@@ -1,3 +1,4 @@
+import { type InboxListed, isUnread } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type SelectionGlyphAct, STATUS_TONE } from "@repo/ui";
@@ -7,7 +8,6 @@ import { firstRefusal, type Kept } from "../act.js";
 import { COMMAND_PLACE, commandWords, PANEL_COMMAND } from "../command-items.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { type InboxResolver, RESOLVE } from "./inbox-close.js";
-import { type InboxListed, isUnread } from "./inbox-model.js";
 import { type InboxRemindMany, REMIND_ME, remindManyGroups } from "./inbox-remind.js";
 import { markedNote, useInboxPresses } from "./inbox-writes.js";
 import type { MarkSaying } from "./use-inbox-read-marks.js";

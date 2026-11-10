@@ -185,7 +185,7 @@ export function PierreDiff({
     );
   }
   return (
-    <div ref={host} className={className} data-diff-layout={look.layout}>
+    <div ref={host} className={`${className} ph-no-capture`} data-diff-layout={look.layout}>
       {notes.map((note) =>
         createPortal(note.content, keptNote(elements.current, note.key), note.key),
       )}

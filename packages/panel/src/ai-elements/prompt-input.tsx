@@ -1,5 +1,5 @@
-import { COMPOSER_ELEMENT, ComposerFrame, cn } from "@repo/ui";
-import type { FormEventHandler, HTMLAttributes, ReactNode } from "react";
+import { COMPOSER_ELEMENT, ComposerFrame, type ComposerLook, cn } from "@repo/ui";
+import type { FormEventHandler, HTMLAttributes, ReactNode, Ref } from "react";
 
 /**
  * prompt-input.tsx -- AI Elements' PromptInput as our one composer: the card a message is written in.
@@ -40,6 +40,10 @@ export type PromptInputProps = Omit<
   onSubmit: () => void;
   /** The owner's class, which places the card in its surface. */
   className?: string | undefined;
+  /** The card's element, for what measures it or asks what it holds. */
+  ref?: Ref<HTMLElement> | undefined;
+  /** How the card stands, as `ComposerFrame`'s look: the window's message box where unsaid, or a field in a comment's card. */
+  look?: ComposerLook | undefined;
   /** Whether files are dragged over the box, which brightens its edge. */
   dropping?: boolean | undefined;
   children: ReactNode;
@@ -48,6 +52,7 @@ export type PromptInputProps = Omit<
 export function PromptInput({
   className,
   onSubmit,
+  look,
   dropping = false,
   children,
   ...props
@@ -60,6 +65,7 @@ export function PromptInput({
     <ComposerFrame
       as={COMPOSER_ELEMENT.FORM}
       className={cn(PROMPT_INPUT_CLASS, className)}
+      look={look}
       dropping={dropping}
       onSubmit={handleSubmit}
       {...props}

@@ -42,6 +42,14 @@ import {
  * registry's: whether the log is at its bottom (`isAtEnd()`), and a way to
  * go there (`scrollToEnd()`).
  *
+ * As the guide's log does, the log's scroll box holds nothing after the
+ * rows: a line that stands after the messages, as an agent's working line
+ * does, is drawn inside the last of them, which grows as the guide's
+ * streaming reply grows, or is the run's last row, as an Inbox thread's
+ * reply box is; and the log's room at its end is the virtualizer's own (`paddingEnd`), read from the theme (`--conversation-log-end`, a
+ * length the stylesheet registers). The log goes to its end as the reader's
+ * own line lands (`ownLast`), as the guide's example does on a send.
+ *
  * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
  * the caller asks, and holds its lines in one block of its own inside it
  * (`.conversation-log`), which carries the log's padding. That block is
@@ -51,6 +59,9 @@ import {
  * to its content; a block child keeps the height it draws, whatever is
  * inside it.
  */
+
+/** The theme's room at a log's end (tasks.css), registered as a length so it reads in pixels. */
+const LOG_END_PROPERTY = "--conversation-log-end";
 
 /** How near its top, in screens of the box, a log asks for the lines older than its first (`onNearTop`): one, so they land before the reader reaches them. */
 const NEAR_TOP_SCREENS = 1;
@@ -62,6 +73,8 @@ interface ConversationScroll {
   readonly scrollToBottom: () => void;
   /** The scroll box, which `ConversationContent` is. */
   readonly list: RefObject<HTMLDivElement | null>;
+  /** The block the lines stand in inside the scroll box, which says the log's room at its end (`--conversation-log-end`). */
+  readonly log: RefObject<HTMLDivElement | null>;
   /** Holds the log's run of lines while it stands (`ConversationRows`); the answer lets it go. */
   readonly hold: (rows: RefObject<VirtualRowsHandle | null>) => () => void;
   /** Asks for older lines where the reader is near the top, or the lines do not fill the box. */
@@ -98,6 +111,7 @@ export function Conversation({
 }: ConversationProps): ReactNode {
   const own = useRef<HTMLDivElement>(null);
   const list = handed ?? own;
+  const log = useRef<HTMLDivElement>(null);
   const [isAtBottom, setAtBottom] = useState(true);
   // The log's run of lines, while one stands.
   const rows = useRef<RefObject<VirtualRowsHandle | null> | undefined>(undefined);
@@ -114,7 +128,9 @@ export function Conversation({
   const askOlder = useCallback(() => {
     const element = list.current;
     if (element === null) return;
-    if (element.scrollTop <= element.clientHeight * NEAR_TOP_SCREENS) nearTop.current?.();
+    // Note that a scroll past the top, as Safari's bounce reports, is no place the reader stands, as the docs' example says.
+    const top = element.scrollTop;
+    if (top >= 0 && top <= element.clientHeight * NEAR_TOP_SCREENS) nearTop.current?.();
   }, [list]);
   const scrollToBottom = useCallback(() => {
     rows.current?.current?.scrollToEnd();
@@ -129,7 +145,16 @@ export function Conversation({
     [askOlder],
   );
   const scroll = useMemo<ConversationScroll>(
-    () => ({ isAtBottom, atBottom: setAtBottom, list, hold, askOlder, scrollToBottom, onScroll }),
+    () => ({
+      isAtBottom,
+      atBottom: setAtBottom,
+      list,
+      log,
+      hold,
+      askOlder,
+      scrollToBottom,
+      onScroll,
+    }),
     [isAtBottom, list, hold, askOlder, scrollToBottom, onScroll],
   );
   return (
@@ -165,7 +190,7 @@ export function ConversationContent({
   streams = false,
   children,
 }: ConversationContentProps): ReactNode {
-  const { list, onScroll } = useConversation();
+  const { list, log, onScroll } = useConversation();
   return (
     <ScrollArea
       ref={list}
@@ -175,7 +200,7 @@ export function ConversationContent({
       fadeInset={fadeInset}
       onScroll={onScroll}
     >
-      <div className={cn("conversation-log px-content-inset pt-section-gap pb-ui-20", className)}>
+      <div ref={log} className={cn("conversation-log px-content-inset pt-section-gap", className)}>
         {children}
       </div>
     </ScrollArea>
@@ -184,10 +209,8 @@ export function ConversationContent({
 
 /**
  * The log's lines, drawn only near the view (`@repo/ui/virtual-rows`), in
- * the log's own scroll box, as one line of the log: lines after it, a
- * working line's, stand after the run. The run keeps to the newest line
- * as the log's header says, and keeps the reader's place as lines land
- * before its first.
+ * the log's own scroll box. The run keeps to the newest line as the log's
+ * header says, and keeps the reader's place as lines land before its first.
  */
 export function ConversationRows({
   keys,
@@ -199,6 +222,7 @@ export function ConversationRows({
   rowClassName,
   "aria-label": label,
   handle,
+  ownLast,
   children,
 }: {
   keys: readonly string[];
@@ -216,13 +240,15 @@ export function ConversationRows({
   /** What the lines are called, to a reader. */
   "aria-label"?: string | undefined;
   handle?: RefObject<VirtualRowsHandle | null> | undefined;
+  /** The key of the reader's own newest line, which takes the log to its end as it lands; none where the reader has written none. */
+  ownLast?: string | undefined;
   /** Draws the line at an index, which wears `place` where the lines are list items of the caller's own. */
   children: (index: number, place: VirtualRowPlace) => ReactNode;
 }): ReactNode {
-  const { list, hold, askOlder, isAtBottom, atBottom } = useConversation();
+  const { list, log, hold, askOlder, isAtBottom, atBottom } = useConversation();
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
-  // Note that the run follows a line appended only where the last line is new, so a line put before a last line that stands still, as the reply box at an inbox thread's end, is followed here while the reader stood at the end.
+  // Note that the run follows a line appended only where the last line is new, so a line put before a last line that stands still, as the reply box at an Inbox thread's end, is followed here while the reader stood at the end.
   const drawn = useRef(keys);
   useLayoutEffect(() => {
     const was = drawn.current;
@@ -231,6 +257,22 @@ export function ConversationRows({
       run.current?.scrollToEnd();
     }
   }, [keys, isAtBottom]);
+  // The log's room at its end, as the theme says it, in pixels: a registered length, so it reads as one.
+  const [end, setEnd] = useState(0);
+  useLayoutEffect(() => {
+    const element = log.current;
+    if (element === null) return;
+    const said = Number.parseFloat(getComputedStyle(element).getPropertyValue(LOG_END_PROPERTY));
+    const room = Number.isFinite(said) ? said : 0;
+    setEnd((was) => (was === room ? was : room));
+  });
+  // The reader's own line landing takes the log to its end; the line the log opened on does not, since the log opens there.
+  const sent = useRef(ownLast);
+  useLayoutEffect(() => {
+    const was = sent.current;
+    sent.current = ownLast;
+    if (ownLast !== undefined && was !== undefined && ownLast !== was) run.current?.scrollToEnd();
+  }, [ownLast]);
   useImperativeHandle(handle, () => {
     const now = () => run.current;
     return {
@@ -239,6 +281,7 @@ export function ConversationRows({
       drawnKeys: () => now()?.drawnKeys() ?? [],
       keys: () => now()?.keys() ?? [],
       scrollToEnd: () => now()?.scrollToEnd(),
+      scrollBy: (delta) => now()?.scrollBy(delta),
     };
   }, []);
   // Note that the lines changing may leave the box unfilled, which no scroll would say.
@@ -258,6 +301,7 @@ export function ConversationRows({
       aria-label={label}
       handle={run}
       onAtEnd={atBottom}
+      paddingEnd={end}
     >
       {children}
     </VirtualRows>

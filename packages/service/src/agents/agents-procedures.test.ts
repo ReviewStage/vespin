@@ -82,6 +82,7 @@ function scriptedSandbox(state: SandboxState) {
       }),
     share: () => Effect.die("the tab shares nothing"),
     unshare: () => Effect.die("the tab shares nothing"),
+    preview: () => Effect.die("the tab previews nothing"),
     shared: () => Effect.die("the tab shares nothing"),
     start: (sessionId, terminalId) =>
       Effect.sync(() => {

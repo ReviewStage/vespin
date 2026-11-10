@@ -71,6 +71,7 @@ import { jsonOf } from "../../http/http-effect.js";
 import type { RelaySocket } from "../../terminal/relay.js";
 import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
+import { makePhoneVideo, phoneVideoOf } from "../machine/phone-video.js";
 import { type SandboxPtyService, sandboxPtyOf } from "../sandbox-pty.js";
 import {
   BRIDGE_WORD,
@@ -168,13 +169,14 @@ export interface BrowserStanding {
   readonly started: boolean;
 }
 
-/** A recording stopped, as the sandbox answered it: the video's length, its bytes, and the absolute path it stays at in the sandbox; or why there is none. */
+/** A recording stopped, as the sandbox answered it: the video's length, its bytes, the absolute path it stays at in the sandbox, and the MP4 made of it there where the sandbox could make one; or why there is none. */
 type BrowserRecordingRead =
   | {
       readonly ok: true;
       readonly seconds: number;
       readonly bytes: Uint8Array;
       readonly path: string;
+      readonly mp4Bytes: Uint8Array | undefined;
     }
   | { readonly ok: false; readonly reason: RecordingFailure; readonly bytes?: number };
 
@@ -187,7 +189,7 @@ export interface AgentBrowserService {
     maxSeconds: number,
     maxBytes: number,
   ) => Effect.Effect<RecordingStart, BrowserUnreachable>;
-  /** Stops the recording that runs, waits on its video, and reads it back up to the bytes given. */
+  /** Stops the recording that runs, waits on its video, and reads it back up to the bytes given, with the MP4 the sandbox makes of it. */
   readonly stopRecording: (
     sessionId: string,
     maxBytes: number,
@@ -545,7 +547,17 @@ export function agentBrowserOver(
       if (file === undefined) {
         return { ok: false, reason: RECORDING_FAILURE.ENCODER } satisfies BrowserRecordingRead;
       }
-      return { ok: true, seconds: stopped.seconds, ...file } satisfies BrowserRecordingRead;
+      // Note that a copy the sandbox could not make leaves the recording its WebM alone, never refused.
+      const mp4Bytes = yield* api.run(running, makePhoneVideo(file.path)).pipe(
+        Effect.map(phoneVideoOf),
+        Effect.catch(() => Effect.succeed(undefined)),
+      );
+      return {
+        ok: true,
+        seconds: stopped.seconds,
+        ...file,
+        mp4Bytes,
+      } satisfies BrowserRecordingRead;
     });
 
   return {

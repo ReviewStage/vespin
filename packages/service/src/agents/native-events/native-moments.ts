@@ -75,6 +75,8 @@ export const NATIVE_MOMENT = {
   NOTED: "noted",
   /** The plan's limit refused the harness, until when where it says; `refused` false is the limit lifting. */
   RATE_LIMIT: "rate_limit",
+  /** How much of its usage window the plan has used, as the harness last reported it. */
+  PLAN_USAGE: "plan_usage",
   /**
    * How the provider answered a model turn on the plan that pays for the
    * agent: it ran, or it refused the sign-in, the plan's limit, or the
@@ -157,6 +159,15 @@ export type NativeMoment =
       /** When the limit resets, in epoch milliseconds, where the harness said. */
       readonly resetsAt?: number;
     }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.PLAN_USAGE;
+      /** The share of the window used, in percent. */
+      readonly usedPercent: number;
+      /** How long the window is, in minutes, where the harness said. */
+      readonly windowMins?: number;
+      /** When the window resets, in epoch milliseconds, where the harness said. */
+      readonly resetsAt?: number;
+    }
   | { readonly kind: typeof NATIVE_MOMENT.PLAN; readonly status: PlanStatus }
   | { readonly kind: typeof NATIVE_MOMENT.WAITING }
   | {
@@ -186,12 +197,15 @@ export interface NativeContextUsage {
 
 /**
  * What a reader may know of the projection as it reads one event: the
- * calls it holds by name, the harness's session as last recorded, and the
- * event's own number, which names what the harness names nothing for.
+ * calls it holds by name, the harness's session as last recorded, the
+ * event's own number, which names what the harness names nothing for, and
+ * whether the plan's limit stands.
  */
 export interface NativeHeld {
   /** The name a held call is stored under, by its id; nothing for a call the projection does not hold. */
   readonly callName: (callId: string) => string | undefined;
   readonly session: string | undefined;
   readonly sequence: number;
+  /** Whether the plan's limit refuses the harness's calls, as it last reported and has not since lifted, so a subagent failing now failed for it. */
+  readonly planLimited: boolean;
 }

@@ -43,9 +43,9 @@ import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/rovin
  * and as it resizes, so a row scrolled out and back is placed by what it
  * measured rather than by `estimate`. Note that a row is never measured
  * while it is not laid out, in a tab kept in the tree but not shown,
- * because a height read there is none: the run keeps what each row last
- * measured by its key and answers that, as the docs ask of a
- * `measureElement` of one's own (`useCachedMeasurements`); nor is the view,
+ * because a height read there is none: the run answers what the
+ * virtualizer last measured of it, as the docs ask of a `measureElement` of
+ * one's own (`useCachedMeasurements`); nor is the view,
  * whose rows stay drawn there rather than leave and be drawn again as it
  * comes back.
  *
@@ -55,7 +55,12 @@ import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/rovin
  * there, and a row appended follows on to it where the reader stood within
  * `scrollEndThreshold` of the end (`followOnAppend`). The run opens on its
  * last rows (`scrollToEnd()` once its scroller is laid out), and its caller asks whether it
- * stands at its end and takes it there through its handle.
+ * stands at its end and takes it there through its handle. Room after the
+ * last row is the virtualizer's own (`paddingEnd`), so nothing the
+ * virtualizer does not measure stands after the rows. A scroll the reader
+ * starts, by wheel, touch, or key, takes over from one the run is still
+ * bringing to its target (`cancelScroll()`), and the caller scrolls through
+ * the handle rather than writing the scroller's position beside it.
  *
  * A run read from its top, as a list of items is, is anchored to its start
  * instead (`VIRTUAL_ROWS_ANCHOR.START`): it opens wherever its scroller
@@ -125,6 +130,17 @@ export interface VirtualRowsHandle {
   readonly keys: () => readonly string[];
   /** Scrolls to the end of the scroller (`scrollToEnd()`). */
   readonly scrollToEnd: () => void;
+  /** Scrolls the scroller by `delta` pixels (`scrollBy()`), as the virtualizer does, so none of its own scrolls is undone by a write beside it. */
+  readonly scrollBy: (delta: number) => void;
+}
+
+/** Each run's handle by its block, so a row found in the page reaches the run that draws it (`runHolding`). */
+const RUNS = new WeakMap<Element, VirtualRowsHandle>();
+
+/** The handle of the run drawing `row`, an element anywhere inside one of its rows; none outside every run. */
+export function runHolding(row: Element): VirtualRowsHandle | undefined {
+  const block = row.closest(".ui-virtual-rows");
+  return block === null ? undefined : RUNS.get(block);
 }
 
 /** A list's runs, each held while it stands, and the bringing in of a row whichever run lists it. */
@@ -145,6 +161,9 @@ interface Bringing {
 
 /** How many rows past each edge of the view are drawn, so a short scroll shows rows already laid out. */
 const DEFAULT_OVERSCAN = 4;
+
+/** The keys that scroll a scroller the reader is in, each of which takes over from a scroll the run is bringing to its target. */
+const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
 /** How near its end, in pixels, a run anchored to its end counts as standing there, so a row appended follows on to it: the docs' chat guide's. */
 const END_THRESHOLD_PX = 80;
@@ -303,6 +322,7 @@ export function VirtualRows({
   options = false,
   moves = false,
   holdsFocus = false,
+  paddingEnd = 0,
   shiftedBy,
   onAtEnd,
   className,
@@ -335,6 +355,8 @@ export function VirtualRows({
   moves?: boolean;
   /** Whether a row holding the keyboard stays drawn wherever the run is scrolled, as a list the keyboard walks keeps it. */
   holdsFocus?: boolean;
+  /** The room after the last row, in pixels, which the virtualizer counts as the run's own (`paddingEnd`), as a log's room at its end. */
+  paddingEnd?: number;
   /** A box whose resizing moves where the run stands in its scroller, as the list holding it among other runs. */
   shiftedBy?: RefObject<HTMLElement | null> | undefined;
   /** Hears whether the scroller stands at its end (`isAtEnd()`) each time the virtualizer's state changes, a scroll's start and end among it. */
@@ -375,22 +397,22 @@ export function VirtualRows({
     if (at < 0 || drawn.includes(at)) return drawn;
     return [...drawn, at].sort((a, b) => a - b);
   }, []);
-  // What each row last measured where it was laid out, by its key, answered while it is not (`useCachedMeasurements`).
-  const heights = useRef(new Map<string, number>());
+  // A row is measured as the docs' default does, but one not laid out answers what the virtualizer last measured of it (`useCachedMeasurements`), its layout read only where it measured nothing.
   const measured = useCallback(
     (
       element: HTMLElement,
       entry: ResizeObserverEntry | undefined,
       instance: Virtualizer<HTMLElement, HTMLElement>,
     ): number => {
-      const key = element.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ?? "";
-      if (element.getClientRects().length === 0) return heights.current.get(key) ?? estimate;
       const height = measureElement(element, entry, instance);
-      heights.current.set(key, height);
-      return height;
+      if (height > 0 || element.getClientRects().length > 0) return height;
+      const key = element.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ?? "";
+      return instance.itemSizeCache.get(key) ?? estimate;
     },
     [estimate],
   );
+  // What the run measured when last drawn, taken once, as the virtualizer reads it once.
+  const [seed] = useState(() => [...measurements]);
   const virtualizer = useVirtualizer<HTMLElement, HTMLElement>({
     count: keys.length,
     getScrollElement: () => scroller.current,
@@ -403,21 +425,38 @@ export function VirtualRows({
     anchorTo: fromEnd ? "end" : "start",
     followOnAppend: fromEnd,
     scrollEndThreshold: END_THRESHOLD_PX,
-    initialMeasurementsCache: [...measurements],
+    paddingEnd,
+    initialMeasurementsCache: seed,
     // Note that the run opens wherever its scroller stands, kept as the reader left it, since several runs may share it; one anchored to its end then takes it there.
     initialOffset: () => scroller.current?.scrollTop ?? 0,
     measureElement: measured,
     observeElementRect: sizeWhileShown,
     initialRect: windowRect(),
     onChange: (instance) => onAtEnd?.(instance.isAtEnd()),
-    useFlushSync: false,
     directDomUpdates: true,
     directDomUpdatesMode: "position",
   });
-  // What the run measured is handed back as it goes, read off the virtualizer's own cache, each row materialized.
+  // What the run measured is handed back as it is let go, the rows it measured alone (`takeSnapshot()`).
   const heard = useRef(onMeasurements);
   heard.current = onMeasurements;
-  useEffect(() => () => heard.current?.(Array.from(virtualizer.measurementsCache)), [virtualizer]);
+  useEffect(() => () => heard.current?.(virtualizer.takeSnapshot()), [virtualizer]);
+  // A scroll the reader starts takes over from one the run is still bringing to its target, as the docs ask (`cancelScroll()`).
+  useEffect(() => {
+    const box = scroller.current;
+    if (box === null) return;
+    const cancel = () => virtualizer.cancelScroll();
+    const keyed = (event: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(event.key)) cancel();
+    };
+    box.addEventListener("wheel", cancel, { passive: true });
+    box.addEventListener("touchstart", cancel, { passive: true });
+    box.addEventListener("keydown", keyed);
+    return () => {
+      box.removeEventListener("wheel", cancel);
+      box.removeEventListener("touchstart", cancel);
+      box.removeEventListener("keydown", keyed);
+    };
+  }, [scroller, virtualizer]);
   // A run anchored to its end opens there once the virtualizer holds its scroller and the scroller is laid out, and only once, so a page kept hidden and shown again leaves it where the reader left it.
   // Note that a scroller not laid out, as one first drawn in a pane not shown yet, has no end to open at: the scroll would settle at its top and count as done, so the run waits for its size (`sized`).
   const opened = useRef(false);
@@ -470,14 +509,16 @@ export function VirtualRows({
       ) ?? undefined,
     [],
   );
-  useImperativeHandle(
-    handle,
-    () => ({
+  const runHandle = useMemo(
+    (): VirtualRowsHandle => ({
       bringIn: (key, then) => {
         const index = latestKeys.current.indexOf(key);
         if (index === -1) return false;
-        bringing.current = { key, drawn: then };
         virtualizer.scrollToIndex(index, { align: "center" });
+        // Note that a row already drawn is handed on at once, since it may draw no more as the scroll moves it.
+        const row = rowElement(key);
+        if (row === undefined) bringing.current = { key, drawn: then };
+        else then?.(row);
         return true;
       },
       rowElement,
@@ -488,9 +529,19 @@ export function VirtualRows({
         }),
       keys: () => latestKeys.current,
       scrollToEnd: () => virtualizer.scrollToEnd(),
+      scrollBy: (delta) => virtualizer.scrollBy(delta),
     }),
     [virtualizer, rowElement],
   );
+  useImperativeHandle(handle, () => runHandle, [runHandle]);
+  useLayoutEffect(() => {
+    const element = block.current;
+    if (element === null) return;
+    RUNS.set(element, runHandle);
+    return () => {
+      RUNS.delete(element);
+    };
+  }, [runHandle]);
   // A row brought in is handed on once it is drawn.
   useLayoutEffect(() => {
     const asked = bringing.current;
@@ -525,7 +576,6 @@ export function VirtualRows({
   useLayoutEffect(() => {
     const listed = new Set<VirtualItem["key"]>(keys);
     for (const key of places.current.keys()) if (!listed.has(key)) places.current.delete(key);
-    for (const key of heights.current.keys()) if (!listed.has(key)) heights.current.delete(key);
   }, [keys]);
   const items: VirtualItem[] = virtualizer.getVirtualItems();
   const own = listItems || options ? "ui-virtual-rows ui-virtual-items" : "ui-virtual-rows";

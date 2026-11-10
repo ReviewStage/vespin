@@ -10,6 +10,7 @@ import {
   useEffect,
   useRef,
 } from "react";
+import { middleOpensTab } from "../../middle-press.js";
 import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { rovingItem } from "../roving-keys/roving-keys.js";
@@ -52,7 +53,9 @@ export { SELECT_BOX_PLACE, type SelectBoxPlace } from "../selection/select-box.j
  *
  * The press is handed what the pointer held (`CardPressEvent`), so a card
  * that opens something elsewhere may read a ⌘- or Ctrl-click; a middle
- * click is no click, so it presses nothing, as a button's never does. An
+ * click is no click, so it presses nothing, as a button's never does, but
+ * opens the card's thing in a tab of its own where the card hands it the
+ * way (`onOpenInTab`), as a middle-click on a link does. An
  * unavailable press (`disabled`) refuses the keyboard and the pointer alike.
  * Where the app drags its cards by their press, it finds the press by
  * `CARD_PRESS_SELECTOR`.
@@ -156,6 +159,7 @@ const CONTROL =
 /** One whole-card press: `children` named on the button, reaching the card it stands in. */
 export function CardPress({
   onPress,
+  onOpenInTab,
   reach = CARD_PRESS_REACH.OVERLAY,
   alsoPressedBy,
   corner = CARD_PRESS_CORNER.CONTROL,
@@ -175,6 +179,8 @@ export function CardPress({
 }: CardPressHintProps & {
   /** What pressing the card does, handed the press, whose modifiers it may read. */
   onPress: (event: CardPressEvent) => void;
+  /** Opens the card's thing in a tab of its own, which a middle-click does, as on a link, choosing nothing; none where the window opens no tab. */
+  onOpenInTab?: (() => void) | undefined;
   /** How it reaches its card: over it, or through it. */
   reach?: CardPressReach | undefined;
   /** Where it reaches through its card, a selector of the controls in it whose own press presses the card too. */
@@ -246,7 +252,7 @@ export function CardPress({
         {...(choosable ? selectableRow(selectKey) : {})}
         {...(roving ? rovingItem() : {})}
         disabled={disabled}
-        onMouseDown={choosable ? holdRun : undefined}
+        {...middleOpensTab(onOpenInTab, choosable ? holdRun : undefined)}
         onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
           pulseCard(event.currentTarget);
           // Note that a ⌘- or ⇧-click that chose rows is no press of the card.

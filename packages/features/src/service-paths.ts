@@ -24,6 +24,10 @@ export const HOSTED_SERVICE_PATH = {
    * `provider-key-wire.ts` declares every body.
    */
   ACCOUNT_PROVIDER_KEYS: "/api/account/provider-keys",
+  /** One of the account's subscriptions named, or its name cleared (PUT). */
+  ACCOUNT_SUBSCRIPTION_LABEL: "/api/account/provider-keys/label",
+  /** The account's subscriptions of a kind put in a new order (PUT). */
+  ACCOUNT_SUBSCRIPTION_ORDER: "/api/account/provider-keys/order",
   /** A ChatGPT plan's connection through Codex's device-code login begun (POST): the code to enter, and the login to poll. */
   ACCOUNT_CHATGPT_DEVICE: "/api/account/chatgpt/device",
   /** One check of a device-code connection (POST), by its login. */
@@ -49,6 +53,21 @@ export const HOSTED_SERVICE_PATH = {
   ACCOUNT_PUSH_DEVICES: "/api/account/push-devices",
   /** The phone unregistered (POST), by its token and gateway in the body; one the account does not hold is passed over. */
   ACCOUNT_PUSH_DEVICES_UNREGISTER: "/api/account/push-devices/unregister",
+  /**
+   * The phone's own standing (POST), by its token and gateway in the body:
+   * its "Notify me" and how its pushes have fared; one the account does not
+   * hold is answered not found.
+   */
+  ACCOUNT_PUSH_DEVICES_STATUS: "/api/account/push-devices/status",
+  /** The phone's "Notify me" set (POST), by its token and gateway in the body; one the account does not hold is answered not found. */
+  ACCOUNT_PUSH_DEVICES_NOTIFY: "/api/account/push-devices/notify",
+  /**
+   * The member used a desktop or web client just now (POST), with an empty
+   * body: the service stamps when the account was last active, which holds
+   * its phone's pushes while it stands inside `PRESENCE.WINDOW_MS`.
+   * `presence-wire.ts` declares it.
+   */
+  ACCOUNT_PRESENCE: "/api/account/presence",
   /**
    * The outside MCP clients the account allowed: read them (GET), or revoke
    * one by its client id in the query (DELETE). `mcp-client-wire.ts`

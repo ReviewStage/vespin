@@ -18,6 +18,7 @@ import {
 import { MEMBER_MCP_FUNCTION, MEMBER_MCP_METADATA_ROUTE } from "@repo/service/member-mcp/app";
 import { MEMBER_MCP_PATH } from "@repo/service/member-mcp/resource";
 import { PAGE_LINK_ROUTE } from "@repo/service/pages/page-links";
+import { PREVIEW_LINK } from "@repo/service/previews/preview-links";
 import { ORPC_ROUTE_KEY } from "./function-dispatch.js";
 
 /**
@@ -56,6 +57,7 @@ const FUNCTION_GROUP = {
   MAINTENANCE_SWEEP: "maintenance-sweep",
   BASE_DRIVE_REFRESH: "base-drive-refresh",
   PAGE_SANDBOX: "page-sandbox",
+  PREVIEW_PROXY: "preview-proxy",
   PULL_REQUEST_CHAPTERS: "pull-request-chapters",
 } as const;
 type FunctionGroup = (typeof FUNCTION_GROUP)[keyof typeof FUNCTION_GROUP];
@@ -121,6 +123,8 @@ const GROUPS: readonly GroupDefinition[] = [
   },
   // A page on the sandbox's host answers within the platform's default, in a function holding no other route.
   { file: FUNCTION_GROUP.PAGE_SANDBOX, routes: [routeKeyOf(PAGE_LINK_ROUTE.PATH)] },
+  // Every request to a shared preview's host, in a function holding no other route for the same reason.
+  { file: FUNCTION_GROUP.PREVIEW_PROXY, routes: [routeKeyOf(PREVIEW_LINK.PROXY_PATH)] },
 ];
 
 /** The WebSocket services, each a function of its own: the terminal relay, the sandbox tunnel, the Browser tab's live view, and the live reads' socket. */

@@ -14,7 +14,6 @@ import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
   INBOX_ASK_STATUS,
-  INBOX_BOUNDS,
   INBOX_FIELD,
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
@@ -32,7 +31,6 @@ import {
   closeInboxItem,
   closeInboxItemAsMember,
   INBOX_ASK_ANSWER,
-  INBOX_POST_REFUSAL,
   type InboxPostRefusal,
   postInboxMessage,
   postInboxThread,
@@ -762,50 +760,6 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           [read.status, read.thread?.[0]?.ask?.status],
           [INBOX_STATUS.OPEN, INBOX_ASK_STATUS.OPEN],
         );
-      }),
-  );
-
-  it.effect(
-    "a post that asks nothing takes no place among the open asks, so an agent holding as many as it may still posts one, and notices left open keep no ask from being posted; past as many open notices, one more is refused until the developer nods to one, while a follow-up on one stands",
-    () =>
-      Effect.gen(function* () {
-        const agent = yield* openAgent;
-        for (let at = 0; at < INBOX_BOUNDS.MAX_OPEN_PER_AGENT; at += 1) {
-          posted(
-            yield* postInboxThread(agent, {
-              key: `notice-${at}`,
-              title: "The preview is up",
-              body: "It deploys from main.",
-            }),
-          );
-        }
-        for (let at = 0; at < INBOX_BOUNDS.MAX_OPEN_PER_AGENT; at += 1) {
-          posted(yield* postInboxThread(agent, { ...SETTINGS, key: `open-${at}` }));
-        }
-
-        const refused = yield* postInboxThread(agent, { ...SETTINGS, key: "one-more" });
-        const notice = {
-          key: "preview-up",
-          title: "The preview is up",
-          body: "It deploys from main.",
-        };
-
-        assert.deepEqual(refused, Result.fail(INBOX_POST_REFUSAL.TOO_MANY_OPEN));
-        assert.deepEqual(
-          yield* postInboxThread(agent, notice),
-          Result.fail(INBOX_POST_REFUSAL.TOO_MANY_NOTICES),
-          "the notice bound counts the notices open, whatever the ask bound holds",
-        );
-        const first = posted(
-          yield* postInboxThread(agent, { key: "notice-0", body: "Redeployed from main." }),
-        );
-        assert.equal(first.status, INBOX_STATUS.OPEN, "a follow-up on a notice still open stands");
-        assert.ok(
-          Option.isSome(
-            yield* acknowledgeInboxItem(agent.userId, first.id, first.revision, randomUUID()),
-          ),
-        );
-        assert.equal(posted(yield* postInboxThread(agent, notice)).status, INBOX_STATUS.OPEN);
       }),
   );
 

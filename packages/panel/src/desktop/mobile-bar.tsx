@@ -1,3 +1,4 @@
+import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BarAction, BarItem, BarItems, MENU_KEEPS_CLEAR, PlusIcon, SearchIcon } from "@repo/ui";
 import { raiseKeyboard } from "@repo/ui/command";
@@ -12,7 +13,6 @@ import { useBoardDoor, useInboxDoor } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type AutomationsPlace, automationsTab } from "../tasks/automations-place.js";
-import { NEEDS_YOU } from "../tasks/inbox-model.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useInboxWaiting } from "./places-waiting.js";
 import { groupCount } from "./sidebar-fold.js";

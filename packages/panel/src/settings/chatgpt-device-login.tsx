@@ -61,12 +61,13 @@ const WORDS = {
   TURN_ON_HINT:
     "If you don't see this option, ask your workspace admin to enable device code authentication for Codex CLI",
   CODE: "Code",
-  ENTER_CODE: "Sign in to ChatGPT, select your workspace if prompted, and enter the code:",
+  ENTER_CODE:
+    "Sign in with your Codex account, select your workspace if prompted, and enter the code:",
   VERIFICATION_PAGE: "Verification page",
   WAITING: "Waiting for Codex",
   GETTING_CODE: "Getting a code",
-  START_FAILED: "Couldn't reach ChatGPT for a code. Try again.",
-  WAIT_FAILED: "Couldn't reach ChatGPT to finish connecting. Try again.",
+  START_FAILED: "Couldn't reach Codex for a code. Try again.",
+  WAIT_FAILED: "Couldn't reach Codex to finish connecting. Try again.",
   TRY_AGAIN: "Try again",
 } as const;
 
@@ -91,7 +92,10 @@ const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
  * again, the login asked after while it waits, and withdrawn as it goes
  * away with it still waiting.
  */
-function useDeviceLogin(onConnected: () => void): { standing: Standing; retry: () => void } {
+function useDeviceLogin(
+  add: boolean,
+  onConnected: () => void,
+): { standing: Standing; retry: () => void } {
   const { mutateAsync: sendChatgptDeviceStart } = useMutation(
     actMutation(ACT_KIND.CHATGPT_DEVICE_START),
   );
@@ -111,7 +115,7 @@ function useDeviceLogin(onConnected: () => void): { standing: Standing; retry: (
     starts.current += 1;
     const mine = starts.current;
     setStanding(STARTING);
-    void sendChatgptDeviceStart()
+    void sendChatgptDeviceStart(add ? { add } : undefined)
       .catch(() => UNANSWERED)
       .then((answer) => {
         if (mine !== starts.current) {
@@ -126,7 +130,7 @@ function useDeviceLogin(onConnected: () => void): { standing: Standing; retry: (
             : { kind: STANDING.WAITING, login: answer },
         );
       });
-  }, [sendChatgptDeviceStart, sendChatgptDeviceCancel]);
+  }, [add, sendChatgptDeviceStart, sendChatgptDeviceCancel]);
 
   useEffect(() => {
     start();
@@ -217,11 +221,14 @@ function CodeSteps({ login }: { login: ChatGptDeviceStartAnswer }): React.JSX.El
  * `onConnected` hears the plan connected; its owner puts it away then.
  */
 export function ChatGptDeviceLogin({
+  add = false,
   onConnected,
 }: {
+  /** Whether the plan it connects is added at the bottom of the account's order rather than replacing its first; one signed in as a plan the account holds replaces that one either way. */
+  add?: boolean;
   onConnected: () => void;
 }): React.JSX.Element {
-  const { standing, retry } = useDeviceLogin(onConnected);
+  const { standing, retry } = useDeviceLogin(add, onConnected);
   return standing.kind === STANDING.STARTING ? (
     <WaitingLine>{WORDS.GETTING_CODE}</WaitingLine>
   ) : standing.kind === STANDING.WAITING ? (

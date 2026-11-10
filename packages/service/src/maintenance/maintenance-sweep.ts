@@ -30,6 +30,10 @@ interface MaintenanceSweeps {
   republishTurns: (now: number) => SweepRead<number>;
   /** Touches the sandbox of every cloud turn still running inside its progress deadline, a sweep's worth, answering how many (`coder-host/reconcile.ts`). */
   keepSandboxesUp: (now: number) => SweepRead<number>;
+  /** Has the coding agents' turns held open for a usage limit's reset go on once it has passed, a sweep's worth, answering how many (`coder-host/steer.ts`'s `resumeWaitedTurns`). */
+  resumeWaitedTurns: (now: number) => SweepRead<number>;
+  /** Sends the alerts held while members were at their desk, for those who have since walked away, a sweep's worth, answering how many holds it took (`push/inbox-pushes.ts`'s `releaseHeldPushes`). */
+  releaseHeldPushes: (now: number) => SweepRead<number>;
 }
 
 /**
@@ -58,6 +62,10 @@ interface MaintenanceSweepAnswer {
   republished: Swept<number>;
   /** Running cloud turns' sandboxes touched. */
   keptUp: Swept<number>;
+  /** Coding agents' turns past their limit's reset, handed on to a launch. */
+  resumed: Swept<number>;
+  /** Pushes held while members were at their desk, taken now that they walked away. */
+  heldPushes: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -96,6 +104,8 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     turns: yield* isolated("reconcileAgents", sweeps.reconcileAgents(now)),
     republished: yield* isolated("republishTurns", sweeps.republishTurns(now)),
     keptUp: yield* isolated("keepSandboxesUp", sweeps.keepSandboxesUp(now)),
+    resumed: yield* isolated("resumeWaitedTurns", sweeps.resumeWaitedTurns(now)),
+    heldPushes: yield* isolated("releaseHeldPushes", sweeps.releaseHeldPushes(now)),
   };
 });
 

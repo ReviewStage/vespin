@@ -2,17 +2,17 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { accountBearer } from "@repo/features";
 import { PORT_FORWARD_STATE } from "@repo/features/port-forward-acts";
+import type {
+  LoopbackConnection,
+  TerminalSocketArrival,
+  TerminalSocketFrame,
+} from "@repo/features/relay-socket";
 import { TUNNEL_CLOSE, TUNNEL_FRAME } from "@repo/features/sandbox-tunnel-wire";
 import { noNetwork } from "@repo/wire/testing";
 import { type Cause, Effect, Queue, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import { TestClock } from "effect/testing";
 import { composePortForwards, PORT_FORWARD } from "./compose-port-forwards.js";
-import type {
-  LoopbackConnection,
-  TerminalSocketArrival,
-  TerminalSocketFrame,
-} from "./relay-socket.js";
 
 /**
  * A coding agent's cloud ports forwarded to the Mac's loopback, over a
@@ -319,7 +319,7 @@ it.effect(
     }),
 );
 
-it.effect("turning forwarding off closes the agent's public link", () =>
+it.effect("turning forwarding off keeps the agent's public link", () =>
   Effect.gen(function* () {
     const { set, share, serve, shared } = yield* subject();
     serve(AGENT_ID, [3000]);
@@ -329,6 +329,6 @@ it.effect("turning forwarding off closes the agent's public link", () =>
 
     yield* set({ agentId: AGENT_ID, on: false });
 
-    assert.equal(shared(AGENT_ID), undefined);
+    assert.deepEqual(shared(AGENT_ID), { port: 3000, url: "https://sb-3000.share.test" });
   }),
 );

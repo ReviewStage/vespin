@@ -36,7 +36,7 @@ import { absurd } from "effect";
 import { useCallback, useRef } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
-import { agentPlace, useCopyLinkItem } from "../copy-link-item.js";
+import { agentPlace, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { agentName, RENAME_FAILED } from "../tasks/agent-model.js";
 import { agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -237,7 +237,7 @@ function pinAgentId({ tab }: SidebarPin): string | undefined {
 
 /** Unpin, the pin's own keeping, which leads its menu as a tab's keeping leads a tab's. */
 function unpinItem(onUnpin: () => void): MenuAction {
-  return commandAction(PANEL_COMMAND.UNPIN_TAB, onUnpin, false);
+  return commandAction(PANEL_COMMAND.UNPIN_TAB, onUnpin, undefined);
 }
 
 /**
@@ -403,9 +403,12 @@ function PinnedTabRow({
   editor,
   description,
   rowRef,
+  openInTab,
 }: {
   drawn: PinnedRowDrawn;
   groups: readonly (readonly MenuEntry[])[];
+  /** Opens what the pin opens in a tab of its own, which a middle-click takes, where its menu offers the same; none elsewhere. */
+  openInTab?: (() => void) | undefined;
   /** The field the row's name is edited in, in its title's place while a Rename is open. */
   editor?: React.ReactNode;
   /** What stands under the title: a refused rename's note. */
@@ -451,6 +454,7 @@ function PinnedTabRow({
                 if (!gone) onOpen();
               }
         }
+        onOpenInTab={editing || gone ? undefined : openInTab}
         menu={
           editing
             ? undefined
@@ -513,6 +517,7 @@ function PinnedAgentRow({
         drawn={drawn}
         groups={groups}
         rowRef={hold}
+        openInTab={actions.openInTab}
         editor={
           editing ? (
             <InlineEdit
@@ -579,7 +584,8 @@ export function SidebarPinnedTab({
   const changesCard = pinChangesCard(pin, tasks, gone, changesPeople, (agentId) => {
     if (taskId !== undefined) tasks.onShowAgent(taskId, agentId);
   });
-  const copyLink = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
+  const inTabOf = useOpenInTab();
   const drawn: PinnedRowDrawn = {
     pin,
     nest,
@@ -609,11 +615,13 @@ export function SidebarPinnedTab({
   const open = openAgentOf(pin, tasks);
   if (open !== undefined) return <PinnedAgentRow agent={open} drawn={drawn} />;
   // Another task's agent is read only as far as its task's row names it, so its pin offers its link alone beside Unpin.
-  const link = isAgentPin(pin) ? copyLink(agentPlace(pin.tab.agent)) : undefined;
+  const linked = isAgentPin(pin) ? agentPlace(pin.tab.agent) : undefined;
+  const links = linked === undefined ? [] : linkItemsOf(linked);
   return (
     <PinnedTabRow
       drawn={drawn}
-      groups={[[unpinItem(onUnpin)], ...(link === undefined ? [] : [[link]])]}
+      groups={[[unpinItem(onUnpin)], ...(links.length === 0 ? [] : [links])]}
+      openInTab={linked === undefined ? undefined : inTabOf(linked)}
     />
   );
 }

@@ -4,6 +4,7 @@ import {
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
 import { INBOX_STATUS, type InboxItem, type InboxStatus } from "@repo/features/inbox-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -15,9 +16,9 @@ import { useCallback, useRef } from "react";
 import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
+import type { ShortcutSubject } from "../shortcut-target.js";
 import { type HeldWrite, pressHeld } from "../undo-stack.js";
 import { messageFailureWords } from "./agent-model.js";
-import { cardTitle } from "./tool-call-model.js";
 
 /**
  * inbox-close.tsx -- open Inbox items resolved without an answer, at once and with Undo, from every place that offers it: an item's menus, its question card, the list's head, a chosen row's menu, and E.
@@ -228,13 +229,13 @@ export function useInboxResolver(): InboxResolver {
 /**
  * The items' resolve as a menu offers it: while one of them is open and the
  * surface hands a resolver, which one that answers nothing, an archived
- * task's say, hands none of. Where `keyed`, it names E, which resolves the
- * chosen items there.
+ * task's say, hands none of. It names E where E resolves `subject`, the
+ * chosen item; none where no key reaches what it resolves.
  */
 export function resolveAction(
   items: readonly InboxItem[],
   onResolve: InboxResolver | undefined,
-  keyed = false,
+  subject?: ShortcutSubject | undefined,
 ): MenuAction | undefined {
   return onResolve === undefined || !items.some((item) => item.status === INBOX_STATUS.OPEN)
     ? undefined
@@ -242,6 +243,6 @@ export function resolveAction(
         label: RESOLVE,
         icon: <GLYPH.RESOLVED />,
         onSelect: () => onResolve(items),
-        ...(keyed ? { command: APP_COMMAND.RESOLVE } : undefined),
+        ...(subject === undefined ? undefined : { command: APP_COMMAND.RESOLVE, subject }),
       };
 }

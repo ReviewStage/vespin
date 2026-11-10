@@ -69,6 +69,8 @@ export type AccountAsksClient = Pick<
   | "saveProviderKey"
   | "removeProviderKey"
   | "setProviderKeyForAgents"
+  | "renameSubscription"
+  | "reorderSubscriptions"
   | "startChatGptDeviceLogin"
   | "pollChatGptDeviceLogin"
   | "cancelChatGptDeviceLogin"
@@ -77,6 +79,7 @@ export type AccountAsksClient = Pick<
   | "removeGitHubToken"
   | "forgetMemory"
   | "transcribeDictation"
+  | "markActive"
 >;
 
 export interface AccountAsksDependencies extends AccountGateDependencies {
@@ -358,7 +361,11 @@ function actsOf(
       Effect.flatMap(asked(client.removeProviderKey(removal)), keysWritten),
     PROVIDER_KEYS_FOR_AGENTS: (change) =>
       Effect.flatMap(asked(client.setProviderKeyForAgents(change)), keysWritten),
-    CHATGPT_DEVICE_START: () => asked(client.startChatGptDeviceLogin()),
+    SUBSCRIPTION_RENAME: (rename) =>
+      Effect.flatMap(asked(client.renameSubscription(rename)), keysWritten),
+    SUBSCRIPTIONS_REORDER: (order) =>
+      Effect.flatMap(asked(client.reorderSubscriptions(order)), keysWritten),
+    CHATGPT_DEVICE_START: (start) => asked(client.startChatGptDeviceLogin(start)),
     // Note that the login is asked after here, on the interval its start named, so a window waits on one answer rather than asking again on a timer of its own.
     CHATGPT_DEVICE_WAIT: ({ loginId, intervalSeconds }) => {
       const interval = Duration.seconds(intervalSeconds);
@@ -378,6 +385,8 @@ function actsOf(
     ),
     // Note that the clip passes through once and is noted nowhere, because its words are the developer's voice.
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
+    // Note that the beat carries nothing and its answer is read by no one, so a signed-out window's is dropped at the gate.
+    ACCOUNT_ACTIVE: () => Effect.asVoid(asked(client.markActive())),
     // A removal is drawn gone over the held hosts the moment it is asked.
     HOSTS_REMOVE: declaredWrite(
       pool,

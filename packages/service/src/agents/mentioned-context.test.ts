@@ -488,7 +488,7 @@ test("a page of the plan the words mention is handed by its title, id, and versi
   );
 });
 
-test("another agent of the plan the words mention is handed by its id, where its work stands on GitHub, and how to message it, and never its conversation", () => {
+test("another agent of the plan the words mention is handed by its id, where its work stands on GitHub, how to message it, and how to read its conversation", () => {
   const part = mentionedContext(`Build on ${agent("Store")}.`, TASK, READS) ?? "";
 
   assert.match(
@@ -497,7 +497,7 @@ test("another agent of the plan the words mention is handed by its id, where its
   );
   assert.match(part, /`gh pr diff 42`/u);
   assert.match(part, /To message it, call `message_agent` with its id\./u);
-  assert.match(part, /Its conversation is not yours to read\./u);
+  assert.match(part, /Read its conversation with `read_agent` and its id/u);
 });
 
 test("an agent of the workspace on another task or on none is handed with its task, to an agent with a plan or with none, and an archived one is not offered to message", () => {

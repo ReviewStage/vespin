@@ -216,6 +216,8 @@ export const SETTLED_FAILURES: readonly (readonly [TurnFailure, AgentFailure])[]
   [TURN_FAILURE.RUNNER_LOST, AGENT_FAILURE.RUNNER_LOST],
   [TURN_FAILURE.NO_PROGRESS, AGENT_FAILURE.NO_PROGRESS],
   [TURN_FAILURE.LINE_UNTAKEN, AGENT_FAILURE.LINE_UNTAKEN],
+  [TURN_FAILURE.PLAN_LIMIT, AGENT_FAILURE.PLAN_LIMIT],
+  [TURN_FAILURE.REFUSAL, AGENT_FAILURE.REFUSAL],
 ];
 
 /** The host that lost a failed turn's run, by the name its turn records; nothing for any other turn. */
@@ -305,6 +307,7 @@ function agentTurnOf(turn: AgentLatestTurn | undefined): AgentTurn | undefined {
     status: turnStatusOfWord(turn.status),
     ...(turn.cancelRequestedAt === null ? undefined : { stopAsked: true }),
     ...(failure === undefined ? undefined : { failure }),
+    ...(turn.waitsUntil == null ? undefined : { waitsUntil: turn.waitsUntil.getTime() }),
   };
 }
 

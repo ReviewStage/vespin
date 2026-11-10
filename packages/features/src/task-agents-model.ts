@@ -1,9 +1,12 @@
 import {
+  AGENT_FAILURE,
+  AGENT_MACHINE,
   AGENT_STATUS,
+  type AgentFailure,
   type AgentStatus,
+  type AgentSummary,
   type ListedAgent,
   PULL_REQUEST_STATE,
-  type TasklessAgent,
 } from "./agent-wire.js";
 import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from "./task-wire.js";
 
@@ -27,8 +30,7 @@ import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from ".
  *
  * Note that a thread waiting on the reader is no status here, because the
  * Tasks page's row and card say how many wait in a count of its own,
- * standing before this status (`@repo/panel`'s `WaitingCount`), and a
- * sidebar row's one mark puts it first (`@repo/ui`'s `RowEndMark`).
+ * standing before this status (`@repo/panel`'s `WaitingCount`).
  */
 
 /** Where a task's agents stand, most pressing first. */
@@ -87,7 +89,8 @@ function markedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state"
  * as it started where it ran none. Note that `latestStart` counts the
  * archived agents too, because archiving the agent that took over from a
  * failure must not bring the failure back. The held and live reads both
- * count `TaskAgentsSummary.failed` here, so the two agree.
+ * count `TaskAgentsSummary.failed` here, so the two agree. An agent its
+ * plan's usage limit stopped is no failure to count, since its user expects it.
  */
 export function standingFailures(
   agents: readonly {
@@ -95,12 +98,16 @@ export function standingFailures(
     readonly status: AgentStatus;
     /** When its last turn settled; none where it ran none. */
     readonly at: number | undefined;
+    /** Why its newest turn failed, where it did. */
+    readonly failure: AgentFailure | undefined;
   }[],
   latestStart: number,
 ): number {
   return agents.filter(
-    ({ createdAt, status, at }) =>
-      status === AGENT_STATUS.FAILED && (at ?? createdAt) >= latestStart,
+    ({ createdAt, status, at, failure }) =>
+      status === AGENT_STATUS.FAILED &&
+      failure !== AGENT_FAILURE.PLAN_LIMIT &&
+      (at ?? createdAt) >= latestStart,
   ).length;
 }
 
@@ -180,16 +187,65 @@ export function taskAgentsStatus(
     : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest };
 }
 
+/** The statuses an agent may still write under, which is when it can be stopped. */
+const FOLLOWED_STATUSES: ReadonlySet<AgentStatus> = new Set([
+  AGENT_STATUS.STARTING,
+  AGENT_STATUS.RUNNING,
+]);
+
+/** Whether an agent in this status may still write more. */
+export function agentStillWriting(status: AgentStatus): boolean {
+  return FOLLOWED_STATUSES.has(status);
+}
+
 /**
- * The one status an agent with no task wears at its row's end: its failure,
- * else the pull request it opened. Note that it never says the agent works,
- * because its row's leading glyph gives way to the working mark instead.
+ * Agents in the order a task's Agents group lists them: those waiting on
+ * the developer first, then those still writing, then the newest started,
+ * each group's order otherwise kept. An entry with no agent, a draft's, is
+ * started at none.
  */
-export function tasklessAgentStatus(
-  agent: Pick<TasklessAgent, "status" | "pullRequest">,
-): TaskAgentsStatus {
-  if (agent.status === AGENT_STATUS.FAILED) return { kind: TASK_AGENTS_STATUS.FAILED };
-  return agent.pullRequest === undefined
-    ? NO_STATUS
-    : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest: agent.pullRequest };
+export function inAgentListOrder<Entry>(
+  entries: readonly Entry[],
+  agentOf: (entry: Entry) => Pick<ListedAgent, "status" | "createdAt"> | undefined,
+  waits: (entry: Entry) => boolean,
+): readonly Entry[] {
+  const writing = (entry: Entry) => {
+    const agent = agentOf(entry);
+    return agent !== undefined && agentStillWriting(agent.status);
+  };
+  const started = (entry: Entry) => agentOf(entry)?.createdAt ?? 0;
+  return entries.toSorted(
+    (a, b) =>
+      Number(waits(b)) - Number(waits(a)) ||
+      Number(writing(b)) - Number(writing(a)) ||
+      started(b) - started(a),
+  );
+}
+
+/** What the Runs on menu, its chips, and an agent's row say of where it runs. */
+export const RUNS_ON_WORDS = {
+  LABEL: "Runs on",
+  CLOUD: "Cloud",
+  ONLINE: "Online",
+  OFFLINE: "Offline",
+  UNKNOWN: "Can't check status",
+  CHECKING: "Checking",
+  REMOVED: "Removed device",
+  NO_MATCH: "No devices match",
+} as const;
+
+/** The Mac a local agent runs on, as its row reads it. */
+type RunsOnMac = NonNullable<AgentSummary["mac"]>;
+
+/**
+ * Where an agent runs, as its row says it: Cloud for one in a sandbox, the
+ * device it runs on by `deviceName` (its own name where none is given), and
+ * Removed device for a local agent whose Mac is gone.
+ */
+export function agentRunsOnWords(
+  agent: Pick<AgentSummary, "machine" | "mac">,
+  deviceName: (mac: RunsOnMac) => string = (mac) => mac.name,
+): string {
+  if (agent.machine !== AGENT_MACHINE.DEVICE) return RUNS_ON_WORDS.CLOUD;
+  return agent.mac === undefined ? RUNS_ON_WORDS.REMOVED : deviceName(agent.mac);
 }

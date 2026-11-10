@@ -33,6 +33,10 @@ for s in 16 32 64 128 256 512 1024; do
   rsvg-convert -w $s -h $s icon/icon-dark.svg -o icon/icon-dark-$s.png
 done
 rsvg-convert -w 512 -h 512 icon/icon-light.svg -o icon/icon-light-512.png
+# App Store Connect refuses an app icon with an alpha channel, so this one is
+# flattened to RGB.
+rsvg-convert -w 1024 -h 1024 icon/icon-ios.svg |
+  magick - -alpha remove -alpha off -strip PNG24:icon/icon-ios-1024.png
 for m in light dark white monochrome color-light color-dark; do
   for s in 256 1024; do
     rsvg-convert -w $s -h $s mark/mark-$m.svg -o mark/mark-$m-$s.png
@@ -114,6 +118,7 @@ The mark is static: it carries no motion.
 | `logo/logo-stacked-{light,dark,black,white,color-light,color-dark}.svg` + `-{512,2048}.png` | The stacked lockup, the disc twice the cap height centered over the name, on a transparent ground, for a square-ish space, in the same inks as the lockup |
 | `icon/icon-{light,dark}.svg` + PNGs | The app icon on Apple's macOS grid: an 824-unit tile with a 185.4-unit corner on a 1024 canvas, the disc 78% of the tile (`ICON_MARK`, the one share every app icon takes). Dark: the night tile under the mark in copper. Light: the copper tile under a white mark. Flat, both |
 | `ios/Vespin.icon/` | The iOS app's icon, an Icon Composer bundle (`icon.json` and `Assets/mark.svg`): the white mark at 78% of the canvas over the tile fill, copper under white in light and the night tile under copper in dark, which iOS 26 and later draw in Liquid Glass, deriving the clear and tinted looks themselves. `apps/mobile`'s `ios.icon` names it |
+| `icon/icon-ios.svg` + `-1024.png` | The iOS app's marketing icon: the Icon Composer bundle's light look flattened, the copper tile full bleed under the white mark at 78% of the canvas, cut to an opaque 1024 PNG with no alpha channel. `apps/mobile` puts it in the asset catalog beside the bundle, under the bundle's name, for App Store Connect and TestFlight, which read no `.icon` |
 | `mark/mark-{light,dark,white}.svg` + `-{256,1024}.png` | The mark alone, in each mode's ink or pure white on transparency, with a twelfth of the square's width as air on each side |
 | `mark/mark-monochrome.svg` + `-{256,1024}.png` | The mark in pure black on transparency: the one-ink glyph a partner surface tints for its own theme, such as an integration's small icon on Sentry, which takes no color but black |
 | `mark/mark-color-{light,dark}.svg` + `-{256,1024}.png` | The mark alone in each mode's copper on transparency, as the color logos draw it |

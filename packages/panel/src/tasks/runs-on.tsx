@@ -12,6 +12,7 @@ import {
   type DeviceSetup,
 } from "@repo/features/device-agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
+import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import {
   CHIP_LOOK,
@@ -78,18 +79,6 @@ const DEVICE_SETUP_WORDS = {
   [DEVICE_SETUP.PREPARING]: "Getting ready…",
   [DEVICE_SETUP.FAILED]: "Couldn't set up",
 } as const satisfies Record<DeviceSetup, string>;
-
-/** What the menu and its chips say. */
-export const RUNS_ON_WORDS = {
-  LABEL: "Runs on",
-  CLOUD: "Cloud",
-  ONLINE: "Online",
-  OFFLINE: "Offline",
-  UNKNOWN: "Can't check status",
-  CHECKING: "Checking",
-  REMOVED: "Removed device",
-  NO_MATCH: "No devices match",
-} as const;
 
 /** The id the Cloud row is picked by, which no device's id is. */
 const CLOUD_ROW = "cloud";
@@ -378,11 +367,9 @@ export function RunsOnPlace({
   const { mac } = agent;
   const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
   // Note that the agent names its device alone, so This Mac is told by its device and no name is twinned.
-  const words = cloud
-    ? RUNS_ON_WORDS.CLOUD
-    : mac === undefined
-      ? RUNS_ON_WORDS.REMOVED
-      : machineName({ deviceId: mac.deviceId, name: mac.name }, [], thisMac);
+  const words = agentRunsOnWords(agent, (named) =>
+    machineName({ deviceId: named.deviceId, name: named.name }, [], thisMac),
+  );
   const device = devices?.find(
     (each) => mac?.deviceId !== undefined && each.deviceId === mac.deviceId,
   );

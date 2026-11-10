@@ -6,7 +6,7 @@ import {
   automationRunTitle,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_FIRING, type AutomationRunSummary } from "@repo/features/automation-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { momentText, sinceText } from "@repo/features/time-format";
 import { TRIGGER_CATALOG } from "@repo/features/trigger-catalog";
@@ -44,7 +44,7 @@ import { ClockIcon, ExternalLinkIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ACTOR_SIZE, ActorMark, actorMarkWidth, automationRunActor } from "../actor-ref.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
@@ -143,21 +143,25 @@ export function RunRow({
 }): React.JSX.Element {
   const state = STANDING_GLYPH[automationRunStanding(run)];
   const line = automationRunLine(run, keyHolder);
-  const linkItem = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
+  const inTabOf = useOpenInTab();
   const openLink = useOpenLink();
   const coarse = useCoarsePointer();
   const { agent } = run;
   // Note that every run offers its link, one that started no agent too, because a run's own link opens it.
-  const copyLink =
+  const runPlace: LinkPlace | undefined =
     automationId === undefined
       ? undefined
-      : linkItem({ kind: LINK_PLACE.AUTOMATION_RUN, automationId, runId: run.id });
+      : { kind: LINK_PLACE.AUTOMATION_RUN, automationId, runId: run.id };
+  const links = runPlace === undefined ? [] : linkItemsOf(runPlace);
   const subject = subjectLink(run);
   const openSubject: MenuAction | undefined =
     subject === undefined
       ? undefined
       : { label: subject.label, icon: <ExternalLinkIcon />, onSelect: () => openLink(subject.url) };
-  const groups = [copyLink, openSubject].flatMap((item) => (item === undefined ? [] : [[item]]));
+  const groups = [links, openSubject === undefined ? [] : [openSubject]].filter(
+    (group) => group.length > 0,
+  );
   // A run a link named is brought into the middle of the box that scrolls it, once, as it is drawn.
   const row = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -204,6 +208,7 @@ export function RunRow({
         </span>
       }
       current={linked ? LIST_ROW_CURRENT.ITEM : undefined}
+      onOpenInTab={runPlace === undefined ? undefined : inTabOf(runPlace)}
       onPress={
         agent !== null
           ? () => onOpenAgent(agent.id)

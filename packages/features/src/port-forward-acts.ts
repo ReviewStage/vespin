@@ -13,9 +13,17 @@
  * While an agent is forwarded, one of its ports may also be shared by a
  * public link (`listening-ports-wire.ts`), which the host reads back from
  * the service and keeps beside the forwarded ports.
+ *
+ * Every host, a browser tab's among them, also asks the service for an
+ * agent's ports and its shared link on the window's behalf, forwarding
+ * nothing: each answer is the hosted `agentPorts` procedure's own, or why
+ * there is none (`answerView`).
  */
 
 import { Schema as EffectSchema } from "effect";
+import { agentPortsContract } from "./contract/agent-ports.js";
+import { answerView } from "./hosted-failure.js";
+import { portShareRequestSchema } from "./listening-ports-wire.js";
 
 /** How one forwarded port stands on this Mac. */
 export const PORT_FORWARD_STATE = {
@@ -72,3 +80,34 @@ export const portForwardingSchema = EffectSchema.NullOr(
 );
 
 export type PortForwarding = typeof portForwardingSchema.Type;
+
+/** The agent whose ports the service is asked for. */
+export const agentPortsParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+});
+
+/** One of the agent's ports to share by a public link, replacing any shared before. */
+export const agentPortShareParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  ...portShareRequestSchema.fields,
+});
+
+/** The agent's listening ports, as the window hears the service answer them, or why it did not. */
+export const agentPortsAnswerViewSchema = answerView(agentPortsContract.list);
+
+export type AgentPortsAnswerView = typeof agentPortsAnswerViewSchema.Type;
+
+/** The agent's port shared now and its link, or why it was not read. */
+export const agentSharedPortAnswerViewSchema = answerView(agentPortsContract.shared);
+
+export type AgentSharedPortAnswerView = typeof agentSharedPortAnswerViewSchema.Type;
+
+/** A port shared, its link, or why it was not. */
+export const agentPortShareAnswerViewSchema = answerView(agentPortsContract.share);
+
+export type AgentPortShareAnswerView = typeof agentPortShareAnswerViewSchema.Type;
+
+/** The shared port's link closed, or why it was not. */
+export const agentPortUnshareAnswerViewSchema = answerView(agentPortsContract.unshare);
+
+export type AgentPortUnshareAnswerView = typeof agentPortUnshareAnswerViewSchema.Type;

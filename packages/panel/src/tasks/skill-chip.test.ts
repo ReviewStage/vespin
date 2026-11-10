@@ -206,8 +206,8 @@ test("an installed skill's chip is no button, yet takes the focus for its card, 
   const [triage, release] = container.querySelectorAll<HTMLElement>("[data-skill-ref]");
   assert.ok(triage && release, "both skills are chips");
   assert.deepEqual(
-    [triage.getAttribute("role"), release.getAttribute("role")],
-    [null, "button"],
+    [triage, release].map((chip) => chip.matches("button, [role='button']")),
+    [false, true],
     "only the skill with a file to open is a button",
   );
   document.documentElement.dataset.keyboard = "true";

@@ -1,10 +1,14 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  type InboxGroup,
+  type InboxListed,
+  inboxGroups,
+  openItems,
+} from "@repo/features/inbox-list-model";
 import { useMemo } from "react";
-import { type InboxGroup, type InboxListed, openItems } from "./inbox-model.js";
 import {
   agentHoldings,
   type HolderInboxItems,
-  inboxGroups,
   taskHoldings,
   useHolderInboxItems,
 } from "./use-holder-inbox-items.js";

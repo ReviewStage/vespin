@@ -5,6 +5,7 @@ import type {
 } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { DescriptionEditor } from "@repo/features/task-wire";
 import {
   AVATAR_SIZE,
@@ -37,7 +38,6 @@ import { GLYPH_STATE, glyphStateWords } from "../state-glyph.js";
 import {
   type ArchivedByReading,
   agentParts,
-  agentStillWriting,
   isDelegation,
   pullRequestNumberLabel,
 } from "./agent-model.js";

@@ -1,4 +1,3 @@
-import { githubRepositoryFullNameSchema } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
@@ -9,29 +8,27 @@ import {
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  AVATAR_SIZE,
   BUTTON_VARIANT,
   Button,
   CONFIRM_LOSS,
+  CodeEditor,
   ConfirmDialog,
-  DIALOG_SIZE,
-  DIALOG_TONE,
-  Dialog,
-  DialogActions,
-  FormField,
+  GAP,
+  GlyphSlot,
+  Inline,
   PlusIcon,
+  POPOVER_ALIGN,
+  RepositoryPicture,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   type SettingsRowSkeletonShape,
   SettingsRowsSkeleton,
   SettingsSection,
-  Stack,
-  TEXT_FIELD_FONT,
-  TextArea,
-  TextField,
   TrashIcon,
   useConfirmDialog,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import {
@@ -41,13 +38,15 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Schema } from "effect";
 import { useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
+import { useTypedCodeColoring } from "../code-coloring.js";
 import { useConfirmAct } from "../confirm-act.js";
-import { useFormDialog } from "../desktop/use-form-dialog.js";
-import { confirmFailure } from "../failure-report.js";
+import { confirmFailure, refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
+import { useRepositoryMenu } from "../tasks/repository-chip.js";
+import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { shownWorkspace } from "./settings-rows.js";
@@ -61,9 +60,13 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  * snapshots, with `sudo`, so what it installs is in every new sandbox; a
  * repository's setup script runs once in each new agent sandbox of it, after
  * its checkout, with the workspace's environment variables. Every member reads
- * both, each script drawn under its row; an owner or admin adds, edits, and
- * removes them, a removal asking first. Each save answers the setup as it then
- * stands, which the page draws at once.
+ * both, each script drawn under its row in Bash's colors; an owner or admin
+ * edits each in place, as a file is edited, Discard and Save standing at its
+ * row's end once it differs from what is saved, types the install script
+ * into its empty row where none is saved yet, adds a setup script from a
+ * repository picked in the menu a task's repository is picked in, and
+ * removes one from its ⋯, a removal asking first. Each save answers the
+ * setup as it then stands, which the page draws at once.
  */
 
 /** A script's row while the setup is read. */
@@ -73,19 +76,43 @@ const SCRIPT_ROW_SKELETON: SettingsRowSkeletonShape = {
   end: [SETTINGS_SKELETON_CONTROL.MORE],
 };
 
-/** The most lines a script stands at under its row before it scrolls. */
-const SHOWN_SCRIPT_LINES = 8;
+/** What a script's editor offers while it is empty, by which script it is. */
+const PLACEHOLDER = {
+  INSTALL: "sudo apt-get install -y postgresql-client",
+  SETUP: "pnpm install\ndocker compose pull",
+} as const;
 
-/** The lines the edit dialog's script stands at. */
-const EDITED_SCRIPT_LINES = 14;
+/** How many lines an empty script's editor stands, so its placeholder and the first lines typed have room. */
+const EMPTY_SCRIPT_LINES = 3;
 
-/** Whether a repository is one the service takes, so Save waits for one it would not refuse by shape. */
-const isRepository = Schema.is(githubRepositoryFullNameSchema);
+/** The language main colors a script in. */
+const SCRIPT_LANGUAGE = "bash";
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 function rejected(error: unknown): ActionResult {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(error) };
+}
+
+/** Whether two names are one repository, as GitHub's names ignore case. */
+function sameRepository(one: string, other: string): boolean {
+  return one.toLowerCase() === other.toLowerCase();
+}
+
+/** Whether a script may be saved as typed: words, within the bound. */
+function savable(script: string): boolean {
+  return script.trim() !== "" && script.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_SCRIPT_CHARS;
+}
+
+/** Why a row's last save was refused, as the line under it says it; nothing while none was. */
+function saveRefusal(error: Error | null): ShownError | undefined {
+  if (error === null) return undefined;
+  return replayMaskedError(
+    refusalShown(
+      { words: actFailureWords(error), cause: error },
+      FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE,
+    ),
+  );
 }
 
 /** Which script a save names: the workspace's install script, or a repository's setup script. */
@@ -127,149 +154,117 @@ function useSaveScript(workspaceId: string) {
   });
 }
 
-/**
- * The script editor: the install script where `adding` is false and no
- * repository is named, a repository's setup script where one is, or a new
- * setup script with its repository typed in where `adding` is true.
- */
-function useScriptDialog(
-  workspaceId: string,
-  shape: { readonly title: string; readonly repository?: string; readonly adding?: boolean },
-  saved: string,
-) {
-  const [typedRepository, setTypedRepository] = useState("");
-  const [script, setScript] = useState(saved);
-  const saving = useSaveScript(workspaceId);
-  const repository = shape.adding === true ? typedRepository.trim() : shape.repository;
-  const target: ScriptTarget = repository === undefined ? {} : { repository };
-  const act = useConfirmAct(saving, {
-    send: () => saving.mutateAsync({ target, script }),
-    answered: () => ACCEPTED,
-    failed: rejected,
-  });
-  const confirm = useConfirmDialog(
-    { subject: true, surfaceOpen: true },
-    act,
-    confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
-  );
-  const form = useFormDialog(
-    confirm,
-    (repository === undefined || isRepository(repository)) &&
-      script.trim() !== "" &&
-      script.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_SCRIPT_CHARS,
-  );
-  const dialog = (
-    <Dialog
-      open={form.open}
-      size={DIALOG_SIZE.WIDE}
-      title={shape.title}
-      replayUnmasked
-      titleReplayMasked={shape.repository !== undefined}
-      busy={form.settling}
-      refused={form.refusal !== undefined}
-      onDismiss={form.dismiss}
-      onExited={() => {
-        setTypedRepository("");
-        setScript(saved);
-      }}
-      actions={
-        <DialogActions
-          onCancel={form.dismiss}
-          act={{ verb: "Save", tone: DIALOG_TONE.PRIMARY, running: "Saving", ...form.act }}
-        />
-      }
-    >
-      <Stack>
-        {shape.adding === true ? (
-          <FormField label="Repository">
-            {(control) => (
-              <ReplayMask>
-                <TextField
-                  field={control}
-                  autoCorrect={false}
-                  spellCheck={false}
-                  placeholder="acme/app"
-                  disabled={form.settling}
-                  value={typedRepository}
-                  onChange={setTypedRepository}
-                />
-              </ReplayMask>
-            )}
-          </FormField>
-        ) : null}
-        <FormField
-          label="Script"
-          description={
-            repository === undefined
-              ? "Bash, run with sudo from /workspace."
-              : "Bash, run from the repository's checkout."
-          }
-          error={replayMaskedError(form.refusal)}
-        >
-          {(control) => (
-            <ReplayMask>
-              <TextArea
-                field={control}
-                font={TEXT_FIELD_FONT.MONO}
-                rows={EDITED_SCRIPT_LINES}
-                spellCheck={false}
-                placeholder={
-                  repository === undefined
-                    ? "sudo apt-get install -y postgresql-client"
-                    : "pnpm install\ndocker compose pull"
-                }
-                disabled={form.settling}
-                value={script}
-                onChange={setScript}
-              />
-            </ReplayMask>
-          )}
-        </FormField>
-      </Stack>
-    </Dialog>
-  );
-  return { ask: confirm.ask, dialog };
-}
-
-/** A saved script drawn under its row, read-only, as tall as its lines up to `SHOWN_SCRIPT_LINES`. */
-function ShownScript({ label, script }: { label: string; script: string }): React.JSX.Element {
+/** A script under its row, colored as Bash while it is typed, masked in a screen recording; read-only to a member. */
+function ScriptEditor({
+  label,
+  value,
+  onChange,
+  install,
+  editable,
+  busy,
+  autoFocus,
+}: {
+  label: string;
+  value: string;
+  onChange: (script: string) => void;
+  /** Whether it is the install script, which its placeholder suggests. */
+  install: boolean;
+  /** Whether the reader may change it: an owner or admin. */
+  editable: boolean;
+  /** Whether a save of it is out, which holds it still. */
+  busy: boolean;
+  /** Whether the caret lands in it as it is drawn, as in a setup script just added. */
+  autoFocus?: boolean;
+}): React.JSX.Element {
+  const lines = useTypedCodeColoring(SCRIPT_LANGUAGE, value);
   return (
     <ReplayMask>
-      <TextArea
+      <CodeEditor
         label={label}
-        font={TEXT_FIELD_FONT.MONO}
-        rows={Math.min(script.split("\n").length, SHOWN_SCRIPT_LINES)}
-        readOnly
-        value={script}
-        onChange={() => undefined}
+        value={value}
+        onChange={onChange}
+        lines={lines}
+        placeholder={install ? PLACEHOLDER.INSTALL : PLACEHOLDER.SETUP}
+        rows={value === "" ? EMPTY_SCRIPT_LINES : 1}
+        readOnly={!editable || busy}
+        autoFocus={autoFocus}
       />
     </ReplayMask>
   );
 }
 
-/** One script's row: its name and the script under it, and for an owner or admin a ⋯ with Edit and Remove. */
+/** A row's way out of an edit and its Save, at the row's end. */
+function EditActions({
+  leave,
+  saving,
+  canSave,
+  onLeave,
+  onSave,
+}: {
+  /** What letting the edit go says: Discard for a saved script, Cancel for a new one. */
+  leave: string;
+  saving: boolean;
+  canSave: boolean;
+  onLeave: () => void;
+  onSave: () => void;
+}): React.JSX.Element {
+  return (
+    <Inline gap={GAP.CONTROL}>
+      <Button variant={BUTTON_VARIANT.QUIET} disabled={saving} onClick={onLeave}>
+        {leave}
+      </Button>
+      <Button variant={BUTTON_VARIANT.PRIMARY} disabled={!canSave || saving} onClick={onSave}>
+        {saving ? "Saving" : "Save"}
+      </Button>
+    </Inline>
+  );
+}
+
+/**
+ * One script's row: its name and the script under it, which an owner or
+ * admin edits in place, Discard and Save standing at the row's end once it
+ * differs from what is saved, and a ⋯ with Remove once one is saved. The
+ * install script's row stands with an empty script where none is saved, so
+ * the first is typed in place as any edit is; a setup script just added
+ * stands the same way, the caret in it and Cancel at its end until it is
+ * saved, when it goes on as the repository's saved row. Note that the edit
+ * is held apart from what is saved, so a save from elsewhere is drawn while
+ * nothing is being typed, and that it is let go once what is saved agrees
+ * with it rather than when its save answers, as the Optimistic Updates
+ * guide's "via the UI" draws a mutation's variables until the read catches
+ * up (`row-write.ts`): the read's observers hear the answer a tick after the
+ * save's own callback runs, so letting go then would draw the old script for
+ * a frame between.
+ */
 function ScriptRow({
   workspaceId,
   name,
   repository,
   script,
   manages,
+  pictures,
+  added,
 }: {
   workspaceId: string;
   name: string;
   repository?: string;
+  /** The script as saved; empty for an install script or a setup script not yet saved. */
   script: string;
   manages: boolean;
+  /** Whether a repository is drawn with its owner's picture (`RepositoryPicture`). */
+  pictures: boolean;
+  /** A setup script just added and not yet saved: what Cancel does to let it go. */
+  added?: { readonly onCancel: () => void } | undefined;
 }): React.JSX.Element {
-  const editing = useScriptDialog(
-    workspaceId,
-    { title: `Edit ${name}`, ...(repository === undefined ? undefined : { repository }) },
-    script,
-  );
+  const [edited, setEdited] = useState<string | undefined>(undefined);
   const saving = useSaveScript(workspaceId);
+  const target: ScriptTarget = repository === undefined ? {} : { repository };
+  // An edit the saved script now agrees with, its own save's or another's, is let go.
+  if (edited !== undefined && edited === script && !saving.isPending) setEdited(undefined);
+  const shown = edited ?? script;
+  const changed = edited !== undefined && edited !== script;
   const removeAct = useConfirmAct(saving, {
-    send: () =>
-      saving.mutateAsync({ target: repository === undefined ? {} : { repository }, script: "" }),
+    send: () => saving.mutateAsync({ target, script: "" }),
     answered: () => ACCEPTED,
     failed: rejected,
   });
@@ -278,49 +273,128 @@ function ScriptRow({
     removeAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
   );
-  const actions = manages
-    ? [
-        { label: "Edit", icon: <GLYPH.RENAME />, onSelect: editing.ask },
-        { label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask },
-      ]
-    : [];
+  const discard = () => {
+    saving.reset();
+    setEdited(undefined);
+  };
+  const save = () => saving.mutate({ target, script: shown });
+  const actions =
+    manages && script !== ""
+      ? [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
+      : [];
   return (
     <>
       <MenuRow
         thing={name}
         actions={actions}
         row={{
-          label: repository === undefined ? name : <ReplayMask>{name}</ReplayMask>,
-          below: <ShownScript label={name} script={script} />,
+          // Note that the owner's picture rides the label rather than leading the row, so every script's editor stands at the same inset.
+          label:
+            repository === undefined ? (
+              name
+            ) : (
+              <Inline gap={GAP.ICON}>
+                <GlyphSlot line>
+                  <RepositoryPicture
+                    repository={repository}
+                    pictures={pictures}
+                    size={AVATAR_SIZE.GLYPH}
+                  />
+                </GlyphSlot>
+                <ReplayMask>{name}</ReplayMask>
+              </Inline>
+            ),
+          error: saveRefusal(saving.error),
+          control:
+            changed || added !== undefined ? (
+              <EditActions
+                leave={added === undefined ? "Discard" : "Cancel"}
+                saving={saving.isPending}
+                canSave={savable(shown)}
+                onLeave={added === undefined ? discard : added.onCancel}
+                onSave={save}
+              />
+            ) : undefined,
+          below: (
+            <ScriptEditor
+              label={name}
+              value={shown}
+              onChange={setEdited}
+              install={repository === undefined}
+              editable={manages}
+              busy={saving.isPending}
+              autoFocus={added !== undefined}
+            />
+          ),
         }}
       />
       {manages ? (
-        <>
-          {editing.dialog}
-          <ConfirmDialog
-            open
-            confirm={removal}
-            question={{
-              title: `Remove ${name}?`,
-              verb: "Remove",
-              running: "Removing",
-              loss: CONFIRM_LOSS.AFFECTS_OTHERS,
-              replayUnmasked: true,
-              titleReplayMasked: repository !== undefined,
-            }}
-          />
-        </>
+        <ConfirmDialog
+          open
+          confirm={removal}
+          question={{
+            title: `Remove ${name}?`,
+            verb: "Remove",
+            running: "Removing",
+            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+            replayUnmasked: true,
+            titleReplayMasked: repository !== undefined,
+          }}
+        />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The Setup scripts section's Add script, which drops the repository menu a
+ * task's repository is picked in (`useRepositoryMenu`): the repositories the
+ * workspace's GitHub reaches, less those `taken`. A pick adds that
+ * repository's row, and the press stands for the next one.
+ */
+function AddSetupButton({
+  workspaceId,
+  taken,
+  onPick,
+}: {
+  workspaceId: string;
+  /** The repositories with a setup script saved or being added, which the menu leaves out. */
+  taken: readonly string[];
+  onPick: (repository: string) => void;
+}): React.JSX.Element {
+  const chooser = useRepositoriesIn()(workspaceId);
+  const menu = useRepositoryMenu({
+    value: null,
+    chooser,
+    onChoose: onPick,
+    omit: taken,
+    align: POPOVER_ALIGN.END,
+  });
+  // Note that the menu's press only opens or shuts it, starting no act, so it is named for that.
+  const toggleMenu = menu.press;
+  return (
+    <div className="relative inline-flex min-w-0" ref={menu.room}>
+      <Button
+        variant={BUTTON_VARIANT.OUTLINE}
+        icon={<PlusIcon />}
+        aria-haspopup="dialog"
+        aria-expanded={menu.open}
+        aria-controls={menu.open ? menu.menuId : undefined}
+        onClick={(event) => toggleMenu(event.currentTarget)}
+      >
+        Add script
+      </Button>
+      {menu.menu}
+    </div>
   );
 }
 
 /** The page over one workspace: its install script, then each repository's setup script. */
 function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const manages = managesWorkspace(workspace);
+  const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
-  const addInstall = useScriptDialog(workspace.id, { title: "Add install script" }, "");
-  const addSetup = useScriptDialog(workspace.id, { title: "Add setup script", adding: true }, "");
+  const [added, setAdded] = useState<readonly string[]>([]);
   const answer = setup.data;
   const read = setup.isError ? (
     <ReadFailed
@@ -331,28 +405,40 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
   ) : answer === undefined ? (
     <SettingsRowsSkeleton label={readingWords("the cloud setup")} rows={[SCRIPT_ROW_SKELETON]} />
   ) : undefined;
+  const setups = answer?.setups ?? [];
+  // A repository added and since saved is the saved list's now, so it is let go of here.
+  const unsaved = added.filter(
+    (repository) => !setups.some((each) => sameRepository(each.repository, repository)),
+  );
+  if (unsaved.length !== added.length) setAdded(unsaved);
+  // Note that the saved and the added stand in one list keyed by repository, so a row just saved goes on as the same row, its caret where it was.
+  const rows = [
+    ...setups,
+    ...(manages ? unsaved.map((repository) => ({ repository, script: "", added: true })) : []),
+  ];
+  const taken = rows.map((each) => each.repository);
+  const add = (repository: string) =>
+    setAdded((now) =>
+      now.some((each) => sameRepository(each, repository)) ? now : [...now, repository],
+    );
+  const letGo = (repository: string) =>
+    setAdded((now) => now.filter((each) => !sameRepository(each, repository)));
   return (
     <>
       <SettingsSection
         title="Install software"
         caption="Runs with sudo each time a repository's snapshot is built, so what it installs is in every new agent sandbox."
-        action={
-          manages && answer !== undefined && answer.install === null ? (
-            <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={addInstall.ask}>
-              Add script
-            </Button>
-          ) : undefined
-        }
       >
         {read ??
-          (answer?.install == null ? (
+          (answer?.install == null && !manages ? (
             <SettingsLine>No install script yet.</SettingsLine>
           ) : (
             <ScriptRow
               workspaceId={workspace.id}
               name="Install script"
-              script={answer.install.script}
+              script={answer?.install?.script ?? ""}
               manages={manages}
+              pictures={pictures}
             />
           ))}
       </SettingsSection>
@@ -361,17 +447,14 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
         caption="Run once in each new agent sandbox of their repository, after its checkout, with the workspace's environment variables."
         action={
           manages ? (
-            <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={addSetup.ask}>
-              Add script
-            </Button>
+            <AddSetupButton workspaceId={workspace.id} taken={taken} onPick={add} />
           ) : undefined
         }
       >
-        {read ??
-          (answer === undefined || answer.setups.length === 0 ? (
-            <SettingsLine>No setup scripts yet.</SettingsLine>
-          ) : (
-            answer.setups.map((each) => (
+        {read ?? (
+          <>
+            {rows.length === 0 ? <SettingsLine>No setup scripts yet.</SettingsLine> : null}
+            {rows.map((each) => (
               <ScriptRow
                 key={each.repository.toLowerCase()}
                 workspaceId={workspace.id}
@@ -379,16 +462,13 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
                 repository={each.repository}
                 script={each.script}
                 manages={manages}
+                pictures={pictures}
+                added={"added" in each ? { onCancel: () => letGo(each.repository) } : undefined}
               />
-            ))
-          ))}
+            ))}
+          </>
+        )}
       </SettingsSection>
-      {manages ? (
-        <>
-          {addInstall.dialog}
-          {addSetup.dialog}
-        </>
-      ) : null}
     </>
   );
 }

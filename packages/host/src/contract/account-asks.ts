@@ -3,6 +3,7 @@ import {
   chatGptDeviceLoginParamsSchema,
   chatGptDevicePollAnswerViewSchema,
   chatGptDeviceStartAnswerViewSchema,
+  chatGptDeviceStartParamsSchema,
   chatGptDeviceWaitParamsSchema,
   dictationTranscribeAnswerViewSchema,
   dictationTranscribeParamsSchema,
@@ -15,6 +16,8 @@ import {
   providerKeyRemoveParamsSchema,
   providerKeySaveParamsSchema,
   providerKeysAnswerViewSchema,
+  subscriptionLabelParamsSchema,
+  subscriptionOrderParamsSchema,
 } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { ACT } from "@repo/sync";
@@ -63,8 +66,24 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,
   }),
+  SUBSCRIPTION_RENAME: hostAct({
+    input: subscriptionLabelParamsSchema,
+    output: providerKeysAnswerViewSchema,
+    refusal: "Couldn't rename your plan on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
+  SUBSCRIPTIONS_REORDER: hostAct({
+    input: subscriptionOrderParamsSchema,
+    output: providerKeysAnswerViewSchema,
+    refusal: "Couldn't reorder your plans on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
   CHATGPT_DEVICE_START: hostAct({
-    input: EffectSchema.Undefined,
+    input: chatGptDeviceStartParamsSchema,
     output: chatGptDeviceStartAnswerViewSchema,
     refusal: "Couldn't start connecting Codex on this system.",
     panelOnly: true,
@@ -118,6 +137,14 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,
+  }),
+  ACCOUNT_ACTIVE: hostAct({
+    input: EffectSchema.Undefined,
+    output: EffectSchema.Void,
+    refusal: "Could not tell the service you are here on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: undefined,
   }),
 });
 

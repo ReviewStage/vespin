@@ -64,9 +64,25 @@
 import type { TasklessAgent } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import { holderName, type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
+import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  type MatchRange,
+  matchesTokens,
+  matchRanges,
+  searchTokens,
+} from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  agentRow,
+  orderTaskRows,
+  repositoryLabel,
+  TASK_ROW,
+  type TaskRow,
+  taskRow,
+} from "@repo/features/task-list-model";
 import {
   TASK_CREATE_RELATION_KIND,
   TASK_RELATION_KIND,
@@ -133,17 +149,8 @@ import {
   type SearchSubject,
   searchHit,
 } from "@repo/ui/search-score";
-import { type MatchRange, matchesTokens, matchRanges, searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
-import {
-  agentRow,
-  orderTaskRows,
-  repositoryLabel,
-  TASK_ROW,
-  type TaskRow,
-  taskRow,
-} from "@repo/ui/task-list-model";
 import { DOCUMENT_REGION, SETTLED_STATUS, settleOffered, TASK_MARK } from "@repo/ui/tasks-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -190,6 +197,7 @@ import {
   type SettingsSearchInput,
   settingsSearchEntries,
 } from "../settings-search.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD, tasklessRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -198,14 +206,12 @@ import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { fileName } from "../tasks/file-ref-model.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, ItemMark } from "../tasks/inbox-item-parts.js";
-import { holderName, type InboxListed, inboxItemWords } from "../tasks/inbox-model.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
 import { agentEndMark, openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
-import { cardTitle } from "../tasks/tool-call-model.js";
 import { type AgentsControl, type HeldPeople, readAgentById } from "../tasks/use-agents.js";
 import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
@@ -224,6 +230,7 @@ import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
+import { actingCommand } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { agentEntries } from "./agent-entries.js";
 import { type AgentReadMarks, useAgentReadMarks } from "./agent-read-marks.js";
@@ -1433,8 +1440,8 @@ function panelTabRows(
  * so, as the plan's menus offer it; none while no plan is looked at. Note
  * that a plan Settings or the Inbox covers is offered nothing, because the
  * row does not name the plan, and going back to it opens it, which takes
- * the mark back before it is ever seen. It wears U, which marks the plan
- * open while no sidebar row has the keyboard, as ⌘K's own field has it.
+ * the mark back before it is ever seen. It wears U where U marks the plan
+ * open, as it does while no sidebar row has the keyboard, as ⌘K's own field has it.
  */
 function readMarkRows(
   tasks: TasksControl,
@@ -1446,13 +1453,13 @@ function readMarkRows(
   if (task.id !== reads.watched) return [];
   const item = markReadItem(
     { unread: reads.markedUnread(task.id), onMark: (unread) => reads.mark(task, unread) },
-    true,
+    shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id),
   );
   return [
     {
       icon: item.icon,
       label: item.label,
-      command: item.command,
+      command: actingCommand(item),
       terms: [item.label],
       onChoose: () => choose(item.onSelect),
     },
@@ -1476,13 +1483,13 @@ function agentReadMarkRows(
   if (agent === undefined) return [];
   const item = markReadItem(
     { unread: reads.markedUnread(agent.id), onMark: (unread) => reads.mark(agent, unread) },
-    true,
+    shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id),
   );
   return [
     {
       icon: item.icon,
       label: item.label,
-      command: item.command,
+      command: actingCommand(item),
       terms: [item.label],
       onChoose: () => choose(item.onSelect),
     },

@@ -1,13 +1,23 @@
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
+import {
+  anyUnread,
+  holderAutomationId,
+  INBOX_HOLDER,
+  type InboxHolder,
+  type InboxListed,
+  itemWorkspaceId,
+  NOTHING_HERE,
+} from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
-import type { DescriptionMention, MentionLines } from "@repo/features/mention-link";
+import type { DescriptionMention } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeRef } from "@repo/features/task-wire";
 import { backToWords, readFailedWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { ERROR_STATE_PLACEMENT, ErrorState, Toolbar } from "@repo/ui";
 import {
   agentTab,
@@ -31,6 +41,7 @@ import { NOT_FOUND_THING, NotFound } from "../not-found.js";
 import { HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { type AutomationsDoor, useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName, messageFailureWords } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { InboxCodeDoors } from "../tasks/inbox-code-card.js";
@@ -40,17 +51,10 @@ import {
   INBOX_VIEW_ITEMS,
   useInboxColumns,
 } from "../tasks/inbox-columns.js";
-import { InboxList, InboxListNote, InboxPaneEmpty, NOTHING_HERE } from "../tasks/inbox-list.js";
-import {
-  anyUnread,
-  holderAutomationId,
-  INBOX_HOLDER,
-  type InboxHolder,
-  type InboxListed,
-  itemWorkspaceId,
-} from "../tasks/inbox-model.js";
+import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { type InboxNewThread, InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
+import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import {
@@ -63,12 +67,7 @@ import {
   useSavedDescriptionText,
 } from "../tasks/task-mentions.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
-import {
-  cardTitle,
-  placeOfTaskTarget,
-  TOOL_TARGET,
-  type ToolTarget,
-} from "../tasks/tool-call-model.js";
+import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
@@ -321,7 +320,7 @@ export const DesktopInbox = memo(function DesktopInbox({
         reads ?? (chosen?.holder.kind === INBOX_HOLDER.TASK ? undefined : repositoryReads(place)),
     });
   // A file the item's words or box name opens as its code does, in the panel beside the Inbox.
-  const openMentionedFile = (path: string, lines: MentionLines | undefined) =>
+  const openMentionedFile = (path: string, lines: OpenFileLines | undefined) =>
     openFile(fileRef(path, lines), lines?.commit);
   // The task's agents this Inbox read, an archived one's among them, whose Pull request tabs the panel beside the item draws.
   const { heldIds } = agents;
@@ -482,6 +481,14 @@ export const DesktopInbox = memo(function DesktopInbox({
       : () => tasks.agentView.onOpen(item.agentId);
   };
   useAppCommand(APP_COMMAND.OPEN_IN_TASK, openInTask());
+  // ⌘O acts on the item's task, or its agent where no task holds it, while the item shown takes it, so their menus print it.
+  const opensInTask =
+    !tasks.shown || (panelAgent !== undefined && taskId !== undefined) || opened === undefined
+      ? undefined
+      : opened.holder.kind === INBOX_HOLDER.TASK
+        ? shortcutSubject(SHORTCUT_SUBJECT.TASK, opened.holder.task.id)
+        : shortcutSubject(SHORTCUT_SUBJECT.AGENT, opened.item.agentId);
+  useShortcutTarget(opensInTask, OPEN_IN_TASK_KEYS);
   // The panel stands for the item asked for, by its task, or its agent where it has none (`use-tasks-tab.ts`).
   const panelFor = taskId ?? chosenAgentId;
   const { pages } = view;
@@ -542,6 +549,8 @@ export const DesktopInbox = memo(function DesktopInbox({
                 onMark: markItem,
                 onClose: resolveItems,
                 onRemind: marks.onRemind,
+                // The thread hands its crumbs the keys only while it is the item shown and the panel beside it does not hold them.
+                keys: opened?.item.id === listed.item.id && !sideFocused,
               }}
             />
           </TaskMentions>
@@ -709,6 +718,9 @@ export const DesktopInbox = memo(function DesktopInbox({
   );
 });
 
+/** The key the Inbox offers on the item shown's task or agent, which opens it in its full place. */
+const OPEN_IN_TASK_KEYS: readonly KeyedCommand[] = [APP_COMMAND.OPEN_IN_TASK];
+
 /**
  * The chosen item's thread (`InboxPane`), its box's drafts read here,
  * where the box is drawn, rather than by the page around it, so a word typed
@@ -769,7 +781,7 @@ export function startedThreads(
 }
 
 /** A file the item names as its code names it: its path, and its lines where it names them. */
-function fileRef(path: string, lines: MentionLines | undefined): CodeRef {
+function fileRef(path: string, lines: OpenFileLines | undefined): CodeRef {
   return lines === undefined
     ? { path }
     : { path, startLine: lines.startLine, endLine: lines.endLine };

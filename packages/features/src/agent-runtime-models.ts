@@ -66,7 +66,7 @@ const NATIVE_MODEL_RULE: Partial<Record<AgentRuntime, RuntimeModelRule>> = {
     ultrafast: false,
     contextWindow: false,
     name: "Codex",
-    fastRefusal: "which runs a fast version on the ChatGPT plan or an OpenAI API key alone",
+    fastRefusal: "which runs a fast version on the Codex plan or an OpenAI API key alone",
     ultrafastRefusal: "which runs an Ultrafast version on an OpenAI API key alone",
   },
 };

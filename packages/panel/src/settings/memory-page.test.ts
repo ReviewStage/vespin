@@ -13,6 +13,7 @@ import {
   NO_KEYS_HELD,
 } from "@repo/host/app-state";
 import type { PortActKind, PortActResult } from "@repo/host/contract";
+import { ReplayUnmask, showsInReplay } from "@repo/ui/session-replay-marks";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -188,14 +189,19 @@ async function mount(
   const draw = (shown: Workspace | null, readerId: string | undefined) =>
     act(() =>
       root.render(
+        // Note that the page stands under the unmask mark Settings draws every page under.
         withQueryClient(
-          createElement(MemorySection, {
-            signedIn,
-            workspace: shown ?? undefined,
-            readerId,
-            workspacesFailed: workspaces.failed,
-            onRetryWorkspaces: workspaces.retry,
-          }),
+          createElement(
+            ReplayUnmask,
+            null,
+            createElement(MemorySection, {
+              signedIn,
+              workspace: shown ?? undefined,
+              readerId,
+              workspacesFailed: workspaces.failed,
+              onRetryWorkspaces: workspaces.retry,
+            }),
+          ),
         ),
       ),
     );
@@ -276,7 +282,7 @@ async function searchFor(page: HTMLElement, query: string): Promise<void> {
   await settle();
 }
 
-test("what Vespin kept in the workspace is held for it and listed in the service's order, each memory's words whole and named by whose they are, and kept out of the screen recording", async () => {
+test("what Vespin kept in the workspace is held for it and listed in the service's order, each memory's words whole and named by whose they are", async () => {
   const { page } = await mount();
 
   assert.deepEqual(
@@ -290,9 +296,10 @@ test("what Vespin kept in the workspace is held for it and listed in the service
     rowOf(page, memory).querySelector(".ui-comment-head")?.textContent ?? "";
   assert.match(keeper(DEPLOYS), /^You/u);
   assert.match(keeper(TESTS), /^Dean/u);
-  assert.ok(
-    rowOf(page, DEPLOYS).closest(".ph-no-capture"),
-    "the rows are under the unrecorded class",
+  assert.equal(
+    showsInReplay(rowOf(page, DEPLOYS).querySelector(".memory-text")),
+    false,
+    "a memory's words are masked in a screen recording",
   );
 });
 

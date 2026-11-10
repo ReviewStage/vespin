@@ -4,6 +4,7 @@ import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
 import type { ToolCallSettlement } from "@repo/features/turn-run";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { storedServerCall } from "../../integrations/connection-tools.js";
 import {
@@ -18,6 +19,7 @@ import {
   PICTURE_STAND_IN,
   runnerMoments,
   toolAnswerSettlement,
+  usageLimitSettlement,
 } from "./runner-moments.js";
 
 /**
@@ -36,7 +38,11 @@ import {
  * answer stand in the transcript, its inner work does not. A subagent the
  * CLI runs in the background, as it does by default, answers its call at
  * once with words that say only that it launched, so that call is kept
- * open instead and settled by the task notification its end posts. A call to our
+ * open instead and settled by the task notification its end posts. A
+ * subagent that fails while the plan's limit refuses its calls (a rejected
+ * `rate_limit_event`, which the CLI posts ahead of the subagent's failure)
+ * failed for that limit, so its call answers with the limit's notice
+ * rather than the CLI's error. A call to our
  * own MCP server is named as our tool (`mcp__workspace__read_inbox` is
  * `read_inbox`, as is the `mcp__luke__` a transcript stored before the
  * server's rename names it by) and its answer read as the JSON that tool answers; a call
@@ -48,7 +54,8 @@ import {
  * is no error ran on it, an answer the CLI flags `authentication_failed`
  * (a setup-token revoked, expired, or never one) refused it, and a
  * rejected `rate_limit_event` is its limit reached, until the reset the
- * CLI names. Each shape is read with a schema of the fields this reads alone, so
+ * CLI names, as is an answer flagged `billing_error`, an API key out of
+ * credit. Each shape is read with a schema of the fields this reads alone, so
  * a field the SDK adds changes nothing here, and a message no schema fits
  * is no moment.
  */
@@ -220,6 +227,7 @@ const readRateLimit = Schema.decodeUnknownOption(
       status: Schema.String,
       rateLimitType: Schema.optionalKey(Schema.String),
       resetsAt: Schema.optionalKey(Schema.Number),
+      utilization: Schema.optionalKey(Schema.Number),
     }),
   }),
 );
@@ -299,6 +307,14 @@ const INFORMATIONAL_WARNING = "warning";
 /** The limit status that refuses the plan's calls, as `SDKRateLimitInfo` spells it. */
 const RATE_LIMIT_REFUSED = "rejected";
 
+/** How long each of the plan's limits runs, in minutes, by the `rateLimitType` the SDK names it. */
+const RATE_LIMIT_WINDOW_MINS: Readonly<Record<string, number>> = {
+  five_hour: 5 * 60,
+  seven_day: 7 * 24 * 60,
+  seven_day_opus: 7 * 24 * 60,
+  seven_day_sonnet: 7 * 24 * 60,
+};
+
 /**
  * The errors an answer carries that say the provider refused the plan's
  * credential, as `SDKAssistantMessageError` spells them: the token was
@@ -309,6 +325,23 @@ const CREDENTIAL_REFUSED: ReadonlySet<string> = new Set([
   "authentication_failed",
   "oauth_org_not_allowed",
 ]);
+
+/**
+ * The error an answer carries where the provider refused the work for the
+ * credential's billing, as `SDKAssistantMessageError` spells it: an API
+ * key's organization out of credit, which reads as the credential's limit,
+ * so the turn goes on with the next payer.
+ */
+const BILLING_REFUSED = "billing_error";
+
+/**
+ * The error the CLI's own answer carries where the plan's usage limit
+ * refused a model call, as `SDKAssistantMessageError` spells it: its words
+ * are the CLI's, never the model's.
+ */
+const RATE_LIMITED = "rate_limit" satisfies NonNullable<
+  Extract<RunnerMessage, { type: "assistant" }>["error"]
+>;
 
 /** What Claude Code puts before any MCP server's tool, the server's name and `__` following it (`mcp__linear__list_issues`). */
 const MCP_TOOL_PREFIX = "mcp__";
@@ -399,6 +432,8 @@ function contextOf(usage: typeof MessageUsageSchema.Type): NativeContextUsage {
 function assistantMoments(message: WireValue): readonly NativeMoment[] {
   const read = readAssistant(message);
   if (Option.isNone(read)) return [];
+  // Note that the CLI's synthetic limit answer is no model message; the launch's end leaves the native notice only if every payer is spent.
+  if (read.value.error === RATE_LIMITED) return [];
   const { id, content, usage } = read.value.message;
   const moments: NativeMoment[] = [
     id === undefined ? { kind: NATIVE_MOMENT.STEP } : { kind: NATIVE_MOMENT.STEP, key: id },
@@ -409,6 +444,9 @@ function assistantMoments(message: WireValue): readonly NativeMoment[] {
   const { error } = read.value;
   if (error !== undefined && CREDENTIAL_REFUSED.has(error)) {
     moments.push({ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.INVALID });
+  }
+  if (error === BILLING_REFUSED) {
+    moments.push({ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED });
   }
   for (const block of content) {
     const text = readTextBlock(block);
@@ -478,10 +516,14 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
       moments.push({ kind: NATIVE_MOMENT.SUBAGENT_RUNNING, callId, key: callId });
       continue;
     }
+    const failed = answer.value.is_error === true;
     moments.push({
       kind: NATIVE_MOMENT.TOOL_SETTLED,
       callId: answer.value.tool_use_id,
-      settlement: settlementOf(name, answer.value.content, answer.value.is_error === true),
+      settlement:
+        failed && name === CLAUDE_CODE_TOOL.AGENT && held.planLimited
+          ? usageLimitSettlement(USAGE_LIMIT_AGENT.CLAUDE)
+          : settlementOf(name, answer.value.content, failed),
     });
   }
   return moments.length === 0 ? [] : [...moments, { kind: NATIVE_MOMENT.STEP_CLOSED }];
@@ -563,14 +605,27 @@ function resultMoments(message: WireValue): readonly NativeMoment[] {
 function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
   const read = readRateLimit(message);
   if (Option.isNone(read)) return [];
-  const { status, rateLimitType, resetsAt } = read.value.rate_limit_info;
+  const { status, rateLimitType, resetsAt, utilization } = read.value.rate_limit_info;
   // Note that the SDK counts the reset in seconds since the epoch.
   const resetsAtMs = resetsAt === undefined ? undefined : resetsAt * 1000;
   const words = [`rate_limit_${status}`];
   if (rateLimitType !== undefined) words.push(rateLimitType);
   if (resetsAtMs !== undefined) words.push(`resets ${new Date(resetsAtMs).toISOString()}`);
   const refused = status === RATE_LIMIT_REFUSED;
+  const windowMins =
+    rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOW_MINS[rateLimitType];
   return [
+    // Note that the SDK reports utilization as a share of one, which the plan's row keeps in percent.
+    ...(utilization === undefined
+      ? []
+      : [
+          {
+            kind: NATIVE_MOMENT.PLAN_USAGE,
+            usedPercent: utilization * 100,
+            ...(windowMins === undefined ? {} : { windowMins }),
+            ...(resetsAtMs === undefined ? {} : { resetsAt: resetsAtMs }),
+          } as const,
+        ]),
     {
       kind: NATIVE_MOMENT.RATE_LIMIT,
       refused,
@@ -585,21 +640,23 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
 /**
  * A background task's end, which settles the subagent call it ran under
  * where it was one (the projection passes over any other task's): its
- * summary is the answer, and a task that failed or was stopped a refusal.
+ * summary is the answer, and a task that failed or was stopped a refusal,
+ * but one that failed while the plan's limit stands, which failed for it.
  */
-function taskNotificationMoments(message: WireValue): readonly NativeMoment[] {
+function taskNotificationMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const read = readTaskNotification(message);
   if (Option.isNone(read) || read.value.tool_use_id === undefined) return [];
   const { tool_use_id, status, summary } = read.value;
   const text = summary === undefined || summary.trim() === "" ? status : summary;
+  const failed = status !== TASK_COMPLETED;
   return [
     {
       kind: NATIVE_MOMENT.SUBAGENT_ENDED,
       key: tool_use_id,
-      settlement: toolAnswerSettlement(
-        { workspaceTool: false, text, output: text },
-        status !== TASK_COMPLETED,
-      ),
+      settlement:
+        failed && held.planLimited
+          ? usageLimitSettlement(USAGE_LIMIT_AGENT.CLAUDE)
+          : toolAnswerSettlement({ workspaceTool: false, text, output: text }, failed),
     },
   ];
 }
@@ -687,7 +744,11 @@ function failureNoticeMoments(
   }
 }
 
-function systemMoments(subtype: string | undefined, message: WireValue): readonly NativeMoment[] {
+function systemMoments(
+  subtype: string | undefined,
+  message: WireValue,
+  held: NativeHeld,
+): readonly NativeMoment[] {
   switch (subtype) {
     case SYSTEM_SUBTYPE.INIT:
       return [
@@ -702,7 +763,7 @@ function systemMoments(subtype: string | undefined, message: WireValue): readonl
     case SYSTEM_SUBTYPE.COMPACT_BOUNDARY:
       return [{ kind: NATIVE_MOMENT.COMPACTED }];
     case SYSTEM_SUBTYPE.TASK_NOTIFICATION:
-      return taskNotificationMoments(message);
+      return taskNotificationMoments(message, held);
     case SYSTEM_SUBTYPE.MIRROR_ERROR:
       // The SDK gave up on a batch of the transcript it mirrors to the store, which then holds a gap.
       return Option.match(readMirrorError(message), {
@@ -745,7 +806,7 @@ export function claudeCodeMoments(message: WireValue, held: NativeHeld): readonl
   if (parent_tool_use_id !== undefined && parent_tool_use_id !== null) return [];
   switch (type) {
     case SDK_MESSAGE.SYSTEM:
-      return systemMoments(subtype, message);
+      return systemMoments(subtype, message, held);
     case SDK_MESSAGE.ASSISTANT:
       return assistantMoments(message);
     case SDK_MESSAGE.USER:

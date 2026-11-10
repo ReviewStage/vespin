@@ -8,7 +8,6 @@ import {
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
-import type { MentionLines } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
@@ -54,12 +53,14 @@ import { agentOriginQuery } from "../live-reads.js";
 import { MemberDirectory } from "../member-directory.js";
 import { HERE } from "../places/pressed-address.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
+import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
+import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
@@ -89,6 +90,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
 import {
+  AGENT_KEYS,
   type AgentMenuDoors,
   type AgentTerminalDoors,
   agentMenuGroups,
@@ -325,8 +327,10 @@ function AgentPageBar({
   const menu = useMenu(shown);
   const { read, agentPin, section, dialog: sectionDialog } = useAgentOwnDoors(tasks, agent, shown);
   // Note that the page's own head already leads with the Slack crumb an agent started from Slack opens, so its menu offers no Open in Slack beside it.
+  // The page's agent is what its keys act on while it stands, wherever a menu of it is drawn.
+  useShortcutTarget(shown ? actions.subject : undefined, AGENT_KEYS);
   const groups = agentMenuGroups({
-    chosen: true,
+    subject: actions.subject,
     ...actions.doors,
     onOpenInSlack: undefined,
     read,
@@ -690,7 +694,7 @@ function DesktopAgentPage({
     [repositoryPlace],
   );
   // A file a mention names opens in the panel beside the agent, its lines at the commit the mention pins them to.
-  const openMentionedFile = useSteadyDoor((path: string, lines: MentionLines | undefined) =>
+  const openMentionedFile = useSteadyDoor((path: string, lines: OpenFileLines | undefined) =>
     onPressTab(
       lines === undefined
         ? { kind: TAB_PRESS.FILE, ref: { path }, reads: fileReads }

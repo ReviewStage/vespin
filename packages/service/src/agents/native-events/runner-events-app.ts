@@ -16,7 +16,7 @@ import {
   type NativeProjectionRow,
   withNativeProjection,
 } from "@repo/database/models/native-projection-store";
-import { setPlanStatus } from "@repo/database/models/provider-key-store";
+import { setPlanStatus, setPlanUsage } from "@repo/database/models/provider-key-store";
 import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
 import { progressTurns, queuedTurnOf, supersededTurnsOf } from "@repo/database/models/turn-state";
 import {
@@ -39,6 +39,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
+import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import {
   Cause,
   Clock,
@@ -77,7 +78,9 @@ import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
+import { roomAfterLimit, soonestResetBeside } from "../coder-host/agent-runtime-choice.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
+import { turnRetried } from "../coder-host/steer.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
@@ -89,7 +92,12 @@ import {
 } from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
-import type { NativeHeld, NativeMoment } from "./native-moments.js";
+import {
+  NATIVE_MOMENT,
+  type NativeHeld,
+  type NativeMoment,
+  PLAN_STATUS,
+} from "./native-moments.js";
 import {
   heldProjection,
   NATIVE_WRITE,
@@ -99,7 +107,7 @@ import {
   turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
-import { redactKeepingPlanCodes } from "./runner-moments.js";
+import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 
 /**
  * runner-events-app.ts -- where a native harness's runner posts its events, which land in the agent's transcript.
@@ -176,6 +184,16 @@ type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
 
+/** A batch as the store can keep it: every NUL its events carry replaced (`withoutNul`). */
+function storable(batch: RunnerEventBatch): RunnerEventBatch {
+  return {
+    events: batch.events.map(({ sequence, message }) => ({
+      sequence,
+      message: withoutNul(message),
+    })),
+  };
+}
+
 /**
  * The tokens of a value's JSON as a step's estimate tells them: its bytes
  * over four, rounded up, the rule the retired runtime's steps were estimated by.
@@ -200,11 +218,13 @@ interface Applying {
   readonly read: NativeReader;
   /** Who pays for the agent, as recorded as it started; none for an agent from before payers. */
   readonly payer: AgentPayer | undefined;
+  /** The subscription or API key its latest launch put it on, which the payer's word is written to; none for the account's first. */
+  readonly subscriptionId: string | undefined;
   /** The description or prompt the agent was handed first, whose share of its context the ring estimates. */
   readonly brief: string;
 }
 
-/** The row each plan is kept in, which a turn's word on the plan is written to; a key's payer has none. */
+/** The kind of row each plan is kept in, the agent's subscription among them taking a turn's word on the plan; a key's payer has none. */
 const PLAN_ROW: Partial<
   Record<AgentPayer, { readonly provider: ProviderKeyProvider; readonly kind: ProviderKeyKind }>
 > = {
@@ -550,26 +570,56 @@ function landWrite(
     case NATIVE_WRITE.FAILED:
       // Said once the batch has landed, so a turn is said failed only once its row is.
       return Effect.void;
+    case NATIVE_WRITE.RETRY:
+      // Launched once the batch has landed, so the plan's limit is written before the next launch chooses its payer.
+      return Effect.void;
+    case NATIVE_WRITE.WAIT:
+      // Note that the turn stays open past its progress deadline until the reset, when the minute sweep launches it.
+      return Effect.asVoid(
+        applying.writer.holdTurn(applying.target, {
+          turnId: write.turnId,
+          until: new Date(write.until),
+        }),
+      );
     case NATIVE_WRITE.PLAN_STATUS: {
-      // Note that the row is the starter's credential that pays: its plan's, or, for an agent its API key
-      // pays for, that key's, which a refusal marks invalid; a plan's limit is no key's.
-      const row =
-        applying.payer === AGENT_PAYER.API_KEY
-          ? write.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
-            ? undefined
-            : apiKeyRowOf(applying.model)
-          : applying.payer === undefined
-            ? undefined
-            : PLAN_ROW[applying.payer];
+      // Note that the row is the starter's credential that pays, the one the agent ran on: the plan's
+      // subscription, or, for an agent its API key pays for, that key, which a refusal marks invalid and
+      // a limit, its provider's quota or credit refusing it, marks out of quota.
+      const ownKey = applying.payer === AGENT_PAYER.API_KEY;
+      const row = ownKey
+        ? apiKeyRowOf(applying.model)
+        : applying.payer === undefined
+          ? undefined
+          : PLAN_ROW[applying.payer];
       if (row === undefined) return Effect.void;
       return setPlanStatus(
         target.userId,
         row.provider,
         row.kind,
-        write.status,
+        ownKey && write.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
+          ? PROVIDER_KEY_STATUS.QUOTA_EXCEEDED
+          : write.status,
         write.resetsAt === undefined ? undefined : new Date(write.resetsAt),
         new Date(write.turnOpenedAt ?? now),
         new Date(now),
+        applying.subscriptionId,
+      );
+    }
+    case NATIVE_WRITE.PLAN_USAGE: {
+      // Note that usage is a plan's alone, which no API key's row takes.
+      const row = applying.payer === undefined ? undefined : PLAN_ROW[applying.payer];
+      if (row === undefined) return Effect.void;
+      return setPlanUsage(
+        target.userId,
+        row.provider,
+        row.kind,
+        {
+          usedPercent: write.usedPercent,
+          ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
+          ...(write.resetsAt === undefined ? {} : { resetsAt: new Date(write.resetsAt) }),
+        },
+        new Date(write.turnOpenedAt ?? now),
+        applying.subscriptionId,
       );
     }
   }
@@ -604,6 +654,8 @@ function landWrites(applying: Applying, writes: readonly NativeWrite[], now: num
  * posting, whose runner this launch replaced, failed as their runner lost,
  * or canceled where a Stop was asked of them; and the projection without the
  * turn it held, where that was one of them, so this launch opens its own.
+ * The one turn the projection holds kept open on its plan's limit
+ * (`retrying`) is carried onto this launch instead, which goes on with it.
  */
 function supersededDropped(
   applying: Applying,
@@ -613,7 +665,14 @@ function supersededDropped(
 ) {
   return Effect.gen(function* () {
     const { conversationId } = applying.target;
-    const superseded = yield* supersededTurnsOf(conversationId, launch);
+    const found = yield* supersededTurnsOf(conversationId, launch);
+    if (found.length === 0) return state;
+    // A turn its plan's limit cut short, kept open for the launch on the next payer, is this launch's to go on with.
+    const retrying = state.turn?.retrying === true ? state.turn.id : undefined;
+    if (retrying !== undefined && found.includes(retrying)) {
+      yield* applying.writer.carryTurn(applying.target, { turnId: retrying, attempt: launch });
+    }
+    const superseded = found.filter((turnId) => turnId !== retrying);
     if (superseded.length === 0) return state;
     const failed = yield* settleRunnerLostTurns(
       applying.writer,
@@ -630,6 +689,46 @@ function supersededDropped(
     }
     const { turn, ...rest } = state;
     return turn !== undefined && superseded.includes(turn.id) ? rest : state;
+  });
+}
+
+/** Whether an event's moments end the launch with its turn on the plan's limit, as the projection holds it or the moments say it. */
+function endsOnLimit(state: NativeProjection, moments: readonly NativeMoment[]): boolean {
+  if (!moments.some((moment) => moment.kind === NATIVE_MOMENT.ENDED)) return false;
+  return (
+    state.turn?.limited === true ||
+    moments.some(
+      (moment) => moment.kind === NATIVE_MOMENT.PLAN && moment.status === PLAN_STATUS.LIMIT_REACHED,
+    )
+  );
+}
+
+/** What a batch that ends a turn on the plan's limit reads once: the payers it moves between, or when it may wait until. */
+interface AfterLimit {
+  readonly moved?: UsageLimitMove | undefined;
+  readonly resetsBeside?: number | undefined;
+}
+
+/**
+ * Where a turn the plan's limit, or its key's quota, cut short may go on
+ * with the next payer, the payers it moves between (`roomAfterLimit`), and
+ * where none has room, when the soonest limit among the other subscriptions
+ * resets (`soonestResetBeside`), which it may wait for: only for an agent
+ * its plan or its API key pays for, past the subscription or key it ran on.
+ */
+function roomAfterLimitOf(applying: Applying) {
+  return Effect.gen(function* () {
+    const provider = providerModelOf(applying.model)?.provider;
+    if (provider === undefined || applying.payer === undefined) return {};
+    if (applying.payer !== AGENT_PAYER.API_KEY && PLAN_ROW[applying.payer] === undefined) {
+      return {};
+    }
+    const { userId } = applying.target;
+    const moved = yield* roomAfterLimit(userId, provider, applying.subscriptionId);
+    if (moved !== undefined) return { moved } satisfies AfterLimit;
+    return {
+      resetsBeside: yield* soonestResetBeside(userId, provider, applying.subscriptionId),
+    } satisfies AfterLimit;
   });
 }
 
@@ -660,13 +759,19 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     const { launch } = held;
     const writes: NativeWrite[] = [];
     const reports: string[] = [];
+    // Whether another payer has room, or when a limit resets, read once and only for a batch that ends a turn on the plan's limit.
+    let afterLimit: AfterLimit | undefined;
     for (const { sequence, message } of events) {
       const held: NativeHeld = {
         callName: (callId) => state.turn?.calls[callId],
         session: state.session,
         sequence,
+        planLimited: state.rateLimit !== undefined,
       };
       const moments = applying.read(message, held);
+      if (afterLimit === undefined && endsOnLimit(state, moments)) {
+        afterLimit = yield* roomAfterLimitOf(applying);
+      }
       const projected = projectMoments(state, moments, {
         conversationId,
         sequence,
@@ -675,6 +780,8 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
+        movedAfterLimit: afterLimit?.moved,
+        resetsBeside: afterLimit?.resetsBeside,
         registered,
         report: (said) => reports.push(said),
       });
@@ -732,6 +839,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       idle,
       turns: turnsMovedBy(writes),
       failed: writes.filter((write): write is FailedTurn => write.kind === NATIVE_WRITE.FAILED),
+      retried: writes.flatMap((write) => (write.kind === NATIVE_WRITE.RETRY ? [write.turnId] : [])),
       keepsAlive,
     };
     return sequence === null || (last === undefined && !keepsAlive)
@@ -825,6 +933,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     writer,
     read: reader,
     payer: Option.getOrUndefined(routing)?.payer ?? undefined,
+    subscriptionId: Option.getOrUndefined(routing)?.subscriptionId ?? undefined,
     brief: agent.value.prompt ?? agent.value.descriptionSnapshot ?? "",
   };
   // Note that the turns the batch settles are heard once its transaction commits, not as the
@@ -845,7 +954,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     withNativeProjection(
       target,
       runnerTokenDigest(bearer),
-      (held) => applyBatch(applying, batch.value, held),
+      (held) => applyBatch(applying, storable(batch.value), held),
       admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );
@@ -870,6 +979,25 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       ...(taskId === null ? undefined : { taskId }),
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
+  }
+  // A turn kept open on its plan's limit goes on in a launch on the next payer, once the limit is written.
+  for (const turnId of applied.value.retried) {
+    yield* afterResponse(
+      "a limited turn's retry",
+      turnRetried({ ...target, turnId }).pipe(
+        Effect.flatMap((went) =>
+          went ? Effect.void : Effect.logWarning("runner-events: a limited turn was not retried"),
+        ),
+        Effect.catch((failure) =>
+          Effect.logWarning(`runner-events: a limited turn was not retried: ${failure._tag}`),
+        ),
+        Effect.annotateLogs({
+          agentId: agent.value.id,
+          conversationId: target.conversationId,
+          turnId,
+        }),
+      ),
+    );
   }
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
   // it up, and a turn's end may have finished its work, or archives the agent with a task moved to

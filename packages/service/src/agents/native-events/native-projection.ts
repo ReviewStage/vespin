@@ -1,6 +1,8 @@
 import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
 import { CLAUDE_CODE_UNRECORDED_TOOL } from "@repo/features/agent-tools";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { type WireValue, WireValueSchema } from "@repo/wire";
+import { USAGE_LIMIT_AGENT, type UsageLimitMove } from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import {
   addModelUsage,
@@ -15,6 +17,7 @@ import {
   TURN_FAILURE,
   type TurnFailure,
 } from "../../core.js";
+import { providerModelOf } from "../../providers/model-catalog.js";
 import { CODER_REFUSAL } from "../coder-host/bounds.js";
 import { SESSION_TURN, SESSION_TURN_KIND } from "../sessions/agent-sessions.js";
 import {
@@ -132,6 +135,8 @@ const TurnSchema = Schema.Struct({
   limited: Schema.optionalKey(Schema.Boolean),
   /** Whether the provider refused the credential that paid, such as a key expired or a plan signed out. */
   refused: Schema.optionalKey(Schema.Boolean),
+  /** Whether the turn's launch ended on the plan's limit and the turn waits, still open, for a launch on the next payer to go on with it (`NATIVE_WRITE.RETRY`). */
+  retrying: Schema.optionalKey(Schema.Boolean),
   /** The MCP servers mentioned to the agent that this turn took as it started, which its calls are handed whatever the switches say. */
   servers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -196,10 +201,16 @@ export const NATIVE_WRITE = {
   COMPACTED: "compacted",
   /** Record how a turn found the plan that pays for the agent, on its row. */
   PLAN_STATUS: "plan_status",
+  /** Record how much of its usage window the plan that pays for the agent has used, on its row. */
+  PLAN_USAGE: "plan_usage",
   /** Record what the newest model call read on the agent's row, which its context ring reads. */
   CONTEXT: "context",
   /** Say a turn's failure in the log, and as an issue where its user did not expect it. */
   FAILED: "failed",
+  /** Launch the agent again on the next payer, to go on with the turn its plan's limit cut short. */
+  RETRY: "retry",
+  /** Hold the turn its plan's limit cut short open until the soonest limit resets, for the minute sweep to go on with it then, where no payer has room now. */
+  WAIT: "wait",
 } as const;
 
 export type NativeWrite =
@@ -224,12 +235,23 @@ export type NativeWrite =
       /** Whether the provider refused the credential that paid, which opens no issue where the credential is the starter's own. */
       readonly refused: boolean;
     }
+  | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string }
+  | { readonly kind: typeof NATIVE_WRITE.WAIT; readonly turnId: string; readonly until: number }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;
       readonly status: PlanStatus;
       /** When a reached limit resets, in epoch milliseconds, where the harness said. */
       readonly resetsAt?: number;
       /** When the turn that found it opened, so a credential saved since is not judged by it. */
+      readonly turnOpenedAt?: number;
+    }
+  | {
+      readonly kind: typeof NATIVE_WRITE.PLAN_USAGE;
+      readonly usedPercent: number;
+      readonly windowMins?: number;
+      /** When the window resets, in epoch milliseconds, where the harness said. */
+      readonly resetsAt?: number;
+      /** When the turn that heard it opened, so a credential saved since is not given it. */
       readonly turnOpenedAt?: number;
     };
 
@@ -245,6 +267,10 @@ export interface NativeProjectionContext {
   readonly model: string | undefined;
   /** Whether the starter's own API key pays for the agent, so a refusal of it is theirs to replace in Settings. */
   readonly ownKey: boolean;
+  /** Where another payer has room for a turn the plan's limit cuts short, the payers it moves between, which it then waits for a launch on rather than failing (`NATIVE_WRITE.RETRY`) and names in its notice. */
+  readonly movedAfterLimit?: UsageLimitMove | undefined;
+  /** Where no other payer has room, when the soonest limit among the starter's other subscriptions resets, which a turn the plan's limit cuts short may wait for rather than fail (`NATIVE_WRITE.WAIT`). */
+  readonly resetsBeside?: number | undefined;
   /** Whether the stored tool set holds a call of this name; a call of any other is left out, its answer with it. */
   readonly registered: (name: string) => boolean;
   /** Where a moment the record leaves out is said. */
@@ -516,19 +542,26 @@ class Fold {
     const ended = this.#endedTurn(moment);
     // Note that a limit is the launch's, let go at its end whether or not a turn ends with it:
     // the next launch is refused again or it is not.
-    const { warm: _warm, rateLimit, rateLimitResetsAt: _resets, ...cold } = this.state;
+    const { warm: _warm, rateLimit, rateLimitResetsAt, ...cold } = this.state;
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
     if (ended === undefined) return;
-    const turn = this.#closed(ended.turn);
+    let turn = this.#closed(ended.turn);
+    if (this.#retried(turn, ended.openedForEnd, moment.ending, rateLimitResetsAt)) return;
+    if (turn.limited === true && moment.ending !== NATIVE_ENDING.STOPPED) {
+      turn = this.#limitNotice(turn, null);
+    }
     // Note that a refusal its launch ended on before the model turn's result still fails the turn.
     const status = statusOf(moment.ending, turn.failure ?? turn.refusing);
     const failed = status === RUN_STATUS.FAILED;
     const refusal = turn.refusal === true || turn.refusing !== undefined;
+    // A turn its plan's limit cut short with no payer left failed for that limit, which its user expects.
     const failure = ended.openedForEnd
       ? TURN_FAILURE.RUNNER_LOST
-      : refusal
-        ? TURN_FAILURE.REFUSAL
-        : TURN_FAILURE.MODEL;
+      : turn.limited === true
+        ? TURN_FAILURE.PLAN_LIMIT
+        : refusal
+          ? TURN_FAILURE.REFUSAL
+          : TURN_FAILURE.MODEL;
     // Note that a refusal of the starter's own key leads with the coder's word for it, so the window reads the failure as a key to replace rather than a model call failed.
     const ownKeyRefused =
       turn.refused === true && this.#context.ownKey ? CODER_REFUSAL.ACCOUNT_KEY_REFUSED : undefined;
@@ -570,6 +603,65 @@ class Fold {
     this.#setTurn(undefined);
   }
 
+  #limitNotice(turn: Turn, resetsAt: number | null, moved?: UsageLimitMove): Turn {
+    const provider =
+      this.#context.model === undefined
+        ? undefined
+        : providerModelOf(this.#context.model)?.provider;
+    return this.#tell(turn, {
+      kind: RUN_EVENT.USAGE_LIMIT_REACHED,
+      notice: {
+        agent:
+          provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE,
+        resetsAt,
+        ...(moved === undefined ? undefined : { moved }),
+      },
+    });
+  }
+
+  /**
+   * Whether the turn, its plan's limit having cut it short, is kept open for
+   * a launch on the next payer rather than ended: where another payer has
+   * room (`movedAfterLimit`), launched at once, its notice naming both payers; else where a limit names its
+   * reset, the one this launch ended on (`resetsAt`) or another
+   * subscription's (`resetsBeside`), held until the soonest of them for the
+   * minute sweep to launch then; and only where the launch ended on its own
+   * rather than on a Stop. The turn ends nothing and says no failure, so the
+   * conversation reads it as still under way; what its model turn failed
+   * with is let go, and the launch that goes on with it takes it as its own
+   * (`runner-events-app.ts`'s `supersededDropped`). A limit no reset is
+   * known of fails the turn, as before.
+   */
+  #retried(
+    turn: Turn,
+    openedForEnd: boolean,
+    ending: (typeof NATIVE_ENDING)[keyof typeof NATIVE_ENDING],
+    resetsAt: number | undefined,
+  ): boolean {
+    if (turn.limited !== true || openedForEnd || ending === NATIVE_ENDING.STOPPED) return false;
+    const moved = this.#context.movedAfterLimit;
+    const resets = [resetsAt, this.#context.resetsBeside].filter((at) => at !== undefined);
+    const until = moved !== undefined || resets.length === 0 ? undefined : Math.min(...resets);
+    if (moved === undefined && until === undefined) return false;
+    turn = this.#limitNotice(turn, until ?? null, moved);
+    const {
+      failure: _failure,
+      refusal: _refusal,
+      refusing: _refusing,
+      compactionFailed: _compaction,
+      limited: _limited,
+      waiting: _waiting,
+      ...kept
+    } = turn;
+    this.#setTurn({ ...kept, retrying: true });
+    this.writes.push(
+      until === undefined
+        ? { kind: NATIVE_WRITE.RETRY, turnId: turn.id }
+        : { kind: NATIVE_WRITE.WAIT, turnId: turn.id, until },
+    );
+    return true;
+  }
+
   #usage(usage: RunUsage): void {
     const turn = this.turn();
     this.#setTurn({ ...turn, usage: addModelUsage(turn.usage, usage) });
@@ -591,7 +683,9 @@ class Fold {
   fold(moment: NativeMoment): void {
     switch (moment.kind) {
       case NATIVE_MOMENT.LINE_ACCEPTED: {
-        const turn = this.turn();
+        // Note that a turn kept open on its plan's limit is under way again once a launch takes its line.
+        const { retrying, ...turn } = this.turn();
+        if (retrying !== undefined) this.#setTurn(turn);
         this.writes.push({
           kind: NATIVE_WRITE.TAKE_LINE,
           turnId: turn.id,
@@ -686,6 +780,22 @@ class Fold {
                 : undefined),
             }
           : rest;
+        // A limit the harness says lifted no longer cut the turn short, so a failure after it is its own.
+        const turn = this.state.turn;
+        if (!moment.refused && turn?.limited === true) {
+          const { limited: _limited, ...lifted } = turn;
+          this.#setTurn(lifted);
+        }
+        return;
+      }
+      case NATIVE_MOMENT.PLAN_USAGE: {
+        const { kind: _kind, ...usage } = moment;
+        const turnOpenedAt = this.state.turn?.openedAt;
+        this.writes.push({
+          kind: NATIVE_WRITE.PLAN_USAGE,
+          ...usage,
+          ...(turnOpenedAt !== undefined ? { turnOpenedAt } : undefined),
+        });
         return;
       }
       case NATIVE_MOMENT.PLAN: {
@@ -696,6 +806,9 @@ class Fold {
         const turn = this.state.turn;
         if (turn !== undefined && moment.status === PLAN_STATUS.LIMIT_REACHED) {
           this.#setTurn({ ...turn, limited: true });
+        } else if (turn !== undefined && moment.status === PLAN_STATUS.VERIFIED) {
+          const { limited: _limited, ...verified } = turn;
+          this.#setTurn(verified);
         } else if (turn !== undefined && REFUSED_STATUSES.has(moment.status)) {
           this.#setTurn({ ...turn, refused: true });
         }

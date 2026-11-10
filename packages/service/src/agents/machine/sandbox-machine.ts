@@ -198,6 +198,7 @@ import {
   type RunnerRecord,
   type SandboxSetup,
 } from "./agent-machine.js";
+import { makePhoneVideo, phoneVideoOf } from "./phone-video.js";
 
 /**
  * Where a message's files that the harness takes no block of are written
@@ -219,6 +220,7 @@ const SANDBOX_LAYOUT: MachineLayout = {
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
   transcriptsKept: true,
+  diskSessions: false,
 };
 
 /** The runner's bundle as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's unit. */
@@ -749,6 +751,11 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         Effect.map(api.run(running, readFileCommand(path, bound + 1)), (ran) =>
           ran.exitCode === 0 ? new Uint8Array(Buffer.from(ran.stdout, "base64")) : undefined,
         ),
+      ),
+
+    phoneVideo: (session, path) =>
+      Effect.flatMap(runningSession(session), (running) =>
+        Effect.map(api.run(running, makePhoneVideo(path)), phoneVideoOf),
       ),
   };
 }

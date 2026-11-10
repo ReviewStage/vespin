@@ -712,10 +712,13 @@ test("a sent message's mention of an MCP server is drawn on a plan's page as a c
   assert.equal(carryingTarget(container), undefined);
 });
 
-test("an @ in the box offers the account's connected MCP servers, and once a word is typed their tools, a pick sent as its link", async () => {
+test("an @ in the box browses the account's connected MCP servers as one kind, and once a word is typed their tools, a pick sent as its link", async () => {
   const { container, sent } = await box(planPage([]));
 
   typeInComposer(container, "Use @");
+  await settle();
+  const kind = kindsListed(container).find(([name]) => name === "MCP servers");
+  typeInComposer(container, "servers:");
   await settle();
   const servers = groupsListed(container).find(([group]) => group === "MCP servers");
   typeInComposer(container, "list");
@@ -726,6 +729,7 @@ test("an @ in the box offers the account's connected MCP servers, and once a wor
   pressInComposer(container, "Enter");
   await settle();
 
+  assert.deepEqual(kind, ["MCP servers", ""]);
   assert.deepEqual(servers, ["MCP servers", ["Linear"]]);
   assert.deepEqual(tools, ["Linear · list_issues"]);
   assert.deepEqual(sent, [
@@ -902,21 +906,21 @@ test("off a plan's page a sent message's page of an integration's is still its c
   assert.equal(carryingTarget(container), undefined);
 });
 
-test("an @ in the box on a plan's page offers the plan's pages and its other agents, each in its own group, an agent leading with its tab's glyph, and not the agent whose box it is", async () => {
+test("an @ in the box on a plan's page suggests the plan's other agents and then its pages, an agent leading with its tab's glyph, and not the agent whose box it is, above its kinds, the servers browsed as one", async () => {
   const { container } = await box(taskPage());
 
   typeInComposer(container, "See @");
   await settle();
   const agentGlyph = container.querySelector(
-    '.mention-menu [aria-label="Agents"] [role="option"] .ui-combobox-option-glyph',
+    '.mention-menu [aria-label="Suggested"] [role="option"] .ui-combobox-option-glyph',
   )?.firstElementChild;
 
   assert.deepEqual(groupsListed(container), [
-    ["Agents", ["Wire the desktop"]],
-    ["Description", ["Goal", "Rollout", "Invitations"]],
-    ["Pages", ["Invites by week"]],
-    ["MCP servers", ["Linear"]],
-    ["Mention from", ["Agents", "Description", "Pages", "Files and folders", "Dates", "Linear"]],
+    ["Suggested", ["Wire the desktop", "Invites by week"]],
+    [
+      "Browse",
+      ["Agents", "People", "Description", "Pages", "Files and folders", "Dates", "MCP servers"],
+    ],
   ]);
   assert.equal(agentGlyph?.className, "state-glyph", "the agent's row leads with its tab's glyph");
 });
@@ -1063,10 +1067,10 @@ function workspaceReads(): unknown[] {
     .map((each) => each.payload);
 }
 
-test("an @ offers the workspace's agents after the task's own, each labeled by its task, and no archived one before a word is typed", async () => {
+test("an @ narrowed to agents offers the workspace's agents after the task's own, each labeled by its task, and no archived one before a word is typed", async () => {
   const { container } = await workspaceBox();
 
-  typeInComposer(container, "See @");
+  typeInComposer(container, "See @agents:");
   await settle();
 
   assert.deepEqual(agentsListed(container), [
@@ -1093,7 +1097,7 @@ test("an @ whose task list failed to carry the workspace's agents says they coul
   refusing.add(ACT_KIND.TASKS_REFRESH);
   const { container } = await workspaceBox();
 
-  typeInComposer(container, "See @");
+  typeInComposer(container, "See @agents:");
   await settle();
 
   assert.match(listNote(container).words, /Agents could not be read\./u);
@@ -1280,7 +1284,7 @@ test("an @ row for an agent ends in its starter's face where a teammate started 
   ];
   const container = await workspaceMemberBox();
 
-  typeInComposer(container, "See @");
+  typeInComposer(container, "See @agents:");
   await settle();
 
   const ends = [
@@ -1489,21 +1493,14 @@ function crumb(container: HTMLElement): string | undefined {
   return container.querySelector(".mention-menu-crumb-title")?.textContent ?? undefined;
 }
 
-/** The keys the list's foot names. */
-function footKeys(container: HTMLElement): string[] {
-  return [...container.querySelectorAll(".mention-menu .ui-menu-keys > *")].map(
-    (key) => key.textContent ?? "",
-  );
-}
-
-/** The "Mention from" rows, each by its name and its detail. */
+/** The "Browse" rows, each by its name and its detail. */
 function kindsListed(container: HTMLElement): [string, string][] {
-  return [
-    ...container.querySelectorAll('.mention-menu [aria-label="Mention from"] [role="option"]'),
-  ].map((row) => [
-    row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
-    row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
-  ]);
+  return [...container.querySelectorAll('.mention-menu [aria-label="Browse"] [role="option"]')].map(
+    (row) => [
+      row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
+      row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
+    ],
+  );
 }
 
 /** ↓ pressed until the row named, in the group given, holds the highlight. */
@@ -1519,29 +1516,27 @@ function highlightRow(container: HTMLElement, group: string, name: string): void
   assert.ok(held(), `${name} in ${group} holds the highlight`);
 }
 
-test("a bare @ ends in a row for each kind the place offers, and → on one narrows the list to that kind under its crumb", async () => {
+test("a bare @ browses a row for each kind the place offers, saying nothing beside its name, and → on one narrows the list to that kind under its crumb", async () => {
   const { container } = await box(taskPage());
 
   typeInComposer(container, "See @");
   await settle();
   const kinds = kindsListed(container);
-  const wideKeys = footKeys(container);
-  highlightRow(container, "Mention from", "Pages");
+  highlightRow(container, "Browse", "Pages");
   pressInComposer(container, "ArrowRight");
   await settle();
 
   assert.deepEqual(kinds, [
-    ["Agents", "acme"],
-    ["Description", "2 sections"],
-    ["Pages", "1 page"],
-    ["Files and folders", "acme/relay"],
+    ["Agents", ""],
+    ["People", ""],
+    ["Description", ""],
+    ["Pages", ""],
+    ["Files and folders", ""],
     ["Dates", ""],
-    ["Linear", "MCP server"],
+    ["MCP servers", ""],
   ]);
-  assert.deepEqual(wideKeys, ["↑↓Move", "⏎⇥Mention", "→Open", "EscClose"]);
   assert.equal(crumb(container), "Pages");
   assert.deepEqual(groupsListed(container), [["Pages", ["Invites by week"]]]);
-  assert.deepEqual(footKeys(container), ["↑↓Move", "⏎⇥Mention", "⌫All kinds", "EscClose"]);
 });
 
 /** The highlighted row, by its group and its name. */
@@ -1569,9 +1564,13 @@ test("a bare End and Home take the highlight to the last row and the first, a mo
   pressInComposer(container, "Enter", { shiftKey: true });
   await settle();
 
-  assert.deepEqual(held, ["Agents", "Wire the desktop"], "a modified Home or End is the editor's");
-  assert.deepEqual(last, ["Mention from", "Linear"]);
-  assert.deepEqual(first, ["Agents", "Wire the desktop"]);
+  assert.deepEqual(
+    held,
+    ["Suggested", "Wire the desktop"],
+    "a modified Home or End is the editor's",
+  );
+  assert.deepEqual(last, ["Browse", "MCP servers"]);
+  assert.deepEqual(first, ["Suggested", "Wire the desktop"]);
   assert.equal(composerEditor(container).querySelector("[data-mention-ref]"), null);
 });
 
@@ -1580,7 +1579,7 @@ test("Enter on a kind's row narrows the list to it, and ⌫ on its empty words w
 
   typeInComposer(container, "See @");
   await settle();
-  highlightRow(container, "Mention from", "Files and folders");
+  highlightRow(container, "Browse", "Files and folders");
   pressInComposer(container, "Enter");
   await settle();
   const narrowed = groupsListed(container);
@@ -1601,7 +1600,7 @@ test("pressing the crumb's back arrow widens the list again and keeps the caret 
 
   typeInComposer(container, "See @");
   await settle();
-  highlightRow(container, "Mention from", "Files and folders");
+  highlightRow(container, "Browse", "Files and folders");
   pressInComposer(container, "ArrowRight");
   await settle();
   const back = [
@@ -1652,16 +1651,23 @@ test("files found by a word typed on are those the longer word finds, and the wo
   assert.deepEqual(listed(container), typed);
 });
 
-test("typing @files: narrows the list to the repository's paths, listing up to fifty where the wide list shows four", async () => {
+test("a group holding more than four ends in the row saying how many more, which opens its kind searched by the same words, as typing @files: does", async () => {
   const { container } = await wideBox();
 
   typeInComposer(container, "See @invite");
   await listSettled();
   const wide = groupsListed(container).find(([group]) => group === "Files and folders");
+  const more = wide?.[1].at(-1) ?? "";
+  highlightRow(container, "Files and folders", more);
+  pressInComposer(container, "Enter");
+  await listSettled();
+  const opened = [crumb(container), listedCount(container), composerEditor(container).textContent];
   typeInComposer(container, " and @files:invite");
   await listSettled();
 
-  assert.equal(wide?.[1].length, 4);
+  assert.equal(wide?.[1].length, 5);
+  assert.match(more, /^Show \d+ more$/u);
+  assert.deepEqual(opened, ["Files and folders", 50, "See @invite"]);
   assert.equal(crumb(container), "Files and folders");
   assert.equal(listedCount(container), 50);
   assert.ok(listed(container).every((name) => name.startsWith("invite-")));
@@ -1679,13 +1685,11 @@ test("→ on a folder walks into it, its first row the folder and the rest what 
   pressInComposer(container, "ArrowRight");
   await listSettled();
   const inWeb = [crumb(container), listed(container).slice(0, 3), listedCount(container)];
-  const keys = footKeys(container);
   pressInComposer(container, "Backspace");
   await listSettled();
 
   assert.deepEqual(inApps, ["apps", ["apps/", "web/"]]);
   assert.deepEqual(inWeb, ["apps/web", ["web/", "invite-01.ts", "invite-02.ts"], 50]);
-  assert.deepEqual(keys, ["↑↓Move", "⏎⇥Mention", "→Open", "⌫Up", "EscClose"]);
   assert.deepEqual([crumb(container), listed(container)], ["apps", ["apps/", "web/"]]);
   assert.equal(composerEditor(container).textContent, "See @files:");
 });
@@ -1789,7 +1793,7 @@ function pullRequestsListed(container: HTMLElement): [string, string, string | n
 test("an @ on a task's page offers the pull requests its agents published, each once, by its number and title, labeled by its first agent", async () => {
   const { container } = await box(publishedPage());
 
-  typeInComposer(container, "See @");
+  typeInComposer(container, "See @prs:");
   await settle();
 
   assert.deepEqual(pullRequestsListed(container), [
@@ -1825,14 +1829,14 @@ test("the task's pull requests are a kind of their own, narrowed to by their row
   typeInComposer(container, "See @");
   await settle();
   const kind = kindsListed(container).find(([name]) => name === "Pull requests");
-  highlightRow(container, "Mention from", "Pull requests");
+  highlightRow(container, "Browse", "Pull requests");
   pressInComposer(container, "ArrowRight");
   await settle();
   const opened = [crumb(container), listed(container)];
   typeInComposer(container, " and @prs:sweep");
   await settle();
 
-  assert.deepEqual(kind, ["Pull requests", "2 pull requests"]);
+  assert.deepEqual(kind, ["Pull requests", ""]);
   assert.deepEqual(opened, [
     "Pull requests",
     ["#3059 feat(billing): bill by seat", "#3061 test: sweep flaky tests"],
@@ -1883,8 +1887,10 @@ test("an @ among the workspace's members offers its people, the reader first as 
 
   typeInComposer(container, "See @");
   await settle();
-  const people = peopleListed(container);
   const kind = kindsListed(container).find(([name]) => name === "People");
+  typeInComposer(container, "people:");
+  await settle();
+  const people = peopleListed(container);
   typeInComposer(container, " and @people:reyes");
   await settle();
   const row = container.querySelector<HTMLElement>('.mention-menu [role="option"]');
@@ -1898,7 +1904,7 @@ test("an @ among the workspace's members offers its people, the reader first as 
     ["Charles Pan", "You", ACTOR_KIND.PERSON],
     ["Dana Reyes", "dana@example.com", ACTOR_KIND.PERSON],
   ]);
-  assert.deepEqual(kind, ["People", "2 members"]);
+  assert.deepEqual(kind, ["People", ""]);
   assert.deepEqual([crumb(container), listed(container)], ["People", ["Dana Reyes"]]);
   assert.deepEqual(marked, ["Reyes"]);
   const card = document.querySelector('.ui-tooltip-card [data-actor-card="person"]');
@@ -1952,15 +1958,6 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
     { workspace: "acme", place: { kind: LINK_PLACE.PERSON, userId: DANA_ID } },
   ]);
   assert.equal(carryingTarget(container), undefined);
-});
-
-test("off a members' directory an @ offers no people", async () => {
-  const { container } = await box(taskPage());
-
-  typeInComposer(container, "See @dana");
-  await settle();
-
-  assert.deepEqual(peopleListed(container), []);
 });
 
 test("a person's page pasted into the box becomes their chip called by their name, and one of another workspace pastes as the words it is", async () => {

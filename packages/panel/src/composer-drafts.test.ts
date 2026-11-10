@@ -13,13 +13,11 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import type { Task } from "@repo/features/task-wire";
-import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
 import { DRAFT_WORD } from "@repo/ui";
 import { agentTab, draftTab, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
-import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Effect, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment } from "react";
@@ -45,7 +43,6 @@ import {
 import type { MainTab } from "./tasks/use-main-tabs.js";
 import { type TaskInboxControl, useTaskInbox } from "./tasks/use-task-inbox.js";
 import { NO_LOOKS } from "./tasks/use-task-looks.js";
-import type { TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads, handInboxItems, writeListedTasks } from "./testing/app-state.js";
@@ -787,94 +784,6 @@ test("a task opened from a tab pinned to the sidebar is open still, so its row w
 
   const away = await sidebarOn(BILLING, false);
   assert.equal(away(INVITES.plan.name), true);
-});
-
-/** The workspace New task starts its tasks in. */
-const WORKSPACE = "workspace-personal";
-
-/** New task's words as storage keeps them, in `workspaceId`, and on one of its issues where `issueId` names one, as a build from before the app kept no issues kept them. */
-function newTaskEntry(workspaceId: string, issueId?: string) {
-  return {
-    accountId: null,
-    place: { kind: "newTask", workspaceId, ...(issueId === undefined ? undefined : { issueId }) },
-    text: "Expire invites after a week",
-  };
-}
-
-/** Whether the sidebar's New task row wears the Draft pencil, drawn over `tasks` with the drafts storage holds. */
-async function newTaskDrafted(tasks: TasksControl, at?: string): Promise<boolean> {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-  await act(async () =>
-    root.render(
-      withQueryClient(
-        signedOut(
-          drawnSidebar(
-            sidebarProps(tasks),
-            windowRouter(createMemoryHistory({ initialEntries: [at ?? "/app"] })),
-          ),
-        ),
-      ),
-    ),
-  );
-  await settle();
-  const glyph =
-    container.querySelector('.sidebar-workspace button[aria-label="New task"]') ??
-    assert.fail("the sidebar draws New task");
-  const drafted = glyph.getAttribute("aria-description") === DRAFT_WORD;
-  for (const each of roots.splice(0)) act(() => each.unmount());
-  return drafted;
-}
-
-test("words left in New task's card mark its sidebar glyph with the Draft pencil while neither the card nor Home shows them", async () => {
-  const listed: Workspace = {
-    id: WORKSPACE,
-    name: "Personal",
-    slug: "personal",
-    role: WORKSPACE_ROLE.OWNER,
-    github: null,
-  };
-  const inWorkspace = (overrides: Partial<TasksControl["newTask"]> = {}) =>
-    tasksControl({
-      workspace: listed,
-      workspaces: [listed],
-      page: TASKS_PAGE.DOCUMENT,
-      tasks: [INVITES.plan],
-      activeTaskId: INVITES.plan.id,
-      newTask: { ...tasksControl().newTask, workspaceId: WORKSPACE, ...overrides },
-    });
-  assert.equal(await newTaskDrafted(inWorkspace()), false, "nothing is kept yet");
-
-  window.localStorage.setItem("app.composerDrafts", JSON.stringify([newTaskEntry(WORKSPACE)]));
-  assert.equal(await newTaskDrafted(inWorkspace()), true, "the words wait while a task is open");
-  assert.equal(
-    await newTaskDrafted(inWorkspace({ open: true })),
-    false,
-    "the open card shows them",
-  );
-  const home = { ...inWorkspace(), page: TASKS_PAGE.HOME, activeTaskId: undefined, atHome: true };
-  assert.equal(await newTaskDrafted(home), false, "Home's composer shows them");
-  assert.equal(
-    await newTaskDrafted({ ...home, atHome: false }, "/acme/person/user-sam"),
-    true,
-    "a person's page opened from Home stands in its composer's place",
-  );
-  assert.equal(
-    await newTaskDrafted(inWorkspace({ workspaceId: "workspace-team" })),
-    false,
-    "another workspace's New task starts from nothing of this one's",
-  );
-
-  window.localStorage.setItem(
-    "app.composerDrafts",
-    JSON.stringify([newTaskEntry(WORKSPACE, "issue-invites")]),
-  );
-  assert.equal(
-    await newTaskDrafted(inWorkspace()),
-    false,
-    "words an older build kept on one of the workspace's own issues are no draft of the workspace's",
-  );
 });
 
 /** The key the Teammate invitations task's draft agent starts under. */

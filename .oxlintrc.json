@@ -50,8 +50,11 @@
     "anti-slop/no-reduced-motion-query": "error",
     "anti-slop/no-run-promise-outside-edges": "error",
     "anti-slop/no-shadcn-focus-ring": "error",
+    "anti-slop/no-shortcut-flag": "error",
     "anti-slop/no-source-read-in-test": "error",
+    "anti-slop/one-message-box": "error",
     "anti-slop/retired": "error",
+    "anti-slop/row-behavior-in-row": "error",
     "anti-slop/settings-row-end": "error",
     "anti-slop/skeleton-through-components": "error"
   },

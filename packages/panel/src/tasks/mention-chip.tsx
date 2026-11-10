@@ -53,6 +53,7 @@ import {
   HoverCardNote,
   INLINE_REF_FIT,
   INLINE_REF_LOOK,
+  INLINE_REF_NAME,
   InlineRef,
   InlineRefFitScope,
   OneLine,
@@ -195,6 +196,9 @@ const MENTION_STATE = {
 
 type MentionState = (typeof MENTION_STATE)[keyof typeof MENTION_STATE];
 
+/** The lines a file's tab opens on: a mention's, at the commit it pins them to, or lines a path in words names with no commit, read where the tab reads the file. */
+export type OpenFileLines = Omit<MentionLines, "commit"> & { readonly commit?: string | undefined };
+
 /** What a place drawing mentions knows and does: the task or the agent on no task whose words it draws, where its mentions are written, its description's sections' anchors, and what opening a mention does. */
 export interface MentionDoors {
   /** The task, or the agent on no task, whose words the place draws; none where neither holds them, so a section of any description is drawn as found. */
@@ -203,7 +207,7 @@ export interface MentionDoors {
   readonly anchors: ReadonlySet<string>;
   readonly onOpenTask: (mention: DescriptionMention) => void;
   /** Shows a file's tab, at its lines where a mention names them; none where no file can be opened from here. */
-  readonly onOpenFile: ((path: string, lines: MentionLines | undefined) => void) | undefined;
+  readonly onOpenFile: ((path: string, lines: OpenFileLines | undefined) => void) | undefined;
   /** One of the plan's agents as its chip wears it, none for an agent not of the plan; the door is none where the place knows the plan's agents not. */
   readonly agentOf?: ((agentId: string) => MentionedAgentLook | undefined) | undefined;
   /** The card a pull request one of the plan's agents opened hangs on its Pull request tab, by any link to it; none for any other, or where the place knows the plan's agents not. */
@@ -243,6 +247,13 @@ export function retargetedMention(
   if (now === mention.anchor && heading === change.before[at]) return undefined;
   return { name: heading, target: encodeMention({ ...mention, anchor: now }, place) };
 }
+
+/** The mentions whose chip is kept whole in words, each a short name read as one thing. */
+const WHOLE_KINDS: ReadonlySet<Mention["kind"]> = new Set([
+  MENTION_KIND.PERSON,
+  MENTION_KIND.SERVER,
+  MENTION_KIND.TOOL,
+]);
 
 /** What a gone section's card says of it. */
 const GONE_WORDS = "No longer in the description";
@@ -560,8 +571,9 @@ function MentionChip({
     mention.kind === MENTION_KIND.TASK &&
     keyNames?.kind === MENTION_KIND.TASK &&
     keyNames.taskId === mention.taskId;
+  const github = githubName(mention, standing);
   const name =
-    githubName(mention, standing) ??
+    github ??
     (keyed
       ? written
       : chipName(mention, written, bare, known, standing, heading, doors.place.repository));
@@ -573,6 +585,9 @@ function MentionChip({
     pull === undefined
       ? name
       : (new RegExp(`^\\S*#${pull.number}(?=\\s)`, "u").exec(name)?.[0] ?? name);
+  // Note that a short name read as one thing is kept whole with its mark and state, since one broken at its `/`, `-`, or space reads as two things: a pull request GitHub answered for, called by its key alone; a task called by its key; a person; and a server or its tool.
+  const whole =
+    (github !== undefined && pull !== undefined) || keyed || WHOLE_KINDS.has(mention.kind);
   const state = mentionState(mention, doors);
   const press = pressOf(mention, target, state, doors, openLink);
   const card = (
@@ -601,6 +616,7 @@ function MentionChip({
       }
       kind={thingWordHeard(thingOfMention(mention).kind, label)}
       label={label}
+      name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       state={standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={
@@ -654,6 +670,7 @@ function DateChip({
       glyph={<CalendarIcon aria-hidden="true" />}
       kind={THING_WORD[THING_KIND.DATE]}
       label={dateChipText(date, now, readerZone())}
+      name={INLINE_REF_NAME.WHOLE}
       card={<DateCard date={date} />}
       onPress={
         onPick === undefined

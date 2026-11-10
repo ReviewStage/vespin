@@ -49,9 +49,9 @@ import { WholeFile, type WholeFileHandle, type WholeFileNote } from "./whole-fil
  * and offers what is done with it (\`file-view.tsx\`), told how the read
  * stands as it moves. The lines are drawn as every code is
  * (\`file-view-settings.ts\`), and ⌘F finds in the whole file, drawn or not
- * (\`file-find.ts\`). Every line here is the repository's, so the root is
- * left out of the screen recording (\`ph-no-capture\`) as a second line
- * behind the recording's text masking.
+ * (\`file-find.ts\`). Every line here is the repository's, so the lines are
+ * left out of the screen recording (\`whole-file.tsx\`), since their colors
+ * draw the code's shape.
  */
 
 /** The first line of a file, the one read to learn the commit the head stands at. */
@@ -276,11 +276,7 @@ export function FileTab({
   useAppCommand(APP_COMMAND.MENTION_LINES, mentionLines);
 
   return (
-    <Fill
-      as={FILL_ELEMENT.SECTION}
-      className="file-tab ph-no-capture bg-card-code"
-      aria-label={file.path}
-    >
+    <Fill as={FILL_ELEMENT.SECTION} className="file-tab bg-card-code" aria-label={file.path}>
       {read.kind === FILE_READ.READY ? (
         <FileTextView file={file} held={read} handleRef={handle} />
       ) : read.kind === FILE_READ.READING ? (

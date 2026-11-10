@@ -13,7 +13,8 @@
  * the agent's place with its checkout, find it again and record the runner
  * it runs, set and take off what stands at its firewall, resume, stop,
  * and discard it, write files into it, launch the runner there and write
- * its stdin, read whether it ended, end it, and read one file. A runner on a
+ * its stdin, read whether it ended, end it, read one file, and make an MP4
+ * of a recording for a phone (`phone-video.ts`). A runner on a
  * machine whose layout says it reads its lines takes them from our store
  * instead (`../coder-host/runner-sessions.ts`), and its stdin carries only
  * its config. What a
@@ -96,7 +97,7 @@ export interface MachineLayout {
   readonly claudeExecutable: string | undefined;
   /** The image's Codex in a sandbox, and on a Mac the one it checked against the pin; none on a Mac that checked none yet, which runs no Codex agent. */
   readonly codexExecutable: string | undefined;
-  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk; none on a Mac, whose Codex keeps its default under the agent's own home. */
+  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk, and on a Mac its default under the agent's own home, named where the runner mirrors it (`transcriptsKept`); none on an older Mac, whose Codex keeps that default unnamed. */
   readonly codexHome: string | undefined;
   /**
    * Whether the runner reads its lines past its config from the service
@@ -108,10 +109,19 @@ export interface MachineLayout {
   /**
    * Whether the runner keeps the CLI's transcript at the service
    * (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS`), as a sandbox's does, so
-   * a place made anew still resumes the CLI's session; a Mac's CLI keeps
-   * its own files on the Mac.
+   * a place made anew still resumes the CLI's session, and a continue or
+   * fork elsewhere carries it; a Mac's whose release bundles a runner that
+   * keeps it (`MAC_MACHINE.TRANSCRIPTS_SINCE`), and none on an older Mac,
+   * whose CLI keeps its own files on the Mac alone.
    */
   readonly transcriptsKept: boolean;
+  /**
+   * Whether a session the store does not hold whole still resumes from the
+   * CLI's own files where the place was not made anew, the store left out
+   * of that launch: a Mac's, whose sessions begun before it kept
+   * transcripts stand on its disk alone; a sandbox's such session is let go.
+   */
+  readonly diskSessions: boolean;
 }
 
 /** What a later call reads of a launch: its first event number, and what it was started with, as a digest (`runner-sessions.ts`'s `launchFingerprint`). */
@@ -451,6 +461,16 @@ export interface AgentMachineService {
     session: string,
     path: string,
     bound: number,
+  ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+  /**
+   * An H.264 MP4 of the WebM recording at the path, made on the session's
+   * place as the agent's own user (`phone-video.ts`), for a player that
+   * plays no WebM; nothing where the place has no encoder, as a Mac and a
+   * sandbox on an older image have none, or the copy would not fit.
+   */
+  readonly phoneVideo: (
+    session: string,
+    path: string,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
 }
 

@@ -13,6 +13,8 @@ import {
   type MirrorStanding,
   type MirrorStep,
 } from "@repo/features/mirror-steps";
+import { openedUnderCredential } from "@repo/features/relay-credential";
+import type { OpenTerminalSocket, TerminalSocket } from "@repo/features/relay-socket";
 import {
   MIRROR_BOUNDS,
   MIRROR_FRAME,
@@ -57,8 +59,6 @@ import type { MirrorPlatformSeam } from "./effect/seams.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
 import { mirrorDeleted, mirrorMatched, mirrorWritten } from "./mirror-disk.js";
-import { openedUnderCredential } from "./relay-credential.js";
-import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
 
 /**

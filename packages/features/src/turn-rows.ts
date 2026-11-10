@@ -66,6 +66,12 @@ export const CALL_KIND = {
   /** A list of the models a coding agent may be started on (`list_models`). */
   LIST_MODELS: "list-models",
   STOP_AGENT: "stop-agent",
+  /** The ports a server listens on in a coding agent's own sandbox listed (`list_ports`). */
+  LIST_PORTS: "list-ports",
+  /** A port of a coding agent's own sandbox shared by link (`share_port`), its row naming the port. */
+  SHARE_PORT: "share-port",
+  /** A coding agent's link to its port closed (`share_port` of null). */
+  UNSHARE_PORT: "unshare-port",
   /** A coding agent renamed, moved to another model, pinned, or given other servers (`update_agent`), its row naming it by its chip. */
   UPDATE_AGENT: "update-agent",
   /** One task of the workspace read with its description (`read_task`), its row naming the task once answered. */
@@ -160,6 +166,9 @@ export const CALL_WORDS = {
   [CALL_KIND.UNARCHIVE_AGENT]: { verb: "Unarchived the agent", code: false },
   [CALL_KIND.LIST_MODELS]: { verb: "Listed the models", code: false },
   [CALL_KIND.STOP_AGENT]: { verb: "Stopped the agent", code: false },
+  [CALL_KIND.LIST_PORTS]: { verb: "Listed the ports", code: false },
+  [CALL_KIND.SHARE_PORT]: { verb: "Shared port", code: true },
+  [CALL_KIND.UNSHARE_PORT]: { verb: "Stopped sharing the port", code: false },
   [CALL_KIND.UPDATE_AGENT]: { verb: "Changed the agent", code: false },
   [CALL_KIND.READ_TASK]: { verb: "Read the task", code: false },
   [CALL_KIND.CREATE_SECTION]: { verb: "Made the section", code: false },
@@ -397,6 +406,8 @@ export const ROW_PART = {
   NOTE: "note",
   /** A message that reached the turn while it ran, from whoever sent it: it ends a run of calls, and a finished turn's fold splits around it, so it stands where it arrived. */
   ARRIVED: "arrived",
+  /** A native notice at a pause, kept in place between stretches of work. */
+  NOTICE: "notice",
 } as const;
 
 type RowPart = (typeof ROW_PART)[keyof typeof ROW_PART];
@@ -723,7 +734,8 @@ function splitAtArrivals<B>(lead: readonly Keyed<B>[], read: RowReading<B>): rea
   const runs: LeadRun<B>[] = [];
   let blocks: Keyed<B>[] = [];
   for (const each of lead) {
-    if (read.part(each.block) !== ROW_PART.ARRIVED) {
+    const part = read.part(each.block);
+    if (part !== ROW_PART.ARRIVED && part !== ROW_PART.NOTICE) {
       blocks.push(each);
       continue;
     }

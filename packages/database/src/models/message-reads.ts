@@ -22,6 +22,7 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
   isNotNull,
   lt,
@@ -410,6 +411,57 @@ export function listMessagesBefore(
   );
 }
 
+const findMessagesFrom = SqlSchema.findAll({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    userId: Schema.String,
+    from: Schema.Number,
+    limit: Schema.Number,
+  }),
+  Result: SelectedMessageRowSchema,
+  execute: (options) =>
+    Database.use((db) =>
+      db
+        .select(MESSAGE_FIELDS)
+        .from(messages)
+        .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
+        .where(
+          and(
+            eq(messages.conversationId, options.conversationId),
+            eq(messages.userId, options.userId),
+            gte(messages.seq, options.from),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(options.limit),
+    ),
+});
+
+/**
+ * The oldest messages at or above a sequence, every role and finished or
+ * not, as each now stands, oldest first: a page of a transcript read on
+ * from a place in it, `from` the sequence to start at. A page holds at most
+ * `limit` rows, and fewer only once nothing more stands above. A
+ * conversation that no longer stands, or another account's, answers none.
+ */
+export function listMessagesFrom(
+  userId: string,
+  conversationId: string,
+  tools: ToolSet,
+  from: number,
+  limit?: number,
+): Effect.Effect<MessageListRead, StoreFailure, DatabaseServices> {
+  return Effect.flatMap(
+    findMessagesFrom({
+      conversationId,
+      userId,
+      from,
+      limit: pageLimit({ ...(limit === undefined ? undefined : { limit }) }),
+    }),
+    (selected) => readSelected(selected, tools),
+  );
+}
+
 const findMessageSeq = SqlSchema.findOneOption({
   Request: Schema.Struct({
     conversationId: Schema.String,
@@ -668,49 +720,6 @@ export function runningChildTurns(
   );
 }
 
-const findNewestJournals = SqlSchema.findAll({
-  Request: Schema.Struct({
-    conversationId: Schema.String,
-    userId: Schema.String,
-    limit: Schema.Number,
-  }),
-  Result: SelectedMessageRowSchema,
-  execute: (options) =>
-    Database.use((db) =>
-      db
-        .select(MESSAGE_FIELDS)
-        .from(messages)
-        .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
-        .where(
-          and(
-            eq(messages.conversationId, options.conversationId),
-            eq(messages.userId, options.userId),
-            eq(messages.role, MESSAGE_ROLE.ASSISTANT),
-          ),
-        )
-        .orderBy(desc(messages.seq))
-        .limit(options.limit),
-    ),
-});
-
-/**
- * The newest turn journals of a conversation, answered oldest first: each
- * turn's assistant message, a journal still being written included, which is
- * how a subagent's session is read while it runs. Answers an empty page for
- * a conversation that has none or does not stand.
- */
-export function listJournals(
-  userId: string,
-  conversationId: string,
-  tools: ToolSet,
-  limit: number,
-): Effect.Effect<MessageListRead, StoreFailure, DatabaseServices> {
-  return Effect.flatMap(
-    findNewestJournals({ conversationId, userId, limit: pageLimit({ limit }) }),
-    (selected) => readSelected([...selected].reverse(), tools),
-  );
-}
-
 const findNewestJournalOf = SqlSchema.findAll({
   Request: Schema.Struct({ conversationIds: Schema.Array(Schema.String) }),
   Result: SelectedMessageRowSchema,
@@ -854,6 +863,8 @@ export interface LatestTurn {
   readonly settledAt: Date | null;
   /** The deadline of the state it stands in while it is queued or runs (`turn-state.ts`); null for a turn from before the deadline. Optional, so a turn built by hand in a test need not name it. */
   readonly leaseUntil?: Date | null;
+  /** When the usage limit an open turn is held for resets (`turns.waits_until`); null where it waits on none. Optional as `leaseUntil` is. */
+  readonly waitsUntil?: Date | null;
   /** What the turn ran under and what it cost, as the row holds them; null where the row names no model, and until the turn settles. */
   readonly model: string | null;
   readonly usage: StoredTurnUsage | null;
@@ -874,6 +885,7 @@ const LatestTurnRowSchema = Schema.Struct({
   settledAt: Schema.NullOr(InstantColumnSchema),
   /** The deadline of the state it stands in while it is open (`turn-state.ts`); null for a turn from before the deadline. */
   leaseUntil: Schema.NullOr(InstantColumnSchema),
+  waitsUntil: Schema.NullOr(InstantColumnSchema),
   model: Schema.NullOr(Schema.String),
   usage: Schema.NullOr(TurnUsageColumnSchema),
   fastRefused: Schema.Boolean,
@@ -904,6 +916,7 @@ const findLatestTurns = SqlSchema.findAll({
           startedAt: turns.startedAt,
           settledAt: turns.settledAt,
           leaseUntil: turns.leaseUntil,
+          waitsUntil: turns.waitsUntil,
           model: turns.model,
           usage: turns.usage,
           fastRefused: turns.fastRefused,

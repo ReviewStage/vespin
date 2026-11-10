@@ -37,6 +37,7 @@ import {
   threadNeedsReader,
 } from "@repo/features/inbox-wire";
 import { LINK_PLACE, linkOf, mentionMarkdownLink } from "@repo/features/link-grammar";
+import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { Effect } from "effect";
 import { agentToolRejected, orStoreRefusal } from "../agents/agent-tools.js";
 import { settledMessages, threadLineOf } from "../agents/coder-host/inbox.js";
@@ -49,10 +50,10 @@ import { INBOX_ASK_ANSWER, workspaceInboxItems } from "../inbox/inbox-store.js";
 
 /** The inbox tools by name, each the name a model calls it by. */
 export const MEMBER_INBOX_TOOL = {
-  READ: "read_inbox",
-  ANSWER: "answer_ask",
-  REPLY: "reply_to_thread",
-  CLOSE: "close_thread",
+  READ: MEMBER_MCP_TOOL.READ_INBOX,
+  ANSWER: MEMBER_MCP_TOOL.ANSWER_ASK,
+  REPLY: MEMBER_MCP_TOOL.REPLY_TO_THREAD,
+  CLOSE: MEMBER_MCP_TOOL.CLOSE_THREAD,
 } as const;
 
 /** Why a call wrote nothing, in words the outside agent can act on. */

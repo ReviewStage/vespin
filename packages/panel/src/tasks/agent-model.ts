@@ -1,6 +1,7 @@
 import {
   agentFailureWords,
   hostLostWords,
+  LIMIT_REACHED_WORDS,
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
@@ -73,14 +74,21 @@ import {
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { formatCompact, formatUsd } from "@repo/features/number-format";
+import { plainWords } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_STATUS,
+  type ProviderKeyKind,
+  type SubscriptionKeySummary,
+} from "@repo/features/provider-key-wire";
 import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
-import { inPullRequestOrder } from "@repo/features/task-agents-model";
+import { agentStillWriting, inPullRequestOrder } from "@repo/features/task-agents-model";
 import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
+import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import {
   ROW_PART,
   type RowReading,
@@ -88,7 +96,7 @@ import {
   type TurnRow,
   turnRows,
 } from "@repo/features/turn-rows";
-import { andList, readFailedWords } from "@repo/features/words";
+import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
   ACTOR_KIND,
@@ -124,12 +132,19 @@ import {
   type WireValue,
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import {
+  USAGE_LIMIT_AGENT,
+  USAGE_LIMIT_PART,
+  UsageLimitAnswerSchema,
+  type UsageLimitNotice,
+  UsageLimitNoticeSchema,
+} from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { TOOL_STATE, type ToolState } from "../ai-elements/tool.js";
 import { devicePlatformOf } from "../device-platform.js";
 import { GLYPH_STATE, type GlyphState, glyphStateWords } from "../state-glyph.js";
 import { drawnCall } from "./native-tool-calls.js";
-import { plainWords, remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
+import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 
 /**
  * agent-model.ts -- what the agent tabs, a Start, and an agent's transcript draw, decided from what the service answered.
@@ -141,7 +156,7 @@ import { plainWords, remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-m
  * than in the transcript, what its working line says it is doing, when a
  * line the developer sent has been read back, what a Start or a message
  * that did not land says, and what its
- * branch chip and the pull request's row say and open, and how what an agent or a turn cost is told.
+ * pull request's row says and opens, and how what an agent or a turn cost is told.
  * Nothing here asks anything.
  */
 
@@ -151,10 +166,60 @@ const LINE_SEPARATOR = " · ";
 /** Each payer as the model menu's last line names it; a key's line goes on to what the agent has cost. */
 const PAYER_WORDS = {
   [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude plan",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using ChatGPT plan",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex plan",
   [AGENT_PAYER.APP]: `${PRODUCT_NAME}'s API key`,
   [AGENT_PAYER.MAC_SIGN_IN]: "Using your Mac's sign-in",
 } as const satisfies Record<Exclude<AgentPayer, typeof AGENT_PAYER.API_KEY>, string>;
+
+/** Each plan payer as the model menu's last line leads a plan it names: "Using Codex · ana@work.com". */
+const PLAN_PAYER_WORDS = {
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex",
+} as const satisfies Partial<Record<AgentPayer, string>>;
+
+type PlanPayer = keyof typeof PLAN_PAYER_WORDS;
+
+/** The kind of plan each plan payer runs on. */
+const PLAN_PAYER_KIND = {
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+} as const satisfies Record<PlanPayer, ProviderKeyKind>;
+
+function planPayer(payer: AgentPayer | undefined): payer is PlanPayer {
+  return payer !== undefined && payer in PLAN_PAYER_WORDS;
+}
+
+/**
+ * The name of the reader's own plan that pays for the agent, for the model
+ * menu's last line: the subscription the page named, or, for one a new
+ * agent would start on (`next`), the first of the payer's kind in the
+ * reader's order with room left, as a turn picks it; by the name the reader
+ * gave it, else the ChatGPT account it signed in as. Nothing for a plan the
+ * reader does not hold, a teammate's, or one with neither name.
+ */
+export function payerPlanName(
+  payer: AgentPayer | undefined,
+  subscriptions: readonly SubscriptionKeySummary[] | undefined,
+  subscriptionId: string | undefined,
+  next: boolean,
+): string | undefined {
+  if (!planPayer(payer) || subscriptions === undefined) return undefined;
+  const kind = PLAN_PAYER_KIND[payer];
+  const plan =
+    subscriptionId !== undefined
+      ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
+      : next
+        ? subscriptions
+            .filter((one) => one.kind === kind)
+            .toSorted((a, b) => a.position - b.position)
+            .find(
+              (one) =>
+                one.status === PROVIDER_KEY_STATUS.VERIFIED ||
+                one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
+            )
+        : undefined;
+  return plan?.label ?? plan?.email;
+}
 
 /** The member's own API key, named by the provider it is for. */
 export const API_KEY_WORDS = {
@@ -182,8 +247,13 @@ export function agentPayerLine(
   payer: AgentPayer | undefined,
   provider: ModelProvider | undefined,
   costUsd: number | undefined,
+  /** The plan that pays, by its name, where the reader's own keys name it (`payerPlanName`). */
+  planName?: string | undefined,
 ): string | undefined {
   if (payer === undefined) return undefined;
+  if (planPayer(payer) && planName !== undefined) {
+    return `${PLAN_PAYER_WORDS[payer]}${LINE_SEPARATOR}${planName}`;
+  }
   const words =
     payer === AGENT_PAYER.API_KEY
       ? provider === undefined
@@ -464,23 +534,25 @@ export function endLineParts(
   }
 }
 
+/** The harness a usage limit's notice names, by the provider of the agent's model: Codex for OpenAI's, Claude for any other. */
+export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLimitNotice["agent"] {
+  return provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE;
+}
+
+/** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
+export function refusedAtLimit(refusal: unknown): boolean {
+  return (
+    Predicate.hasProperty(refusal, "failure") &&
+    refusal.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
+  );
+}
+
 /** What mends a failed turn from its end line: the API keys' page for a key refused; nothing else there is the developer's to mend. */
 export function endLineReason(failure: AgentFailure | undefined, starter?: string): FailureReason {
   // A teammate's key is theirs to mend, so the reader is offered no Settings of their own.
   return failure === AGENT_FAILURE.PROVIDER_KEY && starter === undefined
     ? FAILURE_REASON.API_KEY
     : FAILURE_REASON.OTHER;
-}
-
-/** The statuses an agent may still write under, which is when it can be stopped. */
-const FOLLOWED_STATUSES: ReadonlySet<AgentStatus> = new Set([
-  AGENT_STATUS.STARTING,
-  AGENT_STATUS.RUNNING,
-]);
-
-/** Whether an agent in this status may still write more. */
-export function agentStillWriting(status: AgentStatus): boolean {
-  return FOLLOWED_STATUSES.has(status);
 }
 
 /**
@@ -532,9 +604,6 @@ export const UNHEARD_OFFLINE = {
   BESIDE_RETRY: "You're offline.",
   ALONE: "You're offline. Try again once you're back online.",
 } as const;
-
-/** What a plan's reached limit says where no reset is known; with one, `limitResetsWords`. */
-const LIMIT_REACHED_WORDS = "Usage limit reached";
 
 /** What the refusals a Start and a message meet alike say, worded once. */
 const SHARED_FAILURE_NOTE = {
@@ -659,13 +728,32 @@ export function endLineOffersContinue(input: {
 /**
  * The failures a message sent again would only meet again, since what mends
  * them is a choice the line's words name: a teammate's key, which only they
- * replace, or Fast, which a model chosen with it off mends.
+ * replace, Fast, which a model chosen with it off mends, or the model's
+ * refusal, which a continue on another model mends (`endLineOffersOtherModel`).
  */
 const MENDED_BY_CHOICE: ReadonlySet<AgentFailure> = new Set([
   AGENT_FAILURE.PROVIDER_KEY,
   AGENT_FAILURE.FAST_ON_OWN_KEY,
   AGENT_FAILURE.FAST_NOT_ENABLED,
+  AGENT_FAILURE.REFUSAL,
 ]);
+
+/**
+ * Whether the failed end line's row ends on the offer to continue on another
+ * model (`RefusalContinue`): where the model refused the turn, so a message
+ * only meets the refusal again, and until another agent continued it, when
+ * Continue again stands in its place (`endLineOffersContinue`).
+ */
+export function endLineOffersOtherModel(input: {
+  readonly status: AgentStatus;
+  readonly endReason: FailureReason;
+  readonly failure: AgentFailure | undefined;
+  readonly continued: boolean;
+  readonly boxClosed: boolean;
+}): boolean {
+  if (!endLineContinues(input.status, input.endReason)) return false;
+  return !input.continued && !input.boxClosed && input.failure === AGENT_FAILURE.REFUSAL;
+}
 
 /**
  * Whether the failed end line's row ends on Try again, which sends the
@@ -769,6 +857,12 @@ export function archiveWords(archived: boolean): {
   readonly refused: string;
 } {
   return archived ? ARCHIVED_WORDS : UNARCHIVED_WORDS;
+}
+
+/** What the toast says once `count` agents' archive, or its undoing, landed: one agent's words for one, else how many. */
+export function archivedManyWords(count: number, archived: boolean): string {
+  if (count === 1) return archiveWords(archived).done;
+  return `${countWords(count, TERM.AGENT)} ${archived ? "archived" : "unarchived"}`;
 }
 
 /** A refused start or message as the view hears it: why, why the repository is out of reach where it is and the service said, when a plan's reached limit resets where it is that and the provider said, and the provider whose credential is missing where it is that. */
@@ -928,7 +1022,7 @@ export interface ConnectFailure {
 /** What would run a provider's models, as the connect note names it: the harness's plan or the provider's API key. */
 const CONNECT_CREDENTIALS = {
   [MODEL_PROVIDER.ANTHROPIC]: "a Claude plan or an Anthropic API key",
-  [MODEL_PROVIDER.OPENAI]: "a ChatGPT plan or an OpenAI API key",
+  [MODEL_PROVIDER.OPENAI]: "a Codex plan or an OpenAI API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /**
@@ -1804,6 +1898,7 @@ export type AgentRun = Pick<AgentSummary, "status" | "runStartedAt">;
 
 /** The kinds of part a stored message holds that the tab draws apart. */
 export const AGENT_PART = {
+  USAGE_LIMIT: USAGE_LIMIT_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -1824,6 +1919,7 @@ export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string
 
 /** One part of a stored message as the tab draws it. */
 export type AgentPart =
+  | { readonly kind: typeof AGENT_PART.USAGE_LIMIT; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -1865,6 +1961,12 @@ export function agentPart(part: WireValue): AgentPart {
   if (part.type === AGENT_PART.TEXT || part.type === AGENT_PART.REASONING) {
     return isWireString(part.text)
       ? { kind: part.type, text: part.text }
+      : { kind: AGENT_PART.OTHER };
+  }
+  if (part.type === AGENT_PART.USAGE_LIMIT) {
+    const notice = Schema.decodeUnknownOption(UsageLimitNoticeSchema)(part.data);
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.USAGE_LIMIT, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
@@ -2205,6 +2307,14 @@ export function nativeSubagent(
   return part.tool === CLAUDE_CODE_TOOL.AGENT;
 }
 
+/** The usage limit's notice a worker's call answered with where the plan's limit ended it, which its row draws in its answer's place; none for any other answer. */
+export function callUsageLimit(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+): UsageLimitNotice | undefined {
+  const answer = Schema.decodeUnknownOption(UsageLimitAnswerSchema)(part.output);
+  return Option.isSome(answer) ? answer.value.usageLimit : undefined;
+}
+
 /** Whether a part is a delegation to a worker (`delegates`). */
 export function isDelegation(
   part: AgentPart,
@@ -2241,6 +2351,7 @@ const AGENT_READING: RowReading<AgentPart> = {
     return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
   },
   part: (part) => {
+    if (part.kind === AGENT_PART.USAGE_LIMIT) return ROW_PART.NOTICE;
     if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;
     if (part.kind === AGENT_PART.ARRIVED) return ROW_PART.ARRIVED;
     if (part.kind !== AGENT_PART.TOOL) return ROW_PART.NOTE;
@@ -2539,6 +2650,8 @@ export const WORKING_PHASE = {
   WORKING: "working",
   /** A Stop was asked of its newest turn, which runs until its runner ends it. */
   STOPPING: "stopping",
+  /** Its newest turn is held open until a usage limit resets, its starter's every subscription at one and no API key to pay, and runs again then (`AgentTurn`'s `waitsUntil`). */
+  WAITING: "waiting",
 } as const;
 
 export type WorkingPhase = (typeof WORKING_PHASE)[keyof typeof WORKING_PHASE];
@@ -2549,19 +2662,30 @@ const WORKING_PHASE_WORDS = {
   [WORKING_PHASE.STARTING]: "Starting…",
   [WORKING_PHASE.WORKING]: "Working…",
   [WORKING_PHASE.STOPPING]: "Stopping…",
+  [WORKING_PHASE.WAITING]: "Waiting for your usage limit to reset…",
 } as const satisfies Record<WorkingPhase, string>;
 
-/** What the working line says in a phase. */
-export function workingLineWords(phase: WorkingPhase): string {
-  return WORKING_PHASE_WORDS[phase];
+/** What the working line says in a phase, a wait naming when the limit it waits on resets, as of `now`: "3:40 PM" today. */
+export function workingLineWords(
+  phase: WorkingPhase,
+  waitsUntil?: number,
+  now: number = Date.now(),
+): string {
+  if (phase !== WORKING_PHASE.WAITING || waitsUntil === undefined)
+    return WORKING_PHASE_WORDS[phase];
+  return `Waiting for your usage limit to reset at ${dueText(waitsUntil, now)}`;
 }
 
 /** What a tab reads its agent standing by (`tabTurnOf`). */
 export interface TabTurn {
+  /** The turn whose status the tab draws, where one has been queued. */
+  readonly turnId: string | undefined;
   /** Whether the working line stands: the turn is open, a line sent has not been answered, or a rewind is out. */
   readonly working: boolean;
   /** What the working line says the agent is doing. */
   readonly phase: WorkingPhase;
+  /** When the usage limit its open turn waits on resets; none where it waits on none. */
+  readonly waitsUntil: number | undefined;
   /** Where the agent stands by that turn, which the end row is drawn from once it no longer works. */
   readonly status: AgentStatus;
   /** Why that turn failed, in the wire's word; none where it did not. */
@@ -2598,8 +2722,10 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
       ? agent.status
       : turnAgentStatus({ status: turn.status, cancelRequested: turn.stopAsked === true });
   return {
+    turnId: turn?.id,
     working: open || sends.unanswered || sends.rewinding,
     phase: workingPhaseOf(turn, open, sends.rewinding),
+    waitsUntil: open ? turn?.waitsUntil : undefined,
     status,
     failure:
       turn === undefined
@@ -2610,7 +2736,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
   };
 }
 
-/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open or it is still queued, then the open turn's state. */
+/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open or it is still queued, waiting while it is held open for a limit's reset, then the open turn's state. */
 function workingPhaseOf(
   turn: AgentTurn | undefined,
   open: boolean,
@@ -2619,6 +2745,7 @@ function workingPhaseOf(
   if (rewinding) return WORKING_PHASE.REWINDING;
   if (turn === undefined || !open) return WORKING_PHASE.STARTING;
   if (turn.stopAsked === true) return WORKING_PHASE.STOPPING;
+  if (turn.waitsUntil !== undefined) return WORKING_PHASE.WAITING;
   return turn.status === TURN_STATUS.QUEUED ? WORKING_PHASE.STARTING : WORKING_PHASE.WORKING;
 }
 
@@ -2912,18 +3039,6 @@ function shellWord(word: string): string {
 export function checkoutCommand(branch: string): string {
   const name = shellWord(branch);
   return `git fetch origin ${name} && git switch ${name}`;
-}
-
-/** A branch or a file's path as a GitHub address spells it: every character encoded but the slashes GitHub reads as the name's own. */
-function githubPath(name: string): string {
-  return encodeURIComponent(name).replaceAll("%2F", "/");
-}
-
-/** Where the chip opens on GitHub: the pull request, or the branch compared against the repository's default where there is no pull request yet. */
-export function publishedUrl(published: AgentPullRequestAnswer): string | undefined {
-  if (published.pullRequest !== null) return published.pullRequest.url;
-  if (published.branch === null || published.repository === null) return undefined;
-  return `https://github.com/${published.repository}/compare/${githubPath(published.branch)}?expand=1`;
 }
 
 /** What the agent's dock draws of a pull request: the parts its row reads, and its page. */

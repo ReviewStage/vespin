@@ -6,11 +6,17 @@ import {
   type Picture,
   pictureMediaTypeSchema,
 } from "@repo/features/picture-wire";
+import {
+  MP4_TYPE,
+  PLAYABLE_VIDEO_TYPE,
+  type PlayableVideoType,
+  playableVideoTypeSchema,
+} from "@repo/features/video-signature";
 import { and, eq, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
-import { attachment, ownedByTaskAlone } from "../schemas/attachment.js";
+import { attachment, ownedByTaskAlone, servedColumns } from "../schemas/attachment.js";
 import { task } from "../schemas/task.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
@@ -84,34 +90,57 @@ const insertPicture = SqlSchema.void({
     contentType: pictureMediaTypeSchema,
     byteCount: Schema.Number,
     bytes: Schema.Uint8Array,
+    mp4Bytes: Schema.NullOr(Schema.Uint8Array),
     createdAt: Schema.Date,
   }),
   execute: (row) => Database.use((db) => db.insert(attachment).values(row)),
 });
 
-const findPicture = SqlSchema.findOneOption({
-  Request: Schema.Struct({
-    userId: Schema.String,
-    taskId: Schema.String,
-    attachmentId: Schema.String,
-  }),
-  Result: Schema.Struct({ contentType: pictureMediaTypeSchema, bytes: Schema.Uint8Array }),
-  execute: ({ userId, taskId, attachmentId }) =>
-    Database.use((db) =>
-      db
-        .select({ contentType: attachment.contentType, bytes: attachment.bytes })
-        .from(attachment)
-        .innerJoin(task, eq(task.id, attachment.taskId))
-        .where(
-          and(
-            eq(attachment.taskId, taskId),
-            eq(attachment.id, attachmentId),
-            descriptionPicture,
-            taskReachableBy(userId),
-          ),
-        ),
-    ),
+/** Which picture of which plan an account reads. */
+const PictureAskSchema = Schema.Struct({
+  userId: Schema.String,
+  taskId: Schema.String,
+  attachmentId: Schema.String,
 });
+
+/** The plan's picture, where the account reaches the plan, served as the reader plays a video. */
+function pictureQuery(
+  { userId, taskId, attachmentId }: typeof PictureAskSchema.Type,
+  playable: PlayableVideoType,
+) {
+  return Database.use((db) =>
+    db
+      .select(servedColumns(playable))
+      .from(attachment)
+      .innerJoin(task, eq(task.id, attachment.taskId))
+      .where(
+        and(
+          eq(attachment.taskId, taskId),
+          eq(attachment.id, attachmentId),
+          descriptionPicture,
+          taskReachableBy(userId),
+        ),
+      ),
+  );
+}
+
+const findPicture = SqlSchema.findOneOption({
+  Request: PictureAskSchema,
+  Result: Schema.Struct({ contentType: pictureMediaTypeSchema, bytes: Schema.Uint8Array }),
+  execute: (ask) => pictureQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
+});
+
+const findServedPicture = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...PictureAskSchema.fields, playable: playableVideoTypeSchema }),
+  Result: Schema.Struct({
+    contentType: Schema.Union([pictureMediaTypeSchema, Schema.Literal(MP4_TYPE)]),
+    bytes: Schema.Uint8Array,
+  }),
+  execute: ({ playable, ...ask }) => pictureQuery(ask, playable),
+});
+
+/** A picture or video to keep on the description, a recording with the MP4 its sandbox made of it, which no count weighs. */
+export type DescriptionAttachmentToKeep = Picture & { readonly mp4Bytes?: Uint8Array | undefined };
 
 /**
  * Keeps one picture or video on the description, uploaded by the account, under a
@@ -122,7 +151,7 @@ const findPicture = SqlSchema.findOneOption({
 export function keepDescriptionAttachment(
   userId: string,
   taskId: string,
-  picture: Picture,
+  picture: DescriptionAttachmentToKeep,
 ): TaskStoreEffect<DescriptionAttachmentKeep> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -151,6 +180,7 @@ export function keepDescriptionAttachment(
           contentType: picture.contentType,
           byteCount: picture.bytes.length,
           bytes: picture.bytes,
+          mp4Bytes: picture.mp4Bytes ?? null,
           createdAt: yield* DateTime.nowAsDate,
         });
         return { status: DESCRIPTION_ATTACHMENT_KEEP.KEPT, id } as const;
@@ -166,4 +196,14 @@ export function readDescriptionAttachment(
   attachmentId: string,
 ): TaskStoreEffect<Option.Option<Picture>> {
   return findPicture({ userId, taskId, attachmentId });
+}
+
+/** One picture or video of the description as `readDescriptionAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */
+export function readServedDescriptionAttachment(
+  userId: string,
+  taskId: string,
+  attachmentId: string,
+  playable: PlayableVideoType,
+): TaskStoreEffect<Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }>> {
+  return findServedPicture({ userId, taskId, attachmentId, playable });
 }

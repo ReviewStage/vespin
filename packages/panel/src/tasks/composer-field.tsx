@@ -138,6 +138,7 @@ export function ComposerField({
   aria,
   onKey,
   onEnter,
+  enterWrites = false,
   onPasteFiles,
   onPasteText,
   onPasteCut,
@@ -166,6 +167,8 @@ export function ComposerField({
   aria: Readonly<Record<string, string | undefined>>;
   onKey: (event: KeyboardEvent) => boolean;
   onEnter: () => void;
+  /** Whether a bare Enter writes a new line, so only ⌘ or Ctrl with Enter is `onEnter`, as in a field whose words are kept rather than sent. Read as it mounts. */
+  enterWrites?: boolean;
   onPasteFiles: (files: readonly File[]) => boolean;
   /** Takes pasted words as a file before they are laid in, answering whether it did; a box that takes none lays every paste in. */
   onPasteText?: ((words: string) => boolean) | undefined;
@@ -182,7 +185,7 @@ export function ComposerField({
   /** Whether the editor takes the caret as it mounts, over `takesFocus` and whoever is typing elsewhere; left out, those decide. Read as it mounts. */
   focus?: boolean | undefined;
   /** The span its keystrokes are timed under. */
-  keystrokeSpan?: KeystrokeSpanName;
+  keystrokeSpan?: KeystrokeSpanName | undefined;
   /** What stands over the field, a list it opened. */
   children?: ReactNode;
 }): React.JSX.Element {
@@ -263,6 +266,7 @@ export function ComposerField({
       },
       onKey: (event) => latest.current.onKey(event),
       onEnter: () => latest.current.onEnter(),
+      enterWrites,
       onPasteFiles: (files) => latest.current.onPasteFiles(files),
       onPasteText: (words) => latest.current.onPasteText?.(words) === true,
       onPasteCut: () => latest.current.onPasteCut?.(),

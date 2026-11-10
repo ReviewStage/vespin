@@ -11,6 +11,7 @@
  * glyph.
  */
 
+import { repositoryLabel } from "@repo/features/task-list-model";
 import {
   GAP,
   Inline,
@@ -21,7 +22,6 @@ import {
   RepositoryPicture,
   Stack,
 } from "@repo/ui";
-import { repositoryLabel } from "@repo/ui/task-list-model";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 

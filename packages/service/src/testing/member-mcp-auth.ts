@@ -32,6 +32,9 @@ import { Clock, Effect, Layer, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import type * as HttpClient from "effect/http/HttpClient";
 import { vi } from "vitest";
+import { agentBrowserServices } from "../agents/browser/agent-browser.js";
+import { AgentImage } from "../agents/coder-host/agent-image.js";
+import { agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
 import { authDatabaseAdapter } from "../auth/auth-database.js";
 import {
   AUTH_BASE_PATH,
@@ -60,8 +63,10 @@ import {
   memberMcpResourceUrl,
   oauthResourceRecord,
 } from "../member-mcp/resource.js";
+import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf } from "../providers/model-catalog.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
+import { FAKE_IMAGE } from "./agent-browser-fake.js";
 import { NO_GITHUB } from "./github-app-fake.js";
 import { recordingHarness } from "./native-harness-fake.js";
 
@@ -191,6 +196,12 @@ const seedRows = Effect.gen(function* () {
   );
 });
 
+/** An agent's sandbox and its browser as the edge composes them, over the test's own `Sandbox` and a fixture image. */
+export const MEMBER_MCP_AGENT_SANDBOX = Layer.mergeAll(
+  agentSandboxLayer,
+  agentBrowserServices,
+).pipe(Layer.provide(Layer.succeed(AgentImage, FAKE_IMAGE)));
+
 /** What a test stands the server up over: the transport its metadata documents are fetched through, and the GitHub its tools reach. */
 export interface MemberMcpStandingOptions {
   readonly fetchClientMetadataResource?: ClientMetadataResourceFetch;
@@ -219,6 +230,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
       harness.layer,
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+      Layer.succeed(PageLinks, { sandbox: undefined }),
     );
     yield* seedRows.pipe(Effect.provide(services));
     // The key set is fetched from the auth service over HTTP, as on a deployment: here the in-process handler, and nothing else answers.
@@ -231,9 +243,10 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
     });
     const resourceClient = oauthProviderResourceClient(auth).getActions();
     const web = HttpRouter.toWebHandler(
-      memberMcpApp(memberMcpAuth(resourceClient, MEMBER_MCP_TEST.ORIGIN)).pipe(
-        HttpRouter.provideRequest(services),
-      ),
+      memberMcpApp(
+        memberMcpAuth(resourceClient, MEMBER_MCP_TEST.ORIGIN),
+        MEMBER_MCP_AGENT_SANDBOX,
+      ).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
     yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));

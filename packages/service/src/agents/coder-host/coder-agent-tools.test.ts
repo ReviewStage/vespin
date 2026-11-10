@@ -23,6 +23,7 @@ import { keepConversationPicture } from "@repo/database/models/conversation-pict
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
+import { childConversationId } from "@repo/database/models/ids";
 import { linkIntegrationInstallation } from "@repo/database/models/integration-installation-store";
 import { listMemories } from "@repo/database/models/memory-store";
 import {
@@ -43,12 +44,16 @@ import {
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import { agentPin } from "@repo/database/schemas";
-import { agentTable } from "@repo/database/schemas/agent";
+import { agentDelegationTable, agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
 import { device } from "@repo/database/schemas/device";
-import { messages, turns } from "@repo/database/schemas/storage";
+import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import {
+  CONVERSATION_KIND,
+  CONVERSATION_RUNTIME,
+  MESSAGE_SENDER,
+} from "@repo/database/storage-vocabulary";
 import {
   DEVICE_LAYOUT,
   joinWorkspace,
@@ -114,6 +119,7 @@ import {
   AssistantMessageBuilder,
   isRecord,
   isWireString,
+  MESSAGE_ROLE,
   RUN_EVENT,
   RUN_STATUS,
   RUN_TURN_ORIGIN,
@@ -135,6 +141,7 @@ import {
 } from "../../events/server-events.js";
 import { LINK_OUTCOME } from "../../github/github-installations.js";
 import { postInboxThread, taskInboxItems } from "../../inbox/inbox-store.js";
+import { PageLinks } from "../../pages/page-links.js";
 import {
   ModelCatalog,
   ModelCatalogUnavailable,
@@ -155,6 +162,8 @@ import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import { scriptedHarness } from "../../testing/native-harness-fake.js";
 import { SentryApp, sentryAppService } from "../../triggers/sentry/sentry-app-config.js";
 import {
+  AGENT_CALLER,
+  AGENT_TOOL_BOUNDS,
   AGENT_TOOL_REFUSAL,
   LIST_MODELS_REFUSAL,
   READ_PAGE_REFUSAL,
@@ -165,6 +174,7 @@ import {
   UPDATE_AGENT_REFUSAL,
   UPDATE_TASK_REFUSAL,
 } from "../agent-tools.js";
+import { runReadAgentTranscript } from "../agent-transcript-tool.js";
 import { AUTOMATION_TOOL_REFUSAL } from "../automation-tools.js";
 import { AgentBrowser } from "../browser/agent-browser.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
@@ -179,6 +189,7 @@ import {
 import { TASK_BLOCK_REFUSAL } from "../task-block-changes.js";
 import { NO_SECTION_DELETED, TASK_SECTION_TOOL_REFUSAL } from "../task-section-tools.js";
 import { CREATE_TASK_REFUSAL, READ_TASK_REFUSAL } from "../task-tools.js";
+import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import { callTool, type ServedTool } from "../tool-catalog/catalog.js";
 import { AGENT_LIST_FILTER_REFUSAL, WORKSPACE_AGENTS_LIST_LIMIT } from "../workspace-agents.js";
 import { EXPERIMENT_OFF_REFUSAL, NO_EXPERIMENT_ON } from "../workspace-experiment-on.js";
@@ -526,9 +537,11 @@ const SENTRY_CONFIGURED = Layer.succeed(
 /** A sandbox no agent tool opens, since none reads a file the agent names. */
 const NO_SANDBOX: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
 
-/** What the catalog's call runs against beside the suite's, none of which an agent tool reaches: an agent browser and the integrations, whose every ask dies, and an environment. */
+/** What the catalog's call runs against beside the suite's, none of which an agent tool reaches: an agent browser, its sandbox, and the integrations, whose every ask dies, page links with no page sandbox, and an environment. */
 const UNREACHED = Layer.mergeAll(
   Layer.mock(AgentBrowser)({}),
+  Layer.mock(AgentSandbox)({}),
+  Layer.succeed(PageLinks, { sandbox: undefined }),
   integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
   LOCAL_AGENT_ENVIRONMENT,
 );
@@ -701,13 +714,15 @@ async function answeredTurnOn(agent: StartedAgent, answer: AssistantMessageBuild
   );
 }
 
-/** The tail a read answered, each entry as the record it is. */
+/** The page of a transcript a read answered, each entry as the record it is. */
 function tailOf(read: WireRecord): readonly WireRecord[] {
-  assert.ok(Array.isArray(read.tail), JSON.stringify(read));
-  return read.tail.map((entry) => (isRecord(entry) ? entry : assert.fail(JSON.stringify(entry))));
+  assert.ok(Array.isArray(read.transcript), JSON.stringify(read));
+  return read.transcript.map((entry) =>
+    isRecord(entry) ? entry : assert.fail(JSON.stringify(entry)),
+  );
 }
 
-/** What each entry of a read's tail says. */
+/** What each entry of a read's page says. */
 function tailTexts(read: WireRecord): readonly unknown[] {
   return tailOf(read).map((entry) => entry.text);
 }
@@ -911,7 +926,7 @@ test("list_agents from an agent another started names its starter first, ahead o
   assert.equal(agentSessions.sent.length, 0, "a list sends nothing");
 });
 
-test("read_agent reads a teammate's agent on another task of the caller's workspace, with the tail of its transcript in entries kept longer than Vespin's and as many as asked, older turns included, and reads no agent of another workspace", async () => {
+test("read_agent reads a teammate's agent on another task of the caller's workspace, with a page of its whole transcript, a member's line under their name, read back from its end or on from its start a place at a time, as many entries as asked and as fit its budget, and reads no agent of another workspace", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -970,6 +985,73 @@ test("read_agent reads a teammate's agent on another task of the caller's worksp
     "each turn's journal is a message of its own",
   );
 
+  // A member's line reads under their name, and a page reads on from the place the last one answered.
+  await database.run(
+    writer.writeAwaitingLine(
+      { userId: agents.teammates.userId, conversationId: agents.teammates.conversationId },
+      {
+        text: "Why does it stall?",
+        clientKey: randomUUID(),
+        sender: { kind: MESSAGE_SENDER.MEMBER, userId: agents.teammates.userId },
+      },
+      Effect.succeed(true),
+    ),
+  );
+  const agentId = agents.teammates.id;
+  const newest = await call(AGENT_TOOL.READ_AGENT, { agentId, entries: 2 });
+  assert.deepEqual(tailTexts(newest), ["Said: Turn 4 done.", "Test User: Why does it stall?"]);
+  assert.equal(tailOf(newest)[1]?.messageId, undefined, "a line is no message a fork is cut at");
+  assert.equal(newest.newer, undefined, "the newest page reaches the newest entry");
+  const back = await call(AGENT_TOOL.READ_AGENT, { agentId, before: newest.older, entries: 2 });
+  assert.deepEqual(tailTexts(back), ["Said: Turn 2 done.", "Said: Turn 3 done."]);
+  const first = await call(AGENT_TOOL.READ_AGENT, { agentId, from: "start", entries: 2 });
+  assert.deepEqual(tailTexts(first), ["Ran: pnpm test", `Said: ${report}`]);
+  assert.equal(first.older, undefined, "the first page opens the transcript");
+  const rest = await call(AGENT_TOOL.READ_AGENT, { agentId, after: first.newer });
+  assert.deepEqual(tailTexts(rest), [
+    "Said: Turn 2 done.",
+    "Said: Turn 3 done.",
+    "Said: Turn 4 done.",
+    "Test User: Why does it stall?",
+  ]);
+  assert.equal(rest.newer, undefined);
+
+  // A page holds entries cut to their bound until its budget of characters, and leaves the rest to the next.
+  const long = new AssistantMessageBuilder();
+  for (const each of ["1", "2", "3", "4", "5"]) {
+    long.stepStart();
+    long.text(each.repeat(AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS));
+  }
+  await answeredTurnOn(agents.teammates, long);
+  const full = await call(AGENT_TOOL.READ_AGENT, { agentId });
+  const texts = tailTexts(full).map((text) => (typeof text === "string" ? text : assert.fail()));
+  assert.deepEqual(
+    texts.map((text) => [text.slice(0, "Said: 2".length), text.length, text.at(-1)]),
+    ["2", "3", "4", "5"].map((each) => [`Said: ${each}`, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS, "…"]),
+  );
+  assert.ok(full.older !== undefined, "the entry that did not fit is the next page's");
+
+  // A page that reaches a message that does not read is refused, rather than passing for the transcript's end.
+  await database.run(
+    Database.use((db) =>
+      db.insert(messages).values({
+        userId: agents.teammates.userId,
+        conversationId: agents.teammates.conversationId,
+        seq: 1_000_000,
+        clientId: randomUUID(),
+        role: MESSAGE_ROLE.USER,
+        // SAFETY: a text part with no text is the row a read cannot decode, which is the point.
+        parts: [{ type: "text" }] as never,
+        createdAt: new Date(NOW),
+        placedAt: new Date(NOW),
+      }),
+    ),
+  );
+  assert.deepEqual(await call(AGENT_TOOL.READ_AGENT, { agentId }), {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason: AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT,
+  });
+
   // An agent of another workspace is none of the caller's, even one its starter is also in.
   for (const other of [agents.otherWorkspaces, agents.strangers]) {
     assert.deepEqual(await call(AGENT_TOOL.READ_AGENT, { agentId: other.id }), {
@@ -978,6 +1060,140 @@ test("read_agent reads a teammate's agent on another task of the caller's worksp
     });
   }
   assert.equal(agentSessions.sent.length, 0, "a read sends nothing");
+});
+
+test("read_agent reads a transcript longer than one read of the store whole, each entry once and in order, on from its start and back from its end", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+  const { userId, conversationId } = agents.teammates;
+  const count = AGENT_TOOL_BOUNDS.PAGE_ROWS * 2 + 5;
+  const lines = Array.from({ length: count }, (_, each) => `Line ${each + 1}`);
+  await database.run(
+    Database.use((db) =>
+      db.insert(messages).values(
+        lines.map((text, each) => ({
+          userId,
+          conversationId,
+          seq: 1_000 + each,
+          clientId: randomUUID(),
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text" as const, text }],
+          metadata: { channel: MESSAGE_CHANNEL.TYPED },
+          createdAt: new Date(NOW),
+          placedAt: new Date(NOW),
+        })),
+      ),
+    ),
+  );
+  const expected = lines.map((text) => `The developer: ${text}`);
+  const agentId = agents.teammates.id;
+  const entries = AGENT_TOOL_BOUNDS.MAX_PAGE_ENTRIES;
+
+  assert.deepEqual(tailTexts(await call(AGENT_TOOL.READ_AGENT, { agentId, entries })), expected);
+  assert.deepEqual(
+    tailTexts(await call(AGENT_TOOL.READ_AGENT, { agentId, from: "start", entries })),
+    expected,
+  );
+});
+
+test("read_agent_transcript pages through a worker's transcript, naming each call's callId, reads one call's output whole, and refuses a worker no call started", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const { teammates } = agents;
+  const callId = "call-worker";
+  const worker = childConversationId(teammates.conversationId, callId);
+  await database.run(
+    Database.use((db) =>
+      Effect.gen(function* () {
+        yield* db.insert(conversations).values({
+          id: worker,
+          userId: teammates.userId,
+          kind: CONVERSATION_KIND.CHILD,
+          parentConversationId: teammates.conversationId,
+        });
+        yield* db.insert(agentDelegationTable).values({
+          childConversationId: worker,
+          callId,
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+        });
+      }),
+    ),
+  );
+  // The output runs past the bound a page cuts an entry to, so only the whole read carries its end.
+  const log = Array.from({ length: 2_000 }, (_, line) => `line ${line + 1}`).join("\n");
+  const answer = new AssistantMessageBuilder();
+  answer.stepStart();
+  answer.toolCall(
+    { callId: "call-bash", name: AGENT_TOOL.BASH, argumentsJson: "{}" },
+    unparsedWire({ command: "pnpm test" }),
+  );
+  answer.toolResult("call-bash", {
+    state: TOOL_CALL_SETTLEMENT.OUTPUT_AVAILABLE,
+    output: unparsedWire(log),
+  });
+  await answeredTurnOn({ ...teammates, conversationId: worker }, answer);
+  const read = (input: WireBoundaryInput) =>
+    database.run(
+      runReadAgentTranscript(
+        {
+          caller: {
+            kind: AGENT_CALLER.MEMBER,
+            userId: agents.caller.userId,
+            workspaceId,
+            clientId: "client-1",
+          },
+        },
+        unparsedWire(input),
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            agentSessions.services,
+            modelCatalogOf(CATALOG),
+            ANALYTICS.layer,
+            SENTRY_CONFIGURED,
+            UNREACHED,
+            memorySandbox().layer,
+          ),
+        ),
+      ),
+    );
+
+  const page = await read({ agentId: teammates.id, worker: callId });
+  assert.deepEqual(
+    tailOf(page).map(({ callId: named, text }) => [named, text]),
+    [["call-bash", "Ran: pnpm test"]],
+  );
+  const [entry] = tailOf(page);
+  const whole = await read({
+    agentId: teammates.id,
+    worker: callId,
+    call: { messageId: entry?.messageId, callId: "call-bash" },
+  });
+  assert.deepEqual(whole, {
+    status: ACTION_RESULT_STATUS.ACCEPTED,
+    call: {
+      tool: AGENT_TOOL.BASH,
+      state: "output-available",
+      input: { text: JSON.stringify({ command: "pnpm test" }), leftOutChars: 0 },
+      output: { text: log, leftOutChars: 0 },
+    },
+  });
+  // The agent's own transcript holds no such call, and no call of the agent started another worker.
+  assert.equal(
+    (
+      await read({
+        agentId: teammates.id,
+        call: { messageId: entry?.messageId, callId: "call-bash" },
+      })
+    ).status,
+    ACTION_RESULT_STATUS.REJECTED,
+  );
+  assert.equal(
+    (await read({ agentId: teammates.id, worker: "call-other" })).status,
+    ACTION_RESULT_STATUS.REJECTED,
+  );
 });
 
 test("start_agent starts an agent on the caller's own task as the deployment acting for its starter, answering the mention it is named by, telling it which agent started it, that it reports back with message_agent, and that threads to the developer are that agent's, leaves the starter's default as it stood, and starts once under the call's key", async () => {
@@ -3818,7 +4034,7 @@ test("a Codex agent on its Mac's own sign-in lists its GPT models alone with no 
     {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason:
-        "Not changed: that agent runs on Codex, which runs a fast version on the ChatGPT plan or an OpenAI API key alone; choose the model itself.",
+        "Not changed: that agent runs on Codex, which runs a fast version on the Codex plan or an OpenAI API key alone; choose the model itself.",
     },
     {
       status: ACTION_RESULT_STATUS.REJECTED,

@@ -14,7 +14,8 @@ import {
  * provider-button.test.ts -- a provider's button is named "Continue with"
  * the provider in either size and begins its sign-in when pressed; busy,
  * it is named for the act in progress, says it is busy, and refuses another
- * press; disabled, it refuses the press; and the way in taken last is
+ * press, offering its way back beside it where the gate's wait can be
+ * taken back; disabled, it refuses the press; and the way in taken last is
  * described by its pill without the pill joining its name.
  */
 
@@ -41,7 +42,13 @@ function mount(element: React.ReactElement): HTMLElement {
 function gitHub(
   size: ProviderButtonSize,
   presses: string[],
-  props: { busy?: boolean; disabled?: boolean; lastUsed?: boolean; words?: string } = {},
+  props: {
+    busy?: boolean;
+    disabled?: boolean;
+    lastUsed?: boolean;
+    words?: string;
+    cancel?: { label: string; onPress: () => void };
+  } = {},
 ): React.ReactElement {
   return createElement(ProviderButton, {
     provider: MARK_PROVIDER.GITHUB,
@@ -89,6 +96,23 @@ test("a busy button is named for the act in progress, says it is busy, and refus
     act(() => button.click());
     expect(presses).toEqual([]);
   }
+});
+
+test("a waited gate button offers Cancel beside it, which takes the wait back while the button refuses", () => {
+  const presses: string[] = [];
+  const cancel = { label: "Cancel", onPress: () => presses.push("cancel") };
+  const container = mount(gitHub(PROVIDER_BUTTON_SIZE.GATE, presses, { busy: true, cancel }));
+  const [waited, way] = Array.from(container.querySelectorAll("button"));
+  expect(waited?.textContent).toBe("Opening GitHub");
+  expect(way?.textContent).toBe("Cancel");
+  expect(waited?.contains(way ?? null)).toBe(false);
+  act(() => waited?.click());
+  act(() => way?.click());
+  expect(presses).toEqual(["cancel"]);
+  // At rest there is no wait to take back, so the button stands alone.
+  expect(only(mount(gitHub(PROVIDER_BUTTON_SIZE.GATE, [], { cancel }))).name).toBe(
+    "Continue with GitHub",
+  );
 });
 
 test("a disabled button refuses its press", () => {

@@ -5,6 +5,7 @@ import {
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
+import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { RUN_ON_MAC_REASON_WORDS } from "@repo/features/workspace-tools-model";
 import {
   MAC_COMMAND_MODE_LABEL,
@@ -40,7 +41,7 @@ import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { type RunOnMacRead, useRunOnMac } from "./run-on-mac.js";
-import { DeviceGlyph, RUNS_ON_WORDS } from "./runs-on.js";
+import { DeviceGlyph } from "./runs-on.js";
 
 /**
  * agent-place.tsx -- the chip an agent's message box wears saying where the agent runs: its device by name, or the cloud.
@@ -70,9 +71,8 @@ import { DeviceGlyph, RUNS_ON_WORDS } from "./runs-on.js";
  * A device the read does not name is a teammate's, which the window cannot
  * speak for, so its label is its name alone. Nothing is drawn for an agent
  * on a device the service no longer names, since it is neither in the cloud
- * nor anywhere that can be named. In a box too narrow for its words, where
- * the branch's chip draws its mark alone too, the chip draws its glyph alone
- * in a square and keeps the words for a reader and its hint.
+ * nor anywhere that can be named. In a box too narrow for its words, the
+ * chip draws its glyph alone in a square and keeps the words for a reader and its hint.
  */
 
 /** What a reader hears before the name, which the glyph says to the eye. */

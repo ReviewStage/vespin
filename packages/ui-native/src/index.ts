@@ -58,4 +58,3 @@ export {
   useColors,
 } from "./tokens/colors.js";
 export { MARK_SIZE, SPACE } from "./tokens/space.js";
-export { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";

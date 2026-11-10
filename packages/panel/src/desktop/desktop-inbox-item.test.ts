@@ -34,6 +34,7 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { DocumentIcon } from "@repo/ui";
 import { Effect } from "effect";
@@ -41,6 +42,7 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
+import { runAppCommand } from "../app-commands.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -246,7 +248,7 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
-test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field", async () => {
+test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, printing the keys the thread hands its task but U and P, which stay the thread's, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field; ⌘⌫ asks to delete the thread's task", async () => {
   const { page } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumb = (at: number) =>
@@ -260,11 +262,24 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
       );
     });
   const offered = () => menuItems().map((item) => item.label);
+  const chords = () =>
+    [...document.querySelectorAll('[role="menu"]:not([data-leaving]) .ui-menu-item')].flatMap(
+      (item) => {
+        const keys = item.querySelector(".ui-shortcut")?.textContent;
+        return keys === undefined
+          ? []
+          : [[item.querySelector(".ui-menu-item-label")?.textContent, keys]];
+      },
+    );
 
   rightClick(crumb(0));
   for (const item of ["Copy link", "Rename", "Change repository", "Permanently delete"]) {
     assert.ok(offered().includes(item), `the task's crumb offers ${item}`);
   }
+  assert.deepEqual(chords(), [
+    ["Version history", "⌥⇧⌘H"],
+    ["Permanently delete", "⌘⌫"],
+  ]);
   chooseMenuItem("Rename");
   await settle();
   assert.ok(
@@ -287,6 +302,21 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
   assert.ok(
     page.querySelector('.inbox-view-items nav[aria-label="Path"] input[aria-label="Agent name"]'),
     "the agent's crumb stands as its name field",
+  );
+  act(() =>
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  await settle();
+
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.DELETE), "⌘⌫ is offered");
+  });
+  assert.match(
+    document.querySelector('[role="alertdialog"]')?.textContent ?? "",
+    new RegExp(BILLING.name, "u"),
+    "⌘⌫ asks first, about the thread's task",
   );
 });
 
@@ -410,8 +440,6 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
     )?.textContent,
     "#42",
   );
-  // What the item's words draw stands inside the pane's masked region.
-  assert.ok(page.querySelector(".ph-no-capture [data-lone-link]"));
 });
 
 test("a page's link alone on its line, naming its task by the task's number, is the page's row with the page itself drawn under it", async () => {
@@ -1650,7 +1678,7 @@ test("words selected in an open item's question quote into its box, its reply ca
   );
 });
 
-test("a message written on a settled item's thread from its box goes as a message, never an answer, and lands on the thread in place, scrolled into view with the draft reply under it, the item still answered and the box emptied", async () => {
+test("a message written on a settled item's thread from its box goes as a message, never an answer, and lands on the thread in place, the thread taken to its end, the item still answered and the box emptied", async () => {
   const { page } = mount();
   await settle();
   act(() => rowNamed(page, "How is a failed email retried?").click());
@@ -1660,14 +1688,10 @@ test("a message written on a settled item's thread from its box goes as a messag
   const pane = itemPane(page);
   const board =
     pane.querySelector<HTMLElement>(".inbox-board")?.parentElement ?? assert.fail("the thread");
-  // The thread is taller than its board, so the new comment lands under its foot, the draft reply under it.
-  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
-    if (this === board) return DOMRect.fromRect({ y: 0, height: 400 });
-    if (this.matches("[data-message-id]")) return DOMRect.fromRect({ y: 900, height: 60 });
-    if (this.matches('[data-inbox-comment="draft"]')) {
-      return DOMRect.fromRect({ y: 960, height: 200 });
-    }
-    return DOMRect.fromRect();
+  // The thread is taller than its board, and the reader has scrolled up it, so the new comment lands under its foot.
+  layScrollerOut(board, 400, 1_400);
+  act(() => {
+    board.scrollTop = 200;
   });
 
   typeInComposer(pane, "Page on-call at night too.");
@@ -1688,11 +1712,7 @@ test("a message written on a settled item's thread from its box goes as a messag
   ]);
   assert.deepEqual(subjectOf(page), ["How is a failed email retried?"]);
   assert.equal(composerEditor(pane).textContent, "", "the box lets its words go");
-  assert.equal(
-    board.scrollTop,
-    760,
-    "the board scrolls its own new comment, and the draft reply's foot under it, into view",
-  );
+  assert.equal(board.scrollTop, 1_000, "the reader's own message takes the thread to its end");
 });
 
 test("a message refused says why under the box, which keeps its words, and leaves nothing on the thread", async () => {
@@ -2298,13 +2318,14 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
   );
   assert.deepEqual(
     boxParts(pane),
-    ["controls", "line: Add a note", "row: Attach files, Dictate, Send"],
+    [
+      "controls",
+      "line: Add a note",
+      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+    ],
     "under them the note line on its own, and under it the row: +, the microphone, and Send",
   );
   assert.equal(footWords(pane), "", "and no line of help");
-  // What the thread draws stands inside the pane's masked region.
-  assert.ok(pane.querySelector(".ph-no-capture [data-inbox-draft-ask]"));
-  assert.ok(pane.querySelector(".ph-no-capture [data-inbox-message-text]"));
 });
 
 test("a plain reply sends no answer and leaves the ask open, the box's Send held until it holds words and nothing saying the ask stays open", async () => {
