@@ -263,6 +263,11 @@ export function loopbackConsent<Grant extends object>(
       parameters: Readonly<Record<string, string | Array<string>>>,
     ) {
       if (parameter(parameters, "state") !== state) return NOT_FOUND;
+      // Note that a withdrawn trip still listens while the browser is being
+      // opened, because the open is foreign code the trip waits out; a
+      // redirect landing then is a door already closed, refused before any
+      // code is exchanged for a grant nobody would keep.
+      if (isWithdrawn(trip)) return NOT_FOUND;
       if (trip.phase === TRIP_PHASE.CLAIMED) {
         return card(RESPONSE_STATUS.ALREADY_USED, LOOPBACK_PAGE_TONE.COMPLETE, ALREADY_USED_CARD);
       }
