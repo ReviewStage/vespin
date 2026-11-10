@@ -65,4 +65,9 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
+  [MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS]: { command: ["skills", "list"] },
+  [MEMBER_MCP_TOOL.READ_INSTALLED_SKILL]: { command: ["skills", "view"] },
+  [MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL]: { command: ["skills", "install"] },
+  [MEMBER_MCP_TOOL.INSTALL_SKILL]: { command: ["skills", "install"] },
+  [MEMBER_MCP_TOOL.REMOVE_INSTALLED_SKILL]: { command: ["skills", "remove"] },
 } as const satisfies Record<MemberMcpToolName, McpCliRow>;

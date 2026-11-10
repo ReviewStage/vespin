@@ -105,6 +105,11 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { automations: ["read", "change"] },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { automations: ["run"] },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { automations: ["remove"] },
+  [MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS]: { installedSkills: ["list"] },
+  [MEMBER_MCP_TOOL.READ_INSTALLED_SKILL]: { installedSkills: ["read"] },
+  [MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL]: { installedSkills: ["preview"] },
+  [MEMBER_MCP_TOOL.INSTALL_SKILL]: { installedSkills: ["install"] },
+  [MEMBER_MCP_TOOL.REMOVE_INSTALLED_SKILL]: { installedSkills: ["remove"] },
 } as const satisfies Record<MemberMcpToolName, HostedProcedureNames>;
 
 type Coverage = typeof MEMBER_MCP_COVERAGE;
@@ -225,13 +230,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     remindItem: NOT_YET_BUILT,
     snoozeItem: NOT_YET_BUILT,
     markAllRead: NOT_YET_BUILT,
-  },
-  installedSkills: {
-    list: NOT_YET_BUILT,
-    read: NOT_YET_BUILT,
-    preview: NOT_YET_BUILT,
-    install: NOT_YET_BUILT,
-    remove: NOT_YET_BUILT,
   },
   integrations: {
     statuses: NOT_YET_BUILT,

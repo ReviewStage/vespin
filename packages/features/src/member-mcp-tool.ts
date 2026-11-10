@@ -50,6 +50,11 @@ export const MEMBER_MCP_TOOL = {
   UPDATE_AUTOMATION: AGENT_TOOL.UPDATE_AUTOMATION,
   RUN_AUTOMATION: AGENT_TOOL.RUN_AUTOMATION,
   DELETE_AUTOMATION: AGENT_TOOL.DELETE_AUTOMATION,
+  LIST_INSTALLED_SKILLS: "list_installed_skills",
+  READ_INSTALLED_SKILL: "read_installed_skill",
+  PREVIEW_SKILL_INSTALL: "preview_skill_install",
+  INSTALL_SKILL: "install_skill",
+  REMOVE_INSTALLED_SKILL: "remove_installed_skill",
 } as const;
 
 export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];
