@@ -31,7 +31,8 @@ function GuardedScreens() {
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="settings" options={{ presentation: "modal" }} />
+        {/* Note that the sheet's title is named here as well as on its screen, so its first frame never reads the route's name. */}
+        <Stack.Screen name="settings" options={{ presentation: "modal", title: "Settings" }} />
         <Stack.Screen name="start-task" options={{ presentation: "modal" }} />
         <Stack.Screen name="start-agent" options={{ presentation: "modal" }} />
       </Stack.Protected>

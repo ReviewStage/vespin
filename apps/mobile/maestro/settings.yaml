@@ -13,8 +13,7 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-# Settings stands in the Inbox's ⋯ menu.
-- tapOn: "More"
+# The account's photo leads the Inbox's bar, heard as Settings, and opens it.
 - tapOn: "Settings"
 - waitForAnimationToEnd
 - scrollUntilVisible:

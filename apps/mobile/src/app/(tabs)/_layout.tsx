@@ -34,9 +34,10 @@ export default function TabsLayout() {
       <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox">
         <NativeTabs.Trigger.Icon sf="tray" />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Badge hidden={waiting === 0}>
-          {String(waiting)}
-        </NativeTabs.Trigger.Badge>
+        {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
+        {waiting === 0 ? null : (
+          <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
+        )}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks">
         <NativeTabs.Trigger.Icon sf="checklist" />

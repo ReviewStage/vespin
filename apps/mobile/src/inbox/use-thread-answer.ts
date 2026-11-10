@@ -221,7 +221,7 @@ export interface ThreadAnswer {
   readonly onDraft: (draft: InboxDraft) => void;
   /** What the box's last send said where it did not go: what the answer lacks, or the refusal. */
   readonly note: string | undefined;
-  /** Whether Send stands lit with no words typed: the draft holds an answer to send. */
+  /** Whether Send stands lit with no words typed: the draft holds an answer to send, or a number whose words a press says read as none. */
   readonly answerReady: boolean;
   /** Sends what the draft holds, or the draft given, such as one Mark done was just pressed on; or says what it lacks. */
   readonly send: (pressed?: InboxDraft) => void;
@@ -345,8 +345,9 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
     draft,
     onDraft,
     note,
+    // Note that a number whose words read as none lights Send too, so its press says why the answer is held back rather than standing dimmed with no word.
     answerReady:
-      unreadableNumber(thread, draft) === undefined && inboxThreadSend(thread, draft) !== undefined,
+      unreadableNumber(thread, draft) !== undefined || inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
   };

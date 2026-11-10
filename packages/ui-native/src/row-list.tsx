@@ -5,6 +5,7 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  contentShape,
   font,
   foregroundStyle,
   frame,
@@ -14,6 +15,7 @@ import {
   navigationTitle,
   refreshable,
   scrollContentBackground,
+  shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
@@ -116,8 +118,9 @@ function GroupHeader({
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+  // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   return (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.TIGHT + 2} modifiers={[contentShape(shapes.rectangle())]}>
       {folded === undefined ? null : (
         <Image
           systemName={folded ? "chevron.right" : "chevron.down"}

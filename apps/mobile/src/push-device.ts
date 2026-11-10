@@ -8,6 +8,9 @@
  * since iOS may hand a new one after a restore or a reinstall, and the phone
  * registered again on every launch while the permission stands, so the
  * service always holds the token iOS hands now; a register is idempotent.
+ * Note that iOS may never answer the read, as on an ad-hoc-signed simulator
+ * or a phone that cannot reach APNs, so nothing a person waits on, a
+ * sign-out above all, waits on it.
  * Nothing is asked while signed out. A fixture run, which reaches no service
  * and whose simulator holds no APNs token, names the phone by a synthetic
  * token its host's fixture answers (`@repo/host/fixture-inbox`).
@@ -58,15 +61,23 @@ export interface PushDeviceKey {
 /** This launch's read of the phone's token, made once and shared by every screen that asks. */
 let tokenRead: Promise<PushDeviceKey | undefined> | undefined;
 
+/** The key this launch's read of the phone's token answered; none until iOS answers one. */
+let keyRead: PushDeviceKey | undefined;
+
+/** The key a fixture run names the phone by. */
+const FIXTURE_KEY: PushDeviceKey = { token: FIXTURE_PUSH_TOKEN, environment: BUILD_ENVIRONMENT };
+
 /** The phone's key, read once a launch: a fixture run's synthetic one, or iOS's own; none where iOS hands no token. */
 function readDeviceKey(fixture: boolean): Promise<PushDeviceKey | undefined> {
-  if (fixture)
-    return Promise.resolve({ token: FIXTURE_PUSH_TOKEN, environment: BUILD_ENVIRONMENT });
+  if (fixture) return Promise.resolve(FIXTURE_KEY);
   tokenRead ??= getDevicePushTokenAsync().then(
-    (token) =>
-      typeof token.data === "string" && token.data !== ""
-        ? { token: token.data, environment: BUILD_ENVIRONMENT }
-        : undefined,
+    (token) => {
+      keyRead =
+        typeof token.data === "string" && token.data !== ""
+          ? { token: token.data, environment: BUILD_ENVIRONMENT }
+          : undefined;
+      return keyRead;
+    },
     (error: unknown) => {
       // Note that a refusal is not kept, so the next screen to ask reads again.
       tokenRead = undefined;
@@ -158,26 +169,26 @@ export function usePushRegistration(signedIn: boolean): void {
 /**
  * The phone unregistered from the account's pushes, as a sign-out asks
  * before it signs out, so no push for the account reaches a phone signed
- * out of it. Note that the token is read here whether or not iOS still lets
- * the app notify, since iOS hands one either way and a phone registered
- * before a revoked permission must still leave the account. A sign-out goes
- * on where the unregister fails, since signing out must work offline; a
- * register left standing moves to whoever signs in next. Done at once where
- * iOS hands no token.
+ * out of it. It names the phone by the token this launch already read, and
+ * never reads one itself, since iOS may never answer a read and a sign-out
+ * must always finish. Done at once where no token was read: the phone was
+ * then registered by no read of this launch, and one registered on an
+ * earlier launch is let go by the service once APNs refuses its token, or
+ * moves to whoever signs in next. A sign-out goes on where the unregister
+ * fails too, since signing out must work offline.
  */
 export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Promise<void> {
   // The next account to sign in registers the phone afresh.
   registration = undefined;
   // Note that the unregister waits on a register still under way, since a register landing after it would put the phone back on the account.
-  const done = lastRegister
-    .then(() => readDeviceKey(fixture))
-    .then((key) => {
-      if (key === undefined) return undefined;
-      return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
-        () => undefined,
-        (error: unknown) => console.error("The phone was not unregistered.", error),
-      );
-    });
+  const done = lastRegister.then(() => {
+    const key = fixture ? FIXTURE_KEY : keyRead;
+    if (key === undefined) return undefined;
+    return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
+      () => undefined,
+      (error: unknown) => console.error("The phone was not unregistered.", error),
+    );
+  });
   lastRegister = done;
   return done;
 }
