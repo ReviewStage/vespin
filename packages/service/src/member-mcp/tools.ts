@@ -183,6 +183,7 @@ import {
   LIST_AGENTS_TOOL,
   LIST_TASKS_TOOL,
   orStoreRefusal,
+  queueRecord,
   READ_PAGE_CHARS,
   READ_PAGE_REFUSAL,
   READ_PAGE_TOOL,
@@ -1693,7 +1694,7 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
     `\`handed-on\` where the agent stood idle and it goes at once, unconfirmed, since a refusal puts it back and pauses the queue; and \`paused\` with why where ` +
-    "the queue stands paused, which sends nothing until the member resumes it in the app. " +
+    `the queue stands paused, which sends nothing until ${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it. ` +
     FOLLOW_WORDS,
   input: MessageAgentInputSchema,
   annotations: ADDITIVE,
@@ -1702,6 +1703,142 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       MESSAGE_AGENT_REFUSAL.NO_AGENT,
       (call) => memberMessage(call, asked),
+    ),
+});
+
+/** A queued message, by the id `read_agent`'s queue lists it by. */
+const QUEUED_MESSAGE_ID_INPUT = describeWire(
+  wireUuidSchema,
+  `The queued message's id, as ${MEMBER_MCP_TOOL.READ_AGENT}'s queue lists it.`,
+);
+
+/** A queued message's new words, which replace its own and the files it carried. */
+const QUEUED_WORDS_INPUT = describeWire(
+  MessageAgentInputSchema.fields.text,
+  "Its new words, as the member's own: they replace its words, and it goes without the files " +
+    "it carried.",
+);
+
+/** A change to an agent's queue, by its kind, as the member's queue controls make it: every kind but a message added, which `message_agent`'s queue adds. */
+const MemberQueueChangeSchema = Schema.Union([
+  Schema.Struct({ change: Schema.Literal(QUEUE_CHANGE.RESUME) }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.HOLD),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    held: describeWire(
+      Schema.Boolean,
+      "true to hold it, as the member's Edit does, so the queue sends what stands ahead of it " +
+        "and nothing from it on; false to let it go again.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.EDIT),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: QUEUED_WORDS_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.DELETE),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.REORDER),
+    order: describeWire(
+      Schema.Array(wireUuidSchema).check(Schema.isMaxLength(AGENT_QUEUE_BOUNDS.MAX_MESSAGES)),
+      "Every message the queue holds, by its id, each once, in the order they are to go.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.STEER),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: Schema.optionalKey(QUEUED_WORDS_INPUT),
+  }),
+]);
+
+/** A change to a queue names the agent and the change. */
+const ChangeAgentQueueInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  change: describeWire(
+    MemberQueueChangeSchema,
+    "The change: resume the paused queue; hold a message or let it go; edit its words; " +
+      "delete it; reorder the queue; or steer a message into the turn under way now, with new " +
+      "words or as it stands.",
+  ),
+});
+
+type ChangeAgentQueueInput = typeof ChangeAgentQueueInputSchema.Type;
+
+/** Why a queue change changed nothing, in the member's tool's words. */
+const CHANGE_QUEUE_REFUSAL = {
+  NOT_STARTER: "Not changed: only the member who started that agent changes its queue.",
+  NO_MESSAGE:
+    "Not changed: that agent's queue holds no message of that id; it may have gone already. " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists the queue.`,
+  BAD_ORDER:
+    "Not changed: name every message the queue holds, each once, in the order they are to go; " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists them.`,
+  UNAVAILABLE: "Not changed: the service could not change the queue just now; try again.",
+} as const;
+
+/** The words for a refusal of a queue change. */
+function changeQueueRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return CHANGE_QUEUE_REFUSAL.NOT_STARTER;
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return CHANGE_QUEUE_REFUSAL.NO_MESSAGE;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return CHANGE_QUEUE_REFUSAL.BAD_ORDER;
+    default:
+      return CHANGE_QUEUE_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/**
+ * One change to an agent's queue as the member, through the change their
+ * queue controls make (`changeAgentQueue`): refused for an agent of no
+ * workspace of the call's or an archived one, as a message is, and
+ * answered with the queue as it then stands.
+ */
+const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueueInput) =>
+  orStoreRefusal(
+    Effect.gen(function* () {
+      const found = yield* workspaceAgentOf(call.caller, agentId);
+      if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
+      const { agent } = found.value;
+      if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
+      const changed = yield* Effect.result(
+        changeAgentQueue(callerUserId(call.caller), agent, change),
+      );
+      if (Result.isFailure(changed)) {
+        return agentToolRejected(changeQueueRefusalWords(changed.failure));
+      }
+      return {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        queue: queueRecord(changed.success),
+        agent: { id: agent.id, title: agentName(agent), model: agent.model },
+      };
+    }),
+  );
+
+const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
+  description:
+    "Change the queue of a coding agent the member started, by its id, as their queue " +
+    `controls would: the messages ${MEMBER_MCP_TOOL.MESSAGE_AGENT}'s queue left waiting behind ` +
+    `its turn, which ${MEMBER_MCP_TOOL.READ_AGENT} lists by id. Resume a queue a Stop, a ` +
+    "failed turn, or a refused hand-off paused; hold a message, so the queue stops at it, or " +
+    "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
+    "under way now, which takes it out of the queue. Only the agent's starter changes its " +
+    "queue. Where the agent stands idle, the change hands the next message on at once, as a " +
+    "turn's end would. Answers `accepted` with the queue as it then stands, or `rejected` and " +
+    `why nothing changed. ${FOLLOW_WORDS}`,
+  input: ChangeAgentQueueInputSchema,
+  annotations: DESTRUCTIVE,
+  run: (asked) =>
+    writeAsMember(
+      (userId) => agentWorkspace(userId, { id: asked.agentId }),
+      MESSAGE_AGENT_REFUSAL.NO_AGENT,
+      (call) => memberQueueChange(call, asked),
     ),
 });
 
@@ -4097,6 +4234,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_DELETE_SECTION_TOOL,
   MEMBER_START_AGENT_TOOL,
   MEMBER_MESSAGE_AGENT_TOOL,
+  CHANGE_AGENT_QUEUE_TOOL,
   MEMBER_STOP_AGENT_TOOL,
   MEMBER_UPDATE_AGENT_TOOL,
   LIST_AGENT_PORTS_TOOL,

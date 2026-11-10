@@ -113,6 +113,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"], plans: ["create"] },
   [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send", "queue"] },
+  [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { messages: ["queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { agentPorts: ["list", "shared"] },

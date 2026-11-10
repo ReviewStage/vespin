@@ -54,6 +54,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { command: ["section", "delete"] },
   [MEMBER_MCP_TOOL.START_AGENT]: { command: ["agent", "start"] },
   [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { command: ["agent", "send"] },
+  [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { command: ["agent", "queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { command: ["agent", "stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { command: ["agent", "update"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { command: ["agent", "ports"] },

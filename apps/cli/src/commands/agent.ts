@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `update`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `queue`, `stop`, `update`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -19,12 +19,14 @@
 
 import { HOSTED_API_ERROR, isWireUuid } from "@repo/features";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
+import type { AgentQueue, QueuedMessage } from "@repo/features/agent-queue-wire";
 import {
   ADDED_REPOSITORY_CHECKOUT,
   type AddedRepositoryCheckout,
   AGENT_CURSOR_START,
   AGENT_MACHINE,
   AGENT_STATUS,
+  type AgentQueueChange,
   type AgentRunsOnRequest,
   type AgentStartFrom,
   type AgentStatus,
@@ -776,16 +778,28 @@ const sendCommand = Command.make(
     queue: Flag.Boolean("queue").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
-        "Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues, and a paused queue sends nothing until Resume in the app",
+        "Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues, and a paused queue sends nothing until `vespin agent queue resume`",
+      ),
+    ),
+    messageId: Flag.String("message-id").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "With --queue, the queued message's id, a UUID you mint, so a script addresses it with `vespin agent queue` even where this send's answer was lost; sent again under the same id, it queues nothing more",
       ),
     ),
   },
-  ({ agent: id, file, queue }) =>
+  ({ agent: id, file, queue, messageId: namedId }) =>
     Effect.gen(function* () {
+      if (Option.isSome(namedId) && !queue) {
+        return yield* usage("--message-id names a queued message, so it goes with --queue.");
+      }
+      if (Option.isSome(namedId) && !isWireUuid(namedId.value)) {
+        return yield* usage("--message-id is a UUID, such as one `uuidgen` prints.");
+      }
       const text = yield* readInput(file);
       const { hosted } = yield* session;
       if (queue) {
-        const messageId = crypto.randomUUID();
+        const messageId = Option.getOrElse(namedId, () => crypto.randomUUID());
         const answered = yield* askService(
           hosted.messages.queue,
           { params: { id }, body: { change: QUEUE_CHANGE.ADD, id: messageId, text } },
@@ -810,7 +824,7 @@ const sendCommand = Command.make(
             ...(paused === undefined
               ? []
               : [
-                  `Its queue is paused (${paused.because}${paused.refusal === undefined ? "" : `: ${paused.refusal}`}), so nothing goes until Resume in the app.`,
+                  `Its queue is paused (${paused.because}${paused.refusal === undefined ? "" : `: ${paused.refusal}`}), so nothing goes until \`vespin agent queue resume ${id}\`.`,
                 ]),
           ],
           ids: [id],
@@ -835,6 +849,197 @@ const sendCommand = Command.make(
       command: "vespin agent send <id> --queue -F next.md",
       description: "Queued to go once the turn under way ends",
     },
+  ]),
+);
+
+/** A queued message as a line of a table: its id, whether a member holds it to edit, and its words' first line. */
+function queuedRow(message: QueuedMessage): string[] {
+  const [first = ""] = message.text.split("\n");
+  const files = message.files === undefined ? "" : ` (+${message.files.length} files)`;
+  return [message.id, message.editing ? "held" : "queued", `${first}${files}`];
+}
+
+/** The queue as a command answers it: its messages in the order they go, and why it stands paused. */
+const queueAnswer = (id: string, queue: AgentQueue) =>
+  answer({
+    json: { queue },
+    lines: [
+      ...(queue.messages.length === 0
+        ? [`Nothing is queued for agent ${id}.`]
+        : columns(queue.messages.map(queuedRow))),
+      ...(queue.paused === undefined
+        ? []
+        : [
+            `The queue is paused (${queue.paused.because}${queue.paused.refusal === undefined ? "" : `: ${queue.paused.refusal}`}); \`vespin agent queue resume ${id}\` lets it go on.`,
+          ]),
+    ],
+    ids: queue.messages.map((message) => message.id),
+  });
+
+/** A queue change's refusals, in words that say what to do. */
+const QUEUE_CHANGE_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]: "Only the member who started that agent changes its queue.",
+  [HOSTED_API_ERROR.NOT_FOUND]:
+    "No agent of yours has that id, or its queue holds no message of that id, which may have gone already; `vespin agent queue <id>` lists the queue.",
+  [HOSTED_API_ERROR.INVALID_REQUEST]:
+    "Name every message the queue holds, each once, in the order they are to go; `vespin agent queue <id>` lists them.",
+};
+
+/** One change to the agent's queue (`messages.queue`), answered with the queue as it then stands. */
+const changeQueue = (id: string, body: AgentQueueChange) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const answered = yield* askService(
+      hosted.messages.queue,
+      { params: { id }, body },
+      HOSTED_DEADLINE.STEER,
+      QUEUE_CHANGE_REFUSAL_WORDS,
+    );
+    yield* queueAnswer(id, answered.queue);
+  });
+
+/** A queued message's new words, which replace its own. */
+const queuedWordsFlag = Flag.String("file").pipe(
+  Flag.withAlias("F"),
+  Flag.withDescription("The new words, from a file or - for stdin"),
+);
+
+const queuedArgument = Argument.String("message").pipe(
+  Argument.withDescription("The queued message's id, as `vespin agent queue <id>` lists it"),
+);
+
+const queueResumeCommand = Command.make("resume", { agent: agentArgument }, ({ agent: id }) =>
+  changeQueue(id, { change: QUEUE_CHANGE.RESUME }),
+).pipe(
+  Command.withDescription(
+    "Resume an agent's paused queue, which a Stop, a failed turn, or a refused hand-off pauses",
+  ),
+  Command.withExamples([
+    { command: "vespin agent queue resume <id>", description: "Let the queue go on" },
+  ]),
+);
+
+const queueHoldCommand = Command.make(
+  "hold",
+  { agent: agentArgument, message: queuedArgument },
+  ({ agent: id, message }) =>
+    changeQueue(id, { change: QUEUE_CHANGE.HOLD, messageId: message, held: true }),
+).pipe(
+  Command.withDescription(
+    "Hold a queued message, as the app's Edit does: the queue sends what stands ahead of it and stops there",
+  ),
+  Command.withExamples([
+    { command: "vespin agent queue hold <id> <message>", description: "Stop the queue at it" },
+  ]),
+);
+
+const queueReleaseCommand = Command.make(
+  "release",
+  { agent: agentArgument, message: queuedArgument },
+  ({ agent: id, message }) =>
+    changeQueue(id, { change: QUEUE_CHANGE.HOLD, messageId: message, held: false }),
+).pipe(
+  Command.withDescription("Let a held message go again, so the queue sends on past it"),
+  Command.withExamples([
+    { command: "vespin agent queue release <id> <message>", description: "Let it go" },
+  ]),
+);
+
+const queueEditCommand = Command.make(
+  "edit",
+  { agent: agentArgument, message: queuedArgument, file: queuedWordsFlag },
+  ({ agent: id, message, file }) =>
+    Effect.gen(function* () {
+      const text = yield* readInput(file);
+      yield* changeQueue(id, { change: QUEUE_CHANGE.EDIT, messageId: message, text });
+    }),
+).pipe(
+  Command.withDescription(
+    "Write a queued message again in its place; it goes without the files it carried",
+  ),
+  Command.withExamples([
+    {
+      command: "vespin agent queue edit <id> <message> -F next.md",
+      description: "New words for the message",
+    },
+  ]),
+);
+
+const queueDeleteCommand = Command.make(
+  "delete",
+  { agent: agentArgument, message: queuedArgument },
+  ({ agent: id, message }) => changeQueue(id, { change: QUEUE_CHANGE.DELETE, messageId: message }),
+).pipe(
+  Command.withDescription("Delete a queued message before it goes"),
+  Command.withExamples([
+    { command: "vespin agent queue delete <id> <message>", description: "Drop the message" },
+  ]),
+);
+
+const queueReorderCommand = Command.make(
+  "reorder",
+  {
+    agent: agentArgument,
+    messages: Argument.String("message").pipe(
+      Argument.atLeast(1),
+      Argument.withDescription("Every queued message's id, each once, in the order they are to go"),
+    ),
+  },
+  ({ agent: id, messages }) => changeQueue(id, { change: QUEUE_CHANGE.REORDER, order: messages }),
+).pipe(
+  Command.withDescription("Put an agent's queue in a new order"),
+  Command.withExamples([
+    {
+      command: "vespin agent queue reorder <id> <second> <first>",
+      description: "Swap two messages",
+    },
+  ]),
+);
+
+const queueSteerCommand = Command.make(
+  "steer",
+  { agent: agentArgument, message: queuedArgument, file: queuedWordsFlag.pipe(Flag.optional) },
+  ({ agent: id, message, file }) =>
+    Effect.gen(function* () {
+      const text = Option.isSome(file) ? yield* readInput(file.value) : undefined;
+      yield* changeQueue(id, {
+        change: QUEUE_CHANGE.STEER,
+        messageId: message,
+        ...(text === undefined ? undefined : { text }),
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Send a queued message now, into the turn under way, and take it out of the queue; with -F, in new words",
+  ),
+  Command.withExamples([
+    { command: "vespin agent queue steer <id> <message>", description: "Send it as it stands" },
+  ]),
+);
+
+const queueCommand = Command.make("queue", { agent: agentArgument }, ({ agent: id }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const newest = yield* askService(hosted.messages.agentNewest, { id });
+    const queue = ("queue" in newest ? newest.queue : undefined) ?? { messages: [], revision: 0 };
+    yield* queueAnswer(id, queue);
+  }),
+).pipe(
+  Command.withDescription(
+    "List the messages queued behind an agent's turn, and resume, hold, release, edit, delete, reorder, or steer them (your own agents only)",
+  ),
+  Command.withSubcommands([
+    queueResumeCommand,
+    queueHoldCommand,
+    queueReleaseCommand,
+    queueEditCommand,
+    queueDeleteCommand,
+    queueReorderCommand,
+    queueSteerCommand,
+  ]),
+  Command.withExamples([
+    { command: "vespin agent queue <id>", description: "Each message's id, state, and words" },
+    { command: "vespin agent queue <id> -q", description: "The message ids alone, in order" },
   ]),
 );
 
@@ -1367,6 +1572,7 @@ export const agentCommand = Command.make("agent").pipe(
     viewCommand,
     logsCommand,
     sendCommand,
+    queueCommand,
     stopCommand,
     updateCommand,
     forwardCommand,
