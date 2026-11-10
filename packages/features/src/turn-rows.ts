@@ -154,7 +154,7 @@ export const CALL_WORDS = {
   [CALL_KIND.COMMAND]: { verb: "Ran", code: true },
   [CALL_KIND.MAC_COMMAND]: { verb: "Ran", code: true },
   [CALL_KIND.BROWSER]: { verb: "Used the browser", code: false },
-  [CALL_KIND.COMPUTER]: { verb: "Used", code: false },
+  [CALL_KIND.COMPUTER]: { verb: "Used an app", code: false },
   [CALL_KIND.READ_FILE]: { verb: "Read", code: true },
   [CALL_KIND.WRITE_FILE]: { verb: "Wrote", code: true },
   [CALL_KIND.EDIT]: { verb: "Edited", code: true },
