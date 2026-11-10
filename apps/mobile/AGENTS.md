@@ -59,16 +59,18 @@ with it. Touch nothing of the developer's outside the checkout.
   vitest tests, and `export:ios` on every pull request, through the same turbo
   tasks as every workspace. It is the pull request's only gate.
 - **macOS** (`.github/workflows/ios-simulators.yml`, on GitHub's `xcode-27`
-  image) runs only by hand, on any branch, in about 100 minutes. It generates
+  image) runs only by hand, on any branch. It generates
   the native project, builds the Release simulator app, runs the Maestro flows
   on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad Pro 11-inch,
   and uploads their screenshots as the `mobile-screenshots` artifact, kept
   whether or not the flows passed.
 
-On the Mac, run the flows your change touches on the simulators yourself
-before you push. In the cloud, where there is no Xcode, ask for a run on your
-branch; Vespin's GitHub App cannot dispatch a workflow, so it is started from
-the developer's Mac (`gh workflow run ios-simulators.yml --ref <branch>`).
+A pull request merges on the Linux checks alone, with no device check first;
+device problems show in the TestFlight builds. For screenshots, ask for a run
+on your branch: Vespin's GitHub App cannot dispatch a workflow, so it is
+started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
+<branch>`). A run on all three simulators takes over two hours, so name fewer
+for a quicker look (`-f simulators="iPhone 18 Pro,iPad Pro 11-inch (M5)"`).
 Then read its screenshots:
 
 ```

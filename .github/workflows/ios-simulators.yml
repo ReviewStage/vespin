@@ -22,6 +22,11 @@ name: iOS simulators
 
 on:
   workflow_dispatch:
+    inputs:
+      simulators:
+        description: The simulators to run the flows on, comma-separated, as `xcrun simctl list devices` names them
+        type: string
+        default: "iPhone 18 Pro,iPhone Duo,iPad Pro 11-inch (M5)"
 
 permissions:
   contents: read
@@ -34,10 +39,10 @@ jobs:
   mobile:
     name: iOS app on the simulators
     runs-on: xcode-27
-    # Note that a green run takes about 100 minutes (a 20-minute build, then
-    # the flows), and a retried flow adds up to 15, so the cap leaves room
-    # above that until the simulators run in parallel.
-    timeout-minutes: 140
+    # Note that a run on all three simulators takes over two hours (a
+    # 20-minute build, then every flow in light and dark on each, a retried
+    # flow adding up to 15), so a quicker look names fewer simulators.
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
@@ -52,12 +57,22 @@ jobs:
           MAESTRO_VERSION: 2.12.1
       - name: Generate the native project and build for the simulator
         run: apps/mobile/scripts/simulator-build.sh "$RUNNER_TEMP/derived-data"
+      # Note that the flows' limit sits under the job's, so a run that
+      # outgrows it still uploads the screenshots it took, because a job
+      # cancelled at its own limit skips even an `always()` step.
       - name: Run the Maestro flows
+        timeout-minutes: 200
+        env:
+          SIMULATORS: ${{ inputs.simulators }}
         run: |
+          simulators=()
+          while IFS= read -r name; do
+            if [ -n "$name" ]; then simulators+=("$name"); fi
+          done < <(printf '%s\n' "$SIMULATORS" | tr ',' '\n' | sed 's/^ *//; s/ *$//')
           apps/mobile/scripts/simulator-screenshots.sh \
             "$RUNNER_TEMP/derived-data/Build/Products/Release-iphonesimulator/Vespin.app" \
             "$RUNNER_TEMP/screenshots" \
-            "iPhone 18 Pro" "iPhone Duo" "iPad Pro 11-inch (M5)"
+            "${simulators[@]}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ always() }}
         with:
