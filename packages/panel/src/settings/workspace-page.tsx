@@ -1119,10 +1119,12 @@ function connectionsOf(workspace: Workspace): readonly ShownConnection[] {
 
 /**
  * The workspace's GitHub, for an owner or an admin: Connect while none is,
- * and once one is, Manage on GitHub, which opens the same page. GitHub lists
- * every account there, to install the App on another or to configure one it
- * is on, so one door does both. The connect's return to the app adds the
- * installation to this workspace.
+ * and once one is, a ⋯ whose menu holds Manage on GitHub, which opens the
+ * same page, so the row ends as Integrations' rows do, in at most one
+ * button (Add repository) and a ⋯. GitHub lists every account there, to
+ * install the App on another or to configure one it is on, so one door does
+ * both. The connect's return to the app adds the installation to this
+ * workspace.
  */
 function ManagedGitHub({
   workspace,
@@ -1161,43 +1163,48 @@ function ManagedGitHub({
       });
   };
   const connected = connections.length > 0;
+  const actions = connected
+    ? [
+        [
+          {
+            label: "Manage on GitHub",
+            icon: <ExternalLinkIcon />,
+            disabled: opening,
+            onSelect: open,
+          },
+        ],
+      ]
+    : [];
   return (
     <Stack gap={GAP.NONE}>
-      <SettingsRow
-        leading={GITHUB_MARK}
-        label="GitHub"
-        description={connectionLine(connected, true)}
-        error={replayMaskedError(
-          refusedShown(refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
-        )}
-        end={() => chevron}
-      >
-        {() => (
-          <>
-            {add}
-            {connected ? (
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                icon={<ExternalLinkIcon aria-hidden="true" />}
-                busy={opening}
-                busyLabel="Opening GitHub"
-                onClick={open}
-              >
-                Manage on GitHub
-              </Button>
-            ) : (
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                busy={opening}
-                busyLabel="Connecting"
-                onClick={open}
-              >
-                {CONNECT}
-              </Button>
-            )}
-          </>
-        )}
-      </SettingsRow>
+      <MenuRow
+        thing="GitHub"
+        actions={actions}
+        row={{
+          leading: GITHUB_MARK,
+          label: "GitHub",
+          description: connectionLine(connected, true),
+          error: replayMaskedError(
+            refusedShown(refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
+          ),
+          control: (
+            <>
+              {add}
+              {connected ? null : (
+                <Button
+                  variant={BUTTON_VARIANT.OUTLINE}
+                  busy={opening}
+                  busyLabel="Connecting"
+                  onClick={open}
+                >
+                  {CONNECT}
+                </Button>
+              )}
+            </>
+          ),
+          end: chevron,
+        }}
+      />
     </Stack>
   );
 }
@@ -1338,8 +1345,7 @@ function ManagedSentry({
     <Stack gap={GAP.NONE}>
       <MenuRow
         thing="Sentry"
-        // Note that a lone installation's Disconnect draws as a button of its own, and several share the ⋯.
-        alone
+        // Note that one installation's Disconnect stands in the ⋯ as several do, never as a glyph of its own beside the row's end, as Integrations' rows keep theirs.
         actions={actions}
         row={{
           leading: SENTRY_MARK,
@@ -1485,7 +1491,6 @@ function ManagedSlackBot({
     <Stack gap={GAP.NONE}>
       <MenuRow
         thing="Slack"
-        alone
         actions={actions}
         row={{
           leading: SLACK_MARK,

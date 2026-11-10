@@ -1760,9 +1760,10 @@ const clearArchives = SqlSchema.void({
  * The task's standing agents, or the one named among them, that the guard
  * reads idle under their conversations' locks, archived with the task at
  * `now` by the archiver given, marked `withTask` so the task's move off
- * Done or Canceled brings them back; who they are. An agent that is the archiver itself
- * stands: one moving its own task to Done or Canceled is still answering whoever asked,
- * and is never archived by that move, at once or as its turn ends. The caller
+ * Done or Canceled brings them back; who they are. In the task's own move, the
+ * agent that is the archiver itself stands, since it is still answering
+ * whoever asked; the one named as its turn ends is archived even where it
+ * moved the task itself, its answer given. The caller
  * settles their open asks once the task's own are settled, so those read as
  * the task's.
  */
@@ -1778,7 +1779,9 @@ const archivedIdleWithTask = Effect.fnUntraced(function* <R>(
   if (agents.length === 0) return [];
   const idle = yield* archive.idle(agents);
   const agentIds = agents
-    .filter(({ id }) => idle.has(id) && id !== archive.archivedBy.agentId)
+    .filter(
+      ({ id }) => idle.has(id) && (agentId !== undefined || id !== archive.archivedBy.agentId),
+    )
     .map(({ id }) => id);
   if (agentIds.length === 0) return [];
   return yield* stampArchivedWithTask({
@@ -1820,10 +1823,10 @@ const broughtBackWithTask = Effect.fnUntraced(function* (taskId: string, complet
  * Where the caller hands `doneArchive`, a change that moves the task to Done
  * or Canceled records the archiver given as who moved it there, and archives
  * with it, at its finish's stamp, every standing agent the guard reads idle,
- * as that archiver, the archiving agent itself left standing; one still at
- * work stands, and is archived as its turn ends while the task still stands
- * so (`archiveAgentOfDoneTask`). A move there without one records no one, and
- * archives nothing then or later. Any change that moves the task off Done or
+ * as that archiver, the archiving agent itself left standing; it and one
+ * still at work stand, and are archived as their turns end while the task
+ * still stands so (`archiveAgentOfDoneTask`). A move there without one
+ * records no one, and archives nothing then or later. Any change that moves the task off Done or
  * Canceled brings back every agent that move archived with it, and no other.
  */
 export function updateTask<E = never, R = never, RA = never>(
@@ -2156,8 +2159,7 @@ const lockDoneBy = SqlSchema.findOneOption({
  * to Done or Canceled and the guard reads the agent idle under its conversation's lock,
  * as that move archived the task's idle agents, at this moment and as whoever
  * moved it: what a turn's end asks of an agent still at work when its task
- * moved to Done or Canceled. A move the agent made itself archives nothing
- * (`archivedIdleWithTask`). A turn's start
+ * moved to Done or Canceled, a move the agent made itself among them. A turn's start
  * takes the task up again (`beginTaskWork`), which clears who moved it, so a
  * Done or Canceled this reads was made while the agent's turn ran. The task is read under
  * its row's lock first, so a move off it at once either lands before, and

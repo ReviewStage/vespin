@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
 import { TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
 import { Effect, Option } from "effect";
+import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { turns } from "../../schemas/storage.js";
@@ -11,6 +12,7 @@ import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
 import { archiveAgent, createAgent } from "../agent-store.js";
 import {
+  claimLiveActivityStart,
   endLiveActivityOnPhone,
   forgetLiveActivityToken,
   LIVE_ACTIVITY_TOKEN,
@@ -20,6 +22,7 @@ import {
   recordLiveActivityEnded,
   recordLiveActivityPushed,
   registerLiveActivityToken,
+  releaseLiveActivityStart,
 } from "../live-activity-store.js";
 import { registerPushDevice } from "../push-device-store.js";
 
@@ -141,9 +144,14 @@ it.layer(getTestDB())("the live activity store", (it) => {
         assert.equal(registered.startToken, startToken);
         assert.equal(registered.startedAt, null);
 
+        const started = new Date(1_000);
+        const claim = { startToken, read: registered, now: started };
+        assert.equal(yield* claimLiveActivityStart(owner, registered.pushDeviceId, claim), true);
+        assert.equal(yield* claimLiveActivityStart(owner, registered.pushDeviceId, claim), false);
         yield* recordLiveActivityPushed(owner, registered.pushDeviceId, {
+          sentAt: started,
           sentState: "{}",
-          started: true,
+          startedAt: started,
         });
         yield* registerLiveActivityToken(owner, phone, LIVE_ACTIVITY_TOKEN.ACTIVITY, activityToken);
         const [standing] = yield* listLiveActivityPhones(owner);
@@ -164,12 +172,34 @@ it.layer(getTestDB())("the live activity store", (it) => {
       const [before] = yield* listLiveActivityPhones(owner);
       assert.ok(before);
 
+      assert.ok(before.startToken && before.startedAt && before.activityToken);
+      assert.equal(
+        yield* claimLiveActivityStart(other, before.pushDeviceId, {
+          startToken: before.startToken,
+          read: before,
+          now: new Date(1_000),
+        }),
+        false,
+      );
       yield* recordLiveActivityPushed(other, before.pushDeviceId, {
+        sentAt: before.startedAt,
         sentState: "theirs",
-        started: true,
+        startedAt: before.startedAt,
       });
-      yield* recordLiveActivityEnded(other, before.pushDeviceId);
-      yield* forgetLiveActivityToken(other, before.pushDeviceId, LIVE_ACTIVITY_TOKEN.START);
+      yield* releaseLiveActivityStart(other, before.pushDeviceId, before.startedAt);
+      assert.equal(yield* recordLiveActivityEnded(other, before.pushDeviceId, before), false);
+      yield* forgetLiveActivityToken(
+        other,
+        before.pushDeviceId,
+        LIVE_ACTIVITY_TOKEN.START,
+        before.startToken,
+      );
+      yield* forgetLiveActivityToken(
+        other,
+        before.pushDeviceId,
+        LIVE_ACTIVITY_TOKEN.ACTIVITY,
+        before.activityToken,
+      );
       yield* endLiveActivityOnPhone(other, phone);
 
       assert.deepEqual(yield* listLiveActivityPhones(owner), [before]);
@@ -182,14 +212,20 @@ it.layer(getTestDB())("the live activity store", (it) => {
       Effect.gen(function* () {
         const { owner } = yield* openAccounts;
         const phone = yield* phoneOf(owner);
-        yield* registerLiveActivityToken(owner, phone, LIVE_ACTIVITY_TOKEN.START, token());
+        const startToken = token();
+        yield* registerLiveActivityToken(owner, phone, LIVE_ACTIVITY_TOKEN.START, startToken);
         const activityToken = token();
         yield* registerLiveActivityToken(owner, phone, LIVE_ACTIVITY_TOKEN.ACTIVITY, activityToken);
         const [standing] = yield* listLiveActivityPhones(owner);
         assert.ok(standing);
         assert.ok((yield* listLiveActivityMembers(10_000)).includes(owner));
 
-        yield* forgetLiveActivityToken(owner, standing.pushDeviceId, LIVE_ACTIVITY_TOKEN.START);
+        yield* forgetLiveActivityToken(
+          owner,
+          standing.pushDeviceId,
+          LIVE_ACTIVITY_TOKEN.START,
+          startToken,
+        );
         const [noStart] = yield* listLiveActivityPhones(owner);
         assert.equal(noStart?.startToken, null);
         assert.equal(noStart?.activityToken, activityToken);
@@ -199,6 +235,32 @@ it.layer(getTestDB())("the live activity store", (it) => {
         assert.equal(ended?.activityToken, null);
         assert.equal(ended?.startedAt, null);
         assert.ok(!(yield* listLiveActivityMembers(10_000)).includes(owner));
+      }),
+  );
+
+  it.effect(
+    "the sweep comes round to every account with an activity standing, the longest unswept first",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        for (const userId of [owner, other]) {
+          yield* registerLiveActivityToken(
+            userId,
+            yield* phoneOf(userId),
+            LIVE_ACTIVITY_TOKEN.ACTIVITY,
+            token(),
+          );
+        }
+        yield* TestClock.adjust("1 minute");
+        // Note that this sweep takes every account standing, so the two below see only each other.
+        assert.ok((yield* listLiveActivityMembers(10_000)).length >= 2);
+
+        yield* TestClock.adjust("1 minute");
+        const [first] = yield* listLiveActivityMembers(1);
+        yield* TestClock.adjust("1 minute");
+        const [second] = yield* listLiveActivityMembers(1);
+        assert.ok(first !== undefined && second !== undefined);
+        assert.notEqual(first, second);
       }),
   );
 

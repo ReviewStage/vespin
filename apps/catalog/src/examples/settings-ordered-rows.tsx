@@ -13,7 +13,9 @@ import {
   SettingsRowMark,
   SettingsRowMeter,
   SettingsRowStateLine,
+  SettingsRowUsage,
   SettingsSection,
+  type UsageMeterRow,
 } from "@repo/ui";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -23,16 +25,20 @@ import { CatalogSection } from "../section";
  * the account's Codex plans and its API key are tried top to bottom, under
  * the card's header row: each led by its grip in the gutter the card keeps,
  * so the header's mark and every row's stand in one column, a plan's usage
- * under its name as a thin meter (`SettingsRowMeter`), full in the attention
- * ink at its limit; and a run of one, which draws no grip.
+ * under its name as a meter for each of its windows (`SettingsRowUsage`), in
+ * place of the words where it has room, or a thin meter full in the attention
+ * ink at its limit where no window was heard (`SettingsRowMeter`); and a run
+ * of one, which draws no grip.
  */
 
 interface Plan {
   readonly id: string;
   readonly name: string;
-  readonly state: string;
+  /** Its line's words; none where its usage says it. */
+  readonly state?: string;
   readonly limited?: boolean;
   readonly meter?: { readonly value: number; readonly tone: ProgressTone };
+  readonly usage?: readonly UsageMeterRow[];
 }
 
 const PLANS: readonly Plan[] = [
@@ -46,26 +52,31 @@ const PLANS: readonly Plan[] = [
   {
     id: "personal",
     name: "ana.personal@example.com",
-    state: "42% of the 5-hour limit used",
-    meter: { value: 42, tone: PROGRESS_TONE.WORKING },
+    usage: [
+      { label: "5-hour", usedPercent: 42, resets: "in 2h" },
+      { label: "Weekly", usedPercent: 18, resets: "in 3d" },
+    ],
   },
   { id: "side", name: "ana@sideproject.example", state: "Ready" },
   { id: "key", name: "API key · sk-proj-…a91F", state: "Ready" },
 ];
 
 /** One plan's row, as Settings › Agents draws it. */
-function PlanRow({ name, state, limited = false, meter }: Plan): React.JSX.Element {
+function PlanRow({ name, state, limited = false, meter, usage }: Plan): React.JSX.Element {
   return (
     <SettingsRow
       leading={<ProviderMark provider={MARK_PROVIDER.CHATGPT} size={PROVIDER_MARK_SIZE.ROW} />}
       label={name}
       description={
         <>
-          <SettingsRowStateLine
-            state={limited ? SETTINGS_ROW_STATE.ATTENTION : SETTINGS_ROW_STATE.PLAIN}
-          >
-            {state}
-          </SettingsRowStateLine>
+          {state === undefined ? null : (
+            <SettingsRowStateLine
+              state={limited ? SETTINGS_ROW_STATE.ATTENTION : SETTINGS_ROW_STATE.PLAIN}
+            >
+              {state}
+            </SettingsRowStateLine>
+          )}
+          {usage === undefined ? null : <SettingsRowUsage rows={usage} />}
           {meter === undefined ? null : <SettingsRowMeter value={meter.value} tone={meter.tone} />}
         </>
       }

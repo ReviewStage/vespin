@@ -1,4 +1,6 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { INTEGRATION_STATUS_WORDS } from "@repo/features/integration-status-words";
+import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
@@ -20,7 +22,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { dueText } from "@repo/features/time-format";
-import { readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
+import { readingWords, SIGNED_OUT_WORDS, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
 import { SETTINGS_SECTION } from "@repo/settings/settings-views";
@@ -63,12 +65,14 @@ import {
   SettingsRowMeter,
   type SettingsRowSkeletonShape,
   SettingsRowStateLine,
+  SettingsRowUsage,
   SettingsSection,
   SettingsSectionsSkeleton,
   Stack,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  type UsageMeterRow,
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
@@ -84,6 +88,7 @@ import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
+import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -111,9 +116,10 @@ import { ReadFailed } from "./marks.js";
  * when, its bar full in the attention ink, or what is wrong with it in the
  * attention tint; and ends in a ⋯ holding Rename, Move up and down, Replace
  * token, and Disconnect, the fix its state asks for standing beside it:
- * Replace token for a Claude token Anthropic refused, Sign in again for a
- * Codex plan OpenAI signed out, and Manage usage, which opens ChatGPT's
- * usage settings, for one at its limit. A key is named by the name the
+ * Replace token for a Claude token Anthropic refused, Reconnect for a
+ * Codex plan whose sign-in expired (Sign in again for one whose plan has no
+ * Codex, since another account mends it), and Manage usage, which opens
+ * ChatGPT's usage settings, for one at its limit. A key is named by the name the
  * account gave it, else API key and its hint, renamed in place as a Claude
  * plan is; says Ready, or what is wrong with it; and ends in a ⋯ holding
  * Rename, Move up and down, Replace key, and Remove key. With neither a plan nor a key, no agent
@@ -134,7 +140,7 @@ import { ReadFailed } from "./marks.js";
  * The service never answers a key or a token, so nothing here holds one but
  * what is being pasted: it stands in the open field alone, is sent once,
  * and is cleared as soon as the service keeps it. Every answer is the
- * account's credentials whole, which Settings hands to the Default model
+ * account's credentials whole, which Settings hands to New agents' Model
  * row (`onKeys`) so its note follows a save at once, and setup reads for
  * whether either harness can start an agent (`onConnected`). The lists
  * stand under the mask mark, since a saved key's hint, a plan's email, its
@@ -231,6 +237,7 @@ const WORDS = {
   KEY_NAME: "Key name",
   MOVE_UP: "Move up",
   MOVE_DOWN: "Move down",
+  RECONNECT: VERB.RECONNECT,
   SIGN_IN_AGAIN: "Sign in again",
   MANAGE_USAGE: "Manage usage",
   API_KEY: "API key",
@@ -254,7 +261,7 @@ const WORDS = {
   TOKEN_INVALID: "Anthropic rejected this token. Paste a new one.",
   TOKEN_QUOTA: "Out of usage on your Claude plan.",
   TOKEN_UNREADABLE: "This token can no longer be read. Paste a new one.",
-  CHATGPT_SIGNED_OUT: "Signed out of Codex.",
+  CHATGPT_EXPIRED: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.EXPIRED],
   CHATGPT_UNREADABLE: "This sign-in can no longer be read.",
   CHATGPT_INELIGIBLE:
     "OpenAI says this account's plan doesn't include Codex. Sign in again to use another.",
@@ -351,29 +358,11 @@ function harnessReady(answer: ProviderKeysAnswer, provider: ProviderKeyProvider)
 
 /* ----- What a credential says ----- */
 
-/** Minutes in an hour, and in a day, which a usage window is named in. */
-const MINUTES = { HOUR: 60, DAY: 24 * 60, WEEK: 7 * 24 * 60 } as const;
-
-/** The window a plan's usage is counted in, as its line names it: "the 5-hour limit", "the weekly limit". */
-function windowWords(windowMins: number | undefined): string {
-  if (windowMins === undefined) return "its limit";
-  if (windowMins === MINUTES.WEEK) return "the weekly limit";
-  if (windowMins % MINUTES.DAY === 0) return `the ${String(windowMins / MINUTES.DAY)}-day limit`;
-  if (windowMins % MINUTES.HOUR === 0) return `the ${String(windowMins / MINUTES.HOUR)}-hour limit`;
-  return `the ${String(windowMins)}-minute limit`;
-}
-
 /** A reached limit's words, with when it resets where the provider named it: "At its limit · back at 3:40 PM". */
 function limitWords(plan: SubscriptionKeySummary, now: number): string {
   return plan.limitResetsAt === undefined
     ? WORDS.AT_LIMIT
     : `${WORDS.AT_LIMIT} · ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
-}
-
-/** What a plan with room says: how much of its window it has used, as last heard, or Ready before a turn has said. */
-function roomWords(plan: SubscriptionKeySummary): string {
-  if (plan.usage === undefined) return WORDS.READY;
-  return `${String(Math.round(plan.usage.usedPercent))}% of ${windowWords(plan.usage.windowMins)} used`;
 }
 
 /** What a Claude token that does not stand says. */
@@ -396,14 +385,25 @@ function signInWords(plan: SubscriptionKeySummary): string {
     case PROVIDER_KEY_STATUS.INELIGIBLE:
       return WORDS.CHATGPT_INELIGIBLE;
     default:
-      return WORDS.CHATGPT_SIGNED_OUT;
+      return WORDS.CHATGPT_EXPIRED;
   }
 }
 
-/** A plan's line under its name: its words, whether they need a hand, and the bar under them where its usage is known. */
+/** What mends a Codex sign-in that does not stand: Sign in again as another account where the plan has no Codex, else Reconnect. */
+function signInFix(plan: SubscriptionKeySummary): string {
+  return plan.status === PROVIDER_KEY_STATUS.INELIGIBLE ? WORDS.SIGN_IN_AGAIN : WORDS.RECONNECT;
+}
+
+/**
+ * A plan's line under its name: its words, whether they need a hand, and
+ * under them its usage, each window's meter where its usage is known
+ * (`usage`), else one full bar at its limit (`meter`). A plan with room
+ * whose usage is known says no words, since its meters say it.
+ */
 interface PlanLine {
-  readonly words: string;
+  readonly words?: string;
   readonly ok: boolean;
+  readonly usage?: PlanUsageMeters;
   readonly meter?: { readonly value: number; readonly tone: ProgressTone };
 }
 
@@ -413,22 +413,18 @@ function planLine(
   plan: SubscriptionKeySummary,
   now: number,
 ): PlanLine {
+  const usage = planUsageMeters(plan, now);
   if (plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
     return {
       words: limitWords(plan, now),
       ok: false,
-      meter: { value: 100, tone: PROGRESS_TONE.ATTENTION },
+      ...(usage === undefined
+        ? { meter: { value: 100, tone: PROGRESS_TONE.ATTENTION } }
+        : { usage }),
     };
   }
-  if (standing(plan)) {
-    return {
-      words: roomWords(plan),
-      ok: true,
-      ...(plan.usage === undefined
-        ? undefined
-        : { meter: { value: plan.usage.usedPercent, tone: PROGRESS_TONE.WORKING } }),
-    };
-  }
+  if (standing(plan))
+    return usage === undefined ? { words: WORDS.READY, ok: true } : { ok: true, usage };
   const words = provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? tokenWords(plan) : signInWords(plan);
   return { words, ok: false };
 }
@@ -1039,7 +1035,7 @@ function PlanFix({
   if (standing(plan)) return null;
   return (
     <Button variant={BUTTON_VARIANT.OUTLINE} onClick={onOpen}>
-      {chatGpt ? WORDS.SIGN_IN_AGAIN : WORDS.REPLACE_TOKEN}
+      {chatGpt ? signInFix(plan) : WORDS.REPLACE_TOKEN}
     </Button>
   );
 }
@@ -1088,10 +1084,13 @@ function PlanRow({
   onMove,
   onRename,
   onUnconfirmed,
+  alignWith,
 }: {
   provider: ProviderKeyProvider;
   plan: SubscriptionKeySummary;
   name: string;
+  /** Every plan's meter rows on the page, which its meters line up with. */
+  alignWith: readonly UsageMeterRow[];
   at: number;
   count: number;
   open: typeof STEPS.REPLACE | typeof STEPS.RENAME | undefined;
@@ -1130,8 +1129,14 @@ function PlanRow({
         }
         description={
           <>
-            <State ok={line.ok}>{line.words}</State>
-            {line.meter === undefined ? null : (
+            {line.words === undefined ? null : <State ok={line.ok}>{line.words}</State>}
+            {line.usage !== undefined ? (
+              <SettingsRowUsage
+                rows={line.usage.rows}
+                heard={line.usage.heard}
+                alignWith={alignWith}
+              />
+            ) : line.meter === undefined ? null : (
               <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
             )}
           </>
@@ -1292,9 +1297,12 @@ function HarnessCredentials({
   open,
   onOpen,
   onClose,
+  aligned,
 }: {
   provider: ProviderKeyProvider;
   answer: ProviderKeysAnswer;
+  /** What every harness's card lines up with: whether one draws grips, and every plan's meters on the page. */
+  aligned: PageAlignment;
   /** Which of this harness's steps stand open, if any. */
   open: HarnessSteps | undefined;
   onOpen: (steps: HarnessSteps) => void;
@@ -1378,6 +1386,7 @@ function HarnessCredentials({
         <SettingsOrderedRows
           label={harness.name}
           onPointerDown={drag}
+          gutter={aligned.gutter}
           rows={order.ordered.map((credential, at) => {
             const rowOpen =
               open !== undefined &&
@@ -1403,6 +1412,7 @@ function HarnessCredentials({
                     onMove={order.move}
                     onRename={(label) => order.rename(credential, label)}
                     onUnconfirmed={setUnconfirmed}
+                    alignWith={aligned.meters}
                   />
                 ) : (
                   <KeyRow
@@ -1434,7 +1444,7 @@ function HarnessCredentials({
 
 /**
  * The account's credentials as the host holds them (`LIVE_READ.PROVIDER_KEYS`),
- * each write's own answer laid there, which the Default model row
+ * each write's own answer laid there, which New agents' Model row
  * (`onKeys`) and setup (`onConnected`) hear.
  */
 function useCredentials({
@@ -1452,7 +1462,7 @@ function useCredentials({
   const answer = keys.data;
   const readFailed = keys.isError;
 
-  // The Default model row hears every answer, so nothing there says what a key used to be.
+  // New agents' Model row hears every answer, so nothing there says what a key used to be.
   useEffect(() => {
     if (onKeys !== undefined && (answer !== undefined || readFailed)) onKeys(answer?.keys ?? []);
   }, [answer, readFailed, onKeys]);
@@ -1471,6 +1481,24 @@ function useCredentials({
  * changed in place, one credential's steps open at a time: signed out, a
  * read that failed, or the sections' skeleton while it is out.
  */
+/** What every harness's card on the page lines up with. */
+interface PageAlignment {
+  /** Whether any card draws grips, so every card keeps their gutter and its marks stand in one column with theirs. */
+  readonly gutter: boolean;
+  /** Every plan's meter rows on the page, so each plan's meters line up with every other's as one table. */
+  readonly meters: readonly UsageMeterRow[];
+}
+
+/** What the page's cards line up with, as the account's keys stand `now`. */
+function pageAlignment(answer: ProviderKeysAnswer, now: number): PageAlignment {
+  return {
+    gutter: HARNESSES.some(
+      (provider) => plansOf(answer, provider).length + keysOf(answer, provider).length > 1,
+    ),
+    meters: (answer.subscriptions ?? []).flatMap((plan) => planUsageMeters(plan, now)?.rows ?? []),
+  };
+}
+
 function CredentialLists({
   signedIn,
   gap,
@@ -1511,6 +1539,7 @@ function CredentialLists({
       />
     );
   }
+  const aligned = pageAlignment(answer, Date.now());
   return (
     <ReplayMask>
       <Stack gap={gap}>
@@ -1522,6 +1551,7 @@ function CredentialLists({
             open={open?.provider === provider ? open : undefined}
             onOpen={(steps) => setOpen({ ...steps, provider })}
             onClose={() => setOpen(undefined)}
+            aligned={aligned}
           />
         ))}
       </Stack>
@@ -1529,7 +1559,7 @@ function CredentialLists({
   );
 }
 
-/** Settings › Agents' credentials, whose every answer the Default model row hears. */
+/** Settings › Agents' credentials, whose every answer New agents' Model row hears. */
 export function AgentAuthSection({
   signedIn,
   onKeys,

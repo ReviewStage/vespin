@@ -177,6 +177,8 @@ export type NativeMoment =
       readonly usedPercent: number;
       /** How long the window is, in minutes, where the harness said. */
       readonly windowMins?: number;
+      /** The model the window alone counts, as the harness names it ("Opus"); none for a window on every model. */
+      readonly model?: string;
       /** When the window resets, in epoch milliseconds, where the harness said. */
       readonly resetsAt?: number;
     }

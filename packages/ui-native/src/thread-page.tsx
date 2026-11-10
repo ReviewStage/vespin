@@ -24,7 +24,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { Markdown, type MarkdownPlace, type MarkdownVideo, Picture } from "./markdown.js";
+import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
@@ -93,8 +93,8 @@ type ThreadPageProps = {
   readonly messages: readonly ThreadMessage[];
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
-  /** Routes a link or a chip naming a place in the app; every other link opens in Safari. */
-  readonly onOpenPlace: (place: MarkdownPlace) => void;
+  /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
+  readonly onOpenLink: (address: string) => void;
   /** The address a picture its words draw is drawn from, by the address they name it by; none while it is on its way. */
   readonly pictureSource?: ((written: string) => string | undefined) | undefined;
   /** The video a picture its words draw names, played in its place; every address names a picture where none is given. */
@@ -206,7 +206,7 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
 function MessageView({
   message,
   repository,
-  onOpenPlace,
+  onOpenLink,
   pictureSource,
   videoAt,
   now,
@@ -253,7 +253,7 @@ function MessageView({
             <Markdown
               words={message.words}
               repository={repository}
-              onOpenPlace={onOpenPlace}
+              onOpenLink={onOpenLink}
               typed={message.typed}
               pictureSource={pictureSource}
               videoAt={videoAt}

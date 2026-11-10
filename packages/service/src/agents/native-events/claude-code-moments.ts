@@ -323,12 +323,22 @@ const INFORMATIONAL_WARNING = "warning";
 /** The limit status that refuses the plan's calls, as `SDKRateLimitInfo` spells it. */
 const RATE_LIMIT_REFUSED = "rejected";
 
-/** How long each of the plan's limits runs, in minutes, by the `rateLimitType` the SDK names it. */
-const RATE_LIMIT_WINDOW_MINS: Readonly<Record<string, number>> = {
-  five_hour: 5 * 60,
-  seven_day: 7 * 24 * 60,
-  seven_day_opus: 7 * 24 * 60,
-  seven_day_sonnet: 7 * 24 * 60,
+/** Minutes in a week, the length of the plan's weekly limits. */
+const WEEK_MINS = 7 * 24 * 60;
+
+/**
+ * Each of the plan's usage windows by the `rateLimitType` the SDK names it:
+ * how long it runs, in minutes, and the model it alone counts where it
+ * counts one (`seven_day_opus`), as its own window beside the week on every
+ * model. A limit the SDK names that is no window (`overage`) has none.
+ */
+const RATE_LIMIT_WINDOWS: Readonly<
+  Record<string, { readonly windowMins: number; readonly model?: string }>
+> = {
+  five_hour: { windowMins: 5 * 60 },
+  seven_day: { windowMins: WEEK_MINS },
+  seven_day_opus: { windowMins: WEEK_MINS, model: "Opus" },
+  seven_day_sonnet: { windowMins: WEEK_MINS, model: "Sonnet" },
 };
 
 /**
@@ -646,17 +656,16 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
   if (rateLimitType !== undefined) words.push(rateLimitType);
   if (resetsAtMs !== undefined) words.push(`resets ${new Date(resetsAtMs).toISOString()}`);
   const refused = status === RATE_LIMIT_REFUSED;
-  const windowMins =
-    rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOW_MINS[rateLimitType];
+  const window = rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOWS[rateLimitType];
   return [
     // Note that the SDK reports utilization as a share of one, which the plan's row keeps in percent.
-    ...(utilization === undefined
+    ...(utilization === undefined || window === undefined
       ? []
       : [
           {
             kind: NATIVE_MOMENT.PLAN_USAGE,
             usedPercent: utilization * 100,
-            ...(windowMins === undefined ? {} : { windowMins }),
+            ...window,
             ...(resetsAtMs === undefined ? {} : { resetsAt: resetsAtMs }),
           } as const,
         ]),

@@ -19,14 +19,16 @@ import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { PlanRelations } from "./plan-relations.js";
+import { PlanHead } from "./plan-head.js";
 
 /**
  * plan-relations.test.ts -- the open task's Sub-tasks and Task relations groups:
  * a sub-task's own nested under it once its fold opens, a group drawn only
- * while it holds a row, and a relation's kind moved from its pill in one
+ * while it holds a row, a relation's kind moved from its pill in one
  * call, never a block taken away and added again, and Remove relation
- * taking the block away through the door that offers Undo. Synthetic tasks.
+ * taking the block away through the door that offers Undo; and New
+ * sub-task's + on a folded group opening it on a draft whose Return adds a
+ * sub-task of the open task. Synthetic tasks.
  */
 
 declare global {
@@ -75,11 +77,15 @@ function summary(id: string, number: number, parentTaskId?: string): TaskSummary
   };
 }
 
-/** Draws the groups for the open task, its blocks as given, over `listed`, its sends kept in `sent`. */
+/** Draws the head's groups for the open task, its blocks as given, over `listed`, its sends kept in `sent`. */
 function draw(
   listed: readonly TaskSummary[],
   blocks: { blockedBy?: string[]; blocks?: string[] },
-  sent: { changes: TaskRelationChangeRequest[]; removed: [TaskBlockRelation, string][] },
+  sent: {
+    changes: TaskRelationChangeRequest[];
+    removed: [TaskBlockRelation, string][];
+    started?: unknown[];
+  },
 ): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
@@ -94,6 +100,10 @@ function draw(
       sent.removed.push([block.relation, block.taskId]);
       return Promise.resolve({ blockedBy: [], blocks: [] });
     },
+    [ACT_KIND.TASKS_START]: (start) => {
+      sent.started?.push(start);
+      return Promise.resolve({ planId: "t-9" });
+    },
   });
   const tasks = tasksControl({
     tasks: [...listed],
@@ -105,11 +115,14 @@ function draw(
   act(() =>
     root?.render(
       withQueryClient(
-        createElement(PlanRelations, {
+        createElement(PlanHead, {
           task,
           tasks,
           door: { workspaceName: ACME.name, tasks: listed },
           room: { scroller: { current: container }, column: { current: container } },
+          newAgent: undefined,
+          agents: null,
+          pages: null,
           onOpenTask: tasks.onSelect,
         }),
       ),
@@ -140,6 +153,34 @@ test("a sub-task's own stand under it once its fold opens, and a task with no re
     container.querySelector<HTMLButtonElement>("button[aria-label='Sub-tasks of Task 2']")?.click(),
   );
   assert.deepEqual(rowIds(container, "Sub-tasks"), ["t-2", "t-3"]);
+});
+
+test("New sub-task's + on a folded group opens it on a draft, whose Return adds a sub-task of the open task and opens the next", async () => {
+  const sent = { changes: [], removed: [], started: [] as unknown[] };
+  const container = draw([summary("t-2", 2, DOCUMENT_TASK.id)], {}, sent);
+  const draft = () => container.querySelector<HTMLInputElement>("[data-quick-add] input");
+  act(() => container.querySelector<HTMLButtonElement>("button[aria-expanded='true']")?.click());
+  assert.deepEqual(rowIds(container, "Sub-tasks"), [], "the group folds its rows");
+
+  act(() =>
+    container.querySelector<HTMLButtonElement>("button[aria-label='New sub-task']")?.click(),
+  );
+  assert.deepEqual(rowIds(container, "Sub-tasks"), ["t-2"], "the group opens");
+  const field = draft() ?? assert.fail("the draft stands at the end of the sub-tasks");
+  field.value = "Check the invite email copy";
+  act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  await act(async () => undefined);
+
+  assert.deepEqual(sent.started, [
+    {
+      name: "Check the invite email copy",
+      parentTaskId: DOCUMENT_TASK.id,
+      workspaceId: ACME.id,
+      planning: false,
+      quiet: true,
+    },
+  ]);
+  assert.equal(draft()?.value, "", "the next draft stands, empty");
 });
 
 test("a relation stands while the list does not hold its task, and picking another kind on its pill moves it in one call, and Remove relation takes the block away", async () => {

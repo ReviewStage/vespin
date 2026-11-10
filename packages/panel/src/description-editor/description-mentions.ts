@@ -1,19 +1,14 @@
 import type { Editor } from "@tiptap/core";
 import type { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import {
-  type EditorState,
-  Plugin,
-  PluginKey,
-  TextSelection,
-  type Transaction,
-} from "@tiptap/pm/state";
+import { type EditorState, Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
+import { pickedRest, spacedAfterChip } from "./chip-spacing.js";
 import {
   type ComposerTrigger,
+  type DescriptionEditorMentions,
   type HeadingsChange,
   type MentionNode,
-  type DescriptionEditorMentions,
   sameTrigger,
 } from "./contract.js";
 import { MENTION_NODE } from "./mention-node.js";
@@ -57,8 +52,6 @@ const LEAF_CHARACTER = "￼";
 /** The rest of an `@` word after the caret, which a pick replaces too: up to a space, a bracket, a parenthesis, an `@`, or a chip, which is no word's. */
 const WORD_REST = /^[^\s@[\]()\uFFFC]*/u;
 
-const SPACE = " ";
-
 /** The `@` word the caret ends: the report, and the range a pick replaces. */
 interface TaskTrigger {
   readonly trigger: ComposerTrigger;
@@ -98,7 +91,7 @@ function triggerAt(view: EditorView): TaskTrigger | undefined {
     undefined,
     LEAF_CHARACTER,
   );
-  const rest = WORD_REST.exec(after)?.[0].length ?? 0;
+  const rest = pickedRest(WORD_REST.exec(after)?.[0] ?? "").length;
   return {
     trigger: { start: from, query, rect: { left: box.left, top: box.top, bottom: box.bottom } },
     from,
@@ -242,21 +235,13 @@ export function descriptionMentions(
       },
     },
   });
-  /** The `@` word the caret ends written as the mention chosen, a space after it unless one follows, the caret after the space. */
+  /** The `@` word the caret ends written as the mention chosen, spaced from what follows (`spacedAfterChip`). */
   const choose = (editor: Editor, mention: MentionNode): void => {
     const word = state.found;
     if (word === undefined) return;
-    const { doc, schema } = editor.state;
-    const spaced = doc.textBetween(word.to, Math.min(word.to + 1, doc.content.size)) === SPACE;
-    const chip = schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
-    const tr = editor.state.tr.replaceWith(
-      word.from,
-      word.to,
-      spaced ? [chip] : [chip, schema.text(SPACE)],
-    );
-    editor.view.dispatch(
-      tr.setSelection(TextSelection.create(tr.doc, word.from + 2)).scrollIntoView(),
-    );
+    const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
+    const tr = editor.state.tr.replaceWith(word.from, word.to, chip);
+    editor.view.dispatch(spacedAfterChip(tr, word.from + chip.nodeSize).scrollIntoView());
     editor.view.focus();
   };
   return { plugin, choose };

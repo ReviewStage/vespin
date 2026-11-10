@@ -9,6 +9,7 @@ import {
   TURN_STATUS,
   type TurnStatus,
 } from "@repo/wire";
+import { and, eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -332,6 +333,19 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
             [quiet, 1],
           ].sort(),
         );
+
+        // Note that a reader after the newest parts alone is handed the last of them, in order.
+        yield* Database.use((db) =>
+          db
+            .update(messages)
+            .set({ parts: ["One", "Two", "Three"].map((text) => ({ type: "text", text })) })
+            .where(and(eq(messages.conversationId, busy), eq(messages.seq, 3))),
+        );
+        const tails = yield* newestJournalsOfReached([busy], {}, 2);
+        assert.deepEqual(tails.get(busy)?.message.parts, [
+          { type: "text", text: "Two" },
+          { type: "text", text: "Three" },
+        ]);
       }),
   );
 });

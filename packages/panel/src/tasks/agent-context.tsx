@@ -16,7 +16,7 @@ import {
   useMinute,
 } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { useId, useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import {
   CONTEXT_LEVEL,
   CONTEXT_PART,
@@ -46,7 +46,8 @@ import {
  * `PopoverPanel`). It says the
  * share and the total, draws the parts on one segmented bar, names each
  * part with its count beside a square of its color, and under them the
- * cache, the step's answer, where the harness compacts, and when it last did. The
+ * cache, the step's answer, where the harness compacts, when it last did,
+ * and who pays for the agent, as the model menu's last line says it. The
  * ring stands only once a step has ended, since there is nothing to fill
  * it before. The popover closes on its ×, on Escape, which stops there so
  * the panel behind stays open, on a second press of the ring, and on focus
@@ -76,13 +77,15 @@ export function ContextRingIcon({ context }: { context: AgentContext }): React.J
   return <ProgressRing share={contextShare(context)} tone={LEVEL_TONE[contextLevel(context)]} />;
 }
 
-/** What the popover holds: the summary, the bar, each part's row and the stats, which tick on for as long as it is drawn. */
+/** What the popover holds: the summary, the bar, each part's row, the stats, and who pays, which tick on for as long as it is drawn. */
 function ContextBody({
   context,
   brief,
+  payer,
 }: {
   context: AgentContext;
   brief: AgentBrief | undefined;
+  payer: ReactNode;
 }): React.JSX.Element {
   const now = useMinute();
   const rows = contextRows(context, brief);
@@ -125,6 +128,11 @@ function ContextBody({
           </Fact>
         ))}
       </Facts>
+      {payer === undefined ? null : (
+        <p className="m-0 flex min-w-0 items-center text-caption-inline text-muted-foreground">
+          {payer}
+        </p>
+      )}
       <p className="m-0 text-caption-inline text-muted-foreground">
         As of the agent's last step. ~ marks an estimate.
       </p>
@@ -137,6 +145,7 @@ function ContextPopover({
   id,
   context,
   brief,
+  payer,
   onClose,
   onLeave,
 }: {
@@ -145,6 +154,7 @@ function ContextPopover({
   id: string;
   context: AgentContext;
   brief: AgentBrief | undefined;
+  payer: ReactNode;
   /** Closes the popover and hands focus back to the ring. */
   onClose: () => void;
   /** Focus left the popover for `left`; the owner closes unless that is still its own. */
@@ -161,7 +171,7 @@ function ContextPopover({
       onLeave={onLeave}
     >
       <ReplayUnmask>
-        <ContextBody context={context} brief={brief} />
+        <ContextBody context={context} brief={brief} payer={payer} />
       </ReplayUnmask>
     </PopoverPanel>
   );
@@ -170,6 +180,7 @@ function ContextPopover({
 export function AgentContextRing({
   context,
   brief,
+  payer,
   open: heldOpen,
   onOpenChange,
 }: {
@@ -177,6 +188,8 @@ export function AgentContextRing({
   context: AgentContext | undefined;
   /** What the agent was handed, which names the brief's row. */
   brief: AgentBrief | undefined;
+  /** Who pays for the agent, the popover's last line (`agent-payer.tsx`'s `PayerValue`); none where no payer is named. */
+  payer?: ReactNode;
   /** Whether the popover stands, where the owner holds it, as the composer does so its ⋯ menu can open it; the ring's own otherwise. */
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
@@ -217,6 +230,7 @@ export function AgentContextRing({
           id={popoverId}
           context={context}
           brief={brief}
+          payer={payer}
           onClose={close}
           onLeave={(left) => {
             if (!(left instanceof Node && root.current?.contains(left))) setOpen(false);

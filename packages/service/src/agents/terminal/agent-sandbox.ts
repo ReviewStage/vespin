@@ -256,11 +256,11 @@ function agentSandboxOver(
     listeningPorts: (sessionId) =>
       Effect.gen(function* () {
         const { running } = yield* standing(sessionId);
-        if (running === undefined) return { running: false, ports: [] };
-        const ports = listeningPortsOf(yield* api.run(running, readSocketTables()));
+        if (running === undefined) return { running: false, ports: [], labels: [] };
+        const listed = listeningPortsOf(yield* api.run(running, readSocketTables()));
         // Tables the kernel could not be read for are an outage, never a sandbox with no servers.
-        if (ports === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
-        return { running: true, ports };
+        if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
+        return { running: true, ...listed };
       }),
     share: (sessionId, port) =>
       Effect.gen(function* () {

@@ -19,11 +19,14 @@ import {
   GAP,
   GlyphSlot,
   Inline,
+  OneLine,
   PlusIcon,
   POPOVER_ALIGN,
   RepositoryPicture,
+  SETTINGS_ROW_CONTROLS,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
+  SettingsRowControlHold,
   type SettingsRowSkeletonShape,
   SettingsRowsSkeleton,
   SettingsSection,
@@ -62,9 +65,13 @@ import { MenuRow } from "./menu-row.js";
  * its checkout, and its archive script once in each as its agent is archived,
  * just before the sandbox is deleted, both with the workspace's environment
  * variables. Every member reads them all, each script drawn under its row in
- * Bash's colors; an owner or admin edits each in place, as a file is edited,
- * Discard and Save standing at its row's end once it differs from what is
- * saved, types the install script into its empty row where none is saved
+ * Bash's colors with its lines numbered, at least a few lines tall; an owner
+ * or admin edits each in place, as a file is edited, its border taking the
+ * accent and Discard and Save standing at its row's end once it differs from
+ * what is saved, ⌘S and Escape in it pressing them, in a line
+ * that already stands as tall as they are, so neither their arrival nor the
+ * first character typed moves the page; types the install script into its
+ * empty row where none is saved
  * yet, adds a setup or archive script from a repository picked in the menu a
  * task's repository is picked in, and removes one from its ⋯, a removal
  * asking first. Each save answers the setup as it then stands, which the
@@ -103,8 +110,8 @@ const REPOSITORY_SECTION = {
   { readonly title: string; readonly caption: string; readonly empty: string }
 >;
 
-/** How many lines an empty script's editor stands, so its placeholder and the first lines typed have room. */
-const EMPTY_SCRIPT_LINES = 3;
+/** How many lines a script's editor stands while it holds fewer, so its placeholder and the first lines typed have room, and an empty one does not shrink as it is typed in. */
+const MIN_SCRIPT_LINES = 3;
 
 /** The language main colors a script in. */
 const SCRIPT_LANGUAGE = "bash";
@@ -187,6 +194,9 @@ function ScriptEditor({
   editable,
   busy,
   autoFocus,
+  changed,
+  onSave,
+  onLeave,
 }: {
   label: string;
   value: string;
@@ -199,6 +209,12 @@ function ScriptEditor({
   busy: boolean;
   /** Whether the caret lands in it as it is drawn, as in a setup script just added. */
   autoFocus?: boolean;
+  /** Whether it holds an edit not yet saved, which its border says. */
+  changed: boolean;
+  /** What ⌘S in it does: the row's Save, where it may save now. */
+  onSave: (() => void) | undefined;
+  /** What Escape in it does: the row's Discard or Cancel, while either stands. */
+  onLeave: (() => void) | undefined;
 }): React.JSX.Element {
   const lines = useTypedCodeColoring(SCRIPT_LANGUAGE, value);
   return (
@@ -209,7 +225,11 @@ function ScriptEditor({
         onChange={onChange}
         lines={lines}
         placeholder={placeholder}
-        rows={value === "" ? EMPTY_SCRIPT_LINES : 1}
+        rows={MIN_SCRIPT_LINES}
+        lineNumbers
+        changed={changed}
+        onSave={onSave}
+        onEscape={onLeave}
         readOnly={!editable || busy}
         autoFocus={autoFocus}
       />
@@ -302,6 +322,10 @@ function ScriptRow({
     setEdited(undefined);
   };
   const save = () => saving.mutate({ target, script: shown });
+  const editing = changed || added !== undefined;
+  const leave = added === undefined ? discard : added.onCancel;
+  // Note that ⌘S answers only what the row's Save would: an edit that may be saved, with no save already out.
+  const saveKey = editing && savable(shown) && !saving.isPending ? save : undefined;
   const actions =
     manages && script !== ""
       ? [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
@@ -317,7 +341,7 @@ function ScriptRow({
             repository === undefined ? (
               name
             ) : (
-              <Inline gap={GAP.ICON}>
+              <Inline gap={GAP.ICON} wrap={false}>
                 <GlyphSlot line>
                   <RepositoryPicture
                     repository={repository}
@@ -325,20 +349,27 @@ function ScriptRow({
                     size={AVATAR_SIZE.GLYPH}
                   />
                 </GlyphSlot>
-                <ReplayMask>{name}</ReplayMask>
+                {/* Note that the name keeps to one line, fading where it is cut, so the Discard and Save an edit brings never wrap it and move the editor. */}
+                <ReplayMask>
+                  <OneLine>{name}</OneLine>
+                </ReplayMask>
               </Inline>
             ),
           error: saveRefusal(saving.error),
-          control:
-            changed || added !== undefined ? (
-              <EditActions
-                leave={added === undefined ? "Discard" : "Cancel"}
-                saving={saving.isPending}
-                canSave={savable(shown)}
-                onLeave={added === undefined ? discard : added.onCancel}
-                onSave={save}
-              />
-            ) : undefined,
+          // Note that Discard and Save stay beside the name at any width, the name giving way, since dropping under it would move the editor at a phone's width.
+          controls: SETTINGS_ROW_CONTROLS.BESIDE,
+          control: editing ? (
+            <EditActions
+              leave={added === undefined ? "Discard" : "Cancel"}
+              saving={saving.isPending}
+              canSave={savable(shown)}
+              onLeave={leave}
+              onSave={save}
+            />
+          ) : manages ? (
+            // Note that a row an owner may edit already stands as tall as the Discard and Save its edit brings, so their arrival moves nothing.
+            <SettingsRowControlHold />
+          ) : undefined,
           below: (
             <ScriptEditor
               label={name}
@@ -350,6 +381,9 @@ function ScriptRow({
               editable={manages}
               busy={saving.isPending}
               autoFocus={added !== undefined}
+              changed={changed}
+              onSave={saveKey}
+              onLeave={editing && !saving.isPending ? leave : undefined}
             />
           ),
         }}

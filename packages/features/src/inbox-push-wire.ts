@@ -12,7 +12,7 @@
  */
 
 import { Schema as EffectSchema } from "effect";
-import { iosAppRouteOf } from "./ios-app-links.js";
+import { iosAgentRoute, iosAppRouteOf } from "./ios-app-links.js";
 import { LINK_DESTINATION } from "./link-grammar.js";
 
 /** What a push tells of, as the payload's `kind` names it. */
@@ -114,7 +114,7 @@ export type InboxPushPress =
 
 /** Where a tap or an action on a push takes the app, and what it sends there, if anything. */
 export interface InboxPushResponse {
-  /** The app's route (`@repo/features/ios-app-links`): the thread, or the failed agent's task, or the Inbox. */
+  /** The app's route (`@repo/features/ios-app-links`): the thread, or the failed agent's page. */
   readonly route: string;
   readonly press?: InboxPushPress;
 }
@@ -137,9 +137,7 @@ export function inboxPushOf(payload: unknown): InboxPush | undefined {
 function routeOf(push: InboxPush): string | undefined {
   if (push.kind !== PUSH_KIND.RUN_FAILED)
     return iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: push.itemId });
-  return push.taskId === undefined
-    ? iosAppRouteOf({ kind: LINK_DESTINATION.INBOX })
-    : iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: push.taskId });
+  return iosAgentRoute(push.agentId);
 }
 
 /** What an action on a thread's push sends: a decide's option by its place, or words typed in place; nothing for a tap. */
