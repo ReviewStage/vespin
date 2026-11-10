@@ -78,6 +78,7 @@ import {
   lapsedAgents,
   lapsedTurnsOf,
   pastCap,
+  type RunningTurnSandbox,
   runningTurnSandboxes,
 } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
@@ -95,6 +96,7 @@ import { FAILURE_CHARS } from "../native-events/runner-moments.js";
 import { agentLogIds } from "./agent-log.js";
 import { CODER } from "./bounds.js";
 import { holdingRunnerIfFree } from "./runner-lease.js";
+import { sandboxTouchRecorded } from "./runner-sessions.js";
 import { hostAwayDetail } from "./status.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
@@ -576,9 +578,10 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
  */
 export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunningSandboxesUp")(
   function* (now: number) {
-    const names = yield* runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES);
-    const touched = (name: string) =>
-      touchSandbox(name).pipe(
+    const sandboxes = yield* runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES);
+    // The touch is recorded beside where the sandbox stands, so a runner whose posts stall reads up while the sweep keeps it.
+    const touched = ({ sandboxName, conversationId }: RunningTurnSandbox) =>
+      Effect.andThen(touchSandbox(sandboxName), sandboxTouchRecorded(conversationId)).pipe(
         Effect.timeoutOption(KEEP_UP_SWEEP.TOUCH),
         Effect.flatMap((done) =>
           Option.isSome(done)
@@ -586,14 +589,14 @@ export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunning
             : Effect.logWarning("a running turn's sandbox was not touched in time"),
         ),
       );
-    const swept = yield* Effect.forEach(names, touched, {
+    const swept = yield* Effect.forEach(sandboxes, touched, {
       concurrency: KEEP_UP_SWEEP.CONCURRENCY,
       discard: true,
     }).pipe(Effect.timeoutOption(KEEP_UP_SWEEP.SWEEP));
     if (Option.isNone(swept)) {
       yield* Effect.logWarning("the running turns' sandboxes were not all touched in time");
     }
-    return names.length;
+    return sandboxes.length;
   },
 );
 

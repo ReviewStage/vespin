@@ -353,8 +353,10 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           runner(runningAgent.agentId, runningSandbox),
         );
         const kept = (now: number) =>
-          Effect.map(runningTurnSandboxes(new Date(now), 1000), (names) =>
-            names.filter((name) => name === queuedSandbox || name === runningSandbox),
+          Effect.map(runningTurnSandboxes(new Date(now), 1000), (sandboxes) =>
+            sandboxes
+              .map((sandbox) => sandbox.sandboxName)
+              .filter((name) => name === queuedSandbox || name === runningSandbox),
           );
 
         assert.deepEqual(yield* kept(at + TURN_DEADLINE.PROGRESS_MS - 1), [runningSandbox]);

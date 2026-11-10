@@ -675,11 +675,14 @@ const findLapsedAgents = SqlSchema.findAll({
 
 const findRunningSandboxes = SqlSchema.findAll({
   Request: Schema.Struct({ at: Schema.Date, limit: Schema.Int }),
-  Result: Schema.Struct({ sandboxName: Schema.String }),
+  Result: Schema.Struct({ sandboxName: Schema.String, conversationId: Schema.String }),
   execute: ({ at, limit }) =>
     Database.use((db) =>
       db
-        .select({ sandboxName: agentRunnerRecord.sandboxName })
+        .select({
+          sandboxName: agentRunnerRecord.sandboxName,
+          conversationId: agentTable.conversationId,
+        })
         .from(turns)
         .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
         .innerJoin(
@@ -697,7 +700,7 @@ const findRunningSandboxes = SqlSchema.findAll({
             isNotNull(agentRunnerRecord.sandboxSessionId),
           ),
         )
-        .groupBy(agentRunnerRecord.sandboxName)
+        .groupBy(agentRunnerRecord.sandboxName, agentTable.conversationId)
         // Note that the order is drawn afresh each sweep, so past the limit no sandbox is left out every minute.
         .orderBy(sql`random()`)
         .limit(limit),
@@ -1081,17 +1084,24 @@ export function pastCap(turn: Pick<LapsedTurn, "startedAt">, at: Date): boolean 
   return turn.startedAt !== null && at.getTime() - turn.startedAt.getTime() > TURN_DEADLINE.CAP_MS;
 }
 
+/** A sandbox the minute sweep keeps up: its name, and the conversation of the agent it is kept for. */
+export interface RunningTurnSandbox {
+  readonly sandboxName: string;
+  readonly conversationId: string;
+}
+
 /**
  * The sandboxes, among every account's, whose runner runs a cloud agent's
- * turn still inside its progress deadline at `at`, at most `limit` of them:
- * the ones the minute sweep keeps up while their turn runs, whatever their
- * runner posts, since a sandbox stops its idle window after its last touch
- * and a turn's deadline runs longer.
+ * turn still inside its progress deadline at `at`, at most `limit` of them,
+ * each with its agent's conversation: the ones the minute sweep keeps up
+ * while their turn runs, whatever their runner posts, since a sandbox stops
+ * its idle window after its last touch and a turn's deadline runs longer.
  */
-export function runningTurnSandboxes(at: Date, limit: number): TurnStateEffect<readonly string[]> {
-  return Effect.map(findRunningSandboxes({ at, limit }), (rows) =>
-    rows.map((row) => row.sandboxName),
-  );
+export function runningTurnSandboxes(
+  at: Date,
+  limit: number,
+): TurnStateEffect<readonly RunningTurnSandbox[]> {
+  return findRunningSandboxes({ at, limit });
 }
 
 /** A coding agent with a turn lapsed: its ids, and where its runner lives. */
