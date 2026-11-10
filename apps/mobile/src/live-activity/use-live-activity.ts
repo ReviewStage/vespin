@@ -117,8 +117,12 @@ export function useLiveActivity(signedIn: boolean): void {
         console.error("The Live Activity's push-to-start token was not sent.", error),
       );
   }, [acts, phone, start]);
+  // The count of ends the service has taken, so a change of phone never tells one again and clears the token of an activity standing since.
+  const told = useRef(0);
   useEffect(() => {
     if (phone === undefined || activity === undefined) return;
+    // Note that an end not yet taken is dropped once a newer activity's token is sent, which replaces the ended one's on the service, so no late retry clears it.
+    told.current = ended;
     registeredPushDevice(acts, phone)
       .then(() =>
         acts[ACT_KIND.LIVE_ACTIVITY_TOKEN]({
@@ -130,17 +134,20 @@ export function useLiveActivity(signedIn: boolean): void {
       .then(logRefusal, (error: unknown) =>
         console.error("The Live Activity's token was not sent.", error),
       );
+    // Note that `ended` is read, not followed, so the token is sent once for each activity, not again as ends are counted.
   }, [acts, phone, activity]);
-  // The count of ends already told, so a change of phone never tells one again and clears the token of an activity standing since.
-  const told = useRef(0);
   useEffect(() => {
     if (phone === undefined || ended === told.current) return;
-    told.current = ended;
+    // Note that an end is counted only once the service takes it, so one the host could not deliver is told again on the phone's next change.
     acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
       deviceToken: phone.token,
       environment: phone.environment,
-    }).then(logRefusal, (error: unknown) =>
-      console.error("The Live Activity's end was not told.", error),
+    }).then(
+      (answer) => {
+        logRefusal(answer);
+        if (!("failure" in answer)) told.current = Math.max(told.current, ended);
+      },
+      (error: unknown) => console.error("The Live Activity's end was not told.", error),
     );
   }, [acts, phone, ended]);
   // Whether an account was signed in at the last render, so a sign-out is told from a launch still reading the account.
