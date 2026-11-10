@@ -9,18 +9,35 @@
  * Stop does, then stamps the agent, lets its sandbox and its device go once
  * the archive stands, and is counted where it archived an agent standing
  * unarchived; bringing one back clears whichever archive stands.
+ *
+ * Every other archive writes through here too, each deciding which agents
+ * it puts away and why: a task moved to Done archives its idle agents in
+ * the task's own transaction (`doneTaskArchive`), and they are let go of
+ * once it commits (`archivedWithTaskLetGo`); a turn ending on a task a
+ * member or an agent moved to Done archives its agent with it
+ * (`archivedWithDoneTask`); and "Archive finished runs", which a Slack agent
+ * is put away by too, archives an agent that finished well and stands as it
+ * was read (`archivedUnmovedAgent`). The last two let an agent go on its
+ * device alone, leaving its sandbox be.
  */
 
+import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type Agent,
   type AgentArchiveCommitted,
   type AgentCommitted,
   archiveAgentCommitted,
+  archiveUnmovedAgent,
   pinAgentCommitted,
   renameAgentCommitted,
   updateAgentChoiceCommitted,
   updateAgentServersCommitted,
 } from "@repo/database/models/agent-store";
+import {
+  archiveAgentOfDoneTask,
+  type TaskArchivedAgent,
+  type TaskDoneArchive,
+} from "@repo/database/models/task-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import type { ModelChoice } from "@repo/features/models-wire";
@@ -29,7 +46,8 @@ import { SqlClient } from "effect/sql";
 import { recordServerEvent, SERVER_AGENT_SETTING, SERVER_EVENT } from "../events/server-events.js";
 import { hostedStoreOrUnavailable } from "../http/http-effect.js";
 import { runnerChoiceApplied } from "./coder-host/runtime-sessions.js";
-import { stoppedForGood } from "./coder-host/stop.js";
+import { idleStandingAgents, stoppedForGood } from "./coder-host/stop.js";
+import { discardedOrLogged } from "./device-discard.js";
 import { deletedInBackground, type SandboxDeleteReach } from "./session-sandboxes.js";
 
 /** The changes asked of an agent, each already read, and a choice already the catalog's; any left out stands. */
@@ -145,4 +163,40 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
   }
   return written;
+});
+
+/** How a task's move to Done archives its agents with it, as `archivedBy`: those a Stop reads idle, in the task's own transaction (`updateTaskCommitted`). */
+export const doneTaskArchive = (archivedBy: StoredArchive) =>
+  ({ archivedBy, idle: idleStandingAgents }) satisfies TaskDoneArchive<DatabaseServices>;
+
+/** The agents a task's Done archived with it let go of once it commits, as an archive by hand lets one go: their sandboxes deleted and a local one discarded on its device. */
+export const archivedWithTaskLetGo = (
+  reach: SandboxDeleteReach,
+  archived: readonly TaskArchivedAgent[],
+) => (archived.length > 0 ? deletedInBackground(reach, archived) : Effect.void);
+
+/**
+ * The agent archived with its task where a member or an agent moved the
+ * task to Done while it worked and it now reads idle, as whoever moved it
+ * (`archiveAgentOfDoneTask`), then let go of on its device; what a turn's end
+ * asks of an agent its task's Done left at work.
+ */
+export const archivedWithDoneTask = (userId: string, taskId: string, agentId: string) =>
+  Effect.flatMap(archiveAgentOfDoneTask(userId, taskId, agentId, idleStandingAgents), (archived) =>
+    Effect.forEach(archived, discardedOrLogged, { discard: true }),
+  );
+
+/**
+ * The agent archived where it stands unarchived and its lines have run no
+ * further than `seenSeq`, with nothing open (`archiveUnmovedAgent`), then let
+ * go of on its device: whether it was archived, and whether nothing failed
+ * letting it go, true where nothing was asked.
+ */
+export const archivedUnmovedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
+  agent: Pick<Agent, "id" | "userId">,
+  seenSeq: number,
+) {
+  const archived = yield* archiveUnmovedAgent(agent.userId, agent.id, seenSeq);
+  const discarded = archived ? yield* discardedOrLogged(agent) : true;
+  return { archived, discarded };
 });
