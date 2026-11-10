@@ -159,22 +159,27 @@ const setCommand = Command.make(
       const { hosted } = yield* session;
       const repository = Option.map(repo, (named) => (named === NONE_WORD ? null : named));
       // Note that each change is its own request, as the Settings rows' are, and the bot as the last one answers is the one printed.
-      let slackBot: WorkspaceSlackBot | undefined;
+      // Note that a channel is resolved before any change is made, so a name that matches none changes nothing.
+      let slackBot = Option.isSome(channel)
+        ? yield* askService(hosted.workspaceSlackBot.read, { workspaceId })
+        : undefined;
+      const channelId =
+        slackBot !== undefined && Option.isSome(channel)
+          ? yield* channelIdOf(slackBot, channel.value)
+          : undefined;
       if (Option.isSome(notifications)) {
         slackBot = yield* askService(hosted.workspaceSlackBot.notifications, {
           workspaceId,
           notifications: NOTIFICATIONS_WORD[notifications.value],
         });
       }
-      if (Option.isNone(channel) && Option.isSome(repository)) {
+      if (channelId === undefined && Option.isSome(repository)) {
         slackBot = yield* askService(hosted.workspaceSlackBot.repository, {
           workspaceId,
           repository: repository.value,
         });
       }
-      slackBot ??= yield* askService(hosted.workspaceSlackBot.read, { workspaceId });
-      if (Option.isSome(channel)) {
-        const channelId = yield* channelIdOf(slackBot, channel.value);
+      if (channelId !== undefined) {
         slackBot = yield* askService(hosted.workspaceSlackBot.channel, {
           workspaceId,
           channelId,
@@ -182,6 +187,7 @@ const setCommand = Command.make(
           ...(Option.isSome(repository) ? { repository: repository.value } : undefined),
         });
       }
+      slackBot ??= yield* askService(hosted.workspaceSlackBot.read, { workspaceId });
       yield* answer({
         json: slackBotJson(slackBot),
         lines: slackBotLines(slackBot),
