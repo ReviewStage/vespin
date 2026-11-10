@@ -587,6 +587,11 @@ function fakeService() {
         return { agent: AGENT };
       }),
     warm: () => Effect.succeed({ warm: true as const }),
+    boot: (agentId) =>
+      Effect.sync(() => {
+        asked.push(`boot:${agentId}`);
+        return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
+      }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
