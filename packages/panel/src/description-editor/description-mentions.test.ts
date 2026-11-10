@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { descriptionSections } from "@repo/features/description-document";
 import {
   MENTION_KIND,
   type MentionPlace,
@@ -8,13 +9,12 @@ import {
   mentionsIn,
   sectionAnchors,
 } from "@repo/features/mention-link";
-import { descriptionSections } from "@repo/features/description-document";
 import type { TiptapEditorHTMLElement } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { afterEach, beforeEach, test } from "vitest";
 import { retargetedMention } from "../tasks/mention-chip.js";
 import { installEditorLayout } from "../testing/composer.js";
-import type { ComposerTrigger, MentionNode, DescriptionEditorHandle } from "./contract.js";
+import type { ComposerTrigger, DescriptionEditorHandle, MentionNode } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
 /**
@@ -175,6 +175,18 @@ test("an @ word the caret ends is reported with what follows it, and a pick writ
 
   assert.equal(reported?.query, "go");
   assert.ok(task.last().includes(`Store first. See ${section("Goal")}`), task.last());
+});
+
+test("a pick before closing punctuation leaves it standing, no space before it", () => {
+  const task = mounted(TEXT);
+
+  task.typeAfter("Store first", " @go");
+  task.handle.chooseMention({
+    name: "Goal",
+    target: `https://vespin.dev/acme/task/${TASK_ID}#goal`,
+  });
+
+  assert.ok(task.last().includes(`Store first ${section("Goal")}.`), task.last());
 });
 
 test("an @ inside a word, or inside code, opens nothing", () => {

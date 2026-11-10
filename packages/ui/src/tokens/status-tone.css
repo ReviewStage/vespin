@@ -19,6 +19,11 @@
   --ui-tone-tint: var(--ui-color-working-tint);
 }
 
+:where([data-tone="starting"]) {
+  --ui-tone-ink: var(--ui-color-starting);
+  --ui-tone-tint: var(--ui-color-starting-tint);
+}
+
 :where([data-tone="attention"]) {
   --ui-tone-ink: var(--ui-color-attention);
   --ui-tone-tint: var(--ui-color-attention-tint);

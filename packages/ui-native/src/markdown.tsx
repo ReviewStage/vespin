@@ -4,12 +4,10 @@ import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
 import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
-import type { LinkDestination } from "@repo/features/link-grammar";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
   Image,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -38,13 +36,6 @@ import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
-
-/** A place in the app a link names, as `@repo/features/link-grammar` reads it, and the address it was written as. */
-export interface MarkdownPlace {
-  readonly workspace: string;
-  readonly place: LinkDestination;
-  readonly href: string;
-}
 
 /**
  * The glyph each kind of entity leads its chip with, as the panel's
@@ -149,7 +140,7 @@ interface Drawing {
   readonly fontScale: number;
   /** The widest a chip may stand, the window's width, which a chip's name is cut to. */
   readonly lineWidth: number;
-  readonly openPlace: (place: MarkdownPlace) => void;
+  readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
   readonly pictureSource: (written: string) => string | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
@@ -159,10 +150,8 @@ interface Drawing {
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   switch (target.kind) {
     case LINK_TARGET.PLACE:
-      return () => drawing.openPlace(target);
     case LINK_TARGET.WEB:
-      // Note that the system opens a web address in Safari, its own handler for the scheme.
-      return () => void Linking.openURL(target.href);
+      return () => drawing.openLink(target.href);
     case LINK_TARGET.NONE:
       return undefined;
   }
@@ -619,8 +608,8 @@ type MarkdownProps = {
   readonly words: string;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips; none where it has none. */
   readonly repository?: string | null | undefined;
-  /** Routes a link or a chip naming a place in the app, a `vespin.dev` address; every other link opens in Safari. */
-  readonly onOpenPlace: (place: MarkdownPlace) => void;
+  /** Opens a link or a chip pressed, by the address it was written as: on the app's own screen where it draws one, such as a `vespin.dev` place or a pull request, and in Safari otherwise. */
+  readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way. Each is drawn from the address it names where none is given. */
@@ -656,7 +645,7 @@ function noVideo(): undefined {
 export function Markdown({
   words,
   repository = null,
-  onOpenPlace,
+  onOpenLink,
   typed,
   pictureSource = namedSource,
   videoAt = noVideo,
@@ -671,7 +660,7 @@ export function Markdown({
     colors,
     fontScale,
     lineWidth: width - SPACE.PAGE * 2,
-    openPlace: onOpenPlace,
+    openLink: onOpenLink,
     pictureSource,
     videoAt,
   };

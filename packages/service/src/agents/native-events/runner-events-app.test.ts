@@ -29,7 +29,11 @@ import {
 } from "@repo/database/models/provider-key-store";
 import { readTask, updateTask } from "@repo/database/models/task-store";
 import { lapsedTurnsOf, releaseWaitedTurns } from "@repo/database/models/turn-state";
-import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
+import {
+  SettledTurnListener,
+  StartedTurnListener,
+  storeWriter,
+} from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -104,7 +108,9 @@ const standingWith = (
   options: RunnerEventsOptions,
   after:
     | Layer.Layer<AfterResponse>
-    | Layer.Layer<SettledTurnListener> = Layer.empty as Layer.Layer<AfterResponse>,
+    | Layer.Layer<
+        SettledTurnListener | StartedTurnListener
+      > = Layer.empty as Layer.Layer<AfterResponse>,
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -805,18 +811,24 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a turn the batch settles is heard once its transaction is over, so what it said is committed",
+    "a turn the batch starts and settles is heard started, then settled, each once its transaction is over, so what it said is committed",
     () =>
       Effect.gen(function* () {
-        const heard: { readonly turnId: string; readonly inTransaction: boolean }[] = [];
-        const listener = Layer.succeed(SettledTurnListener, {
-          heard: (turn) =>
-            Effect.flatMap(SqlClient.SqlClient, (client) =>
-              Effect.map(Effect.serviceOption(client.transactionService), (open) => {
-                heard.push({ turnId: turn.turnId, inTransaction: Option.isSome(open) });
-              }),
-            ),
-        });
+        const heard: {
+          readonly kind: string;
+          readonly turnId: string;
+          readonly inTransaction: boolean;
+        }[] = [];
+        const hear = (kind: string) => (turn: { readonly turnId: string }) =>
+          Effect.flatMap(SqlClient.SqlClient, (client) =>
+            Effect.map(Effect.serviceOption(client.transactionService), (open) => {
+              heard.push({ kind, turnId: turn.turnId, inTransaction: Option.isSome(open) });
+            }),
+          );
+        const listener = Layer.merge(
+          Layer.succeed(StartedTurnListener, { heard: hear("started") }),
+          Layer.succeed(SettledTurnListener, { heard: hear("settled") }),
+        );
         const post = yield* standingWith({}, listener);
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
@@ -836,9 +848,13 @@ it.layer(SUITE)("the runner events route", (it) => {
         yield* post(agent.bearer, events);
 
         assert.deepEqual(
-          heard.map((each) => each.inTransaction),
-          [false],
+          heard.map((each) => [each.kind, each.inTransaction]),
+          [
+            ["started", false],
+            ["settled", false],
+          ],
         );
+        assert.equal(heard[0]?.turnId, heard[1]?.turnId);
       }),
   );
 

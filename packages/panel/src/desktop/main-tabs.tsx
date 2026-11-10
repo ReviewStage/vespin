@@ -456,17 +456,14 @@ function NewAgentButton({
 }
 
 /**
- * What a phone's Overview offers after the task's agents in place of the
- * column's hidden "+" (`plan-agents.tsx`): New agent as the "+" offers it
- * (`newAgentStarts`), and the agents' read again where it never landed, as
- * the strip's Retry offers it.
+ * What a phone's Overview offers after the task's agents, where no strip
+ * stands to offer it (`plan-agents.tsx`): the agents' read again where it
+ * never landed, as the strip's Retry offers it.
  */
-export function phoneAgentStarts(main: MainTabsControl, agents: AgentsControl): MenuAction[] {
-  const retry: MenuAction[] =
-    agents.listFailed && agents.agents === undefined
-      ? [{ label: RETRY_AGENTS, onSelect: agents.onRetryList }]
-      : [];
-  return [...newAgentStarts(main, agents), ...retry];
+export function agentsRetry(agents: AgentsControl): MenuAction[] {
+  return agents.listFailed && agents.agents === undefined
+    ? [{ label: RETRY_AGENTS, onSelect: agents.onRetryList }]
+    : [];
 }
 
 /** The row the column's tabs stand in, which is its toolbar's title: the strip, what follows it, and the "+" last. */

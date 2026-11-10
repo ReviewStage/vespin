@@ -25,10 +25,6 @@
  * its checkout made from its repository's base drive and its pushed branch,
  * as a sandbox whose snapshot lapsed is.
  *
- * Deleting is off unless the deployment's `SANDBOX_RELEASE.DELETES_ENVIRONMENT`
- * says `SANDBOX_RELEASE.DELETES_ON`: off, the sweep logs what it would
- * release and marks and publishes nothing, and a release already queued is
- * written LIVE again without a delete, so the variable is a kill switch too.
  * Every outcome is a log line of its own, so a stuck or runaway release
  * shows.
  *
@@ -320,8 +316,6 @@ export const SANDBOX_RELEASE_OUTCOME = {
   RELEASED: "released",
   /** Opened, touched, or given a turn since it was found due, or a launch or an archive script under way holds its agent's runner, and written LIVE again. */
   USED_SINCE: "used-since",
-  /** Deleting is off, and the row written LIVE again. */
-  DELETES_OFF: "deletes-off",
   /** The row no longer stands RELEASING: reopened, already released, or gone with its agent. */
   NOT_RELEASING: "not-releasing",
 } as const;
@@ -334,10 +328,8 @@ export interface SandboxReleaseSweep {
   readonly published: number;
 }
 
-/** Where releases go and whether they delete: the queue's publish, and the deployment's switch. */
+/** Where releases go: the queue's publish. */
 interface SandboxReleasesShape {
-  /** Whether a release deletes; off, the sweep only logs and a queued release deletes nothing. */
-  readonly deleting: boolean;
   /** The sandbox's release published, a failure said in the log, since the sweep publishes it again. */
   readonly publish: (sandboxName: string) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
 }
@@ -379,8 +371,7 @@ const releasedHolding = (sandboxName: string) =>
   });
 
 /**
- * One release consumed. With deleting off, the row is written LIVE again
- * and nothing deleted. Else the release is decided again holding the agent's
+ * One release consumed. The release is decided again holding the agent's
  * runner lease (`releasedHolding`), which a launch holds while it opens the
  * sandbox, so no launch opens it between the last read and the delete; a
  * lease another call holds means a launch or an archive script is under
@@ -391,15 +382,10 @@ export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandb
   function* (
     sandboxName: string,
   ): Effect.fn.Return<SandboxReleaseOutcome, unknown, DatabaseServices | Sandbox> {
-    const releases = yield* SandboxReleases;
     const outcome: SandboxReleaseOutcome = yield* Effect.gen(function* () {
       const row = yield* agentSandboxRelease(sandboxName);
       if (Option.isNone(row) || row.value.state !== AGENT_SANDBOX_STATE.RELEASING) {
         return SANDBOX_RELEASE_OUTCOME.NOT_RELEASING;
-      }
-      if (!releases.deleting) {
-        yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
-        return SANDBOX_RELEASE_OUTCOME.DELETES_OFF;
       }
       const held = yield* holdingRunnerIfFree(row.value.agentId, releasedHolding(sandboxName));
       if (Option.isSome(held)) return held.value;
@@ -424,11 +410,9 @@ export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandb
  * The sweep: the sandboxes due and those still RELEASING read from the
  * ledger alone, the oldest used first and at most `SANDBOX_RELEASE.SWEEP_LIMIT`
  * of each;
- * with deleting on, each due one marked RELEASING and each published,
+ * each due one marked RELEASING and each published,
  * `SANDBOX_RELEASE.PUBLISH_CONCURRENCY` at a time so a slow queue holds the
- * minute's other sweeps back by a few publishes' bounds at most, and
- * with it off, what it would release said in one log line and nothing
- * written or published.
+ * minute's other sweeps back by a few publishes' bounds at most.
  */
 export const releaseUnusedSandboxes = /* @__PURE__ */ Effect.fn("web/releaseUnusedSandboxes")(
   function* (
@@ -437,14 +421,6 @@ export const releaseUnusedSandboxes = /* @__PURE__ */ Effect.fn("web/releaseUnus
     const releases = yield* SandboxReleases;
     const usedBy = unusedSince(now);
     const rows = yield* releasableAgentSandboxes(usedBy, SANDBOX_RELEASE.SWEEP_LIMIT);
-    if (!releases.deleting) {
-      if (rows.length > 0) {
-        yield* Effect.logInfo(
-          `dry run: ${rows.length} unused sandboxes would be released: ${rows.map((row) => row.sandboxName).join(", ")}`,
-        );
-      }
-      return { due: rows.length, published: 0 };
-    }
     const sent = yield* Effect.forEach(
       rows,
       ({ sandboxName, state }) =>
@@ -506,27 +482,21 @@ const inProcessRelease = (
 ): Effect.Effect<void, never, DatabaseServices | Sandbox> =>
   Effect.asVoid(consumeSandboxRelease(sandboxName).pipe(Effect.ignore));
 
-/** The releases one runtime has: off and consumed in place by default, as a test or a local run without the switch has them. */
+/** The releases one runtime has: consumed in place by default, as a test or a local run has them. */
 export const SandboxReleases = Context.Reference<SandboxReleasesShape>(
   "@repo/service/SandboxReleases",
-  { defaultValue: () => ({ deleting: false, publish: inProcessRelease }) },
+  { defaultValue: () => ({ publish: inProcessRelease }) },
 );
 
 /**
- * The releases as the deployment's environment names them: deleting on only
- * where `SANDBOX_RELEASE.DELETES_ENVIRONMENT` says `SANDBOX_RELEASE.DELETES_ON`,
- * published to Vercel's queue on production and on a Preview and consumed in
+ * The releases as the deployment's environment names them: published to Vercel's queue on production and on a Preview and consumed in
  * place anywhere else.
  */
 export const sandboxReleasesFromEnvironment = Layer.effect(
   SandboxReleases,
   Effect.map(
-    Config.all({
-      deletes: Config.option(Config.String(SANDBOX_RELEASE.DELETES_ENVIRONMENT)),
-      deployment: Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
-    }),
-    ({ deletes, deployment }): SandboxReleasesShape => ({
-      deleting: Option.exists(deletes, (value) => value.trim() === SANDBOX_RELEASE.DELETES_ON),
+    Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
+    (deployment): SandboxReleasesShape => ({
       publish: Option.exists(
         deployment,
         (named) =>

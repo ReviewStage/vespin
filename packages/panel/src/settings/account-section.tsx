@@ -212,8 +212,10 @@ function deletedWorkspacesWords(
 
 /**
  * Who is signed in, the member's own GitHub personal access token, and the
- * two ways out of being signed in, at the head of the Account page Settings
- * opens on, and the one place either way out is offered. Sign out acts on
+ * two ways out of being signed in, the Account page Settings opens on, and
+ * the one place either way out is offered: the account's rows at its head,
+ * its other groups (`children`) under them, and Delete account last, where
+ * Linear, Notion, and Slack keep it. Sign out acts on
  * the press, since nothing is lost: the host asks first where a call or
  * unsaved words would go. Deleting asks first in the confirm dialog, since it
  * erases the account at the service for good, naming the workspaces that go
@@ -225,6 +227,7 @@ export function AccountSection({
   workspacesRead = false,
   listFailed = false,
   onSignOut,
+  children,
 }: {
   account: Extract<AccountSnapshot, { status: typeof ACCOUNT_STATUS.SIGNED_IN }>;
   /** The account's workspaces as the Workspace page lists them. */
@@ -234,6 +237,8 @@ export function AccountSection({
   /** Whether the read the workspaces arrive with failed, so the list may not be whole. */
   listFailed?: boolean;
   onSignOut: () => Promise<void>;
+  /** The page's groups between the account's rows and Delete account. */
+  children?: React.ReactNode;
 }): React.JSX.Element {
   const listKnown = workspacesRead && !listFailed;
   const goneWith = deletedWorkspacesWords(workspaces, listKnown);
@@ -255,76 +260,82 @@ export function AccountSection({
   // a pressed result lands on and rings the whole row, as it did before the
   // row was shared, and the shared row takes no attribute of a caller's. The
   // section is untitled, as the Workspace page's first is, because the page
-  // over it is already headed Account.
+  // over it is already headed Account, and so is the last, which holds
+  // Delete account alone.
   return (
-    <SettingsSection>
-      <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.SIGN_OUT)}>
-        <SettingsRow
-          lead={SETTINGS_ROW_LEAD.FACE}
-          // The account's face as the sidebar's foot and every list draw it: its picture, else its letter on its hue.
-          leading={
-            <ReplayMask>
-              <ActorMark actor={accountActor(account)} size={ACTOR_SIZE.CARD} />
-            </ReplayMask>
-          }
-          label={
-            <OneLine hint={wholeWordsHint(account.email)}>
-              <ReplayMask>{account.email}</ReplayMask>
-            </OneLine>
-          }
-          description={
-            <span className="inline-flex flex-wrap items-center gap-ui-4 whitespace-nowrap">
-              Signed in with
-              <ProviderMark provider={account.provider} size={PROVIDER_MARK_SIZE.CAPTION} />
-              {account.provider === ACCOUNT_PROVIDER.GITHUB ? "GitHub" : "Google"}
-            </span>
-          }
-        >
-          {() => (
-            <Button
-              variant={BUTTON_VARIANT.OUTLINE}
-              busy={signOut.busy}
-              busyLabel="Signing out"
-              disabled={deletion.busy}
-              onClick={signOut.onPress}
-            >
-              {VERB.SIGN_OUT}
-            </Button>
-          )}
-        </SettingsRow>
-      </div>
-      <GitHubTokenRow key={account.id} accountId={signedInAccountId(account)} />
-      <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.DELETE_ACCOUNT)}>
-        <SettingsRow label="Delete account">
-          {() => (
-            <Button
-              variant={BUTTON_VARIANT.DANGER_OUTLINE}
-              busy={deletion.busy}
-              busyLabel="Deleting the account"
-              disabled={signOut.busy}
-              onClick={deletion.ask}
-            >
-              Delete account
-            </Button>
-          )}
-        </SettingsRow>
-      </div>
-      <ConfirmDialog
-        open
-        confirm={deletion}
-        gate={account.email}
-        question={{
-          title: `Delete the account ${account.email}?`,
-          body: goneWith === undefined ? IRREVERSIBLE_WORDS : `${IRREVERSIBLE_WORDS} ${goneWith}`,
-          verb: "Delete account",
-          running: "Deleting account",
-          loss: CONFIRM_LOSS.IRREVERSIBLE,
-          replayUnmasked: true,
-          titleReplayMasked: true,
-          // Note that the workspaces' names are a person's words, so the body is masked once it names any.
-          bodyReplayMasked: listKnown && goneWith !== undefined,
-        }}
-      />
-    </SettingsSection>
+    <>
+      <SettingsSection>
+        <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.SIGN_OUT)}>
+          <SettingsRow
+            lead={SETTINGS_ROW_LEAD.FACE}
+            // The account's face as the sidebar's foot and every list draw it: its picture, else its letter on its hue.
+            leading={
+              <ReplayMask>
+                <ActorMark actor={accountActor(account)} size={ACTOR_SIZE.CARD} />
+              </ReplayMask>
+            }
+            label={
+              <OneLine hint={wholeWordsHint(account.email)}>
+                <ReplayMask>{account.email}</ReplayMask>
+              </OneLine>
+            }
+            description={
+              <span className="inline-flex flex-wrap items-center gap-ui-4 whitespace-nowrap">
+                Signed in with
+                <ProviderMark provider={account.provider} size={PROVIDER_MARK_SIZE.CAPTION} />
+                {account.provider === ACCOUNT_PROVIDER.GITHUB ? "GitHub" : "Google"}
+              </span>
+            }
+          >
+            {() => (
+              <Button
+                variant={BUTTON_VARIANT.OUTLINE}
+                busy={signOut.busy}
+                busyLabel="Signing out"
+                disabled={deletion.busy}
+                onClick={signOut.onPress}
+              >
+                {VERB.SIGN_OUT}
+              </Button>
+            )}
+          </SettingsRow>
+        </div>
+        <GitHubTokenRow key={account.id} accountId={signedInAccountId(account)} />
+      </SettingsSection>
+      {children}
+      <SettingsSection>
+        <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.DELETE_ACCOUNT)}>
+          <SettingsRow label="Delete account">
+            {() => (
+              <Button
+                variant={BUTTON_VARIANT.DANGER_OUTLINE}
+                busy={deletion.busy}
+                busyLabel="Deleting the account"
+                disabled={signOut.busy}
+                onClick={deletion.ask}
+              >
+                Delete account
+              </Button>
+            )}
+          </SettingsRow>
+        </div>
+        <ConfirmDialog
+          open
+          confirm={deletion}
+          gate={account.email}
+          question={{
+            title: `Delete the account ${account.email}?`,
+            body: goneWith === undefined ? IRREVERSIBLE_WORDS : `${IRREVERSIBLE_WORDS} ${goneWith}`,
+            verb: "Delete account",
+            running: "Deleting account",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
+            replayUnmasked: true,
+            titleReplayMasked: true,
+            // Note that the workspaces' names are a person's words, so the body is masked once it names any.
+            bodyReplayMasked: listKnown && goneWith !== undefined,
+          }}
+        />
+      </SettingsSection>
+    </>
   );
 }

@@ -14,7 +14,7 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { SETTINGS_SEARCH_ROW, searchAnchorProps } from "@repo/settings/settings-anchors";
 import {
   CHOICE_BAR_LOOK,
   CHOICE_BAR_SIZE,
@@ -64,11 +64,11 @@ import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 
 /**
- * mcp-clients-section.tsx -- Settings › our MCP: the outside agents the account let in, each revoked from its row, and how to connect one.
+ * mcp-clients-section.tsx -- Settings › our MCP & CLI's MCP section: the outside agents the account let in, each revoked from its row, and how to connect one.
  *
  * An agent that signs a member in to the MCP server (Claude Code, Codex,
  * Cursor, Claude, ChatGPT) holds the member's Allow from the consent page
- * until it is revoked. Connected lists every one the account allowed, read
+ * until it is revoked. The section lists every one the account allowed, read
  * by the host while the page shows and again whenever the window is focused
  * (`LIVE_READ.MCP_CLIENTS`): its name, where its sign-in returns to as the
  * consent page said it, when it was allowed, and when it last refreshed its
@@ -80,7 +80,7 @@ import { MenuRow } from "./menu-row.js";
  * which keeps its Disconnect, since an agent half revoked could sign in again
  * without being asked.
  *
- * Connect an agent asks which agent first, and then shows only that agent's
+ * Under them, Connect an app asks which agent, and then shows only that agent's
  * two steps (`OutsideSteps`), as its own docs say it adds a remote MCP
  * server signed in with OAuth: Claude Code, Codex, and VS Code by a command
  * with its Copy, Cursor by its install link, Claude and ChatGPT by the
@@ -89,21 +89,21 @@ import { MenuRow } from "./menu-row.js";
  * agent to connect. An agent that arrives while the page shows, which is how
  * a member comes back from the browser, lights its row and is said to be
  * connected under the steps, in the wait's place.
- * While the account has none, Connect an agent stands first. The `vespin`
- * command, which the read lists too, is left out of Connected: its sign-in
- * stands in the command's own sections under these (`cli-sections.tsx`).
+ * While the account has none, a line says so over Connect an app. The
+ * `vespin` command, which the read lists too, is left out of the list: its
+ * sign-in stands in the CLI's section under this one (`cli-section.tsx`).
  *
  * Each agent is led by its brand's mark, in the picker and on its row, an
  * allowed agent's found by the name it registered under; Other stands in
  * the picker by its name alone, and a row whose agent the page does not
- * know wears a plain agent's glyph, so the rows' names stay in one column. Each section is `@repo/ui`'s
+ * know wears a plain agent's glyph, so the rows' names stay in one column. The section is `@repo/ui`'s
  * `SettingsSection`, the agent asked for its segmented `ChoiceBar`, each
  * allowed agent `MenuRow`'s row, and an address or a command its `CopyField`.
  */
 
-const SECTION_TITLE = {
-  CLIENTS: "Apps connected over MCP",
-  CONNECT: "Connect an app over MCP",
+const SECTION = {
+  TITLE: "MCP",
+  CAPTION: `Use ${PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, and other AI apps.`,
 } as const;
 
 /** The name each agent knows the server by in a command that adds it. */
@@ -114,6 +114,7 @@ const PAGE_LINE = {
   NONE: "No apps connected yet.",
   UNNAMED: "Unnamed app",
   AGENT: "App",
+  CONNECT: "Connect an app",
   SERVER: "Server URL",
   DISCONNECT: "Disconnect",
   REVOKED: `Disconnected. Its access ends within ${MCP_ACCESS_TOKEN_MINUTES} minutes.`,
@@ -227,22 +228,19 @@ function clientMark(client: McpClient): React.JSX.Element {
 const CLIENT_SKELETON_ROWS = 1;
 
 /**
- * The sections that stand while the agents are read: a row to each agent
- * likely, ending in its ⋯, and Connect an agent's two rows, the agent asked
+ * The section as it stands while the agents are read: a row to each agent
+ * likely, ending in its ⋯, then Connect an app's two rows, the agent asked
  * for and its step.
  */
 const SECTIONS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
   {
     headed: true,
-    rows: Array.from({ length: CLIENT_SKELETON_ROWS }, () => ({
-      described: true,
-      controls: [],
-      end: [SETTINGS_SKELETON_CONTROL.MORE],
-    })),
-  },
-  {
-    headed: true,
     rows: [
+      ...Array.from({ length: CLIENT_SKELETON_ROWS }, () => ({
+        described: true,
+        controls: [],
+        end: [SETTINGS_SKELETON_CONTROL.MORE],
+      })),
       { described: false, controls: [SETTINGS_SKELETON_CONTROL.CHOICE] },
       { described: true, controls: [] },
     ],
@@ -446,8 +444,8 @@ function connectWaiting(step: ConnectStep): string {
     : `Waiting for ${step.name} to connect`;
 }
 
-/** Connect an agent: which agent, that agent's one step, and the agent that just connected, once one has. */
-function ConnectSection({
+/** Connect an app's rows: which agent, that agent's one step, and the agent that just connected, once one has. */
+function ConnectRows({
   serverUrl,
   arrived,
 }: {
@@ -456,24 +454,26 @@ function ConnectSection({
 }): React.JSX.Element {
   const [agent, setAgent] = useState<ConnectAgent>(CONNECT_AGENT.CLAUDE_CODE);
   return (
-    <SettingsSection title={SECTION_TITLE.CONNECT} anchor={SETTINGS_SEARCH_ROW.MCP_CONNECT}>
-      <SettingsRow
-        label={PAGE_LINE.AGENT}
-        below={() => (
-          <ChoiceBar
-            label={PAGE_LINE.AGENT}
-            items={Object.values(CONNECT_AGENT).map((each) => ({
-              value: each,
-              label: CONNECT_STEPS[each].name,
-              icon: CONNECT_STEPS[each].mark,
-            }))}
-            value={agent}
-            look={CHOICE_BAR_LOOK.SEGMENTED}
-            size={CHOICE_BAR_SIZE.COMPACT}
-            onChange={setAgent}
-          />
-        )}
-      />
+    <>
+      <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.MCP_CONNECT)}>
+        <SettingsRow
+          label={PAGE_LINE.CONNECT}
+          below={() => (
+            <ChoiceBar
+              label={PAGE_LINE.AGENT}
+              items={Object.values(CONNECT_AGENT).map((each) => ({
+                value: each,
+                label: CONNECT_STEPS[each].name,
+                icon: CONNECT_STEPS[each].mark,
+              }))}
+              value={agent}
+              look={CHOICE_BAR_LOOK.SEGMENTED}
+              size={CHOICE_BAR_SIZE.COMPACT}
+              onChange={setAgent}
+            />
+          )}
+        />
+      </div>
       <ConnectSteps
         step={CONNECT_STEPS[agent]}
         serverUrl={serverUrl}
@@ -487,12 +487,16 @@ function ConnectSection({
           </SettingsRowStateLine>
         </SettingsLine>
       )}
-    </SettingsSection>
+    </>
   );
 }
 
-/** The agents allowed and Connect an agent, for the account signed in. */
-export function McpClientsSections(): React.JSX.Element {
+/**
+ * The MCP section for the account signed in: the agents it allowed, or that
+ * it has none yet, then Connect an app, as the CLI's section under it
+ * stands its sign-in over its install.
+ */
+export function McpSection(): React.JSX.Element {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const read = useQuery(mcpClientsQuery(accountId));
   const retry = useMutation(mcpClientsRetryMutation());
@@ -504,53 +508,49 @@ export function McpClientsSections(): React.JSX.Element {
   if (rows !== undefined && known === undefined) {
     setKnown(new Set(rows.clients.map((client) => client.clientId)));
   }
-  if (rows === undefined) {
-    return read.isError ? (
-      <SettingsSection title={SECTION_TITLE.CLIENTS} anchor={SETTINGS_SEARCH_ROW.MCP_CLIENTS}>
-        <ReadFailed
-          line={PAGE_LINE.READ_FAILED}
-          surface={FAILURE_SURFACE.MCP_CLIENTS_READ}
-          onRetry={() => retry.mutate()}
-        />
-      </SettingsSection>
-    ) : (
+  if (rows === undefined && !read.isError) {
+    return (
       <SettingsSectionsSkeleton
         label={readingWords("the connected agents")}
         sections={SECTIONS_SKELETON}
       />
     );
   }
-  const shown = shownClients(rows.clients, revoked);
+  const shown = rows === undefined ? [] : shownClients(rows.clients, revoked);
   const isNew = (client: McpClient) =>
     known !== undefined && !known.has(client.clientId) && !revoked.has(client.clientId);
-  const clients = (
-    <SettingsSection title={SECTION_TITLE.CLIENTS} anchor={SETTINGS_SEARCH_ROW.MCP_CLIENTS}>
-      {shown.length === 0 ? (
-        <SettingsLine>{PAGE_LINE.NONE}</SettingsLine>
+  return (
+    <SettingsSection
+      title={SECTION.TITLE}
+      caption={SECTION.CAPTION}
+      anchor={SETTINGS_SEARCH_ROW.MCP_CLIENTS}
+    >
+      {rows === undefined ? (
+        <ReadFailed
+          line={PAGE_LINE.READ_FAILED}
+          surface={FAILURE_SURFACE.MCP_CLIENTS_READ}
+          onRetry={() => retry.mutate()}
+        />
       ) : (
-        shown.map((client) => (
-          <ClientRow
-            key={client.clientId}
-            client={client}
-            revoked={revoked.has(client.clientId)}
-            arrived={isNew(client)}
-            onRevoked={(gone) => setRevoked((before) => new Map(before).set(gone.clientId, gone))}
-          />
-        ))
+        <>
+          {shown.length === 0 ? (
+            <SettingsLine>{PAGE_LINE.NONE}</SettingsLine>
+          ) : (
+            shown.map((client) => (
+              <ClientRow
+                key={client.clientId}
+                client={client}
+                revoked={revoked.has(client.clientId)}
+                arrived={isNew(client)}
+                onRevoked={(gone) =>
+                  setRevoked((before) => new Map(before).set(gone.clientId, gone))
+                }
+              />
+            ))
+          )}
+          <ConnectRows serverUrl={rows.serverUrl} arrived={shown.find(isNew)} />
+        </>
       )}
     </SettingsSection>
-  );
-  const connect = <ConnectSection serverUrl={rows.serverUrl} arrived={shown.find(isNew)} />;
-  // Note that an account with no agent yet is led to connect one, rather than to an empty list.
-  return shown.length === 0 ? (
-    <>
-      {connect}
-      {clients}
-    </>
-  ) : (
-    <>
-      {clients}
-      {connect}
-    </>
   );
 }

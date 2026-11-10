@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import type { Workspace } from "@repo/features/workspace-wire";
 import {
   APP_SETTING_DEFAULTS,
   APP_SETTING_SCHEMA,
@@ -15,10 +16,10 @@ import { PlayIcon } from "@repo/ui/icons";
 import { appPlatform } from "../app-platform.js";
 import { NotificationsOff } from "./notifications-off.js";
 import { SchemaSettingRows } from "./schema-rows.js";
-import type { SettingsWrites } from "./writes.js";
+import { SlackNotificationsRow } from "./slack-notifications-row.js";
 
 /**
- * sounds-section.tsx -- the Account page's Notifications group: whether a sound plays as an agent the account started finishes or asks, and which one, and whether a notification is posted then, which the account carries across its Macs and the web.
+ * sounds-section.tsx -- the Preferences page's Notifications group: whether a sound plays as an agent the account started finishes or asks, and which one, whether a notification is posted then, which the account carries across its Macs and the web, and the reader's own Slack notifications.
  *
  * Every row is the schema's (`soundWhen`, `completionSound`,
  * `turnNotifications`), drawn by `SchemaSettingRows` like every stored
@@ -31,6 +32,8 @@ import type { SettingsWrites } from "./writes.js";
  * switch says so, and on a Mac opens System Settings. Note that the switch is
  * the account's, so it may stand on in a browser that was never asked, as
  * one it was turned on from elsewhere; there the line asks, by its Allow.
+ * Last stands the reader's Slack notifications, once a workspace of theirs
+ * has our Slack bot connected (`slack-notifications-row.tsx`).
  */
 
 /** What Play is called, for a reader and its hover. */
@@ -47,10 +50,12 @@ const NOTIFICATIONS_OFF_WORDS = {
 export function SoundsSection({
   view,
   notifications,
+  workspaces,
 }: {
   view: SettingsRowsInput;
-  writes: SettingsWrites;
   notifications: NotificationsControl;
+  /** The account's workspaces, whose Slack bots decide whether Slack notifications stand. */
+  workspaces: readonly Workspace[];
 }): React.JSX.Element {
   const sound = view.settings.completionSound ?? APP_SETTING_DEFAULTS.completionSound;
   const actions = (field: AppSettingField) =>
@@ -69,8 +74,8 @@ export function SoundsSection({
   return (
     <SettingsSection title="Notifications">
       <SchemaSettingRows
-        page={SCHEMA_SETTINGS_PAGE.ACCOUNT}
-        section={SETTING_SECTION.SOUNDS}
+        page={SCHEMA_SETTINGS_PAGE.PREFERENCES}
+        section={SETTING_SECTION.NOTIFICATIONS}
         view={view}
         actions={actions}
         onTurned={onTurned}
@@ -92,6 +97,7 @@ export function SoundsSection({
       {notifying && !onMac && notifications.status === NOTIFICATIONS_STATUS.UNKNOWN ? (
         <NotificationsOff words={NOTIFICATIONS_OFF_WORDS.unasked} onAllow={ask} />
       ) : null}
+      <SlackNotificationsRow workspaces={workspaces} />
     </SettingsSection>
   );
 }

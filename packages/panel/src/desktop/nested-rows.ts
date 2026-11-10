@@ -20,20 +20,15 @@
  * flat in one list.
  */
 
-import {
-  type DrawnTaskRow,
-  drawnTaskRows,
-  TASK_ROW,
-  type TaskRow,
-  type TasksById,
-} from "@repo/features/task-list-model";
+import { type DrawnTaskRow, drawnTaskRows, type TasksById } from "@repo/features/task-list-model";
+import type { TaskSummary } from "@repo/features/task-wire";
 import type { ListRowFold, ListRowNest } from "@repo/ui";
 import { useRef } from "react";
 
 /** The words a parent's fold is named by, before its name. */
 const CHILD_TASKS_OF = "Sub-tasks of";
 
-/** Whether two drawings stand every row alike: the same row, at the same depth, folded the same way. */
+/** Whether two drawings stand every row alike: the same task, at the same depth, folded the same way. */
 function sameDrawn(was: readonly DrawnTaskRow[], now: readonly DrawnTaskRow[]): boolean {
   return (
     was.length === now.length &&
@@ -41,7 +36,7 @@ function sameDrawn(was: readonly DrawnTaskRow[], now: readonly DrawnTaskRow[]): 
       const next = now[at];
       return (
         next !== undefined &&
-        next.row === held.row &&
+        next.task === held.task &&
         next.depth === held.depth &&
         next.open === held.open
       );
@@ -125,14 +120,14 @@ export function movedBeside(
   return beside === own ? undefined : siblings[beside];
 }
 
-/** Where a row let go at the drawn slot `at` lands in `rows`, the order the list keeps: before the row at the top drawn next, or last where none is. */
+/** Where a row let go at the drawn slot `at` lands in `tasks`, the order the list keeps: before the row at the top drawn next, or last where none is. */
 export function storedSlot(
-  rows: readonly TaskRow[],
+  tasks: readonly TaskSummary[],
   nested: readonly DrawnTaskRow[],
   at: number,
 ): number {
   const next = nested.slice(at).find(({ depth }) => depth === 0);
-  return next === undefined ? rows.length : rows.indexOf(next.row);
+  return next === undefined ? tasks.length : tasks.indexOf(next.task);
 }
 
 /** The fold a task's row draws over the child tasks nested under it, asking `onFold` to turn it; none where the list nests none under it. */
@@ -140,25 +135,25 @@ export function childTasksFold(
   drawn: DrawnTaskRow,
   onFold: (taskId: string) => void,
 ): ListRowFold | undefined {
-  const { row, open } = drawn;
-  if (open === undefined || row.kind !== TASK_ROW.TASK) return undefined;
+  const { task, open } = drawn;
+  if (open === undefined) return undefined;
   return {
     open,
     onOpenChange: (asked) => {
-      if (asked !== open) onFold(row.task.id);
+      if (asked !== open) onFold(task.id);
     },
-    label: `${CHILD_TASKS_OF} ${row.task.name}`,
+    label: `${CHILD_TASKS_OF} ${task.name}`,
   };
 }
 
 /** The rows a list draws (`drawnTaskRows`), the same list across renders while every row stands as it did. */
 export function useNestedRows(
-  rows: readonly TaskRow[],
+  tasks: readonly TaskSummary[],
   opened: (taskId: string) => boolean,
-  standing: (row: TaskRow) => boolean,
+  standing: (task: TaskSummary) => boolean,
   every: TasksById,
 ): readonly DrawnTaskRow[] {
-  const drawn = drawnTaskRows(rows, opened, standing, every);
+  const drawn = drawnTaskRows(tasks, opened, standing, every);
   const held = useRef(drawn);
   // Note that the ref follows the drawing as it renders, so a list that changed is handed on the same frame.
   if (!sameDrawn(held.current, drawn)) held.current = drawn;

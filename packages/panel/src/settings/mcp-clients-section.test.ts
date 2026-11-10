@@ -12,7 +12,7 @@ import { fakeActPort } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState, signedInAs } from "../testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
-import { McpClientsSections } from "./mcp-clients-section.js";
+import { McpSection } from "./mcp-clients-section.js";
 
 /**
  * mcp-clients-section.test.ts -- Settings › our MCP's connected
@@ -132,7 +132,7 @@ test("a revoke that did not finish leaves the agent standing with its Disconnect
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(McpClientsSections))));
+  act(() => root.render(withQueryClient(createElement(McpSection))));
   await settle();
   assert.ok(pageText().includes("Goes to an app on this computer"), pageText());
   assert.ok(!pageText().includes("Vespin CLI"), "the command's sign-in is its own section's");

@@ -25,6 +25,8 @@ import {
   QueuedTurnListener,
   type SettledAgentTurn,
   SettledTurnListener,
+  type StartedAgentTurn,
+  StartedTurnListener,
   type StoreWriter,
   storeWriter,
 } from "@repo/database/models/writer";
@@ -971,9 +973,13 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // writer's savepoint inside it ends, so what a listener reads of a turn (its final words, for
   // the Slack thread and the agent's starter) is what the batch wrote, and a rolled back batch
   // tells nobody.
+  const started: StartedAgentTurn[] = [];
   const settled: SettledAgentTurn[] = [];
   const queued: QueuedAgentTurn[] = [];
-  const collecting = Layer.merge(
+  const collecting = Layer.mergeAll(
+    Layer.succeed(StartedTurnListener, {
+      heard: (turn) => Effect.sync(() => void started.push(turn)),
+    }),
     Layer.succeed(SettledTurnListener, {
       heard: (turn) => Effect.sync(() => void settled.push(turn)),
     }),
@@ -989,6 +995,10 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );
+  const starting = yield* Effect.serviceOption(StartedTurnListener);
+  if (Option.isSome(starting)) {
+    yield* Effect.forEach(started, starting.value.heard, { discard: true });
+  }
   const listener = yield* Effect.serviceOption(SettledTurnListener);
   if (Option.isSome(listener)) {
     yield* Effect.forEach(settled, listener.value.heard, { discard: true });

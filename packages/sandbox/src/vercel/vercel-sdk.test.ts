@@ -389,12 +389,12 @@ it.effect(
 );
 
 it.effect(
-  "a touch makes a running session end three minutes from now, only where that moves it more than 30 seconds, never past 24 hours from its start, and touches nothing not running",
+  "a touch makes a running session end five minutes from now, only where that moves it more than 30 seconds, never past 24 hours from its start, and touches nothing not running",
   () =>
     Effect.gen(function* () {
       const minutes = (count: number) => Duration.toMillis(Duration.minutes(count));
       let status = "running";
-      let timeout = minutes(3);
+      let timeout = minutes(5);
       const extensions: number[] = [];
       const api = yield* apiOver((url, init) => {
         if (status === "gone") return refusedWith(404)();
@@ -411,9 +411,9 @@ it.effect(
       const touchedAt = (since: number) =>
         Effect.andThen(TestClock.setTime(CREATED_AT + since), api.touch(NAME));
 
-      // Ends at 3:00; touched at 0:20 it would end at 3:20, too little to extend.
+      // Ends at 5:00; touched at 0:20 it would end at 5:20, too little to extend.
       yield* touchedAt(Duration.toMillis(Duration.seconds(20)));
-      // Touched at 2:00, it ends at 5:00.
+      // Touched at 2:00, it ends at 7:00.
       yield* touchedAt(minutes(2));
       // Touched a minute short of 24 hours, it ends at 24 hours, and touched again, stays there.
       yield* touchedAt(minutes(24 * 60 - 1));
@@ -423,6 +423,6 @@ it.effect(
       status = "gone";
       yield* touchedAt(minutes(24 * 60 + 20));
 
-      assert.deepEqual(extensions, [minutes(2), minutes(24 * 60 - 5)]);
+      assert.deepEqual(extensions, [minutes(2), minutes(24 * 60 - 7)]);
     }),
 );

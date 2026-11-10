@@ -23,6 +23,7 @@ import {
   followTakingRows,
   LIVE_STATE,
   type LiveFailure,
+  type LiveState,
   restarting,
   type TxWait,
 } from "./live-follow.js";
@@ -63,16 +64,13 @@ type AnsweredPart = Exclude<keyof AccountInboxLiveAnswer["queries"], "agents">;
 /** A read the service did not answer, `gone` where it never will again. */
 
 /** A follow before its first rows, with the answer they make, or stopped for good. */
-type LiveState =
-  | { readonly kind: typeof LIVE_STATE.WAITING }
-  | { readonly kind: typeof LIVE_STATE.STANDING; readonly answer: AccountInboxAnswer }
-  | { readonly kind: typeof LIVE_STATE.BROKEN };
+type AccountInboxState = LiveState<{ readonly answer: AccountInboxAnswer }>;
 
 /** What an account's read is answered from: its follow, or that the service answered none. */
 type Standing =
   | {
       readonly kind: typeof LIVE_STATE.LIVE;
-      readonly inbox: SubscriptionRef.SubscriptionRef<LiveState>;
+      readonly inbox: SubscriptionRef.SubscriptionRef<AccountInboxState>;
     }
   | { readonly kind: typeof LIVE_STATE.BROKEN };
 
@@ -182,7 +180,7 @@ export function accountInboxes(
       Effect.gen(function* () {
         const first = yield* dependencies.seal(userId, false);
         if ("failure" in first) return { kind: LIVE_STATE.BROKEN } as const;
-        const inbox = yield* SubscriptionRef.make<LiveState>({ kind: LIVE_STATE.WAITING });
+        const inbox = yield* SubscriptionRef.make<AccountInboxState>({ kind: LIVE_STATE.WAITING });
         const items = yield* answeredCollection({ getKey: (row: Entry) => row.id });
         const plans = yield* answeredCollection({
           getKey: (row: AccountInboxLiveRows["plans"][number]) => row.planId,

@@ -63,7 +63,7 @@ import { CatalogSection } from "../section";
 
 /** The last line a ChatGPT-paid agent's model menu ends on: who pays, Manage usage set apart at its end. */
 const PLAN_LINE: MenuLastLine = {
-  words: "Using Codex plan",
+  words: "Your Codex plan",
   end: (
     <TextLink href="https://chatgpt.com/settings/usage" look={TEXT_LINK_LOOK.UNDERLINED} external>
       Manage usage

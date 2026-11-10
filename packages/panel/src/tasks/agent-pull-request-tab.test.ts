@@ -2267,7 +2267,7 @@ test("the toolbar's ⋯ offers nothing for the pull request before any of it is 
 test("a screen reader meets the title before the pill, which comes after it in the title row's markup", async () => {
   const tab = await draw(controlAnswering());
   const title =
-    tab.querySelector(".pull-request-title-row > .pull-request-title") ??
+    tab.querySelector(".pull-request-title-row .pull-request-title") ??
     assert.fail("the title stands in the title row");
   const pill = pillOf(tab) ?? assert.fail("the pill stands in the title row");
   assert.ok(
@@ -4628,90 +4628,106 @@ test("a pull request published as queued says Queued in the pill while its own r
   await vi.waitFor(() => assert.equal(standing(tab), "Queued #2"));
 });
 
-/** The title's field, opened by its pencil. */
-function editTitle(tab: HTMLElement): HTMLInputElement {
-  act(() =>
-    (
-      tab.querySelector<HTMLButtonElement>('[aria-label="Edit title"]') ??
-      assert.fail("the title has a pencil")
-    ).click(),
-  );
-  return (
-    tab.querySelector<HTMLInputElement>('[aria-label="Pull request title"]') ??
-    assert.fail("the pencil opens a field")
-  );
+/** The title's words, focused as a click in them focuses them. */
+function titleWords(tab: HTMLElement): HTMLElement {
+  const words =
+    tab.querySelector<HTMLElement>('[aria-label="Pull request title"]') ??
+    assert.fail("the title's words stand to be edited");
+  act(() => words.focus());
+  return words;
 }
 
-/** Words typed into a field, as React hears them. */
-function type(field: HTMLInputElement, words: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+/** Words typed over the title's, as React hears them. */
+function typeTitle(words: HTMLElement, typed: string): void {
   act(() => {
-    setter?.call(field, words);
-    field.dispatchEvent(new Event("input", { bubbles: true }));
+    words.textContent = typed;
+    words.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 
-/** A key pressed in a field, while an input method composes a word where `composing` says. */
-async function key(field: HTMLInputElement, name: string, composing = false): Promise<void> {
+/** A key pressed in the title's words, while an input method composes a word where `composing` says; whether something took it. */
+async function key(words: HTMLElement, name: string, composing = false): Promise<boolean> {
+  const event = new KeyboardEvent("keydown", {
+    key: name,
+    bubbles: true,
+    cancelable: true,
+    isComposing: composing,
+  });
   act(() => {
-    field.dispatchEvent(
-      new KeyboardEvent("keydown", { key: name, bubbles: true, isComposing: composing }),
-    );
+    words.dispatchEvent(event);
   });
   await settle();
+  return event.defaultPrevented;
 }
 
-test("the title is edited in place: Enter keeps new words trimmed, and Escape, or words unchanged, sends nothing", async () => {
+test("the title is edited where it stands: Return keeps new words trimmed, and Escape, or words unchanged, sends nothing", async () => {
   const tab = await draw(controlAnswering());
-  const escaped = editTitle(tab);
-  assert.equal(document.activeElement, escaped, "the field takes the keys as it opens");
-  type(escaped, "Something else");
-  await key(escaped, "Enter", true);
-  await key(escaped, "Escape", true);
-  assert.equal(escaped.isConnected, true, "keys an input method takes leave the field as it is");
-  const heard: string[] = [];
-  const hear = (event: KeyboardEvent) => heard.push(event.key);
-  window.addEventListener("keydown", hear);
-  await key(escaped, "Escape");
-  window.removeEventListener("keydown", hear);
-  assert.equal(tab.querySelector('[aria-label="Pull request title"]') === null, true);
-  assert.deepEqual(heard, [], "the field's own Escape never reaches the window");
+  const words = titleWords(tab);
+  assert.equal(words.textContent, PULL_REQUEST.title);
+  typeTitle(words, "Something else");
+  assert.equal(await key(words, "Enter", true), false, "an input method's Return types on");
+  assert.equal(await key(words, "Escape", true), false, "an input method's Escape types on");
+  assert.equal(document.activeElement, words);
+  assert.equal(await key(words, "Escape"), true, "Escape is taken, so the window stands down");
+  assert.notEqual(document.activeElement, words, "Escape leaves the words");
+  assert.equal(words.textContent, PULL_REQUEST.title, "Escape puts the title back");
 
-  const unchanged = editTitle(tab);
-  assert.equal(unchanged.value, PULL_REQUEST.title);
-  await key(unchanged, "Enter");
+  titleWords(tab);
+  await key(words, "Enter");
   assert.deepEqual(changes, [], "neither Escape nor the same words change anything");
 
-  const renamed = editTitle(tab);
-  type(renamed, "  Expire invitations after a week  ");
-  await key(renamed, "Enter");
+  titleWords(tab);
+  typeTitle(words, "  Expire invitations after a week  ");
+  await key(words, "Enter");
   assert.deepEqual(changes, [
     [
       AGENT.id,
       { action: PULL_REQUEST_ACTION.EDIT_TITLE, title: "Expire invitations after a week" },
     ],
   ]);
-  assert.equal(
-    tab.querySelector('[aria-label="Pull request title"]') === null,
-    true,
-    "the field closes once GitHub answered",
-  );
+  assert.notEqual(document.activeElement, words, "Return leaves the words");
 });
 
-test("the title's edit is kept as the focus leaves its field, as it is on Enter", async () => {
+test("the title's edit is kept as the focus leaves its words, and where GitHub refuses it the title comes back", async () => {
+  changeAnswer = {
+    outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED,
+    words: "Pull request is locked.",
+  };
   const tab = await draw(controlAnswering());
-  const field = editTitle(tab);
-  type(field, "Expire invitations after a day");
-  act(() => field.blur());
+  const words = titleWords(tab);
+  typeTitle(words, "Expire invitations after a day");
+  act(() => words.blur());
   await settle();
   assert.deepEqual(changes, [
     [AGENT.id, { action: PULL_REQUEST_ACTION.EDIT_TITLE, title: "Expire invitations after a day" }],
   ]);
-  assert.equal(
-    tab.querySelector('[aria-label="Pull request title"]') === null,
-    true,
-    "the field closes",
+  await vi.waitFor(() => assert.equal(words.textContent, PULL_REQUEST.title));
+});
+
+test("the title's edit stands as typed while it is out, though a read from before it lands meanwhile", async () => {
+  let title = PULL_REQUEST.title;
+  const tab = await draw(
+    controlAnswering({
+      pullRequest: () => Promise.resolve({ pullRequest: { ...PULL_REQUEST, title } }),
+    }),
   );
+  const sending = Promise.withResolvers<void>();
+  changeHeld = sending.promise;
+  const words = titleWords(tab);
+  typeTitle(words, "Expire invitations after a day");
+  act(() => words.blur());
+  await vi.waitFor(() => assert.equal(changes.length, 1));
+
+  // A read GitHub answered before it took the change, with a title someone else gave it.
+  title = "Expire stale invitations";
+  await pressToolbar(tab, "Refresh");
+  await settle();
+  assert.equal(words.textContent, "Expire invitations after a day");
+
+  title = "Expire invitations after a day";
+  await act(async () => sending.resolve());
+  await settle();
+  assert.equal(words.textContent, "Expire invitations after a day");
 });
 
 test("Refresh, the one its screen offers, reads Files changed again once the view was shown", async () => {

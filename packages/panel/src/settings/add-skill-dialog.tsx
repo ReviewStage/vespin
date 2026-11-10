@@ -203,6 +203,7 @@ function TextFields({
 export function AddSkillDialog({
   open = true,
   workspace,
+  scope: chosenScope = INSTALLED_SKILL_SCOPE.PERSONAL,
   onInstalled,
   onClose,
   onExited,
@@ -211,6 +212,8 @@ export function AddSkillDialog({
   /** Whether the card stands; falling, it fades out, then tells its owner it is gone. Standing while mounted where it is left out. */
   open?: boolean | undefined;
   workspace: Workspace;
+  /** Whom it installs for as it opens, the group whose Add opened it; the account alone where it is left out. */
+  scope?: InstalledSkillScope | undefined;
   /** The skills an install made, in the order asked. */
   onInstalled: (skills: readonly InstalledSkillSummary[]) => void;
   onClose: () => void;
@@ -227,7 +230,7 @@ export function AddSkillDialog({
   const [settled, setSettled] = useState<string | undefined>(undefined);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [fill, setFill] = useState<TextFill>(() => textFill(undefined));
-  const [scope, setScope] = useState<InstalledSkillScope>(INSTALLED_SKILL_SCOPE.PERSONAL);
+  const [scope, setScope] = useState<InstalledSkillScope>(chosenScope);
   const [query, setQuery] = useState("");
   const [installing, setInstalling] = useState(false);
   const [refusal, setRefusal] = useState<string | undefined>(undefined);

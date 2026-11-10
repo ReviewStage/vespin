@@ -36,7 +36,11 @@ import { getDevicePushTokenAsync } from "expo-notifications";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
-import { NOTIFICATION_STANDING, useNotificationPermission } from "./notification-permission.js";
+import {
+  NOTIFICATION_STANDING,
+  type NotificationStanding,
+  useNotificationPermission,
+} from "./notification-permission.js";
 
 /**
  * The gateway this build's tokens belong to. Note that the entitlement
@@ -97,13 +101,24 @@ export function useFixtureRun(): boolean {
   return fixture;
 }
 
+/**
+ * Whether the phone counts as letting the app notify: iOS's permission
+ * granted, or a fixture run, which stands for a phone that allowed
+ * notifications, since a CI simulator never answers the permission's read.
+ */
+export function notificationsAllowed(
+  fixture: boolean,
+  standing: NotificationStanding | undefined,
+): boolean {
+  return fixture || standing === NOTIFICATION_STANDING.ALLOWED;
+}
+
 /** The phone's key once iOS lets it notify, read once a launch; none until then, or where iOS hands no token. */
 export function usePushDeviceKey(): PushDeviceKey | undefined {
   const { standing } = useNotificationPermission();
   const fixture = useFixtureRun();
   const [key, setKey] = useState<PushDeviceKey | undefined>(undefined);
-  // Note that a fixture run stands for a phone that allowed notifications, since a CI simulator never answers the permission's read.
-  const allowed = fixture || standing === NOTIFICATION_STANDING.ALLOWED;
+  const allowed = notificationsAllowed(fixture, standing);
   useEffect(() => {
     if (!allowed) return undefined;
     let live = true;

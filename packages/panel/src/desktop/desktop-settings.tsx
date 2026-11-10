@@ -2,7 +2,6 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { type HostCapability, NO_EXPERIMENTS, SETTINGS_VIEW_COUNTED_AS } from "@repo/settings";
 import {
@@ -94,7 +93,8 @@ export interface SettingsStep {
  * The line under the title of the pages that connect something: one short
  * sentence saying what the page is for, since its name alone may not. Agents
  * says once, for both harnesses' lists, the order their credentials are
- * tried in. No other page has one.
+ * tried in. The MCP & CLI page has none, since each of its two sections
+ * says under its own heading what it is for. No other page has one.
  */
 function pageDescription(view: SettingsView): ReactNode {
   switch (view) {
@@ -102,12 +102,6 @@ function pageDescription(view: SettingsView): ReactNode {
       return <ReplayUnmask>Plans and API keys are used in the order listed.</ReplayUnmask>;
     case SETTINGS_VIEW.INTEGRATIONS:
       return <ReplayUnmask>Apps your agents can use.</ReplayUnmask>;
-    case SETTINGS_VIEW.MCP:
-      return (
-        <ReplayUnmask>
-          Use {PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, other AI apps, and your terminal.
-        </ReplayUnmask>
-      );
     case SETTINGS_VIEW.HOSTS:
       return (
         <ReplayUnmask>

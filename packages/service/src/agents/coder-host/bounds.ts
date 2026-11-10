@@ -120,7 +120,7 @@ export const CODER = {
    * warm runners while it waits (`@repo/host`'s `compose-local-agents.ts`).
    *
    * A sandbox's runner has no window of its own: it is launched warm and
-   * lives until its sandbox stops, three idle minutes after its last touch
+   * lives until its sandbox stops, five idle minutes after its last touch
    * (`@repo/sandbox`'s `SANDBOX_IDLE`), bounded only by the runner's own cap
    * (`RUNNER_WARM.IDLE_CAP_MS`).
    */

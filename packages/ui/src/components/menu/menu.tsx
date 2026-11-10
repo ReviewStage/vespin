@@ -219,6 +219,8 @@ export interface MenuAction {
   card?: React.ReactNode;
   /** Whether its label and detail are a person's words, a repository's or a workspace's name, kept masked in a screen recording even in a menu that unmasks its own (`replayUnmasked`). */
   replayMasked?: boolean | undefined;
+  /** Whether its detail alone is a person's words, such as the command serving a port, kept masked in a screen recording while its label shows. */
+  detailMasked?: boolean | undefined;
 }
 
 /**
@@ -241,6 +243,10 @@ export interface MenuSubmenu {
   label: string;
   /** Whether its label names a person's thing, kept masked in a screen recording even in a menu that unmasks its own (`replayUnmasked`). */
   replayMasked?: boolean | undefined;
+  /** A muted word beside the label, such as what serves a port. */
+  detail?: string | undefined;
+  /** Whether its detail is a person's words, kept masked in a screen recording while its label shows. */
+  detailMasked?: boolean | undefined;
   icon?: React.JSX.Element;
   items: readonly MenuAction[];
   /** Printed muted before its chevron: the shortcut that opens it, as the app draws it. */
@@ -722,6 +728,7 @@ function ItemBody({
       </>
     );
   }
+  const detailMasked = action.replayMasked === true || action.detailMasked === true;
   return (
     <>
       {glyph}
@@ -740,14 +747,14 @@ function ItemBody({
         </OneLine>
         {action.detailPlace === MENU_DETAIL.WRAPPED ? (
           <span className="ui-menu-item-detail whitespace-normal">
-            <ItemWords masked={action.replayMasked}>{action.detail}</ItemWords>
+            <ItemWords masked={detailMasked}>{action.detail}</ItemWords>
           </span>
         ) : (
           <OneLine
             className={cn("ui-menu-item-detail", beside && "min-w-0 flex-[0_1000_auto]")}
             words={action.detail}
           >
-            <ItemWords masked={action.replayMasked}>{action.detail}</ItemWords>
+            <ItemWords masked={detailMasked}>{action.detail}</ItemWords>
           </OneLine>
         )}
       </span>
@@ -1126,9 +1133,25 @@ function Submenu({
         }}
       >
         <MenuGlyph>{entry.icon}</MenuGlyph>
-        <OneLine className="ui-menu-item-label min-w-0 flex-1" words={entry.label}>
-          <ItemWords masked={entry.replayMasked}>{entry.label}</ItemWords>
-        </OneLine>
+        {entry.detail === undefined ? (
+          <OneLine className="ui-menu-item-label min-w-0 flex-1" words={entry.label}>
+            <ItemWords masked={entry.replayMasked}>{entry.label}</ItemWords>
+          </OneLine>
+        ) : (
+          <span
+            className="ui-menu-item-copy flex min-w-0 flex-1 flex-row items-baseline gap-ui-8"
+            data-place={MENU_DETAIL.BESIDE}
+          >
+            <OneLine className="ui-menu-item-label min-w-0 flex-initial" words={entry.label}>
+              <ItemWords masked={entry.replayMasked}>{entry.label}</ItemWords>
+            </OneLine>
+            <OneLine className="ui-menu-item-detail min-w-0 flex-[0_1000_auto]" words={entry.detail}>
+              <ItemWords masked={entry.replayMasked === true || entry.detailMasked === true}>
+                {entry.detail}
+              </ItemWords>
+            </OneLine>
+          </span>
+        )}
         {entry.hint === undefined ? null : <span className="ui-menu-item-hint">{entry.hint}</span>}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent
@@ -1837,7 +1860,12 @@ function SheetRows({
             !("onSelect" in entry) ? (
               <SheetItem
                 key={entry.label}
-                action={{ ...entry, opens: true, onSelect: () => undefined }}
+                action={{
+                  ...entry,
+                  detailPlace: MENU_DETAIL.BESIDE,
+                  opens: true,
+                  onSelect: () => undefined,
+                }}
                 submenu={entry.label}
                 onChoose={() => onOpen(entry.label)}
               />

@@ -9,8 +9,11 @@
  */
 
 import { APP_COMMAND, APP_SHORTCUTS, shortcutMatches } from "@repo/settings/shortcuts";
+import { isComposingKey } from "../../composing-key.js";
 
-/** Whether `event` is Close tab's chord, which closes the card it was pressed in. */
+/** Whether `event` is Close tab's chord, which closes the card it was pressed in; never a key an input method is composing with, which is the method's. */
 export function closesCard(event: React.KeyboardEvent): boolean {
-  return shortcutMatches(APP_SHORTCUTS[APP_COMMAND.CLOSE_TAB].chord, event);
+  return (
+    !isComposingKey(event) && shortcutMatches(APP_SHORTCUTS[APP_COMMAND.CLOSE_TAB].chord, event)
+  );
 }

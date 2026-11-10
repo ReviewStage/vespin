@@ -173,6 +173,7 @@ export const PRODUCT_SETTINGS_VIEW = {
   /** No page since Settings › Cloud setup was folded into the Environment page; an older build still counts a visit to it. */
   CLOUD_SETUP: "cloud_setup",
   ACCOUNT: "account",
+  PREFERENCES: "preferences",
   NOTIFICATIONS: "notifications",
   THIS_MAC: "this_mac",
   EXPERIMENTAL: "experimental",

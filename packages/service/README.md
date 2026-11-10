@@ -1514,7 +1514,7 @@ and effort and its `messages` rows as `UIMessage`s, and a batch posted again
 writes nothing twice; and it takes the developer's lines from
 `/api/agents/runner-lines` (`runner-lines-app.ts`), a held read woken through
 Sync. The runner stays warm past its turn, and the sandbox, its credential
-on the firewall, stops three minutes after anything last touched it
+on the firewall, stops five minutes after anything last touched it
 (`@repo/sandbox`'s `SANDBOX_IDLE`). The instructions (`src/agents/coder-host/instructions.ts`, worded for the
 harness and handed to it at every launch) tell the agent to read `AGENTS.md`
 and `CLAUDE.md` first, reread the code the description names and say where it no
@@ -1688,6 +1688,17 @@ activity ended on the phone, which forgets its update token. The rows are
 `packages/database/src/models/live-activity-store.ts`'s, in the
 `live_activity` table, one per `push_device` row and leaving with it; a phone
 that moves to another account leaves its activity behind.
+
+`live-activities.ts` pushes that activity: it refreshes a member's activity
+whole on each of their phones whenever one of their agents starts or settles
+a turn (`StartedTurnListener`, `SettledTurnListener`), a thread that waits on
+them takes a post or settles, and once a minute from the sweep for every
+member with one standing. A push-to-start goes when agents run and none
+stands, an update when the state moved, and an end, with a dismissal date,
+once none runs. Only a start, an end, and an ask starting to wait go at high
+priority; every other update is low priority, at most one per phone per 30
+seconds, with a `stale-date`. A token Apple says is gone is forgotten, as is
+an activity's update token once it ends.
 
 `ApnsSender` is the one door to a phone: a notification names the phone, its
 push type (`alert`, `background`, or `liveactivity`), the JSON Apple delivers,
