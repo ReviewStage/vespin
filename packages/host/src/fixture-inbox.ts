@@ -26,12 +26,14 @@ import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/cr
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentSummary,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -48,6 +50,7 @@ import {
 import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MODEL_PROVIDER, type ModelsAnswer } from "@repo/features/models-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
@@ -62,6 +65,7 @@ import {
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppStateSnapshot,
+  type AppTranscript,
   OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "./app-state.js";
@@ -548,6 +552,7 @@ function agentOn(
     turnId: null,
     runStartedAt: LANDED - startedAgo,
     startedBy: ADA,
+    runtime: AGENT_RUNTIME.CLAUDE_CODE,
   };
 }
 
@@ -962,11 +967,21 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
 }
 
 /** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
-const INVITES_TRANSCRIPT = fixtureAgentTranscript(
-  LANDED - 3 * DAY,
-  ADA,
-  "Build teammate invitations",
+const INVITES_TRANSCRIPT = withQueued(
+  fixtureAgentTranscript(LANDED - 3 * DAY, ADA, "Build teammate invitations"),
 );
+
+/** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
+function withQueued(transcript: AppTranscript): AppTranscript {
+  const queued = {
+    id: fixtureId(90),
+    text: "Then add a Resend button beside each pending invite.",
+    queuedBy: ADA.userId,
+  };
+  const { word } = transcript;
+  if (word === undefined) return transcript;
+  return { ...transcript, word: { ...word, queue: { messages: [queued], revision: 1 } } };
+}
 
 /** The transcripts main holds with the invitations agent's laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
@@ -986,6 +1001,49 @@ function stagedTranscripts(
   STAGED_TRANSCRIPTS.set(held, staged);
   return staged;
 }
+
+/** The models the account may start an agent on, as the service's catalog lists them, and no device of its own. */
+const MODELS: ModelsAnswer = {
+  models: [
+    {
+      id: MODEL,
+      name: "Anthropic Claude Opus 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["low", "medium", "high", "xhigh", "max"],
+    },
+    {
+      id: "anthropic/claude-sonnet-5.5",
+      name: "Anthropic Claude Sonnet 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["low", "medium", "high"],
+    },
+    {
+      id: "openai/gpt-6.1-sol",
+      name: "OpenAI GPT-6.1 Sol",
+      provider: MODEL_PROVIDER.OPENAI,
+      efforts: ["low", "medium", "high", "xhigh"],
+    },
+  ],
+};
+
+/** A repository of the fixture's workspace, as GitHub lists it. */
+function listedRepository(fullName: string, name: string) {
+  return {
+    owner: "ada",
+    name,
+    fullName,
+    defaultBranch: "main",
+    private: true,
+    updatedAt: LANDED - DAY,
+  };
+}
+
+/** The repositories the fixture's workspace reaches, the two its tasks are about. */
+const REPOSITORIES: GitHubRepositoriesAnswer = {
+  installed: true,
+  repositories: [listedRepository("ada/relay", "relay"), listedRepository("ada/ledger", "ledger")],
+  installationUrl: "https://github.com/apps/vespin/installations/new",
+};
 
 /**
  * Main's document as these profiles draw it: the account signed in, its
@@ -1013,6 +1071,10 @@ export function inboxAppState(
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
+    [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
+    [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
+      workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
+    ),
   };
 }
 
@@ -1021,6 +1083,11 @@ export function inboxAppState(
 /** One staged item by its id, in whichever task's inbox holds it. */
 function stagedItem(itemId: string): InboxItem | undefined {
   return [...INBOXES.values()].flat().find((each) => each.id === itemId);
+}
+
+/** One staged agent by its id, on whichever task it works. */
+function stagedAgent(agentId: string): AgentSummary | undefined {
+  return [...AGENTS.values()].find((each) => each.id === agentId);
 }
 
 /** One kind's staged answer: its result. */
@@ -1074,6 +1141,31 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged.
+  [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, status: AGENT_STATUS.RUNNING } };
+  },
+  [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
+    if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { queue: { messages: [], revision: 2 } };
+  },
+  [ACT_KIND.AGENTS_STOP]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
+  },
+  // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
+  [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
+    agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),
+  }),
+  [ACT_KIND.TASKS_START]: ({ agent }) => ({
+    planId: fixtureId(92),
+    agentStart: {
+      agent: agentOn(fixtureId(93), fixtureId(92), agent?.prompt ?? "", AGENT_STATUS.STARTING, 0),
+    },
+  }),
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

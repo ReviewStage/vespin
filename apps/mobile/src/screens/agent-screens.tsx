@@ -17,12 +17,18 @@ import { selectInboxReader, selectTasks, selectWorkspaces } from "@repo/host/app
 import {
   AgentHead,
   AgentTranscript,
+  AskNote,
+  AttachedPictures,
   BAR_TITLE,
+  Composer,
   ConfirmAsk,
+  DOCK_ROOM,
   EmptyState,
+  GlassDock,
   type MarkdownPlace,
   NO_TOGGLES,
   PATH_PART,
+  QueuedLines,
   Screen,
   SealedPage,
   shownMediaIds,
@@ -45,6 +51,7 @@ import {
   useFollowedAgent,
   usePageHtml,
 } from "../agents/use-agent.js";
+import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 
@@ -155,6 +162,39 @@ function CardMergeAsk({
   );
 }
 
+/** The agent's composer at the page's foot: the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
+function AgentComposerBar({ composer }: { readonly composer: AgentComposer }) {
+  const head =
+    composer.queued.length === 0 &&
+    composer.paused === undefined &&
+    composer.attached.length === 0 &&
+    composer.note === undefined ? undefined : (
+      <>
+        <QueuedLines
+          lines={composer.queued}
+          paused={composer.paused}
+          onSteer={composer.steer}
+          onDelete={composer.remove}
+        />
+        <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
+        {composer.note === undefined ? null : <AskNote words={composer.note} />}
+      </>
+    );
+  return (
+    <Composer
+      placeholder={composer.placeholder}
+      words={composer.words}
+      onWords={composer.onWords}
+      sendable={composer.sendable}
+      onSend={composer.send}
+      onAdd={composer.attach}
+      onStop={composer.stop}
+      stopping={composer.stopping}
+      head={head}
+    />
+  );
+}
+
 /**
  * One agent's page: the system's header holding its path, the task it works
  * on and the agent, small and muted, with a menu that opens it on
@@ -164,7 +204,10 @@ function CardMergeAsk({
  * draws as it moves; each call opens in place, a fold opens on what it
  * holds, a page the agent showed opens whole, and a pull request it opened
  * opens its own screen, its card offering Review, which opens it on GitHub,
- * and Merge where it may merge now, which asks first.
+ * and Merge where it may merge now, which asks first. Its composer floats
+ * over the transcript's foot: a follow-up, with the photos the + attaches,
+ * steers the turn under way or waits behind it as the member's Follow-up
+ * behavior says, and Stop stands in Send's place while the agent works.
  */
 export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
@@ -204,6 +247,7 @@ export function AgentScreen() {
     [messages, status, readerId, toggles, pullRequests],
   );
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
+  const composer = useAgentComposer(id, agent, transcript, status);
   const media = useAgentMedia(id, mediaIds);
   const title = cardTitle(agent?.title ?? transcript?.word?.title ?? UNTITLED_AGENT);
   const failed = held?.failed === true || transcript?.failure !== undefined;
@@ -227,41 +271,44 @@ export function AgentScreen() {
           </Stack.Toolbar.MenuAction>
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen. */}
-      <AgentTranscript
-        items={items}
-        head={
-          <AgentHead
-            title={title}
-            model={agent === undefined ? undefined : modelLabel(agent.model)}
-            status={status}
-          />
-        }
-        empty={
-          <EmptyState
-            title={failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING}
-            symbol={failed ? "exclamationmark.triangle" : "text.bubble"}
-          />
-        }
-        repository={agent?.repository}
-        onOpenPlace={openPlace}
-        onToggle={(item) => setToggles((held) => toggledAt(held, item))}
-        onOpenPage={openPage}
-        mediaSource={(pictureId) => media.get(pictureId)}
-        onOpenElsewhere={() => opened(address)}
-        onOpenAddress={opened}
-        onOpenPullRequest={(item) =>
-          router.push({
-            pathname: "/tasks/agent/[id]/pull/[number]",
-            params: { id, number: String(item.number) },
-          })
-        }
-        pullRequestActs={(item) =>
-          cardMergeOf(offers.get(item.number)) === undefined
-            ? []
-            : [{ label: MERGE_WORD, onPress: () => setMerging(item.number) }]
-        }
-      />
+      {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
+      <GlassDock bar={<AgentComposerBar composer={composer} />}>
+        <AgentTranscript
+          items={items}
+          head={
+            <AgentHead
+              title={title}
+              model={agent === undefined ? undefined : modelLabel(agent.model)}
+              status={status}
+            />
+          }
+          empty={
+            <EmptyState
+              title={failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING}
+              symbol={failed ? "exclamationmark.triangle" : "text.bubble"}
+            />
+          }
+          repository={agent?.repository}
+          onOpenPlace={openPlace}
+          onToggle={(item) => setToggles((held) => toggledAt(held, item))}
+          onOpenPage={openPage}
+          mediaSource={(pictureId) => media.get(pictureId)}
+          onOpenElsewhere={() => opened(address)}
+          onOpenAddress={opened}
+          onOpenPullRequest={(item) =>
+            router.push({
+              pathname: "/tasks/agent/[id]/pull/[number]",
+              params: { id, number: String(item.number) },
+            })
+          }
+          pullRequestActs={(item) =>
+            cardMergeOf(offers.get(item.number)) === undefined
+              ? []
+              : [{ label: MERGE_WORD, onPress: () => setMerging(item.number) }]
+          }
+          footRoom={DOCK_ROOM}
+        />
+      </GlassDock>
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}

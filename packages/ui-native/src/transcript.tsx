@@ -627,6 +627,8 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   readonly empty?: ReactNode;
   /** What the times count from; now where none is given. */
   readonly now?: number | undefined;
+  /** The room left under the newest row, so it scrolls clear of a bar docked over the list's foot (`DOCK_ROOM`). */
+  readonly footRoom?: number | undefined;
 };
 
 /**
@@ -637,7 +639,14 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
  * their place; a reader scrolled back is offered Jump to latest. Only the rows near the
  * screen are drawn, however long the transcript runs.
  */
-export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTranscriptProps) {
+export function AgentTranscript({
+  items,
+  head,
+  empty,
+  now,
+  footRoom = 0,
+  ...drawing
+}: AgentTranscriptProps) {
   const colors = useColors();
   const { bottom, left, right } = useSafeAreaInsets();
   const list = useRef<FlatList<TranscriptItem>>(null);
@@ -645,6 +654,7 @@ export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTr
   const anchored = useRef(true);
   const [away, setAway] = useState(false);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
+  const foot = bottom + TAB_BAR_ROOM + footRoom;
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
@@ -669,7 +679,7 @@ export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTr
         renderItem={({ item }) => <TranscriptRow item={item} drawing={rowDrawing} />}
         ListHeaderComponent={<>{head}</>}
         ListEmptyComponent={<>{empty}</>}
-        ListFooterComponent={<View style={{ height: bottom + TAB_BAR_ROOM }} />}
+        ListFooterComponent={<View style={{ height: foot }} />}
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
         contentContainerStyle={[styles.content, { paddingLeft: left, paddingRight: right }]}
         contentInsetAdjustmentBehavior="automatic"
@@ -685,7 +695,7 @@ export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTr
       />
       {away ? (
         <JumpToLatest
-          bottom={bottom + TAB_BAR_ROOM}
+          bottom={foot}
           onPress={() => {
             anchored.current = true;
             list.current?.getScrollResponder()?.scrollToEnd({ animated: true });

@@ -1,4 +1,4 @@
-// _layout.tsx -- the app's root: the host started over every screen, the tabs and Settings once an account is signed in, and the sign-in screen until then.
+// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, and the New task and New agent sheets once an account is signed in, and the sign-in screen until then.
 
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
@@ -10,8 +10,8 @@ import { HostProvider } from "../host/host-provider.js";
 import { usePushRegistration } from "../push-device.js";
 
 /**
- * The screens, each behind the account's standing: the tabs and Settings
- * while an account is signed in, and the sign-in screen otherwise, so a
+ * The screens, each behind the account's standing: the tabs, Settings, and
+ * the sheets that start a task or an agent while an account is signed in, and the sign-in screen otherwise, so a
  * sign-out anywhere, Settings' or a refused renewal's, lands on it and a
  * sign-in lands on the Inbox. A fixture run stands signed in as its
  * profile's account. While an account is signed in, the phone registers
@@ -29,6 +29,8 @@ function GuardedScreens() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
+        <Stack.Screen name="start-task" options={{ presentation: "modal" }} />
+        <Stack.Screen name="start-agent" options={{ presentation: "modal" }} />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />

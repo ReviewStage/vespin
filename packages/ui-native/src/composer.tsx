@@ -1,6 +1,6 @@
 // composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
 
-import { Button, HStack, Image, TextField, useNativeState } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, TextField, useNativeState, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
@@ -14,7 +14,7 @@ import {
   padding,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BAR_RADIUS, GlassBar } from "./glass-bar.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -41,19 +41,51 @@ type ComposerProps = {
   readonly onAdd?: (() => void) | undefined;
   /** Starts dictation, drawn as a mic in Send's place while the field is empty. */
   readonly onDictate?: (() => void) | undefined;
+  /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
+  readonly onStop?: (() => void) | undefined;
+  /** Whether a Stop is out, which stands pressed and dimmed until the agent stops. */
+  readonly stopping?: boolean | undefined;
+  /** What stands over the field inside the same glass: the messages queued behind the turn, the pictures attached, and what a send that did not go said. */
+  readonly head?: ReactNode;
 };
 
-/** The round button at the field's end: Send, filled with the ink, or the mic while nothing is typed. */
+/** The round button at the field's end: Send, filled with the ink, or, while nothing is typed, Stop while a turn runs, else the mic. */
 function SendButton({
   empty,
   onSend,
   onDictate,
+  onStop,
+  stopping,
 }: {
   readonly empty: boolean;
   readonly onSend: (() => void) | undefined;
   readonly onDictate: (() => void) | undefined;
+  readonly onStop: (() => void) | undefined;
+  readonly stopping: boolean;
 }) {
   const colors = useColors();
+  if (empty && onStop !== undefined) {
+    return (
+      <Button
+        onPress={onStop}
+        modifiers={[
+          buttonStyle("plain"),
+          disabled(stopping),
+          accessibilityLabel(stopping ? "Stopping" : "Stop"),
+        ]}
+      >
+        <Image
+          systemName="stop.fill"
+          size={MARK_SIZE.GLYPH - 2}
+          color={colors.GROUND}
+          modifiers={[
+            frame({ width: SEND_SIZE, height: SEND_SIZE }),
+            background(stopping ? colors.TEXT_MUTED : colors.TEXT, shapes.circle()),
+          ]}
+        />
+      </Button>
+    );
+  }
   if (empty && onDictate !== undefined) {
     return (
       <Button onPress={onDictate} modifiers={[buttonStyle("plain"), accessibilityLabel("Dictate")]}>
@@ -85,7 +117,17 @@ function SendButton({
 
 /** The composer's pieces in a row's order: the +, the field, and Send or the mic, which a bar of glass holds. */
 function ComposerPieces(props: ComposerProps) {
-  const { placeholder, words: held, onWords, sendable = false, onSend, onAdd, onDictate } = props;
+  const {
+    placeholder,
+    words: held,
+    onWords,
+    sendable = false,
+    onSend,
+    onAdd,
+    onDictate,
+    onStop,
+    stopping = false,
+  } = props;
   const colors = useColors();
   const text = useNativeState(held ?? "");
   const [typed, setTyped] = useState(held ?? "");
@@ -130,7 +172,13 @@ function ComposerPieces(props: ComposerProps) {
           accessibilityIdentifier("composer-field"),
         ]}
       />
-      <SendButton empty={empty} onSend={send} onDictate={onDictate} />
+      <SendButton
+        empty={empty}
+        onSend={send}
+        onDictate={onDictate}
+        onStop={onStop}
+        stopping={stopping}
+      />
     </>
   );
 }
@@ -146,7 +194,7 @@ function ComposerPieces(props: ComposerProps) {
  */
 export function Composer(props: ComposerProps) {
   return (
-    <GlassBar>
+    <GlassBar head={props.head}>
       <ComposerPieces {...props} />
     </GlassBar>
   );
@@ -158,20 +206,28 @@ export function Composer(props: ComposerProps) {
  * system's own glass, rounded as the bar is.
  */
 export function ComposerFoot(props: ComposerProps) {
+  const glass = [
+    padding({ leading: SPACE.ROW + 4, trailing: SPACE.TIGHT * 2, vertical: SPACE.TIGHT * 2 }),
+    glassEffect({
+      glass: { variant: "regular", interactive: true },
+      shape: "roundedRectangle",
+      cornerRadius: BAR_RADIUS,
+    }),
+    padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
+  ];
+  if (props.head === undefined) {
+    return (
+      <HStack spacing={SPACE.ROW} modifiers={glass}>
+        <ComposerPieces {...props} />
+      </HStack>
+    );
+  }
   return (
-    <HStack
-      spacing={SPACE.ROW}
-      modifiers={[
-        padding({ leading: SPACE.ROW + 4, trailing: SPACE.TIGHT * 2, vertical: SPACE.TIGHT * 2 }),
-        glassEffect({
-          glass: { variant: "regular", interactive: true },
-          shape: "roundedRectangle",
-          cornerRadius: BAR_RADIUS,
-        }),
-        padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
-      ]}
-    >
-      <ComposerPieces {...props} />
-    </HStack>
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
+      {props.head}
+      <HStack spacing={SPACE.ROW}>
+        <ComposerPieces {...props} />
+      </HStack>
+    </VStack>
   );
 }

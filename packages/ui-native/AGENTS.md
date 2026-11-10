@@ -20,7 +20,8 @@ builds a control of its own.
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
+  rows, with `WordsField` and `MenuPickRow` for a sheet that starts work,
+  `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of Liquid
@@ -28,7 +29,10 @@ builds a control of its own.
   over its foot above the keyboard, and `Composer` the rounded field a
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
   field at a SwiftUI column's foot in the system's own glass, where no React
-  Native bar can stand, such as a split view's detail.
+  Native bar can stand, such as a split view's detail. Its round button is
+  Send, or, with nothing typed, Stop while an agent works, and its head,
+  inside the same glass, holds an agent's `QueuedLines` (Steer and Delete),
+  its `AttachedPictures`, and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through

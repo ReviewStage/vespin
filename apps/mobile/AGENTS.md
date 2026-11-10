@@ -115,7 +115,9 @@ A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the
 Inbox profile's threads and the tasks holding them among it
 (`@repo/host/fixture-inbox`), the acts the profile stages, such as a mark,
-a thread's file read, or a reply or a resolve, answered by the fixture, the
+a thread's file read, a reply or a resolve, an agent's message, queue
+change, or Stop, or a New agent or New task start, answered by the fixture,
+the models and repositories those sheets pick among staged, the
 migration's approval refused so a flow sees a refused answer taken back
 (`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
 flows run with no server. A change to one of the fixture agent's pull

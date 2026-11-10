@@ -27,7 +27,14 @@ export {
 } from "./button.js";
 export { type Choice, ChoiceList } from "./choice-list.js";
 export { Composer, ComposerFoot } from "./composer.js";
+export {
+  type AttachedPicture,
+  AttachedPictures,
+  type QueuedLine,
+  QueuedLines,
+} from "./composer-head.js";
 export { EmptyState } from "./empty-state.js";
+export { MenuPickRow, WordsField } from "./form-rows.js";
 export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";

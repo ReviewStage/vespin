@@ -8,11 +8,14 @@
  * neither carries the other's React.
  */
 
-import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
+import { agentDefaultOf } from "@repo/features/account-preferences-live";
 import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
+import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import {
   type AccountExperiment,
   type AccountExperimentChoices,
@@ -434,4 +437,29 @@ export function selectTranscript(
 ): (state: AppStateSnapshot) => AppHostRead<AppTranscript> | undefined {
   return (state) =>
     state[LIVE_READ.TRANSCRIPT][transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
+}
+
+/** The models the account may start an agent on, and the devices that may run one, as the host holds their read (`ACT_KIND.AGENTS_MODELS_FOLLOW`); none before it is read or while no one is signed in. */
+export function selectModels(state: AppStateSnapshot): AppHostRead<ModelsAnswer> | undefined {
+  const accountId = signedInAccountId(state.account);
+  return accountId === undefined ? undefined : state[LIVE_READ.MODELS][accountId];
+}
+
+/**
+ * The model and effort an agent starts on where its Start names none, as the
+ * panel's model chip reads it: the account's stored default, else the
+ * catalog's fallback once the models are read; none before either is read.
+ */
+export function selectAgentDefault(state: AppStateSnapshot): ModelChoice | undefined {
+  const accountId = signedInAccountId(state.account);
+  if (accountId === undefined) return undefined;
+  const stored = state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.agent;
+  return agentDefaultOf(stored, state[LIVE_READ.MODELS][accountId] ?? {});
+}
+
+/** The repositories a workspace's GitHub reaches, or every workspace's under `EVERY_WORKSPACE`, as the host holds their read (`ACT_KIND.TASKS_REPOSITORIES_FOLLOW`), as a `select`; none before it is read. */
+export function selectRepositoryList(
+  scope: string,
+): (state: AppStateSnapshot) => AppHostRead<GitHubRepositoriesAnswer> | undefined {
+  return (state) => state[LIVE_READ.REPOSITORY_LISTS][scope];
 }
