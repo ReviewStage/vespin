@@ -174,7 +174,7 @@ const NO_LIVE_NAME: EntityName<Entity> = { live: false, held: () => undefined };
 /** A provider's page, called by the key and title its provider answered, where it was written bare. */
 const ANSWERED_NAME: EntityName<Entity> = {
   live: false,
-  held: (_thing, _known, { answered }) =>
+  held: (_entity, _known, { answered }) =>
     answered === undefined ? undefined : `${answered.key} ${answered.title}`,
 };
 
@@ -281,7 +281,7 @@ const ENTITY_NAME: EntityNames = {
 };
 
 /**
- * What each kind is called in words, which a screen reader hears before a
+ * What each kind is called in words, which a screen reader hears before an
  * entity's name, since the glyph that says it to the eye is hidden from one:
  * "pull request #42 Fix the refresh". Its nouns are the glossary's
  * (`words.ts`'s `TERM`) where it has one. Read it through `entityWordHeard`,
@@ -343,7 +343,7 @@ function asEntity<P extends Entity>(place: P): Entity {
 }
 
 /** The entity each kind of place names. */
-const PLACE_THING: { readonly [K in LinkPlaceKind]: (place: PlaceOf<K>) => Entity } = {
+const PLACE_ENTITY: { readonly [K in LinkPlaceKind]: (place: PlaceOf<K>) => Entity } = {
   [LINK_PLACE.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.planId }),
   [LINK_PLACE.SECTION]: (place) => ({
     kind: ENTITY_KIND.SECTION,
@@ -376,7 +376,7 @@ const PLACE_THING: { readonly [K in LinkPlaceKind]: (place: PlaceOf<K>) => Entit
 
 /** A place read through its kind's own entry, which keeps the kind and the place it reads together. */
 function placeEntity<K extends LinkPlaceKind>(kind: K, place: PlaceOf<K>): Entity {
-  return PLACE_THING[kind](place);
+  return PLACE_ENTITY[kind](place);
 }
 
 /** An entity's name read through its kind's own entry. */
