@@ -171,7 +171,12 @@ beforeEach(() => {
   });
   reads = handHostReads({
     preferences: {
-      rows: { agent: undefined, chaptersModel: CHAPTERS_MODEL.HAIKU, slackNotifications: true },
+      rows: {
+        agent: undefined,
+        chaptersModel: CHAPTERS_MODEL.HAIKU,
+        slackNotifications: true,
+        sounds: { list: [], choices: { finish: undefined, ask: undefined } },
+      },
     },
   });
 });

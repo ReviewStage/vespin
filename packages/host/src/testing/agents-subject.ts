@@ -288,8 +288,12 @@ function fakeService() {
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     hosts: polledLive(["hosts"]),
-    // Note that the account stored no preferences until a test sets a row, as a new account has none.
-    preferences: polledLive(["preferences"], () => ({ preferences: [] })),
+    // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
+    preferences: polledLive(["preferences", "sounds", "soundChoices"], () => ({
+      preferences: [],
+      sounds: [],
+      soundChoices: [],
+    })),
   };
   /** The models the account is offered, as the service answers them; the one Claude model from the start. */
   let offeredModels: readonly CatalogModel[] = MODELS;

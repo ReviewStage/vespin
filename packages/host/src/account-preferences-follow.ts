@@ -2,7 +2,11 @@ import {
   ACCOUNT_PREFERENCES_READ,
   type AccountPreferencesLiveAnswer,
   type AccountPreferencesLiveRow,
+  type AccountSoundChoiceLiveRow,
+  type AccountSoundLiveRow,
+  type AccountSounds,
   accountPreferencesOfLiveRows,
+  accountSoundsOfLiveRows,
 } from "@repo/features/account-preferences-live";
 import type {
   AgentDefaultAnswer,
@@ -38,7 +42,8 @@ import {
  * account-preferences-follow.ts -- the account's preferences row, held for the signed-in session, followed over the service's held poll into the sync engine's pool by the account, told whole on its app-state slice, and every write to it drawn over it the moment it is asked.
  *
  * Every surface that draws the default agent, the chapters model, or the
- * Slack notifications switch reads them from this one row, which the host
+ * Slack notifications switch reads them from this one row, as the sound
+ * player and Settings read the sounds the account keeps of its own, which the host
  * follows from the gate opening until the session ends, so a default chosen
  * on another device draws on every open window within the service's
  * coalesce window. The row is one row of the pool (`@repo/sync`), by the
@@ -56,13 +61,17 @@ import {
  * the next sign-in follows it again.
  */
 
-/** The account's row as the pool holds it: the live row, under the account it is the row of. */
+/** The account's row as the pool holds it: the live row, under the account it is the row of, with the sounds it keeps of its own and which each of its two sounds plays. */
 export interface AccountPreferencesPoolRow extends AccountPreferencesLiveRow {
   readonly userId: string;
+  readonly sounds: AccountSounds;
 }
 
 /** The account's row as the pool holds it, by the account, every write to it a change of its fields. */
 const ACCOUNT_PREFERENCES = fieldKind((row: AccountPreferencesPoolRow) => row.userId);
+
+/** An account that keeps no sounds of its own, as a row the read has not answered holds. */
+const NO_SOUNDS = accountSoundsOfLiveRows([], []);
 
 /** A change to the account's row. */
 type PreferencesChange = FieldChange<AccountPreferencesPoolRow>;
@@ -90,6 +99,8 @@ export interface AccountPreferencesFollowDependencies {
 function poolRowOf(
   userId: string,
   rows: readonly AccountPreferencesLiveRow[],
+  sounds: readonly AccountSoundLiveRow[],
+  choices: readonly AccountSoundChoiceLiveRow[],
 ): AccountPreferencesPoolRow {
   const [row] = rows;
   return {
@@ -99,6 +110,7 @@ function poolRowOf(
     agentContextWindow: row?.agentContextWindow ?? null,
     chaptersModel: row?.chaptersModel ?? null,
     slackNotifications: row?.slackNotifications ?? null,
+    sounds: accountSoundsOfLiveRows(sounds, choices),
   };
 }
 
@@ -128,7 +140,10 @@ function followPreferences(
       let wait: TxWait | undefined;
       let answered = false;
       const drawn: Effect.Effect<void> = Effect.sync(() => {
-        if (answered) answers.answered(accountPreferencesOfLiveRows(row.rows()));
+        if (!answered) return;
+        const rows = row.rows();
+        const [held] = rows;
+        answers.answered(accountPreferencesOfLiveRows(rows, held?.sounds ?? NO_SOUNDS));
       });
       const row: HeldRows<AccountPreferencesPoolRow> = yield* dependencies.pool.stand(
         ACCOUNT_PREFERENCES,
@@ -156,7 +171,7 @@ function followPreferences(
         ACCOUNT_PREFERENCES_READ.rows,
         (rows) =>
           Effect.andThen(
-            row.answer([poolRowOf(userId, rows.preferences)]),
+            row.answer([poolRowOf(userId, rows.preferences, rows.sounds, rows.soundChoices)]),
             Effect.suspend(() => {
               answered = true;
               return drawn;

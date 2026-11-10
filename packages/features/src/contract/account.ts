@@ -2,7 +2,8 @@
  * account.ts -- the signed-in account's own reads and writes (`account-wire.ts`, `provider-key-wire.ts`), as procedures.
  *
  * Its deletion, its preferences snapshot, its access, a beat that it is
- * active at a client (`presence-wire.ts`), its own provider
+ * active at a client (`presence-wire.ts`), its own sounds
+ * (`sound-clip-wire.ts`), its own provider
  * keys, its workspace's memories, and its ChatGPT credentials, each on the path
  * and method it has always answered on; a memory kept in the member's words
  * and a search of them, the member MCP server's `save_memory` and
@@ -65,6 +66,18 @@ import {
 } from "../provider-key-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
+import {
+  SOUND_CLIP_BOUNDS,
+  SOUND_CLIP_QUERY,
+  soundAddAnswerSchema,
+  soundAddRequestSchema,
+  soundChoiceAnswerSchema,
+  soundChoiceRequestSchema,
+  soundClipAnswerSchema,
+  soundIdSchema,
+  soundRenameRequestSchema,
+  soundStateSchema,
+} from "../sound-clip-wire.js";
 import { workspaceIdSchema } from "../task-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
@@ -76,6 +89,12 @@ const SUBSCRIPTION_ORDER_BODY_BYTES = 4_096;
 
 /** A memory's save is a workspace id, a statement of at most 400 characters at JSON's widest escape, and an id, so a body past this is not one. */
 const MEMORY_SAVE_BODY_BYTES = 4_096;
+
+/** A sound's add is one clip as a `data:` URL at its byte bound, base64 being four characters for every three bytes, with room for its name, its slot, and their keys. */
+const SOUND_BODY_BYTES = Math.ceil(SOUND_CLIP_BOUNDS.MAX_BYTES / 3) * 4 + 1_024;
+
+/** A rename or a choice is a sound's id and a name of at most 64 characters at JSON's widest escape, so a body past this is not one. */
+const SOUND_RENAME_BODY_BYTES = 1_024;
 
 /** A device-code login's poll or cancel is one login id of at most 64 characters, so a body past this is not one. */
 const CHATGPT_DEVICE_LOGIN_BODY_BYTES = 512;
@@ -141,6 +160,44 @@ export const accountContract = {
       }),
     )
     .output(EffectSchema.flip(providerKeysAnswerSchema)),
+  /** One of the account's own sounds' clips, as its bytes in base64; null where it keeps no such sound. */
+  sound: declaredProcedure
+    .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_SOUNDS }))
+    .input(EffectSchema.Struct({ [SOUND_CLIP_QUERY.ID]: soundIdSchema }))
+    .output(EffectSchema.flip(soundClipAnswerSchema)),
+  /** A sound added to the account's own under its name, chosen for a sound where the body names one, answered as kept. */
+  addSound: declaredProcedure
+    .meta(bodyCap(SOUND_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_SOUNDS }))
+    .input(exactInput(soundAddRequestSchema))
+    .output(EffectSchema.flip(soundAddAnswerSchema)),
+  /** One of the account's sounds renamed, answered as it now stands, or null where it keeps no such sound. */
+  renameSound: declaredProcedure
+    .meta(bodyCap(SOUND_RENAME_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.PATCH, path: HOSTED_SERVICE_PATH.ACCOUNT_SOUNDS }))
+    .input(exactInput(soundRenameRequestSchema))
+    .output(EffectSchema.flip(soundStateSchema)),
+  /** One of the account's sounds removed, with every choice of it, whether or not it kept it; the sound rides in the query, since a `DELETE` carries no body. */
+  removeSound: declaredProcedure
+    .meta(
+      openapi({
+        method: HTTP_METHOD.DELETE,
+        path: HOSTED_SERVICE_PATH.ACCOUNT_SOUNDS,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(
+      EffectSchema.Struct({
+        query: EffectSchema.Struct({ [SOUND_CLIP_QUERY.ID]: soundIdSchema }),
+      }),
+    )
+    .output(EffectSchema.flip(soundStateSchema)),
+  /** Which of the account's sounds one of its two sounds plays, or none; answered as the choice now stands. */
+  chooseSound: declaredProcedure
+    .meta(bodyCap(SOUND_RENAME_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.PUT, path: HOSTED_SERVICE_PATH.ACCOUNT_SOUND_CHOICE }))
+    .input(exactInput(soundChoiceRequestSchema))
+    .output(EffectSchema.flip(soundChoiceAnswerSchema)),
   memories: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_MEMORIES }))

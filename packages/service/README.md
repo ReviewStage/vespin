@@ -596,6 +596,28 @@ catalog's after its prefix. `src/providers/model-catalog.test.ts` reads the cata
 through a scripted gateway and the test clock; `src/accounts/models-procedures.test.ts`
 answers the route over a fixed catalog, byte for byte as the old group did.
 
+## Accounts' own sounds
+
+`src/accounts/sounds-procedures.ts` answers `/api/account/sounds` on the
+hosted oRPC router, the sounds an account keeps of its own, each a clip
+under a name it gave (`@repo/database/models/account-sounds`, the
+`account_sound` table, deleted with the account): `GET ?id=` answers one's
+bytes in base64 under its type with their SHA-256, or null; `POST` adds one
+sent as a `data:` URL under its name, whose label must be the type its bytes
+open as (`@repo/features/audio-signature`: WAV, MP3, M4A, AAC, or Ogg), and
+chooses it at once for the sound its body names, if any; `PATCH` renames one;
+and `DELETE ?id=` removes one with every choice of it.
+`/api/account/sounds/choice` (`PUT`) sets which of them one of the account's
+two sounds plays (`finish` or `ask`; the `account_sound_choice` table, which
+names a sound by its account and id together, so it can name no other
+account's). No bound is set on how many sounds an account keeps or how long
+one plays; a clip is held only to the 3.3 MB a request sent as base64 can
+carry and answer. No file name is sent or kept, and nothing of a sound is
+traced, logged, or counted. The account's preferences live read
+(`/api/live/account-preferences`) carries each sound's id, name, and hash,
+never its bytes, and the choices, so a client fetches a sound again only once
+its hash changed.
+
 ## Accounts' own provider keys
 
 `src/accounts/provider-keys-procedures.ts` answers `/api/account/provider-keys` on the

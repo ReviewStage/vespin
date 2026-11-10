@@ -389,6 +389,7 @@ function controlAnswering(answers: Answers): AgentsControl {
       agent: undefined,
       chaptersModel: chaptersModelOn(provider, CHAPTERS_MODEL.HAIKU),
       slackNotifications: true,
+      sounds: { list: [], choices: { finish: undefined, ask: undefined } },
     },
   });
   const { deliverChapters, deliverMembers, deliverParts, deliverPreferences } = handHostReads({
