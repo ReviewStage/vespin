@@ -9,9 +9,8 @@ import {
   ChipName,
   type ChipWidth,
   type MenuLastLine,
+  OutsideLink,
   POPOVER_ALIGN,
-  TEXT_LINK_LOOK,
-  TextLink,
   Tooltip,
 } from "@repo/ui";
 import { useDisclosure } from "@repo/ui/use-disclosure";
@@ -81,17 +80,9 @@ const MANAGE_USAGE = "Manage usage";
 function ManageUsageLink(): React.JSX.Element {
   const openLink = useOpenLink();
   return (
-    <TextLink
-      href={CHATGPT_USAGE_URL}
-      look={TEXT_LINK_LOOK.UNDERLINED}
-      external
-      onClick={(event) => {
-        event.preventDefault();
-        openLink(CHATGPT_USAGE_URL);
-      }}
-    >
+    <OutsideLink href={CHATGPT_USAGE_URL} open={openLink}>
       {MANAGE_USAGE}
-    </TextLink>
+    </OutsideLink>
   );
 }
 
