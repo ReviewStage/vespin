@@ -139,9 +139,7 @@ on any Settings page leaves Settings.
   the dimmed window, puts the dialog away, its words and files kept as New
   task's draft, which Home's composer shares.
 - A pinned task stands under **Pinned**, a section above Tasks drawn only
-  while any task is pinned, which no view filters. A
-  pinned agent with no task stands there among the pinned tasks, ordered the
-  same way, and leaves its place among the tasks. Its rows, tabs pinned to
+  while any task is pinned, which no view filters. Its rows, tabs pinned to
   the sidebar among them, are dragged up and down it to the order the
   developer wants, each drop drawn at once and put back with a toast when
   the service refuses it; a pin not yet dragged stands on top, newest pinned

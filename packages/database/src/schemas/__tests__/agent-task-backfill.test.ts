@@ -8,7 +8,7 @@ import { Effect } from "effect";
 import * as SqlClient from "effect/sql/SqlClient";
 import { Database } from "../../core/query.js";
 import { createTask } from "../../models/task-store.js";
-import { getTestDB, migrationStatements, openWorkspace } from "../../testing/index.js";
+import { getTestDB, migrationStatements, openWorkspace, replayable } from "../../testing/index.js";
 import { agentTable } from "../agent.js";
 import { agentBrowserTab } from "../agent-browser-tab.js";
 import { user } from "../auth.js";
@@ -16,17 +16,17 @@ import { inboxItem } from "../inbox.js";
 import { task } from "../task.js";
 import { taskPageVersion } from "../task-page.js";
 import { taskPin } from "../task-pin.js";
-import { taskRead } from "../task-read.js";
-import { taskSectionEntry } from "../task-section.js";
 
 /**
  * The migrations that give every agent with no task a task of its own and
  * then require one: over a database from before them, each such agent lands
  * on a new task of its workspace, numbered after the workspace's last, named
  * from its title, assigned to its starter, Done unless it is still at work,
- * with its starter's pin, read mark, section, inbox thread, the pages it
- * showed, and its browser's tabs carried onto it; and running the backfill
- * twice changes nothing. Synthetic accounts throughout.
+ * with its starter's pin, inbox thread, the pages it showed, and its
+ * browser's tabs carried onto it; and running the backfill twice changes
+ * nothing. Its read marks and sections are no longer replayed, since their
+ * tables are dropped (`agent_read_and_section_entry_drop`). Synthetic
+ * accounts throughout.
  */
 
 const BACKFILL = "20261110012454_agent_task_backfill";
@@ -93,11 +93,7 @@ it.layer(getTestDB())("agent_task_backfill over a database from before it", (it)
           TURN_STATUS.SETTLED,
           "2026-10-21T09:00:00Z",
         );
-        const sectionId = randomUUID();
-        yield* sql`insert into task_section (id, user_id, organization_id, title, created_at) values (${sectionId}, ${userId}, ${organizationId}, 'Chores', now())`;
         yield* sql`insert into agent_pin (user_id, agent_id, pinned_at) values (${userId}, ${working}, '2026-10-19T09:00:00Z')`;
-        yield* sql`insert into agent_read (user_id, agent_id, read_through, marked_unread) values (${userId}, ${working}, '2026-10-19T09:00:00Z', true)`;
-        yield* sql`insert into agent_section_entry (user_id, agent_id, section_id, added_at) values (${userId}, ${working}, ${sectionId}, '2026-10-19T09:00:00Z')`;
         const itemId = randomUUID();
         yield* sql`insert into inbox_item (id, user_id, task_id, organization_id, agent_id, key, revision, version, title, needs_reply, status, posted_at, updated_at)
           values (${itemId}, ${userId}, null, ${organizationId}, ${working}, 'branch-protection', 1, 5, 'Require a review on main', false, 'open', now(), now())`;
@@ -108,7 +104,7 @@ it.layer(getTestDB())("agent_task_backfill over a database from before it", (it)
         yield* sql`insert into agent_browser_tab (id, conversation_id, task_id, target_id, address, opened_by)
           select ${tabId}, conversation_id, null, 'target-1', 'https://ci.example.test/runs', 'agent' from agent where id = ${working}`;
 
-        const backfill = yield* migrationStatements(BACKFILL);
+        const backfill = replayable(yield* migrationStatements(BACKFILL));
         for (const statement of backfill) yield* sql.unsafe(statement);
         for (const statement of backfill) yield* sql.unsafe(statement);
         // The column is required again once every agent stands on a task, which fails where the backfill left one on none.
@@ -172,16 +168,6 @@ it.layer(getTestDB())("agent_task_backfill over a database from before it", (it)
           .from(taskPin)
           .where(eq(taskPin.userId, userId));
         assert.deepEqual(pins, [{ taskId: workingTask }]);
-        const reads = yield* db
-          .select({ taskId: taskRead.taskId, markedUnread: taskRead.markedUnread })
-          .from(taskRead)
-          .where(eq(taskRead.userId, userId));
-        assert.deepEqual(reads, [{ taskId: workingTask, markedUnread: true }]);
-        const entries = yield* db
-          .select({ taskId: taskSectionEntry.taskId, sectionId: taskSectionEntry.sectionId })
-          .from(taskSectionEntry)
-          .where(eq(taskSectionEntry.userId, userId));
-        assert.deepEqual(entries, [{ taskId: workingTask, sectionId }]);
         const [item] = yield* db
           .select({ taskId: inboxItem.taskId })
           .from(inboxItem)
