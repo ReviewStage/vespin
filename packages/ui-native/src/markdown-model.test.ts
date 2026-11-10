@@ -34,7 +34,7 @@ describe("markdownBlocks", () => {
         {
           kind: MARKDOWN_RUN.CHIP,
           chip: {
-            thing: "pull-request",
+            entity: "pull-request",
             name: "#42 Fix the refresh",
             heard: "pull request #42 Fix the refresh",
             target: { kind: LINK_TARGET.WEB, href: "https://github.com/acme/app/pull/42" },
@@ -44,7 +44,7 @@ describe("markdownBlocks", () => {
         {
           kind: MARKDOWN_RUN.CHIP,
           chip: {
-            thing: "date",
+            entity: "date",
             name: "Tomorrow",
             heard: "date Tomorrow",
             target: { kind: LINK_TARGET.NONE },

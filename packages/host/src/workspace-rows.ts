@@ -21,14 +21,7 @@
  */
 
 import type { Workspace } from "@repo/features/workspace-wire";
-import type {
-  EntityKind,
-  EntityPool,
-  HeldRows,
-  Refused,
-  WriteDeclaration,
-  Written,
-} from "@repo/sync";
+import type { EntityPool, HeldRows, Refused, RowKind, WriteDeclaration, Written } from "@repo/sync";
 import { Effect, Equal, type Scope } from "effect";
 import { carriedWaits } from "./live-collection.js";
 
@@ -36,7 +29,7 @@ import { carriedWaits } from "./live-collection.js";
 type WorkspaceChange = (row: Workspace) => Workspace;
 
 /** A workspace as the pool holds it, by its id, every write to it a change of the row. */
-const WORKSPACE: EntityKind<Workspace, WorkspaceChange> = {
+const WORKSPACE: RowKind<Workspace, WorkspaceChange> = {
   key: (row) => row.id,
   drawn: (change, row) => {
     if (row === undefined) return undefined;

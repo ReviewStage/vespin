@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository, as owner/name."
+    },
+    "pinned": {
+      "type": "boolean",
+      "description": "true to pin it, false to unpin it."
+    }
+  },
+  "required": [
+    "repository",
+    "pinned"
+  ],
+  "additionalProperties": false
+}

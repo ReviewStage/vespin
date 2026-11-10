@@ -184,13 +184,7 @@ it.layer(getTestDB())("the automation store", (it) => {
             made.targetKind,
             made.archiveSuccessful,
           ],
-          [
-            workspaceId,
-            ["acme/api"],
-            AUTOMATION_SCOPE.PERSONAL,
-            AUTOMATION_TARGET.NEW_AGENT,
-            false,
-          ],
+          [workspaceId, ["acme/api"], AUTOMATION_SCOPE.PERSONAL, AUTOMATION_TARGET.NEW_AGENT, true],
         );
       }),
   );

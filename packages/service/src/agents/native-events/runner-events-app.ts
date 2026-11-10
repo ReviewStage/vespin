@@ -37,7 +37,7 @@ import {
   type ProviderKeyKind,
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
-import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import {
@@ -84,6 +84,7 @@ import { turnRetried } from "../coder-host/steer.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 import {
   admitRunnerBearer,
   presentedBearer,
@@ -301,14 +302,17 @@ export interface RunnerEventsOptions<R = never> {
 }
 
 /**
- * A run's sandbox touched as a batch of its runner's events lands
- * (`@repo/sandbox`'s `touchSandbox`), which logs a touch the sandbox did not
- * confirm, since the next due batch, a minute on, touches it again.
+ * A run's sandbox touched as a batch of its runner's events lands, and its
+ * use recorded (`../sandbox-use.ts`'s `touchAgentSandbox`), which logs a
+ * touch the sandbox did not confirm, since the next due batch, a minute on,
+ * touches it again.
  */
-export function sandboxTouched(alive: RunnerAlive): Effect.Effect<void, never, Sandbox> {
+export function sandboxTouched(
+  alive: RunnerAlive,
+): Effect.Effect<void, never, Sandbox | DatabaseServices> {
   const { sessionId } = alive;
   if (sessionId === undefined) return Effect.void;
-  return touchSandbox(agentSandboxName(sessionId));
+  return touchAgentSandbox(agentSandboxName(sessionId));
 }
 
 /**
@@ -1002,8 +1006,8 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     );
   }
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
-  // it up, and a turn's end may have finished its work, or archives the agent with a task moved to
-  // Done while it worked (`tasks/task-finish.ts`).
+  // it up, and a turn's end archives the agent with a task moved to Done while it worked
+  // (`tasks/task-finish.ts`).
   if (taskId !== null && applied.value.turns.started) {
     yield* reopenTaskForWork(target.userId, taskId);
   }

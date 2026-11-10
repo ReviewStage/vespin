@@ -180,6 +180,7 @@ import {
   type RepositoryCredential,
   sandboxFirewall,
 } from "../sandbox-firewall.js";
+import { recordedSandboxOpen } from "../sandbox-use.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -966,7 +967,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * for, created as the attempt says where none stands, with whether it was
    * created, its checkout made in its `onCreate` where the agent has a
    * repository and the sandbox was created (`checkedOutIn`), and whether that
-   * moved a lockfile. A setup that fails fails the open, and what it made is
+   * moved a lockfile, and the open recorded as its use (`../sandbox-use.ts`).
+   * A setup that fails fails the open, and what it made is
    * left as it stands. Note that the setup's own failure is the open's,
    * because `onCreate`'s rejection is handed on as the call's, which
    * would read as the sandbox's rather than in the checkout's words.
@@ -1014,6 +1016,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.provideService(Sandbox, api),
         Effect.mapError((failure) => refused ?? failure),
       );
+      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId));
       return { ...runningOf(sandbox), created, lockfileMoved: moved, from: attempt.from };
     });
 

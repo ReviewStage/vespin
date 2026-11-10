@@ -17,7 +17,7 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
-import { Sandbox, touchSandbox } from "@repo/sandbox";
+import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
@@ -25,6 +25,7 @@ import { AgentBrowser, agentBrowserOver } from "../agents/browser/agent-browser.
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
 import { AgentImage } from "../agents/coder-host/agent-image.js";
 import { sandboxPtyOf } from "../agents/sandbox-pty.js";
+import { touchAgentSandbox } from "../agents/sandbox-use.js";
 import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
 import type { BrowserLiveDependencies } from "./relay.js";
 
@@ -78,6 +79,6 @@ export const browserLiveDependencies: Effect.Effect<
         Effect.catch(() => Effect.logWarning("a watched tab's page was not kept")),
         Effect.asVoid,
       ),
-    touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
+    touch: (sessionId) => run(touchAgentSandbox(agentSandboxName(sessionId))),
   };
 });

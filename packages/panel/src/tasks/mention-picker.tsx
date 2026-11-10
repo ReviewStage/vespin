@@ -12,6 +12,7 @@ import {
   suggestedDates,
 } from "@repo/features/date-mention";
 import { descriptionSections } from "@repo/features/description-document";
+import { entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
@@ -30,7 +31,6 @@ import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { skillWord } from "@repo/features/skill-word";
 import { TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
-import { thingOfMention } from "@repo/features/thing-kind";
 import {
   MCP_SERVER_LABEL,
   noMatchWords,
@@ -110,6 +110,7 @@ import {
   type MentionNode,
 } from "../description-editor/contract.js";
 import { useAutomations } from "../desktop/use-automations.js";
+import { entityCard } from "../entities/entity-card.js";
 import { unreadShown } from "../failure-report.js";
 import { type IntegrationToolsReads, useIntegrationTools } from "../integration-tools.js";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
@@ -135,7 +136,6 @@ import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
 import { AgentMark, PlanGlyph } from "./tab-look.js";
-import { thingCard } from "./thing-card.js";
 import { useTaskStatus } from "./use-known-names.js";
 
 /**
@@ -2076,7 +2076,7 @@ export function useMentionPicker({
   // Note that a row's card is the chip's, made as the row is drawn, because the repository's paths are thousands and only the few listed hang one.
   const rowCard: RowCardOf = (row) => {
     if (!("mention" in row)) return undefined;
-    return thingCard(thingOfMention(row.mention), {
+    return entityCard(entityOfMention(row.mention), {
       own: undefined,
       glyph: <RowGlyph row={row} />,
       name: row.written ?? row.name,

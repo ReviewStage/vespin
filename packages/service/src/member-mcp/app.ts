@@ -21,6 +21,7 @@
  */
 
 import { createMcpHandler, originValidationResponse } from "@modelcontextprotocol/server";
+import type { WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import type { WorkspaceExperiment } from "@repo/settings";
 import { HTTP_METHOD } from "@repo/wire";
 import { Effect, Layer, Option, Result, Schema } from "effect";
@@ -170,6 +171,7 @@ const renamedToolAnswer = /* @__PURE__ */ Effect.fn("web/memberMcpRenamedTool")(
 const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function* (
   auth: MemberMcpAuth,
   agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   never,
@@ -194,7 +196,7 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function*
   );
   const services = yield* Effect.context<MemberMcpRequestServices>();
   const handler = createMcpHandler(() =>
-    memberMcpServer(services, agentSandbox, member, experimentsOn),
+    memberMcpServer(services, agentSandbox, workspaces, member, experimentsOn),
   );
   const answer = yield* Effect.promise(() => handler.fetch(request));
   return HttpServerResponse.raw(answer);
@@ -216,13 +218,14 @@ const metadataEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpMetadataEndpoin
 const metadataRoute = (auth: MemberMcpAuth) =>
   HttpRouter.add(ANY_METHOD, MEMBER_MCP_METADATA_ROUTE, hostedRefusing(metadataEndpoint(auth)));
 
-/** The group: the server, its tools reaching an agent's sandbox as the edge composes it, and its metadata over the auth service's resource client, and the hosted vocabulary's own refusal for any other path. */
+/** The group: the server, its tools reaching an agent's sandbox as the edge composes it and the organization plugin's workspace writes, and its metadata over the auth service's resource client, and the hosted vocabulary's own refusal for any other path. */
 export function memberMcpApp(
   auth: MemberMcpAuth,
   agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
 ): WebRoutes<MemberMcpRequestServices> {
   return Layer.mergeAll(
-    HttpRouter.add(ANY_METHOD, MEMBER_MCP_PATH, mcpEndpoint(auth, agentSandbox)),
+    HttpRouter.add(ANY_METHOD, MEMBER_MCP_PATH, mcpEndpoint(auth, agentSandbox, workspaces)),
     metadataRoute(auth),
     hostedNotFoundRoute,
   );

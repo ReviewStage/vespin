@@ -19,10 +19,11 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { PREVIEW_SIGN_IN } from "@repo/features/preview-sign-in";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { SANDBOX_TOUCH_EVERY, type Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
+import { SANDBOX_TOUCH_EVERY, type Sandbox, type SandboxError } from "@repo/sandbox";
 import { HTTP_METHOD } from "@repo/wire";
 import { Clock, Duration, Effect, Layer, Option } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { touchAgentSandbox } from "../agents/sandbox-use.js";
 import {
   AgentSandbox,
   type AgentSandboxService,
@@ -359,7 +360,10 @@ const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =
     if (status) return statusAnswer(yield* serverAnswers(preview.url));
     if (now - (touched.get(preview.name) ?? 0) >= Duration.toMillis(SANDBOX_TOUCH_EVERY)) {
       touched.set(preview.name, now);
-      yield* afterResponse("a preview kept its agent's sandbox up", touchSandbox(preview.name));
+      yield* afterResponse(
+        "a preview kept its agent's sandbox up",
+        touchAgentSandbox(preview.name),
+      );
     }
     return yield* passedOn(request, preview.url, previewOrigin(sandbox, agentId), asked);
   });

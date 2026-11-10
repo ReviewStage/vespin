@@ -7,7 +7,8 @@
  * reads `github.repositories` and `github.tokenRepositories`, `add` and
  * `remove` are `github.setTokenRepository`, and `cat`, `ls`, `skills`, and
  * `issue` read a repository by its full name (`owner/name`) as GitHub holds
- * it. The member's GitHub token is never printed.
+ * it. The member's GitHub token is never printed. `pins`, `pin`, and `unpin`,
+ * the member's own sidebar pins, live in `repo-pins.ts`.
  */
 
 import { HOSTED_API_ERROR } from "@repo/features";
@@ -26,6 +27,7 @@ import { FILE_REFUSAL_WORDS, fileRefused } from "../file-refusal.js";
 import { answer, CommandFailed, columns, note } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveWorkspace } from "../workspace.js";
+import { repoPinCommand, repoPinsCommand, repoUnpinCommand } from "./repo-pins.js";
 
 /** Why the service read no file, listed no folder, or read no skills, as a person reads it of a repository named by its full name. */
 const REPOSITORY_REFUSAL_WORDS = {
@@ -303,7 +305,7 @@ const issueCommand = Command.make(
   ]),
 );
 
-/** The repo group: list, add, remove, cat, ls, skills, and issue. */
+/** The repo group: list, add, remove, cat, ls, skills, and issue, and the member's sidebar pins (`repo-pins.ts`). */
 export const repoCommand = Command.make("repo").pipe(
   Command.withDescription("List the workspace's GitHub repositories and read their files"),
   Command.withSubcommands([
@@ -314,6 +316,9 @@ export const repoCommand = Command.make("repo").pipe(
     lsCommand,
     skillsCommand,
     issueCommand,
+    repoPinsCommand,
+    repoPinCommand,
+    repoUnpinCommand,
   ]),
   Command.withExamples([
     { command: "vespin repo list", description: "The workspace's repositories" },

@@ -1,6 +1,6 @@
+import { entityName, entityOfPlace, type KnownNames, NOTHING_SAID } from "./entity-kind.js";
 import { LINK_PLACE, type LinkPlace } from "./link-grammar.js";
 import { UNTITLED_TASK_NAME } from "./task-wire.js";
-import { type KnownNames, NOTHING_SAID, thingName, thingOfPlace } from "./thing-kind.js";
 
 /**
  * place-chip-model.ts -- a link of ours drawn in words as its chip says it: the name of the place it opens, as the window already knows it, and the task it stands under.
@@ -59,8 +59,8 @@ function taskOf(place: LinkPlace): string | undefined {
 }
 
 /**
- * What a chip says of the place a link of ours opens: for a thing named live
- * (`THING_NAME`), the name the window holds for it, else the words it was
+ * What a chip says of the place a link of ours opens: for an entity named live
+ * (`ENTITY_NAME`), the name the window holds for it, else the words it was
  * labeled with; for any other, the words first, then the name held; else
  * its kind; and the task it stands under, by the name the window holds for it.
  */
@@ -71,7 +71,7 @@ export function placeChipLook(
 ): PlaceChipLook {
   const taskId = taskOf(place);
   const under = taskId === undefined ? undefined : known.tasks.get(taskId);
-  const named = thingName(thingOfPlace(place), known, NOTHING_SAID);
+  const named = entityName(entityOfPlace(place), known, NOTHING_SAID);
   const held = named.held;
   const untitled = place.kind === LINK_PLACE.TASK && held === UNTITLED_TASK_NAME;
   const live = named.live && !untitled;
