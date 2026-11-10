@@ -32,6 +32,7 @@ import {
   type ApprovalAnswerAnswer,
   type ApprovalAnswerRequest,
 } from "@repo/features/agent-approval-wire";
+import { failureKind } from "@repo/runtime/effect";
 import { Clock, Effect, Option } from "effect";
 import {
   approvalSettled,
@@ -83,22 +84,27 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
     decision: DECISION_OF_ANSWER[request.answer],
     ...(request.message === undefined ? undefined : { message: request.message }),
   };
-  const reached = yield* runnerApprovalAnswered(agent, line);
+  // A claim whose line never reached a runner goes back, uninterruptibly and on an interruption too, so no
+  // answer the runner never heard stands; a release that fails is said, and the answer's own outcome kept.
+  const released = (to: typeof APPROVAL_STATUS.PENDING | typeof APPROVAL_STATUS.EXPIRED) =>
+    releaseApprovalClaim({ agentId: agent.id, approvalId, userId, to, at }).pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(`an answer's claim of an ask was not released: ${failureKind(failure)}`),
+      ),
+      Effect.asVoid,
+      Effect.annotateLogs({ agentId: agent.id }),
+      Effect.uninterruptible,
+    );
+  const reached = yield* runnerApprovalAnswered(agent, line).pipe(
+    Effect.onInterrupt(() => released(APPROVAL_STATUS.PENDING)),
+  );
   if (reached === RUNNER_ANSWER.WRITTEN) {
     return { approval: { id: claimed.value.id, status: claimed.value.status } };
   }
-  // The line never reached a runner: the claim goes back, pending for another answer where the runner could
-  // not be reached just now, and expired where none runs, so no runner holds the ask.
+  // The line never reached a runner: pending for another answer where the runner could not be reached just
+  // now, and expired where none runs, so no runner holds the ask.
   const lost = reached === RUNNER_ANSWER.NOT_LIVE;
-  yield* hostedStoreOrUnavailable(
-    releaseApprovalClaim({
-      agentId: agent.id,
-      approvalId,
-      userId,
-      to: lost ? APPROVAL_STATUS.EXPIRED : APPROVAL_STATUS.PENDING,
-      at,
-    }),
-  );
+  yield* released(lost ? APPROVAL_STATUS.EXPIRED : APPROVAL_STATUS.PENDING);
   if (!lost) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   return yield* refusedAsItStands(userId, agent.id, approvalId);
 });
