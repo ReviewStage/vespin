@@ -201,7 +201,7 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/s
  * decides when an idle sandbox stops. Five minutes with no agent or
  * terminal activity, the one rule every sandbox follows, with no
  * exceptions: activity is an agent's turn running, a terminal typed in or
- * printing, or the agent open in a focused Vespin window
+ * printing, or the agent open in a focused window of the app
  * (`use-warm-agent.ts`), and nothing else touches a sandbox. A run also
  * ends at the provider's longest, 24 hours from its start, however active
  * (`vercel/vercel-sdk.ts`'s `TOUCH`).
@@ -217,6 +217,15 @@ export const SANDBOX_TOUCH_EVERY = Duration.minutes(1);
 
 /** How a resumed sandbox is waited on until it runs (`resumedRunning`). */
 const RESUME_WAIT = { POLL: Duration.seconds(1) } as const;
+
+/** A touch the sandbox did not confirm, logged in its own words and let be. */
+function loggedIfUnconfirmed<R>(
+  touch: Effect.Effect<void, SandboxError, R>,
+): Effect.Effect<void, never, R> {
+  return Effect.catch(touch, (failure) =>
+    Effect.logWarning(`a sandbox was not touched: ${failure.message}`),
+  );
+}
 
 /** Whether two reads of a name are of one sandbox: the same creation and the same run. */
 function sameSandbox(one: ListedSandbox, other: ListedSandbox): boolean {
@@ -244,31 +253,34 @@ export const deletedIfStill = (read: ListedSandbox) =>
  * be, since the next one comes well before the sandbox would stop.
  */
 export const touchSandbox = (name: string): Effect.Effect<void, never, Sandbox> =>
-  Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(name)).pipe(
-    Effect.catch((failure) => Effect.logWarning(`a sandbox was not touched: ${failure.message}`)),
-  );
+  loggedIfUnconfirmed(Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(name)));
 
 /**
  * A sandbox a connection holds touched only while the connection is used:
  * every `SANDBOX_TOUCH_EVERY`, from at once, where `lastUsedAt` (an epoch
  * millisecond the caller moves on every sign of use) is no older than the
- * last touch, for the caller's scope. A connection left open and unused so
- * lets its sandbox stop `SANDBOX_IDLE` after its last use, or at most one
- * touch interval later, as every sandbox does.
+ * last touch the sandbox confirmed, for the caller's scope. A touch it did
+ * not confirm is logged and tried again at the next interval, since no
+ * later use may come to ask it. A connection left open and unused so lets
+ * its sandbox stop `SANDBOX_IDLE` after its last use, or at most one touch
+ * interval later, as every sandbox does.
  */
 export const touchedWhileUsed = (
-  touch: Effect.Effect<void>,
+  touch: Effect.Effect<void, SandboxError>,
   lastUsedAt: Effect.Effect<number>,
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     const touchedAt = yield* Ref.make(Number.NEGATIVE_INFINITY);
     const touchIfUsed = Effect.gen(function* () {
       if ((yield* lastUsedAt) <= (yield* Ref.get(touchedAt))) return;
-      yield* Ref.set(touchedAt, yield* Clock.currentTimeMillis);
+      const at = yield* Clock.currentTimeMillis;
       yield* touch;
+      yield* Ref.set(touchedAt, at);
     });
     yield* Effect.forkScoped(
-      Effect.repeat(touchIfUsed, { schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY) }),
+      Effect.repeat(loggedIfUnconfirmed(touchIfUsed), {
+        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
+      }),
     );
   });
 

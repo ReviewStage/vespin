@@ -125,8 +125,8 @@ export interface RelayDependencies {
   readonly connect: (
     shell: InteractiveShell,
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
-  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
-  readonly touch: (sessionId: string) => Effect.Effect<void>;
+  /** Touches the session's sandbox where it runs; one the sandbox did not confirm fails, and is tried again (`touchedWhileUsed`). */
+  readonly touch: (sessionId: string) => Effect.Effect<void, SandboxError>;
   /** Claims the token's renewal on the running sandbox session, once per conversation per session within the refresh rule. */
   readonly claimRenewal: (
     conversationId: string,
