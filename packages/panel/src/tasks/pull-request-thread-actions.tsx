@@ -121,9 +121,12 @@ export function useThreadControls(thread: ReviewThread): ThreadControls | undefi
 export function ThreadResolve({
   controls,
   resolved,
+  onRefused,
 }: {
   controls: ThreadControls | undefined;
   resolved: boolean;
+  /** Hears GitHub's refusal, which stands under the comments, so a folded card opens on it. */
+  onRefused: () => void;
 }): React.JSX.Element | null {
   if (controls === undefined) return null;
   const { threadId, writes } = controls;
@@ -140,7 +143,11 @@ export function ThreadResolve({
         disabled={writes.pending !== undefined && writes.pending !== action}
         busy={writes.pending === action}
         busyLabel={resolved ? THREAD_WORDS.REOPENING : THREAD_WORDS.RESOLVING}
-        onClick={() => void writes.write({ action, threadId })}
+        onClick={() =>
+          void writes.write({ action, threadId }).then((outcome) => {
+            if (!outcome.done) onRefused();
+          })
+        }
       />
     </Tooltip>
   );
@@ -156,9 +163,9 @@ function ReplyBox({ controls }: { controls: ThreadControls }): React.JSX.Element
   const send = () => {
     const body = words.trim();
     if (body === "" || out !== undefined) return;
-    // Note that the words stay until GitHub took them, since the box is held while they are out and a refusal leaves them to send again.
+    // Note that the words stay until GitHub took them, so a refusal leaves them to send again, and only the words sent go, so any written since stay.
     void writes.write({ action: PULL_REQUEST_ACTION.REPLY_TO_THREAD, threadId, body }, () =>
-      update((was) => ({ ...was, text: "" })),
+      update((was) => (was.text === words ? { ...was, text: "" } : was)),
     );
   };
   const box = useMessageBox({

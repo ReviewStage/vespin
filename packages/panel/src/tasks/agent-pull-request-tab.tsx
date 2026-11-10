@@ -1402,7 +1402,11 @@ function ThreadCard({
         where={<ThreadWhere path={thread.path} lines={lineSpan(thread)} onPress={toFiles} />}
         menu={
           <ThreadTools>
-            <ThreadResolve controls={controls} resolved={thread.resolved} />
+            <ThreadResolve
+              controls={controls}
+              resolved={thread.resolved}
+              onRefused={() => landed.onOpenChange(true)}
+            />
             {pending ? (
               start.menu
             ) : (
@@ -1626,7 +1630,11 @@ function InlineThread({
       }
       menu={
         <ThreadTools>
-          <ThreadResolve controls={controls} resolved={thread.resolved} />
+          <ThreadResolve
+            controls={controls}
+            resolved={thread.resolved}
+            onRefused={() => landed.onOpenChange(true)}
+          />
           {pending ? (
             start.menu
           ) : (

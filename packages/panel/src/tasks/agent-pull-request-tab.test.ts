@@ -4292,6 +4292,28 @@ test("a reply GitHub refuses says so under its thread in GitHub's own words, its
   assert.equal(withoutId.querySelector(".pull-request-thread-actions") === null, true);
 });
 
+test("a folded thread whose Reopen GitHub refuses opens, so its refusal stands in view under its comments", async () => {
+  changeAnswer = { outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED, words: "Not allowed." };
+  const tab = await draw(
+    controlAnswering({
+      conversation: () =>
+        Promise.resolve({ pullRequest: reviewWith([thread({ id: "PRRT_flag", resolved: true })]) }),
+    }),
+  );
+  const card = (): HTMLElement =>
+    tab.querySelector<HTMLElement>(".pull-request-thread") ?? assert.fail("the thread is drawn");
+  const opened = () =>
+    card().querySelector(".annotation-card-fold > summary")?.getAttribute("aria-expanded");
+  assert.equal(opened(), "false", "a resolved thread stands folded");
+
+  act(() => threadPress(card(), "Reopen").click());
+  await vi.waitFor(() => assert.equal(opened(), "true"));
+  assert.match(
+    card().querySelector(".pull-request-thread-note [role='alert']")?.textContent ?? "",
+    /Not allowed\./u,
+  );
+});
+
 test("a tab naming another pull request of the agent's repository by its number reads that one, counts its own lines and files, and changes it rather than the agent's own", async () => {
   const asked: unknown[] = [];
   const url = "https://github.com/acme/relay/pull/41";
