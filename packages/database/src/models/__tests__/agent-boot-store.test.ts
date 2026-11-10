@@ -124,6 +124,8 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
       Effect.gen(function* () {
         const { userId, agentId } = yield* openAccount;
         yield* beginAgentBoot(agentId, AT, firstLine(userId));
+        yield* agentBootScriptsStarted(agentId, past(500));
+        yield* agentBootScriptsEnded(agentId, 1);
 
         const failed = yield* failAgentBoot(agentId, BOOT_FAILURE.CHECKOUT_FAILED, past(1_000));
         const pausedBy = (yield* agentQueueNow(agentId)).paused?.because;
@@ -135,8 +137,8 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
         assert.equal(pausedBy, QUEUE_PAUSE.BOOT_FAILED);
         assert.equal(failedAgain, false, "a failed boot fails no second time");
         assert.deepEqual(
-          Option.map(rebooted, (boot) => [boot.phase, boot.attempt, boot.failure]),
-          Option.some([BOOT_PHASE.STARTING, 2, undefined]),
+          Option.map(rebooted, (boot) => [boot.phase, boot.attempt, boot.failure, boot.setupExit]),
+          Option.some([BOOT_PHASE.STARTING, 2, undefined, undefined]),
         );
         assert.equal(afterReboot.paused, undefined);
         assert.deepEqual(
@@ -145,11 +147,24 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
         );
 
         // A Stop's pause is no boot's, so a Retry leaves it standing.
-        yield* failAgentBoot(agentId, BOOT_FAILURE.NO_RESPONSE, past(4_000));
         yield* pauseAgentQueue(agentId, QUEUE_PAUSE.STOPPED);
+        yield* failAgentBoot(agentId, BOOT_FAILURE.NO_RESPONSE, past(4_000));
+        yield* rebootAgent(agentId, past(5_000));
         const stillPaused = (yield* agentQueueNow(agentId)).paused?.because;
-        assert.equal(stillPaused, QUEUE_PAUSE.BOOT_FAILED);
+        assert.equal(stillPaused, QUEUE_PAUSE.STOPPED);
       }),
+  );
+
+  it.effect("pauses its queue once a line is held after it failed with nothing queued", () =>
+    Effect.gen(function* () {
+      const { userId, agentId } = yield* openAccount;
+      yield* beginAgentBoot(agentId, AT, undefined);
+      yield* failAgentBoot(agentId, BOOT_FAILURE.MACHINE_UNAVAILABLE, past(1_000));
+
+      yield* queueWhileBooting(agentId, userId, firstLine(userId));
+
+      assert.equal((yield* agentQueueNow(agentId)).paused?.because, QUEUE_PAUSE.BOOT_FAILED);
+    }),
   );
 
   it.effect("is read past its deadline only while under way, and never once failed or ready", () =>

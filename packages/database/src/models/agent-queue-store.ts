@@ -57,7 +57,7 @@
 
 import { randomUUID } from "node:crypto";
 import { HOSTED_API_ERROR, type HostedApiError } from "@repo/features";
-import { BOOT_HOLD, type BootPhase, bootHold } from "@repo/features/agent-boot";
+import { BOOT_HOLD, BOOT_PHASE, type BootPhase, bootHold } from "@repo/features/agent-boot";
 import { AGENT_QUEUE_BOUNDS, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
 import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
 import { and, asc, count, eq, exists, isNotNull, isNull, lte, max, or, sql } from "drizzle-orm";
@@ -274,7 +274,7 @@ const insertMessage = SqlSchema.findAll({
 /** The phase of the agent's first launch, where its boot record stands. */
 const findBootPhase = SqlSchema.findAll({
   Request: Schema.Struct({ agentId: Schema.String }),
-  Result: Schema.Struct({ phase: Schema.String }),
+  Result: Schema.Struct({ phase: Schema.Literals(Object.values(BOOT_PHASE)) }),
   execute: ({ agentId }) =>
     Database.use((db) =>
       db
@@ -700,8 +700,7 @@ export function queueAgentMessage(
  * the hand-off both read the one rule by (`bootHold`).
  */
 export function bootPhaseInLock(agentId: string): AgentQueueEffect<BootPhase | undefined> {
-  // SAFETY: the column is written only by `agent-boot-store.ts`, from `BOOT_PHASE`.
-  return Effect.map(findBootPhase({ agentId }), ([row]) => row?.phase as BootPhase | undefined);
+  return Effect.map(findBootPhase({ agentId }), ([row]) => row?.phase);
 }
 
 /**
@@ -765,9 +764,16 @@ export function queueWhileBooting(
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
-      if (bootHold(yield* bootPhaseInLock(agentId)) === BOOT_HOLD.NONE) return Option.none();
+      const phase = yield* bootPhaseInLock(agentId);
+      if (bootHold(phase) === BOOT_HOLD.NONE) return Option.none();
       const queued = yield* queueLineInLock(agentId, userId, message);
       inserted = queued.inserted;
+      // Note that a boot that failed over an empty queue paused nothing, so its first line held pauses it now,
+      // on the queue's row its revision's move writes.
+      if (inserted && phase === BOOT_PHASE.FAILED) {
+        yield* bumpRevision({ agentId });
+        yield* pauseInLock(agentId, QUEUE_PAUSE.BOOT_FAILED);
+      }
       return Option.some(queued.outcome);
     }),
     () => inserted,

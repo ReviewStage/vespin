@@ -20,13 +20,16 @@
  *   FAILED          -> STARTING         rebootAgent, the pause lifted
  *   READY           -> (none)           endAgentBoot, once the first turn settles
  *
- * Each move under way names the attempt it was begun under, so a delivery
- * or a sweep of a boot Retry has since replaced moves nothing. Nothing here
- * reads the clock: each write is handed its instant.
+ * A failure and the scripts' start may name the attempt they were begun
+ * under, so a delivery or a sweep of a boot Retry has since replaced moves
+ * nothing; the runner coming up and the scripts' end name none, as their
+ * callers read the machine as it stands. Nothing here reads the clock: each
+ * write is handed its instant.
  */
 
 import {
   BOOT_BOUNDS,
+  BOOT_FAILURE,
   BOOT_PHASE,
   BOOTING_PHASES,
   type BootFailure,
@@ -51,6 +54,7 @@ import {
 type AgentBootEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 const PHASES: readonly BootPhase[] = Object.values(BOOT_PHASE);
+const FAILURES: readonly BootFailure[] = Object.values(BOOT_FAILURE);
 
 /** An agent's first launch as its row keeps it. */
 export interface AgentBootRow {
@@ -70,7 +74,7 @@ const BootRowSchema = Schema.Struct({
   phaseAt: Schema.Date,
   deadlineAt: Schema.Date,
   setupExit: Schema.NullOr(Schema.Number),
-  failure: Schema.NullOr(Schema.String),
+  failure: Schema.NullOr(Schema.Literals(FAILURES)),
 });
 
 const BOOT_COLUMNS = {
@@ -87,8 +91,7 @@ function bootOf(row: typeof BootRowSchema.Type): AgentBootRow {
   return {
     ...row,
     setupExit: row.setupExit ?? undefined,
-    // SAFETY: the column is written only by `failAgentBoot`, from `BOOT_FAILURE`.
-    failure: (row.failure ?? undefined) as BootFailure | undefined,
+    failure: row.failure ?? undefined,
   };
 }
 
@@ -130,7 +133,7 @@ const updatePhase = SqlSchema.findAll({
     to: Schema.Literals(PHASES),
     at: Schema.Date,
     setupExit: Schema.NullOr(Schema.Number),
-    failure: Schema.NullOr(Schema.String),
+    failure: Schema.NullOr(Schema.Literals(FAILURES)),
     nextAttempt: Schema.Boolean,
   }),
   Result: BootRowSchema,
@@ -143,10 +146,10 @@ const updatePhase = SqlSchema.findAll({
           phaseAt: at,
           deadlineAt: deadlineFrom(at),
           ...(setupExit === null ? undefined : { setupExit }),
-          // SAFETY: `failure` is handed in only by `failAgentBoot`, from `BOOT_FAILURE`.
-          ...(failure === null ? undefined : { failure: failure as BootFailure }),
+          ...(failure === null ? undefined : { failure }),
+          // Note that a next attempt keeps nothing of the last: no failure, and no exit of scripts it has not run.
           ...(nextAttempt
-            ? { attempt: sql`${agentBootTable.attempt} + 1`, failure: null }
+            ? { attempt: sql`${agentBootTable.attempt} + 1`, failure: null, setupExit: null }
             : undefined),
         })
         .where(
