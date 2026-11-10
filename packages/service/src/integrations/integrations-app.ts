@@ -107,6 +107,9 @@ export interface IntegrationsAppSeams {
   now: () => number;
 }
 
+/** The seams a call about the account's own integrations reads and writes through: every one but the caller's resolver, which a door resolves first. */
+export type IntegrationAccountSeams = Omit<IntegrationsAppSeams, "resolveUserId">;
+
 /** A sign-in state as production mints it. */
 export function mintIntegrationState(): string {
   return randomBytes(STATE_BYTES).toString("base64url");
@@ -123,7 +126,10 @@ export function signInIssuedSince(now: number): number {
 }
 
 /** Whether a sign-in begun at this instant may still settle. */
-export function signInStands(seams: IntegrationsAppSeams, issuedAt: Date | undefined): boolean {
+export function signInStands(
+  seams: Pick<IntegrationsAppSeams, "now">,
+  issuedAt: Date | undefined,
+): boolean {
   return (
     issuedAt !== undefined && seams.now() - issuedAt.getTime() <= INTEGRATION_SIGN_IN_WINDOW_MS
   );

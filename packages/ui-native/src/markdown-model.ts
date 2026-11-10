@@ -2,6 +2,7 @@
 
 import { dateChipText } from "@repo/features/date-mention";
 import { type LinkPlace, readLink } from "@repo/features/link-grammar";
+import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import { isBareLink, linkMention, MENTION_KIND, mentionName } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
@@ -434,8 +435,9 @@ function blocksOf(nodes: readonly RootContent[], reader: Reader): MarkdownBlock[
   return nodes.flatMap((node) => blockOf(node, reader));
 }
 
-/** Markdown as the blocks the app draws, read as the panel reads it. */
+/** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */
 export function markdownBlocks(words: string, reading: MarkdownReading): readonly MarkdownBlock[] {
+  if (markdownTooDeep(words)) return [{ kind: MARKDOWN_BLOCK.CODE, text: words }];
   const tree = markdownTree(words);
   return blocksOf(tree.children, { reading, definitions: definitionsIn(tree) });
 }
