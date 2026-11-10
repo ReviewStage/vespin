@@ -276,8 +276,10 @@ export type QueueHandOn = (agent: Agent) => Effect.Effect<void, never, CarryOnSe
  * turn was cut off while the Mac was away: decided as at its settle, the
  * Mac now back, with the queued message handed on in place of a carry-on
  * through `handOn`, which leaves a queue paused for a reason of its own as
- * it stands. A carry-on that did not go leaves the turn failed, and pauses
- * the queue as the turn's end would have. Answers whether a carry-on went.
+ * it stands. A carry-on that did not go, or a turn back past the window,
+ * leaves the turn failed and pauses the queue as the turn's end would
+ * have, since its settle deferred that to this return. Answers whether a
+ * carry-on went.
  */
 const agentCarriedOnReturn = (
   sessionsFor: QueueSessions,
@@ -296,8 +298,15 @@ const agentCarriedOnReturn = (
       yield* handOn(agent.value);
       return false;
     }
-    if (decided.outcome !== CARRY_ON_OUTCOME.RESUME || turn === undefined) return false;
-    if (yield* carriedOn(sessionsFor, agent.value, turn.id, decided.reason)) return true;
+    if (decided.outcome === CARRY_ON_OUTCOME.AWAIT_HOST || turn === undefined) return false;
+    if (
+      decided.outcome === CARRY_ON_OUTCOME.RESUME &&
+      (yield* carriedOn(sessionsFor, agent.value, turn.id, decided.reason))
+    ) {
+      return true;
+    }
+    // A turn past the window, or whose carry-on did not go, pauses the queue its settle deferred, as the turn's end would have;
+    // a queue already paused keeps its own reason, and an empty one is not paused.
     yield* pauseAgentQueue(agent.value.id, QUEUE_PAUSE.TURN_FAILED);
     return false;
   }).pipe(

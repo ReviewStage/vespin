@@ -384,6 +384,38 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
     );
 
     it.effect(
+      "a Mac back more than an hour after its turn was cut off carries nothing on, and pauses the queue its turn's end deferred, so the message queued behind the failed turn does not go by itself",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, deviceId, agent } = warm;
+          const lost = yield* turnRunning(warm, "Now the emails.");
+          yield* queueAgentMessage(userId, agent.id, {
+            id: randomUUID(),
+            text: "Then open the pull request.",
+          });
+          yield* TestClock.adjust("6 minutes");
+          yield* reconcileAgent(agent);
+          yield* turnEnded(warm);
+          yield* TestClock.adjust("61 minutes");
+
+          yield* hostWriteCarriedOn(
+            sessionsFor,
+            userId,
+            deviceId,
+            (back) => queueAtTouch(sessionsFor, back),
+            beatDevice(userId, deviceId),
+          );
+
+          assert.equal(yield* carriedOnStands(warm, lost), false);
+          const queue = yield* agentQueueNow(agent.id);
+          assert.equal(queue.paused?.because, QUEUE_PAUSE.TURN_FAILED);
+          assert.equal(queue.messages.length, 1);
+          assert.equal(yield* launchClaimed(warm), undefined);
+        }),
+    );
+
+    it.effect(
       "a message queued behind the turn a Mac lost goes at the Mac's first beat back, in the carry-on's place, and a queue paused for a reason of its own is left as it stands",
       () =>
         Effect.gen(function* () {
