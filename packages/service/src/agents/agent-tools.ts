@@ -2488,7 +2488,7 @@ interface TaskUpdateAnswered {
 }
 
 /** A task's change as the model reads it: the task as it now stands, with its mention, its parent and its blocks where the call named them, and whether every change named already stood before the call. */
-const taskUpdateAnswer = (
+export const taskUpdateAnswer = (
   userId: string,
   task: StoredTask["task"],
   { already, section, parentNamed, blocksNamed }: TaskUpdateAnswered,

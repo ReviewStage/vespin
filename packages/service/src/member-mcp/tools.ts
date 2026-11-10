@@ -179,6 +179,12 @@ import {
 } from "../agents/memory-tools.js";
 import { runListPortsShared, runSharePort, SHARE_PORT_TOOL } from "../agents/port-tools.js";
 import {
+  CHANGE_TASK_RELATION_INPUT,
+  FIND_TASK_INPUT,
+  runChangeTaskRelation,
+  runFindTask,
+} from "../agents/task-find-relation-tools.js";
+import {
   CREATE_SECTION_TOOL,
   DELETE_SECTION_TOOL,
   NO_SECTION_DELETED,
@@ -479,6 +485,25 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
       READ_TASK_REFUSAL.NO_TASK,
       (call) => runReadTask(call, asked),
     ),
+});
+
+/** A find names the workspace it looks in, and the task by its number or its key. */
+const FindTaskInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  ...FIND_TASK_INPUT.fields,
+});
+
+const MEMBER_FIND_TASK_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.FIND_TASK,
+  description:
+    "Find a task of a workspace the member belongs to by its number there, such as 42, or its " +
+    "key, such as ACME-42, as a link or a person names it, and read it as " +
+    `${MEMBER_MCP_TOOL.READ_TASK} reads it, its id among it; the key's prefix is not checked, ` +
+    `since it follows the workspace's name. ${WORKSPACE_WORDS} Answers \`rejected\` and why ` +
+    "where no task the member can open has that number.",
+  input: FindTaskInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace, ...asked }) => listAsMember(workspace, (call) => runFindTask(call, asked)),
 });
 
 /** A list of agents narrows as the agents' own does, in the workspace named, bar to a task of the caller's own, since the member works on none. */
@@ -812,6 +837,30 @@ const MEMBER_UPDATE_TASK_TOOL = memberMcpTool({
       (userId) => readTaskWorkspace(userId, asked.taskId),
       UPDATE_TASK_REFUSAL.NO_TASK,
       (call) => runUpdateTask(call, asked),
+    ),
+});
+
+const MEMBER_CHANGE_TASK_RELATION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CHANGE_TASK_RELATION,
+  description:
+    "Move one relation between a task the member can open and another task of its workspace " +
+    "from the kind it stands in to another, in one step, as the task head's menu changes a " +
+    "relation's kind in place: from how the other task stands to the task now (blocked-by, " +
+    "blocks, sub-task, or parent) to how it stands once moved, such as a blocker made a " +
+    "sub-task, or a block turned around. The old relation is taken away and the new one added " +
+    "together, so either both land or neither does; one that did not stand in the kind it " +
+    "leaves is left alone, and the new one is added still. A block that would close a cycle " +
+    "is refused, as is a parent under which a task would descend from itself, or one working " +
+    "in another repository than its child. Answers `accepted` with the task as it now stands, " +
+    "its parentTaskId, blockedBy, and blocks among it, `already` true where the relation stood " +
+    "as asked, or `rejected` and why.",
+  input: CHANGE_TASK_RELATION_INPUT,
+  annotations: IDEMPOTENT_CHANGE,
+  run: (asked) =>
+    writeAsMember(
+      (userId) => readTaskWorkspace(userId, asked.taskId),
+      UPDATE_TASK_REFUSAL.NO_TASK,
+      (call) => runChangeTaskRelation(call, asked),
     ),
 });
 
@@ -2167,6 +2216,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   LIST_WORKSPACES_TOOL,
   MEMBER_LIST_TASKS_TOOL,
   MEMBER_READ_TASK_TOOL,
+  MEMBER_FIND_TASK_TOOL,
   MEMBER_LIST_AGENTS_TOOL,
   MEMBER_READ_AGENT_TOOL,
   READ_AGENT_CHANGES_TOOL,
@@ -2174,6 +2224,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_LIST_MODELS_TOOL,
   MEMBER_CREATE_TASK_TOOL,
   MEMBER_UPDATE_TASK_TOOL,
+  MEMBER_CHANGE_TASK_RELATION_TOOL,
   MEMBER_EDIT_DESCRIPTION_TOOL,
   MEMBER_CREATE_SECTION_TOOL,
   MEMBER_DELETE_SECTION_TOOL,
