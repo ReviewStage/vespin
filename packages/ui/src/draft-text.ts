@@ -137,8 +137,12 @@ function slackRuns(text: string): DraftRun[] {
     const link = character === "<" ? SLACK_LINK.exec(text.slice(at)) : null;
     if (link !== null) {
       const [whole, url = "", label] = link;
-      const words = label === undefined || label === "" ? url : label;
-      runs.push({ kind: DRAFT_RUN.LINK, url, runs: slackRuns(words) });
+      // Note that a bare link's words are its address as written, never read for marks a path may hold.
+      const words: DraftRun[] =
+        label === undefined || label === ""
+          ? [{ kind: DRAFT_RUN.TEXT, text: url }]
+          : slackRuns(label);
+      runs.push({ kind: DRAFT_RUN.LINK, url, runs: words });
       at += whole.length;
       continue;
     }

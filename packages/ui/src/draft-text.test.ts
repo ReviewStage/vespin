@@ -26,11 +26,11 @@ it.each<{ name: string; kind: DraftKind; text: string; html: string; plain: stri
     plain: "snake_case_name 2*3 *open\nclose*",
   },
   {
-    name: "a Slack link labeled and bare, and words to escape",
+    name: "a Slack link labeled and bare, a bare address kept as written, and words to escape",
     kind: DRAFT_KIND.SLACK,
-    text: "See <https://a.example/x?y=1&z=2|*the doc*> or <https://b.example> & <not a link>",
-    html: 'See <a href="https://a.example/x?y=1&amp;z=2"><b>the doc</b></a> or <a href="https://b.example">https://b.example</a> &amp; &lt;not a link&gt;',
-    plain: "See the doc (https://a.example/x?y=1&z=2) or https://b.example & <not a link>",
+    text: "See <https://a.example/x?y=1&z=2|*the doc*> or <https://b.example/_x_> & <not a link>",
+    html: 'See <a href="https://a.example/x?y=1&amp;z=2"><b>the doc</b></a> or <a href="https://b.example/_x_">https://b.example/_x_</a> &amp; &lt;not a link&gt;',
+    plain: "See the doc (https://a.example/x?y=1&z=2) or https://b.example/_x_ & <not a link>",
   },
   {
     name: "an email's body under its subject, its marks left as written",
