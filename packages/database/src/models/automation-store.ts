@@ -1052,7 +1052,7 @@ export function createAutomationCommitted(
       scope: made.scope ?? AUTOMATION_SCOPE.PERSONAL,
       targetKind: made.targetKind ?? AUTOMATION_TARGET.NEW_AGENT,
       targetAgentId: made.targetAgentId ?? null,
-      archiveSuccessful: made.archiveSuccessful ?? false,
+      archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
       now,
     });
