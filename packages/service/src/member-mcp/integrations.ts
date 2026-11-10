@@ -61,6 +61,7 @@ const MEMBER_INTEGRATION_REFUSAL = {
     "Not done: that integration is not offered to the member on this deployment, it holds as " +
     "many accounts as it takes, it is GitHub, whose sign-in is the member's own, or it could " +
     "not be reached just now.",
+  TOOLS_UNAVAILABLE: `Not done: that integration is not offered to the member on this deployment, the account is not connected (${MEMBER_MCP_TOOL.CONNECT_INTEGRATION} signs it in again), or it could not be reached just now.`,
   NO_WORKSPACE: "Not done: the member belongs to no such workspace.",
   NOT_PERMITTED: "Not done: only an owner or an admin of the workspace may disconnect its Sentry.",
   NO_INSTALLATION: `Not done: the workspace holds no such Sentry installation; ${MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS} names its installations.`,
@@ -148,7 +149,7 @@ export const listIntegrationToolsAsMember = (provider: string, connection: strin
     return yield* accepted(
       Effect.map(work, (answer) => ({ connection, ...answer })),
       MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
-      MEMBER_INTEGRATION_REFUSAL.UNAVAILABLE,
+      MEMBER_INTEGRATION_REFUSAL.TOOLS_UNAVAILABLE,
     );
   });
 
