@@ -63,7 +63,6 @@ import {
   useMinute,
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
-import { CalendarIcon } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import type { ReactNode } from "react";
 import type {
@@ -72,6 +71,7 @@ import type {
   MentionNodeDoors,
 } from "../description-editor/contract.js";
 import { branchNote, entityCard } from "../entities/entity-card.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { type AgentTiles, entityMark } from "../entities/entity-mark.js";
 import type { LinkDrawer, MarkdownSpan } from "../markdown-message.js";
 import { LinkAutomations, useSectionHeading } from "./chip-cards.js";
@@ -648,7 +648,7 @@ function DateCard({ date }: { date: DateMention }): React.JSX.Element {
   const zone = readerZone();
   return (
     <HoverCard data-date-card="">
-      <HoverCardHead glyph={<CalendarIcon aria-hidden="true" />} name={dateWhole(date, zone)} />
+      <HoverCardHead glyph={<EntityGlyph kind={ENTITY_KIND.DATE} />} name={dateWhole(date, zone)} />
       <HoverCardNote>{dateDistance(date, now, zone)}</HoverCardNote>
     </HoverCard>
   );
@@ -667,7 +667,7 @@ function DateChip({
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
-      glyph={<CalendarIcon aria-hidden="true" />}
+      glyph={<EntityGlyph kind={ENTITY_KIND.DATE} />}
       kind={ENTITY_WORD[ENTITY_KIND.DATE]}
       label={dateChipText(date, now, readerZone())}
       name={INLINE_REF_NAME.WHOLE}

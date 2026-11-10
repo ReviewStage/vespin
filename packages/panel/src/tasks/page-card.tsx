@@ -1,3 +1,4 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import {
   PAGE_SHOWER,
@@ -8,10 +9,10 @@ import {
 import { HoverCard, HoverCardHead, HoverCardSkeleton, PageThumb, Time, useMinute } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
-import { AppWindowIcon } from "lucide-react";
 import { useRef } from "react";
 import { PROVENANCE_VERB, ProvenanceRow } from "../actor-ref.js";
 import { appPlatform } from "../app-platform.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { PAGE_SANDBOX } from "./page-pane.js";
 import { PAGE_ROOM, usePageTheme } from "./page-theme.js";
 import { useKnownNames } from "./use-known-names.js";
@@ -105,7 +106,7 @@ export function PageCard({ place, page }: CardPage): React.JSX.Element {
   return (
     <HoverCard data-page-card="">
       <HoverCardHead
-        glyph={<AppWindowIcon aria-hidden="true" />}
+        glyph={<EntityGlyph kind={ENTITY_KIND.PAGE} />}
         name={page.title}
         sub={page.version > 1 ? `Version ${page.version}` : undefined}
         corner={<Time at={page.at} now={now} hint={false} />}
@@ -132,7 +133,7 @@ function shownName(name: string | undefined): string {
 export function PageNameCard({ name }: { name: string | undefined }): React.JSX.Element {
   return (
     <HoverCard data-page-card="">
-      <HoverCardHead glyph={<AppWindowIcon aria-hidden="true" />} name={shownName(name)} />
+      <HoverCardHead glyph={<EntityGlyph kind={ENTITY_KIND.PAGE} />} name={shownName(name)} />
     </HoverCard>
   );
 }
@@ -141,7 +142,7 @@ export function PageNameCard({ name }: { name: string | undefined }): React.JSX.
 export function PageNameSkeleton({ name }: { name: string | undefined }): React.JSX.Element {
   return (
     <HoverCardSkeleton
-      glyph={<AppWindowIcon aria-hidden="true" />}
+      glyph={<EntityGlyph kind={ENTITY_KIND.PAGE} />}
       name={shownName(name)}
       sub
       data-page-card=""
