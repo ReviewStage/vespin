@@ -261,7 +261,7 @@ test("a Start the plan's usage limit refused draws the limit's notice in the fai
     resetsAt: Date.UTC(2026, 10, 10, 4),
   } as const;
   // Note that a refused Start's note keeps the answer that refused it, as `use-agents.ts` hands it on.
-  const note: Failure = { ...startFailureNote(refused, TASK_ID), cause: refused } as Failure;
+  const note = { ...startFailureNote(refused, TASK_ID), cause: refused };
   const tab = mount([note, undefined]);
   await tab.send();
 
