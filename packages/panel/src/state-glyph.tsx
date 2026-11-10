@@ -21,31 +21,9 @@
  * `glyphStateWords` gives.
  */
 
+import { GLYPH_STATE, type GlyphState, glyphStateWords } from "@repo/features/glyph-state";
 import { FailedMark as FailedRowMark, Tooltip, WorkingMark } from "@repo/ui";
 import type { ReactNode } from "react";
-
-export const GLYPH_STATE = {
-  WORKING: "working",
-  FAILED: "failed",
-  REST: "rest",
-} as const;
-
-export type GlyphState = (typeof GLYPH_STATE)[keyof typeof GLYPH_STATE];
-
-/** What a reader is told of each state; nothing at rest. */
-const GLYPH_STATE_WORDS = {
-  [GLYPH_STATE.WORKING]: "Working",
-  [GLYPH_STATE.FAILED]: "Failed",
-  [GLYPH_STATE.REST]: undefined,
-} as const satisfies Record<GlyphState, string | undefined>;
-
-/** What a piece of work at rest is called once it was stopped, which its glyph at rest does not tell from a finish. */
-const STOPPED_WORDS = "Stopped";
-
-/** What a card or a tab says of where its work stands beyond its glyph: the state's own word, or Stopped for work at rest that was `stopped`. */
-export function glyphStateWords(state: GlyphState, stopped: boolean): string | undefined {
-  return state === GLYPH_STATE.REST && stopped ? STOPPED_WORDS : GLYPH_STATE_WORDS[state];
-}
 
 /**
  * A glyph wearing where its work stands: the working mark in its place
@@ -71,7 +49,7 @@ export function StateGlyph({
       className="state-glyph"
       data-state={state}
       role="img"
-      aria-label={GLYPH_STATE_WORDS[state]}
+      aria-label={glyphStateWords(state, false)}
     >
       <WorkingMark />
     </span>
@@ -86,7 +64,7 @@ export function StateGlyph({
  */
 function FailedMark({ hinted }: { hinted: boolean }): React.JSX.Element {
   return hinted ? (
-    <Tooltip label={GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}>
+    <Tooltip label={glyphStateWords(GLYPH_STATE.FAILED, false)}>
       <FailedRowMark />
     </Tooltip>
   ) : (

@@ -8,6 +8,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
+import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
   AVATAR_SHAPE,
   AVATAR_SIZE,
@@ -56,7 +57,7 @@ import { useAutomation } from "./automation-directory.js";
 import { automationNextText, automationOwnerName } from "./desktop/automation-words.js";
 import { useCreator } from "./member-directory.js";
 import { useActorDoor, usePreloadedPerson } from "./person-door.js";
-import { GLYPH_STATE, type GlyphState, StateGlyph } from "./state-glyph.js";
+import { StateGlyph } from "./state-glyph.js";
 import { AgentHoverCard } from "./tasks/agent-ref.js";
 import { AgentMark } from "./tasks/tab-look.js";
 
@@ -501,6 +502,30 @@ export function ActorMark({
       )}
     </span>
   );
+}
+
+/**
+ * An actor as a chip's glyph: an agent's mark or an automation's alone,
+ * wearing where its work stands, at the size of every glyph beside it in the
+ * line; anyone else as their mark (`ActorMark`). Note that an agent and an
+ * automation stand bare here rather than on their square, because a bare
+ * square draws no ground of its own and only shrinks its glyph to its share,
+ * which reads in a chip as a glyph too small and set off from its name.
+ */
+export function ActorGlyph({ actor }: { actor: Actor }): React.JSX.Element {
+  switch (actor.kind) {
+    case ACTOR_KIND.AGENT:
+      return (
+        <StateGlyph
+          glyph={<AgentMark provider={actor.provider} />}
+          state={GLYPH_OF_STATE[actor.state]}
+        />
+      );
+    case ACTOR_KIND.AUTOMATION:
+      return automationGlyph(actor);
+    default:
+      return <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />;
+  }
 }
 
 /**

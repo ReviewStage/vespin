@@ -82,6 +82,8 @@ export const AGENT_TOOL = {
   READ_PAGE: "read_page",
   // Pictures from a coding agent's sandbox, shown in its transcript.
   SHOW_IMAGE: "show_image",
+  // A wakeup a coding agent books for later, on a harness with no wakeup of its own: its turn ends, and the prompt opens its next turn when due.
+  SCHEDULE_WAKEUP: "schedule_wakeup",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
   SLEEP: "sleep",
 } as const;

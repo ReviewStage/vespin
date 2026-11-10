@@ -12,6 +12,7 @@ import { ACCOUNT_COMMANDS } from "./account.js";
 import { agentCommand } from "./agent.js";
 import { apiCommand } from "./api.js";
 import { automationCommand } from "./automation.js";
+import { commentCommand } from "./comment.js";
 import { descriptionCommand } from "./description.js";
 import { githubCommand } from "./github.js";
 import { inboxCommand } from "./inbox.js";
@@ -19,9 +20,12 @@ import { keysCommand } from "./keys.js";
 import { mcpCommand } from "./mcp.js";
 import { memoryCommand } from "./memory.js";
 import { modelsCommand } from "./models.js";
+import { pageCommand } from "./page.js";
 import { prCommand } from "./pr.js";
+import { preferencesCommand } from "./preferences.js";
 import { repoCommand } from "./repo.js";
 import { sectionCommand } from "./section.js";
+import { setupCommand } from "./setup.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
 import { versionCommand } from "./version.js";
@@ -32,15 +36,19 @@ export const COMMANDS = [
   taskCommand,
   sectionCommand,
   descriptionCommand,
+  commentCommand,
+  pageCommand,
   agentCommand,
   prCommand,
   workspaceCommand,
   githubCommand,
   repoCommand,
+  setupCommand,
   inboxCommand,
   memoryCommand,
   automationCommand,
   modelsCommand,
+  preferencesCommand,
   keysCommand,
   mcpCommand,
   apiCommand,
