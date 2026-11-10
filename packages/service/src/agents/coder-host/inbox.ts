@@ -119,7 +119,7 @@ const POST_THREAD_WORDS =
   `where they pick between designs or variants, give each option its own media, at most ${INBOX_BOUNDS.MAX_OPTION_MEDIA}, which they look at on its card: ` +
   "a file in your sandbox as {path, caption}, a picture or a recording as a body's picture is, a page you showed with show_page as {page} by the id it answered, " +
   `or an https address to open, such as a preview, as {url, label}; at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} across the options, the message's own pictures counted; ` +
-  "an option's extra screens go in its own media, never an option of their own; " +
+  "an option's extra screens go in its own media, never an option of their own, and media an option carries stands on its card, so never draw it in body as well; " +
   `options with media also offer "${NONE_OF_THESE}", which you never offer yourself, and an answer of none reaches you as "Chose ${NONE_OF_THESE.toLowerCase()}."; ` +
   "for a go-ahead on one step you propose, two short options such as Approve and Request changes), " +
   "do (a to-do: something only they can do by hand, such as changing a GitHub setting, adding a secret, or testing by hand what you could not test yourself; " +
