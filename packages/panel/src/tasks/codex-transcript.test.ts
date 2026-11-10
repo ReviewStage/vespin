@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { MESSAGE_ROLE, type WireRecord, type WireValue } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -9,7 +10,6 @@ import { afterEach, beforeEach, test } from "vitest";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 
 /**
  * codex-transcript.test.ts -- a coding agent on Codex stores its items under

@@ -117,4 +117,9 @@ describe("markdownBlocks", () => {
       ],
     });
   });
+
+  it("draws words nested too deep to parse as one block of plain text", () => {
+    const deep = `${">".repeat(8000)} **hi**`;
+    expect(markdownBlocks(deep, READING)).toEqual([{ kind: MARKDOWN_BLOCK.CODE, text: deep }]);
+  });
 });

@@ -1,4 +1,5 @@
 import type { AgentChangedFile } from "@repo/features/agent-wire";
+import { fileName } from "@repo/features/code-ref-words";
 import {
   FILES_CHANGED_KEY,
   FILES_CHANGED_SHORTCUTS,
@@ -47,7 +48,6 @@ import {
 } from "./changes-model.js";
 import type { DiffListDoor } from "./diff-list.js";
 import { PATH_COPY_WORDS } from "./file-menu.js";
-import { fileName } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
 /**

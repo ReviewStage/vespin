@@ -132,6 +132,7 @@ const DECLARED: readonly {
   { name: "TASKS_REVISION", payload: { ...TASK, seq: 3 } },
   { name: "TASKS_RESTORE", payload: { ...TASK, seq: 3 } },
   { name: "TASKS_PAGE_SOURCE", payload: { ...TASK, pageId: "page-funnel", version: 2 } },
+  { name: "TASKS_PAGE_HTML", payload: { ...TASK, pageId: "page-funnel", version: 2 } },
   { name: "TASKS_PICTURE_READ", payload: { ...PLAN, attachmentId: "picture-1" } },
   {
     name: "TASKS_PICTURE_KEEP",

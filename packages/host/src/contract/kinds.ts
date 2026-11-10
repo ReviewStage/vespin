@@ -503,6 +503,8 @@ export const TASKS_ACT_KIND = {
   TASKS_RESTORE: "tasks.restore",
   /** A page tab's source of one version of one of the plan's pages, read from the service as its frame's is and colored by main as HTML; answered to the tab, never on the document. */
   TASKS_PAGE_SOURCE: "tasks.pageSource",
+  /** One version of one of the plan's pages, or an agent's on no task, its HTML whole, read from the service as its frame's is, for a client that draws the page itself, the iPhone's sealed page; answered to the client, never on the document. */
+  TASKS_PAGE_HTML: "tasks.pageHtml",
   /**
    * One plan's pages, or one agent's on no task, held followed while the
    * window holds the stream open for a surface that draws them, the open
@@ -1027,6 +1029,7 @@ export const PORT_ACT_USE = {
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
+  TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_RETRY: ACT_USE.READ,

@@ -48,6 +48,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { NOTE_KIND } from "@repo/features/description-notes";
 import { INBOX_ANSWER_LEAD, INBOX_ASK, INBOX_REPLY, INBOX_STATUS } from "@repo/features/inbox-wire";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import { DESCRIPTION_ACTOR, TASK_STATUS } from "@repo/features/task-wire";
@@ -62,6 +63,7 @@ import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-m
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
 import { EXPERIMENT_OFF_REFUSAL } from "../agents/workspace-experiment-on.js";
 import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
+import { ACTION_RESULT_STATUS } from "../core.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { postInboxThread, readInboxItem } from "../inbox/inbox-store.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
@@ -87,6 +89,11 @@ import {
   signInWithGitHub,
   standingGithubRow,
 } from "../testing/github-app-fake.js";
+import {
+  CONNECTOR_ASKED_NOTHING,
+  GRANTING_SIGN_IN_URL,
+  integrationConnectOf,
+} from "../testing/integration-connect.js";
 import {
   connected,
   MCP_CLIENT,
@@ -561,7 +568,7 @@ it.effect(
 );
 
 it.effect(
-  "a member makes, starts, messages, stops, changes, shares a port of, drives a browser of, plans, comments, remembers, and runs nothing in a workspace they are not in",
+  "a member makes, starts, messages, stops, changes, shares a port of, drives a browser of, plans, comments, remembers, runs, and reads or disconnects the Sentry of nothing in a workspace they are not in",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -655,6 +662,7 @@ it.effect(
         [
           [MEMBER_MCP_TOOL.CREATE_TASK, { workspace, name: "Planted" }],
           [MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, name: "Renamed" }],
+          [MEMBER_MCP_TOOL.DELETE_TASK, { taskId }],
           [
             MEMBER_MCP_TOOL.EDIT_DESCRIPTION,
             { taskId, notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Planted." }] },
@@ -703,6 +711,8 @@ it.effect(
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
           [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
+          [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS, { workspace }],
+          [MEMBER_MCP_TOOL.DISCONNECT_SENTRY, { workspace, installationId: randomUUID() }],
         ] as const,
         ([name, args]) =>
           Effect.promise(async () => {
@@ -1461,6 +1471,52 @@ it.effect(
         slug: "seats",
         name: "Test Workspace",
       });
+    }),
+);
+
+it.effect(
+  "a member's connect_integration answers the sign-in link alone, and the sign-in returns to this deployment's own address",
+  () =>
+    Effect.gen(function* () {
+      const returns: string[] = [];
+      const signingIn = integrationConnectOf(() => ({
+        ...CONNECTOR_ASKED_NOTHING,
+        authorize: (_subject, callbackUrl) => {
+          returns.push(callbackUrl);
+          return Effect.succeed({ url: GRANTING_SIGN_IN_URL });
+        },
+      }));
+      const { auth, fetch } = yield* memberMcpStanding({ integrations: signingIn });
+      const member = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const answer = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.CONNECT_INTEGRATION,
+            arguments: { provider: INTEGRATION_PROVIDER.NOTION },
+          }),
+        ),
+      );
+      yield* Effect.promise(() => client.close());
+
+      assert.equal(answer.isError, undefined);
+      assert.deepEqual(JSON.parse(answer.content[0].text), {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        url: GRANTING_SIGN_IN_URL,
+        connection: INTEGRATION_PROVIDER.NOTION,
+      });
+      assert.equal(returns.length, 1);
+      assert.ok(
+        returns[0]?.startsWith(`${ORIGIN}/api/account/integrations/connected?state=`),
+        String(returns[0]),
+      );
     }),
 );
 

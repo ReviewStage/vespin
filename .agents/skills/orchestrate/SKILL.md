@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Roll out a plan or Linear issue as a set of PRs by acting as an orchestrator, from a Vespin coding agent. Splits the plan into small PRs, gives each PR to its own worker (a Vespin coding agent) on a model and effort the orchestrator picks for that PR, runs independent PRs in parallel, has each worker babysit its PR and merge it on green unless the PR needs the user's attention, restacks a stack through a short-lived worker, monitors the workers through messages rather than polling, and archives every worker it started once that worker's work is done, so the user never has to clean up after a rollout. Use when the user says "orchestrate", "roll out this plan", or asks you to farm a plan or issue out to workspaces or agents instead of doing the work here.
+description: Roll out a plan or Linear issue as a set of PRs by acting as an orchestrator, from a Vespin coding agent. Splits the plan into small PRs, makes each PR a subtask of the task it works on, gives each subtask its own worker (a Vespin coding agent) on a model and effort the orchestrator picks for that PR, runs independent PRs in parallel, has each worker babysit its PR and merge it on green unless the PR needs the user's attention, restacks a stack through a short-lived worker, monitors the workers through messages rather than polling, and closes every subtask and archives every worker once its work is done, so the user never has to clean up after a rollout. Use when the user says "orchestrate", "roll out this plan", or asks you to farm a plan or issue out to workspaces or agents instead of doing the work here.
 ---
 
 # Orchestrate
@@ -9,15 +9,14 @@ You do no implementation work here. You are the orchestrator: the plan or
 Linear issue describes the work; you split it into PRs, kick each of them off
 with a new worker, and manage the rollout to merge.
 
-You are a coding agent, and a worker is another coding agent on your own
-task, driven by your agent tools: never make a task for a worker. Where you
-work on no task (an automation may start you on none), make one task for the
-whole rollout with `create_task`, named for the plan or the issue, before the
-first worker, and take "your own task" below as that one: pass its id as
-`taskId` wherever the table starts or lists workers. The whole rollout is one
-team on one task, so `message_agent` is how you and the workers talk: you
-message a worker by the agent id `start_agent` answered, and it reports to
-yours.
+You are a coding agent, and a worker is another coding agent, driven by your
+agent tools. Prefer subtasks to agents on your own task: every PR gets a
+child task of yours, and its worker starts on it, so the user sees the
+rollout as a tree of tasks under yours. Only a helper with no PR, such as a
+restack worker, starts on your own task. Where you work on no task (an
+automation may start you on none), first make one task for the whole rollout
+with `create_task`, named for the plan or the issue, and take "your own task"
+below as that one. You and the workers talk by `message_agent`.
 
 | Action | How |
 | --- | --- |
@@ -25,7 +24,10 @@ yours.
 | Tell the user | `post_thread` without an ask, and your reply; where another coding agent started you, to it instead, as above |
 | Valid model ids | `list_models` |
 | Your id, for reports | Nothing to record: a started agent is told your id and your mention link |
-| Start a worker | `start_agent` on your own task (no `taskId`, or the rollout task's id where you work on none), with `title` set to the PR title, the brief as `prompt`, plus `model` and `effort` (below) |
+| Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, and the PR's scope as `description` |
+| Draw a dependency | `update_task` on the subtask of the PR that builds on another, with `blockedBy: { add: [<the other PR's subtask id>] }` |
+| Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below) |
+| Start a helper | `start_agent` on your own task (no `taskId`, or the rollout task's id where you work on none), with the brief as `prompt` |
 | Worker's base branch | `start_agent`'s `branch` |
 | Open a PR | `open_pull_request` with `base` |
 | Message a worker | `message_agent` with the worker's agent id |
@@ -33,9 +35,10 @@ yours.
 | Check on a silent worker | `read_agent` with its agent id |
 | Stop a worker | `stop_agent` with its agent id |
 | Continue a dead or stalled worker | `start_agent` with `from: { agentId }` and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
+| Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless Vespin already marked it done, or `canceled` for a PR cut from the plan, once its worker is stopped and its PR closed; then archive its worker |
 | Archive a worker | `update_agent` with `archived: true` and a short `reason`, once the agent is idle |
-| Keep the rollout together | Your own task: every worker starts on it, so its agents are the rollout, and `list_agents` with `thisTask` (or the rollout task's `taskId`) lists them |
-| Point the user at a worker or PR | The mentions `start_agent` answered, and the PR's URL |
+| List the rollout's agents | `list_agents` with a subtask's `taskId` for its workers, and with `thisTask` (or the rollout task's `taskId`) for the helpers |
+| Point the user at a subtask, worker, or PR | The mentions `create_task` and `start_agent` answered, and the PR's URL |
 
 Arguments: the plan (a file path, a Linear issue key such as `LUKE-159`, or
 inline text), optionally followed by the model and effort the user wants the
@@ -67,18 +70,19 @@ report. What the user named in the arguments or the conversation wins.
   the table's "Ask the user" row with an approval for each (one
   inbox item per held PR, mentioning it, once it is open and green).
 
-**Archiving is your job.** Every worker you start is yours to archive once its work is done: a PR worker once
-its PR has merged (or been closed because the PR was cut from the plan), a
-restack worker once it reports the restack done, and a stopped or dead worker
-once a continuation has taken its PR over. Archive each as soon as it is
-done, not in a batch at the end, and never leave one for the user to clean
-up. The table's "Archive a worker" row says how. Archive only the
-worker agents; your task stays, and so does a rollout task you made because
-you work on none, for the user to keep or archive.
+**Cleaning up is your job.** Close each subtask and archive each worker as
+soon as its work is done, never in a batch at the end: a PR's subtask and
+its worker once its PR has merged (or been closed because it was cut from
+the plan), a restack worker once it reports the restack done, and a stopped
+or dead worker once a continuation has taken its PR over. Vespin marks a
+subtask done by itself once its PR merges, but archives no agent then, so
+archive each worker yourself. Your own task opens no PR, so Vespin never
+finishes it: you mark it done at the end (Step 4).
 
 Split the plan into small PRs and draw the dependency graph. Every PR gets
-its own worker, which builds, opens, and babysits that one PR, so review
-comments on several PRs are fixed in parallel. Independent PRs start in
+its own subtask and its own worker on it, which builds, opens, and babysits
+that one PR, so review comments on several PRs are fixed in parallel.
+Independent PRs start in
 parallel from `main`. A PR that builds on another is based on that PR's
 branch; a linear chain of them is a stack, and where chains branch off a
 shared PR (a tree), each branch-off chain is a stack of its own. Prefer small
@@ -103,40 +107,40 @@ the inbox is that agent's, not yours: everything above that would reach the
 user goes to that agent instead, as the table's "Ask the user" and "Tell the
 user" rows say for it.
 
-## Step 1: Kick off each worker
+## Step 1: Make each subtask and kick off its worker
 
 There is nothing to record: every agent you start is told your agent id and
 how to reach you by `message_agent`.
 
-Start one worker per PR, but only for PRs whose base exists. Kick off every
-PR that starts from `main` now. Do not kick off a PR that builds on another
-until that PR's worker reports it open and its branch pushed; a worker started
-earlier would have nothing to build on. Then start it with that PR's branch
-as its base.
+Make every PR's subtask up front, as the table says, its `description` the
+brief's first item (below) under `##` headings, and draw the dependency
+graph on them with blocks. Make no sidebar section for the rollout; the
+subtasks stand under your task. Where the workspace has Task descriptions
+off, `create_task` offers no `description` and `start_agent` refuses a start
+with no `prompt`: make each subtask by its name alone, and start its worker
+with the brief's first item as `prompt` instead.
 
-Start every worker on the task you work on: call `start_agent`
-without `taskId` (with the rollout task's id where you work on none), so each
-worker stands among your task's agents, and its branch, PR, and
-transcript stay under the task the developer started the rollout from. Make
-no task for a worker with `create_task`, and make or move no sidebar section
-for the rollout. Set `title` to the PR title (at most 80 characters). Set
-`branch` to
-the base branch when it is not `main`; the worker starts on it and is told to
-pass it as `base` when it opens its PR. Give the brief as `prompt`, so the
-worker works from the brief and not the whole plan, and the chosen `model`
-and `effort`, checked against `list_models`. The call carries everything the
-worker is told; do not follow it with a message. `prompt` and `note` each
-hold at most 64,000 characters: put the
-PR's own scope and acceptance criteria in `prompt` and the rest of the brief
-in `note`, and where the plan is long, quote only the parts this PR needs and
-name the plan's file in the repository, if it has one, for the worker to read.
+Start one worker per subtask, but only for PRs whose base exists. Kick off
+every PR that starts from `main` now. Do not kick off a PR that builds on
+another until that PR's worker reports it open and its branch pushed; a
+worker started earlier would have nothing to build on. Then start it with
+that PR's branch as its base.
+
+Start each worker on its PR's subtask, as the table's "Start a worker" row
+says, `title` at most 80 characters. Set `branch` to the base branch when it
+is not `main`; the worker starts on it and is told to pass it as `base` when
+it opens its PR. Give the rest of the brief (its items 2 to 5) as `note`,
+which holds at most 64,000 characters, and the chosen `model` and `effort`,
+checked against `list_models`. The call carries everything the worker is
+told; do not follow it with a message.
 
 Every brief must contain:
 
-1. **The task**: the PR's scope, acceptance criteria, and the plan or issue
-   text this PR comes from (its own part, not the whole plan, where the
-   plan is long), plus a line on each PR below and above it in its
-   stack. Say plainly what is out of scope.
+1. **The task**, the subtask's description: the PR's scope, acceptance
+   criteria, and the plan or issue text this PR comes from (its own part,
+   not the whole plan, where the plan is long, naming the plan's file in the
+   repository, if it has one), plus a line on each PR below and above it in
+   its stack. Say plainly what is out of scope.
 2. **Branching**: the base branch, the PR's branch, and how to open it
    against that base (the table's "Open a PR" row for the host). The worker
    never restacks.
@@ -180,8 +184,9 @@ Every brief must contain:
    whole plan and the user's intent; the worker holds one PR. Small
    judgment calls stay with the worker.
 
-Keep each worker's ids (its agent id and its mention), branch, and PR url; you need
-them to reply, to kick off the PRs above, to restack, and to archive.
+Keep each PR's subtask (its id and its mention), its worker's ids (its agent
+id and its mention), branch, and PR url; you need them to reply, to kick off
+the PRs above, to restack, and to close and archive.
 
 ## Step 2: Monitor by messages, not polling
 
@@ -202,12 +207,12 @@ and each message arrives as a new turn; a worker's
   green (`gh pr checks <number>`), ask the user for the go now, since no
   later green report will come to prompt it; otherwise ask on its next one.
 - **Merged**: if any PR builds on this one, restack (Step 3), which also
-  retargets the PR above to `main`. Archive the merged PR's worker now, as the
-  table says.
+  retargets the PR above to `main`. Close the merged PR's subtask and archive
+  its worker now, as the table says.
 - **Worker ended**: a line from Vespin, not the worker, naming a
   worker of yours whose turn failed, or that someone else stopped or
   archived. No report will come from it on its own, so act now unless its PR
-  already merged: read it with `read_agent`, then continue a failed worker
+  already merged or was cut: read it with `read_agent`, then continue a failed worker
   as the table's "Continue a dead or stalled worker" row says. For one the
   user stopped or archived, ask the user whether to go on before you
   continue it. Each ending is told once, so do not wait for a second line.
@@ -244,8 +249,8 @@ work lives in the old worker's transcript.
 Run one restack at a time per stack. Tell every worker in the stack, and in
 each branch-off stack based on it, that a restack is pending, and wait for
 each to reply "holding"; stop one that does not hold, as the table says. Then
-start a short-lived restack worker (the Step 1 start, named "Restack <stack
-title>"; without `branch`, on
+start a short-lived restack worker (the table's "Start a helper" row, named
+"Restack <stack title>"; without `branch`, on
 `main`, since a Vespin agent never pushes the branch it was started on, so its
 checkout is a single-branch clone of `main`, possibly shallow, and its brief
 has it first run `git remote set-branches origin '*'`, then `git fetch
@@ -276,16 +281,16 @@ PR of its own, and reports when done. Then archive it and tell every held worker
 
 ## Step 4: Finish
 
-Before you report, check that nothing you started is left standing:
-`list_agents` with `thisTask` (or the rollout task's `taskId`) shows none of
-the rollout's workers unarchived, restack workers and replaced workers among
-them. Archive whatever is left. When every PR has merged, or been closed because it was
-cut, and every worker is archived, report to the user, as the table's "Tell
-the user" row says (one inbox post without an ask, mentioning each
+Before you report, check that nothing you started is left standing: every
+subtask reads done or canceled, and the table's "List the rollout's agents"
+row shows no worker unarchived, restack and replaced workers among them.
+Close and archive whatever is left. Then report to the user, as the table's
+"Tell the user" row says (one inbox post without an ask, mentioning each
 PR):
 the merged PRs with links, anything that was cut or changed from the plan,
 and any follow-ups the workers surfaced. If the rollout came from a Linear
-issue, update the issue with the merged PRs.
+issue, update the issue with the merged PRs. Then mark your own task done,
+unless another coding agent started you on it.
 
 ## Rules
 
@@ -293,18 +298,19 @@ issue, update the issue with the merged PRs.
 - Only you talk to the user. Workers report to you and never post to the
   user's inbox; you relay what needs the user and nothing routine.
 - Point the user at a worker or PR with a deep link or mention, not an id.
-- One PR per worker. Do not reuse a worker for a second PR; a continuation
-  of a worker takes over its source's PR.
+- One PR per subtask and per worker. Do not reuse a worker or a subtask for
+  a second PR; a continuation of a worker takes over its source's PR on its
+  subtask.
 - A PR that builds on another gets its worker only after that PR is open.
 - Workers never restack; a restack runs only in a restack worker, while
   every affected worker holds.
-- Every worker runs on your own task; never make a task or a
-  sidebar section for one. Only an orchestrator on no task makes a task,
-  one for the whole rollout.
-- You archive what you started: every worker, as soon as its work is
-  done. The user never cleans up after a rollout.
+- Every PR's worker runs on its own subtask of your task; only a helper
+  with no PR runs on your own task.
+- You clean up what you made: every subtask closed and every worker
+  archived, as soon as its work is done, and your own task done at the end.
+  The user never cleans up after a rollout.
 - Do not archive a worker while its PR is unmerged, unless a continuation
   has taken the PR over or the PR was closed because it was cut.
-- Stop a worker only when it goes the wrong way, is stuck, or will not hold
-  for a restack. Continue a dead or stopped worker; never start a fresh one
-  to replace it.
+- Stop a worker only when it goes the wrong way, is stuck, will not hold
+  for a restack, or its PR is cut. Continue a dead or stopped worker unless
+  its PR was cut; never start a fresh one to replace it.
