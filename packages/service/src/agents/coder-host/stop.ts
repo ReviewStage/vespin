@@ -11,6 +11,7 @@ import {
   openSandboxesOfReached,
   RUNNING_TURN_STATUSES,
 } from "@repo/database/models/agent-store";
+import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { TaskStandingAgent } from "@repo/database/models/task-store";
@@ -200,6 +201,9 @@ export const canceledTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
   { key, by }: TurnStop = {},
 ): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const target = { userId: agent.userId, conversationId: agent.conversationId };
+  // A wakeup the agent booked ends with the Stop, as a stopped harness's own wakeups end with it, whether
+  // or not a turn stands to cancel: the agent may have booked it and ended its turn to wait.
+  yield* hostedStoreOrUnavailable(cancelAgentWakeup(agent.id));
   // Every Stop, the developer's, a Continue's, another agent's, or a rewind's, pauses what is queued behind the
   // turn, so nothing more goes until Resume. Note that it pauses before the cancel goes out, because the turn's
   // end may land before the harness answers it, and would hand on a queue not yet paused.

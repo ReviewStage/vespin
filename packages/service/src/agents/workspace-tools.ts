@@ -22,7 +22,8 @@ import { standingOfAgent } from "./tool-catalog/gates.js";
 /** Whose Mac the agent's `run_on_mac` runs on and whether it would run there now; nothing where the agent is offered none. */
 export function runOnMacStanding(agent: Agent, target: ConversationTarget) {
   return Effect.gen(function* () {
-    if (!offers(yield* standingOfAgent(Option.some(agent)), AGENT_TOOL.RUN_ON_MAC)) {
+    // Note that no harness is handed, because `run_on_mac` stands behind no gate that reads one.
+    if (!offers(yield* standingOfAgent(Option.some(agent), undefined), AGENT_TOOL.RUN_ON_MAC)) {
       return undefined;
     }
     const userId = yield* macOwnerOf(target);

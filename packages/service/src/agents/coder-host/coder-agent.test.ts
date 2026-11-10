@@ -204,7 +204,15 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
     "`delegate`",
     "task_wait",
   ];
-  const CLAUDE_CODES = ["TaskCreate", "WebSearch", "WebFetch", "Skill tool", "Agent tool", "Bash"];
+  const CLAUDE_CODES = [
+    "TaskCreate",
+    "WebSearch",
+    "WebFetch",
+    "Skill tool",
+    "Agent tool",
+    "Bash",
+    "ScheduleWakeup",
+  ];
   const CODEXES = [
     "`apply_patch`",
     "`update_plan`",
@@ -247,17 +255,27 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
         }
       }
     }
-    const watching = coderInstructions(
-      "Acme/Relay",
-      brief,
-      TASK_ADDRESS,
-      standingFor("Acme/Relay"),
-      undefined,
-      null,
-      false,
-      CODER_HARNESS.CODEX,
-    );
-    assert.ok(watching.includes("gh pr checks <number> --watch --fail-fast"), brief);
+    // A Codex agent waits on its checks with our wakeup, since Codex has none of its own, and never on a watch.
+    for (const memberToken of [false, true]) {
+      const waiting = coderInstructions(
+        "Acme/Relay",
+        brief,
+        TASK_ADDRESS,
+        standingFor("Acme/Relay", { wakeup: true }),
+        undefined,
+        null,
+        memberToken,
+        CODER_HARNESS.CODEX,
+      );
+      assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), brief);
+      // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
+      assert.equal(
+        waiting.includes(`call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``),
+        !memberToken,
+        brief,
+      );
+      assert.ok(!waiting.includes("--watch --fail-fast"), brief);
+    }
   }
 });
 

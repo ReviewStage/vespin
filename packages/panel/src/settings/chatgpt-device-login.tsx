@@ -10,16 +10,16 @@ import {
   ANNOUNCE,
   BUTTON_VARIANT,
   Button,
-  ButtonLink,
   COPY_FIELD_WIDTH,
   CopyField,
   ErrorLine,
   GAP,
   Inline,
+  OutsideLink,
+  OutsideSteps,
   STEP_STATE,
   Stack,
   Step,
-  Steps,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
@@ -31,7 +31,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { refusedShown } from "../failure-report.js";
-import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
+import { useOpenLink } from "../tasks/use-open-link.js";
 
 /**
  * chatgpt-device-login.tsx -- a ChatGPT plan connected in place through Codex's device-code login, which the service runs, on the desktop and the web alike.
@@ -63,7 +63,7 @@ const WORDS = {
   CODE: "Code",
   ENTER_CODE:
     "Sign in with your Codex account, select your workspace if prompted, and enter the code:",
-  VERIFICATION_PAGE: "Verification page",
+  VERIFICATION_PAGE: "Open the verification page",
   WAITING: "Waiting for Codex",
   GETTING_CODE: "Getting a code",
   START_FAILED: "Couldn't reach Codex for a code. Try again.",
@@ -176,42 +176,32 @@ function useDeviceLogin(
   return { standing, retry: start };
 }
 
-/** The two steps over a code handed out, as a pasted key's are drawn, and the wait on Codex under them. */
+/** The two steps over a code handed out, and the wait on Codex under them. */
 function CodeSteps({ login }: { login: ChatGptDeviceStartAnswer }): React.JSX.Element {
   const openLink = useOpenLink();
   const url = login.verificationUrl;
   return (
-    <Stack gap={GAP.CONTROL}>
-      <Steps>
-        <Step number={1} title={WORDS.TURN_ON} state={STEP_STATE.CURRENT}>
-          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-            {WORDS.TURN_ON_HINT}
-          </Text>
-        </Step>
-        <Step number={2} title={WORDS.ENTER_CODE} state={STEP_STATE.CURRENT}>
-          <ReplayMask>
-            <CopyField
-              label={WORDS.CODE}
-              value={login.userCode}
-              what="code"
-              copy={copyThroughShell}
-              width={COPY_FIELD_WIDTH.HUG}
-            />
-          </ReplayMask>
-          <Inline>
-            <ButtonLink
-              href={url}
-              variant={BUTTON_VARIANT.OUTLINE}
-              external
-              onClick={linkPressOf(openLink, url)}
-            >
-              {WORDS.VERIFICATION_PAGE}
-            </ButtonLink>
-          </Inline>
-        </Step>
-      </Steps>
-      <WaitingLine>{WORDS.WAITING}</WaitingLine>
-    </Stack>
+    <OutsideSteps waiting={WORDS.WAITING}>
+      <Step number={1} title={WORDS.TURN_ON} state={STEP_STATE.CURRENT}>
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {WORDS.TURN_ON_HINT}
+        </Text>
+      </Step>
+      <Step number={2} title={WORDS.ENTER_CODE} state={STEP_STATE.CURRENT}>
+        <ReplayMask>
+          <CopyField
+            label={WORDS.CODE}
+            value={login.userCode}
+            what="code"
+            copy={copyThroughShell}
+            width={COPY_FIELD_WIDTH.HUG}
+          />
+        </ReplayMask>
+        <OutsideLink href={url} open={openLink}>
+          {WORDS.VERIFICATION_PAGE}
+        </OutsideLink>
+      </Step>
+    </OutsideSteps>
   );
 }
 

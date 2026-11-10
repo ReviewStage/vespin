@@ -40,11 +40,13 @@ import {
   type Gap,
   INLINE_EDIT_LOOK,
   InlineEdit,
-  LAYOUT_ELEMENT,
   MARK_PROVIDER,
   type MarkProvider,
   MoreButton,
   moreLabel,
+  OutsideLink,
+  type PasteFirstStep,
+  PasteSteps,
   PROGRESS_TONE,
   PROVIDER_MARK_SIZE,
   type ProgressTone,
@@ -54,7 +56,6 @@ import {
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
-  SecretField,
   SettingsLine,
   SettingsOrderedRows,
   SettingsRow,
@@ -64,15 +65,10 @@ import {
   SettingsRowStateLine,
   SettingsSection,
   SettingsSectionsSkeleton,
-  STEP_STATE,
   Stack,
-  Step,
-  Steps,
-  TEXT_LINK_LOOK,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  TextLink,
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
@@ -533,18 +529,9 @@ function GetKeyLink({
   const openLink = useOpenLink();
   const { keyUrl, keySite } = HARNESS[provider];
   return (
-    <TextLink
-      look={TEXT_LINK_LOOK.UNDERLINED}
-      href={keyUrl}
-      external
-      onClick={(event) => {
-        event.preventDefault();
-        openLink(keyUrl);
-        onOpened();
-      }}
-    >
+    <OutsideLink href={keyUrl} open={openLink} onOpened={onOpened}>
       {`Open ${keySite}`}
-    </TextLink>
+    </OutsideLink>
   );
 }
 
@@ -655,14 +642,8 @@ function usePastedSecret({
   };
 }
 
-/** A paste's first step: what to do, and what it needs, told once it is done. */
-interface FirstStep {
-  readonly title: string;
-  readonly body: (done: () => void) => React.ReactNode;
-}
-
 /** A setup-token's first step: its command, copied to run in a terminal. */
-const SETUP_TOKEN_FIRST: FirstStep = {
+const SETUP_TOKEN_FIRST: PasteFirstStep = {
   title: WORDS.RUN_SETUP_TOKEN,
   body: (done) => (
     <CopyField
@@ -677,7 +658,7 @@ const SETUP_TOKEN_FIRST: FirstStep = {
 };
 
 /** An API key's first step: the provider's site, opened to make one. */
-function keyFirst(provider: ProviderKeyProvider): FirstStep {
+function keyFirst(provider: ProviderKeyProvider): PasteFirstStep {
   return {
     title: WORDS.CREATE_KEY,
     body: (done) => <GetKeyLink provider={provider} onOpened={done} />,
@@ -686,7 +667,7 @@ function keyFirst(provider: ProviderKeyProvider): FirstStep {
 
 /** What a paste's steps save, by the credential they stand under. */
 interface PasteKind {
-  readonly first: FirstStep;
+  readonly first: PasteFirstStep;
   /** What the field is called, which says what to paste. */
   readonly label: string;
   readonly placeholder: string;
@@ -743,7 +724,7 @@ function keyPaste(provider: ProviderKeyProvider, replacing?: string): PasteKind 
  * lands and Enter what was typed. Escape puts them away, as the row's
  * Cancel does.
  */
-function PasteSteps({
+function CredentialPasteSteps({
   kind,
   held,
   onKept,
@@ -762,43 +743,24 @@ function PasteSteps({
     refused: kind.refused,
     onKept,
   });
-  const [firstDone, setFirstDone] = useState(false);
   useEffect(() => field.current?.focus(), []);
   return (
-    <Stack
-      as={LAYOUT_ELEMENT.FORM}
-      onSubmit={(event) => {
-        event.preventDefault();
-        secret.save();
-      }}
-    >
-      <Steps>
-        <Step
-          number={1}
-          title={kind.first.title}
-          state={firstDone ? STEP_STATE.DONE : STEP_STATE.CURRENT}
-        >
-          {kind.first.body(() => setFirstDone(true))}
-        </Step>
-        <Step number={2} state={firstDone ? STEP_STATE.CURRENT : STEP_STATE.TO_DO}>
-          <div className={NO_CAPTURE}>
-            <SecretField
-              ref={field}
-              label={kind.label}
-              description={secret.saving ? kind.running : undefined}
-              error={refusedShown(secret.rejection, FAILURE_SURFACE.AGENT_KEY_SAVE)}
-              saved={held}
-              placeholder={kind.placeholder}
-              disabled={secret.saving}
-              value={secret.pasted}
-              onEscape={onEscape}
-              onChange={secret.change}
-              onPasted={secret.paste}
-            />
-          </div>
-        </Step>
-      </Steps>
-    </Stack>
+    <div className={NO_CAPTURE}>
+      <PasteSteps
+        first={kind.first}
+        fieldRef={field}
+        label={kind.label}
+        placeholder={kind.placeholder}
+        saved={held}
+        busy={secret.saving}
+        busyWords={kind.running}
+        error={refusedShown(secret.rejection, FAILURE_SURFACE.AGENT_KEY_SAVE)}
+        value={secret.pasted}
+        onChange={secret.change}
+        onSave={secret.paste}
+        onEscape={onEscape}
+      />
+    </div>
   );
 }
 
@@ -1096,7 +1058,12 @@ function PlanSteps({
   onDone: () => void;
 }): React.JSX.Element {
   return provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? (
-    <PasteSteps kind={setupTokenPaste(placement)} held={held} onKept={onDone} onEscape={onDone} />
+    <CredentialPasteSteps
+      kind={setupTokenPaste(placement)}
+      held={held}
+      onKept={onDone}
+      onEscape={onDone}
+    />
   ) : (
     <ChatGptDeviceLogin add onConnected={onDone} />
   );
@@ -1287,7 +1254,7 @@ function KeyRow({
         below={
           open === STEPS.REPLACE
             ? () => (
-                <PasteSteps
+                <CredentialPasteSteps
                   kind={keyPaste(provider, apiKey.id)}
                   held
                   onKept={onClose}
@@ -1383,7 +1350,7 @@ function HarnessCredentials({
               )
             : adding === STEPS.KEY
               ? () => (
-                  <PasteSteps
+                  <CredentialPasteSteps
                     kind={keyPaste(provider)}
                     held={false}
                     onKept={close(STEPS.KEY)}
