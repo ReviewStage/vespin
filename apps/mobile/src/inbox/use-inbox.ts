@@ -142,19 +142,25 @@ export function useInboxBadge(): number {
 
 /**
  * One thread by its id, with what holds it, wherever it stands in the
- * account's feed; none where the feed holds no such thread. Note that every
+ * account's feed, and where that feed stands; none where the feed holds no
+ * such thread, or has not answered yet. Note that every
  * workspace's threads are searched, not only the chosen workspace's the list
  * shows, so a link to a thread of another workspace still opens it.
  */
 export function useInboxThread(id: string | undefined): {
   readonly listed: InboxListed | undefined;
   readonly readerId: string | undefined;
+  readonly feed: InboxFeed;
 } {
   const { data: groups = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),
   });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  const { data: feed = INBOX_FEED.READING } = useQuery({
+    ...appStateQuery,
+    select: selectInboxFeed,
+  });
   const listed = useMemo(() => {
     for (const { holder, items } of groups) {
       const item = items.find((each) => each.id === id);
@@ -162,7 +168,7 @@ export function useInboxThread(id: string | undefined): {
     }
     return undefined;
   }, [groups, id]);
-  return { listed, readerId };
+  return { listed, readerId, feed };
 }
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
@@ -224,7 +230,11 @@ const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
  * file still being written, and a write cut short never stands as the file a
  * later read finds.
  */
-async function cachedFile(attachmentId: string, contentType: string, base64: string): Promise<string> {
+async function cachedFile(
+  attachmentId: string,
+  contentType: string,
+  base64: string,
+): Promise<string> {
   const extension = VIDEO_EXTENSION[contentType];
   const name =
     extension === undefined ? `inbox-${attachmentId}` : `inbox-${attachmentId}.${extension}`;

@@ -73,6 +73,9 @@ const INBOX_TITLE = "Inbox";
 /** What the thread's column says before a thread is picked, in a regular window. */
 const SELECT_A_THREAD = "Select a thread";
 
+/** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
+const THREAD_NOT_FOUND = "This thread isn't in your inbox";
+
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
 
@@ -494,15 +497,24 @@ export function InboxListScreen({ barAction }: InboxListScreenProps) {
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its back button naming the Inbox. */
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { listed, readerId } = useInboxThread(id);
+  const { listed, readerId, feed } = useInboxThread(id);
+  const { refresh } = useInboxActs();
   return (
     <>
       <Stack.Screen options={{ title: "", headerBackTitle: INBOX_TITLE }} />
       <Screen>
-        {listed === undefined ? (
-          <EmptyState title={SELECT_A_THREAD} symbol="tray" />
-        ) : (
+        {listed !== undefined ? (
           <ThreadDetail listed={listed} readerId={readerId} />
+        ) : feed === INBOX_FEED.READING ? (
+          <EmptyState title={READING_INBOX} symbol="tray" />
+        ) : feed === INBOX_FEED.FAILED ? (
+          <EmptyState
+            title={INBOX_NOT_READ}
+            symbol="exclamationmark.triangle"
+            action={{ label: RETRY, onPress: () => void refresh() }}
+          />
+        ) : (
+          <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />
         )}
       </Screen>
     </>

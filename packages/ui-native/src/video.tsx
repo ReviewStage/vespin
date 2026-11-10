@@ -51,18 +51,23 @@ export function Video({ source, label, onOpenElsewhere }: VideoProps) {
     return () => listening.remove();
   }, [player]);
   if (source === undefined || failed) {
+    // Note that a well offering Open in Safari stands as two elements to VoiceOver, its words and its link, since one element would hide the link.
+    const offers = failed && onOpenElsewhere !== undefined;
     return (
       <View
         style={[styles.frame, styles.unplayable, { backgroundColor: colors.WELL }]}
-        accessible
-        accessibilityLabel={failed ? `${label}. ${CANNOT_PLAY}` : label}
+        accessible={!offers}
+        accessibilityLabel={offers ? undefined : failed ? `${label}. ${CANNOT_PLAY}` : label}
       >
         {failed ? (
-          <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+          <Text
+            style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
+            accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
+          >
             {CANNOT_PLAY}
           </Text>
         ) : null}
-        {failed && onOpenElsewhere !== undefined ? (
+        {offers ? (
           <Pressable onPress={onOpenElsewhere} accessibilityRole="link" hitSlop={SPACE.ROW}>
             <Text
               style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.ACCENT_TEXT }}
