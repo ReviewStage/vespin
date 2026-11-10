@@ -6,6 +6,7 @@ import {
   type CodexConfig,
   INPUT_LINE,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_ENV,
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
@@ -17,6 +18,7 @@ import {
   readAgentRouting,
   recordAgentNativeSession,
   updateAgentChoice,
+  updateAgentPermissionModeCommitted,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { registerDevice } from "@repo/database/models/device-store";
@@ -40,6 +42,7 @@ import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { deviceAgentLaunchSecretsSchema } from "@repo/features/device-agent-wire";
 import {
@@ -597,6 +600,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         const openai = openAi();
         const { userId, agent } = yield* openAgent;
         yield* signIn(userId, 60);
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.AUTO);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
         const line = yield* writtenLine(agent, "Fix the invitations.");
         const { lineId } = line;
@@ -645,6 +649,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           integrations: [LINEAR_SERVER],
           tokenUrl: `${TOKEN_URL}${FIRST_LAUNCH}`,
           installedSkills: "/opt/agent/installed-skills",
+          permissionMode: PERMISSION_MODE.AUTO,
           warm: true,
         });
         assert.ok(first.type === INPUT_LINE.MESSAGE);

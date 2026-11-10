@@ -203,7 +203,7 @@ export interface AgentModeControl {
 
 /**
  * The mode chip of an agent: none for an agent that never asks, which is
- * every agent but a Claude Code one. Note that the mode is read off the
+ * every agent on neither Claude Code nor Codex. Note that the mode is read off the
  * agent's row, which the host draws a change on at once, as the model
  * chip's is.
  */
@@ -216,7 +216,12 @@ export function useAgentPermissionMode(input: {
   const latest = useRef(input);
   latest.current = input;
   const writes = useRef(0);
-  if (agent === undefined || agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE) return undefined;
+  if (
+    agent === undefined ||
+    (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
+  ) {
+    return undefined;
+  }
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
     writes.current += 1;

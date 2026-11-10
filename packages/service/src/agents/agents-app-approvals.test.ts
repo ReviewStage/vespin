@@ -97,7 +97,11 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
             .set({ runtime: CONVERSATION_RUNTIME.CODEX })
             .where(eq(conversations.id, started.target.conversationId)),
         );
-        const onCodex = yield* changed(owner, AGENT_PERMISSION_MODE.AUTO);
+        const onCodex = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* changed(owner, AGENT_PERMISSION_MODE.AUTO),
+        );
         const backToFull = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -110,10 +114,8 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
           teammate,
           refusal(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
         );
-        assert.deepEqual(
-          onCodex,
-          refusal(HOSTED_HTTP_STATUS.CONFLICT, HOSTED_API_ERROR.PERMISSION_MODE_REFUSED),
-        );
+        // Codex asks in its own terms, so it takes a mode that asks too.
+        assert.equal(onCodex.agent.permissionMode, AGENT_PERMISSION_MODE.AUTO);
         // Full access is any harness's, and is said by saying nothing.
         assert.equal(backToFull.agent.permissionMode, undefined);
       }),

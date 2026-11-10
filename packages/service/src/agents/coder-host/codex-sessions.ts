@@ -95,6 +95,7 @@ import {
 } from "../sessions/agent-sessions.js";
 import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
+import { launchPermissionMode } from "./permission-mode.js";
 import {
   type HarnessLaunch,
   type RunnerHarness,
@@ -330,6 +331,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
         integrations: yield* options.integrations(agent),
         tokenUrl,
         installedSkills: layout.installedSkills,
+        ...launchPermissionMode(agent),
       };
       return written;
     });
