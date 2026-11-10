@@ -82,7 +82,7 @@ import {
   archiveScriptRun,
 } from "./archive-script.js";
 import { deletedBaseDrive } from "./base-drive.js";
-import { holdingRunnerIfFree } from "./coder-host/runner-lease.js";
+import { holdingRunner, holdingRunnerIfFree } from "./coder-host/runner-lease.js";
 import { discardedOrLogged } from "./device-discard.js";
 import { SANDBOX_RELEASE } from "./sandbox-release-bounds.js";
 
@@ -179,7 +179,10 @@ function describeDeleteFailure(failure: {
 /**
  * One archived agent's repository's archive script run in its sandbox, where
  * its workspace keeps one and the agent is still archived; one that failed,
- * could not run, or ran past its bounds is logged.
+ * could not run, or ran past its bounds is logged. Note that the script runs
+ * holding the agent's runner lease, because a release backs off from a lease
+ * another call holds (`consumeSandboxRelease`), so a sandbox already unused
+ * long enough to be released is not deleted while its teardown runs.
  */
 const archiveScriptRanWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Pick<Agent, "id" | "userId">,
@@ -189,7 +192,8 @@ const archiveScriptRanWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function
   if (Option.isNone(current) || current.value.archivedAt === null) return;
   const archive = yield* archiveScriptOf(current.value);
   if (archive === undefined) return;
-  yield* (yield* SessionSandboxes).archiveFor(sessionId, archive);
+  const sandboxes = yield* SessionSandboxes;
+  yield* holdingRunner(agent.id, sandboxes.archiveFor(sessionId, archive));
 });
 
 /**
@@ -314,7 +318,7 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
 export const SANDBOX_RELEASE_OUTCOME = {
   /** Deleted, with the drive it owns, and written RELEASED. */
   RELEASED: "released",
-  /** Opened, touched, or given a turn since it was found due, or a launch under way holds its agent's runner, and written LIVE again. */
+  /** Opened, touched, or given a turn since it was found due, or a launch or an archive script under way holds its agent's runner, and written LIVE again. */
   USED_SINCE: "used-since",
   /** Deleting is off, and the row written LIVE again. */
   DELETES_OFF: "deletes-off",
@@ -379,8 +383,8 @@ const releasedHolding = (sandboxName: string) =>
  * and nothing deleted. Else the release is decided again holding the agent's
  * runner lease (`releasedHolding`), which a launch holds while it opens the
  * sandbox, so no launch opens it between the last read and the delete; a
- * lease another call holds means a launch is under way, and the row is
- * written LIVE again. A delete that fails fails the delivery, which comes
+ * lease another call holds means a launch or an archive script is under
+ * way, and the row is written LIVE again. A delete that fails fails the delivery, which comes
  * again.
  */
 export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandboxRelease")(

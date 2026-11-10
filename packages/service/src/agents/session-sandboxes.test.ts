@@ -3,18 +3,25 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { AGENT_USER } from "@repo/agent-runner/pins";
 import { Database } from "@repo/database/core/query";
+import { archiveAgent } from "@repo/database/models/agent-store";
+import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { setRepositorySetup } from "@repo/database/models/workspace-sandbox-script-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { AGENT_SANDBOX_STATE, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { SANDBOX_CALL, SANDBOX_STATUS, SandboxUnavailable } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Fiber } from "effect";
+import { Clock, Deferred, Duration, Effect, Fiber, Layer } from "effect";
 import { TestClock } from "effect/testing";
+import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { ARCHIVE_SCRIPT } from "./archive-script.js";
 import { SANDBOX_RELEASE } from "./sandbox-release-bounds.js";
 import { recordedSandboxOpen, touchAgentSandbox } from "./sandbox-use.js";
 import {
+  archivedInBackground,
   consumeSandboxRelease,
   releaseUnusedSandboxes,
   SANDBOX_RELEASE_OUTCOME,
@@ -31,7 +38,9 @@ import {
  * session's sandbox, as the agent's user, and is ended past its bound. An
  * agent's sandbox unused for `SANDBOX_RELEASE.UNUSED_FOR` is released by the
  * sweep, deleted and recorded released, one touched after the sweep found
- * it due is left standing, and none is touched while deleting is off.
+ * it due is left standing, and none is touched while deleting is off, not
+ * even one whose release was queued before it was turned off. A release
+ * backs off from a sandbox whose archived agent's archive script is running.
  * Synthetic accounts, agents, and sandbox names throughout.
  */
 
@@ -149,18 +158,19 @@ it.effect("an archive script that runs past its bound is ended", () =>
   }),
 );
 
-/** An agent's sandbox standing in the memory and opened in the ledger now, with the memory it stands in. */
+/** An agent's sandbox standing in the memory and opened in the ledger now, with the memory it stands in and the account, workspace, and agent it was opened for. */
 const openedSandbox = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
-  const agentId = yield* openAgentOnOwnTask(userId, yield* openWorkspace(userId));
+  const workspaceId = yield* openWorkspace(userId);
+  const agentId = yield* openAgentOnOwnTask(userId, workspaceId);
   const name = `agent-sandbox-${randomUUID()}`;
   const sandbox = memorySandbox();
   sandbox.stand({ name, tags: { sessionId: SESSION }, status: SANDBOX_STATUS.STOPPED });
   yield* recordedSandboxOpen(agentId, name);
-  return { name, sandbox };
+  return { name, sandbox, userId, workspaceId, agentId };
 });
 
 const stateOf = (name: string) =>
@@ -234,6 +244,66 @@ it.layer(getTestDB())("an unused sandbox's release", (it) => {
       const published = yield* swept(false).pipe(Effect.provide(sandbox.layer));
 
       assert.deepEqual(published, []);
+      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
+    }),
+  );
+
+  it.effect("a release queued before deleting was turned off deletes nothing and stands live", () =>
+    Effect.gen(function* () {
+      const { name, sandbox } = yield* openedSandbox;
+      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
+
+      yield* swept(true).pipe(Effect.provide(sandbox.layer));
+      const outcome = yield* consumeSandboxRelease(name).pipe(
+        Effect.provideService(SandboxReleases, { deleting: false, publish: () => Effect.void }),
+        Effect.provide(sandbox.layer),
+      );
+
+      assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.DELETES_OFF);
+      assert.deepEqual(sandbox.state.deleted, []);
+      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
+    }),
+  );
+
+  it.effect("a release backs off while the archived agent's archive script runs", () =>
+    Effect.gen(function* () {
+      const { name, sandbox, userId, workspaceId, agentId } = yield* openedSandbox;
+      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
+      const now = new Date(yield* Clock.currentTimeMillis);
+      const [agent] = yield* Effect.flatMap(Database, (db) =>
+        db
+          .select({ conversationId: agentTable.conversationId })
+          .from(agentTable)
+          .where(eq(agentTable.id, agentId)),
+      );
+      assert.ok(agent !== undefined);
+      const { conversationId } = agent;
+      yield* claimRuntimeSession({ userId, conversationId }, `wrun_${randomUUID()}`, now);
+      yield* setRepositorySetup(
+        workspaceId,
+        "acme/api",
+        REPOSITORY_SCRIPT_KIND.ARCHIVE,
+        "docker compose down",
+        now,
+      );
+      yield* archiveAgent(userId, agentId, true);
+      // The script signals once it runs, and runs on until the test ends.
+      const running = yield* Deferred.make<void>();
+      const scriptRunning = Layer.succeed(SessionSandboxes, {
+        deleteFor: () => Effect.die("an archive deletes no sandbox"),
+        archiveFor: () => Effect.andThen(Deferred.succeed(running, undefined), Effect.never),
+      });
+
+      yield* swept(true).pipe(Effect.provide(sandbox.layer));
+      yield* archivedInBackground(
+        { sessionSandboxes: scriptRunning, keepAwake: keepAwakeDetached },
+        [{ id: agentId, userId, conversationId }],
+      ).pipe(Effect.provide(sandbox.layer));
+      yield* Deferred.await(running);
+      const outcome = yield* consumed(name).pipe(Effect.provide(sandbox.layer));
+
+      assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.USED_SINCE);
+      assert.deepEqual(sandbox.state.deleted, []);
       assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
     }),
   );
