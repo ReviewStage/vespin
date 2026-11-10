@@ -6,7 +6,10 @@
      each release on a page of its own at vespin.dev/changelog/<version>.
      Each release heading is a contract with those pages: exactly
      `## <version> — <YYYY-MM-DD>`, which becomes the release's sticky
-     version-and-date rail and its address. A release's first feature
+     version-and-date rail and its address. The date is the day the tag that
+     shipped was pushed, in Eastern time (America/New_York), never UTC or the
+     author's own zone: a tag pushed at 9 PM Eastern is that day's release
+     even though it is past midnight in UTC. A release's first feature
      section, its first paragraph, and its first screenshot become the title,
      description, and image of the card its page shares as.
 
@@ -69,7 +72,7 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
-## 0.31.0 — 2026-11-10
+## 0.31.0 — 2026-11-09
 
 ### Several plans and keys, used in order
 
@@ -1502,7 +1505,7 @@ notifications in Settings › Workspace turns your DMs off.
 - Updated the repository's links to ReviewStage/vespin
   ([#6342](https://github.com/ReviewStage/vespin/pull/6342))
 
-## 0.24.0 — 2026-11-01
+## 0.24.0 — 2026-10-31
 
 ### Sub-tasks and blocked tasks
 
@@ -3624,7 +3627,7 @@ follow a link straight to one of its review threads.
   where links open
   ([#4036](https://github.com/ReviewStage/luke/pull/4036))
 
-## 0.18.0 — 2026-10-18
+## 0.18.0 — 2026-10-19
 
 ### Continue and fork an agent
 
@@ -3822,7 +3825,7 @@ and you mark it read or unread, or swipe it right to do so.
   ([#3595](https://github.com/ReviewStage/luke/pull/3595),
   [#3601](https://github.com/ReviewStage/luke/pull/3601))
 
-## 0.17.0 — 2026-10-17
+## 0.17.0 — 2026-10-16
 
 ### A Pull request tab for every agent
 
@@ -5273,7 +5276,7 @@ transcript, and the row opens the worker's own tab in the side panel.
 - Removed the PostHog extensions Luke never used from the app bundle
   ([#1969](https://github.com/ReviewStage/luke/pull/1969))
 
-## 0.10.0 — 2026-10-10
+## 0.10.0 — 2026-10-09
 
 ### Coding agents
 
@@ -5520,7 +5523,7 @@ tells you its result at a natural pause, and Stop cancels that work too.
   [#1809](https://github.com/ReviewStage/luke/pull/1809),
   [#1810](https://github.com/ReviewStage/luke/pull/1810))
 
-## 0.7.1 — 2026-10-07
+## 0.7.1 — 2026-10-06
 
 ### Improvements
 
@@ -6085,7 +6088,7 @@ session recordings.
 - Fixed hosted macOS releases omitting the PostHog project key and silently
   disabling recording ([#518](https://github.com/ReviewStage/luke/pull/518))
 
-## 0.3.10 — 2026-08-24
+## 0.3.10 — 2026-08-25
 
 ### Onboarding
 
@@ -6413,7 +6416,7 @@ every event and property by name.
 - Added anti-slop Oxlint rules across the repository
   ([#286](https://github.com/ReviewStage/luke/pull/286))
 
-## 0.2.0 — 2026-08-18
+## 0.2.0 — 2026-08-19
 
 ### Codex cloud tasks
 
@@ -6475,7 +6478,7 @@ Linear issues show as chips under the notch.
 - Removed excessive panel animations
   ([#243](https://github.com/ReviewStage/luke/pull/243))
 
-## 0.1.1 — 2026-08-17
+## 0.1.1 — 2026-08-18
 
 ### Free daily allowance
 
@@ -6539,7 +6542,7 @@ meeting is over.
 - Updated the landing page download button to always fetch the latest build
   ([#183](https://github.com/ReviewStage/luke/pull/183))
 
-## 0.1.0 — 2026-08-16
+## 0.1.0 — 2026-08-17
 
 Introducing Luke: a voice agent that lives in the MacBook notch and watches
 every local and cloud coding agent session.

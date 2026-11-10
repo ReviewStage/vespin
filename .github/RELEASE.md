@@ -48,7 +48,9 @@ value and upload nothing, and neither does a rehearsal (below).
 
 1. **Prepare and merge the version PR.** Bump `apps/desktop/package.json` and add the
    release's entry to `CHANGELOG.md` at the repository root in the same change. The
-   landing page renders that file at `/changelog`. Every bullet and feature section links the pull request or
+   landing page renders that file at `/changelog`. The entry's heading dates the release
+   by the day its tag will be pushed in Eastern time (America/New_York), whatever zone you
+   are in: `TZ=America/New_York date +%F` prints it. Every bullet and feature section links the pull request or
    requests that made it, in the form the comment atop `CHANGELOG.md` gives.
    A feature section's screenshot is taken on a Mac from the release's own build
    with mock data staged for it, and framed by `scripts/changelog-screenshot.sh` on
@@ -70,7 +72,9 @@ value and upload nothing, and neither does a rehearsal (below).
    ```
 
 4. **Push the tag.** This is the human release decision — the workflow creates no
-   credentials and pushes no tags.
+   credentials and pushes no tags. Where the push lands on another day in Eastern time
+   than the changelog entry's heading, past midnight or after a failed run re-pushed the
+   tag, correct the heading's date in a follow-up PR.
 
    ```sh
    git push origin v0.1.0
