@@ -131,7 +131,13 @@ import {
   Shortcut,
   useMinute,
 } from "@repo/ui";
-import { ACTOR_KIND, type Actor, actorName, assigneeFace } from "@repo/ui/actor-model";
+import {
+  ACTOR_KIND,
+  type Actor,
+  actorName,
+  assigneeFace,
+  type EditReader,
+} from "@repo/ui/actor-model";
 import {
   COMMAND_FILTER,
   CommandDialog,
@@ -187,6 +193,7 @@ import { unreadShown } from "../failure-report.js";
 import { type InboxView, useInboxView } from "../inbox-route.js";
 import { type CopyLink, inSidePanel, type LinkAtHand } from "../links-at-hand.js";
 import { workspaceMembersQuery, workspaceMembersRetryMutation } from "../live-reads.js";
+import { useMemberDirectory } from "../member-directory.js";
 import { memberRows } from "../member-rows.js";
 import { PANEL_SPAN, useKeystrokeSpans } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
@@ -947,6 +954,7 @@ function agentRows(
   doors: PanelOfferDoors,
   show: (pick: () => void) => void,
   people: ReadonlyMap<string, HeldPeople>,
+  directory: EditReader,
 ): readonly PaletteRow[] {
   const taskId = tasks.activeTaskId;
   if (taskId === undefined) return [];
@@ -954,7 +962,7 @@ function agentRows(
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
   const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
   const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
-  const agents = agentEntries(tasks.mainTabs, tasks.agents).map((entry) => ({
+  const agents = agentEntries(tasks.mainTabs, tasks.agents, directory).map((entry) => ({
     ...entry,
     onPick: () => tasks.onShowAgent(taskId, entry.row.id),
   }));
@@ -1841,6 +1849,7 @@ export function CommandPalette({
   // The experiments on in the workspace the window lists, the account's own beside them.
   const experiments = useExperimentsIn(tasks.workspace?.id);
   const inboxWaiting = useInboxWaitingTasks();
+  const directory = useMemberDirectory();
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
@@ -2116,7 +2125,7 @@ export function CommandPalette({
   // while open: every row a tier matches ranks above the next tier's.
   const tiersOf = {
     [PALETTE_FILTER.THIS_TASK]: () => [
-      agentRows(tasks, inboxWaiting, inboxStanding, offerDoors, onTasks, changesPeople),
+      agentRows(tasks, inboxWaiting, inboxStanding, offerDoors, onTasks, changesPeople, directory),
     ],
     [PALETTE_FILTER.PEOPLE]: () => [
       peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.onOpenPerson(userId))),
