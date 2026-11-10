@@ -50,8 +50,9 @@ Other commands:
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
+| `setup show [--repo owner/name]` · `setup edit [--repo owner/name] -F <file\|->` | The workspace's cloud sandbox setup: its install script (run once in each build of a repository's base snapshot) and each repository's setup script (run once in each new agent sandbox after its checkout). `edit` replaces the install script, or with `--repo` that repository's setup script, whole; an empty script removes it. Saving takes an owner or admin |
 
-`description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.
+`description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). `setup edit` is the same: take `setup show --repo owner/name`'s `.script`, or `setup show`'s `.install.script`. Run `vespin <group> --help` for any flag not listed here.
 
 ## Conventions
 

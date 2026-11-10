@@ -65,4 +65,6 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
+  [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP]: { command: ["setup", "show"] },
+  [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { command: ["setup", "edit"] },
 } as const satisfies Record<MemberMcpToolName, McpCliRow>;

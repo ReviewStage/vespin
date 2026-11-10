@@ -677,6 +677,8 @@ it.effect(
           [MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
+          [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
+          [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
         ] as const,
         ([name, args]) =>
           Effect.promise(async () => {

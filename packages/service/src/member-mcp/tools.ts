@@ -98,6 +98,10 @@ import {
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import {
+  type WorkspaceSandboxSetupAnswer,
+  workspaceInstallScriptPutRequestSchema,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -229,6 +233,11 @@ import {
   memberCommentAnswer,
 } from "../tasks/description-comments-procedures.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
+import {
+  readSandboxSetup,
+  saveInstallScript,
+  saveRepositorySetup,
+} from "../workspace-sandbox-setup/workspace-sandbox-setup.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 
@@ -2140,6 +2149,113 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
     ),
 });
 
+// A workspace's cloud sandbox setup (`../workspace-sandbox-setup/workspace-sandbox-setup.ts`), read and saved as Settings does.
+
+/** Why a setup was not read or saved, in words the agent can act on. */
+const SANDBOX_SETUP_REFUSAL = {
+  NOT_PERMITTED:
+    "Not saved: only an owner or an admin of the workspace saves its sandbox setup, and the " +
+    "member is neither.",
+  UNAVAILABLE:
+    "Not run: the service could not reach the workspace's sandbox setup just now. The call may " +
+    "be made again.",
+} as const;
+
+/** A setup read or saved as the member, as the agent reads it, or the refusal in its words. */
+const sandboxSetupAnswer = <R>(
+  answered: Effect.Effect<WorkspaceSandboxSetupAnswer, HostedRefusal, R>,
+  accepted: (setup: WorkspaceSandboxSetupAnswer) => WireRecord,
+) =>
+  answered.pipe(
+    Effect.map(accepted),
+    Effect.catch((refusal) =>
+      Effect.succeed(
+        agentToolRejected(
+          refusal.error === HOSTED_API_ERROR.NOT_PERMITTED
+            ? SANDBOX_SETUP_REFUSAL.NOT_PERMITTED
+            : SANDBOX_SETUP_REFUSAL.UNAVAILABLE,
+        ),
+      ),
+    ),
+  );
+
+/** The workspace whose setup a call reads or saves, by its slug, where the member has more than one. */
+const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace whose setup it is, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; ` +
+      "leave it out where the member belongs to one workspace alone.",
+  ),
+);
+
+/** A read of the setup names its workspace. */
+const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
+
+/** A save names its workspace, at most the repository whose setup script it is, and the script. */
+const EditSandboxSetupInputSchema = Schema.Struct({
+  workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
+  repository: Schema.optionalKey(
+    describeWire(
+      githubRepositoryFullNameSchema,
+      "The repository whose setup script to save, as owner/name; leave it out to save the " +
+        "workspace's install script.",
+    ),
+  ),
+  script: describeWire(
+    workspaceInstallScriptPutRequestSchema.fields.script,
+    "The whole script, which replaces the one that stood; an empty one removes it.",
+  ),
+});
+
+const READ_SANDBOX_SETUP_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_SANDBOX_SETUP,
+  description:
+    "Read the cloud sandbox setup of a workspace the member belongs to, as its Settings › Cloud " +
+    "setup shows it: its install script, which runs once in each build of a repository's base " +
+    "snapshot, and each repository's setup script, which runs once in each new agent sandbox " +
+    "of it after its checkout, each with when it was last saved in epoch milliseconds. " +
+    `${WORKSPACE_WORDS} Answers the install script, or install null where none is saved, and ` +
+    "the repositories' setup scripts in the order of their names, or `rejected` and why.",
+  input: ReadSandboxSetupInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    listAsMember(workspace, ({ caller }) =>
+      sandboxSetupAnswer(
+        readSandboxSetup(callerUserId(caller), callerWorkspaceId(caller)),
+        (setup) => setup,
+      ),
+    ),
+});
+
+const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
+  description:
+    "Save one script of the cloud sandbox setup of a workspace the member is an owner or an " +
+    "admin of, as its Settings › Cloud setup would: the install script, or, naming a " +
+    "repository, that repository's setup script, under any casing of its name. The script " +
+    "given replaces the one that stood whole, so read it first with " +
+    `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} to change part of it; an empty script removes it. ` +
+    "Sandboxes already running keep the script they ran. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the setup as it then stands, or ` +
+    "`rejected` and why.",
+  input: EditSandboxSetupInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, repository, script }) =>
+    listAsMember(workspace, ({ caller }) =>
+      sandboxSetupAnswer(
+        repository === undefined
+          ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
+          : saveRepositorySetup(
+              callerUserId(caller),
+              callerWorkspaceId(caller),
+              repository,
+              script,
+            ),
+        (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
+      ),
+    ),
+});
+
 /** Every tool the server offers, listed in the order an agent reads them. */
 /**
  * The workspace experiments on in one of the member's workspaces at least,
@@ -2200,4 +2316,6 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AUTOMATION_TOOL,
   MEMBER_RUN_AUTOMATION_TOOL,
   MEMBER_DELETE_AUTOMATION_TOOL,
+  READ_SANDBOX_SETUP_TOOL,
+  EDIT_SANDBOX_SETUP_TOOL,
 ];
