@@ -7,8 +7,9 @@
  * than `FRESH_FOR`, with the plan's own access token (renewed under its
  * lock where due, `refreshChatGptAccess`) and its ChatGPT workspace, at the
  * endpoint Codex's own client calls. The endpoint is undocumented, so an
- * answer that is not what Codex reads, a refusal, or no answer within
- * `CALL_TIMEOUT` changes nothing, and the plan keeps what it last heard.
+ * answer that is not what Codex reads, a refusal, or no answer within the
+ * time any call to OpenAI is given (`OPENAI_CALL_TIMEOUT`) changes nothing,
+ * and the plan keeps what it last heard.
  * Its windows replace all the plan held. The access token goes to ChatGPT
  * alone and is never logged; nothing of an answer is but the windows.
  */
@@ -24,7 +25,11 @@ import { PROVIDER_KEY_KIND, PROVIDER_KEY_STATUS } from "@repo/features/provider-
 import { DateTime, Duration, Effect, Option, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import { CHATGPT_ACCESS, refreshChatGptAccess } from "./chatgpt-credentials.js";
+import {
+  CHATGPT_ACCESS,
+  OPENAI_CALL_TIMEOUT,
+  refreshChatGptAccess,
+} from "./chatgpt-credentials.js";
 
 /** ChatGPT's usage endpoint, where Codex's client reads a plan's limits. */
 export const CHATGPT_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
@@ -37,9 +42,6 @@ const FRESH_FOR = Duration.minutes(5);
 
 /** The status ChatGPT answers a read of the plan's usage with. */
 const HTTP_OK = 200;
-
-/** How long one ask of ChatGPT may take before the keys are answered without it. */
-const CALL_TIMEOUT = Duration.seconds(4);
 
 /** The statuses a plan is asked in: connected, whether a turn has run on it or its limit is reached. */
 const ASKED_STATUSES: ReadonlySet<string> = new Set([
@@ -112,7 +114,7 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
         : Effect.succeed(Option.none()),
     ),
     Effect.scoped,
-    Effect.timeout(CALL_TIMEOUT),
+    Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.orElseSucceed(() => Option.none()),
   );
   return Option.flatMap(answered, (body) =>

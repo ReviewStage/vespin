@@ -100,8 +100,8 @@ export const CODEX_DEVICE_OAUTH = {
 /** How long before its expiry an access token is renewed rather than handed out, unless a caller asks for longer. */
 const REFRESH_MARGIN = Duration.minutes(10);
 
-/** How long OpenAI is given to answer one call. */
-const CALL_TIMEOUT = Duration.seconds(10);
+/** How long OpenAI is given to answer one call, whichever of its endpoints, ChatGPT's usage read among them. */
+export const OPENAI_CALL_TIMEOUT = Duration.seconds(10);
 
 /** The waits between revocation tries, after a failure to connect or a server error: a second, then two. */
 const REVOKE_RETRY = { WAIT: Duration.seconds(1), TIMES: 2 } as const;
@@ -450,7 +450,7 @@ const readSigningKeys = /* @__PURE__ */ Effect.fnUntraced(function* () {
     client.get(url).pipe(
       Effect.flatMap((response) => response.json),
       Effect.scoped,
-      Effect.timeout(CALL_TIMEOUT),
+      Effect.timeout(OPENAI_CALL_TIMEOUT),
       Effect.option,
     );
   const discovered = Option.flatMap(
@@ -598,7 +598,7 @@ export const postToOpenAi = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
     ),
     Effect.scoped,
-    Effect.timeout(CALL_TIMEOUT),
+    Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.option,
   );
 });
@@ -740,7 +740,7 @@ const revokeOnce = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.flatMap((response) => response.json),
     Effect.flatMap(Schema.decodeUnknownEffect(DiscoverySchema)),
     Effect.scoped,
-    Effect.timeout(CALL_TIMEOUT),
+    Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.option,
   );
   if (Option.isNone(discovered)) return REVOKE_OUTCOME.RETRY;
