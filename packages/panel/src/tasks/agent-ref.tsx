@@ -5,7 +5,7 @@ import {
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import { agentStateWords } from "@repo/features/glyph-state";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { agentMovedAt, agentStillWriting } from "@repo/features/task-agents-model";
 import {
@@ -20,13 +20,7 @@ import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
 import type { HeldTranscripts } from "../desktop/strip-tabs.js";
-import {
-  agentActor,
-  agentName,
-  archivedByReading,
-  providerOf,
-  teammateRef,
-} from "./agent-model.js";
+import { agentActor, agentName, archivedByReading, teammateRef } from "./agent-model.js";
 import {
   AgentTabCard,
   type CardFoot,
@@ -187,53 +181,6 @@ export function listedRowSubject(
     }),
   });
   return { name, tile: agentActor(agent, name), agent, read };
-}
-
-/**
- * An agent with no task as the Inbox names it (`TasklessInboxAgent`): its
- * title, else the name of the automation
- * the reader may read that started it, else its model (`agentName`), its
- * harness's tile at rest, and that automation. Note that the line says
- * nothing of where the agent stands, so its card's corner says nothing
- * either.
- */
-export function tasklessSubject(
-  line: {
-    readonly agentTitle: string | null;
-    readonly agentModel: string;
-    readonly automationId: string | null;
-    readonly automationName: string | null;
-  },
-  models: readonly CatalogModel[] | undefined,
-): AgentSubject {
-  const name = agentName(
-    {
-      title: line.agentTitle,
-      model: line.agentModel,
-      automationName: line.automationId === null ? null : line.automationName,
-    },
-    models,
-  );
-  const tile: Actor = {
-    kind: ACTOR_KIND.AGENT,
-    name,
-    provider: providerOf(line.agentModel),
-    state: ACTOR_STATE.REST,
-  };
-  const reading: CardReading = {
-    corner: cardCorner({
-      writing: false,
-      startedAt: undefined,
-      movedAt: undefined,
-      state: undefined,
-    }),
-    choice: undefined,
-    transcript: undefined,
-    automationId: line.automationId ?? undefined,
-    automationName: line.automationName ?? undefined,
-    tile,
-  };
-  return { name, tile, read: () => reading };
 }
 
 /** An agent as a line read beside its thread names it: its title, null where it has none; its model; the automation whose run started it, which an untitled one goes by; and where it stands, where the line says so. */
@@ -442,7 +389,7 @@ export function SendingAgent({
       ? undefined
       : () =>
           openPlace({
-            kind: LINK_PLACE.AGENT,
+            kind: LINK_DESTINATION.AGENT,
             ...(taskId === undefined ? undefined : { planId: taskId }),
             agentId,
           });

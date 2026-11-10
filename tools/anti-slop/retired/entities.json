@@ -27,9 +27,7 @@
       "baseline": {
         "packages/panel/src/actor-ref.tsx": 1,
         "packages/panel/src/desktop/automation-agent-run.tsx": 2,
-        "packages/panel/src/desktop/automation-runs-panel.tsx": 1,
-        "packages/panel/src/desktop/command-palette.tsx": 1,
-        "packages/panel/src/tasks/inbox-item-parts.tsx": 1
+        "packages/panel/src/desktop/automation-runs-panel.tsx": 1
       }
     },
     {
@@ -41,8 +39,7 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/command-items.tsx": 1,
-        "packages/panel/src/tasks/transcript-blocks.tsx": 1
+        "packages/panel/src/command-items.tsx": 1
       }
     },
     {
@@ -55,8 +52,7 @@
       ],
       "baseline": {
         "packages/panel/src/tasks/inbox-item-chip.tsx": 1,
-        "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
-        "packages/panel/src/tasks/tab-look.tsx": 1
+        "packages/panel/src/tasks/inbox-item-parts.tsx": 1
       }
     },
     {
@@ -92,7 +88,6 @@
         "packages/panel/src/command-items.tsx": 1,
         "packages/panel/src/tasks/agent-published.tsx": 1,
         "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1,
-        "packages/panel/src/tasks/transcript-blocks.tsx": 1,
         "packages/ui/src/components/landing/landing-scenes.tsx": 1
       }
     },
@@ -103,10 +98,7 @@
         "packages/ui/src/icons/",
         "apps/catalog/",
         "packages/ui/src/marks/"
-      ],
-      "baseline": {
-        "packages/panel/src/tasks/transcript-blocks.tsx": 2
-      }
+      ]
     },
     {
       "glyph": "GLYPH.PEOPLE",
@@ -156,9 +148,7 @@
         "packages/panel/src/desktop/automations-page.tsx": 1,
         "packages/panel/src/desktop/tasks-page-options.tsx": 1,
         "packages/panel/src/tasks/agent-tab.tsx": 1,
-        "packages/panel/src/tasks/inbox-pane.tsx": 1,
-        "packages/panel/src/tasks/tab-look.tsx": 1,
-        "packages/panel/src/tasks/transcript-blocks.tsx": 1
+        "packages/panel/src/tasks/inbox-pane.tsx": 1
       }
     },
     {
@@ -174,7 +164,6 @@
         "packages/panel/src/desktop/automations-page.tsx": 1,
         "packages/panel/src/desktop/section-icon-picker.tsx": 1,
         "packages/panel/src/tasks/agent-tab.tsx": 1,
-        "packages/panel/src/tasks/inbox-pane.tsx": 1,
         "packages/ui/src/components/landing/landing-desktop.tsx": 1,
         "packages/ui/src/components/landing/landing-scenes.tsx": 1
       }
@@ -213,13 +202,7 @@
         "packages/ui/src/icons/",
         "apps/catalog/",
         "packages/ui/src/marks/"
-      ],
-      "baseline": {
-        "packages/panel/src/tasks/lone-link-card.tsx": 1,
-        "packages/panel/src/tasks/page-card.tsx": 1,
-        "packages/panel/src/tasks/tab-look.tsx": 1,
-        "packages/panel/src/tasks/transcript-blocks.tsx": 1
-      }
+      ]
     },
     {
       "glyph": "BookOpen",
@@ -228,11 +211,7 @@
         "packages/ui/src/icons/",
         "apps/catalog/",
         "packages/ui/src/marks/"
-      ],
-      "baseline": {
-        "packages/panel/src/tasks/skill-ref.tsx": 1,
-        "packages/panel/src/tasks/transcript-blocks.tsx": 1
-      }
+      ]
     },
     {
       "glyph": "GitPullRequest",
@@ -243,8 +222,7 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/tasks/pull-request-writes.tsx": 1,
-        "packages/panel/src/tasks/tab-look.tsx": 1
+        "packages/panel/src/tasks/pull-request-writes.tsx": 1
       }
     },
     {
@@ -272,9 +250,7 @@
       "baseline": {
         "packages/panel/src/actor-ref.tsx": 1,
         "packages/panel/src/desktop/agent-archive.tsx": 2,
-        "packages/panel/src/desktop/agent-entries.tsx": 1,
         "packages/panel/src/desktop/agent-list-row.tsx": 2,
-        "packages/panel/src/desktop/command-palette.tsx": 1,
         "packages/panel/src/desktop/main-tabs.tsx": 1,
         "packages/panel/src/desktop/side-panel.tsx": 3,
         "packages/panel/src/desktop/sidebar-pinned-tab.tsx": 1,
@@ -286,7 +262,6 @@
         "packages/panel/src/tasks/agent-tab.tsx": 1,
         "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
         "packages/panel/src/tasks/inbox-list.tsx": 1,
-        "packages/panel/src/tasks/mention-picker.tsx": 2,
         "packages/panel/src/tasks/terminal-tab.tsx": 1,
         "packages/panel/src/tasks/transcript-blocks.tsx": 1
       }

@@ -124,6 +124,7 @@ const postEvents = (bearer: string, events: readonly RunnerEvent[]) =>
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
+      NO_GITHUB,
     );
     const web = HttpRouter.toWebHandler(
       runnerEventsApp({}).pipe(HttpRouter.provideRequest(services)),

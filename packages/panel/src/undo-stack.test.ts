@@ -8,15 +8,15 @@ import { createElement } from "react";
 import { afterEach, test, vi } from "vitest";
 import {
   forgetUndo,
-  type HeldWrite,
   type LocalWrite,
-  pressHeld,
   pressLocal,
   pressRows,
+  pressTakeBack,
   pressWrite,
   ROW_WRITE,
   type RowDoors,
   redoLast,
+  type TakeBackWrite,
   type TaskRows,
   UNDO_RAN,
   type UndoWrite,
@@ -146,17 +146,16 @@ test("⌘Z leaves a declared write's target changed since as it stands, and send
   assert.deepEqual(window.sent, [{ taskId: TASK_ID, pinned: true }]);
 });
 
-/** A held write that answers every send at once, its undo once `undoing` settles, each send named in `sent` in order as it is sent. */
-function heldWrite(
+/** A take-back write that answers every send at once, its take-back once `undoing` settles, each send named in `sent` in order as it is sent. */
+function takeBackWrite(
   sent: string[],
   undoing: Promise<void> = Promise.resolve(),
-): HeldWrite<undefined, string, number, number> {
+): TakeBackWrite<undefined, string, number, number> {
   return {
     words: (itemId) => `Resolved ${itemId}`,
     glyph: () => createElement("span"),
     unmasked: () => true,
     act: (_doors, itemId) => Promise.resolve(sent.push(`act ${itemId}`)),
-    letGo: (_doors, itemId) => void sent.push(`let go ${itemId}`),
     undo: (_doors, itemId) => {
       const at = sent.push(`undo ${itemId}`);
       return undoing.then(() => at);
@@ -166,9 +165,9 @@ function heldWrite(
   };
 }
 
-test("⌘Z takes a held write back once, without letting its hold go, and leaves nothing to put back", async () => {
+test("⌘Z takes a take-back write back once by its take-back, and leaves nothing to put back", async () => {
   const sent: string[] = [];
-  await pressHeld(heldWrite(sent), undefined, "item-1");
+  await pressTakeBack(takeBackWrite(sent), undefined, "item-1");
 
   const undone = await undoLast();
   const again = await undoLast();
@@ -187,8 +186,8 @@ test("once the account changes, an undo queued behind another sends nothing, and
     open = resolve;
   });
   const window = standWindow();
-  await pressHeld(heldWrite(sent, gate), undefined, "item-1");
-  await pressHeld(heldWrite(sent, gate), undefined, "item-2");
+  await pressTakeBack(takeBackWrite(sent, gate), undefined, "item-1");
+  await pressTakeBack(takeBackWrite(sent, gate), undefined, "item-2");
   const first = undoLast();
   const queued = undoLast();
   await vi.waitFor(() => assert.ok(sent.includes("undo item-2")));

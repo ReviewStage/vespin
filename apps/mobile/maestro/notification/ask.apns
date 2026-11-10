@@ -1,0 +1,22 @@
+{
+  "Simulator Target Bundle": "dev.vespin.ios",
+  "aps": {
+    "alert": {
+      "title": "Who can withdraw an invite?",
+      "body": "An invite is a pending memberships row, so withdrawing one deletes it."
+    },
+    "thread-id": "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
+    "category": "inbox-decide",
+    "mutable-content": 1,
+    "sound": "default",
+    "badge": 1
+  },
+  "kind": "ask",
+  "itemId": "81e2a425-6d9f-4ab7-92df-000000000001",
+  "messageId": "81e2a425-6d9f-4ab7-92df-000000000065",
+  "agentId": "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
+  "revision": 1,
+  "ask": "decide",
+  "options": ["The member who sent it", "Any admin", "Both"],
+  "recommended": ["Both"]
+}

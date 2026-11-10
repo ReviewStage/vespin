@@ -64,7 +64,7 @@
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import { fileName } from "@repo/features/code-ref-words";
-import { holderName, type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
+import { type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -88,6 +88,12 @@ import {
   TASK_TREE_ENTRY,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import {
+  DOCUMENT_REGION,
+  SETTLED_STATUS,
+  settleOffered,
+  TASK_MARK,
+} from "@repo/features/tasks-model";
 import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import { noMatchWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
@@ -131,7 +137,13 @@ import {
   Shortcut,
   useMinute,
 } from "@repo/ui";
-import { ACTOR_KIND, type Actor, actorName, assigneeFace } from "@repo/ui/actor-model";
+import {
+  ACTOR_KIND,
+  type Actor,
+  actorName,
+  assigneeFace,
+  type EditReader,
+} from "@repo/ui/actor-model";
 import {
   COMMAND_FILTER,
   CommandDialog,
@@ -139,7 +151,6 @@ import {
   type CommandGroup,
   type CommandItem,
 } from "@repo/ui/command";
-import { GLYPH } from "@repo/ui/icons";
 import {
   hitRangesIn,
   SEARCH_TIER,
@@ -149,7 +160,6 @@ import {
 } from "@repo/ui/search-score";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, SETTLED_STATUS, settleOffered, TASK_MARK } from "@repo/ui/tasks-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Fragment,
@@ -164,7 +174,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { AssigneeFaceMark, AutomationCard } from "../actor-ref.js";
+import {
+  ACTOR_SIZE,
+  ActorMark,
+  AssigneeFaceMark,
+  AutomationCard,
+  automationActor,
+} from "../actor-ref.js";
 import {
   appCommandOffered,
   runAppCommand,
@@ -182,6 +198,7 @@ import { unreadShown } from "../failure-report.js";
 import { type InboxView, useInboxView } from "../inbox-route.js";
 import { type CopyLink, inSidePanel, type LinkAtHand } from "../links-at-hand.js";
 import { workspaceMembersQuery, workspaceMembersRetryMutation } from "../live-reads.js";
+import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows } from "../member-rows.js";
 import { PANEL_SPAN, useKeystrokeSpans } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
@@ -196,15 +213,16 @@ import {
   settingsSearchEntries,
 } from "../settings-search.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
+import { agentSummaryEnd } from "../tasks/agent-menu-row.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
-import { InboxItemCard, InboxItemEnd, ItemMark } from "../tasks/inbox-item-parts.js";
+import { InboxItemCard, InboxItemEnd, inboxItemGlyph } from "../tasks/inbox-item-parts.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
-import { agentEndMark, openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
+import { openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
@@ -942,6 +960,7 @@ function agentRows(
   doors: PanelOfferDoors,
   show: (pick: () => void) => void,
   people: ReadonlyMap<string, HeldPeople>,
+  directory: EditReader,
 ): readonly PaletteRow[] {
   const taskId = tasks.activeTaskId;
   if (taskId === undefined) return [];
@@ -949,7 +968,7 @@ function agentRows(
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
   const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
   const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
-  const agents = agentEntries(tasks.mainTabs, tasks.agents).map((entry) => ({
+  const agents = agentEntries(tasks.mainTabs, tasks.agents, directory).map((entry) => ({
     ...entry,
     onPick: () => tasks.onShowAgent(taskId, entry.row.id),
   }));
@@ -1021,7 +1040,7 @@ function agentRows(
       onChoose: () => show(onPick),
     };
   });
-  return [...standing, ...archivedAgentRows(tasks, taskName, show)];
+  return [...standing, ...archivedAgentRows(tasks, taskName, show, directory)];
 }
 
 /**
@@ -1035,6 +1054,7 @@ function archivedAgentRows(
   tasks: TasksControl,
   taskName: string | undefined,
   show: (pick: () => void) => void,
+  directory: EditReader,
 ): readonly PaletteRow[] {
   const { agents } = tasks;
   return (agents.archived ?? []).map((agent) => {
@@ -1046,8 +1066,9 @@ function archivedAgentRows(
     return {
       ...look,
       replayMasked: true,
-      detail: [ARCHIVED_WORD, taskName].filter((word) => word !== undefined).join(" · "),
-      endMark: agentEndMark(agent, true),
+      // Note that the task leads and Archived follows, as every agent menu says it (`agentMenuRow`).
+      detail: [taskName, ARCHIVED_WORD].filter((word) => word !== undefined).join(" · "),
+      endMark: agentSummaryEnd(agent, directory),
       card: (
         <AgentCard
           subject={agentSubject(agents, agent.id, NOTHING_HELD, false)}
@@ -1094,7 +1115,8 @@ function automationRows(
     const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
     return {
       replayMasked: true,
-      icon: <GLYPH.AUTOMATION />,
+      // Note that it wears its tile, what fires it and how its last run went, as the Automations page, its chip, and the @ list draw it.
+      icon: <ActorMark actor={automationActor(automation)} size={ACTOR_SIZE.INLINE} />,
       label: automation.name,
       // Note that its task's name, which finds it too, is said after what fires it, so a row it found says why.
       detail: automation.planName === null ? trigger : `${trigger} · ${automation.planName}`,
@@ -1131,15 +1153,15 @@ function snippetOf(
   return undefined;
 }
 
-/** What an Inbox item's search reads: its title and its holder's name, and else everything it says (`inboxItemWords`). */
+/** What an Inbox item's search reads: its title and its task's name, and else everything it says (`inboxItemWords`). */
 function inboxWords({ holder, item }: InboxListed): RowWords {
   const title = cardTitle(item.title);
-  return { label: title, terms: [title, holderName(holder)], keywords: inboxItemWords(item) };
+  return { label: title, terms: [title, holder.task.name], keywords: inboxItemWords(item) };
 }
 
 /**
- * An Inbox item's row, by its agent's tile and title, beside its task's or
- * automation's name and, where its thread rather than those found it, the
+ * An Inbox item's row, by its agent's tile and title, beside its task's
+ * name and, where its thread rather than those found it, the
  * words that did, the marks its Inbox row wears at its end and its card hung
  * beside it (`inbox-item-parts.tsx`), drawn only once the filter lists it.
  */
@@ -1156,19 +1178,12 @@ function inboxRow(
 ): UndrawnRow {
   const { holder, item } = listed;
   return undrawnRow(words, () => {
-    const name = holderName(holder);
+    const name = holder.task.name;
     const snippet = snippetOf(words.keywords ?? [], [item.title, words.label, name], seams.tokens);
     return {
       replayMasked: true,
-      icon: (
-        <ItemMark
-          holder={holder}
-          agentId={item.agentId}
-          models={seams.models}
-          readerId={seams.readerId}
-          plain
-        />
-      ),
+      // Note that it leads with what it asks, as its chip and the @ list's row do, never its agent's tile, which its holder's words already name.
+      icon: inboxItemGlyph(item),
       detail: snippet === undefined ? name : `${name} · ${snippet}`,
       endMark: <InboxItemEnd listed={listed} now={seams.now} readerId={seams.readerId} />,
       card: (
@@ -1841,6 +1856,8 @@ export function CommandPalette({
   // The experiments on in the workspace the window lists, the account's own beside them.
   const experiments = useExperimentsIn(tasks.workspace?.id);
   const inboxWaiting = useInboxWaitingTasks();
+  // Note that the palette stands outside a task page, so it reads the open task's workspace's members itself, the reader among them, which a starter's face is told from.
+  const directory = useWorkspaceDirectory(tasks.workspace);
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
@@ -2116,7 +2133,7 @@ export function CommandPalette({
   // while open: every row a tier matches ranks above the next tier's.
   const tiersOf = {
     [PALETTE_FILTER.THIS_TASK]: () => [
-      agentRows(tasks, inboxWaiting, inboxStanding, offerDoors, onTasks, changesPeople),
+      agentRows(tasks, inboxWaiting, inboxStanding, offerDoors, onTasks, changesPeople, directory),
     ],
     [PALETTE_FILTER.PEOPLE]: () => [
       peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.onOpenPerson(userId))),

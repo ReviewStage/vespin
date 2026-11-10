@@ -263,7 +263,10 @@ export const requestedAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
  * out of time holds none, because no read answers it, so nothing the
  * developer sees could free its place.
  */
-function holdsAccountPlace(seams: IntegrationAccountSeams, row: IntegrationConnectionRow): boolean {
+function holdsAccountDestination(
+  seams: IntegrationAccountSeams,
+  row: IntegrationConnectionRow,
+): boolean {
   return (
     row.status === INTEGRATION_ROW_STATUS.CONNECTED ||
     row.status === INTEGRATION_ROW_STATUS.EXPIRED ||
@@ -700,7 +703,7 @@ const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (adding) {
     if (!connector.multipleAccounts) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     // Note that a sign-in left past its window is let go first, so its name is free again and no read takes it for an account.
-    const left = providerRows(rows, provider).filter((row) => !holdsAccountPlace(seams, row));
+    const left = providerRows(rows, provider).filter((row) => !holdsAccountDestination(seams, row));
     yield* Effect.forEach(
       left,
       (row) =>
@@ -714,7 +717,9 @@ const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
     // Note that the rows are read again, so a sign-in restarted, or an account added, while these were let go keeps its name and its place.
     const remaining =
       left.length === 0 ? rows : yield* hostedStoreOrUnavailable(seams.readConnections(userId));
-    const held = providerRows(remaining, provider).filter((row) => holdsAccountPlace(seams, row));
+    const held = providerRows(remaining, provider).filter((row) =>
+      holdsAccountDestination(seams, row),
+    );
     if (held.length >= INTEGRATION_ACCOUNTS_MAX) {
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }

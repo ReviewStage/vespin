@@ -331,6 +331,14 @@ export const HOSTED_SERVICE_PATH = {
    */
   GITHUB_REPOSITORY_ISSUE: "/api/github/repositories/issue",
   /**
+   * What a web page a plain link names says of itself, for the card the
+   * link hangs (POST): its title, description, site name, icon, and
+   * picture, read by the service for the address the body names, which
+   * rides in the body so no request line keeps it.
+   * `link-preview-wire.ts` declares the answer.
+   */
+  LINK_PREVIEW: "/api/link-previews",
+  /**
    * Sends the browser to GitHub to install our GitHub App, or to change
    * which repositories it reaches (GET). GitHub returns the browser to
    * `GITHUB_INSTALLED` afterwards.

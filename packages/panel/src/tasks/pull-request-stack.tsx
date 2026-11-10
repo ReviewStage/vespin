@@ -3,7 +3,7 @@ import {
   PULL_REQUEST_STATE,
   type PullRequestStackEntry,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { ACT_KIND } from "@repo/host/acts";
 import { CHIP_LOOK, Chip, ChipName, dropBelowStart, Tooltip, useMenu } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -22,7 +22,7 @@ import { useOpenPlace } from "./use-open-link.js";
  * agent of the workspace whose branch is each one's head. A pull request an
  * agent owns opens that agent's Pull request tab, on its own task's side
  * panel whatever task this one is on, through the window's own opener for an
- * app link (`LINK_PLACE.CHANGES`), as a link to that tab would; an agent
+ * app link (`LINK_DESTINATION.CHANGES`), as a link to that tab would; an agent
  * on no task opens it on its own page. One no agent owns opens on GitHub, and so
  * does every one outside the window, where there is no opener.
  */
@@ -51,9 +51,9 @@ function markOf(entry: PullRequestStackEntry): PullRequestMarked {
 }
 
 /** The place in the app a stacked pull request's agent stands: its Pull request tab, on its task where it has one, else on its own page. */
-function placeOf(agent: NonNullable<PullRequestStackEntry["agent"]>): LinkPlace {
+function placeOf(agent: NonNullable<PullRequestStackEntry["agent"]>): LinkDestination {
   const task = agent.taskId === null ? undefined : { planId: agent.taskId };
-  return { kind: LINK_PLACE.CHANGES, ...task, agentId: agent.id };
+  return { kind: LINK_DESTINATION.CHANGES, ...task, agentId: agent.id };
 }
 
 /** How a pull request of the stack opens: its agent's Pull request tab where an agent owns it and the window can open one, else its page on GitHub. */

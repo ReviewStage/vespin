@@ -131,7 +131,7 @@ import {
 } from "@repo/features/conversation-picture-wire";
 import { sniffImageType } from "@repo/features/image-signature";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
@@ -602,7 +602,7 @@ function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<stri
 /** The agent's link in the workspace, as the member's other links name it. */
 const agentLink = (userId: string, organizationId: string, agentId: string) =>
   Effect.map(workspaceStepOf(userId, organizationId), (step) =>
-    linkOf({ kind: LINK_PLACE.AGENT, agentId }, step),
+    linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, step),
   );
 
 /** The one line the bot says once an agent starts: that it is on it, where, and the agent's link, so the thread opens the transcript before the agent's first reply. */

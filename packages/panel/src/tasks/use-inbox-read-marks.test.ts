@@ -7,6 +7,7 @@ import {
   INBOX_ASK_STATUS,
   INBOX_MESSAGE_AUTHOR,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
@@ -28,8 +29,8 @@ import { type InboxReadMarks, type MarkSaying, useInboxReadMarks } from "./use-i
  * use-inbox-read-marks.test.ts -- the Inbox's read marks say a refusal
  * once, unless the caller says it itself, Mark all as read names the
  * unread items it marks, which the host draws read, and acknowledges the
- * reader's notices held behind an Undo, and ⌘Z puts back the reminder a new
- * one replaced.
+ * reader's notices with an Undo that takes them back at the service, and
+ * ⌘Z puts back the reminder a new one replaced.
  * Synthetic plan and items.
  */
 
@@ -104,8 +105,8 @@ function marks() {
   const sent: Sent[] = [];
   /** Each held nod's item, by the key it went under. */
   const keys = new Map<string, string>();
-  /** Each hold let go, as sent or taken back, by its item. */
-  const released: string[] = [];
+  /** Each take-back sent, by its item, and whether it named the key its nod went under. */
+  const tookBack: string[] = [];
   /** One write held until the test answers it, with the value it answers when it does not fail. */
   const sending = <Value>(words: string, value: Value) =>
     new Promise<Value | { failure: typeof AGENT_CALL_FAILURE.UNANSWERED }>((resolve) => {
@@ -124,16 +125,16 @@ function marks() {
       sending(`all:${workspaceId}:${itemIds.join(",")}`, { marked: 1 }),
     [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) =>
       sending(`${unread ? "unread" : "read"}:${itemId}`, { id: itemId, unread }),
-    [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId, revision, reply, held, clientKey }) => {
+    [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId, revision, reply, clientKey }) => {
       keys.set(clientKey, itemId);
-      return sending(`${held === true ? "held " : ""}${reply}:${itemId}@${revision}`, {
+      return sending(`${reply}:${itemId}@${revision}`, {
         item: item(itemId, false),
         taken: revision !== MOVED_ON,
       });
     },
-    [ACT_KIND.AGENTS_INBOX_RELEASE]: ({ clientKey, send }) => {
-      released.push(`${send ? "sent" : "taken back"}:${keys.get(clientKey)}`);
-      return Promise.resolve({ held: true });
+    [ACT_KIND.AGENTS_INBOX_TAKE_BACK]: ({ itemId, clientKey }) => {
+      tookBack.push(`${itemId === keys.get(clientKey) ? "taken back" : "wrong key"}:${itemId}`);
+      return Promise.resolve({ item: item(itemId, false), outcome: INBOX_TAKE_BACK.TAKEN });
     },
   });
   let control: InboxReadMarks | undefined;
@@ -146,7 +147,7 @@ function marks() {
   const held = () => control ?? assert.fail("the hook stands");
   return {
     sent,
-    released,
+    tookBack,
     /** The hook's presses as it stands. */
     get marks() {
       return held();
@@ -187,7 +188,7 @@ test("a mark the service refused says so once, and Mark all as read names the un
   assert.deepEqual(hook.toasts(), ["Could not mark 1 item unread", "Could not mark 1 item read"]);
 });
 
-test("Mark all as read acknowledges the reader's notices, read or not or their reminder come due, leaving a question asking and a notice put away under a reminder still ahead, holding the nods behind one Undo toast, and says a refused nod and a notice changed since as not taken", async () => {
+test("Mark all as read acknowledges the reader's notices, read or not or their reminder come due, leaving a question asking and a notice put away under a reminder still ahead, the nods under one Undo toast, and says a refused nod and a notice changed since as not taken", async () => {
   const hook = marks();
   const reminded = { ...notice(item(W, false)), remindAt: Date.UTC(2099, 0, 1) };
   const due = { ...notice(item(V, false)), remindAt: Date.UTC(2000, 0, 1) };
@@ -202,31 +203,31 @@ test("Mark all as read acknowledges the reader's notices, read or not or their r
   ]);
   await settle();
   assert.deepEqual(hook.sent.map((each) => each.words).toSorted(), [
+    `acknowledged:${Y}@1`,
+    `acknowledged:${Z}@1`,
+    `acknowledged:${V}@1`,
+    `acknowledged:${U}@${MOVED_ON}`,
     `all:${TASK.workspaceId}:${X},${Z}`,
-    `held acknowledged:${Y}@1`,
-    `held acknowledged:${Z}@1`,
-    `held acknowledged:${V}@1`,
-    `held acknowledged:${U}@${MOVED_ON}`,
   ]);
   assert.deepEqual(hook.toasts(), ["4 items acknowledged"]);
-  const nodOnY = hook.sent.find((each) => each.words === `held acknowledged:${Y}@1`);
-  await hook.sent.find((each) => each.words === `held acknowledged:${Z}@1`)?.answer();
+  const nodOnY = hook.sent.find((each) => each.words === `acknowledged:${Y}@1`);
+  await hook.sent.find((each) => each.words === `acknowledged:${Z}@1`)?.answer();
   await nodOnY?.answer(true);
-  await hook.sent.find((each) => each.words === `held acknowledged:${V}@1`)?.answer();
-  await hook.sent.find((each) => each.words === `held acknowledged:${U}@${MOVED_ON}`)?.answer();
+  await hook.sent.find((each) => each.words === `acknowledged:${V}@1`)?.answer();
+  await hook.sent.find((each) => each.words === `acknowledged:${U}@${MOVED_ON}`)?.answer();
   assert.deepEqual(hook.toasts(), ["4 items acknowledged", "2 items acknowledged, 2 could not be"]);
 });
 
-test("Undo after marking a notice read takes its Got it back before the service hears of it, leaving the read mark", async () => {
+test("Undo after marking a notice read takes its Got it back at the service by its key, leaving the read mark", async () => {
   const hook = marks();
   hook.mark(notice(item(Y, true)), false);
   await settle();
   assert.deepEqual(hook.toasts(), ["Acknowledged “Alert at 80%?”"]);
   await act(() => undoLast());
-  assert.deepEqual(hook.released, [`taken back:${Y}`]);
+  assert.deepEqual(hook.tookBack, [`taken back:${Y}`]);
   assert.deepEqual(
     hook.sent.map((each) => each.words),
-    [`held acknowledged:${Y}@1`, `read:${Y}`],
+    [`acknowledged:${Y}@1`, `read:${Y}`],
   );
 });
 
@@ -255,7 +256,6 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
         [LIVE_READ.INBOX_ITEMS]: {
           rows: {
             [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [{ ...item(X, false), remindAt }] },
-            [INBOX_SCOPE_KIND.AGENT]: {},
           },
         },
       },

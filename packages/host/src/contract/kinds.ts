@@ -95,6 +95,16 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * Carries nothing.
    */
   ACCOUNT_ACTIVE: "account.active",
+  /**
+   * The phone the iOS app runs on, as it registers itself for pushes once
+   * iOS lets it notify, unregisters before a sign-out, and reads and sets
+   * its "Notify me" in Settings: its APNs token and gateway pass through to
+   * the service and are kept nowhere on the way.
+   */
+  PUSH_DEVICE_REGISTER: "pushDevice.register",
+  PUSH_DEVICE_UNREGISTER: "pushDevice.unregister",
+  PUSH_DEVICE_STATUS: "pushDevice.status",
+  PUSH_DEVICE_NOTIFY: "pushDevice.notify",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -286,8 +296,8 @@ export const AGENT_INBOX_ACT_KIND = {
   AGENTS_INBOX_ANSWER: "agents.inboxAnswer",
   /** One open item closed without an answer against the revision the panel drew, under the panel's own key. */
   AGENTS_INBOX_CLOSE: "agents.inboxClose",
-  /** A held close or nod let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
-  AGENTS_INBOX_RELEASE: "agents.inboxRelease",
+  /** The reader's own nod or close taken back by the key it went under, as its Undo asks. */
+  AGENTS_INBOX_TAKE_BACK: "agents.inboxTakeBack",
   /** A message on one item's thread, open or settled, under the panel's own key; it never answers the item. */
   AGENTS_INBOX_MESSAGE: "agents.inboxMessage",
   /** A new thread with one agent, its subject and first message, under the panel's own key. */
@@ -473,6 +483,8 @@ export const TASKS_ACT_KIND = {
   TASKS_FILE: "tasks.file",
   /** A File tab's tree listing one folder of the open task's repository, read from GitHub through the service; answered to the tree, never on the document. */
   TASKS_TREE: "tasks.tree",
+  /** What a web page a plain link names says of itself, for the card the link hangs: fetched as the card shows, and kept by the window alone. */
+  TASKS_LINK_PREVIEW: "tasks.linkPreview",
   /** The skills a developer may choose of a task's repository, read from GitHub through the service; answered to the asker, never on the document. */
   TASKS_SKILLS: "tasks.skills",
   /**
@@ -872,6 +884,10 @@ export const PORT_ACT_USE = {
   MEMORIES_FORGET: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
+  PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_STATUS: ACT_USE.FETCH,
+  PUSH_DEVICE_NOTIFY: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
@@ -931,7 +947,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_ITEMS_RETRY: ACT_USE.READ,
   AGENTS_INBOX_ANSWER: ACT_USE.WRITE,
   AGENTS_INBOX_CLOSE: ACT_USE.WRITE,
-  AGENTS_INBOX_RELEASE: ACT_USE.WRITE,
+  AGENTS_INBOX_TAKE_BACK: ACT_USE.WRITE,
   AGENTS_INBOX_MESSAGE: ACT_USE.WRITE,
   AGENTS_INBOX_START: ACT_USE.WRITE,
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,
@@ -1022,6 +1038,7 @@ export const PORT_ACT_USE = {
   TASKS_SET_STANDING: ACT_USE.WRITE,
   TASKS_FILE: ACT_USE.FETCH,
   TASKS_TREE: ACT_USE.FETCH,
+  TASKS_LINK_PREVIEW: ACT_USE.FETCH,
   TASKS_SKILLS: ACT_USE.FETCH,
   TASKS_LINK_STANDING_FOLLOW: ACT_USE.READ,
   TASKS_BROWSER_TAB_OPEN: ACT_USE.WRITE,

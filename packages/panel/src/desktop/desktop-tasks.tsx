@@ -1,7 +1,7 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -9,6 +9,7 @@ import type {
   TaskCreateRelationKind,
   TaskStanding,
 } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
@@ -45,7 +46,6 @@ import {
   subagentTab,
   TAB_WORDS,
 } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -87,7 +87,7 @@ import {
   type TaskMentionsValue,
   useMentionAgentsReader,
 } from "../tasks/task-mentions.js";
-import { taskLinkPlace, useOfferTaskRename } from "../tasks/task-menu-items.js";
+import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
@@ -586,7 +586,7 @@ function DescriptionDocument({
       : tasks.workspaces.find((each) => each.id === opened.workspaceId);
   // The slug the task's links are written under, as its ⋯ menu's Copy link to task writes it.
   const workspace =
-    opened === undefined ? undefined : taskLinkPlace(tasks.workspaces, opened).workspace;
+    opened === undefined ? undefined : taskLinkDestination(tasks.workspaces, opened).workspace;
   // A row that opens a tab of this column, as a coding agent's start in an
   // agent's tab opens the agent's, first has a panel filling the window over it
   // give way, and hands the keys to this column, so ⌘W closes the tab it opened.
@@ -651,8 +651,8 @@ function DescriptionDocument({
           (target.key === undefined ? undefined : keyedItem(inbox.board, target.key, from)?.id);
         return openPlace?.(
           itemId === undefined
-            ? { kind: LINK_PLACE.INBOX, planId: taskId }
-            : { kind: LINK_PLACE.INBOX_ITEM, planId: taskId, itemId },
+            ? { kind: LINK_DESTINATION.INBOX, planId: taskId }
+            : { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId },
         );
       }
       case TOOL_TARGET.PAGE:

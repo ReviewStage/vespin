@@ -2,14 +2,16 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { askHeadWords } from "@repo/features/inbox-ask-words";
 import {
-  holderAutomationId,
-  holderName,
-  INBOX_HOLDER,
+  answerOf,
+  askNumberedPick,
+  EMPTY_INBOX_DRAFT,
+  type InboxDraft,
+} from "@repo/features/inbox-draft";
+import {
   INBOX_SETTLED_STANDING,
   type InboxHolder,
   type InboxKnownAsk,
   inboxSettledStanding,
-  itemWorkspaceId,
   knownAsk,
   readersItem,
   sentStamp,
@@ -80,16 +82,15 @@ import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { isWireString } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { BotIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ZapIcon } from "lucide-react";
+import { BotIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActorGlyph, ActorLine, ActorRef, AutomationCard, commentAuthor } from "../actor-ref.js";
+import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
   ConversationRows,
   ConversationScrollButton,
 } from "../ai-elements/conversation.js";
-import { useAutomation } from "../automation-directory.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   AgentCrumbMenu,
@@ -97,7 +98,6 @@ import {
   NO_CRUMB_KEYS,
   TaskCrumbMenu,
   THREAD_AGENT_COPY_KEYS,
-  THREAD_AGENT_KEYS,
   THREAD_TASK_KEYS,
 } from "../desktop/crumb-menus.js";
 import { PhoneHead, phoneFindGroups } from "../desktop/phone-head.js";
@@ -133,7 +133,7 @@ import { INBOX_VIEW_ITEMS } from "./inbox-columns.js";
 import { COMMENT, INBOX_THREAD, InboxComment } from "./inbox-comment.js";
 import type { FormTextDoors } from "./inbox-form-text.js";
 import { INBOX_ITEM_KEYS, inboxItemSubject, useInboxItemActions } from "./inbox-item-actions.js";
-import { AddressedTo, HolderGlyph } from "./inbox-item-parts.js";
+import { AddressedTo } from "./inbox-item-parts.js";
 import {
   AgentName,
   type ItemAgent,
@@ -141,7 +141,6 @@ import {
   MessageWords,
   useMessageWriter,
 } from "./inbox-message.js";
-import { answerOf, askNumberedPick, EMPTY_INBOX_DRAFT, type InboxDraft } from "./inbox-model.js";
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
@@ -1136,7 +1135,7 @@ export interface InboxPanePhone {
 /**
  * What a phone's ⋯ leads with, in place of what the wide bar draws as
  * buttons and crumbs: the pager's steps, then what the crumbs open, the
- * item's task or automation and its agent, then the side panel.
+ * item's task and its agent, then the side panel.
  */
 function phoneItemGroups(
   holder: InboxHolder,
@@ -1165,52 +1164,32 @@ function phoneItemGroups(
           },
         ];
   const { onOpenHolder } = doors;
-  const holderItem: MenuAction[] =
-    onOpenHolder === undefined
-      ? []
-      : holder.kind === INBOX_HOLDER.TASK
-        ? [
-            {
-              label: OPEN_TASK,
-              detail: holder.task.name,
-              replayMasked: true,
-              icon: tabLook({
-                kind: TAB_KIND.PLAN,
-                name: holder.task.name,
-                status: holder.task.status,
-              }).icon,
-              onSelect: onOpenHolder,
-              command: APP_COMMAND.OPEN_IN_TASK,
-            },
-          ]
-        : [
-            {
-              label: OPEN_AUTOMATION,
-              detail: holderName(holder),
-              replayMasked: true,
-              icon: <ZapIcon />,
-              onSelect: onOpenHolder,
-            },
-          ];
-  // ⌘O opens the item's task, or its agent where no task holds it (`desktop-inbox.tsx`).
+  const { task } = holder;
+  // ⌘O opens the item's task (`desktop-inbox.tsx`).
+  const holderItem: MenuAction = {
+    label: OPEN_TASK,
+    detail: task.name,
+    replayMasked: true,
+    icon: tabLook({ kind: TAB_KIND.PLAN, name: task.name, status: task.status }).icon,
+    onSelect: onOpenHolder,
+    command: APP_COMMAND.OPEN_IN_TASK,
+  };
   const agentItem: MenuAction = {
     label: OPEN_AGENT,
     detail: by.subject.name,
     replayMasked: true,
     icon: <BotIcon />,
     onSelect: by.onOpen,
-    ...(holder.kind === INBOX_HOLDER.TASK ? {} : { command: APP_COMMAND.OPEN_IN_TASK }),
   };
   const panel: MenuAction[] =
     phone.onShowPanel === undefined
       ? []
       : [{ label: "Show panel", icon: <SidePanelIcon />, onSelect: phone.onShowPanel }];
-  return [steps, [...holderItem, agentItem], panel].filter((group) => group.length > 0);
+  return [steps, [holderItem, agentItem], panel].filter((group) => group.length > 0);
 }
 
 /** What a phone's ⋯ calls the crumbs' presses. */
 const OPEN_TASK = "Open task";
-const OPEN_AUTOMATION = "Open automation";
 const OPEN_AGENT = "Open agent";
 
 /** What the pane's ⋯ menu is called, which is its tooltip too, as the item's row names its own. */
@@ -1384,10 +1363,9 @@ function AnswerMentions({
   return value === undefined ? children : <TaskMentions value={value}>{children}</TaskMentions>;
 }
 
-/** The words a dictation into an item's box is likely to say: its repository's, its title's, and its thread's. */
+/** The words a dictation into an item's box is likely to say: its task's repository's, its title's, and its thread's. */
 function answerKeywords(holder: InboxHolder, item: InboxItem): readonly string[] {
-  const repository =
-    holder.kind === INBOX_HOLDER.TASK ? holder.task.repository : holder.agent.repository;
+  const { repository } = holder.task;
   const body = (item.thread ?? []).map((message) => message.text).join("\n");
   return dictationKeywords({ repository, title: item.title, body });
 }
@@ -1396,9 +1374,9 @@ function answerKeywords(holder: InboxHolder, item: InboxItem): readonly string[]
 export interface InboxPaneDoors {
   /** The window's tasks, which the crumbs' menus act through, as the sidebar's rows do. */
   readonly tasks: TasksControl;
-  /** Opens what holds the item: its task, or its automation's page; nothing where there is none to open. */
-  readonly onOpenHolder: (() => void) | undefined;
-  /** The task's hover card, as its sidebar row hangs it; none for an automation. */
+  /** Opens the item's task. */
+  readonly onOpenHolder: () => void;
+  /** The task's hover card, as its sidebar row hangs it. */
   readonly taskCard: React.ReactNode;
   /** Opens the agent's tab on its task. */
   readonly onOpenAgent: (agentId: string) => void;
@@ -1409,7 +1387,7 @@ export interface InboxPaneDoors {
   readonly onRemind?: InboxReminder | undefined;
   /** Resolves open items without an answer, from the bar's ⋯ menu and the question card; none where the pane offers no resolve. */
   readonly onClose?: InboxResolver | undefined;
-  /** Whether the thread holds the window's keys, shown with the keyboard in it, so ⌘⌫, Version history, and the agent's copies act on its task or agent (`crumb-menus.tsx`); none where the pane hands its crumbs none. */
+  /** Whether the thread holds the window's keys, shown with the keyboard in it, so ⌘⌫, Version history, and the agent's copies act on its task and its agent (`crumb-menus.tsx`); none where the pane hands its crumbs none. */
   readonly keys?: boolean | undefined;
 }
 
@@ -1443,39 +1421,10 @@ function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent):
 }
 
 /**
- * An automation's crumb, as its page's own look names it: its clock and its
- * name, hanging its card where the window reads it, and opening its page
- * where that can be opened.
- */
-function useAutomationCrumb(
-  holder: InboxHolder,
-  onOpen: (() => void) | undefined,
-): Crumb | undefined {
-  const automationId = holderAutomationId(holder);
-  const known = useAutomation(automationId ?? undefined);
-  if (holder.kind !== INBOX_HOLDER.AGENT) return undefined;
-  const name = holderName(holder);
-  return {
-    label: name,
-    // Note that the agents no automation names stand under no automation, so their crumb wears the factory glyph, as their group's header does.
-    glyph: <HolderGlyph holder={holder} />,
-    hint: name,
-    card:
-      known === undefined ? undefined : (
-        <AutomationCard automation={known.automation} workspaceName={known.workspaceName} />
-      ),
-    onPress: onOpen === undefined ? undefined : () => onOpen(),
-  };
-}
-
-/**
  * The pane's path, task › agent, each crumb wearing its tab's glyph in the task's column,
  * the task's document glyph and the agent's mark: each opens what it names,
  * the task or the agent's tab, and hangs the card its sidebar row or tab
- * hangs. An agent with no task stands under the automation that started it
- * instead, by its clock and name, which hang its card and open the
- * automation's page where that can be opened, and are words alone where it
- * cannot. An agent this window
+ * hangs. An agent this window
  * does not list, one started on another Mac, hangs a card saying so and
  * still opens its tab. Once the thread's heading has scrolled away, the
  * item's title joins the path as its last words, in the text's own ink, so
@@ -1487,8 +1436,7 @@ function useAutomationCrumb(
  * as their sidebar rows and their own bars offer them (`crumb-menus.tsx`).
  * While the thread holds the window's keys (`keys`), ⌘⌫ and Version history
  * act on its task, and ⌥⌘C and ⇧⌥⌘C on its agent, as Linear's Inbox acts on
- * the issue shown, ⌘⌫ on the agent where no task holds the thread; its
- * crumbs' menus print them so. U and P stay the thread's.
+ * the issue shown; its crumbs' menus print them so. U and P stay the thread's.
  */
 function Crumbs({
   holder,
@@ -1507,10 +1455,9 @@ function Crumbs({
   /** Whether the heading has scrolled away, so the path names the item. */
   titleShown: boolean;
 }): React.JSX.Element {
-  const automation = useAutomationCrumb(holder, doors.onOpenHolder);
-  const path = (task: CrumbHeld | undefined, agent: CrumbHeld | undefined) => {
+  const path = (task: CrumbHeld, agent: CrumbHeld | undefined) => {
     const crumbs: Crumb[] = [
-      taskCrumb(holder, doors, task) ?? automation,
+      taskCrumb(holder, doors, task),
       // Note that once the title joins the path the agent's crumb keeps its size, so a narrow bar cuts the task's crumb short first and then the title.
       agentCrumb(by, titleShown, agent),
       { label: title, current: true, shown: titleShown },
@@ -1523,11 +1470,10 @@ function Crumbs({
   };
   // The agent's crumb holds its menu where the window lists the agent, which an agent started on another Mac may not be.
   const listed = by.subject.agent;
-  // While the thread holds the keys, they act on its task, the agent's copies on its agent, or all on its agent where no task holds it; U and P stay the thread's.
-  const onTask = holder.kind === INBOX_HOLDER.TASK;
+  // While the thread holds the keys, they act on its task, the agent's copies on its agent; U and P stay the thread's.
   const keys = doors.keys === true;
-  const agentKeys = !keys ? NO_CRUMB_KEYS : onTask ? THREAD_AGENT_COPY_KEYS : THREAD_AGENT_KEYS;
-  const withAgent = (task: CrumbHeld | undefined) =>
+  const agentKeys = keys ? THREAD_AGENT_COPY_KEYS : NO_CRUMB_KEYS;
+  const withAgent = (task: CrumbHeld) =>
     listed === undefined ? (
       path(task, undefined)
     ) : (
@@ -1535,7 +1481,7 @@ function Crumbs({
         {(agent) => path(task, agent)}
       </AgentCrumbMenu>
     );
-  return holder.kind === INBOX_HOLDER.TASK ? (
+  return (
     <TaskCrumbMenu
       tasks={doors.tasks}
       task={holder.task}
@@ -1543,26 +1489,23 @@ function Crumbs({
     >
       {withAgent}
     </TaskCrumbMenu>
-  ) : (
-    withAgent(undefined)
   );
 }
 
-/** The path's task crumb, wearing its plan's glyph and hanging its card, which opens the task and holds its menu (`held`); none for an item no task holds. */
+/** The path's task crumb, wearing its plan's glyph and hanging its card, which opens the task and holds its menu (`held`). */
 function taskCrumb(
   holder: InboxHolder,
   doors: InboxPaneDoors,
   held?: CrumbHeld | undefined,
-): Crumb | undefined {
-  if (holder.kind !== INBOX_HOLDER.TASK) return undefined;
+): Crumb {
   const { onOpenHolder } = doors;
+  const { task } = holder;
   return {
-    label: holder.task.name,
-    glyph: tabLook({ kind: TAB_KIND.PLAN, name: holder.task.name, status: holder.task.status })
-      .icon,
-    hint: holder.task.name,
+    label: task.name,
+    glyph: tabLook({ kind: TAB_KIND.PLAN, name: task.name, status: task.status }).icon,
+    hint: task.name,
     card: doors.taskCard,
-    onPress: () => onOpenHolder?.(),
+    onPress: () => onOpenHolder(),
     menu: held?.menu,
     editing: held?.editing,
   };
@@ -1584,9 +1527,8 @@ function agentCrumb(by: ItemAgent, fixed = false, held?: CrumbHeld | undefined):
 }
 
 /**
- * A phone's bar's name for the item: what holds it, its task as the wide
- * path leads with it, or its agent where no task holds it, each crumb
- * pressing where the wide path's does. Where the Inbox is narrowed to a
+ * A phone's bar's name for the item: its task, as the wide path leads with
+ * it, pressing where the wide path's does. Where the Inbox is narrowed to a
  * task, the Inbox leads it, pressing back to that narrowed list, so the
  * screen a thread's link lands on says the list it stands in. Note that the
  * bar never names the item's title, because the thread's heading right
@@ -1594,17 +1536,15 @@ function agentCrumb(by: ItemAgent, fixed = false, held?: CrumbHeld | undefined):
  */
 function PhoneHolder({
   holder,
-  by,
   doors,
   narrowed,
 }: {
   holder: InboxHolder;
-  by: ItemAgent;
   doors: InboxPaneDoors;
   /** Goes back to the list narrowed to the task; none while it lists every task's. */
   narrowed: (() => void) | undefined;
 }): React.JSX.Element {
-  const holds = taskCrumb(holder, doors) ?? agentCrumb(by);
+  const holds = taskCrumb(holder, doors);
   return (
     <Breadcrumbs
       label="Path"
@@ -1638,10 +1578,10 @@ export function InboxPane({
   newThread,
   within,
 }: {
-  /** What holds the item: its task, or the automation that started its agent with no task. */
+  /** What holds the item: its task. */
   holder: InboxHolder;
   item: InboxItem;
-  /** The live read of the item's task, or of its agent with no task, which answers it and holds its draft. */
+  /** The live read of the item's task, which answers it and holds its draft. */
   control: TaskInboxControl;
   agents: AgentsControl;
   doors: InboxPaneDoors;
@@ -1736,8 +1676,8 @@ export function InboxPane({
     keywords: answerKeywords(holder, item),
     onEnter: () => sendFromPane(pane.current),
   };
-  // Note that the item's words are read under its own workspace, its plan's or its agent's, never the one the Inbox lists, which may not be the item's.
-  const workspaceId = itemWorkspaceId(holder);
+  // Note that the item's words are read under its own workspace, its plan's, never the one the Inbox lists, which may not be the item's.
+  const { workspaceId } = holder.task;
   const onDraft = (next: InboxDraft) => control.onDraft(item, next);
   // The open ask's controls stand in the draft reply, over its note.
   const asking = openAskOf(thread);
@@ -1800,7 +1740,6 @@ export function InboxPane({
           title={
             <PhoneHolder
               holder={holder}
-              by={by}
               doors={doors}
               narrowed={phone.narrowedTask === undefined ? undefined : onBack}
             />

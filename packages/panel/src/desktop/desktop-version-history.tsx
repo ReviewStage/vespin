@@ -1,10 +1,11 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { descriptionSections } from "@repo/features/description-document";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import type { FormerMember, Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -45,7 +46,6 @@ import {
 } from "@repo/ui";
 import { type Actor, actorName } from "@repo/ui/actor-model";
 import { ArrowUpRightIcon, GLYPH, RotateCcwIcon } from "@repo/ui/icons";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import {
   VIRTUAL_ROW_KEY_ATTRIBUTE,
   VIRTUAL_ROWS_ANCHOR,
@@ -816,7 +816,7 @@ export function DesktopVersionHistory({
       ? undefined
       : linkOf(
           numbered(
-            { kind: LINK_PLACE.VERSION, planId: linked.taskId, revision },
+            { kind: LINK_DESTINATION.VERSION, planId: linked.taskId, revision },
             linked.place.workspace,
           ),
           linked.place.workspace,

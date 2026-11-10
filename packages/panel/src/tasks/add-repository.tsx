@@ -1,3 +1,4 @@
+import { addRepositoryFailureWords } from "@repo/features/agent-refusal-words";
 import {
   ADDED_REPOSITORY_CHECKOUT,
   type AddedRepositoryCheckout,
@@ -30,7 +31,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import { addRepositoryFailureWords } from "./agent-model.js";
+
 import { CHIP_PLACE, RepositoryChip, type RepositoryChooser } from "./repository-chip.js";
 import { type AgentsControl, agentAddRepositoryMutation } from "./use-agents.js";
 

@@ -45,12 +45,13 @@
  * with it, once its caller withdraws that subject (`withdrawUndo`), as what
  * it would put back has gone.
  *
- * A held entry (`pressHeld`) is built from a declaration of a write the host
- * holds from the service until its toast is gone (`HeldWrite`): its words,
- * the act sent held, how its hold is let go, its inverse, and what a refusal
- * of either says. It is kept for ⌘Z at the press, since a held write is
- * drawn at once, and is never put back, since sending it again would be a
- * new write rather than the one taken back.
+ * A take-back entry (`pressTakeBack`) is built from a declaration of a
+ * write the service takes at once and takes back by an act of its own on
+ * request (`TakeBackWrite`): its words, the act, its take-back, and what a
+ * refusal of either says. It is kept for ⌘Z at the press, since the write is
+ * drawn at once, for as long as the list keeps it, toast or not, and is
+ * never put back, since sending it again would be a new write rather than
+ * the one taken back.
  */
 
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
@@ -681,106 +682,74 @@ function keptWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
   say({ ...toast, replayUnmasked: write.unmasked(change) });
 }
 
-/** What a refusal of a held write says, and what it is reported as. */
-interface HeldRefusal {
+/** What a refusal of a take-back write or its take-back says, and what it is reported as. */
+interface TakeBackRefusal {
   readonly words: string;
   readonly failure: ShownFailure;
 }
 
-/** What a refusal of a held write's act says, and whether the service took none of it, so nothing is left for ⌘Z to take back. */
-interface HeldActRefusal extends HeldRefusal {
+/** What a refusal of a take-back write's act says, and whether the service took none of it, so nothing is left for ⌘Z to take back. */
+interface TakeBackActRefusal extends TakeBackRefusal {
   readonly whole: boolean;
 }
 
-/** What a refusal of a held write's inverse says, and, where part of it was not reached, what asking again takes back and what that action is called. */
-export interface HeldUndoRefusal<Change> extends HeldRefusal {
+/** What a refusal of a take-back says, and, where part of it was not reached, what asking again takes back and what that action is called. */
+export interface TakeBackUndoRefusal<Change> extends TakeBackRefusal {
   readonly retry?: { readonly label: string; readonly change: Change };
 }
 
 /**
- * A write the host holds from the service until its toast is gone, taken
- * back by letting the hold go unsent rather than by an act of its own:
- * `Doors` are the caller's mutations it is sent on, `Change` what a press
- * changes, `Answer` what its act answers and `Released` what letting its
- * hold go unsent answers, each settled by itself, an act that never
- * answered among it, so neither rejects.
+ * A write the service takes at once and takes back by an act of its own,
+ * whenever ⌘Z or its toast's Undo asks: `Doors` are the caller's mutations
+ * it is sent on, `Change` what a press changes, `Answer` what its act
+ * answers and `TakenBack` what its take-back answers, each settled by itself,
+ * an act that never answered among it, so neither rejects.
  */
-export interface HeldWrite<Doors, Change, Answer, Released> {
+export interface TakeBackWrite<Doors, Change, Answer, TakenBack> {
   /** What its toast says, and what ⌘Z's toast calls it. */
   readonly words: (change: Change) => string;
   /** The glyph its toast leads with. */
   readonly glyph: NonNullable<ToastNotice["glyph"]>;
   /** Whether its toast's words are the app's own, which a screen recording shows as they read; one quoting a name leaves this false. */
   readonly unmasked: (change: Change) => boolean;
-  /** Sends the write, held. */
+  /** Sends the write. */
   readonly act: (doors: Doors, change: Change) => Promise<Answer>;
-  /** Lets the hold go as sent. */
-  readonly letGo: (doors: Doors, change: Change) => void;
-  /** Lets the hold go unsent, which takes the write back while the host still holds it. */
-  readonly undo: (doors: Doors, change: Change) => Promise<Released>;
+  /** Sends its take-back. */
+  readonly undo: (doors: Doors, change: Change) => Promise<TakenBack>;
   /** What a refusal of the act says, of its answer; none where the service took it. */
-  readonly refused: (change: Change, answer: Answer) => HeldActRefusal | undefined;
-  /** What a refusal of its inverse says, of its answer; none where the write was taken back. */
-  readonly unheld: (change: Change, released: Released) => HeldUndoRefusal<Change> | undefined;
-}
-
-/** Lets each held write this window still holds go as sent; each lets itself out of the set as it goes. */
-const heldHere = new Set<() => void>();
-
-/** Whether the window's leaving is heard yet, which is heard once for the window's life. */
-let leavingHeard = false;
-
-/**
- * Lets every write the window holds go as sent once it leaves, heard once
- * for the window's life rather than a surface's, since a toast outlives the
- * surface it was pressed on. Note that a page kept in the back-forward cache
- * has not left, because it may come back with its toast and its Undo still
- * standing.
- */
-function hearLeaving(): void {
-  if (leavingHeard) return;
-  leavingHeard = true;
-  window.addEventListener("pagehide", (event) => {
-    if (event.persisted) return;
-    for (const letGo of [...heldHere]) letGo();
-  });
+  readonly refused: (change: Change, answer: Answer) => TakeBackActRefusal | undefined;
+  /** What a refusal of its take-back says, of its answer; none where the write was taken back. */
+  readonly unheld: (
+    change: Change,
+    takenBack: TakenBack,
+  ) => TakeBackUndoRefusal<Change> | undefined;
 }
 
 /**
- * Presses a held write: sends its act held, keeps it at once as the newest
- * entry for ⌘Z, and says so with its toast's Undo, which runs that entry;
- * once the toast is gone, or the window leaves, the hold is let go as sent.
- * ⌘Z takes it back by letting the hold go unsent, which, once the hold was
- * let go, takes it back only where the host still holds it, and says why
- * otherwise. A refusal of the act says so in its own words, unless the
- * write was taken back. Answers once the act answered.
+ * Presses a take-back write: sends its act, keeps it at once as the newest
+ * entry for ⌘Z, and says so with its toast's Undo, which runs that entry.
+ * ⌘Z takes it back by its take-back for as long as the list keeps it, its
+ * toast gone or not, and says why where the service did not take it back.
+ * A refusal of the act says so in its own words, unless the write was taken
+ * back. Answers once the act answered.
  */
-export function pressHeld<Doors, Change, Answer, Released>(
-  write: HeldWrite<Doors, Change, Answer, Released>,
+export function pressTakeBack<Doors, Change, Answer, TakenBack>(
+  write: TakeBackWrite<Doors, Change, Answer, TakenBack>,
   doors: Doors,
   change: Change,
 ): Promise<void> {
-  hearLeaving();
   let taken = false;
-  const letGo = () => {
-    if (!heldHere.delete(letGo)) return;
-    write.letGo(doors, change);
-  };
-  heldHere.add(letGo);
-  // Note that the hold is claimed as the take-back is pressed, by ⌘Z or its toast's Undo, because its toast may be gone, and let the hold go, before the run's turn comes.
-  const claim = () => {
-    heldHere.delete(letGo);
-    taken = true;
-  };
   const answered = write.act(doors, change);
   const entry: UndoEntry = {
     words: write.words(change),
-    claim,
+    claim: () => {
+      taken = true;
+    },
     undo: () => takeBack(change),
   };
   const takeBack = (among: Change): Promise<UndoRun> =>
-    write.undo(doors, among).then((released): UndoRun => {
-      const refusal = write.unheld(among, released);
+    write.undo(doors, among).then((takenBack): UndoRun => {
+      const refusal = write.unheld(among, takenBack);
       if (refusal === undefined) return APPLIED_RUN;
       const { words, failure, retry } = refusal;
       if (retry === undefined) return { ran: UNDO_RAN.REFUSED, words, failure };
@@ -797,13 +766,12 @@ export function pressHeld<Doors, Change, Answer, Released>(
     ...undoable(entry),
     glyph: write.glyph,
     replayUnmasked: write.unmasked(change),
-    onGone: letGo,
   });
   return answered.then((answer) => {
     // Note that a write taken back answers nothing worth saying, since the reader undid it.
     const refusal = taken ? undefined : write.refused(change, answer);
     if (refusal === undefined) return;
-    // Note that a write the service took none of leaves the list, so ⌘Z takes back the one before it rather than saying it was too late.
+    // Note that a write the service took none of leaves the list, so ⌘Z takes back the one before it rather than saying it was not taken back.
     if (refusal.whole) {
       undoLine.setState((now) => ({ ...now, undo: now.undo.filter((each) => each !== entry) }));
     }

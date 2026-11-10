@@ -8,13 +8,13 @@ import { Markdown, type MarkdownPlace } from "./markdown.js";
 import { PageHeader } from "./page-header.js";
 import { SPACE } from "./tokens/space.js";
 
-const WORDS_FRAME = { paddingHorizontal: SPACE.PAGE, paddingBottom: SPACE.PAGE } as const;
+const WORDS_FRAME = { paddingHorizontal: SPACE.EDGE, paddingBottom: SPACE.PAGE } as const;
 
 type MarkdownPageProps = {
   readonly title: string;
   /** A line under the title: where the thing stands, or what it asks. */
   readonly summary?: string | undefined;
-  /** A task's status, drawn over the title as a task's page heads itself. */
+  /** A task's status, drawn as its chip under the title. */
   readonly status?: TaskStatus | undefined;
   readonly words: string;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */

@@ -1,13 +1,24 @@
 import assert from "node:assert/strict";
 import { INBOX_MISSING } from "@repo/features/inbox-ask-words";
 import {
+  doDecision,
+  EMPTY_INBOX_DRAFT,
+  type InboxDraft,
+  inboxMissing,
+  inboxReply,
+  inboxThreadSend,
+  shownTicks,
+  stepParts,
+  withChoice,
+  withDoPress,
+  withStep,
+  withValue,
+} from "@repo/features/inbox-draft";
+import {
   ANSWER_TONE,
   acknowledgedOnOpen,
-  agentGroups,
   awaitsNod,
   EVERYONES,
-  holderName,
-  INBOX_HOLDER,
   INBOX_LINE,
   INBOX_SHOW,
   INBOX_WHOSE,
@@ -51,31 +62,11 @@ import {
   type InboxMessage,
   type InboxResponse,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
-import type { AppInboxTasklessItem } from "@repo/host/app-state";
 import { test } from "vitest";
-import {
-  CODE_READ,
-  codeNotice,
-  codeReadOf,
-  codeWindow,
-  doDecision,
-  EMPTY_INBOX_DRAFT,
-  type InboxDraft,
-  inboxBoard,
-  inboxMissing,
-  inboxReply,
-  inboxThreadSend,
-  shownTicks,
-  stepParts,
-  waitsOnReader,
-  withChoice,
-  withDoPress,
-  withStep,
-  withValue,
-} from "./inbox-model.js";
+import { CODE_READ, codeNotice, codeReadOf, codeWindow, inboxBoard } from "./inbox-model.js";
 
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 const UNLISTED = "9d2b7b5f-4e3f-4e9c-9c77-7a5d8b3f4c32";
@@ -889,76 +880,6 @@ test("a code block near the file's top reads from its first line, a file that en
   );
 });
 
-/** An item of an agent with no task as main's read lists it. */
-function waitingTaskless(
-  agentId: string,
-  patch: Partial<AppInboxTasklessItem> = {},
-): AppInboxTasklessItem {
-  return {
-    id: `item-${agentId}`,
-    agentId,
-    title: "Quarantine the flaky test?",
-    postedAt: 1,
-    updatedAt: 1,
-    agentTitle: null,
-    agentModel: "anthropic/claude-opus-5.5",
-    automationId: "automation-sweep",
-    automationName: "Nightly flake sweep",
-    repository: "acme/relay",
-    workspaceId: "workspace-acme",
-    ...patch,
-  };
-}
-
-test("each item of an agent with no plan is held by its agent, named by the automation that started it, the unnamed ones alike, and only the listed workspace's are listed", () => {
-  // An item from a service before workspaces were named, which stands in every workspace's list.
-  const { workspaceId: _unnamed, ...unnamedWorkspace } = waitingTaskless("agent-5", {
-    automationId: "automation-old",
-    automationName: "Old",
-  });
-  const waiting = [
-    waitingTaskless("agent-1"),
-    waitingTaskless("agent-2"),
-    // Started by hand, by no automation.
-    waitingTaskless("agent-3", { automationId: null, automationName: null }),
-    waitingTaskless("agent-4", { workspaceId: "workspace-beta" }),
-    unnamedWorkspace,
-  ];
-  const read = new Map([
-    ["agent-1", [item({ id: "one", agentId: "agent-1", updatedAt: 60 })]],
-    [
-      "agent-2",
-      [
-        item({ id: "two", agentId: "agent-2", updatedAt: 50 }),
-        item({ id: "settled", agentId: "agent-2", status: INBOX_STATUS.ANSWERED, updatedAt: 10 }),
-      ],
-    ],
-    ["agent-3", [item({ id: "three", agentId: "agent-3", updatedAt: 40 })]],
-    ["agent-4", [item({ id: "four", agentId: "agent-4", updatedAt: 30 })]],
-    ["agent-5", [item({ id: "five", agentId: "agent-5", updatedAt: 25 })]],
-  ]);
-  const view = inboxList(agentGroups(waiting, read, "workspace-acme"), {
-    show: INBOX_SHOW.ALL,
-    chosen: undefined,
-    readerId: undefined,
-  });
-
-  assert.deepEqual(
-    listedItems(view).map(({ holder, item }) => [
-      item.id,
-      holder.kind === INBOX_HOLDER.AGENT ? holder.agent.agentId : undefined,
-      holderName(holder),
-    ]),
-    [
-      ["one", "agent-1", "Nightly flake sweep"],
-      ["two", "agent-2", "Nightly flake sweep"],
-      ["three", "agent-3", "Other agents"],
-      ["five", "agent-5", "Old"],
-      ["settled", "agent-2", "Nightly flake sweep"],
-    ],
-  );
-});
-
 /** Names a member as a row's preview does: "You" for the reader, a teammate by name, someone unnamed where the service names nobody. */
 function previewName(
   member: { readonly userId: string; readonly name: string } | undefined,
@@ -1229,19 +1150,6 @@ test("a notice, open with no ask open on its thread, waits on the reader's nod, 
   assert.equal(awaitsNod({ ...notice, status: INBOX_STATUS.ANSWERED }), false);
 });
 
-test("an item of an agent with no task waits on the member it is addressed to, else on its starter", () => {
-  const teammate = CHARLES.userId;
-
-  assert.deepEqual(
-    [
-      waitsOnReader({ startedBy: teammate, waitsOn: READER }, READER),
-      waitsOnReader({ startedBy: READER, waitsOn: teammate }, READER),
-      waitsOnReader({ startedBy: READER }, READER),
-    ],
-    [true, false, true],
-  );
-});
-
 test("an answer's stamp names a pair of buttons' pick in the past where it can and which way it goes, any other pick by its options, and a to-do by the steps it ticked", () => {
   const pair = asking({
     type: INBOX_ASK.DECIDE,
@@ -1368,7 +1276,7 @@ test("a thread's row says the ask itself while one is open: a choice's options, 
 test("a comment's files are drawn after its words but for a picture its words draw as one, the pictures apart from every other file; a file the words only link to, quote in code, or draw though it is no picture is still drawn", () => {
   const itemId = "a1b2c3d4-0000-4000-8000-0000000000f1";
   const place = {
-    kind: LINK_PLACE.INBOX_ITEM,
+    kind: LINK_DESTINATION.INBOX_ITEM,
     planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;
@@ -1425,7 +1333,7 @@ test("a comment's files are drawn after its words but for a picture its words dr
 test("a recording an agent posted stands with a comment's pictures, never its other files: one its words draw is not named again over them, one they do not draw is played among the pictures", () => {
   const itemId = "a1b2c3d4-0000-4000-8000-0000000000f1";
   const place = {
-    kind: LINK_PLACE.INBOX_ITEM,
+    kind: LINK_DESTINATION.INBOX_ITEM,
     planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;

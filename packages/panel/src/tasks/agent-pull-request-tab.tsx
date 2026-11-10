@@ -11,7 +11,6 @@ import {
   type AgentOverviewConversation,
   type AgentOverviewPullRequest,
   type AgentPullRequest,
-  CHANGES_BOUNDS,
   CHECK_STATE,
   CHECK_SUMMARY,
   type CheckState,
@@ -27,17 +26,24 @@ import {
   type PullRequestDeployment,
   type PullRequestLabel,
   type PullRequestReviewer,
-  REVIEW_STATE,
   type ReactionGroup,
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   PULL_REQUEST_THREAD_VIEW,
   type PullRequestThreadView,
 } from "@repo/features/link-grammar";
 import { formatCount } from "@repo/features/number-format";
+import {
+  CHECK_WORDS,
+  checksCountOf,
+  checksSummaryOf,
+  conversationCount,
+  PULL_REQUEST_READ_WORDS,
+  reviewersOf,
+} from "@repo/features/pull-request-model";
 import type { FailureSurface } from "@repo/features/shown-failure";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { workingTime } from "@repo/features/time-format";
@@ -408,20 +414,20 @@ const VIEW_CLASS =
 
 /** The tab's own words. */
 const PULL_REQUEST_WORDS = {
-  READING: "Reading pull request",
-  READING_CHECKS: "Reading checks",
+  READING: PULL_REQUEST_READ_WORDS.READING,
+  READING_CHECKS: PULL_REQUEST_READ_WORDS.READING_CHECKS,
   READING_DESCRIPTION: "Reading description",
-  READING_CONVERSATION: "Reading conversation",
+  READING_CONVERSATION: PULL_REQUEST_READ_WORDS.READING_CONVERSATION,
   READING_CHAPTERS: "Reading chapters",
-  FAILED: "The pull request could not be read.",
-  CHECKS_FAILED: "The checks could not be read.",
-  CONVERSATION_FAILED: "The conversation could not be read.",
-  NO_PULL_REQUEST: "No pull request yet.",
+  FAILED: PULL_REQUEST_READ_WORDS.FAILED,
+  CHECKS_FAILED: PULL_REQUEST_READ_WORDS.CHECKS_FAILED,
+  CONVERSATION_FAILED: PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED,
+  NO_PULL_REQUEST: PULL_REQUEST_READ_WORDS.NO_PULL_REQUEST,
   PREVIEW: "Preview",
   PREVIEWS: "Preview deployments",
   NO_DESCRIPTION: "No description provided.",
-  NO_CHECKS: "No checks have run on this pull request.",
-  NO_CONVERSATION: "Nobody has commented yet.",
+  NO_CHECKS: PULL_REQUEST_READ_WORDS.NO_CHECKS,
+  NO_CONVERSATION: PULL_REQUEST_READ_WORDS.NO_CONVERSATION,
   NO_MATCHING: "No matching comments.",
   HIDE_BOTS: "Hide bots",
   HIDE_RESOLVED: "Hide resolved",
@@ -443,7 +449,7 @@ const PULL_REQUEST_WORDS = {
   /** What a review thread says of the replies a read left on GitHub, by how many. */
   moreReplies: (count: number) => `${count} more ${count === 1 ? "reply" : "replies"} on GitHub`,
   /** What a thread drawn on its line says of how many comments it holds. */
-  commentCount: (count: number) => `${count} ${count === 1 ? "comment" : "comments"}`,
+  commentCount: PULL_REQUEST_READ_WORDS.commentCount,
   RESOLVED: "Resolved",
   OUTDATED: "Outdated",
   /** What a review thread's card is called, and who it is by. */
@@ -559,14 +565,6 @@ const CHECK_INK = {
   [CHECK_STATE.SKIPPED]: "text-muted-foreground",
 } as const satisfies Record<CheckState, string>;
 
-/** Where a check stands, in the words its glyph says to a reader who cannot see it and the count says. */
-const CHECK_WORDS = {
-  [CHECK_STATE.FAILED]: "failed",
-  [CHECK_STATE.PENDING]: "running",
-  [CHECK_STATE.PASSED]: "passed",
-  [CHECK_STATE.SKIPPED]: "skipped",
-} as const satisfies Record<CheckState, string>;
-
 /** The tone and glyph a deployment wears, as a check's: ready as passed, deploying as running, failed as failed, and no longer serving as skipped. */
 const DEPLOYMENT_TONE = {
   [DEPLOYMENT_STATE.READY]: CHECK_STATE.PASSED,
@@ -647,13 +645,6 @@ function pullRequestActions(
 /** What the header draws of the pull request from the first frame: its mark's three, and its page. */
 type HeaderPullRequest = Pick<AgentPullRequest, "number" | "state" | "checks" | "url">;
 
-/** The checks as one word, as the pull request's mark wears it: a failure beats a wait beats a pass. */
-function checksSummaryOf(checks: readonly PullRequestCheck[]): CheckSummary {
-  if (checks.some((check) => check.state === CHECK_STATE.FAILED)) return CHECK_SUMMARY.FAILING;
-  if (checks.some((check) => check.state === CHECK_STATE.PENDING)) return CHECK_SUMMARY.PENDING;
-  return checks.length === 0 ? CHECK_SUMMARY.NONE : CHECK_SUMMARY.PASSING;
-}
-
 /**
  * The pull request the header's pill and the toolbar's ⋯ draw: what the agent published,
  * as last read for the plan, from the first frame, each of its words
@@ -693,33 +684,6 @@ function headerQueuedOf(
 ): { readonly position?: number } | null | undefined {
   if (pullRequest !== undefined) return pullRequest.merging?.queued;
   return published?.number === number && published.queued === true ? {} : undefined;
-}
-
-/**
- * Who the pull request names as its reviewers, as stage-cli's header names
- * them: where each stands by their reviews, as its conversation's read
- * says, with those it still asks for a review, as its own read says,
- * standing asked whatever they said before, as GitHub shows a re-requested
- * reviewer, save one whose changes asked for still stand; its author left
- * out, and Apps' bots after the people; up to the bound. Until the reviews
- * land, those it asks stand asked.
- */
-function reviewersOf(
-  requested: readonly AgentOverviewPullRequest["requested"][number][],
-  standings: readonly PullRequestReviewer[],
-  author: string | undefined,
-): readonly PullRequestReviewer[] {
-  const by = new Map<string, PullRequestReviewer>();
-  for (const reviewer of standings) by.set(reviewer.by.login, reviewer);
-  for (const person of requested) {
-    if (by.get(person.login)?.state === REVIEW_STATE.CHANGES_REQUESTED) continue;
-    by.set(person.login, { by: person, state: REVIEW_STATE.REQUESTED });
-  }
-  const named = [...by.values()].filter((reviewer) => reviewer.by.login !== author);
-  return [
-    ...named.filter((reviewer) => !reviewer.by.bot),
-    ...named.filter((reviewer) => reviewer.by.bot),
-  ].slice(0, CHANGES_BOUNDS.MAX_PEOPLE);
 }
 
 /** Whether a section that folds stands open, and the press that opens or folds it. */
@@ -1136,7 +1100,10 @@ function EntryWords({
 /** How a thread drawn in the tab is taken to its other view, and the place a link to it names there; none for a thread GitHub named no id for. */
 interface ThreadJumps {
   readonly jump: (thread: ReviewThread, view: PullRequestThreadView) => void;
-  readonly place: (thread: ReviewThread, view: PullRequestThreadView) => LinkPlace | undefined;
+  readonly place: (
+    thread: ReviewThread,
+    view: PullRequestThreadView,
+  ) => LinkDestination | undefined;
 }
 
 const ThreadJumpContext = createContext<ThreadJumps | undefined>(undefined);
@@ -1159,7 +1126,7 @@ function ThreadTools({ children }: { children: ReactNode }): React.JSX.Element {
 
 /**
  * A thread's ⋯ at the end of its head: Copy link, the thread's app link in
- * the view it is drawn in (`LINK_PLACE.PULL_REQUEST_THREAD`), then, in Files
+ * the view it is drawn in (`LINK_DESTINATION.PULL_REQUEST_THREAD`), then, in Files
  * changed, View in Conversation, where the thread is found by its id;
  * nothing where the thread offers neither.
  */
@@ -2399,17 +2366,6 @@ function HeaderTitle({
   );
 }
 
-/** How many checks the Checks tab's glyph counts: those that failed beside a failure, those still running beside a wait, and every one where all passed. */
-function summaryCountOf(checks: readonly PullRequestCheck[], summary: CheckSummary): number {
-  if (summary === CHECK_SUMMARY.FAILING) {
-    return checks.filter((check) => check.state === CHECK_STATE.FAILED).length;
-  }
-  if (summary === CHECK_SUMMARY.PENDING) {
-    return checks.filter((check) => check.state === CHECK_STATE.PENDING).length;
-  }
-  return checks.length;
-}
-
 /** The glyph the Checks tab wears for how its checks went, as the pull request's mark tells it; none where there are none. */
 const SUMMARY_GLYPHS = {
   [CHECK_SUMMARY.FAILING]: <XIcon />,
@@ -2625,15 +2581,6 @@ function HeaderLines({ lines }: { lines: LinesShown }): React.JSX.Element {
   return lines.hint === undefined ? drawn : <Tooltip label={lines.hint}>{drawn}</Tooltip>;
 }
 
-/** How many entries the Conversation tab counts: its comments and reviews, the earlier ones left on GitHub, and every review thread. */
-function conversationCount(conversation: AgentOverviewConversation): number {
-  const threads = conversation.conversation.reduce(
-    (sum, entry) => sum + (entry.threads?.length ?? 0),
-    0,
-  );
-  return conversation.earlier + conversation.conversation.length + threads;
-}
-
 /**
  * The four tabs under the header, each counting what the app has read of it
  * so far: the conversation once read; the checks by how they went from the
@@ -2667,7 +2614,7 @@ function tabsOf(
           ? undefined
           : checksCount(
               held.checks,
-              checks === undefined ? undefined : summaryCountOf(checks.checks, held.checks),
+              checks === undefined ? undefined : checksCountOf(checks.checks, held.checks),
             ),
     },
     {
@@ -2979,7 +2926,7 @@ function centerCard(card: HTMLElement): void {
 /**
  * The tab's door to its review threads by id, and the thread it is bringing
  * into view. A thread is taken to its other view through the window's own
- * route for its link (`LINK_PLACE.PULL_REQUEST_THREAD`), as any link to it
+ * route for its link (`LINK_DESTINATION.PULL_REQUEST_THREAD`), as any link to it
  * would take it, which opens this tab on that view and leaves the ask for
  * it to take; a tab the route cannot reach, one showing another pull
  * request by its number, or one outside the window, takes the jump itself.
@@ -3017,10 +2964,10 @@ function useThreadJumps(input: {
     start(standing.reveal.threadId, standing.reveal.view);
     standing.onRevealed(standing.reveal.ask);
   }, [taken?.reveal.ask, start]);
-  const place = (thread: ReviewThread, view: PullRequestThreadView): LinkPlace | undefined =>
+  const place = (thread: ReviewThread, view: PullRequestThreadView): LinkDestination | undefined =>
     thread.id === undefined || number !== undefined
       ? undefined
-      : { kind: LINK_PLACE.PULL_REQUEST_THREAD, agentId, threadId: thread.id, view };
+      : { kind: LINK_DESTINATION.PULL_REQUEST_THREAD, agentId, threadId: thread.id, view };
   const latestView = useRef(input.onView);
   latestView.current = input.onView;
   const jumpTo = (thread: ReviewThread, view: PullRequestThreadView) => {

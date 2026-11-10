@@ -237,7 +237,7 @@ export function runMessageAgent(
           title: agentName(target),
           model: target.model,
           status: AGENT_STATUS.RUNNING,
-          onYourTask: target.taskId !== null && target.taskId === callerTask(caller),
+          onYourTask: target.taskId === callerTask(caller),
         },
       };
     }),

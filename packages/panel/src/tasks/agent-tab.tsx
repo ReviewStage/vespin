@@ -86,6 +86,7 @@ import {
   BUTTON_VARIANT,
   Button,
   CodeCard,
+  ConnectionLostNotice,
   DisclosureChevron,
   DocumentIcon,
   ERROR_STATE_PLACEMENT,
@@ -1177,6 +1178,8 @@ function AgentPartView({
   switch (part.kind) {
     case AGENT_PART.USAGE_LIMIT:
       return <UsageLimitNotice notice={part.notice} />;
+    case AGENT_PART.CONNECTION_LOST:
+      return <ConnectionLostNotice notice={part.notice} />;
     case AGENT_PART.TEXT:
       // The agent's words alone may be replied to, never a call's output or a thought.
       return (

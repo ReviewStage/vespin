@@ -42,6 +42,7 @@ import {
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
@@ -308,8 +309,6 @@ function fakeService() {
   let committedIn: { readonly txid?: string } = {};
   /** The item as the agent changed it first, which a close is answered not taken with; none takes every close. */
   let changedFirst: InboxItem | undefined;
-  /** What each close waits on once asked, before it is answered. */
-  let closesWait: Effect.Effect<void> = Effect.void;
   /** The transaction the service says wrote a sent message's row; none says none was written. */
   let sentTxid: string | undefined;
   /** What a rename, an archive, a change of model, or a switch of servers waits on before the service answers it; nothing from the start. */
@@ -721,6 +720,10 @@ function fakeService() {
         ),
       ),
     markActive: () => Effect.sync(() => void asked.push("active")),
+    registerPushDevice: () => Effect.succeed({ done: true as const }),
+    unregisterPushDevice: () => Effect.succeed({ done: true as const }),
+    pushDeviceStatus: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+    setPushDeviceNotify: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
     transcribeDictation: (clip) =>
       Effect.sync(() => {
         asked.push(`transcribe:${clip.audio}:${clip.keywords.join(",")}`);
@@ -825,7 +828,6 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`close:${itemId}:${request.revision}:${request.clientKey}`);
       }).pipe(
-        Effect.andThen(Effect.suspend(() => closesWait)),
         Effect.map(() => {
           if (changedFirst !== undefined) return { item: changedFirst, taken: false };
           return {
@@ -843,6 +845,11 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`answer:${itemId}:${request.revision}:${request.reply}:${request.clientKey}`);
         return { item: { ...ITEM, revision: 3, status: INBOX_STATUS.ANSWERED }, taken: true };
+      }),
+    takeBackInbox: (itemId, request) =>
+      Effect.sync(() => {
+        asked.push(`take-back:${itemId}:${request.clientKey}`);
+        return { item: { ...ITEM, status: INBOX_STATUS.OPEN }, outcome: INBOX_TAKE_BACK.TAKEN };
       }),
   };
   return {
@@ -916,10 +923,6 @@ function fakeService() {
     /** The transaction a Start answers it committed in; none answers none. */
     startCommits: (txid: string | undefined) => {
       startTxid = txid;
-    },
-    /** What each close from now on waits on once asked, before it is answered. */
-    answerClosesAfter: (wait: Effect.Effect<void>) => {
-      closesWait = wait;
     },
     /** Whether each Start from now on goes unanswered, as one sent offline does. */
     leaveStartsUnanswered: (unanswered: boolean) => {
@@ -1202,9 +1205,6 @@ export function subject(
       acts: { ...composer.acts, ...accountAsks.acts },
       /** The composer's row writes that may wait, as a relaunch lays its queue back by. */
       queueable: composer.queueable,
-      flushHeldSettles: composer.flushHeldSettles,
-      letGoHeldSettles: composer.letGoHeldSettles,
-      answerClosesAfter: service.answerClosesAfter,
       transcripts,
       /** Each of `transcript`'s rows the host laid, in order. */
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>

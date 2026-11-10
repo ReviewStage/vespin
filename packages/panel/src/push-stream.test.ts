@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { createORPCClient } from "@orpc/client";
+import { RPCLink } from "@orpc/client/message-port";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
   type ActSender,
   actPortHandlerOf,
@@ -8,8 +10,6 @@ import {
 } from "@repo/host/act-port";
 import { PUSH } from "@repo/host/contract";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { createORPCClient } from "@orpc/client";
-import { RPCLink } from "@orpc/client/message-port";
 import { Context } from "effect";
 import { afterEach, it } from "vitest";
 import { openPushStream } from "./app-bridge.js";
@@ -28,8 +28,8 @@ const WINDOW = Symbol("window");
 const PANEL: ActSender = { sender: WINDOW, panel: true };
 
 /** An app link to a task, and to another, as the system hands them the app. */
-const LINK = { workspace: "workspace-1", place: { kind: LINK_PLACE.TASK, planId: "task-1" } };
-const OTHER_LINK = { ...LINK, place: { kind: LINK_PLACE.TASK, planId: "task-2" } };
+const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, planId: "task-1" } };
+const OTHER_LINK = { ...LINK, place: { kind: LINK_DESTINATION.TASK, planId: "task-2" } };
 
 const opened: MessagePort[] = [];
 

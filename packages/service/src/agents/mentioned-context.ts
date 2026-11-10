@@ -8,7 +8,7 @@ import {
   type IntegrationProvider,
 } from "@repo/features/integration-wire";
 import {
-  LINK_PLACE,
+  LINK_DESTINATION,
   linkOf,
   mentionMarkdownLink,
   readLink,
@@ -408,7 +408,7 @@ function numberedTaskOf(
   const read = readLink(target);
   const number = read === undefined ? undefined : taskNumberOf(read.place);
   if (read === undefined || number === undefined) return undefined;
-  const link = linkOf({ kind: LINK_PLACE.TASK, planId: String(number) }, read.workspace);
+  const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: String(number) }, read.workspace);
   return { kind: HANDED_KIND.NUMBERED_TASK, taskId: mention.taskId, link };
 }
 

@@ -1,6 +1,6 @@
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { type DescriptionSection, descriptionSections } from "@repo/features/description-document";
-import { LINK_PLACE, linkOf, taskLinkStep } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import {
   type DescriptionMention,
   type MentionPlace,
@@ -833,7 +833,7 @@ function SectionLink({
   tabbable: boolean;
 }): React.JSX.Element {
   const link = linkOf(
-    { kind: LINK_PLACE.SECTION, planId: linked.step, anchor },
+    { kind: LINK_DESTINATION.SECTION, planId: linked.step, anchor },
     linked.place.workspace,
   );
   return (
@@ -849,7 +849,7 @@ function TitleLink({
   linked: LinkedTask;
   tabbable: boolean;
 }): React.JSX.Element {
-  const link = linkOf({ kind: LINK_PLACE.TASK, planId: linked.step }, linked.place.workspace);
+  const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: linked.step }, linked.place.workspace);
   return <UnitLinkButton link={link} label={LINK_COPY.LABEL} tabbable={tabbable} />;
 }
 

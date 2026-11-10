@@ -1,15 +1,29 @@
-// row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them.
+// row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
-import { List, Section, Text } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swift-ui";
 import {
+  accessibilityLabel,
   background,
+  buttonStyle,
+  font,
+  foregroundStyle,
+  frame,
   listStyle,
+  monospacedDigit,
+  navigationBarTitleDisplayMode,
   navigationTitle,
   refreshable,
   scrollContentBackground,
 } from "@expo/ui/swift-ui/modifiers";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import type { MarkLook } from "./glyph.js";
+import { ToneGlyph } from "./marks.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
+
+/** The fold chevron's size, a little under the header's words. */
+const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
@@ -28,7 +42,7 @@ type RowListProps = {
   readonly selected?: string | undefined;
   /** Called with the id of the row a person picked. */
   readonly onSelect?: ((id: string) => void) | undefined;
-  /** The title a split view's sidebar heads its column with. */
+  /** The title a split view's sidebar heads its column with, small and inline as every screen's title stands. */
   readonly title?: string | undefined;
   /** What a pull down the list reads again, its spinner standing until it settles; none where a pull reads nothing. */
   readonly onRefresh?: (() => Promise<void>) | undefined;
@@ -64,7 +78,9 @@ export function RowList({ look, selected, onSelect, title, onRefresh, children }
         listStyle(look),
         scrollContentBackground("hidden"),
         background(listGround(colors, look)),
-        ...(title === undefined ? [] : [navigationTitle(title)]),
+        ...(title === undefined
+          ? []
+          : [navigationTitle(title), navigationBarTitleDisplayMode("inline")]),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
@@ -74,21 +90,110 @@ export function RowList({ look, selected, onSelect, title, onRefresh, children }
 }
 
 type ListSectionProps = {
-  /** The words heading the section, as the system draws a section's header. */
+  /** The words heading the section, small and muted. */
   readonly title?: string | undefined;
+  /** How many rows it holds, drawn after its title in a lighter ink. */
+  readonly count?: number | undefined;
+  /** A glyph in its tone before the count, saying how what it counts went, such as checks failing. */
+  readonly mark?: MarkLook | undefined;
+  /** Whether a press on its header folds it in place, a chevron leading the header. */
+  readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
   readonly children: ReactNode;
 };
 
-/** A section of a list or a form, headed and footed as the system draws one. */
-export function ListSection({ title, footer, children }: ListSectionProps) {
+/** A section's header: its fold chevron where it folds, its title in 13 pt medium, and its count, all muted. */
+function GroupHeader({
+  title,
+  count,
+  mark,
+  folded,
+}: {
+  readonly title: string;
+  readonly count: number | undefined;
+  readonly mark: MarkLook | undefined;
+  readonly folded: boolean | undefined;
+}) {
+  const colors = useColors();
+  return (
+    <HStack spacing={SPACE.TIGHT + 2}>
+      {folded === undefined ? null : (
+        <Image
+          systemName={folded ? "chevron.right" : "chevron.down"}
+          size={CHEVRON_SIZE}
+          color={colors.TEXT_MUTED}
+          modifiers={[frame({ width: CHEVRON_SIZE + 2 })]}
+        />
+      )}
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
+          foregroundStyle(colors.TEXT_MUTED),
+        ]}
+      >
+        {title}
+      </Text>
+      {mark === undefined ? null : (
+        <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.GROUP_HEADER} hidden />
+      )}
+      {count === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
+            monospacedDigit(),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        >
+          {String(count)}
+        </Text>
+      )}
+      <Spacer />
+    </HStack>
+  );
+}
+
+/**
+ * A section of a list or a form under a small muted header with its count,
+ * as Linear's and Cursor's groups stand rather than the system's uppercase
+ * caption. A foldable section folds in place on a press of its header, its
+ * chevron turning to say so; it opens unfolded.
+ */
+export function ListSection({
+  title,
+  count,
+  mark,
+  foldable = false,
+  footer,
+  children,
+}: ListSectionProps) {
+  const [folded, setFolded] = useState(false);
+  const label =
+    title === undefined ? undefined : (
+      <GroupHeader title={title} count={count} mark={mark} folded={foldable ? folded : undefined} />
+    );
+  const header =
+    label === undefined || !foldable ? (
+      label
+    ) : (
+      <Button
+        onPress={() => setFolded((was) => !was)}
+        modifiers={[
+          buttonStyle("plain"),
+          accessibilityLabel(
+            `${title}${count === undefined ? "" : `, ${count}`}, ${folded ? "folded" : "unfolded"}`,
+          ),
+        ]}
+      >
+        {label}
+      </Button>
+    );
   return (
     <Section
-      {...(title === undefined ? {} : { title })}
+      {...(header === undefined ? {} : { header })}
       {...(footer === undefined ? {} : { footer: <Text>{footer}</Text> })}
     >
-      {children}
+      {foldable && folded ? [] : children}
     </Section>
   );
 }

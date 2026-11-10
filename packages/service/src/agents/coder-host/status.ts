@@ -1,4 +1,4 @@
-import type { AgentOwnerFacts } from "@repo/database/models/agent-owners";
+import { CONNECTION_LOST_DETAIL } from "@repo/agent-runner/protocol";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -164,9 +164,10 @@ const LAUNCH_UNSTARTED_DETAIL = ", because of ";
 
 /**
  * The host's refusal sentences, a provider's words for a prompt past the
- * window, and the words of a run its host lost or a launch it settled
- * unstarted, a failed turn's detail may carry, by the word the wire says for
- * each. Note that those last two read as `other` rather than words of their
+ * window, the words of a run its host lost or a launch it settled
+ * unstarted, and the runner's words for a provider's host it waited for in
+ * vain (`@repo/agent-runner/protocol`'s `CONNECTION_LOST_DETAIL`), a failed
+ * turn's detail may carry, by the word the wire says for each. Note that those last two read as `other` rather than words of their
  * own, because a window reads `failureReason` as one of the words it knows
  * and an older build would refuse the whole page over a new one: `other`
  * reads there as a run that ended without saying why, rather than as the
@@ -203,6 +204,7 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
     ],
   ],
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
+  [AGENT_FAILURE.CONNECTION_LOST, Object.values(CONNECTION_LOST_DETAIL)],
 ];
 
 /**
@@ -390,25 +392,22 @@ export function summaryDevices(
   );
 }
 
-/** What every read of one agent says of it but its task, its status read at `now`, its owner as `owners` reads it, the agents started from it where any was, and the Mac it runs on where `macs` holds it. */
+/** What every read of one agent says of it but its task, its status read at `now`, its owner, the task it stands on, the agents started from it where any was, and the Mac it runs on where `macs` holds it. */
 function summaryFields(
   agent: AgentLine,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[],
   macs: ReadonlyMap<string, Device>,
 ): Omit<AgentSummary, "id" | "planId"> {
   const starter = names.get(agent.userId);
   const mac = macOf(agent, macs);
+  // Every agent stands on a task, which owns it, so the run's automation is never asked.
   const owner = agentOwnerOf({
     taskId: agent.taskId,
     runId: agent.automationRunId,
-    runAutomationId:
-      agent.automationRunId === null
-        ? null
-        : (owners.runAutomations.get(agent.automationRunId) ?? null),
+    runAutomationId: null,
   });
   const turn = agentTurnOf(standing.turn);
   const summary: Omit<AgentSummary, "id" | "planId"> = {
@@ -472,17 +471,12 @@ function summaryFields(
   };
 }
 
-/**
- * One agent as the tabs draw it, on a task or with none, read whole or as a
- * list's line. Its owner is read from `owners`, which `agentOwnerFactsOf`
- * answers for the agents of the read.
- */
+/** One agent as the tabs draw it, read whole or as a list's line. */
 export function agentSummary(
   agent: Agent | AgentLine,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[] = [],
   macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentSummary {
@@ -490,7 +484,7 @@ export function agentSummary(
   return {
     id: line.id,
     planId: line.taskId,
-    ...summaryFields(line, standing, now, names, owners, continuedBy, macs),
+    ...summaryFields(line, standing, now, names, continuedBy, macs),
   };
 }
 
@@ -532,20 +526,19 @@ export function pageAccounts(agent: Agent): readonly string[] {
     : summaryAccounts(agent);
 }
 
-/** One agent as its own page reads it, on a task or with none, its status read at `now`, with the agents started from it and the Mac it runs on. */
+/** One agent as its own page reads it, its status read at `now`, with the agents started from it and the Mac it runs on. */
 export function agentPage(
   agent: Agent,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[] = [],
   macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentPage {
   return {
     id: agent.id,
     planId: agent.taskId,
-    ...summaryFields(agentLineOf(agent), standing, now, names, owners, continuedBy, macs),
+    ...summaryFields(agentLineOf(agent), standing, now, names, continuedBy, macs),
     automationId: agent.automationId,
     ...(agent.automationOrigin === null
       ? undefined

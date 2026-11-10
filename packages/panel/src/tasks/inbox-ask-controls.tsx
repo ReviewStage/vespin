@@ -1,4 +1,15 @@
-import { INBOX_MISSING, type InboxMissing } from "@repo/features/inbox-ask-words";
+import { ASK_PRESS, INBOX_MISSING, type InboxMissing } from "@repo/features/inbox-ask-words";
+import {
+  answeredDraft,
+  doDecision,
+  fieldValueOf,
+  type InboxDraft,
+  shownTicks,
+  stepParts,
+  withDoPress,
+  withStep,
+  withValue,
+} from "@repo/features/inbox-draft";
 import {
   ANSWER_TONE,
   type AnswerTone,
@@ -51,17 +62,6 @@ import { Fragment } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { type FormTextDoors, type FormTextProps, InboxFormText } from "./inbox-form-text.js";
-import {
-  answeredDraft,
-  doDecision,
-  fieldValueOf,
-  type InboxDraft,
-  shownTicks,
-  stepParts,
-  withDoPress,
-  withStep,
-  withValue,
-} from "./inbox-model.js";
 import { ANSWER_STATUS_TONE } from "./inbox-stamp.js";
 import { REPLY_SCOPE } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
@@ -499,12 +499,6 @@ function onResponseKey(
 
 /** The keys 1 to 9, each the option of its number. */
 export const OPTION_NUMBER = /^[1-9]$/u;
-
-/** What the presses closing an open ask say. */
-const ASK_PRESS = {
-  DONE: "Mark done",
-  NOT_DONE: "Couldn't do it",
-} as const;
 
 /** What an open ask's presses send, and what they are drawn with. */
 interface AskDoors {

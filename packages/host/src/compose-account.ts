@@ -39,8 +39,6 @@ interface AccountLinks {
   /** The account gate's own pair: opening it arms every cadence a signed-in account may have, and closing it disarms them. */
   readonly startCapabilities: Effect.Effect<void>;
   readonly stopCapabilities: Effect.Effect<void>;
-  /** What the account signed in still holds to send, settled under it before it leaves: sent, or dropped where it cannot be in time. */
-  readonly settleHeld: Effect.Effect<void>;
 }
 
 export interface AccountComposer extends Composer {
@@ -224,9 +222,6 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
     kernel.emit(GATEWAY_EVENT.SESSION_REPLAY_CHANGED, carried(replay));
   });
 
-  /** What the account holds to send, settled before a step of this host's own ends it, while its credential still stands. */
-  const settleHeld: Effect.Effect<void> = Effect.flatMap(late.value, (links) => links.settleHeld);
-
   /**
    * A step the account source could not carry, answered as the protocol's
    * refusal rather than a defect: a browser's cookie session fails on any
@@ -323,7 +318,6 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
         // authenticated with; queued behind the sign-out it would wait for the
         // next sign-in.
         yield* settings.flushProductEvents;
-        yield* settleHeld;
         return yield* refusedAs(SIGN_OUT_REFUSED)(session.signOut({ revokeRemote: true }));
       }),
     ACCOUNT_DELETE: () =>
@@ -332,7 +326,6 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
           account_action: PRODUCT_ACCOUNT_ACTION.DELETE,
         });
         yield* settings.flushProductEvents;
-        yield* settleHeld;
         const deleted = yield* Effect.result(session.deleteEverywhere());
         if (Result.isFailure(deleted)) {
           report(`${DELETE_REFUSED}: ${deleted.failure.message}`);

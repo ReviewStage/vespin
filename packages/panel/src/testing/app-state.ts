@@ -192,7 +192,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     audio: { microphoneStatus: MICROPHONE_STATUS.GRANTED },
     tasks: IDLE_TASKS_VIEW,
     agents: { unseen: [] },
-    inbox: { waiting: [], tasks: [], taskless: [], automations: [], agents: [], failedRuns: [] },
+    inbox: { waiting: [], tasks: [], failedRuns: [] },
     [LIVE_READ.ACCOUNT_PREFERENCES]: NO_KEYS_HELD,
     [LIVE_READ.AGENT_ORIGINS]: NO_AGENT_ORIGINS,
     [LIVE_READ.INBOX_ITEMS]: UNREAD,
@@ -263,9 +263,7 @@ function inCaseWorkspaces(
     tasks,
     ...(patch[LIVE_READ.INBOX_ITEMS] === undefined
       ? {
-          [LIVE_READ.INBOX_ITEMS]: {
-            rows: { [INBOX_SCOPE_KIND.PLAN]: {}, [INBOX_SCOPE_KIND.AGENT]: {} },
-          },
+          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: {} } },
         }
       : undefined),
     ...(patch[LIVE_READ.AUTOMATIONS] === undefined

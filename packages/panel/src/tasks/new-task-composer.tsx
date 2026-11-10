@@ -8,6 +8,7 @@ import {
   type TaskCreateRelation,
   type TaskCreateRelationKind,
 } from "@repo/features/task-wire";
+import { workspaceReaches } from "@repo/features/tasks-model";
 import { TERM } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -20,7 +21,6 @@ import {
   Text,
   VisuallyHidden,
 } from "@repo/ui";
-import { workspaceReaches } from "@repo/ui/tasks-model";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
@@ -54,6 +54,7 @@ import {
   treeRelationOf,
 } from "./new-task-relation.js";
 import { NoRepositoriesBanner } from "./no-repositories-banner.js";
+import { putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { keptSkills } from "./repository-skills.js";
 import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "./runs-on.js";
@@ -62,7 +63,7 @@ import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import { MODELS_READ } from "./use-agents.js";
-import type { NewTaskAgent, NewTaskStart } from "./use-new-task.js";
+import type { NewTaskAgent, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -166,7 +167,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * after a relaunch too; a task started lets them go, as emptying the box
  * does, an agent's start as it is pressed, so a New task opened while it is
  * out opens empty, and a refused card opened again brings its own words
- * back. The card holds its own repository and model, so the owner
+ * and files back ahead of whatever was written there since
+ * (`refused-send.ts`). The card holds its own repository and model, so the owner
  * mounts it afresh to start those over; the workspace it starts in is the
  * owner's.
  *
@@ -252,6 +254,13 @@ const NONE_DROPPED: readonly string[] = [];
 
 /** The devices Runs on offers before a read lists any, or while Bring your own host is off: none, so it offers Cloud alone. */
 const NO_DEVICES: readonly MacOffer[] = [];
+
+/**
+ * The refusals a card has put back into its box. Note that each goes in
+ * once however often a card mounts on it, as strict mode mounts one twice,
+ * because a second time would lay its words in again ahead of themselves.
+ */
+const PUT_BACK = new WeakSet<NewTaskRefusal>();
 
 /** What one Agent-mode press asked beside its key: the task's repository and workspace, and where its agents run, and the agent's words, files, and the model picked, none for the account's default. */
 interface AgentAsk {
@@ -424,15 +433,24 @@ export function NewTaskComposer({
     const nextTree = treeRelationOf(next);
     if (nextTree !== undefined) setChosen(nextTree.task.repository);
   };
-  // A refused card opened again holds the words it was pressed with, where the box holds nothing since.
+  // The workspace the card stands in now, whose draft a Put back pressed later writes to.
+  const workspaceNow = useRef(workspaceId);
+  workspaceNow.current = workspaceId;
+  // A refused card opened again puts the words and files it was pressed with back ahead of what the box holds since.
+  // Note that the draft is found as the write lands, because the workspaces may be read after the card opened.
   useLayoutEffect(() => {
-    if (refused === undefined) return;
+    if (refused === undefined || PUT_BACK.has(refused)) return;
+    PUT_BACK.add(refused);
     const { words: kept, press } = refused.card;
-    draft.update((now) =>
-      hasWordsOrFiles(now.text, now.attachments)
-        ? now
-        : { ...now, text: kept, attachments: press.ask.agent.attachments },
-    );
+    putBackRefused({
+      went: { text: kept, attachments: press.ask.agent.attachments },
+      most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
+      update: (next) =>
+        writer.update(newTaskPlace(workspaceNow.current, purpose), (now) => {
+          const joined = next(now);
+          return joined === undefined ? now : { ...now, ...joined };
+        }),
+    });
   }, []);
   // The last agent press's key and what it asked, until a start lands.
   const pressed = useRef<NewTaskPress | undefined>(refused?.card.press);

@@ -1,0 +1,44 @@
+# new-agent.yaml -- New agent on a task: its sheet opened from the task's Agents, the words typed, the model and effort picked, and the agent started, its page opened.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `tasks.yaml` is, whose models are
+# staged and whose Start is answered with a new agent starting
+# (`@repo/host/fixture-inbox`), so nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- tapOn: "Tasks"
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: DOWN
+- tapOn: "Teammate invitations"
+- scrollUntilVisible:
+    element: "New agent"
+    direction: DOWN
+- tapOn: "New agent"
+- assertVisible: "Ask to make changes"
+- assertVisible: "Model"
+- waitForAnimationToEnd
+- takeScreenshot: new-agent-sheet
+- inputText: "Add a Resend button beside each pending invite."
+- hideKeyboard
+# The model's menu offers the catalog, each model once; a pick keeps the
+# effort it lists nearest the one shown.
+- tapOn: "Model.*"
+- assertVisible: "Claude Sonnet 5.5"
+- waitForAnimationToEnd
+- takeScreenshot: new-agent-models
+- tapOn: "Claude Sonnet 5.5"
+- assertVisible: "Effort.*"
+- waitForAnimationToEnd
+- takeScreenshot: new-agent-picked
+- tapOn: "Start"
+- extendedWaitUntil:
+    notVisible: "Ask to make changes"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: new-agent-started

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { act, createElement } from "react";
@@ -116,7 +116,7 @@ test("a press on the agent that showed the version opens its tab, on the page's 
   const shower = container.querySelector<HTMLElement>(".ui-hover-card-row [data-actor-ref]");
   assert.equal(shower?.tagName, "BUTTON", "the agent's name is a press");
   act(() => shower?.click());
-  assert.deepEqual(opened, [{ kind: LINK_PLACE.AGENT, planId: TASK, agentId }]);
+  assert.deepEqual(opened, [{ kind: LINK_DESTINATION.AGENT, planId: TASK, agentId }]);
 });
 
 test("the preview's page is handed the window's theme when it asks, with the room its tab keeps", () => {

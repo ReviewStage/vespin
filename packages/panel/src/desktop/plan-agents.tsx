@@ -7,6 +7,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import { useCoarsePointer } from "../coarse-pointer.js";
+import { useMemberDirectory } from "../member-directory.js";
 import { agentSubject } from "../tasks/agent-ref.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
@@ -167,6 +168,7 @@ export function PlanAgents({
   phone?: PlanAgentsPhone | undefined;
 }): React.JSX.Element | null {
   // Note that an entry's pick chooses its agent's tab, which a row hands the page as that agent's id.
+  const directory = useMemberDirectory();
   const entries = agentEntries(
     {
       tab,
@@ -177,6 +179,7 @@ export function PlanAgents({
       },
     },
     agents,
+    directory,
     held,
   );
   // Note that a phone's group stands for its archived agents too, on a task whose every agent is archived, which starts none.

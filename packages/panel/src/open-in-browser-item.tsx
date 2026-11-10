@@ -1,4 +1,9 @@
-import { LINK_PLACE, type LinkPlace, linkOf, readLink } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  readLink,
+} from "@repo/features/link-grammar";
 import { stayingOnWeb } from "@repo/features/link-open";
 import { GLYPH } from "@repo/ui/icons";
 import { appPlatform } from "./app-platform.js";
@@ -22,10 +27,10 @@ import type { MenuAction } from "./desktop/action-menu.js";
 const OPEN_IN_BROWSER = "Open in browser";
 
 /** A page's place, on its task or under the agent on no task that showed it. */
-type PageLinkPlace = Extract<LinkPlace, { kind: typeof LINK_PLACE.PAGE }>;
+type PageLinkDestination = Extract<LinkDestination, { kind: typeof LINK_DESTINATION.PAGE }>;
 
 /** Open in browser for a page, by its place and the workspace its link is written under. */
-export function openPageInBrowserItem(place: PageLinkPlace, workspace: string): MenuAction {
+export function openPageInBrowserItem(place: PageLinkDestination, workspace: string): MenuAction {
   return {
     label: OPEN_IN_BROWSER,
     icon: <GLYPH.OPEN_EXTERNALLY />,
@@ -36,7 +41,7 @@ export function openPageInBrowserItem(place: PageLinkPlace, workspace: string): 
 /** Open in browser for the page an app link names; none for a link to anything else. */
 export function linkedPageInBrowserItem(href: string): MenuAction | undefined {
   const read = readLink(href);
-  return read?.place.kind === LINK_PLACE.PAGE
+  return read?.place.kind === LINK_DESTINATION.PAGE
     ? openPageInBrowserItem(read.place, read.workspace)
     : undefined;
 }

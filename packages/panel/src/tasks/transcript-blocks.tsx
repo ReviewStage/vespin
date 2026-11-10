@@ -4,6 +4,7 @@ import {
   type AgentTodos,
 } from "@repo/features/agent-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { readLink } from "@repo/features/link-grammar";
@@ -92,11 +93,8 @@ import {
 import {
   AlarmClockCheckIcon,
   AlarmClockOffIcon,
-  AppWindowIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
-  BookOpenIcon,
-  BotIcon,
   CalendarCheckIcon,
   CalendarClockIcon,
   CalendarCogIcon,
@@ -182,6 +180,7 @@ import {
   ToolTerminal,
 } from "../ai-elements/tool.js";
 import { useDrawnDark } from "../drawn-dark.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -1116,7 +1115,7 @@ const CALL_ICON = {
   [CALL_KIND.SEARCH]: SearchIcon,
   [CALL_KIND.WEB_SEARCH]: SearchIcon,
   [CALL_KIND.WEB_PAGE]: GlobeIcon,
-  [CALL_KIND.LOAD_SKILL]: BookOpenIcon,
+  [CALL_KIND.LOAD_SKILL]: () => <EntityGlyph kind={ENTITY_KIND.SKILL} />,
   [CALL_KIND.LOOK_AT_PICTURE]: ImageIcon,
   [CALL_KIND.EDIT_DESCRIPTION]: FilePenIcon,
   [CALL_KIND.TODOS]: () => <GLYPH.TODOS />,
@@ -1125,7 +1124,7 @@ const CALL_ICON = {
   [CALL_KIND.INBOX_READ]: InboxIcon,
   [CALL_KIND.INBOX_REPLY]: InboxIcon,
   [CALL_KIND.INBOX_WITHDRAW]: InboxIcon,
-  [CALL_KIND.WORKER]: BotIcon,
+  [CALL_KIND.WORKER]: () => <EntityGlyph kind={ENTITY_KIND.WORKER} />,
   [CALL_KIND.WORKER_WAIT]: HourglassIcon,
   [CALL_KIND.WORKER_CANCEL]: CircleStopIcon,
   [CALL_KIND.WORKER_MESSAGE]: SendIcon,
@@ -1157,22 +1156,22 @@ const CALL_ICON = {
   [CALL_KIND.CREATE_ISSUE]: CirclePlusIcon,
   [CALL_KIND.UPDATE_ISSUE]: FilePenIcon,
   [CALL_KIND.CREATE_TASK]: FilePlusIcon,
-  [CALL_KIND.SHOW_PAGE]: AppWindowIcon,
-  [CALL_KIND.READ_PAGE]: AppWindowIcon,
+  [CALL_KIND.SHOW_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
+  [CALL_KIND.READ_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
   [CALL_KIND.SHOW_IMAGE]: ImageIcon,
-  [CALL_KIND.OPEN_PULL_REQUEST]: () => <GLYPH.PULL_REQUEST />,
+  [CALL_KIND.OPEN_PULL_REQUEST]: () => <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />,
   [CALL_KIND.SLEEP]: TimerIcon,
   [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
   [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
-  [CALL_KIND.LIST_TASKS]: () => <GLYPH.TASK />,
+  [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
   [CALL_KIND.READ_COMMENTS]: () => <GLYPH.COMMENT />,
   [CALL_KIND.REPLY_TO_COMMENT]: () => <GLYPH.COMMENT />,
   [CALL_KIND.RESOLVE_THREAD]: () => <GLYPH.RESOLVED />,
   [CALL_KIND.REOPEN_THREAD]: () => <GLYPH.COMMENT />,
-  [CALL_KIND.SEARCH_TOOLS]: () => <GLYPH.MCP_SERVER />,
-  [CALL_KIND.MCP_TOOL]: () => <GLYPH.MCP_SERVER />,
+  [CALL_KIND.SEARCH_TOOLS]: () => <EntityGlyph kind={ENTITY_KIND.SERVER} />,
+  [CALL_KIND.MCP_TOOL]: () => <EntityGlyph kind={ENTITY_KIND.TOOL} />,
   [CALL_KIND.OTHER]: WrenchIcon,
 } as const satisfies Record<CallKind, ComponentType<{ "aria-hidden"?: "true" }>>;
 

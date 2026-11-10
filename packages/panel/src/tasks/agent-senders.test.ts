@@ -17,7 +17,7 @@ import {
   AUTOMATION_TRIGGER,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
-import { LINK_PLACE, type LinkPlace, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, type ReadLink } from "@repo/features/link-grammar";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import {
@@ -204,7 +204,7 @@ afterEach(() => {
 /** The developer's messages as `reader` sees the tab drawn, one element for each of `messages`, every place a press opened kept in `opened`, and every automation's page in `automations`' own, where the workspace lists them. */
 async function drawnFor(
   reader: string,
-  opened: LinkPlace[] = [],
+  opened: LinkDestination[] = [],
   agent: AgentSummary = AGENT,
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
   automations?: { readonly rows: readonly AutomationSummary[]; readonly opened: string[] },
@@ -369,7 +369,7 @@ function readingOrder(message: Element, words: string): readonly string[] {
 }
 
 test("another agent named as a line's sender opens its tab on a press and hangs its card as it stands now, while its mark stays the one it sent under", async () => {
-  const opened: LinkPlace[] = [];
+  const opened: LinkDestination[] = [];
   const drawn = await drawnFor(DEAN.userId, opened);
   const sender = drawn[
     MESSAGES.findIndex((message) => message.id === "claude-agent")
@@ -393,7 +393,7 @@ test("another agent named as a line's sender opens its tab on a press and hangs 
     sender.querySelector(".ui-harness-mark")?.getAttribute("data-provider"),
     MODEL_PROVIDER.ANTHROPIC,
   );
-  assert.deepEqual(opened, [{ kind: LINK_PLACE.AGENT, agentId: SENDER_ID }]);
+  assert.deepEqual(opened, [{ kind: LINK_DESTINATION.AGENT, agentId: SENDER_ID }]);
   fakeAppBridge({});
 });
 

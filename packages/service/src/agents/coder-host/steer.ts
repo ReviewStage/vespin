@@ -366,8 +366,8 @@ const handedToHarness = (
  * nothing while it still takes one.
  */
 const refusalNow = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, agent: Agent) {
-  const tasks = agent.taskId === null ? undefined : yield* taskNamesOf(userId, [agent.taskId]);
-  if (agent.taskId !== null && tasks?.has(agent.taskId) !== true) return HOSTED_REFUSAL.NOT_FOUND;
+  const tasks = yield* taskNamesOf(userId, [agent.taskId]);
+  if (!tasks.has(agent.taskId)) return HOSTED_REFUSAL.NOT_FOUND;
   const now = yield* readAgent(userId, agent.id);
   return Option.isNone(now) || now.value.archivedAt !== null ? HOSTED_REFUSAL.NOT_FOUND : undefined;
 });
@@ -423,12 +423,8 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
           sentLineStands(agent.userId, agent.conversationId, sentLineId(line.clientKey)),
         ),
       ),
-      // The sender reaches the agent, as the routing read holds, and an agent on a task its task too, read as the sender.
-      task: Effect.result(
-        agent.taskId === null
-          ? Effect.succeed(undefined)
-          : hostedStoreOrUnavailable(readTaskDescription(userId, agent.taskId)),
-      ),
+      // The sender reaches the agent, as the routing read holds, and its task too, read as the sender.
+      task: Effect.result(hostedStoreOrUnavailable(readTaskDescription(userId, agent.taskId))),
       workspace: Effect.result(hostedStoreOrUnavailable(agentWorkspace(userId, agent))),
       sessionId: Effect.result(hostedStoreOrUnavailable(recordedRuntimeSession(target))),
       // Read before the harness is asked, so an ended session settles the turn it was running and never one begun since.

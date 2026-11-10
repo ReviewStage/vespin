@@ -3,7 +3,7 @@ import type { AgentSummary } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
 import {
   inPinOrder,
   type PinPlace,
@@ -47,6 +47,7 @@ import {
   unplaceAllWrites,
 } from "@repo/features/task-sections-model";
 import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
+import { repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -115,7 +116,6 @@ import {
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, sameTab } from "@repo/ui/tab-strip-model";
-import { repositoryPageUrl, TASK_MARK } from "@repo/ui/tasks-model";
 import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
@@ -2004,7 +2004,7 @@ function SidebarColumn({
   // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
   const listedStep =
     tasks.workspace === undefined ? undefined : (tasks.workspace.slug ?? tasks.workspace.id);
-  const inTab = (place: LinkPlace) =>
+  const inTab = (place: LinkDestination) =>
     listedStep === undefined ? undefined : openInTabOf(linkOf(place, listedStep));
   const places = (
     <>
@@ -2024,14 +2024,14 @@ function SidebarColumn({
               current={atHome}
               disabled={!tasks.signedIn}
               onOpen={chosen(goHome)}
-              onOpenInTab={inTab({ kind: LINK_PLACE.HOME })}
+              onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
             />
             <SidebarInboxRow
               waiting={waiting}
               current={inInbox}
               disabled={!tasks.signedIn}
               onOpen={chosen(openInbox)}
-              onOpenInTab={inTab({ kind: LINK_PLACE.INBOX })}
+              onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
             />
           </>
         )}
@@ -2040,7 +2040,7 @@ function SidebarColumn({
             current={inBoard}
             disabled={!tasks.signedIn}
             onOpen={chosen(openBoard)}
-            onOpenInTab={inTab({ kind: LINK_PLACE.BOARD })}
+            onOpenInTab={inTab({ kind: LINK_DESTINATION.BOARD })}
             onPreload={board.preload}
           />
         )}
@@ -2050,7 +2050,7 @@ function SidebarColumn({
           running={automationsRunning}
           disabled={!tasks.signedIn}
           onOpen={chosen(openAutomations)}
-          onOpenInTab={inTab({ kind: LINK_PLACE.AUTOMATIONS })}
+          onOpenInTab={inTab({ kind: LINK_DESTINATION.AUTOMATIONS })}
         />
       </SidebarPlaces>
       <SidebarRule />

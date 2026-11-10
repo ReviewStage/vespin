@@ -15,6 +15,7 @@ import { onboardingEventsFromEnvironment } from "./accounts/onboarding-events.js
 import { welcomeMailFromEnvironment } from "./accounts/welcome-mail.js";
 import { settledTurnListener } from "./agents/coder-host/settled-turns.js";
 import { queuedTurnListener, turnQueueFromEnvironment } from "./agents/coder-host/turn-delivery.js";
+import { sandboxReleasesFromEnvironment } from "./agents/session-sandboxes.js";
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
 import { webSqlClient } from "./db/sql-client.js";
@@ -174,6 +175,7 @@ export const webServices = Layer.mergeAll(
   automationCadenceFromEnvironment,
   queuedTurnListener,
   turnQueueFromEnvironment,
+  sandboxReleasesFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(

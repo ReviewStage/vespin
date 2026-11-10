@@ -40,6 +40,7 @@ import {
   type AgentInboxMessagedView,
   type AgentInboxReadAllView,
   type AgentInboxReadStateView,
+  type AgentInboxTakenBackView,
   type AgentListAnswer,
   type AgentMessageAnswerView,
   type AgentMessagesAnswerView,
@@ -76,6 +77,12 @@ import {
   type ProviderKeyRemoveParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
+  type PushDeviceDoneAnswerView,
+  type PushDeviceKeyParams,
+  type PushDeviceNotifyAnswerView,
+  type PushDeviceNotifyParams,
+  type PushDeviceRegisterParams,
+  type PushDeviceStatusAnswerView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
 } from "./agent-view.js";
@@ -139,11 +146,13 @@ import {
   type InboxMessageRequest,
   type InboxReadAllRequest,
   type InboxStartRequest,
+  type InboxTakeBackRequest,
   inboxAcknowledgeRequestSchema,
   inboxCloseRequestSchema,
   inboxMessageRequestSchema,
   inboxReadAllRequestSchema,
   inboxStartRequestSchema,
+  inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
@@ -170,6 +179,12 @@ import {
   type PullRequestActionRequest,
   pullRequestActionRequestSchema,
 } from "./pull-request-write-wire.js";
+import {
+  pushDeviceNotifyRequestSchema,
+  pushDeviceRegisterRequestSchema,
+  pushDeviceStatusRequestSchema,
+  pushDeviceUnregisterRequestSchema,
+} from "./push-device-wire.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
 import {
@@ -619,6 +634,42 @@ export class HostedAgentClient {
           : { [PROVIDER_KEY_QUERY.SUBSCRIPTION_ID]: params.subscriptionId }),
       },
     });
+  }
+
+  /** The phone the app runs on registered for pushes under the account; a registration the service would refuse by shape never travels. */
+  registerPushDevice(
+    params: PushDeviceRegisterParams,
+  ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceRegisterRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.register, admitted);
+  }
+
+  /** The phone unregistered from the account's pushes, as a sign-out does; a key the service would refuse by shape never travels. */
+  unregisterPushDevice(
+    params: PushDeviceKeyParams,
+  ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceUnregisterRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.unregister, admitted);
+  }
+
+  /** The phone's "Notify me" and how its pushes fared; not found where the account holds no such phone. */
+  pushDeviceStatus(
+    params: PushDeviceKeyParams,
+  ): Effect.Effect<PushDeviceStatusAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceStatusRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.status, admitted);
+  }
+
+  /** The phone's "Notify me" set; not found where the account holds no such phone. */
+  setPushDeviceNotify(
+    params: PushDeviceNotifyParams,
+  ): Effect.Effect<PushDeviceNotifyAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceNotifyRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.notify, admitted);
   }
 
   /** Tells the service the member used this client just now, which holds their phone's pushes (`presence-wire.ts`); its answer is read by no one. */
@@ -1319,6 +1370,29 @@ export class HostedAgentClient {
     return Effect.map(
       hostedCall(
         this.#hosted.inbox.close,
+        { params: { id: itemId }, body },
+        inboxWrite(HOSTED_DEADLINE.STEER, key),
+      ),
+      writtenAlreadyKept,
+    );
+  }
+
+  /**
+   * Takes back the account's own nod or close on one item, by the key it
+   * went under, however long since, under the idempotency key given where
+   * one is. It answers the item as it then stands with what came of it:
+   * taken back, refused as told to its agent, or refused as moved on.
+   */
+  takeBackInbox(
+    itemId: string,
+    request: InboxTakeBackRequest,
+    key?: string,
+  ): Effect.Effect<AgentInboxTakenBackView, never, HttpClient.HttpClient> {
+    const body = wireRequestOf(inboxTakeBackRequestSchema, request);
+    if (body === undefined) return Effect.succeed(UNANSWERED);
+    return Effect.map(
+      hostedCall(
+        this.#hosted.inbox.takeBack,
         { params: { id: itemId }, body },
         inboxWrite(HOSTED_DEADLINE.STEER, key),
       ),

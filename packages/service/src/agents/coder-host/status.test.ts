@@ -1,4 +1,4 @@
-import { NO_AGENT_OWNER_FACTS } from "@repo/database/models/agent-owners";
+import { CONNECTION_LOST_DETAIL, connectionLostFailure } from "@repo/agent-runner/protocol";
 import type { AgentLine } from "@repo/database/models/agent-store";
 import {
   AGENT_BRIEF,
@@ -53,6 +53,21 @@ test("a turn the sweep failed as its runner lost reads as that, not as a run tha
   expect(agentFailureOf(lost)).toBe(AGENT_FAILURE.RUNNER_LOST);
 });
 
+test("a turn its runner ended over a provider it waited for in vain reads as the connection lost, by either of the runner's words", () => {
+  const gaveUp = failedOnModel(
+    `failed ${connectionLostFailure("api.anthropic.com", CONNECTION_LOST_DETAIL.GAVE_UP)}`,
+  );
+  const lostAgain = failedOnModel(
+    `failed ${connectionLostFailure("chatgpt.com", CONNECTION_LOST_DETAIL.LOST_AGAIN)}; responseStreamDisconnected`,
+  );
+  // The harness's own words for a connection it gave up on, from a runner that probed nothing, stay the model's.
+  const unprobed = failedOnModel("success: API Error: Connection error.");
+
+  expect(agentFailureOf(gaveUp)).toBe(AGENT_FAILURE.CONNECTION_LOST);
+  expect(agentFailureOf(lostAgain)).toBe(AGENT_FAILURE.CONNECTION_LOST);
+  expect(agentFailureOf(unprobed)).toBe(AGENT_FAILURE.MODEL);
+});
+
 test("a local agent's summary names its Mac and when it last beat; an agent in a sandbox names none", () => {
   const DEVICE = "device-1";
   const line: AgentLine = {
@@ -91,7 +106,6 @@ test("a local agent's summary names its Mac and when it last beat; an agent in a
       { turn: undefined },
       now,
       new Map(),
-      NO_AGENT_OWNER_FACTS,
       [],
       new Map([
         [

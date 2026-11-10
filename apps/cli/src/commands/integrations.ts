@@ -15,9 +15,12 @@
 import { HOSTED_API_ERROR } from "@repo/features";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import {
+  INTEGRATION_GRANT,
+  INTEGRATION_GRANT_OF,
   INTEGRATION_NAME,
   INTEGRATION_PROVIDER_LIST,
   INTEGRATION_QUERY,
+  INTEGRATION_TOOLS_PROBLEM,
   type IntegrationProvider,
   integrationAccountInput,
   integrationAccountLabel,
@@ -36,6 +39,13 @@ const ACCOUNT_REFUSAL = {
     "You hold no such account. vespin integrations list names yours by their connection.",
   [HOSTED_API_ERROR.UNAVAILABLE]:
     "That integration is not offered to you here, it holds as many accounts as it takes, it is GitHub, whose sign-in is your own, or it could not be reached just now.",
+} as const;
+
+/** The words a refusal of a tools read is told in: an account not connected among them, which connecting again mends. */
+const TOOLS_REFUSAL = {
+  [HOSTED_API_ERROR.NOT_FOUND]: ACCOUNT_REFUSAL[HOSTED_API_ERROR.NOT_FOUND],
+  [HOSTED_API_ERROR.UNAVAILABLE]:
+    "That integration is not offered to you here, the account is not connected (vespin integrations connect signs it in), or it could not be reached just now.",
 } as const;
 
 const decodeAccount = Schema.decodeUnknownOption(integrationAccountSchema);
@@ -153,15 +163,22 @@ const toolsCommand = Command.make("tools", { connection: connectionArgument }, (
       hosted.integrations.tools,
       { provider, [INTEGRATION_QUERY.CONNECTION]: connection },
       undefined,
-      ACCOUNT_REFUSAL,
+      TOOLS_REFUSAL,
     );
     // Note that a server that listed none is an answer, why, rather than a failure.
     if ("problem" in read) {
       const said = read.problem.message === undefined ? "" : `: ${read.problem.message}`;
+      // Only a refused grant is mended by signing in again, and GitHub's grant is the account's own sign-in.
+      const mends =
+        read.problem.reason === INTEGRATION_TOOLS_PROBLEM.REFUSED &&
+        INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.CONNECT;
+      const hint = mends
+        ? ` vespin integrations connect ${provider} --account ${connection} signs it in again.`
+        : "";
       return yield* answer({
         json: { connection, problem: read.problem },
         lines: [
-          `${INTEGRATION_NAME[provider]}'s server listed no tools (${read.problem.reason}${said}). vespin integrations connect ${provider} --account ${connection} signs it in again.`,
+          `${INTEGRATION_NAME[provider]}'s server listed no tools (${read.problem.reason}${said}).${hint}`,
         ],
         ids: [],
       });

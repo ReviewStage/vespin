@@ -16,6 +16,7 @@ import {
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { WRITE_UNTAKEN } from "@repo/features/keyed-write";
 import { issueAddressOf, pullRequestAddressOf } from "@repo/features/link-grammar";
+import { LINK_PREVIEW_UNANSWERED } from "@repo/features/link-preview-view";
 import type { AnyLiveRead, LiveReadAnswer, LiveReadAsked } from "@repo/features/live-read";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import {
@@ -362,6 +363,7 @@ export type TasksClient = Pick<
   | "readTree"
   | "readSkills"
   | "readRepositoryFile"
+  | "linkPreview"
   | "readRepositoryTree"
   | "readRepositorySkills"
   | "readRepositoryPullRequest"
@@ -2117,6 +2119,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     // The repository's skills are held for every window and read again behind
     // each answer (`heldSkills`), a plan's under the repository the list
     // names it on, so a plan moved to another repository reads that one's.
+    TASKS_LINK_PREVIEW: ({ url }) =>
+      gate() ? served(client.linkPreview(url)) : Effect.succeed(LINK_PREVIEW_UNANSWERED),
     TASKS_SKILLS: (asked) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };

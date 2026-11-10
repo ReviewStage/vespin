@@ -947,6 +947,7 @@ export const INBOX_ATTACHMENT = "/api/inbox/attachment";
 export const INBOX_MESSAGES = "/api/inbox/{id}/messages";
 export const INBOX_ITEM_READ = "/api/inbox/{id}/read";
 export const INBOX_CLOSE = "/api/inbox/{id}/close";
+export const INBOX_ITEM_TAKE_BACK = "/api/inbox/{id}/take-back";
 export const INBOX_READ = "/api/inbox/read";
 
 /** A post as the agent's inbox tool hands the store one. */

@@ -1,19 +1,23 @@
-// provider-button.tsx -- a way to sign in through a provider: the system's bordered button across its column, the provider's mark beside its words, as the web's sign-in buttons carry it.
+// provider-button.tsx -- a way to sign in through a provider: a quiet capsule across its column, the provider's mark beside its words, as the web's sign-in buttons carry it.
 
 import { HStack, Image, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
+  background,
   buttonStyle,
-  controlSize,
   disabled as disabledModifier,
+  font,
   foregroundStyle,
   frame,
+  opacity,
+  padding,
   resizable,
-  tint,
+  shapes,
+  strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
-import { BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /**
  * The image sets the providers' marks are drawn from, which the app's config
@@ -38,27 +42,38 @@ type ProviderButtonProps = {
   readonly onPress: () => void;
 };
 
+/** A way in's height inside its edge, beside its words. */
+const WAY_IN_PADDING = 13;
+
+/** How thick its edge is drawn. */
+const HAIRLINE = 0.5;
+
 /**
- * One provider's way in: the system's bordered button on the brand's copper
- * wash, never iOS's gray, with its words and GitHub's mark in the ink, as the
- * web's ways in stand neutral on their card, so the provider's mark is what
- * tells the two apart.
+ * One provider's way in, quiet as the denser look's buttons stand: a capsule
+ * across its column on the surface inside a hairline, its words in the ink
+ * with GitHub's mark, so the provider's mark is what tells the two apart and
+ * no copper is spent on a choice the page itself is for.
  */
 export function ProviderButton({ label, mark, disabled = false, onPress }: ProviderButtonProps) {
   const colors = useColors();
   return (
     <SwiftUIButton
       onPress={onPress}
-      modifiers={[
-        buttonStyle(BUTTON_LOOK.BORDERED),
-        controlSize(BUTTON_SIZE.LARGE),
-        tint(colors.ACCENT),
-        disabledModifier(disabled),
-      ]}
+      modifiers={[buttonStyle("plain"), disabledModifier(disabled), opacity(disabled ? 0.5 : 1)]}
     >
       <HStack
         spacing={SPACE.ROW}
-        modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY }), foregroundStyle(colors.TEXT)]}
+        modifiers={[
+          frame({ maxWidth: Number.POSITIVE_INFINITY }),
+          padding({ vertical: WAY_IN_PADDING }),
+          foregroundStyle(colors.TEXT),
+          background(colors.SURFACE, shapes.capsule()),
+          strokeBorder({
+            content: colors.CHIP_EDGE,
+            shape: "capsule",
+            style: { lineWidth: HAIRLINE },
+          }),
+        ]}
       >
         <Image
           assetName={mark}
@@ -68,7 +83,9 @@ export function ProviderButton({ label, mark, disabled = false, onPress }: Provi
             accessibilityHidden(),
           ]}
         />
-        <Text>{label}</Text>
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" })]}>
+          {label}
+        </Text>
       </HStack>
     </SwiftUIButton>
   );

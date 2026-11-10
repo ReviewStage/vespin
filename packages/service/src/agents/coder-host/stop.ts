@@ -1,5 +1,4 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import { pauseAgentQueue } from "@repo/database/models/agent-queue-store";
 import {
   type Agent,
@@ -106,13 +105,11 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const names = yield* hostedStoreOrUnavailable(readAccountNames(summaryAccounts(agent)));
   const continuedBy = yield* continuedByOf(userId, [agent.id]);
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
-  const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf([agent]));
   return agentSummary(
     agent,
     standing(agent.conversationId),
     yield* Clock.currentTimeMillis,
     names,
-    owners,
     continuedBy(agent.id),
     macs,
   );

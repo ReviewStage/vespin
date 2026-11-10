@@ -2,12 +2,12 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { HISTORY_READ, type DescriptionHistoryControl } from "../tasks/use-description-history.js";
+import { type DescriptionHistoryControl, HISTORY_READ } from "../tasks/use-description-history.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";

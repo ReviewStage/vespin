@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
+import { TASKS_PAGE } from "@repo/features/tasks-model";
 import { type FileStripTab, fileTab } from "@repo/ui/tab-strip-model";
-import { TASKS_PAGE } from "@repo/ui/tasks-model";
 import { test } from "vitest";
 import { liveStepTitle, NAMED_STEP, stepTitle } from "./history-titles.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";

@@ -16,7 +16,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, type ReadLink } from "@repo/features/link-grammar";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE } from "@repo/wire";
@@ -118,7 +118,7 @@ async function drawn(
   sentAt?: number,
 ) {
   const opened: ToolTarget[] = [];
-  const places: LinkPlace[] = [];
+  const places: LinkDestination[] = [];
   const messages: readonly AgentTranscriptMessage[] = [
     {
       id: "first",
@@ -398,7 +398,7 @@ test("on an agent's own page, which lists no source, the card names the source a
   assert.equal(headOf(container), "Continued from Wire the start from field · 3 steps");
   press(container.querySelector("[data-replay-card] ~ .ui-disclosure-actions [data-actor-ref]"));
   assert.deepEqual(opened, []);
-  assert.deepEqual(places, [{ kind: LINK_PLACE.AGENT, planId: TASK_ID, agentId: SOURCE.id }]);
+  assert.deepEqual(places, [{ kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: SOURCE.id }]);
 });
 
 test("a replay holding Vespin's summary of the oldest steps opens on one folded row naming it as its, which opens onto the summary", async () => {

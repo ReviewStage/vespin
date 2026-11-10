@@ -24,6 +24,10 @@ appId: dev.vespin.ios
       authServer: stub
 - assertVisible: "Inbox"
 - assertNotVisible: "Sign in to Vespin"
+# The account's photo leads the Inbox's bar, heard as Settings, and opens it.
+- assertVisible: "Settings"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-account
 - tapOn: "Settings"
 - assertVisible: "Ada Lovelace"
 - assertVisible: "Analytical Engines"

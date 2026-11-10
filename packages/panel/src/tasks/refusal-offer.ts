@@ -1,3 +1,4 @@
+import { effortFor } from "@repo/features/model-effort";
 import {
   AGENT_FALLBACK_CHOICE,
   type CatalogModel,
@@ -6,7 +7,6 @@ import {
 } from "@repo/features/models-wire";
 import {
   choiceOn,
-  effortFor,
   offeredModels,
   providerOf,
   readModelChoice,

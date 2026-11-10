@@ -778,7 +778,14 @@ export type InputLine = typeof InputLineSchema.Type;
  * it: the CLI never echoes a prompt back. WAITING follows a `result` the run
  * outlives, because the Stop hook before it reported background work or a
  * scheduled wakeup still to come: the agent is waiting, not done, and the
- * sandbox must stay up. IDLE follows a `result`, or Codex's
+ * sandbox must stay up. CONNECTION_LOST follows a model turn the harness gave
+ * up on because it could not reach its provider after its own retries: the
+ * launch stays up and probes the provider's host (`reconnect.ts`), and
+ * CONNECTION_RESTORED follows once the host answers, saying whether the
+ * service should send the agent a carry-on line, or nothing where a line the
+ * service sent meanwhile goes next instead; a launch whose host never
+ * answers within `RUNNER_RECONNECT.GIVE_UP_MS` ends `FAILED` with
+ * `connectionLostFailure`'s words. IDLE follows a `result`, or Codex's
  * `turn/completed`, that leaves nothing in flight or unanswered: the agent's
  * turn is over, as a `turn_ended` END says, but the launch stays warm
  * (`RUNNER_WARM`), so the service's next message is a line on its stdin rather than
@@ -793,6 +800,8 @@ export type InputLine = typeof InputLineSchema.Type;
 export const RUNNER_EVENT = {
   ACCEPTED: "vespin_runner_accepted",
   WAITING: "vespin_runner_waiting",
+  CONNECTION_LOST: "vespin_runner_connection_lost",
+  CONNECTION_RESTORED: "vespin_runner_connection_restored",
   IDLE: "vespin_runner_idle",
   END: "vespin_runner_end",
   APPROVAL_REQUESTED: "vespin_runner_approval_requested",
@@ -865,6 +874,64 @@ export interface RunnerWaiting {
   readonly type: typeof RUNNER_EVENT.WAITING;
   readonly background_tasks: readonly BackgroundTaskSummary[];
   readonly session_crons: readonly SessionCronSummary[];
+}
+
+/** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
+export interface RunnerConnectionLost {
+  readonly type: typeof RUNNER_EVENT.CONNECTION_LOST;
+  readonly host: string;
+}
+
+/**
+ * The CONNECTION_RESTORED event: the host answers again. `carryOn` asks the
+ * service to send the agent a carry-on line, since the model turn the loss
+ * cut off left its work where it stood; it is false where a line the service
+ * sent during the wait goes next instead.
+ */
+export interface RunnerConnectionRestored {
+  readonly type: typeof RUNNER_EVENT.CONNECTION_RESTORED;
+  readonly host: string;
+  readonly carryOn: boolean;
+}
+
+/**
+ * How a launch waits for its provider's host to answer again after the
+ * harness gave up reaching it: a TCP connect to the host on 443, through the
+ * `HTTPS_PROXY` when one is set, asked again after a wait that doubles from
+ * the first to the longest, for at most `GIVE_UP_MS` in all, each connect
+ * given `PROBE_TIMEOUT_MS` to answer. The bound guards two costs: a sandbox
+ * kept up for a provider that stays down, and the turn's progress lease on
+ * the service, which the sweep fails a silent turn at fifteen minutes past
+ * its last progress (`@repo/features/turn-deadline`'s `PROGRESS_MS`): a Mac
+ * cut off from the provider is cut off from the service too, so the runner's
+ * own end, with why, must come before the sweep's does.
+ */
+export const RUNNER_RECONNECT = {
+  FIRST_WAIT_MS: 5 * 1_000,
+  LONGEST_WAIT_MS: 60 * 1_000,
+  GIVE_UP_MS: 10 * 60 * 1_000,
+  PROBE_TIMEOUT_MS: 5 * 1_000,
+} as const;
+
+/**
+ * The words a launch ends `FAILED` with over its provider's connection, which
+ * the service reads as the agent's connection-lost failure
+ * (`coder-host/status.ts`), each after the host's name and the same in every
+ * such end: the host never answered within `RUNNER_RECONNECT.GIVE_UP_MS`, or
+ * it was lost again before the model answered anything since the last
+ * carry-on, where probing again would only loop.
+ */
+export const CONNECTION_LOST_DETAIL = {
+  GAVE_UP: " could not be reached, and did not answer again within the wait",
+  LOST_AGAIN: " could not be reached again before the model answered",
+} as const;
+
+/** What a launch ends with where its provider's connection failed it, by which way (`CONNECTION_LOST_DETAIL`). */
+export function connectionLostFailure(
+  host: string,
+  detail: (typeof CONNECTION_LOST_DETAIL)[keyof typeof CONNECTION_LOST_DETAIL],
+): string {
+  return `${host}${detail}`;
 }
 
 /**
@@ -984,6 +1051,8 @@ export type RunnerMessage =
   | CodexNotification
   | RunnerAccepted
   | RunnerWaiting
+  | RunnerConnectionLost
+  | RunnerConnectionRestored
   | RunnerIdle
   | RunnerEndEvent
   | RunnerApprovalRequested

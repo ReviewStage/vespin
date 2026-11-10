@@ -1,8 +1,10 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
 
+import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
+import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
-import type { LinkPlace } from "@repo/features/link-grammar";
+import type { LinkDestination } from "@repo/features/link-grammar";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -18,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { type Glyph, isLucideSymbol } from "./glyph.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -30,21 +33,26 @@ import {
   type MarkdownRun,
   markdownBlocks,
 } from "./markdown-model.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
+import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /** A place in the app a link names, as `@repo/features/link-grammar` reads it, and the address it was written as. */
 export interface MarkdownPlace {
   readonly workspace: string;
-  readonly place: LinkPlace;
+  readonly place: LinkDestination;
   readonly href: string;
 }
 
-/** The glyph each kind of entity leads its chip with, as the panel's `entity-mark.tsx` gives each kind its own. */
-const ENTITY_SYMBOL: { readonly [K in EntityKind]: SfSymbol } = {
+/**
+ * The glyph each kind of entity leads its chip with, as the panel's
+ * `entity-mark.tsx` gives each kind its own: a pull request's is Lucide's
+ * own, as the panel's chip draws it before GitHub has said where the pull
+ * request stands, and the rest the SF Symbol closest to the panel's.
+ */
+const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
   [ENTITY_KIND.PLAN]: "checklist",
   [ENTITY_KIND.SECTION]: "number",
   [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
@@ -54,7 +62,7 @@ const ENTITY_SYMBOL: { readonly [K in EntityKind]: SfSymbol } = {
   [ENTITY_KIND.WORKER]: "gearshape.2",
   [ENTITY_KIND.APP]: "app",
   [ENTITY_KIND.CHANGES]: "plusminus",
-  [ENTITY_KIND.PULL_REQUEST]: "arrow.triangle.pull",
+  [ENTITY_KIND.PULL_REQUEST]: LUCIDE_SYMBOL.GIT_PULL_REQUEST,
   [ENTITY_KIND.PULL_REQUEST_THREAD]: "text.bubble",
   [ENTITY_KIND.ISSUE]: "smallcircle.filled.circle",
   [ENTITY_KIND.LINK]: "link",
@@ -79,14 +87,22 @@ const ENTITY_SYMBOL: { readonly [K in EntityKind]: SfSymbol } = {
   [ENTITY_KIND.DATE]: "calendar",
 };
 
-/** Each heading level's size and weight, a step above the words as the panel draws a message's headings. */
+/**
+ * The font size a chip's custom symbol is set at, as a share of its square.
+ * Note that a symbol set at the square's own size overflows it, since its
+ * template stands at one and a half cap heights, so it is set smaller and
+ * centered in the square rather than hung from its baseline.
+ */
+const CHIP_SYMBOL_SCALE = 0.85;
+
+/** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
 const HEADING_LOOK: { readonly [Level in 1 | 2 | 3 | 4 | 5 | 6]: TextStyle } = {
-  1: { fontSize: TEXT_SIZE.TITLE_2, fontWeight: "700" },
-  2: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
-  3: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
-  4: { fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "600" },
-  5: { fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "600" },
-  6: { fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "600" },
+  1: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
+  2: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
+  3: { fontSize: PROSE_SIZE, fontWeight: "600" },
+  4: { fontSize: PROSE_SIZE, fontWeight: "600" },
+  5: { fontSize: PROSE_SIZE, fontWeight: "600" },
+  6: { fontSize: PROSE_SIZE, fontWeight: "600" },
 };
 
 const TEXT_ALIGN: { readonly [A in ColumnAlign]: TextStyle["textAlign"] } = {
@@ -152,6 +168,36 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
+/**
+ * A chip's glyph in a `size`-point square in `color`: an SF Symbol through
+ * the system's symbol view, or one of Lucide's custom symbols through
+ * SwiftUI's own image in a host of that square. Note that React Native's
+ * image draws a symbol set blank, since it reads only image sets by name.
+ */
+function ChipGlyph({
+  glyph,
+  size,
+  color,
+}: {
+  readonly glyph: Glyph;
+  readonly size: number;
+  readonly color: string;
+}) {
+  if (!isLucideSymbol(glyph)) {
+    return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
+  }
+  return (
+    <Host style={{ width: size, height: size }}>
+      <SwiftUIImage
+        assetName={glyph}
+        size={size * CHIP_SYMBOL_SCALE}
+        color={color}
+        modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
+      />
+    </Host>
+  );
+}
+
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -162,9 +208,9 @@ function MentionChip({
 }) {
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
-  const size = TEXT_SIZE.SUBHEADLINE;
+  const size = TEXT_SIZE.FOOTNOTE;
   return (
-    <View style={{ transform: [{ translateY: TEXT_SIZE.BODY * CHIP_DROP * fontScale }] }}>
+    <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
       <Pressable
         onPress={onPress}
         disabled={onPress === undefined}
@@ -179,11 +225,10 @@ function MentionChip({
           },
         ]}
       >
-        <SymbolView
-          name={ENTITY_SYMBOL[chip.entity]}
+        <ChipGlyph
+          glyph={ENTITY_SYMBOL[chip.entity]}
           size={size * fontScale}
-          tintColor={colors.TEXT_MUTED}
-          accessibilityElementsHidden
+          color={colors.TEXT_MUTED}
         />
         <Text
           numberOfLines={1}
@@ -224,7 +269,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         <Text
           style={{
             fontFamily: MONOSPACE_FONT,
-            fontSize: TEXT_SIZE.SUBHEADLINE,
+            fontSize: TEXT_SIZE.FOOTNOTE,
             backgroundColor: colors.WELL,
           }}
         >
@@ -261,7 +306,7 @@ function Line({
   readonly style?: TextStyle | undefined;
 }) {
   return (
-    <Text style={[{ fontSize: TEXT_SIZE.BODY, color: drawing.colors.TEXT_BODY }, style]}>
+    <Text style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}>
       <Runs runs={runs} drawing={drawing} />
     </Text>
   );
@@ -278,7 +323,7 @@ function Marker({
   readonly drawing: Drawing;
 }) {
   const { colors, fontScale } = drawing;
-  const width = TEXT_SIZE.BODY * MARKER_WIDTH * fontScale;
+  const width = PROSE_SIZE * MARKER_WIDTH * fontScale;
   if (checked !== undefined) {
     return (
       <View
@@ -289,7 +334,7 @@ function Marker({
       >
         <SymbolView
           name={checked ? "checkmark.square.fill" : "square"}
-          size={TEXT_SIZE.BODY * fontScale}
+          size={PROSE_SIZE * fontScale}
           tintColor={checked ? colors.ACCENT : colors.TEXT_MUTED}
         />
       </View>
@@ -297,7 +342,7 @@ function Marker({
   }
   return (
     <Text
-      style={{ width, fontSize: TEXT_SIZE.BODY, color: colors.TEXT_MUTED, textAlign: "right" }}
+      style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}
       accessibilityElementsHidden
     >
       {number === undefined ? "•" : `${number}.`}
@@ -382,7 +427,7 @@ function TableView({
                   runs={cell}
                   drawing={drawing}
                   style={{
-                    fontSize: TEXT_SIZE.SUBHEADLINE,
+                    fontSize: TEXT_SIZE.FOOTNOTE,
                     textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
                     ...(rowAt === 0 ? { fontWeight: "600", color: colors.TEXT } : {}),
                   }}
@@ -404,7 +449,7 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Text
           selectable
-          style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT }}
+          style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT }}
         >
           {text}
         </Text>
