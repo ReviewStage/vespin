@@ -634,8 +634,9 @@ export function KeptFileChips({
   /** Whether the line is still on its way, its row not yet read back. */
   sending?: boolean;
 }): ReactNode {
-  // Note that a file the words draw in place is not drawn over them again.
-  const inWords = useContext(WordFilesContext)?.names;
-  const chips = useKeptChips(files.filter((file) => inWords?.has(file.name) !== true));
+  // Note that a file the words draw in place is not drawn over them again, and that a
+  // marker draws the first file of its name alone, so a later file of that name stays here.
+  const drawn = new Set(useContext(WordFilesContext)?.names);
+  const chips = useKeptChips(files.filter((file) => !drawn.delete(file.name)));
   return <AttachedFileChips files={chips} uploading={sending} />;
 }

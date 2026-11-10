@@ -1958,7 +1958,7 @@ test("a picture a comment's words name is drawn where its marker stands, and its
     ...open,
     entries: open.entries.map((entry) => ({
       ...entry,
-      words: "The expired link shows [Picture 1] here.",
+      words: "The expired link shows [Picture 1] here, not ![a broken source](#file:%E0).",
       files: [
         {
           attachmentId: "7a8b9c0d-1e2f-4a3b-8c4d-6e7f8091a2b3",
@@ -1990,6 +1990,10 @@ test("a picture a comment's words name is drawn where its marker stands, and its
     "the picture stands in the words",
   );
   assert.ok(!words.textContent?.includes("[Picture 1]"));
+  assert.ok(
+    words.textContent?.includes("a broken source"),
+    "an image whose file source does not decode is its alt text",
+  );
   assert.deepEqual(
     [...entry.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
     ["log.txt"],

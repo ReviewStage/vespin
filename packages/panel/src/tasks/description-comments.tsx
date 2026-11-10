@@ -1086,11 +1086,14 @@ function withFileImages(words: string, names: ReadonlySet<string>): string {
   return written + words.slice(at);
 }
 
-/** The file an image written by `withFileImages` names; nothing for any other image. */
+/** The file an image written by `withFileImages` names; nothing for any other image, nor for one typed by hand whose source does not decode, which is its alt text. */
 function fileNameOf(src: string): string | undefined {
-  return src.startsWith(FILE_SOURCE)
-    ? decodeURIComponent(src.slice(FILE_SOURCE.length))
-    : undefined;
+  if (!src.startsWith(FILE_SOURCE)) return undefined;
+  try {
+    return decodeURIComponent(src.slice(FILE_SOURCE.length));
+  } catch {
+    return undefined;
+  }
 }
 
 /**
