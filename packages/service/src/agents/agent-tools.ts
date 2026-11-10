@@ -36,7 +36,7 @@ import {
   type TaskChanges,
 } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
-import type { StoreWriter } from "@repo/database/models/writer";
+import type { ConversationTarget, StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import { START_NOTE_HEADING } from "@repo/features/agent-replay";
 import {
@@ -1458,24 +1458,35 @@ function cut(text: string, maximumChars: number): string {
   return line.length > maximumChars ? `${line.slice(0, maximumChars - 1)}…` : line;
 }
 
-/** A journal's entries in order, whole: each of the agent's own texts, and each call with its subject. */
-function entriesOf(journal: StoredUIMessage): string[] {
-  return journal.parts.flatMap((part) => {
+/** One entry's words, whole, and the id of the call it says, where it is one. */
+interface EntryWords {
+  readonly text: string;
+  readonly callId?: string;
+}
+
+/** A journal's entries in order, whole: each of the agent's own texts, and each call with its subject and its id. */
+function journalEntriesOf(journal: StoredUIMessage): EntryWords[] {
+  return journal.parts.flatMap((part): EntryWords[] => {
     if (isTextUIPart(part) && part.text.trim().length > 0) {
-      return [`${ENTRY_WORDS.SAID}: ${part.text.trim()}`];
+      return [{ text: `${ENTRY_WORDS.SAID}: ${part.text.trim()}` }];
     }
-    if (isStoredToolPart(part)) return [callEntry(part)];
+    if (isStoredToolPart(part)) return [{ text: callEntry(part), callId: part.toolCallId }];
     return [];
   });
 }
 
+/** A journal's entries in order, whole, as words alone. */
+function entriesOf(journal: StoredUIMessage): string[] {
+  return journalEntriesOf(journal).map((entry) => entry.text);
+}
+
 /** A message's entries in order, whole: a line under who sent it, its files named, and a journal's own; none for any other row. */
-function rowEntriesOf(record: StoredMessageRecord, sent: LineSent | undefined): string[] {
+function rowEntriesOf(record: StoredMessageRecord, sent: LineSent | undefined): EntryWords[] {
   const { role, parts } = record.message;
-  if (role === MESSAGE_ROLE.ASSISTANT) return entriesOf(record.message);
+  if (role === MESSAGE_ROLE.ASSISTANT) return journalEntriesOf(record.message);
   if (role !== MESSAGE_ROLE.USER) return [];
   const words = lineWords(parts).trim();
-  return words === "" ? [] : [`${senderName(sent)}: ${words}`];
+  return words === "" ? [] : [{ text: `${senderName(sent)}: ${words}` }];
 }
 
 /** One agent as the model reads it: its title, what it runs on, where it stands, the branch its row holds, and what it last did. */
@@ -1865,22 +1876,23 @@ const PAGE_WAY = {
 type PageWay = (typeof PAGE_WAY)[keyof typeof PAGE_WAY];
 
 /** Which page a read asks for: the way it reads, the place it reads from, none for the transcript's end or start, and at most how many entries. */
-interface PageAsked {
+export interface PageAsked {
   readonly way: PageWay;
   readonly place: TranscriptPlace | undefined;
   readonly entries: number;
 }
 
-/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, the line sent to the agent, which a rewind names, none for the agent's own, and its words, cut to the bound. */
-interface PageEntry {
+/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, the line sent to the agent, which a rewind names, none for the agent's own, its words, cut to the bound, and the id of the call it says, where it is one. */
+export interface PageEntry {
   readonly place: TranscriptPlace;
   readonly messageId: string | undefined;
   readonly lineId: string | undefined;
   readonly text: string;
+  readonly callId: string | undefined;
 }
 
 /** A page of a transcript in the order it was read, and whether an entry stands past it that did not fit. */
-interface PageRead {
+export interface PageRead {
   readonly entries: readonly PageEntry[];
   readonly more: boolean;
 }
@@ -1902,13 +1914,14 @@ function pageEntriesOf(
   sent: LineSent | undefined,
   way: PageWay,
 ): PageEntry[] {
-  const entries = rowEntriesOf(record, sent).map((text, entry) => ({
+  const entries = rowEntriesOf(record, sent).map(({ text, callId }, entry) => ({
     place: { seq: record.seq, entry },
     // Note that only the agent's own journal is named, because a fork is cut at one and refuses a line.
     messageId: record.message.role === MESSAGE_ROLE.ASSISTANT ? record.id : undefined,
     // Note that a line sent to the agent is named apart, because a rewind is cut before one and a fork refuses it.
     lineId: record.message.role === MESSAGE_ROLE.USER ? record.id : undefined,
     text: cutText(text, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS),
+    callId,
   }));
   return way === PAGE_WAY.BACK ? entries.reverse() : entries;
 }
@@ -1920,12 +1933,13 @@ interface PageRows {
 }
 
 /** The messages a page reads next from a sequence, the way it reads; nothing where one of them does not read. */
-const pageRowsAt = (agent: Agent, way: PageWay, at: number) => {
+const pageRowsAt = (target: ConversationTarget, way: PageWay, at: number) => {
   const { PAGE_ROWS } = AGENT_TOOL_BOUNDS;
+  const { userId, conversationId } = target;
   return Effect.map(
     way === PAGE_WAY.BACK
-      ? listMessagesBefore(agent.userId, agent.conversationId, CODER_TOOL_SET, at, PAGE_ROWS)
-      : listMessagesFrom(agent.userId, agent.conversationId, CODER_TOOL_SET, at, PAGE_ROWS),
+      ? listMessagesBefore(userId, conversationId, CODER_TOOL_SET, at, PAGE_ROWS)
+      : listMessagesFrom(userId, conversationId, CODER_TOOL_SET, at, PAGE_ROWS),
     (read): PageRows | undefined => {
       if (!read.ok) return undefined;
       const rows = read.value;
@@ -1938,7 +1952,8 @@ const pageRowsAt = (agent: Agent, way: PageWay, at: number) => {
 };
 
 /**
- * A page of an agent's transcript, read under the member who started it:
+ * A page of a transcript, an agent's or its worker's, read under the
+ * member who started the agent:
  * the entries past the place asked, the way asked, until the page holds as
  * many as asked or the next would take it past its budget of characters,
  * which leaves at least one on a page however long. Note that a page reads
@@ -1947,7 +1962,7 @@ const pageRowsAt = (agent: Agent, way: PageWay, at: number) => {
  * message that does not read is nothing, as a fork's replay is, because a
  * page that stopped there would pass for the transcript's own end.
  */
-const transcriptPage = (agent: Agent, asked: PageAsked) =>
+export const transcriptPage = (target: ConversationTarget, asked: PageAsked) =>
   Effect.gen(function* () {
     const entries: PageEntry[] = [];
     let chars = 0;
@@ -1958,11 +1973,11 @@ const transcriptPage = (agent: Agent, asked: PageAsked) =>
           : asked.place.seq + 1
         : (asked.place?.seq ?? 0);
     while (at !== undefined) {
-      const rowsRead: PageRows | undefined = yield* pageRowsAt(agent, asked.way, at);
+      const rowsRead: PageRows | undefined = yield* pageRowsAt(target, asked.way, at);
       if (rowsRead === undefined) return undefined;
       const { rows, next }: PageRows = rowsRead;
       const senders = yield* lineSendersOf(
-        { userId: agent.userId, conversationId: agent.conversationId },
+        { userId: target.userId, conversationId: target.conversationId },
         rows.filter((row) => row.message.role === MESSAGE_ROLE.USER).map((row) => row.id),
       );
       const read = rows.flatMap((row) => pageEntriesOf(row, senders.get(row.id), asked.way));
@@ -1980,7 +1995,9 @@ const transcriptPage = (agent: Agent, asked: PageAsked) =>
   });
 
 /** Which page a read asks for, from its input: a place before or after, else the end or the start; none where it names both places. */
-function pageAskedOf(asked: typeof CODER_READ_AGENT_INPUT.Type): PageAsked | undefined {
+export function pageAskedOf(
+  asked: Pick<typeof CODER_READ_AGENT_INPUT.Type, "from" | "before" | "after" | "entries">,
+): PageAsked | undefined {
   const entries = asked.entries ?? AGENT_TOOL_BOUNDS.MAX_PAGE_ENTRIES;
   if (asked.before !== undefined && asked.after !== undefined) return undefined;
   if (asked.before !== undefined) return { way: PAGE_WAY.BACK, place: asked.before, entries };
@@ -1996,7 +2013,11 @@ function pageAskedOf(asked: typeof CODER_READ_AGENT_INPUT.Type): PageAsked | und
  * page was read from wherever that read named a place, since the place is
  * an entry's own, and on the far side wherever the page was full.
  */
-function pageAnswer(asked: PageAsked, page: PageRead): WireRecord {
+export function pageAnswer(
+  asked: PageAsked,
+  page: PageRead,
+  said: (entry: PageEntry) => WireRecord,
+): WireRecord {
   const back = asked.way === PAGE_WAY.BACK;
   const entries = back ? page.entries.toReversed() : page.entries;
   const first = entries[0];
@@ -2004,13 +2025,18 @@ function pageAnswer(asked: PageAsked, page: PageRead): WireRecord {
   const older = (back ? page.more : asked.place !== undefined) ? first?.place : undefined;
   const newer = (back ? asked.place !== undefined : page.more) ? last?.place : undefined;
   return {
-    transcript: entries.map(({ messageId, lineId, text }) => ({
-      ...(messageId === undefined ? undefined : { messageId }),
-      ...(lineId === undefined ? undefined : { lineId }),
-      text,
-    })),
+    transcript: entries.map(said),
     ...(older === undefined ? undefined : { older: { ...older } }),
     ...(newer === undefined ? undefined : { newer: { ...newer } }),
+  };
+}
+
+/** An entry as `read_agent` says it: its words, and the journal it stands in where it is the agent's own. */
+function readAgentEntry({ messageId, lineId, text }: PageEntry): WireRecord {
+  return {
+    ...(messageId === undefined ? undefined : { messageId }),
+    ...(lineId === undefined ? undefined : { lineId }),
+    text,
   };
 }
 
@@ -2049,7 +2075,7 @@ export function runReadAgent(
         ...(published === undefined
           ? undefined
           : { published: { branch: published.branch, pullRequest: published.pullRequest } }),
-        ...pageAnswer(page, read),
+        ...pageAnswer(page, read, readAgentEntry),
       };
     }),
   );
