@@ -1,12 +1,15 @@
+import { agentParts, isDelegation } from "@repo/features/agent-parts";
 import type {
   AgentPullRequest,
   AgentStatus,
   AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { DescriptionEditor } from "@repo/features/task-wire";
+import { delegationView } from "@repo/features/tool-call-model";
 import {
   AVATAR_SIZE,
   HOVER_CARD_ROW_LOOK,
@@ -34,16 +37,9 @@ import {
 import { useAutomation } from "../automation-directory.js";
 import { usePerson } from "../member-directory.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
-import { GLYPH_STATE, glyphStateWords } from "../state-glyph.js";
-import {
-  type ArchivedByReading,
-  agentParts,
-  isDelegation,
-  pullRequestNumberLabel,
-} from "./agent-model.js";
+import { type ArchivedByReading, pullRequestNumberLabel } from "./agent-model.js";
 import { ModelLabel } from "./model-label.js";
 import { PullRequestMark } from "./pull-request-mark.js";
-import { delegationView } from "./tool-call-model.js";
 import { type CopiedTranscript, LATEST_ACTIVITY, latestActivity } from "./transcript-copy.js";
 import { WorkingTime } from "./working-time.js";
 

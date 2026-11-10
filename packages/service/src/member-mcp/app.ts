@@ -30,7 +30,11 @@ import { AUTH_BASE_PATH } from "../auth/auth-policy.js";
 import { HOSTED_REFUSAL, hostedNotFoundRoute, hostedRefusing } from "../http/http-effect.js";
 import { logStoreFailure } from "../http/store-failure.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
-import { admitMember, type MemberMcpResourceClient } from "./admission.js";
+import {
+  type AdmittedMemberValues,
+  admitMember,
+  type MemberMcpResourceClient,
+} from "./admission.js";
 import { MEMBER_MCP_PATH, MEMBER_MCP_SCOPE, memberMcpResourceUrl } from "./resource.js";
 import {
   type MemberMcpAgentSandbox,
@@ -69,6 +73,8 @@ const NO_ORIGINS: readonly string[] = [];
 export interface MemberMcpAuth {
   readonly verify: (request: Request) => Promise<unknown>;
   readonly metadata: () => Promise<object>;
+  /** The deployment's base URL, which a link to one of its own routes is built on. */
+  readonly baseURL: string;
 }
 
 /**
@@ -94,6 +100,7 @@ export function memberMcpAuth(client: MemberMcpResourceClient, baseURL: string):
         scopes_supported: Object.values(MEMBER_MCP_SCOPE),
         bearer_methods_supported: ["header"],
       }),
+    baseURL,
   };
 }
 
@@ -172,19 +179,20 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function*
   if (crossOrigin !== undefined) return HttpServerResponse.raw(crossOrigin);
   const admitted = yield* admitMember(auth.verify, request);
   if (Result.isFailure(admitted)) return HttpServerResponse.raw(admitted.failure);
+  const member: AdmittedMemberValues = { ...admitted.success, baseURL: auth.baseURL };
   // Note that the handler is built per request, because the tools run on
   // the services this request's fiber holds, which the SDK's factory is
   // handed nothing of; a handler holds nothing between requests besides.
   const renamed = yield* renamedToolAnswer(request);
   if (Option.isSome(renamed)) return HttpServerResponse.raw(renamed.value);
   // Note that a member whose workspaces' experiments cannot be read is listed none of their tools, as a workspace with them off would be.
-  const experimentsOn = yield* memberExperimentsOn(admitted.success.userId).pipe(
+  const experimentsOn = yield* memberExperimentsOn(member.userId).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => new Set<WorkspaceExperiment>()),
   );
   const services = yield* Effect.context<MemberMcpRequestServices>();
   const handler = createMcpHandler(() =>
-    memberMcpServer(services, agentSandbox, admitted.success, experimentsOn),
+    memberMcpServer(services, agentSandbox, member, experimentsOn),
   );
   const answer = yield* Effect.promise(() => handler.fetch(request));
   return HttpServerResponse.raw(answer);

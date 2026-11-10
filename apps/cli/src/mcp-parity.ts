@@ -85,4 +85,11 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { command: ["automation", "delete"] },
   [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP]: { command: ["setup", "show"] },
   [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { command: ["setup", "edit"] },
+  [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { command: ["integrations", "list"] },
+  [MEMBER_MCP_TOOL.CONNECT_INTEGRATION]: { command: ["integrations", "connect"] },
+  [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { command: ["integrations", "rename"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { command: ["integrations", "disconnect"] },
+  [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { command: ["mcp", "clients"] },
+  [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS]: { command: ["sentry", "list"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_SENTRY]: { command: ["sentry", "disconnect"] },
 } as const satisfies Record<MemberMcpToolName, McpCliRow>;

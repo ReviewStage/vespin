@@ -9,6 +9,7 @@ import type {
   TaskCreateRelationKind,
   TaskStanding,
 } from "@repo/features/task-wire";
+import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -93,7 +94,6 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -322,19 +322,17 @@ function TaskPageSkeleton({
           ) : null
         }
         column={
-          <>
-            <TaskBody>
-              <Fill className="desktop-task-column">
-                <AgentColumn>
-                  {starting === undefined ? (
-                    <AgentTabSkeleton label={TASK_LOADING_LABEL} />
-                  ) : (
-                    <StartingAgentTab line={starting.line} model={starting.model} />
-                  )}
-                </AgentColumn>
-              </Fill>
-            </TaskBody>
-          </>
+          <TaskBody>
+            <Fill className="desktop-task-column">
+              <AgentColumn>
+                {starting === undefined ? (
+                  <AgentTabSkeleton label={TASK_LOADING_LABEL} />
+                ) : (
+                  <StartingAgentTab line={starting.line} model={starting.model} />
+                )}
+              </AgentColumn>
+            </Fill>
+          </TaskBody>
         }
       >
         {panel === undefined ? null : <SidePanelSkeleton drawing={frame} panel={panel} />}

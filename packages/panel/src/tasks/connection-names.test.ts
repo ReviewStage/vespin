@@ -9,6 +9,7 @@ import {
   type IntegrationProvider,
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
+import { toolCallView } from "@repo/features/tool-call-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -16,7 +17,6 @@ import { fakeAppBridge } from "../testing/app-bridge.js";
 import { holdIntegrations } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
-import { toolCallView } from "./tool-call-model.js";
 
 /**
  * connection-names.test.ts -- a call of an MCP server's tool says the server

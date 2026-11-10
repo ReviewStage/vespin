@@ -19,6 +19,7 @@ import {
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
+import { holderTaskId, type MentionHolder } from "@repo/features/mention-holder";
 import {
   type DescriptionMention,
   decodeMention,
@@ -79,7 +80,6 @@ import {
   dateMentionNode,
 } from "./date-picker.js";
 import { useInboxItemTitle } from "./inbox-item-chip.js";
-import { holderTaskId, type MentionHolder } from "./mention-holder.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { branchNote, thingCard } from "./thing-card.js";
 import { type AgentTiles, thingMark } from "./thing-mark.js";

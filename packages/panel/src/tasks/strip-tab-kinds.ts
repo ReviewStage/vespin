@@ -1,4 +1,6 @@
 import { PRODUCT_SURFACE, type ProductSurface } from "@repo/features/analytics";
+import { fileName } from "@repo/features/code-ref-words";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
 import {
@@ -13,8 +15,6 @@ import {
   TAB_WORDS,
   tabKey,
 } from "@repo/ui/tab-strip-model";
-import { GLYPH_STATE } from "../state-glyph.js";
-import { fileName } from "./file-ref-model.js";
 import { type PlanStanding, TAB_KIND, type TabSubject } from "./tab-look.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB, SIDE_PANEL_TABS } from "./task-tab-model.js";
 import { isOverviewTab, type MainTab } from "./use-main-tabs.js";

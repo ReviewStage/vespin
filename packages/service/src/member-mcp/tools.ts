@@ -90,6 +90,12 @@ import {
   INBOX_STATUS,
   inboxAnswersSchema,
 } from "@repo/features/inbox-wire";
+import {
+  integrationConnectionNameSchema,
+  integrationConnectionOf,
+  integrationProviderSchema,
+  integrationRenameRequestSchema,
+} from "@repo/features/integration-wire";
 import { commitShaSchema } from "@repo/features/link-grammar";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
@@ -107,6 +113,7 @@ import {
   type PullRequestWriteAnswer,
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
+import { workspaceSentryDisconnectRequestSchema } from "@repo/features/sentry-install-wire";
 import {
   CODE_PATH_MAX_CHARS,
   codeLineSchema,
@@ -262,6 +269,7 @@ import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import type { HostedRefusal } from "../http/http-effect.js";
+import type { IntegrationConnect } from "../integrations/integration-connect.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import {
@@ -294,13 +302,22 @@ import {
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 import {
+  connectIntegrationAsMember,
+  disconnectIntegrationAsMember,
+  disconnectSentryAsMember,
+  listIntegrationsAsMember,
+  listMcpClientsAsMember,
+  readSentryAsMember,
+  renameIntegrationAsMember,
+} from "./integrations.js";
+import {
   MARK_FILES_VIEWED_FIELDS,
   READ_PULL_REQUEST_FIELDS,
   runMarkFilesViewed,
   runReadPullRequest,
 } from "./pull-request-tools.js";
 
-/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in and the browser in it a tab is opened in, the deployment's page links its shares answer, and the member the call acts for. */
+/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against and a workspace's installations are read through, Vercel Connect the member's own integrations are read, begun, and ended through, an agent's sandbox its ports are read and shared in and the browser in it a tab is opened in, the deployment's page links its shares answer, and the member the call acts for. */
 export type MemberMcpServices =
   | Sandbox
   | AgentSandbox
@@ -312,6 +329,7 @@ export type MemberMcpServices =
   | ModelCatalog
   | HostedEnvironment
   | SentryApp
+  | IntegrationConnect
   | AdmittedMember;
 
 /** A tool's input declaration: a wire schema the emitter can show and the reader can read. */
@@ -3129,6 +3147,172 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
     ),
 });
 
+/*
+ * The member's own integrations, the outside MCP clients they allowed, and
+ * their workspaces' Sentry (`integrations.ts`), each through the operation
+ * its window's procedure runs. A connect answers the address the member
+ * opens to sign in, and runs no sign-in; no answer carries a credential.
+ */
+
+/** One account at a provider, by the connection name `list_integrations` answered. */
+const INTEGRATION_CONNECTION_INPUT = describeWire(
+  integrationConnectionNameSchema,
+  `The account, by the connection name ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS} answered, such as ` +
+    "notion, or notion-2 for a second Notion account.",
+);
+
+/** The provider a connection name is an account at; its pattern names one, so the name itself stands in only for a defect. */
+const connectionProvider = (connection: string): string =>
+  integrationConnectionOf(connection)?.provider ?? connection;
+
+const LIST_INTEGRATIONS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_INTEGRATIONS,
+  description:
+    "List the member's own integrations, as Settings › Integrations shows them: where each " +
+    "provider stands for them (connected, pending, expired, disconnected, or unavailable on " +
+    "this deployment), every account they hold, each by its connection name, its provider, " +
+    "its label, and where it stands, the providers they may add another account at, and any " +
+    "sign-in that ended without a grant, and why. A sign-in under way is settled first. " +
+    "Answers `accepted` with them, never a token, or `rejected` and why.",
+  input: NoInputSchema,
+  annotations: READ_ONLY,
+  run: listIntegrationsAsMember,
+});
+
+const ConnectIntegrationInputSchema = Schema.Struct({
+  provider: describeWire(integrationProviderSchema, "The provider to sign in to."),
+  connection: Schema.optionalKey(
+    describeWire(
+      integrationConnectionNameSchema,
+      `An account the member holds, by the connection name ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS} ` +
+        "answered, to sign it in again; leave it out for the provider's first account.",
+    ),
+  ),
+  add: Schema.optionalKey(
+    describeWire(
+      Schema.Boolean,
+      "true to sign in another account at the provider, where it takes more than one.",
+    ),
+  ),
+});
+
+const CONNECT_INTEGRATION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CONNECT_INTEGRATION,
+  description:
+    "Begin connecting one of the member's integrations, as their Connect in Settings › " +
+    "Integrations does, and answer the link they open in their own browser to sign in to the " +
+    "provider: nothing is connected until they finish it there, so hand them the link, and " +
+    `read where it stands afterwards with ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS}. Answers ` +
+    "`accepted` with the link and the connection name of the account it signs in, or " +
+    "`rejected` and why, such as a provider this deployment does not offer them.",
+  input: ConnectIntegrationInputSchema,
+  annotations: ADDITIVE,
+  run: connectIntegrationAsMember,
+});
+
+const RenameIntegrationInputSchema = Schema.Struct({
+  connection: INTEGRATION_CONNECTION_INPUT,
+  label: describeWire(
+    integrationRenameRequestSchema.fields.label,
+    "What the member calls the account, such as the workspace it is at the provider.",
+  ),
+});
+
+const RENAME_INTEGRATION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.RENAME_INTEGRATION,
+  description:
+    "Rename one of the member's integration accounts, by its connection name, as their " +
+    "Rename in Settings › Integrations does: the label they know it by. Answers `accepted` " +
+    "with the account as it then stands, or `rejected` and why.",
+  input: RenameIntegrationInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ connection, label }) =>
+    renameIntegrationAsMember(connectionProvider(connection), connection, label),
+});
+
+const DisconnectIntegrationInputSchema = Schema.Struct({
+  connection: INTEGRATION_CONNECTION_INPUT,
+});
+
+const DISCONNECT_INTEGRATION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION,
+  description:
+    "Disconnect one of the member's integration accounts, by its connection name, as their " +
+    "Disconnect in Settings › Integrations does: their agents lose its tools from their next " +
+    "step, and the provider's grant is revoked; every other account stands. GitHub, whose " +
+    `grant is the member's own GitHub sign-in, is refused. Connecting it again takes ` +
+    `${MEMBER_MCP_TOOL.CONNECT_INTEGRATION} and the member's browser. Answers \`accepted\` with ` +
+    "where the account then stands, or `rejected` and why.",
+  input: DisconnectIntegrationInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ connection }) =>
+    disconnectIntegrationAsMember(connectionProvider(connection), connection),
+});
+
+const LIST_MCP_CLIENTS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_MCP_CLIENTS,
+  description:
+    `List the outside MCP clients the member allowed to act for them on ${PRODUCT_NAME}'s MCP ` +
+    "server, as Settings › MCP lists them, and the server's address: each client by its id " +
+    "and name, where it signs in, when the member allowed it, and when it last renewed its " +
+    "access. The member revokes one in Settings › MCP. Answers `accepted` with them, never a " +
+    "token, or `rejected` and why.",
+  input: NoInputSchema,
+  annotations: READ_ONLY,
+  run: listMcpClientsAsMember,
+});
+
+/** A Sentry call run as the member, in the workspace its slug names or their only one; refused, naming theirs, where that names none. */
+const sentryAsMember = (
+  slug: string | undefined,
+  run: (userId: string, workspaceId: string) => Effect.Effect<object, never, MemberMcpServices>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const workspace = yield* listedWorkspace(member.userId, slug);
+    if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+    return yield* run(member.userId, workspace.success);
+  });
+
+const ListSentryInstallationsInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
+
+const LIST_SENTRY_INSTALLATIONS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS,
+  description:
+    "List the Sentry organizations a workspace the member belongs to has linked through " +
+    `${PRODUCT_NAME}'s Sentry integration, as its Settings › Integrations shows them: whether ` +
+    "this deployment offers the integration, and each installation by its id and the " +
+    `organization it is on, where known. ${WORKSPACE_WORDS} Linking one takes the member's ` +
+    "browser, in the app. Answers `accepted` with them, or `rejected` and why.",
+  input: ListSentryInstallationsInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) => sentryAsMember(workspace, readSentryAsMember),
+});
+
+const DisconnectSentryInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  installationId: describeWire(
+    workspaceSentryDisconnectRequestSchema.fields.installationId,
+    `The installation, by the id ${MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS} answered.`,
+  ),
+});
+
+const DISCONNECT_SENTRY_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DISCONNECT_SENTRY,
+  description:
+    "Disconnect one of a workspace's Sentry installations, by its id, as its Disconnect in " +
+    "Settings › Integrations does: its issues and alerts start no automation of the workspace " +
+    "from then on, though the integration stays installed on the Sentry organization until " +
+    "it is uninstalled there. Only an owner or an admin of the workspace may. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the installations left, or \`rejected\` and why.`,
+  input: DisconnectSentryInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, installationId }) =>
+    sentryAsMember(workspace, (userId, workspaceId) =>
+      disconnectSentryAsMember(userId, workspaceId, installationId),
+    ),
+});
+
 // A workspace's cloud sandbox setup (`../workspace-sandbox-setup/workspace-sandbox-setup.ts`), read and saved as Settings does.
 
 /** Why a setup was not read or saved, in words the agent can act on. */
@@ -3319,6 +3503,13 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AUTOMATION_TOOL,
   MEMBER_RUN_AUTOMATION_TOOL,
   MEMBER_DELETE_AUTOMATION_TOOL,
+  LIST_INTEGRATIONS_TOOL,
+  CONNECT_INTEGRATION_TOOL,
+  RENAME_INTEGRATION_TOOL,
+  DISCONNECT_INTEGRATION_TOOL,
+  LIST_MCP_CLIENTS_TOOL,
+  LIST_SENTRY_INSTALLATIONS_TOOL,
+  DISCONNECT_SENTRY_TOOL,
   READ_SANDBOX_SETUP_TOOL,
   EDIT_SANDBOX_SETUP_TOOL,
 ];
