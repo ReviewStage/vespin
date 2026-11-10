@@ -88,6 +88,13 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * way keeps it.
    */
   DICTATION_TRANSCRIBE: "dictation.transcribe",
+  /**
+   * The member used this window just now: a key, a press, or a move of the
+   * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
+   * service stamps so their phone holds its pushes (`presence-wire.ts`).
+   * Carries nothing.
+   */
+  ACCOUNT_ACTIVE: "account.active",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -858,6 +865,7 @@ export const PORT_ACT_USE = {
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
+  ACCOUNT_ACTIVE: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,

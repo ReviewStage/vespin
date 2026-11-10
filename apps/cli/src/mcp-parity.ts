@@ -30,13 +30,18 @@ type McpCliRow = { readonly command: readonly [string, ...string[]] } | { readon
 /** Each tool's command, or its gap. */
 export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { command: ["workspace", "list"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { command: ["workspace", "members"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { command: ["workspace", "slug"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { command: ["task", "list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { command: ["task", "view"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { command: ["agent", "list"] },
   [MEMBER_MCP_TOOL.READ_AGENT]: { command: ["agent", "view"] },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { command: ["agent", "diff"] },
+  [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: { command: ["agent", "logs"] },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { command: ["models"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
+  [MEMBER_MCP_TOOL.READ_TASK_FILE]: { command: ["task", "cat"] },
+  [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { command: ["task", "ls"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { command: ["task", "create"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { command: ["task", "update"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { command: ["description", "edit"] },
