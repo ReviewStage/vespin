@@ -72,7 +72,13 @@ appId: dev.vespin.ios
     element: "invite-flow.webm.*"
     direction: DOWN
 - waitForAnimationToEnd
-# The recording is read as its MP4 copy, which iOS's player plays in place.
+# The recording is read as its MP4 copy, which iOS's player plays in place:
+# the flow waits for the player to hold the file, so a read that never lands
+# fails here rather than leaving an empty well in the screenshot.
+- extendedWaitUntil:
+    visible:
+      id: "video-player"
+    timeout: 15000
 - assertNotVisible: ".*can't play here.*"
 - takeScreenshot: inbox-video
 # Back on the list, the search narrows it to the threads whose words hold

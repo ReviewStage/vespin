@@ -25,9 +25,11 @@ import {
 import { searchTokens } from "@repo/features/search-tokens";
 import { MP4_TYPE, WEBM_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
+import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   INBOX_FEED,
   type InboxFeed,
+  inboxFeedHolds,
   selectInboxFeed,
   selectInboxGroupsIn,
   selectInboxReader,
@@ -35,7 +37,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { File, Paths } from "expo-file-system";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -143,7 +145,9 @@ export function useInboxBadge(): number {
 /**
  * One thread by its id, with what holds it, wherever it stands in the
  * account's feed, and where that feed stands; none where the feed holds no
- * such thread, or has not answered yet. Note that every
+ * such thread, or has not answered yet. Note that a thread the feed holds
+ * before the task list that holds it is read stands as still reading, not
+ * as missing. Note too that every
  * workspace's threads are searched, not only the chosen workspace's the list
  * shows, so a link to a thread of another workspace still opens it.
  */
@@ -157,10 +161,12 @@ export function useInboxThread(id: string | undefined): {
     select: selectInboxGroupsIn(undefined),
   });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const { data: feed = INBOX_FEED.READING } = useQuery({
+  const { data: answered = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,
     select: selectInboxFeed,
   });
+  const holds = useCallback((state: AppStateSnapshot) => inboxFeedHolds(state, id), [id]);
+  const { data: held = false } = useQuery({ ...appStateQuery, select: holds });
   const listed = useMemo(() => {
     for (const { holder, items } of groups) {
       const item = items.find((each) => each.id === id);
@@ -168,6 +174,7 @@ export function useInboxThread(id: string | undefined): {
     }
     return undefined;
   }, [groups, id]);
+  const feed = listed === undefined && held ? INBOX_FEED.READING : answered;
   return { listed, readerId, feed };
 }
 

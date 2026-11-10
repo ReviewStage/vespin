@@ -475,6 +475,19 @@ export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
   return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
 }
 
+/**
+ * Whether the account's feed holds a thread, whatever holds it: true for one
+ * the feed read before the task list that holds it, which `inboxGroups`
+ * cannot group yet.
+ */
+export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
+  const rows = state[LIVE_READ.INBOX_ITEMS].rows;
+  if (rows === undefined || itemId === undefined) return false;
+  return [INBOX_SCOPE_KIND.PLAN, INBOX_SCOPE_KIND.AGENT].some((kind) =>
+    Object.values(rows[kind]).some((items) => items.some((item) => item.id === itemId)),
+  );
+}
+
 /** What a workspace's choices are read from: its entry on the account's list. */
 interface ChoosingWorkspace {
   readonly id: string;
