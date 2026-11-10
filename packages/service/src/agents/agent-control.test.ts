@@ -1,19 +1,16 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { Database } from "@repo/database/core/query";
 import { createAgent, readAgent } from "@repo/database/models/agent-store";
 import { recordRepositoryReads } from "@repo/database/models/github-repository-reads";
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { createTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
-import { agentTable } from "@repo/database/schemas/agent";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Option } from "effect";
 import { HOSTED_REFUSAL } from "../http/http-effect.js";
 import {
@@ -182,15 +179,9 @@ it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
           repository: "octo-member/app",
           githubAccess: GITHUB_ACCESS.APP,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          machine: AGENT_MACHINE.DEVICE,
         });
-        const agent = Option.getOrThrow(started).agent;
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ machine: AGENT_MACHINE.DEVICE })
-            .where(eq(agentTable.id, agent.id)),
-        );
-        const onMac = Option.getOrThrow(yield* readAgent(owner, agent.id));
+        const onMac = Option.getOrThrow(started).agent;
         const agentSessions = yield* routedSessions<TypedTurn>(teammate);
 
         const refused = yield* Effect.flip(
@@ -203,7 +194,7 @@ it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
         const from = yield* startFromOf(
           teammate,
           { taskId: task.id },
-          { agentId: agent.id },
+          { agentId: onMac.id },
           [],
           randomUUID(),
         );

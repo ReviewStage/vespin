@@ -273,6 +273,24 @@ export function placeOfAgent(
     : { taskId: null, organizationId, repository };
 }
 
+/**
+ * Where a Start from another agent runs where its ask names no place: where
+ * its source runs, so a continue or a fork goes on where the work was, but
+ * in the cloud for a source on another member's Mac, since a Mac runs its
+ * owner's agents alone, and a teammate takes such an agent up in the cloud
+ * unless they name a Mac of their own.
+ */
+export function inheritedPlaceOf(
+  userId: string,
+  source: Pick<Agent, "userId" | "machine" | "deviceId">,
+): { readonly machine: AgentMachineKind; readonly deviceId?: string | null | undefined } {
+  const machine = source.machine ?? AGENT_MACHINE.VERCEL;
+  if (machine === AGENT_MACHINE.DEVICE && source.userId !== userId) {
+    return { machine: AGENT_MACHINE.VERCEL };
+  }
+  return { machine, deviceId: source.deviceId };
+}
+
 /** The place alone, as a Start from another agent reads its source against it. */
 export function whereOf(place: StartWhere): StartWhere {
   if (place.taskId !== null) return { taskId: place.taskId };
@@ -736,7 +754,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
 ) {
   const { source } = from;
   const sourceMachine = source.machine ?? AGENT_MACHINE.VERCEL;
-  const place = ask.runsOn ?? { machine: sourceMachine, deviceId: source.deviceId };
+  const place = ask.runsOn ?? inheritedPlaceOf(userId, source);
   const [onto, off] = yield* Effect.all([
     checkoutsOn(userId, place.machine, "deviceId" in place ? place.deviceId : undefined),
     checkoutsOn(source.userId, sourceMachine, source.deviceId),
