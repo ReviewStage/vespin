@@ -10,14 +10,18 @@
  * made it, so each asks at a terminal first and takes `--yes` where stdin
  * is none (`confirmOrYes`), and none is a member MCP tool, by design. Each
  * acts in the workspace `-w`, `VESPIN_WORKSPACE`, or the default names
- * (`../workspace.js`).
+ * (`../workspace.js`); leaving or deleting the default forgets it
+ * (`forgetWorkspace`), so the next command falls back to the member's only
+ * workspace or asks which.
  */
 
 import { HOSTED_API_ERROR } from "@repo/features";
+import { CLI_EXIT } from "@repo/features/cli-exit";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { Effect } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
-import { answer, columns, confirmOrYes } from "../output.js";
+import { forgetWorkspace } from "../config-store.js";
+import { answer, CommandFailed, columns, confirmOrYes } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveWorkspace } from "../workspace.js";
 import { namedMember } from "./workspace-members.js";
@@ -39,6 +43,13 @@ const DELETE_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_FOUND]: "You are no longer a member of that workspace, or it was deleted.",
 } as const;
 
+/** The default workspace forgotten once the member is out of it, a config file it could not write as the command's failure. */
+const forgetDefault = (origin: string, workspace: { id: string; slug?: string | null }) =>
+  Effect.mapError(
+    forgetWorkspace(origin, workspace),
+    (failed) => new CommandFailed({ exit: CLI_EXIT.REFUSED, message: failed.message }),
+  );
+
 /** The flag each command takes to go ahead without asking. */
 const yesFlag = (doing: string) =>
   Flag.Boolean("yes").pipe(
@@ -55,13 +66,14 @@ export const workspaceLeaveCommand = Command.make("leave", { yes: yesFlag("Leave
       yes,
       "You stayed in the workspace.",
     );
-    const { hosted } = yield* session;
+    const { origin, hosted } = yield* session;
     const { workspaceId } = yield* askService(
       hosted.workspaces.leave,
       { workspaceId: workspace.id },
       HOSTED_DEADLINE.USUAL,
       LEAVE_REFUSAL_WORDS,
     );
+    yield* forgetDefault(origin, workspace);
     yield* answer({
       json: { workspaceId },
       lines: [`You left ${workspace.name}.`],
@@ -138,13 +150,14 @@ export const workspaceDeleteCommand = Command.make(
         `Delete ${workspace.name} (${workspace.slug ?? workspace.id})? Its agents are stopped, and every task, agent, and conversation in it is deleted for every member. This cannot be undone.`,
         yes,
       );
-      const { hosted } = yield* session;
+      const { origin, hosted } = yield* session;
       const { workspaceId } = yield* askService(
         hosted.workspaces.delete,
         { workspaceId: workspace.id },
         HOSTED_DEADLINE.USUAL,
         DELETE_REFUSAL_WORDS,
       );
+      yield* forgetDefault(origin, workspace);
       yield* answer({
         json: { workspaceId },
         lines: [`Deleted ${workspace.name}.`],
