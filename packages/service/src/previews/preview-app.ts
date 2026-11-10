@@ -2,22 +2,25 @@
  * preview-app.ts -- a shared port's members-only preview: the app's sign-in step that hands a member to the preview host, and the preview host's own route, which trades the handoff for its cookie and passes each request a cookie admits on to the sandbox's route for the shared port.
  *
  * The sign-in step answers on the app's host. A browser with no session is
- * sent to the app's sign-in page, which returns it here; a member who
- * reaches the agent by the Terminal's rule (`sandbox-reach.ts`) is sent on to
- * the preview host with a handoff token (`preview-links.ts`).
+ * sent to the app's sign-in page, which returns it here; the preview host's
+ * name is read for the member as the agent on their task it names, and a
+ * member who reaches that agent by the Terminal's rule (`sandbox-reach.ts`)
+ * is sent on to the preview host with a handoff token (`preview-links.ts`).
  *
  * The preview host is routed to its own function (the root `vercel.json`),
  * which answers on a preview host alone. A request without a cookie for that
  * host is a page load sent to sign in, or anything else refused as
  * unauthorized. A request with one is checked against the member's reach
- * again, so a member who left the workspace is refused at once, and passed
- * on to the route the agent's sandbox serves the shared port at, whose
- * address no member is ever handed. The preview's cookie never goes on to
+ * again, the host read once more as the agent the cookie admits them to, so
+ * a member who left the workspace is refused at once, and passed on to the
+ * route the agent's sandbox serves the shared port at, whose address no
+ * member is ever handed. The preview's cookie never goes on to
  * the sandbox.
  */
 
 import { BRAND_PALETTE, MARK_ART } from "@repo/brand";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { agentIdOfTaskNumber } from "@repo/database/models/task-number-store";
 import { PREVIEW_SIGN_IN } from "@repo/features/preview-sign-in";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
@@ -40,18 +43,22 @@ import {
   type HostedRefusal,
   hostedNotFoundRoute,
   hostedRefusing,
+  hostedStoreOrUnavailable,
   resolvedAccount,
   type UserIdResolver,
-  uuidOf,
 } from "../http/http-effect.js";
 import { PageLinks, type PageSandbox } from "../pages/page-links.js";
 import { ANY_METHOD, ANY_PATH, type WebRoutes } from "../route.js";
 import {
-  agentOfPreviewHost,
   mintPreviewHandoff,
   mintPreviewSession,
   PREVIEW_LINK,
   PREVIEW_TOKEN_LIFETIME,
+  type PreviewMember,
+  type PreviewName,
+  previewLabel,
+  previewNameOfHost,
+  previewNameOfLabel,
   previewOrigin,
   previewReturnPath,
   readPreviewHandoff,
@@ -137,6 +144,17 @@ const webRequest = Effect.gen(function* () {
   return yield* Effect.orDie(HttpServerRequest.toWeb(yield* HttpServerRequest.HttpServerRequest));
 });
 
+/** The agent a preview's name names to the account: the one on the task it names whose id has its head; none where it names none the account reaches. */
+const previewAgentFor = (userId: string, name: PreviewName) =>
+  hostedStoreOrUnavailable(agentIdOfTaskNumber(userId, name.slug, name.number, name.agentHead));
+
+/** Whether a preview's name names, to a token's member, the agent the token admits them to. */
+const namesTokenAgent = (name: PreviewName, member: PreviewMember) =>
+  Effect.map(
+    previewAgentFor(member.userId, name),
+    (found) => Option.getOrUndefined(found) === member.agentId,
+  );
+
 export interface PreviewSignInSeams {
   readonly resolveUserId: UserIdResolver;
 }
@@ -147,7 +165,9 @@ const signInEndpoint = (seams: PreviewSignInSeams) =>
     const request = yield* webRequest;
     const sandbox = yield* pageSandbox;
     const address = new URL(request.url);
-    const agentId = yield* uuidOf(request, PREVIEW_LINK.QUERY.AGENT);
+    const name = previewNameOfLabel(address.searchParams.get(PREVIEW_LINK.QUERY.PREVIEW) ?? "");
+    if (name === undefined)
+      return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.INVALID_REQUEST);
     const returnPath = previewReturnPath(address.searchParams.get(PREVIEW_LINK.QUERY.RETURN));
     const account = yield* resolvedAccount(seams.resolveUserId, request);
     if (Option.isNone(account)) {
@@ -155,13 +175,16 @@ const signInEndpoint = (seams: PreviewSignInSeams) =>
       const signIn = `${SIGN_IN_PAGE.PATH}?${new URLSearchParams({ [SIGN_IN_PAGE.RETURN]: here })}`;
       return HttpServerResponse.redirect(signIn, { status: HOSTED_HTTP_STATUS.FOUND });
     }
+    const found = yield* previewAgentFor(account.value, name);
+    if (Option.isNone(found)) return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.NOT_FOUND);
+    const agentId = found.value;
     yield* reachedAgentSession(account.value, agentId);
     const token = mintPreviewHandoff(
       sandbox,
       { userId: account.value, agentId },
       yield* Clock.currentTimeMillis,
     );
-    const target = new URL(PREVIEW_LINK.SESSION_PATH, previewOrigin(sandbox, agentId));
+    const target = new URL(PREVIEW_LINK.SESSION_PATH, previewOrigin(sandbox, name));
     target.searchParams.set(PREVIEW_LINK.QUERY.TOKEN, token);
     target.searchParams.set(PREVIEW_LINK.QUERY.RETURN, returnPath);
     return HttpServerResponse.redirect(target, { status: HOSTED_HTTP_STATUS.FOUND });
@@ -206,23 +229,24 @@ function cookiesWithoutPreview(request: Request): string | undefined {
 }
 
 /** The handoff traded for the preview host's cookie, and the browser sent back to the path it asked for. */
-function sessionStep(sandbox: PageSandbox, agentId: string, address: URL, now: number) {
-  const member = readPreviewHandoff(
-    sandbox,
-    address.searchParams.get(PREVIEW_LINK.QUERY.TOKEN) ?? "",
-    now,
-  );
-  if (member === undefined || member.agentId !== agentId) {
-    return HttpServerResponse.text(NOT_SIGNED_IN, { status: HOSTED_HTTP_STATUS.UNAUTHORIZED });
-  }
-  const maxAge = Duration.toSeconds(PREVIEW_TOKEN_LIFETIME.SESSION);
-  const cookie = `${PREVIEW_LINK.COOKIE}=${mintPreviewSession(sandbox, member, now)}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
-  const back = previewReturnPath(address.searchParams.get(PREVIEW_LINK.QUERY.RETURN));
-  return HttpServerResponse.redirect(back, {
-    status: HOSTED_HTTP_STATUS.FOUND,
-    headers: { "Set-Cookie": cookie, "Cache-Control": "no-store" },
+const sessionStep = (sandbox: PageSandbox, name: PreviewName, address: URL, now: number) =>
+  Effect.gen(function* () {
+    const member = readPreviewHandoff(
+      sandbox,
+      address.searchParams.get(PREVIEW_LINK.QUERY.TOKEN) ?? "",
+      now,
+    );
+    if (member === undefined || !(yield* namesTokenAgent(name, member))) {
+      return HttpServerResponse.text(NOT_SIGNED_IN, { status: HOSTED_HTTP_STATUS.UNAUTHORIZED });
+    }
+    const maxAge = Duration.toSeconds(PREVIEW_TOKEN_LIFETIME.SESSION);
+    const cookie = `${PREVIEW_LINK.COOKIE}=${mintPreviewSession(sandbox, member, now)}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+    const back = previewReturnPath(address.searchParams.get(PREVIEW_LINK.QUERY.RETURN));
+    return HttpServerResponse.redirect(back, {
+      status: HOSTED_HTTP_STATUS.FOUND,
+      headers: { "Set-Cookie": cookie, "Cache-Control": "no-store" },
+    });
   });
-}
 
 /** Whether the request is a browser's page load, which is answered a page rather than bare text or JSON. */
 function isPageLoad(request: Request): boolean {
@@ -230,7 +254,7 @@ function isPageLoad(request: Request): boolean {
 }
 
 /** A request without a member's cookie: a page load sent to sign in on the app, anything else refused. */
-function signInFirst(sandbox: PageSandbox, agentId: string, request: Request, asked: string) {
+function signInFirst(sandbox: PageSandbox, name: PreviewName, request: Request, asked: string) {
   if (request.method !== HTTP_METHOD.GET || !isPageLoad(request)) {
     return HttpServerResponse.text(NOT_SIGNED_IN, {
       status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
@@ -239,7 +263,7 @@ function signInFirst(sandbox: PageSandbox, agentId: string, request: Request, as
   }
   const [app] = sandbox.appOrigins;
   const signIn = new URL(PREVIEW_LINK.SIGN_IN_PATH, app);
-  signIn.searchParams.set(PREVIEW_LINK.QUERY.AGENT, agentId);
+  signIn.searchParams.set(PREVIEW_LINK.QUERY.PREVIEW, previewLabel(name));
   signIn.searchParams.set(PREVIEW_LINK.QUERY.RETURN, asked);
   return HttpServerResponse.redirect(signIn, {
     status: HOSTED_HTTP_STATUS.FOUND,
@@ -369,18 +393,18 @@ const proxyEndpoint = (seams: PreviewProxySeams) =>
     const request = yield* webRequest;
     const sandbox = yield* pageSandbox;
     const address = new URL(request.url);
-    const agentId = agentOfPreviewHost(sandbox, address.host);
-    if (agentId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+    const name = previewNameOfHost(sandbox, address.host);
+    if (name === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     const now = yield* Clock.currentTimeMillis;
     const asked = askedPath(address);
     if (asked.split("?")[0] === PREVIEW_LINK.SESSION_PATH) {
-      return sessionStep(sandbox, agentId, new URL(asked, address.origin), now);
+      return yield* sessionStep(sandbox, name, new URL(asked, address.origin), now);
     }
     const member = readPreviewSession(sandbox, previewCookie(request) ?? "", now);
-    if (member === undefined || member.agentId !== agentId) {
-      return signInFirst(sandbox, agentId, request, asked);
+    if (member === undefined || !(yield* namesTokenAgent(name, member))) {
+      return signInFirst(sandbox, name, request, asked);
     }
-    const { sessionId } = yield* reachedAgentSession(member.userId, agentId);
+    const { sessionId } = yield* reachedAgentSession(member.userId, member.agentId);
     if (sessionId === undefined) return noPreview(request);
     const onSandbox = <A>(call: (agent: AgentSandboxService) => Effect.Effect<A, SandboxError>) =>
       Effect.provide(
@@ -405,7 +429,7 @@ const proxyEndpoint = (seams: PreviewProxySeams) =>
       return status ? statusAnswer(false) : wakingPage(request);
     }
     if (status) return statusAnswer(yield* serverAnswers(preview.url));
-    return yield* passedOn(request, preview.url, previewOrigin(sandbox, agentId), asked);
+    return yield* passedOn(request, preview.url, previewOrigin(sandbox, name), asked);
   });
 
 /** The preview host's one route. */

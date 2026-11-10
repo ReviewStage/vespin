@@ -4,9 +4,10 @@ import { Redacted } from "effect";
 import { describe, it } from "vitest";
 import type { PageSandbox } from "../pages/page-links.js";
 import {
-  agentOfPreviewHost,
   mintPreviewHandoff,
   mintPreviewSession,
+  previewNameOf,
+  previewNameOfHost,
   previewOrigin,
   previewReturnPath,
   readPreviewHandoff,
@@ -16,8 +17,8 @@ import {
 /**
  * A shared preview's tokens and host: a session cookie admits only the
  * member and agent it was minted for, until it lapses, and a handoff never
- * stands in for one; an agent's preview host names that agent and no other
- * host does; and a return after sign-in never leaves the preview's own site.
+ * stands in for one; an agent's preview host is named by its task's key and
+ * the head of its id, reads back as that, and no other host does; and a return after sign-in never leaves the preview's own site.
  * Synthetic keys, accounts, and agents throughout.
  */
 
@@ -41,13 +42,26 @@ describe("preview links", () => {
     assert.deepEqual(readPreviewHandoff(SANDBOX, handoff, NOW + 1), MEMBER);
   });
 
-  it("names an agent's preview host, and reads no agent from any other host", () => {
-    const { host } = new URL(previewOrigin(SANDBOX, MEMBER.agentId));
-    assert.equal(host, "8c1a6a4f3d2e4d8b8b666f4c7a2e3b21.vespin.page");
-    assert.equal(agentOfPreviewHost(SANDBOX, host), MEMBER.agentId);
-    assert.equal(agentOfPreviewHost(SANDBOX, `${host}.`), MEMBER.agentId);
-    for (const other of ["vespin.page", "app.test", "x.vespin.page", `${host}.evil.test`]) {
-      assert.equal(agentOfPreviewHost(SANDBOX, other), undefined, other);
+  it("names an agent's preview host by its task's key, and reads no preview from any other host", () => {
+    const name = previewNameOf("acme-labs", 2617, MEMBER.agentId);
+    const { host } = new URL(previewOrigin(SANDBOX, name));
+    assert.equal(host, "acme-labs-2617-8c1a6a.vespin.page");
+    assert.deepEqual(previewNameOfHost(SANDBOX, host), {
+      slug: "acme-labs",
+      number: 2617,
+      agentHead: "8c1a6a",
+    });
+    assert.deepEqual(previewNameOfHost(SANDBOX, `${host}.`), name);
+    for (const other of [
+      "vespin.page",
+      "app.test",
+      "x.vespin.page",
+      "acme-0-8c1a6a.vespin.page",
+      "acme-2617-8c1a6.vespin.page",
+      "8c1a6a4f3d2e4d8b8b666f4c7a2e3b21.vespin.page",
+      `${host}.evil.test`,
+    ]) {
+      assert.equal(previewNameOfHost(SANDBOX, other), undefined, other);
     }
   });
 

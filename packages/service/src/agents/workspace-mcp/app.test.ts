@@ -14,7 +14,7 @@ import {
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { user } from "@repo/database/schemas/auth";
+import { organization, user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
@@ -1220,8 +1220,12 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         yield* Effect.promise(() => client.close());
 
-        // The agent's preview host is its id without dashes under the page sandbox's domain.
-        const host = `${agent.agentId.replaceAll("-", "")}.vespin.page`;
+        // The agent's preview host is its workspace's slug, its task's number, and its id's head, under the page sandbox's domain.
+        const [workspace] = yield* (yield* Database)
+          .select({ slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, agent.organizationId));
+        const host = `${workspace?.slug}-1-${agent.agentId.slice(0, 6)}.vespin.page`;
         assert.deepEqual(firstJson(share), {
           status: "accepted",
           port: 3000,
