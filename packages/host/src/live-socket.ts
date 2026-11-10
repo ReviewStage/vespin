@@ -35,6 +35,7 @@
  */
 
 import { type CallCredential, readServiceAnswer, webSocketOrigin } from "@repo/features";
+import { type ClientIdentity, clientHeaders } from "@repo/features/client-identity";
 import {
   LIVE_POLL,
   LIVE_SOCKET,
@@ -124,6 +125,8 @@ export interface LiveSocketOptions {
   readonly openSocket: OpenTerminalSocket;
   readonly credential: CallCredential;
   readonly serviceBaseUrl: string;
+  /** The build the socket is opened for, which its upgrade names as every call does. */
+  readonly client: ClientIdentity;
 }
 
 /** Whether a request is a live read's GET to the service, which is what a socket asks. */
@@ -171,7 +174,8 @@ export function liveSocketClient(
     const socketOrigin = webSocketOrigin(options.serviceBaseUrl);
     if (socketOrigin === undefined) return http;
     const serviceOrigin = new URL(options.serviceBaseUrl).origin;
-    const address = `${socketOrigin}${LIVE_SOCKET.PATH}`;
+    // The upgrade names the build as a call's headers do, in its query, since a browser's socket can carry no header of its own.
+    const address = `${socketOrigin}${LIVE_SOCKET.PATH}?${new URLSearchParams(clientHeaders(options.client))}`;
     const scope = yield* Effect.scope;
     let connection: Connection = NO_CONNECTION;
     let nextId = 0;

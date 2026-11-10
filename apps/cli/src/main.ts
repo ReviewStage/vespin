@@ -18,10 +18,13 @@
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { CLI_EXIT, type CliExit } from "@repo/features/cli-exit";
+import { CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { Console, Effect, Exit, Layer, Stdio } from "effect";
 import { CliConfig, CliError, Command, GlobalFlag } from "effect/cli";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { COMMANDS } from "./commands/index.js";
 import { VERSION } from "./commands/version.js";
 import { GLOBAL_FLAGS } from "./flags.js";
@@ -55,10 +58,23 @@ const vespin = Command.make("vespin").pipe(
   ]),
 );
 
+/** `fetch` naming this build on every request (`client-identity.ts`): the CLI's calls reach the service alone, bar the release download. */
+const namedFetch = Layer.effect(
+  HttpClient.HttpClient,
+  Effect.map(HttpClient.HttpClient, (http) =>
+    HttpClient.mapRequest(http, (request) =>
+      HttpClientRequest.setHeaders(
+        request,
+        clientHeaders({ platform: CLIENT_PLATFORM.CLI, version: VERSION }),
+      ),
+    ),
+  ),
+).pipe(Layer.provide(FetchHttpClient.layer));
+
 /** The services every command runs on: Node's, `fetch` for the service, and `--help` and `--version` as the only built-in flags. */
 const services = Layer.mergeAll(
   NodeServices.layer,
-  FetchHttpClient.layer,
+  namedFetch,
   CliConfig.layer({ builtIns: [GlobalFlag.Help, GlobalFlag.Version] }),
 );
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { fixedBearer, HOSTED_SERVICE_PATH } from "@repo/features";
+import { CLIENT_PLATFORM, HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { type LiveSocketAsk, liveSocketAskSchema } from "@repo/features/live-wire";
 import type {
   OpenTerminalSocket,
@@ -119,6 +120,7 @@ const subject = Effect.gen(function* () {
     openSocket: relay.open,
     credential: fixedBearer("token-1"),
     serviceBaseUrl: SERVICE,
+    client: { platform: CLIENT_PLATFORM.DESKTOP, version: "0.30.0" },
   });
   /** A live poll asked, as a fiber its answer is joined from. */
   const poll = Effect.forkChild(
@@ -139,7 +141,9 @@ it.effect(
         // The first read goes over HTTP while the socket opens, so no read waits on an open.
         assert.deepEqual(yield* Fiber.join(yield* poll), { status: 200, text: HTTP_BODY });
         const socket = yield* relay.opened;
-        assert.deepEqual(relay.addresses, ["wss://app.test/api/live/socket Bearer token-1"]);
+        assert.deepEqual(relay.addresses, [
+          `wss://app.test/api/live/socket?vespin-client=desktop%2F0.30.0&vespin-api-version=${HOSTED_API_VERSION} Bearer token-1`,
+        ]);
         yield* socket.reading;
 
         const polled = yield* poll;
