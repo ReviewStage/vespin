@@ -90,23 +90,48 @@
  * the subagent's answer, so one spawn would fail every later turn of the
  * thread.
  *
- * Sandbox. Codex runs no sandbox of its own, `danger-full-access` with
- * approval `never` (https://learn.chatgpt.com/docs/sandboxing), set as the
- * thread starts and again as the `sandboxPolicy` of each `turn/start`, as
- * app-server documents, so a thread started under another mode runs under
- * this one from its next turn. Note that a Claude Code agent's permission
- * mode (`PERMISSION_MODE`) does not reach here: Codex asks the member
- * nothing, whatever its agent's mode. The machine is the boundary: a host's box, to
- * which an agent there has full access, or the cloud's sandbox, whose
- * firewall holds every credential and leaves only placeholders inside. Its
- * commands still inherit no bearer or key (`shell_environment_policy`),
- * since none is theirs to use, a placeholder or not.
+ * Sandbox. The agent's mode (`PERMISSION_MODE`) runs Codex as the Codex
+ * app means it (https://learn.chatgpt.com/docs/sandboxing), set as the
+ * thread starts and again in each `turn/start`, as app-server documents, so
+ * a thread started under another mode runs under this one from its next
+ * turn. Full access runs no sandbox of Codex's own, `danger-full-access`
+ * with approval `never`: the machine is the boundary, a host's box, to which
+ * an agent there has full access, or the cloud's sandbox, whose firewall
+ * holds every credential and leaves only placeholders inside. Ask for
+ * approval and Approve for me run Codex's workspace sandbox with the network
+ * on and approval `on-request`, so Codex asks only to run a command outside
+ * it or to write outside the checkout. The checkout's git folders (a
+ * worktree's own and the clone's it shares) and the home caches package
+ * managers keep (`PACKAGE_CACHES`) are writable beside the checkout, so a
+ * commit, a push, and an install run unasked. Under Ask for approval the
+ * member answers each ask (`approvals.ts`): Allow is Codex's `accept`, Always
+ * allow its `acceptForSession`, which keeps the rule in the session rather
+ * than writing one into `CODEX_HOME`, Deny or a message sent meanwhile its
+ * `decline`, and a launch's end its `cancel`; app-server settling an ask
+ * itself (`serverRequest/resolved`) withdraws it. Under Approve for me
+ * Codex's automatic review answers them in the member's place, and a
+ * command it denies or could not review says why at the end of its output
+ * (`reviewNotes`). An MCP server's elicitation, which Codex declines itself
+ * under approval `never`, is declined here under every mode. Note that two
+ * gaps stand under the workspace sandbox: a command reaches Docker's socket,
+ * through which it can write anywhere, and a checkout beside this one, which
+ * the config does not name, is read-only. Commands still inherit no bearer
+ * or key (`shell_environment_policy`), since none is theirs to use, a
+ * placeholder or not.
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { Data, Duration, Effect, Exit, Fiber, Option, Queue, Schema, Scope, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
@@ -114,12 +139,26 @@ import {
   type AppServer,
   AppServerError,
   type AppServerListener,
+  type AppServerRequest,
   AppServerRequestFailed,
   spawnAppServer,
 } from "./app-server.js";
+import {
+  type Approvals,
+  cutInput,
+  denyForMessage,
+  denyWaiting,
+  holdAsk,
+  makeApprovals,
+  settleAsk,
+} from "./approvals.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import type {
+  ApprovalsReviewer,
+  AskForApproval,
   ChatgptAuthTokensRefreshResponse,
+  CommandExecutionApprovalDecision,
+  SandboxMode,
   SandboxPolicy,
   ThreadStartParams,
   TurnStatus,
@@ -142,6 +181,10 @@ import {
 import { codexMemoryWatch } from "./out-of-memory.js";
 import { CODEX_PIN, SANDBOX_TOOL_ENV } from "./pins.js";
 import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
+  type ApprovalBy,
+  type ApprovalDecision,
   CODEX_EFFORT,
   CODEX_ERROR_INFO,
   CODEX_PLAN_BACKEND,
@@ -149,6 +192,7 @@ import {
   CONNECTION_LOST_DETAIL,
   type CodexConfig,
   type CodexEffort,
+  type CodexNotification,
   type CodexPlanBackend,
   type ContentBlock,
   codexErrorKind,
@@ -156,10 +200,13 @@ import {
   INPUT_LINE,
   INSTALLED_SKILLS,
   InputLineSchema,
+  PERMISSION_MODE,
+  type PermissionMode,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
   RUNNER_WARM,
+  type RunnerApprovalRequested,
   type RunnerEnd,
 } from "./protocol.js";
 import {
@@ -261,6 +308,12 @@ const METHOD = {
   TURN_INTERRUPT: "turn/interrupt",
   TURN_COMPLETED: "turn/completed",
   ITEM_STARTED: "item/started",
+  ITEM_COMPLETED: "item/completed",
+  COMMAND_APPROVAL: "item/commandExecution/requestApproval",
+  FILE_CHANGE_APPROVAL: "item/fileChange/requestApproval",
+  MCP_ELICITATION: "mcpServer/elicitation/request",
+  SERVER_REQUEST_RESOLVED: "serverRequest/resolved",
+  AUTO_REVIEW_COMPLETED: "item/autoApprovalReview/completed",
 } as const;
 
 /** JSON-RPC's code for a request the receiver refuses as it stands. */
@@ -600,19 +653,127 @@ function featureOverrides(auth: CodexAuth): (readonly [string, string])[] {
   ];
 }
 
-/** The sandbox every turn runs under, as `turn/start`'s documented `sandboxPolicy`: none of Codex's own. */
-const SANDBOX_POLICY = { type: "dangerFullAccess" } as const satisfies SandboxPolicy;
+/**
+ * The folders under the member's home that package managers keep their
+ * caches in (npm's, pnpm's store, and the shared `~/.cache` beside them),
+ * writable under the workspace sandbox so an install runs unasked, and made
+ * where they are missing, since a command cannot make one under a home it
+ * does not write.
+ */
+const PACKAGE_CACHES = [".npm", ".cache", join(".local", "share", "pnpm")] as const;
 
-/** The sandbox mode a thread is started and resumed under, as app-server's config names `SANDBOX_POLICY`. */
-const SANDBOX_MODE = "danger-full-access";
+/** A worktree's `.git` file, naming the folder its git state is in. */
+const GITDIR_LINE = /^gitdir:\s*(.+)$/m;
+
+/**
+ * The git folders a commit in the checkout writes: its `.git` folder, or,
+ * in a worktree, the folder its `.git` file names and the clone's own it
+ * shares (`commondir`); none where the checkout holds no git.
+ */
+function gitFoldersOf(cwd: string): string[] {
+  const dotGit = join(cwd, ".git");
+  const found = statSync(dotGit, { throwIfNoEntry: false });
+  if (found === undefined) return [];
+  if (found.isDirectory()) return [dotGit];
+  const gitdir = GITDIR_LINE.exec(readFileSync(dotGit, "utf8"))?.[1]?.trim();
+  if (gitdir === undefined) return [];
+  const own = resolve(cwd, gitdir);
+  const common = join(own, "commondir");
+  return existsSync(common) ? [own, resolve(own, readFileSync(common, "utf8").trim())] : [own];
+}
+
+/**
+ * How a launch runs Codex for its mode: the approval policy and sandbox
+ * every thread and turn names, who answers an ask where one is asked, and
+ * the argv beside them. Full access names no reviewer, as a launch from
+ * before modes named none.
+ */
+interface CodexPermissions {
+  readonly approvalPolicy: AskForApproval;
+  readonly approvalsReviewer: ApprovalsReviewer | undefined;
+  readonly sandbox: SandboxMode;
+  readonly sandboxPolicy: SandboxPolicy;
+  readonly overrides: readonly (readonly [string, string])[];
+}
+
+/** Full access: none of Codex's own sandbox, nothing asked (the file header's Sandbox). */
+const FULL_ACCESS: CodexPermissions = {
+  approvalPolicy: "never",
+  approvalsReviewer: undefined,
+  sandbox: "danger-full-access",
+  sandboxPolicy: { type: "dangerFullAccess" },
+  overrides: [
+    ["approval_policy", toml("never")],
+    ["sandbox_mode", toml("danger-full-access")],
+  ],
+};
+
+/** Who answers Codex's asks in each mode that asks: the member, or Codex's automatic review. */
+const REVIEWER_OF = {
+  [PERMISSION_MODE.ASK]: "user",
+  [PERMISSION_MODE.AUTO]: "auto_review",
+} as const satisfies Record<
+  Exclude<PermissionMode, typeof PERMISSION_MODE.FULL_ACCESS>,
+  ApprovalsReviewer
+>;
+
+/**
+ * The mode's permissions: full access as it always ran, or the workspace
+ * sandbox with the network on, the checkout's git folders and, where the
+ * launch knows its home, the package caches (`PACKAGE_CACHES`) writable
+ * beside the checkout, and approval `on-request`.
+ */
+function permissionsOf(
+  mode: PermissionMode | undefined,
+  cwd: string,
+  home: string | undefined,
+): CodexPermissions {
+  if (mode === undefined || mode === PERMISSION_MODE.FULL_ACCESS) return FULL_ACCESS;
+  const caches =
+    home === undefined || home === "" ? [] : PACKAGE_CACHES.map((cache) => join(home, cache));
+  const writableRoots = [...gitFoldersOf(cwd), ...caches];
+  const approvalsReviewer = REVIEWER_OF[mode];
+  return {
+    approvalPolicy: "on-request",
+    approvalsReviewer,
+    sandbox: "workspace-write",
+    sandboxPolicy: {
+      type: "workspaceWrite",
+      writableRoots,
+      networkAccess: true,
+      excludeTmpdirEnvVar: false,
+      excludeSlashTmp: false,
+    },
+    overrides: [
+      ["approval_policy", toml("on-request")],
+      ["approvals_reviewer", toml(approvalsReviewer)],
+      ["sandbox_mode", toml("workspace-write")],
+      ["sandbox_workspace_write.writable_roots", `[${writableRoots.map(toml).join(", ")}]`],
+      ["sandbox_workspace_write.network_access", "true"],
+    ],
+  };
+}
+
+/** The package caches the mode's sandbox names writable, made where missing; one that cannot be made is let be, and an install there asks. */
+const makeCaches = (permissions: CodexPermissions, home: string | undefined) =>
+  Effect.forEach(
+    home === undefined || home === "" || permissions === FULL_ACCESS
+      ? []
+      : PACKAGE_CACHES.map((cache) => join(home, cache)),
+    (folder) =>
+      Effect.try(() => mkdirSync(folder, { recursive: true })).pipe(
+        Effect.catch(() => Effect.logWarning("agent-runner: a package cache could not be made")),
+      ),
+    { discard: true },
+  );
 
 /**
  * App-server's argv: our provider and its credential where the launch
  * runs on one of ours (`providerOverrides`), our MCP
  * server and each integration's beside it with the bearer read from the environment and their tools approved up
  * front (under `approval_policy = "never"` Codex 0.163.0 otherwise fails
- * every MCP call, as P16 found) and given as long as the service runs a call, no
- * sandbox (`SANDBOX_MODE`), and commands inheriting the launch's whole
+ * every MCP call, as P16 found) and given as long as the service runs a call, the
+ * mode's sandbox and approval policy (`CodexPermissions`), and commands inheriting the launch's whole
  * environment, the workspace's variables among it whatever their names,
  * without the bearer or the key, and handed the image's tools' own
  * (`SANDBOX_TOOL_ENV`), as Claude Code's commands are (`runner.ts`). Note
@@ -621,7 +782,11 @@ const SANDBOX_MODE = "danger-full-access";
  * mostly such names, and those a member set are its agents' to use. Nothing
  * in argv is secret.
  */
-function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
+function appServerArgs(
+  config: CodexConfig,
+  auth: CodexAuth,
+  permissions: CodexPermissions,
+): string[] {
   const mcp = `mcp_servers.${MCP_SERVER}`;
   // Each integration the agent is handed is a server of its own on the same bearer, its tools approved and bounded as ours are.
   // Note that a cached catalog satisfies an integration's startup (`startup_readiness`) while it connects, so a
@@ -651,8 +816,7 @@ function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
     [`${mcp}.default_tools_approval_mode`, toml("approve")],
     [`${mcp}.tool_timeout_sec`, MCP_TOOL_TIMEOUT_SECONDS.toFixed(1)],
     ...integrations,
-    ["approval_policy", toml("never")],
-    ["sandbox_mode", toml(SANDBOX_MODE)],
+    ...permissions.overrides,
     ["shell_environment_policy.inherit", toml("all")],
     ["shell_environment_policy.ignore_default_excludes", "true"],
     ["shell_environment_policy.exclude", `[${excluded.map(toml).join(", ")}]`],
@@ -725,6 +889,10 @@ interface CodexLaunch {
   readonly accepted: Set<string>;
   /** The credential app-server runs on. */
   readonly auth: CodexAuth;
+  /** How the launch's mode runs Codex. */
+  readonly permissions: CodexPermissions;
+  /** The asks waiting on the member (`approvals.ts`). */
+  readonly approvals: Approvals;
   model: string;
   effort: CodexEffort | undefined;
   /** The service tier the next turn names (`turnTierOf`); null for the standard one. */
@@ -762,6 +930,9 @@ function ended(end: RunnerEnd, failure = ""): LaunchOutcome {
 interface ThreadSeen {
   readonly context: LaunchContext<CodexConfig>;
   readonly signals: Queue.Queue<Signal>;
+  readonly approvals: Approvals;
+  /** Whether the launch's mode asks, which serves app-server's approval requests rather than refusing them. */
+  readonly asks: boolean;
   threadId: string | undefined;
   /** How many items the thread has started but the service's own messages (`CodexLaunch`'s `heard`). */
   readonly heard: { count: number };
@@ -782,26 +953,171 @@ const planTokens = (
     (answer) => ({ ...answer, chatgptPlanType: null }) as ChatgptAuthTokensRefreshResponse,
   );
 
+/** The fields of an approval request the ask is posted with: the item that asks, and Codex's words for it. */
+const ApprovalAskSchema = Schema.Struct({
+  itemId: Schema.String,
+  reason: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  command: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  cwd: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  grantRoot: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeApprovalAsk = Schema.decodeUnknownOption(ApprovalAskSchema);
+const decodeResolved = Schema.decodeUnknownOption(
+  Schema.Struct({ requestId: Schema.Union([Schema.Number, Schema.String]) }),
+);
+
+/** Each approval request app-server makes, by the item type that asks, as the transcript names the call, and the words its ask is titled with. */
+const APPROVAL_ASK = {
+  [METHOD.COMMAND_APPROVAL]: { toolName: "commandExecution", title: "Run this command" },
+  [METHOD.FILE_CHANGE_APPROVAL]: { toolName: "fileChange", title: "Make this file change" },
+} as const;
+
+/** Whether a method is one of app-server's approval requests. */
+function isApprovalMethod(method: string): method is keyof typeof APPROVAL_ASK {
+  return method === METHOD.COMMAND_APPROVAL || method === METHOD.FILE_CHANGE_APPROVAL;
+}
+
+/**
+ * The member's decision in Codex's words (the file header's Sandbox): an ask
+ * the launch's end or app-server itself settled is canceled; every other is
+ * accepted, accepted for the session, or declined as decided.
+ */
+function codexDecisionOf(
+  decision: ApprovalDecision,
+  by: ApprovalBy,
+): Extract<CommandExecutionApprovalDecision, string> {
+  if (by === APPROVAL_BY.ENDED || by === APPROVAL_BY.ABORTED) return "cancel";
+  switch (decision) {
+    case APPROVAL_DECISION.ALLOW:
+      return "accept";
+    case APPROVAL_DECISION.ALLOW_FOR_AGENT:
+      return "acceptForSession";
+    case APPROVAL_DECISION.DENY:
+      return "decline";
+  }
+}
+
+/**
+ * One approval request, posted as the ask on the item that made it and held
+ * for the member's answer, under an id of the runner's own, since
+ * app-server's restart with each launch; `asked` keeps which ask each of
+ * app-server's ids stands for until it settles.
+ */
+function servedAsk(
+  seen: ThreadSeen,
+  asked: Map<string, string>,
+  request: AppServerRequest & { readonly method: keyof typeof APPROVAL_ASK },
+): Effect.Effect<Schema.Json, AppServerRequestFailed> {
+  const params = decodeApprovalAsk(request.params);
+  if (Option.isNone(params)) {
+    return Effect.fail(
+      new AppServerRequestFailed({ detail: "the approval request is unreadable" }),
+    );
+  }
+  const { itemId, reason, command, cwd, grantRoot } = params.value;
+  const { toolName, title } = APPROVAL_ASK[request.method];
+  const requestId = randomUUID();
+  const input = Object.fromEntries(
+    Object.entries({ command, cwd, grantRoot }).filter(([, value]) => typeof value === "string"),
+  );
+  const requested: RunnerApprovalRequested = {
+    type: RUNNER_EVENT.APPROVAL_REQUESTED,
+    requestId,
+    toolUseId: itemId,
+    toolName,
+    title,
+    ...(typeof reason === "string" && reason !== "" ? { description: reason } : undefined),
+    input: cutInput(input),
+  };
+  const key = String(request.id);
+  return Effect.sync(() => asked.set(key, requestId)).pipe(
+    Effect.andThen(
+      holdAsk(seen.approvals, requested, (decision, by) => ({
+        decision: codexDecisionOf(decision, by),
+      })),
+    ),
+    Effect.ensuring(Effect.sync(() => asked.delete(key))),
+  );
+}
+
+/** An MCP server's elicitation, declined: nobody answers a form for an agent. */
+const DECLINED_ELICITATION = { action: "decline", content: null, _meta: null } as const;
+
+/**
+ * A command Codex's automatic review denied, or could not finish, said at
+ * the end of the command's output as it is posted, so its row in the
+ * transcript says why it did not run, a review that failed among them,
+ * which would otherwise leave only a declined command. Note that the model
+ * reads Codex's own words for the review, not this line.
+ */
+function reviewNotes(): (notification: CodexNotification) => CodexNotification {
+  const notes = new Map<string, string>();
+  return (notification) => {
+    if (notification.method === METHOD.AUTO_REVIEW_COMPLETED) {
+      const { targetItemId, review } = notification.params;
+      const why = review.rationale ?? "";
+      if (targetItemId === null || targetItemId === undefined) return notification;
+      if (review.status === "denied") {
+        notes.set(targetItemId, `Codex's automatic review denied this command. ${why}`.trim());
+      } else if (review.status === "timedOut") {
+        notes.set(targetItemId, "Codex's automatic review timed out, so this command did not run.");
+      }
+      return notification;
+    }
+    if (notification.method !== METHOD.ITEM_COMPLETED) return notification;
+    const { item } = notification.params;
+    const note = notes.get(item.id);
+    if (item.type !== "commandExecution" || note === undefined) return notification;
+    notes.delete(item.id);
+    const said = item.aggregatedOutput ?? "";
+    const aggregatedOutput = said === "" ? note : `${said.replace(/\n$/, "")}\n${note}`;
+    return {
+      ...notification,
+      params: { ...notification.params, item: { ...item, aggregatedOutput } },
+    };
+  };
+}
+
 /**
  * What app-server reports, posted in order and turned into the controller's
- * signals; and on host-supplied tokens, its ask for fresh ones after a 401,
- * answered with the service's (`refresh`).
+ * signals; on host-supplied tokens, its ask for fresh ones after a 401,
+ * answered with the service's (`refresh`); where the launch's mode asks,
+ * each approval it asks, held for the member's answer, and withdrawn as it
+ * settles it itself; and every MCP elicitation, declined.
  */
 function listenerFor(
   seen: ThreadSeen,
   refresh: Effect.Effect<ChatgptAuthTokensRefreshResponse, CodexTokenFailed> | undefined,
 ): AppServerListener {
   const annotate = codexMemoryWatch();
+  const reviewed = reviewNotes();
+  const asked = new Map<string, string>();
   return {
-    onRequest: (method) =>
-      method === METHOD.CHATGPT_AUTH_TOKENS_REFRESH && refresh !== undefined
-        ? refresh.pipe(
-            Effect.mapError((failure) => new AppServerRequestFailed({ detail: failure.detail })),
-          )
-        : undefined,
+    onRequest: (request) => {
+      if (request.method === METHOD.CHATGPT_AUTH_TOKENS_REFRESH && refresh !== undefined) {
+        return refresh.pipe(
+          Effect.mapError((failure) => new AppServerRequestFailed({ detail: failure.detail })),
+        );
+      }
+      if (request.method === METHOD.MCP_ELICITATION) return Effect.succeed(DECLINED_ELICITATION);
+      if (!seen.asks || !isApprovalMethod(request.method)) return undefined;
+      return servedAsk(seen, asked, { ...request, method: request.method });
+    },
     onNotification: (notification) =>
       Effect.gen(function* () {
-        yield* seen.context.sink.emit(yield* Effect.promise(() => annotate(notification)));
+        yield* seen.context.sink.emit(
+          reviewed(yield* Effect.promise(() => annotate(notification))),
+        );
+        if (notification.method === METHOD.SERVER_REQUEST_RESOLVED) {
+          // App-server settled an ask itself, as an interrupt does: it is withdrawn, where it still waits.
+          const resolved = decodeResolved(notification.params);
+          const requestId = Option.isSome(resolved)
+            ? asked.get(String(resolved.value.requestId))
+            : undefined;
+          if (requestId === undefined) return;
+          yield* settleAsk(seen.approvals, requestId, APPROVAL_DECISION.DENY, APPROVAL_BY.ABORTED);
+          return;
+        }
         if (notification.method === METHOD.TURN_COMPLETED) {
           const { threadId, turn } = notification.params;
           if (threadId !== seen.threadId) return;
@@ -847,7 +1163,10 @@ class RolloutUnread extends Data.TaggedError("RolloutUnread") {}
  * the thread opens rather than as it starts.
  */
 const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
-  launch: Pick<CodexLaunch, "context" | "signals" | "model" | "auth" | "heard">,
+  launch: Pick<
+    CodexLaunch,
+    "context" | "signals" | "model" | "auth" | "heard" | "permissions" | "approvals"
+  >,
   threadId: string | undefined,
   fork: boolean,
   /** Whether the thread's rollout stands on the sandbox's disk, written back where it had to be. */
@@ -864,16 +1183,19 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       : undefined;
   // Note that the listener reads the thread's id from here, because a new
   // thread's notifications arrive before `thread/start` answers.
+  const { permissions } = launch;
   const seen: ThreadSeen = {
     context: launch.context,
     signals: launch.signals,
+    approvals: launch.approvals,
+    asks: permissions !== FULL_ACCESS,
     threadId: fork ? undefined : threadId,
     heard: launch.heard,
   };
   const server = yield* spawnAppServer(
     {
       executable: config.executable,
-      args: appServerArgs(config, launch.auth),
+      args: appServerArgs(config, launch.auth, permissions),
       cwd: config.cwd,
       // Note that Claude Code's credentials, were they set, are no business of Codex's.
       env: {
@@ -917,8 +1239,11 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
     const thread = {
       cwd: config.cwd,
       model: launch.model,
-      approvalPolicy: "never",
-      sandbox: SANDBOX_MODE,
+      approvalPolicy: permissions.approvalPolicy,
+      ...(permissions.approvalsReviewer === undefined
+        ? undefined
+        : { approvalsReviewer: permissions.approvalsReviewer }),
+      sandbox: permissions.sandbox,
       developerInstructions: config.developerInstructions,
     } satisfies ThreadStartParams;
     // Note that a resume refused for its provider forks the thread, so whether it forked is told with the answer.
@@ -1046,8 +1371,11 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
       input: [...outgoing.input],
       model: launch.model,
       effort: launch.effort ?? null,
-      approvalPolicy: "never",
-      sandboxPolicy: SANDBOX_POLICY,
+      approvalPolicy: launch.permissions.approvalPolicy,
+      ...(launch.permissions.approvalsReviewer === undefined
+        ? undefined
+        : { approvalsReviewer: launch.permissions.approvalsReviewer }),
+      sandboxPolicy: launch.permissions.sandboxPolicy,
       // Note that a null tier is the standard one, which a fast or Ultrafast version turned off goes back to.
       serviceTier: turnTierOf(launch),
     }),
@@ -1078,6 +1406,8 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
   switch (value.type) {
     case INPUT_LINE.MESSAGE: {
       yield* launch.context.trace.taken;
+      // A message sent while a call waits on the member's answer declines the call, and goes on as the member's words.
+      yield* denyForMessage(launch.approvals, value.content);
       // Note that our id for the line is the id Codex echoes, so a turn that takes it names it.
       const uuid = value.uuid ?? randomUUID();
       const outgoing: Outgoing = { clientId: uuid, input: userInput(value.content), lines: [uuid] };
@@ -1144,6 +1474,13 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
     // Note that a warm launch's window is its wait for the next signal, which this one already ran again from now.
     case INPUT_LINE.WARM:
       return undefined;
+    case INPUT_LINE.APPROVAL: {
+      const { requestId, decision, message } = value;
+      if (!(yield* settleAsk(launch.approvals, requestId, decision, APPROVAL_BY.MEMBER, message))) {
+        yield* Effect.logWarning("agent-runner: skipped an approval for no waiting call");
+      }
+      return undefined;
+    }
     case INPUT_LINE.MODEL: {
       if (value.model !== undefined) launch.model = value.model;
       // Note that a line naming either speed key says both, the one it leaves out being off.
@@ -1420,8 +1757,12 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   );
   const heard = { count: 0 };
   const provider = providerOf(auth);
+  const home = context.env.HOME;
+  const permissions = permissionsOf(config.permissionMode, config.cwd, home);
+  yield* makeCaches(permissions, home);
+  const approvals = yield* makeApprovals(context.sink);
   const opened = yield* openAppServer(
-    { context, signals, model: config.model, auth, heard },
+    { context, signals, model: config.model, auth, heard, permissions, approvals },
     config.threadId,
     config.fork === true,
     Fiber.join(restoring),
@@ -1485,6 +1826,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     waiting: [],
     accepted: new Set(),
     auth,
+    permissions,
+    approvals,
     model: config.model,
     effort: config.effort,
     tier: serviceTierOf(config.fast, config.ultrafast),
@@ -1521,7 +1864,9 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     ),
   );
   // App-server ends before the launch's last event, so nothing it emits on
-  // the way down is numbered after it.
+  // the way down is numbered after it. A call still waiting on the member is
+  // canceled first, so its ask is resolved ahead of the launch's last event.
+  yield* denyWaiting(approvals, APPROVAL_BY.ENDED);
   yield* Scope.close(launch.serverScope, Exit.void);
   yield* mirrored(launch);
   return outcome;

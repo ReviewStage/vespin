@@ -103,7 +103,7 @@ export const RUNNER_PLACE = {
    * as in the cloud's sandbox, and none asks an approval but where its
    * agent's mode does (`PERMISSION_MODE`): Claude Code under
    * `bypassPermissions` by default, and Codex in `danger-full-access` with
-   * approval `never`.
+   * approval `never` by default.
    */
   HOST: "host",
 } as const;
@@ -159,8 +159,11 @@ export const CLAUDE_CODE_WORKER = "worker";
  * `default` mode (`ASK`); or each call left to the CLI's `auto` classifier,
  * which asks the member where it cannot decide (`AUTO`). An ask reaches the
  * service as an APPROVAL_REQUESTED event and is answered by an `approval`
- * line. Codex reads no mode: it runs every call unasked, approval `never`,
- * whatever its agent's mode.
+ * line. A Codex launch reads the same modes with the Codex app's own
+ * meanings (`codex.ts`'s Sandbox): no sandbox and nothing asked
+ * (`FULL_ACCESS`); its workspace sandbox, asking the member before a
+ * command runs outside it (`ASK`); or that sandbox, each such command left to
+ * Codex's automatic review (`AUTO`).
  */
 export const PERMISSION_MODE = {
   FULL_ACCESS: "full_access",
@@ -275,7 +278,7 @@ export const APPROVAL_BY = {
   MEMBER: "member",
   /** A message the member sent while it waited, which denied it with the message's words. */
   MESSAGE: "message",
-  /** The CLI withdrew it, as it does on a stop's interrupt: denied. */
+  /** The harness withdrew it, as Claude Code does on a stop's interrupt and Codex as it settles the ask itself: denied. */
   ABORTED: "aborted",
   /** The launch ended while it waited: denied. */
   ENDED: "ended",
@@ -599,9 +602,6 @@ export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
  * from the launch's environment and must exist before the runner starts.
  * `threadId` is the thread to resume, where this launch continues one; a new
  * thread's id reaches the service in its `thread/started` notification.
- * Note that it names no `permissionMode`, because Codex reads none: it runs
- * every call unasked, approval `never`, whatever its agent's mode, and a
- * mode the service writes anyway is let go as the line is read.
  */
 export const CodexConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CODEX),
@@ -656,6 +656,8 @@ export const CodexConfigSchema = Schema.Struct({
   trace: Schema.optionalKey(RunnerTraceSchema),
   /** How long a warm launch stays warm before it ends itself (`RUNNER_WARM`); `RUNNER_WARM.IDLE_CAP_MS` where absent. */
   warmForMs: Schema.optionalKey(Schema.Number),
+  /** How the launch answers its agent's tool calls (`PERMISSION_MODE`), as the Codex app means each; full access where absent, as in a config written before modes. */
+  permissionMode: Schema.optionalKey(PermissionModeSchema),
 });
 export type CodexConfig = typeof CodexConfigSchema.Type;
 
@@ -961,9 +963,10 @@ export interface RunnerEndEvent {
 
 /**
  * The APPROVAL_REQUESTED event: a tool call held for the member's answer, an
- * `approval` line naming its `requestId`, the CLI's id for the ask.
- * `toolUseId` is the call's `tool_use` block's id, so the ask stands on the
- * call in the transcript; `agentId` the subagent's that made it, absent for
+ * `approval` line naming its `requestId`, the CLI's id for the ask on
+ * Claude Code and one the runner makes on Codex. `toolUseId` is the call's
+ * `tool_use` block's id, or the id of the Codex item that asks, so the ask
+ * stands on the call in the transcript; `agentId` the subagent's that made it, absent for
  * the agent's own; `title` the CLI's sentence for the ask, or the tool's
  * name where it gave none; `description` its subtitle, where it gave one;
  * `input` the call's input, cut as `APPROVAL_INPUT` says.
