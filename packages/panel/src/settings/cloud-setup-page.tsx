@@ -91,14 +91,13 @@ const PLACEHOLDER = {
 const REPOSITORY_SECTION = {
   [REPOSITORY_SCRIPT_KIND.SETUP]: {
     title: "Setup scripts",
-    caption:
-      "Run once in each new agent sandbox of their repository, after its checkout, with the workspace's environment variables.",
+    caption: "Run in each new cloud sandbox after its repository is checked out.",
     empty: "No setup scripts yet.",
   },
   [REPOSITORY_SCRIPT_KIND.ARCHIVE]: {
     title: "Archive scripts",
     caption:
-      "Run in an agent's sandbox of their repository as the agent is archived, just before the sandbox is deleted, with the workspace's environment variables. Stopped after 90 seconds; a failure never holds up the archive.",
+      "Run when an agent is archived, before its sandbox is deleted. Stopped after 90 seconds.",
     empty: "No archive scripts yet.",
   },
 } as const satisfies Record<
@@ -512,7 +511,7 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
     <>
       <SettingsSection
         title="Install software"
-        caption="Runs with sudo each time a repository's snapshot is built, so what it installs is in every new agent sandbox."
+        caption="Installs tools in every new cloud sandbox. Runs with sudo."
       >
         {read ??
           (answer?.install == null && !manages ? (

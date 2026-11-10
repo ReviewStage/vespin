@@ -273,10 +273,10 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CLIENTS,
-          label: "Connected agents",
+          label: "Connected apps",
           page: SETTINGS_VIEW.MCP,
           haystack: [
-            "Connected agents",
+            "Connected apps",
             "mcp server clients oauth allowed agents with access revoke disconnect external outside",
           ],
         }
@@ -284,11 +284,11 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CONNECT,
-          label: "Connect an agent",
+          label: "Connect an app",
           page: SETTINGS_VIEW.MCP,
           haystack: [
-            "Connect an agent",
-            "mcp server url address claude code codex cursor vs code chatgpt connector external outside",
+            "Connect an app",
+            "agent mcp server url address claude code codex cursor vs code chatgpt connector external outside",
           ],
         }
       : undefined,
@@ -451,13 +451,13 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Rename workspace", "rename name change workspace photo"],
         }
       : undefined,
-    // The workspace's link, which its owner alone changes from Change slug in the identity row's ⋯.
+    // The workspace's link, which its owner alone changes from Change URL in the identity row's ⋯.
     input.workspace?.role === WORKSPACE_ROLE.OWNER
       ? {
           id: SETTINGS_SEARCH_ROW.WORKSPACE_SLUG,
-          label: "Workspace link",
+          label: "Workspace URL",
           page: SETTINGS_VIEW.WORKSPACE,
-          haystack: ["Workspace link", "Change slug link address url workspace"],
+          haystack: ["Workspace URL", "Change URL slug link address workspace"],
         }
       : undefined,
     // The Skills page's one standing row, drawn once the page has the workspace it lists the skills of: the skills themselves are read from the service and listed under it.

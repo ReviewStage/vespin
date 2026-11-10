@@ -103,17 +103,17 @@ import { MenuRow } from "./menu-row.js";
 
 const SECTION_TITLE = {
   CLIENTS: "Connected",
-  CONNECT: "Connect an agent",
+  CONNECT: "Connect an app",
 } as const;
 
 /** The name each agent knows the server by in a command that adds it. */
 const SERVER_NAME = MCP_SERVER_NAME;
 
 const PAGE_LINE = {
-  READ_FAILED: "The connected agents could not be read.",
-  NONE: "No agents connected yet.",
-  UNNAMED: "Unnamed agent",
-  AGENT: "Agent",
+  READ_FAILED: "The connected apps could not be read.",
+  NONE: "No apps connected yet.",
+  UNNAMED: "Unnamed app",
+  AGENT: "App",
   SERVER: "Server URL",
   DISCONNECT: "Disconnect",
   REVOKED: `Disconnected. Its access ends within ${MCP_ACCESS_TOKEN_MINUTES} minutes.`,

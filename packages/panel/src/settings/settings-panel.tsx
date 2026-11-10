@@ -119,7 +119,7 @@ export function SettingsPanel({
           </>
         ) : (
           <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-            Not signed in.
+            {SIGNED_OUT_WORDS}
           </Text>
         )
       ) : null}

@@ -18,7 +18,7 @@ import { SchemaSettingRows } from "./schema-rows.js";
 import type { SettingsWrites } from "./writes.js";
 
 /**
- * sounds-section.tsx -- the Account page's Sounds group: whether a sound plays as an agent the account started finishes or asks, and which one, and whether a notification is posted then, which the account carries across its Macs and the web.
+ * sounds-section.tsx -- the Account page's Notifications group: whether a sound plays as an agent the account started finishes or asks, and which one, and whether a notification is posted then, which the account carries across its Macs and the web.
  *
  * Every row is the schema's (`soundWhen`, `completionSound`,
  * `turnNotifications`), drawn by `SchemaSettingRows` like every stored
@@ -38,10 +38,10 @@ const PLAY = "Play the sound";
 
 /** What the line says where the system will not show the app's notifications: macOS, by whether this is the packaged app, or the browser. */
 const NOTIFICATIONS_OFF_WORDS = {
-  packaged: `macOS has notifications off for ${PRODUCT_NAME}, so none will show.`,
-  development: `macOS has notifications off for Electron, which is how the dev build appears to macOS, so none will show.`,
-  browser: `Your browser blocks notifications from ${PRODUCT_NAME}, so none will show. Allow them in the site's settings in your browser.`,
-  unasked: `This browser hasn't been asked to show notifications from ${PRODUCT_NAME}, so none will show until you allow them.`,
+  packaged: `Notifications are off for ${PRODUCT_NAME} in macOS.`,
+  development: "Notifications are off for Electron, the dev build, in macOS.",
+  browser: "Your browser is blocking notifications. Allow them in this site's settings.",
+  unasked: "Allow notifications in this browser to see them.",
 } as const;
 
 export function SoundsSection({
@@ -67,7 +67,7 @@ export function SoundsSection({
   const notifying = view.settings.turnNotifications ?? APP_SETTING_DEFAULTS.turnNotifications;
   const onMac = view.capabilities.includes(HOST_CAPABILITY.DESKTOP_APP);
   return (
-    <SettingsSection title="Sounds">
+    <SettingsSection title="Notifications">
       <SchemaSettingRows
         page={SCHEMA_SETTINGS_PAGE.ACCOUNT}
         section={SETTING_SECTION.SOUNDS}

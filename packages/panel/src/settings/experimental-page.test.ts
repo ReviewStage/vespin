@@ -124,15 +124,12 @@ function answer(words: string): HTMLButtonElement {
   );
 }
 
-test("the workspace's experiments and the account's own stand in two groups, each saying whom it reaches", () => {
+test("the workspace's experiments and the account's own stand in two groups, each named for whom it reaches", () => {
   const page = draw({});
 
   assert.deepEqual(groups(page), [
-    [
-      "For everyone in Acme",
-      "These change Vespin for every member and agent in Acme. Only admins can change them.",
-    ],
-    ["Just for you", "These change Vespin only for you, in every workspace you're in."],
+    ["For everyone in Acme", "Only admins can change these."],
+    ["Just for you", undefined],
   ]);
   assert.deepEqual(
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),

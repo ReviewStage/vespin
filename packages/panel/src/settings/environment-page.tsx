@@ -21,7 +21,6 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SecretField,
   SettingsLine,
-  SettingsRow,
   type SettingsRowSkeletonShape,
   SettingsRowsSkeleton,
   SettingsSection,
@@ -251,7 +250,7 @@ function VariableRow({
   );
 }
 
-/** The page over one workspace: Add a variable for an owner or admin, then its variables. */
+/** The page over one workspace: its variables, under Add variable for an owner or admin. */
 function ShownEnvironment({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const manages = managesWorkspace(workspace);
   const environment = useQuery(environmentQuery(workspace.id));
@@ -259,18 +258,16 @@ function ShownEnvironment({ workspace }: { workspace: Workspace }): React.JSX.El
   const variables = environment.data?.variables;
   return (
     <>
-      {manages ? (
-        <SettingsSection>
-          <SettingsRow label="Add a variable">
-            {() => (
-              <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={add.ask}>
-                Add variable
-              </Button>
-            )}
-          </SettingsRow>
-        </SettingsSection>
-      ) : null}
-      <SettingsSection title="Variables">
+      <SettingsSection
+        title="Variables"
+        action={
+          manages ? (
+            <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={add.ask}>
+              Add variable
+            </Button>
+          ) : undefined
+        }
+      >
         {environment.isError ? (
           <ReadFailed
             line="The variables could not be read."

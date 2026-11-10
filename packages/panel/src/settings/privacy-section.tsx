@@ -23,8 +23,8 @@ import type { SettingsWrites } from "./writes.js";
  * access and written through the host under the account's own session.
  */
 
-/** What granting means, said beside the row whether or not it stands. */
-const SUPPORT_ACCESS_MEANING = `A ${PRODUCT_NAME} maintainer may sign in as you, for up to an hour at a time, to help.`;
+/** What granting means, said beside the row while no grant stands. */
+const SUPPORT_ACCESS_MEANING = `Let the ${PRODUCT_NAME} team sign in as you to help.`;
 
 /**
  * The member's grant of support access: whether it stands and until when,
@@ -49,11 +49,7 @@ function SupportAccessRow(): React.JSX.Element {
   return (
     <SettingsRow
       label="Support access"
-      description={
-        granted
-          ? `Granted until ${formatInstant(until)}. ${SUPPORT_ACCESS_MEANING}`
-          : `${SUPPORT_ACCESS_MEANING} A grant lasts seven days, and you can revoke it at any time.`
-      }
+      description={granted ? `Granted until ${formatInstant(until)}` : SUPPORT_ACCESS_MEANING}
     >
       {() =>
         granted ? (

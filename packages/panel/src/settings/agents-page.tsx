@@ -416,7 +416,7 @@ function AgentsSection({
   const onRetryModels = useCallback(() => retryModels(), [retryModels]);
 
   return (
-    <SettingsSection title="Default model">
+    <SettingsSection title="New agents">
       {!signedIn ? (
         <SettingsLine>{PAGE_LINE.SIGNED_OUT}</SettingsLine>
       ) : drawn.choice !== undefined && (models !== undefined || modelsFailed) ? (

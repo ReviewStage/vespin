@@ -1679,7 +1679,7 @@ export interface WorkspaceSettingsControl {
 
 /** What the slug's dialog says: the ⋯ item that opens it, which is its title too, and its act. */
 const SLUG_WORDS = {
-  CHANGE: "Change slug",
+  CHANGE: "Change URL",
   SAVE: "Save",
   SAVING: "Saving",
 } as const;
@@ -1733,7 +1733,7 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
       }
     >
       <FormField
-        label="Slug"
+        label="URL"
         description={
           <>
             {LINK_HOME.HOST}/<ReplayMask>{slug}</ReplayMask>

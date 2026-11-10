@@ -27,7 +27,6 @@ import {
   SettingsPage,
   Stack,
   TEXT_ELEMENT,
-  TEXT_FONT,
   TEXT_VARIANT,
   Text,
   TOOLBAR_LOOK,
@@ -42,7 +41,6 @@ import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
-import { SettingsPageLink } from "../open-settings.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
 import {
@@ -93,50 +91,29 @@ export interface SettingsStep {
 }
 
 /**
- * The line under the title of the pages that connect something, each
- * naming the one a reader may have meant: Integrations holds what the
- * account's own agents use, the product's MCP lets outside agents use the
- * account, CLI is the `vespin` command an agent with a shell runs, so a
- * reader who landed on one looking for another is sent across, and Hosts
- * says what a host is and where it is picked. Agents says once, for both
- * harnesses' lists, the order their credentials are tried in. No other page
- * has one.
+ * The line under the title of the pages that connect something: one short
+ * sentence saying what the page is for, since its name alone may not. Agents
+ * says once, for both harnesses' lists, the order their credentials are
+ * tried in. No other page has one.
  */
 function pageDescription(view: SettingsView): ReactNode {
   switch (view) {
     case SETTINGS_VIEW.AGENTS:
       return <ReplayUnmask>Plans and API keys are used in the order listed.</ReplayUnmask>;
     case SETTINGS_VIEW.INTEGRATIONS:
-      return (
-        <ReplayUnmask>
-          Services your {PRODUCT_NAME} agents can use. To use {PRODUCT_NAME} from Claude Code,
-          Cursor, or another agent, go to <SettingsPageLink page={SETTINGS_VIEW.MCP} />.
-        </ReplayUnmask>
-      );
+      return <ReplayUnmask>Apps your agents can use.</ReplayUnmask>;
     case SETTINGS_VIEW.MCP:
       return (
         <ReplayUnmask>
-          Use {PRODUCT_NAME} from Claude Code, Codex, Cursor, ChatGPT, and other agents. To give
-          your {PRODUCT_NAME} agents tools like Linear or Sentry, go to{" "}
-          <SettingsPageLink page={SETTINGS_VIEW.INTEGRATIONS} />. For the command line, go to{" "}
-          <SettingsPageLink page={SETTINGS_VIEW.CLI} />.
+          Use {PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, and other AI apps.
         </ReplayUnmask>
       );
     case SETTINGS_VIEW.CLI:
-      return (
-        <ReplayUnmask>
-          Use {PRODUCT_NAME} from your terminal and your agents with the{" "}
-          <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-            {PRODUCT_NAME.toLowerCase()}
-          </Text>{" "}
-          command.
-        </ReplayUnmask>
-      );
+      return <ReplayUnmask>Use {PRODUCT_NAME} from your terminal.</ReplayUnmask>;
     case SETTINGS_VIEW.HOSTS:
       return (
         <ReplayUnmask>
-          Macs and Linux servers of yours that run your agents instead of the cloud. Pick one under
-          a task's Runs on.
+          Run agents on your own Mac or Linux server instead of the cloud.
         </ReplayUnmask>
       );
     default:

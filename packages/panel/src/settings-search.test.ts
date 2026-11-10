@@ -187,7 +187,7 @@ function experimentalFound(
 
 test("an experiment is found by its name, what it brings, and what other apps call the page, while signed in", () => {
   assert.deepEqual(experimentalFound("on a schedule", true), [], "Automations is no experiment");
-  for (const query of ["settled facts", "recall them in later work"]) {
+  for (const query of ["how your team works", "later tasks"]) {
     assert.deepEqual(experimentalFound(query, true), ["Memory"], query);
   }
   assert.deepEqual(experimentalFound("hosts", true), ["Bring your own host"], "the page it holds");
@@ -287,7 +287,7 @@ test("mcp finds the Vespin MCP page's two groups and none of the integrations", 
     groups.map((group) => group.page),
     [SETTINGS_VIEW.MCP],
   );
-  assert.deepEqual(labelsFound("mcp"), ["Connected agents", "Connect an agent"]);
+  assert.deepEqual(labelsFound("mcp"), ["Connected apps", "Connect an app"]);
 });
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {

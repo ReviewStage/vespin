@@ -50,7 +50,7 @@ export const SETTINGS_SEARCH_ROW = {
   ADD_HOSTS: "add-hosts",
   /** The Workspace page's identity row, where an owner or an admin renames the workspace. */
   WORKSPACE_RENAME: "workspace-rename",
-  /** The Workspace page's identity row, whose ⋯ holds the owner's Change slug. */
+  /** The Workspace page's identity row, whose ⋯ holds the owner's Change URL. */
   WORKSPACE_SLUG: "workspace-slug",
   /** Settings › Experimental's group of the experiments the workspace Settings shows chooses for everyone in it. */
   EXPERIMENTS_WORKSPACE: "experiments-workspace",

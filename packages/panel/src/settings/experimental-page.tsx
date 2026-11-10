@@ -82,10 +82,8 @@ const SIGN_IN_NOTE = SIGNED_OUT_WORDS;
 /** The words of the page's groups and rows. */
 const WORDS = {
   ACCOUNT_TITLE: "Just for you",
-  ACCOUNT_CAPTION: `These change ${PRODUCT_NAME} only for you, in every workspace you're in.`,
   WORKSPACE_TITLE: "For everyone in ",
-  WORKSPACE_CAPTION_START: `These change ${PRODUCT_NAME} for every member and agent in `,
-  WORKSPACE_CAPTION_END: ". Only admins can change them.",
+  WORKSPACE_CAPTION: "Only admins can change these.",
   LOCKED: "Only an admin can change this",
   SEND_FEEDBACK: "Send feedback",
   NOTHING_DELETED: "Nothing is deleted; turning it back on brings it all back.",
@@ -320,13 +318,7 @@ export function ExperimentalPage({
                 <ReplayMask>{workspace.name}</ReplayMask>
               </>
             }
-            caption={
-              <>
-                {WORDS.WORKSPACE_CAPTION_START}
-                <ReplayMask>{workspace.name}</ReplayMask>
-                {WORDS.WORKSPACE_CAPTION_END}
-              </>
-            }
+            caption={WORDS.WORKSPACE_CAPTION}
           >
             {workspaceEntries.map((entry) => (
               <WorkspaceExperimentRow key={entry.key} entry={entry} workspace={workspace} />
@@ -338,7 +330,6 @@ export function ExperimentalPage({
         <SettingsSection
           anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_ACCOUNT}
           title={WORDS.ACCOUNT_TITLE}
-          caption={WORDS.ACCOUNT_CAPTION}
         >
           {accountEntries.map((entry) => (
             <AccountExperimentRow
