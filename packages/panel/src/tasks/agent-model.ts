@@ -769,6 +769,8 @@ export function chooseFailureNote(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
     case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
     case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
+    // Note that a model change asks no files back, so never meets a rewind's refusal.
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
       return MODEL_CHANGE_FAILED;
   }
 }
@@ -1290,8 +1292,9 @@ function startFailureWords(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
     case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
     case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
-    // Note that a Start never names a permission mode, so never meets its refusal.
+    // Note that a Start never names a permission mode, so never meets its refusal, and asks no files back.
     case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
       return "The agent could not be started.";
     case AGENT_CALL_FAILURE.AGENT_RETIRED:
       return START_RETIRED;
@@ -1399,6 +1402,10 @@ function messageNoteWords(failure: AgentCallFailure): string {
   }
 }
 
+/** Said under an agent's box when a rewind asked its files back and no snapshot of them stands for that point. */
+const FILES_NOT_RESTORED =
+  "The agent's files could not be restored: no snapshot of them stands for this point. Nothing was rewound.";
+
 /** What a message that did not reach the agent says, by why, where only the words are drawn, as an Inbox answer's are, so a refusal trying again mends says so. */
 export function messageFailureWords(failure: AgentCallFailure): string {
   switch (failure) {
@@ -1424,6 +1431,9 @@ export function messageFailureWords(failure: AgentCallFailure): string {
       return MESSAGE_RETIRED;
     case AGENT_CALL_FAILURE.DEVICE_REMOVED:
       return HOST_REMOVED;
+    // A rewind asked the files back where no snapshot of them stands any more; the conversation was left whole.
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
+      return FILES_NOT_RESTORED;
     case AGENT_CALL_FAILURE.GITHUB_UNANSWERED:
       return `${SHARED_FAILURE_NOTE[failure]} Try again.`;
     case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
@@ -2380,6 +2390,8 @@ export interface SentLine {
   readonly rewinds?: string | undefined;
   /** Whether the agent was already taken back to just before that line, which is gone, so the line's Retry only sends. */
   readonly rewound?: boolean | undefined;
+  /** Whether the agent's files go back too as it is taken back before that line, to the snapshot its runner took before the line's turn. */
+  readonly restoresFiles?: boolean | undefined;
   /** Whether the service answered that the agent took it; until it does, a row read back may still be withdrawn. */
   readonly taken?: boolean | undefined;
 }

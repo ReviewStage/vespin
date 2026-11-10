@@ -989,10 +989,14 @@ export class HostedAgentClient {
   rewind(
     agentId: string,
     messageId: string,
+    restoreFiles = false,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     return hostedCall(
       this.#hosted.agents.rewind,
-      { params: { id: agentId }, body: { messageId } },
+      {
+        params: { id: agentId },
+        body: { messageId, ...(restoreFiles ? { restoreFiles: true } : undefined) },
+      },
       { as: AGENT_NOT_FOUND_RENAMES, deadline: HOSTED_DEADLINE.STEER },
     );
   }

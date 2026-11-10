@@ -20,6 +20,7 @@ import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
+  AGENT_MACHINE,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
@@ -2873,14 +2874,20 @@ function AgentTabView({
   // reads them, and a page that moved no rewind point must draw no message again.
   const pending = composer.sent.length > 0;
   const going = useKept(composer.going, sameSet);
+  // The files go back only where the service restores them: in a cloud sandbox, not yet on a Mac.
+  const restores = agent.machine !== AGENT_MACHINE.DEVICE;
   const points = useKept(
-    useMemo(() => rewindPoints(kept, pending, readerId, going), [kept, pending, readerId, going]),
+    useMemo(
+      () => rewindPoints(kept, pending, readerId, going, restores),
+      [kept, pending, readerId, going, restores],
+    ),
     (a, b) =>
       sameSet(a.editable, b.editable) &&
       sameEntries(a.revertsAt, b.revertsAt) &&
       sameSet(a.followed, b.followed) &&
       sameEntries(a.revertTakes, b.revertTakes) &&
-      sameEntries(a.editTakes, b.editTakes),
+      sameEntries(a.editTakes, b.editTakes) &&
+      sameSet(a.restorable, b.restorable),
   );
   const editorNow = { agentId: agent.id, keywords, skills };
   const editorProps = useRef(editorNow);

@@ -119,6 +119,8 @@ import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
  * throughout.
  */
 
+const AGENT_REWIND = "/api/agents/rewind";
+
 it.layer(getTestDB())("starting an agent from another", (it) => {
   /** A source agent on the owner's plan, on a choice and servers of its own, with a transcript of two turns, a branch, and a pull request, its GitHub answering as given. */
   const sourceAgentOn = (
@@ -183,6 +185,33 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
+
+  it.effect(
+    "a rewind asked to put the files back is refused where no snapshot of them stands for the line, and the conversation is left whole",
+    () =>
+      Effect.gen(function* () {
+        const { owner, ask, source, stored, laterLine } = yield* sourceAgent;
+        const db = yield* Database;
+        const rowsOf = () =>
+          db
+            .select({ id: messages.id })
+            .from(messages)
+            .where(eq(messages.conversationId, stored.conversationId));
+        const before = yield* rowsOf();
+
+        const answered = yield* ask(
+          request(AGENT_REWIND, owner, {
+            method: "POST",
+            id: source.id,
+            body: { messageId: laterLine, restoreFiles: true },
+          }),
+        );
+
+        assert.deepEqual(answered.body, { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING });
+        assert.equal(answered.status, HOSTED_HTTP_STATUS.CONFLICT);
+        assert.deepEqual(yield* rowsOf(), before, "nothing was cut");
+      }),
+  );
 
   it.effect(
     "a continue is handed the description as it stands now and every step after the source's brief, its reasoning left out, on the source's choice and servers, and names where it came from",

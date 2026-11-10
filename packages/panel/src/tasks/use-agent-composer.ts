@@ -101,7 +101,11 @@ export type MessageSender = (
 ) => Promise<AgentActAnswer>;
 
 /** How the agent is taken back to just before one of the developer's lines, by its message id, answered as the view hears it. */
-export type MessageRewinder = (agentId: string, messageId: string) => Promise<AgentActAnswer>;
+export type MessageRewinder = (
+  agentId: string,
+  messageId: string,
+  restoreFiles?: boolean,
+) => Promise<AgentActAnswer>;
 
 /** Why a message did not go, with the answer that said so, which the shown failure reports in its place. */
 export type ComposerNote = Failure & { readonly cause?: unknown };
@@ -237,11 +241,12 @@ export interface HeldComposer extends AgentComposerControl {
   readonly edit: (messageId: string) => void;
   /** Closes the line open for writing again, sending nothing. */
   readonly dropEdit: () => void;
-  /** Sends the words and files in place of the line named, taking the agent back to just before it first. */
+  /** Sends the words and files in place of the line named, taking the agent back to just before it first, its files back too where `restoreFiles`. */
   readonly sendEdit: (
     messageId: string,
     words: string,
     attachments: readonly AgentAttachment[],
+    restoreFiles?: boolean,
   ) => void;
   /** Whether a rewind is out, an edit's or a revert's, until the service answers it. */
   readonly rewindOut: boolean;
@@ -253,8 +258,8 @@ export interface HeldComposer extends AgentComposerControl {
   readonly turn: AgentTurn | undefined;
   /** When the newest edit or revert was pressed, in epoch milliseconds, which the working line counts from while it is rewinding; none before one was. */
   readonly rewoundAt: number | undefined;
-  /** Takes the agent back to just before one of the developer's lines, sending nothing. */
-  readonly revert: (messageId: string) => void;
+  /** Takes the agent back to just before one of the developer's lines, sending nothing, its files back too where `restoreFiles`. */
+  readonly revert: (messageId: string, restoreFiles?: boolean) => void;
   /** The messages a rewind drops, hidden from the transcript until it reads back without them; none while none does. */
   readonly cut: ReadonlySet<string> | undefined;
   /** The ids the lines sent were written under that the service has not said it took, whose rows it may yet withdraw, so no rewind lands on them. */
@@ -330,8 +335,12 @@ export function useAgentComposer(input: {
 
   const { update } = kept;
   /** The agent taken back to just before the line named, answered as unanswered where the box was handed no rewind. */
-  const rewindTo = (agentId: string, messageId: string): Promise<AgentActAnswer> =>
-    latest.current.rewind?.(agentId, messageId) ?? Promise.resolve(UNANSWERED);
+  const rewindTo = (
+    agentId: string,
+    messageId: string,
+    restoreFiles: boolean,
+  ): Promise<AgentActAnswer> =>
+    latest.current.rewind?.(agentId, messageId, restoreFiles) ?? Promise.resolve(UNANSWERED);
   /** Sends one line once every line before it has answered, and takes its answer. */
   const deliver = (line: SentLine) => {
     // Note that the task is read as the line goes, because the tab may show another agent by the time it answers.
@@ -348,7 +357,10 @@ export function useAgentComposer(input: {
       // A line written in place of another takes the agent back to just before that one first, once.
       const rewinds = line.rewound === true ? undefined : line.rewinds;
       if (rewinds !== undefined) ours((was) => ({ ...was, reverting: rewinds }));
-      const rewound = rewinds === undefined ? undefined : await rewindTo(agentId, rewinds);
+      const rewound =
+        rewinds === undefined
+          ? undefined
+          : await rewindTo(agentId, rewinds, line.restoresFiles === true);
       if (rewinds !== undefined) ours((was) => ({ ...was, reverting: undefined }));
       const answer =
         rewound !== undefined && "failure" in rewound
@@ -490,7 +502,12 @@ export function useAgentComposer(input: {
   };
 
   /** Sends the words and files in place of the line named, the messages from it on hidden at once; the box is left as it is. */
-  const sendEdit = (messageId: string, words: string, attachments: readonly AgentAttachment[]) => {
+  const sendEdit = (
+    messageId: string,
+    words: string,
+    attachments: readonly AgentAttachment[],
+    restoreFiles = false,
+  ) => {
     const text = words.trim();
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
     const clientKey = crypto.randomUUID();
@@ -505,6 +522,7 @@ export function useAgentComposer(input: {
       sentAt: rewoundAt,
       state: SENT_LINE_STATE.PENDING,
       rewinds: messageId,
+      ...(restoreFiles ? { restoresFiles: true } : undefined),
     };
     setHeld((was) => ({
       ...was,
@@ -518,7 +536,7 @@ export function useAgentComposer(input: {
   };
 
   /** Takes the agent back to just before the line named once every send before it has answered. */
-  const revert = (messageId: string) => {
+  const revert = (messageId: string, restoreFiles = false) => {
     const rewoundAt = Date.now();
     setHeld((was) => ({
       ...was,
@@ -529,7 +547,7 @@ export function useAgentComposer(input: {
       cut: cutFrom(messages, messageId),
     }));
     queue.after(agentId, async () => {
-      const answer = await rewindTo(agentId, messageId);
+      const answer = await rewindTo(agentId, messageId, restoreFiles);
       if (latest.current.agentId !== agentId) return;
       if (!("failure" in answer)) {
         ours((was) => ({ ...was, reverting: undefined }));

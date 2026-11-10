@@ -104,13 +104,13 @@ async function settle(): Promise<void> {
   await settleQueries();
 }
 
-/** The agent's tab over the transcript, every rewind and send it makes written down in order. */
-async function drawnTab(holdSends = false) {
+/** The agent's tab over the transcript, every rewind and send it makes written down in order, a rewind that puts the files back marked `:files`. */
+async function drawnTab(holdSends = false, messages: readonly AgentTranscriptMessage[] = MESSAGES) {
   fakeAppBridge({});
   const calls: string[] = [];
   pushedTranscripts(() => [
     {
-      messages: [...MESSAGES],
+      messages: [...messages],
       cursor: "5:0",
       status: AGENT_STATUS.COMPLETED,
       title: null,
@@ -118,8 +118,8 @@ async function drawnTab(holdSends = false) {
   ]);
   const control = agentsControl({
     agents: [AGENT_SUMMARY],
-    onRewind: (_agentId, messageId) => {
-      calls.push(`rewind:${messageId}`);
+    onRewind: (_agentId, messageId, restoreFiles) => {
+      calls.push(restoreFiles === true ? `rewind:${messageId}:files` : `rewind:${messageId}`);
       return Promise.resolve(REWOUND);
     },
     onMessage: (_agentId, text) => {
@@ -222,4 +222,34 @@ test("a line sent and not yet read back follows the last message, so editing it 
 
   assert.ok(tab.dialog(), "the question stands");
   assert.deepEqual(tab.calls, ["send:And the docs."], "nothing was cut yet");
+});
+
+test("an edited message whose turn recorded the files offers them back in its box, and Send in the question hands the choice on with the rewind", async () => {
+  const tab = await drawnTab(
+    false,
+    MESSAGES.map((each) => (each.id === "middle" ? { ...each, filesRestorable: true } : each)),
+  );
+  const edit = tab.message("middle").querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
+  assert.ok(edit);
+  await act(async () => edit.click());
+  await settle();
+  const choice = tab.message("middle").querySelector<HTMLElement>('[role="checkbox"]');
+  assert.ok(choice, "the box offers the files back");
+  await act(async () => choice.click());
+  await settle();
+  const box = tab.message("middle");
+  act(() => composerEditor(box).focus());
+  typeInComposer(box, " and the light one");
+  pressInComposer(box, "Enter");
+  await settle();
+  assert.ok(
+    tab.dialog()?.textContent?.includes("The agent's files also go back"),
+    tab.dialog()?.textContent,
+  );
+  await tab.press("Send message");
+
+  assert.deepEqual(tab.calls, [
+    "rewind:middle:files",
+    "send:Use the dark variant. and the light one",
+  ]);
 });

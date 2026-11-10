@@ -1224,7 +1224,8 @@ function composed(
     AGENTS_ADD_REPOSITORY: ({ agentId, addRepository }) =>
       asked(client.addRepository(agentId, { addRepository })),
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
-    AGENTS_REWIND: ({ agentId, messageId }) => asked(client.rewind(agentId, messageId)),
+    AGENTS_REWIND: ({ agentId, messageId, restoreFiles }) =>
+      asked(client.rewind(agentId, messageId, restoreFiles === true)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),

@@ -573,7 +573,12 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {
       return {
-        agent: yield* rewoundAgentById(context.userId, input.params.id, input.body.messageId),
+        agent: yield* rewoundAgentById(
+          context.userId,
+          input.params.id,
+          input.body.messageId,
+          input.body.restoreFiles === true,
+        ),
       };
     }),
     /**

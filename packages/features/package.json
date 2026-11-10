@@ -43,6 +43,7 @@
     "./task-record-live": "./src/task-record-live.js",
     "./task-pages-live": "./src/task-pages-live.js",
     "./checkout-identity": "./src/checkout-identity.js",
+    "./checkout-restore": "./src/checkout-restore.js",
     "./cli-exit": "./src/cli-exit.js",
     "./cli-git-remote": "./src/cli-git-remote.js",
     "./cli-inbox-answer": "./src/cli-inbox-answer.js",
