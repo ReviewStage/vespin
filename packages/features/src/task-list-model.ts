@@ -1,5 +1,3 @@
-import type { TasklessAgent } from "./agent-wire.js";
-import { agentName } from "./model-label.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
 /**
@@ -13,20 +11,14 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
  * order tasks by the same last activity (`taskTime`), which is the time
  * each row shows, so the order and the label never disagree.
  *
- * A row of the sidebar's list is a task, or an agent an automation started
- * with no task, which stands among the tasks by the same rules rather than
- * in a group of its own: under its repository, as the reader's where the
- * reader started it, and in the order of its last activity.
- *
  * The list holds the reader's own tasks until they choose Anyone or a
  * teammate (`ASSIGNED_TO`): those assigned to them, and those no one is on
  * that they created, so a task of theirs nobody picked up never leaves it.
  * It holds the tasks to do and in progress alone (`SHOWN_STATUSES`), so a
  * filed backlog and the settled tasks stay out of the way of the work under
  * way, unless the reader asks for the finished sub-tasks back, which stand
- * under their parents (`taskRowInView`); an agent with no task, and a task
- * from a service before statuses, has no status to leave it out by and
- * always stands. The Tasks page lays the same tasks out its own way
+ * under their parents (`taskRowInView`); a task from a service before
+ * statuses has no status to leave it out by and always stands. The Tasks page lays the same tasks out its own way
  * (`tasks-page-model.ts`).
  */
 
@@ -83,16 +75,16 @@ export const DEFAULT_TASK_LIST_VIEW: TaskListView = {
   finishedSubTasks: false,
 };
 
-/** What a row of the list stands for: a task, or an agent with no task. */
+/** What a row of the list stands for: a task. */
 export const TASK_ROW = {
   TASK: "task",
-  AGENT: "agent",
 } as const;
 
-/** One row of the list: a task, or an agent an automation started with no task. */
-export type TaskRow =
-  | { readonly kind: typeof TASK_ROW.TASK; readonly task: TaskSummary }
-  | { readonly kind: typeof TASK_ROW.AGENT; readonly agent: TasklessAgent };
+/** One row of the list: a task. */
+export interface TaskRow {
+  readonly kind: typeof TASK_ROW.TASK;
+  readonly task: TaskSummary;
+}
 
 /** The rows of one repository, as the sidebar groups them under its header; null is the rows with none. */
 export interface RepositoryGroup {
@@ -100,9 +92,9 @@ export interface RepositoryGroup {
   readonly rows: readonly TaskRow[];
 }
 
-/** The key a row is followed by, out of one list and into another: its task's id, or its agent's. */
+/** The key a row is followed by, out of one list and into another: its task's id. */
 export function taskRowKey(row: TaskRow): string {
-  return row.kind === TASK_ROW.TASK ? row.task.id : row.agent.id;
+  return row.task.id;
 }
 
 /** A task as a row of the list. */
@@ -110,29 +102,19 @@ export function taskRow(task: TaskSummary): TaskRow {
   return { kind: TASK_ROW.TASK, task };
 }
 
-/** An agent with no task as a row of the list. */
-export function agentRow(agent: TasklessAgent): TaskRow {
-  return { kind: TASK_ROW.AGENT, agent };
-}
-
-/** The row's name: its task's, or its agent's as its tab names it (`agentName`). */
+/** The row's name: its task's. */
 export function taskRowName(row: TaskRow): string {
-  return row.kind === TASK_ROW.TASK ? row.task.name : agentName(row.agent);
+  return row.task.name;
 }
 
 /** The repository the row works in; null for a task with none chosen yet. */
 export function taskRowRepository(row: TaskRow): string | null {
-  return row.kind === TASK_ROW.TASK ? row.task.repository : row.agent.repository;
+  return row.task.repository;
 }
 
 /** Who created a plan, by account id: the creator the wire names, else its owner. */
 function creatorIdOf(task: TaskSummary): string | undefined {
   return task.createdBy?.userId ?? task.ownerId;
-}
-
-/** Who created the row, by account id: a task's creator, or whoever started the agent, whose automation it ran on. */
-function taskRowCreatorId(row: TaskRow): string | undefined {
-  return row.kind === TASK_ROW.TASK ? creatorIdOf(row.task) : row.agent.startedBy?.userId;
 }
 
 /**
@@ -149,9 +131,9 @@ export function taskTime(task: TaskSummary, order: TaskOrder): number {
   return Math.max(task.updatedAt, task.agents?.activityAt ?? 0);
 }
 
-/** The time a row shows and is ordered by: its task's last activity (`taskTime`), or its agent's. */
+/** The time a row shows and is ordered by: its task's last activity (`taskTime`). */
 export function taskRowTime(row: TaskRow): number {
-  return row.kind === TASK_ROW.TASK ? taskTime(row.task, TASK_ORDER.UPDATED) : row.agent.activityAt;
+  return taskTime(row.task, TASK_ORDER.UPDATED);
 }
 
 /** The rows newest active first. */
@@ -250,13 +232,9 @@ export function createdByOnly(
   return createdBy === undefined ? tasks : tasks.filter((task) => creatorIdOf(task) === createdBy);
 }
 
-/**
- * Who the row is assigned to, by account id: a task's assignee, none for a
- * task no one is on, or whoever started an agent with no task, which is
- * theirs.
- */
+/** Who the row is assigned to, by account id: its task's assignee, none for a task no one is on. */
 function taskRowAssigneeId(row: TaskRow): string | undefined {
-  return row.kind === TASK_ROW.TASK ? row.task.assignee?.userId : row.agent.startedBy?.userId;
+  return row.task.assignee?.userId;
 }
 
 /**
@@ -279,19 +257,14 @@ export function taskRowsAssignedTo(
       if (readerId === undefined) return rows;
       return rows.filter((row) => {
         const assignee = taskRowAssigneeId(row);
-        return assignee === undefined ? taskRowCreatorId(row) === readerId : assignee === readerId;
+        return assignee === undefined ? creatorIdOf(row.task) === readerId : assignee === readerId;
       });
   }
 }
 
-/** The status a row is left out by: its task's, or none for an agent with no task or a task from a service before statuses. */
-function taskRowStatus(row: TaskRow): TaskStatus | undefined {
-  return row.kind === TASK_ROW.TASK ? row.task.status : undefined;
-}
-
-/** Whether the view draws a row: one of a status shown, or one with no status to leave it out by. */
+/** Whether the view draws a row: one of a status shown, or one with no status to leave it out by, a task from a service before statuses. */
 function taskRowInStatuses(row: TaskRow, statuses: readonly TaskStatus[]): boolean {
-  const status = taskRowStatus(row);
+  const status = row.task.status;
   return status === undefined || statuses.includes(status);
 }
 
@@ -312,12 +285,7 @@ export function taskRowsInStatuses(
  */
 export function taskRowInView(row: TaskRow, view: Pick<TaskListView, "finishedSubTasks">): boolean {
   if (taskRowInStatuses(row, SHOWN_STATUSES)) return true;
-  return (
-    view.finishedSubTasks &&
-    row.kind === TASK_ROW.TASK &&
-    row.task.parentTaskId !== undefined &&
-    taskFinished(row.task)
-  );
+  return view.finishedSubTasks && row.task.parentTaskId !== undefined && taskFinished(row.task);
 }
 
 /** One row as a list nesting child tasks draws it: how deep it stands, and whether the child tasks under it stand open. */
@@ -374,9 +342,8 @@ function underParent(task: TaskSummary): boolean {
   );
 }
 
-/** The row a row stands under where `rows` holds it: its task's nearest ancestor `rows` holds (`heldAncestor`); none for an agent. */
+/** The row a row stands under where `rows` holds it: its task's nearest ancestor `rows` holds (`heldAncestor`). */
 function parentIn(row: TaskRow, held: ReadonlySet<string>, every: TasksById): string | undefined {
-  if (row.kind !== TASK_ROW.TASK) return undefined;
   return heldAncestor(row.task, (taskId) => held.has(taskId), every);
 }
 
@@ -387,7 +354,7 @@ function parentIn(row: TaskRow, held: ReadonlySet<string>, every: TasksById): st
  * than the loop leaving the list.
  */
 function taskRowTree(rows: readonly TaskRow[], every: TasksById): TaskRowNode[] {
-  const held = new Set(rows.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task.id] : [])));
+  const held = new Set(rows.map((row) => row.task.id));
   const childrenOf = new Map<string, TaskRow[]>();
   const tops: TaskRow[] = [];
   for (const row of rows) {
@@ -398,7 +365,7 @@ function taskRowTree(rows: readonly TaskRow[], every: TasksById): TaskRowNode[] 
   const reached = new Set<string>();
   const node = (row: TaskRow): TaskRowNode => {
     reached.add(taskRowKey(row));
-    const children = row.kind === TASK_ROW.TASK ? (childrenOf.get(row.task.id) ?? []) : [];
+    const children = childrenOf.get(row.task.id) ?? [];
     return {
       row,
       children: children.filter((child) => !reached.has(taskRowKey(child))).map(node),
@@ -436,8 +403,7 @@ export function drawnTaskRows(
   const drawn: DrawnTaskRow[] = [];
   const draw = (node: TaskRowNode, depth: number) => {
     const { row, children } = node;
-    const open =
-      children.length === 0 || row.kind !== TASK_ROW.TASK ? undefined : opened(row.task.id);
+    const open = children.length === 0 ? undefined : opened(row.task.id);
     drawn.push({ row, depth, open });
     const under =
       open === false ? children.filter((child) => holdsStanding(child, standing)) : children;
@@ -468,14 +434,13 @@ export function homedTaskRows(
   const byId = new Map<string, TaskSummary>();
   lists.forEach((rows, list) => {
     for (const row of rows) {
-      if (row.kind !== TASK_ROW.TASK || listOf.has(row.task.id)) continue;
+      if (listOf.has(row.task.id)) continue;
       listOf.set(row.task.id, list);
       byId.set(row.task.id, row.task);
     }
   });
   const held = (taskId: string) => listOf.has(taskId);
-  const homeOf = (row: TaskRow, list: number): number | undefined => {
-    if (row.kind !== TASK_ROW.TASK) return list;
+  const homeOf = (row: TaskRow): number | undefined => {
     const walked = new Set([row.task.id]);
     let at = row.task;
     let above = heldAncestor(at, held, every);
@@ -488,7 +453,7 @@ export function homedTaskRows(
     // The top of the walk is drawn nowhere where it stands under a parent no list holds, so neither is anything under it.
     return above === undefined && underParent(at) ? undefined : listOf.get(at.id);
   };
-  const homed = lists.map((rows, list) => rows.map((row) => ({ row, home: homeOf(row, list) })));
+  const homed = lists.map((rows) => rows.map((row) => ({ row, home: homeOf(row) })));
   return lists.map((_, list) => [
     ...(homed[list] ?? []).flatMap(({ row, home }) => (home === list ? [row] : [])),
     ...homed.flatMap((rows, from) =>

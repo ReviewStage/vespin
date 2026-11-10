@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository, by its full name (owner/name), as list_repositories lists it."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "The file's path from the repository's root, such as src/index.ts."
+    },
+    "firstLine": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The first line to read, from 1; 1 where left out."
+    },
+    "commit": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 40,
+      "description": "The commit to read the file at, by its full SHA; the default branch's head where left out."
+    }
+  },
+  "required": [
+    "repository",
+    "path"
+  ],
+  "additionalProperties": false
+}

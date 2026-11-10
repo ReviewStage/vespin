@@ -8,6 +8,7 @@ import { createContext, type ReactNode, useContext, useEffect, useState } from "
 import { HostFailedScreen } from "../screens/host-failed.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
+import { fixtureActs } from "./fixture-host.js";
 import { launchFixtureProfile, launchStubsAuthServer } from "./launch-arguments.js";
 import {
   type MobileHostStartOptions,
@@ -92,7 +93,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
             error,
           );
         }
-        if (live) setStanding({ client, acts: host.acts });
+        const profile = launchFixtureProfile();
+        const acts = profile === undefined ? host.acts : fixtureActs(host.acts, profile);
+        if (live) setStanding({ client, acts });
         else void host.close();
       },
       (error: unknown) => {

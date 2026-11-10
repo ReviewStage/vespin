@@ -1,4 +1,4 @@
-import type { AgentSummary, ListedAgent, TasklessAgent } from "@repo/features/agent-wire";
+import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
@@ -22,12 +22,7 @@ import type {
   TaskRelationKind,
   TaskSummary,
 } from "@repo/features/task-wire";
-import {
-  summaryOfTaskless,
-  TASK_CALL_FAILURE,
-  TASKS_READ,
-  type TasksView,
-} from "@repo/features/tasks-view";
+import { TASK_CALL_FAILURE, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask } from "@repo/host/app-state";
@@ -263,15 +258,14 @@ interface InboxViewControl {
 
 /**
  * One agent's page, standing in the task's place beside the sidebar as the
- * Inbox does: the agent an automation started with no task, which has no
- * task's column to stand in, drawn as its tab would be. It is the router's
+ * Inbox does: the agent a link names by itself, drawn as its tab would be. It is the router's
  * (`agent-route.ts`), as the Inbox is, so it leaves the task the host has
  * open as it stands; opening any task, the Inbox, or home leaves it.
  */
 interface AgentViewControl {
   /** The agent whose page stands, none while none does. */
   readonly agentId: string | undefined;
-  /** The pages that agent showed on itself, working on no task, each by its newest version; none until read. */
+  /** The pages that agent showed on itself, each by its newest version; none until read. */
   readonly pages?: readonly PageLine[] | undefined;
   readonly onOpen: (agentId: string) => void;
   readonly onClose: () => void;
@@ -337,11 +331,6 @@ export interface TasksControl {
   };
   /** The tasks a rename, a pin, or where they stand, asked here and not yet carried by the list, is drawn over (main's view's own), which a list held still moves at once; none where nothing waits. */
   pendingTasks?: ReadonlySet<string>;
-  /** The chosen workspace's agents an automation started with no plan, newest started first, which the sidebar lists among the plans, and those archived, which its Archived view lists among the archived plans. */
-  listedAgents: {
-    readonly standing: readonly TasklessAgent[];
-    readonly archived: readonly TasklessAgent[];
-  };
   /** The workspaces the account is a member of, its first one first; none before the first read lands. */
   workspaces: readonly Workspace[];
   /** The workspace the sidebar lists and New task starts in; absent while none is listed, when every task is listed. */
@@ -527,7 +516,7 @@ export interface TasksControl {
    * any of it is saved, or none, which draws its saved name again.
    */
   onDraftName: (taskId: string, name: string | undefined) => void;
-  /** Every agent the list followed live carries, on a plan or with none, the archived ones among them, each with its own workspace and repository; none while it is not. */
+  /** Every agent the list followed live carries, the archived ones among them, each with its own workspace and repository; none while it is not. */
   liveAgents: readonly ListedAgent[] | undefined;
   /** The pull request of every agent the list followed live carries that opened one, as its row keeps it; none while it is not. */
   listedPullRequests: readonly ListedPullRequest[] | undefined;
@@ -557,23 +546,21 @@ interface HistorySeek {
 
 /**
  * The pin the open place was last opened from, which the sidebar marks for
- * as long as it stays open: one on a task while that task is the one bound,
- * and one on an agent's own page while that page stands; none otherwise.
+ * as long as it stays open: one on a task while that task is the one bound;
+ * none otherwise.
  */
 function chosenPinOf(
   chosen: PinChoice | undefined,
   boundFor: string | undefined,
-  pageAgent: string | undefined,
 ): SidebarPin | undefined {
   if (chosen === undefined) return undefined;
   const { pin } = chosen;
-  const open = "agent" in pin ? pin.agent === pageAgent : pin.task === boundFor;
-  return open ? pin : undefined;
+  return pin.task === boundFor ? pin : undefined;
 }
 
 /** Whether a pin of the sidebar's is of the task: a tab pinned on it, or an agent on it. */
 function pinOnTask(pin: SidebarPin, taskId: string): boolean {
-  return "task" in pin && pin.task === taskId;
+  return pin.task === taskId;
 }
 
 /**
@@ -633,9 +620,6 @@ const NO_HOLDS: TaskHolds = {};
 
 /** No ids, the same array every render. */
 const NO_IDS: readonly string[] = [];
-
-/** No agent with no plan, before the list carries any. */
-const NO_TASKLESS_AGENTS: readonly TasklessAgent[] = [];
 
 /** A task's act that never answered, settled as unanswered with the error beneath. */
 const taskUnreached = unreachedAs(TASK_CALL_FAILURE.UNANSWERED);
@@ -1022,15 +1006,8 @@ export function useTasksTab(input: {
       ),
     [tasks.tasks, listedWorkspaceId],
   );
-  const { tasklessAgents } = tasks;
-  // Every agent the list followed live carries, on a plan or with none, the archived ones among them; none while it is not.
-  const liveAgents = useMemo(
-    () =>
-      tasks.taskAgents === undefined
-        ? undefined
-        : [...tasks.taskAgents, ...(tasklessAgents ?? NO_TASKLESS_AGENTS).map(summaryOfTaskless)],
-    [tasks.taskAgents, tasklessAgents],
-  );
+  // Every agent the list followed live carries, the archived ones among them; none while it is not.
+  const liveAgents = tasks.taskAgents;
   const inboxWaiting = useInboxWaitingTasks();
   const signedIn = fixture !== undefined || input.signedIn;
   const page = tasksPage(tasks);
@@ -1083,17 +1060,6 @@ export function useTasksTab(input: {
     onDraftRestored: (on, draftId) => mainRef.current?.onShow(on, draftTab(draftId)),
     keywords: dictationWords,
   });
-  // The agents with no plan are listed by the same workspace as the plans, standing and archived apart as the plans are,
-  // each named, archived, and pinned as main draws it.
-  const listedAgents = useMemo(() => {
-    const listed = (tasklessAgents ?? NO_TASKLESS_AGENTS).filter(
-      (agent) => listedWorkspaceId === undefined || agent.workspaceId === listedWorkspaceId,
-    );
-    return {
-      standing: listed.filter((agent) => agent.archivedAt === undefined),
-      archived: listed.filter((agent) => agent.archivedAt !== undefined),
-    };
-  }, [tasklessAgents, listedWorkspaceId]);
   // The task's archived agents, whose tabs stand once opened (`use-main-tabs.ts`).
   const archivedIds = useMemo(() => agents.archived?.map((agent) => agent.id), [agents.archived]);
   const mainTabs = useMainTabs(
@@ -2319,40 +2285,6 @@ export function useTasksTab(input: {
     }
   };
 
-  // A tab of an agent's own page's panel, the panel taking the keys, as a press opening a tab hands them (`tab-press.ts`).
-  const showAgentPanelTab = (agentId: string, tab: SidePanelTab) => {
-    sidePanel.onShow(agentId, tab);
-    onKeys(COLUMN.SIDE);
-  };
-
-  // An agent's place on its own page, where it works on no task: the page, and the tab of its panel, held under the agent, that shows what the place names.
-  const openOnAgentPage = (place: AgentPlace, home?: string) =>
-    linkArrive(
-      () => openAgentPage(place.agentId, home),
-      () => showOnAgentPage(place),
-    );
-  const showOnAgentPage = (place: AgentPlace) => {
-    const { agentId } = place;
-    switch (place.kind) {
-      case LINK_PLACE.WORKER:
-        showAgentPanelTab(agentId, subagentTab(place.callId, { agent: agentId, task: "" }));
-        return;
-      case LINK_PLACE.CHANGES:
-        showAgentPanelTab(agentId, changesTab(agentId));
-        return;
-      case LINK_PLACE.PULL_REQUEST_THREAD:
-        sidePanel.onPullRequestView(changesTab(agentId), place.view);
-        showAgentPanelTab(agentId, changesTab(agentId));
-        revealThread(agentId, place);
-        return;
-      case LINK_PLACE.AGENT:
-        return;
-      case LINK_PLACE.MESSAGE:
-        revealMessage(place);
-        return;
-    }
-  };
-
   /**
    * An app link opened as its route reads it (`openLinked`) opens its place, once a task it names
    * by its number in the link's workspace is found by its id on the
@@ -2391,9 +2323,10 @@ export function useTasksTab(input: {
     );
   };
 
-  // An agent's place opened by the agent as the list or the service has it: on its page where it is on no task, else on its task, an archived agent's tab among its tabs.
+  // An agent's place opened by the agent as the list or the service has it: on its task, an archived agent's tab among its tabs.
+  // Note that an agent read on no task, which no service writes any more, stands on its own page, as an agent not read does.
   const openFoundAgent = (agent: AgentSummary, place: AgentPlace, home?: string) => {
-    if (agent.planId === null) openOnAgentPage(place, home);
+    if (agent.planId === null) linkArrive(() => openAgentPage(place.agentId, home), NOTHING);
     else openOnTask(agent.planId, place);
   };
 
@@ -2405,6 +2338,32 @@ export function useTasksTab(input: {
    * the agent, which opens nothing where the window moved on before it
    * answered.
    */
+  // A page an agent showed on itself, by the agent's id, opened on the agent's task as the list or the service has it;
+  // on the agent's own page where neither reads it on one.
+  const openAgentsPage = (agentId: string, pageId: string, home: string) => {
+    const onAgent = (agent: AgentSummary | undefined) => {
+      if (agent === undefined || agent.planId === null) {
+        linkArrive(() => openAgentPage(agentId, home), NOTHING);
+        return;
+      }
+      const onTask = { kind: LINK_PLACE.PAGE, planId: agent.planId, pageId } as const;
+      const tab = pageTab(pageId);
+      linkOnTask({ taskId: agent.planId, side: { tab, link: onTask } }, () =>
+        linkPanelTab(onTask, tab),
+      );
+    };
+    const listed = listedAgentIn(tasks, agentId);
+    if (listed !== undefined) {
+      onAgent(listed);
+      return;
+    }
+    const current = linkRead();
+    const opening = keepLinkLanded();
+    readAgentById(queryClient, agentId).then((agent) => {
+      if (current()) opening(() => onAgent(agent));
+    });
+  };
+
   const openAgentPlace = (place: AgentPlace, home: string) => {
     const open = tasks.activeTaskId;
     const listed = listedAgentIn(tasks, place.agentId);
@@ -2634,13 +2593,10 @@ export function useTasksTab(input: {
       case LINK_ROUTED_PLACE.PAGE: {
         if (place.kind !== LINK_PLACE.PAGE) return;
         const tab = pageTab(place.pageId);
-        // A page of an agent on no task opens on that agent's page, in its panel.
+        // A page an agent showed on itself while it stood on no task, as an older link names it, stands on
+        // the task that agent was given since, so it opens there, found by the agent.
         if ("agentId" in place) {
-          const { agentId } = place;
-          linkArrive(
-            () => openAgentPage(agentId, workspace),
-            () => showAgentPanelTab(agentId, tab),
-          );
+          openAgentsPage(place.agentId, place.pageId, workspace);
           return;
         }
         const step = { taskId: place.planId, side: { tab, link: place } };
@@ -3083,7 +3039,6 @@ export function useTasksTab(input: {
     listed: {
       tasks: listedSidebar,
     },
-    listedAgents,
     pendingTasks,
     workspaces: viewed.workspaces,
     workspace: listedWorkspace,
@@ -3231,18 +3186,10 @@ export function useTasksTab(input: {
     // Note that its holder's place stands first, from wherever the window stands, as the sidebar leaves it, and the tab once it lands.
     onOpenPinnedTab: (pin: SidebarPin) =>
       placeLeave.arrive(
-        () => {
-          if ("agent" in pin) openAgentPage(pin.agent);
-          else standTaskPlace(pin.task, true);
-        },
+        () => standTaskPlace(pin.task, true),
         () => {
           const { tab } = pin;
           setChosen({ pin, over: openTaskId });
-          // A tab pinned on an agent's own page opens that page, its panel on the tab.
-          if ("agent" in pin) {
-            showAgentPanelTab(pin.agent, pin.tab);
-            return;
-          }
           if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.AGENT) {
             showPanelTab(pin.task, tab);
             return;
@@ -3251,7 +3198,7 @@ export function useTasksTab(input: {
           openOnTask(pin.task, { kind: LINK_PLACE.AGENT, planId: pin.task, agentId: tab.agent });
         },
       ),
-    chosenPin: chosenPinOf(chosen, boundFor, agentView?.agentId),
+    chosenPin: chosenPinOf(chosen, boundFor),
     onReopenClosedTab: reopenable.length === 0 ? undefined : reopenClosedTab,
     ...menus,
     onMoveTask: moveTask,

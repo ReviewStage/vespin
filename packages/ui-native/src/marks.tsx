@@ -1,6 +1,6 @@
-// marks.tsx -- the small marks a row leads with: the unread dot, a task's status, and a person's avatar.
+// marks.tsx -- the small marks a row leads with: the unread dot, a task's status, a person's avatar, and an agent's tile.
 
-import { Circle, Image, Text, ZStack } from "@expo/ui/swift-ui";
+import { Circle, Image, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityLabel,
@@ -82,6 +82,35 @@ export function Avatar({ name, size = MARK_SIZE.AVATAR }: AvatarProps) {
       >
         {monogramOf(name)}
       </Text>
+    </ZStack>
+  );
+}
+
+/** The share of an agent's tile its corners round by, a square softened as the panel's agent tiles are. */
+const TILE_ROUNDING = 0.28;
+
+/** The share of an agent's tile its glyph stands at. */
+const TILE_GLYPH_SCALE = 0.5;
+
+/**
+ * An agent's tile, as the panel's messages lead an agent's words with it: a
+ * rounded square on the brand's well, the agent's glyph on it in the ink,
+ * heard as the agent's name, so an agent never reads as a person.
+ */
+export function AgentTile({ name, size = MARK_SIZE.AVATAR }: AvatarProps) {
+  const colors = useColors();
+  return (
+    <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
+      <RoundedRectangle
+        cornerRadius={size * TILE_ROUNDING}
+        modifiers={[foregroundStyle(colors.WELL)]}
+      />
+      <Image
+        systemName="sparkles"
+        size={size * TILE_GLYPH_SCALE}
+        color={colors.TEXT}
+        modifiers={[accessibilityHidden()]}
+      />
     </ZStack>
   );
 }

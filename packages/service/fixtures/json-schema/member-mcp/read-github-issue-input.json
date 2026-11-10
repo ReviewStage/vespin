@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository, by its full name (owner/name), as list_repositories lists it."
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The issue's or pull request's number in the repository."
+    }
+  },
+  "required": [
+    "repository",
+    "number"
+  ],
+  "additionalProperties": false
+}

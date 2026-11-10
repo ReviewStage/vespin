@@ -76,6 +76,7 @@ function fixture() {
         heard.push(`open:${url}`);
       },
       copyText: (words) => heard.push(`copy:${words}`),
+      copyRich: ({ html, text }) => heard.push(`copy rich:${html}:${text}`),
       copyImage: (png) => {
         heard.push(`copy image:${png}`);
         return png !== UNDRAWN_PNG;

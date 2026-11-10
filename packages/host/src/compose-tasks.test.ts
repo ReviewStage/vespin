@@ -970,26 +970,6 @@ it.effect(
     }),
 );
 
-it.effect("the window's refresh lists the agents with no task beside the tasks", () =>
-  Effect.gen(function* () {
-    const billing = task(BILLING, "Billing export", "# Billing export", 20);
-    const { call, last, listed } = yield* subject(fakeService([billing]));
-    const triage = agentRow(null, 60_000);
-
-    yield* call("TASKS_REFRESH", undefined);
-    yield* listed([triage]);
-
-    assert.deepEqual(
-      last()?.tasks.map((each) => each.id),
-      [BILLING],
-    );
-    assert.deepEqual(
-      last()?.tasklessAgents?.map((each) => each.id),
-      [triage.id],
-    );
-  }),
-);
-
 it.effect(
   "the developer's edit is saved on the service and the open description takes the plan it answered, which stands with its list row until the record and the list carry its transaction",
   () =>
@@ -2695,8 +2675,8 @@ it.effect(
 /** The instant the live list is read at, which the test's clock is set to. */
 const LIVE_NOW = 1_800_000_000_000;
 
-/** One agent of the plan, or of none, as the agents statement delivers its row, started `ago` before the list is read, with no turn yet. */
-function agentRow(planId: string | null, ago: number) {
+/** One agent of the plan as the agents statement delivers its row, started `ago` before the list is read, with no turn yet. */
+function agentRow(planId: string, ago: number) {
   return agentListRow(planId, LIVE_NOW - ago);
 }
 

@@ -1484,7 +1484,7 @@ function PanelTabs({
       : undefined;
   useAppCommand(APP_COMMAND.OPEN_ON_GITHUB, openOnGitHub, FOCUSED_OFFER);
   const pinOf = ({ tab, look }: DrawnTab): TabPin | undefined => {
-    // A task's page pins on the task; an agent's page pins where the sidebar draws the pin, as its page says; the Inbox's, nowhere.
+    // A task's page pins on the task; an agent's page on the agent's task, as its page says; the Inbox's, nowhere.
     const on: PinHolder | undefined =
       holder === SIDE_PANEL_HOLDER.TASK
         ? { task: taskId }

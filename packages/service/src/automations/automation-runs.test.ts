@@ -691,9 +691,12 @@ it.layer(SUITE)("an automation's runs", (it) => {
       const teammate = yield* openGithubUser();
       yield* connectAgentApiKeys(teammate);
       yield* joinWorkspace(workspaceId, teammate);
-      const made = yield* createAgent(teammate, {
-        taskId: null,
+      const { id: taskId } = yield* createTask(teammate, {
         organizationId: workspaceId,
+        name: "Quarantine",
+      });
+      const made = yield* createAgent(teammate, {
+        taskId,
         idempotencyKey: randomUUID(),
         model: SOL,
         effort: "low",
@@ -823,14 +826,14 @@ it.layer(SUITE)("an automation's runs", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
-        const { owner, automation, workspaceId } = yield* openAutomation({
+        const { owner, automation } = yield* openAutomation({
           archiveSuccessful: true,
           trigger: UNSCHEDULED,
         });
         const lead = yield* startedNow(agentSessions, automation);
+        const leadAgent = Option.getOrThrow(yield* readAgent(owner, lead));
         const made = yield* createAgent(owner, {
-          taskId: null,
-          organizationId: workspaceId,
+          taskId: leadAgent.taskId,
           idempotencyKey: randomUUID(),
           model: SOL,
           effort: "low",
@@ -839,7 +842,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
           repository: `${RELAY.owner}/${RELAY.name}`,
           runtime: CONVERSATION_RUNTIME.CODEX,
           payer: AGENT_PAYER.API_KEY,
-          automationRunId: Option.getOrThrow(yield* readAgent(owner, lead)).automationRunId ?? "",
+          automationRunId: leadAgent.automationRunId ?? "",
           startedByAgentId: lead,
         });
         const helper = Option.getOrThrow(made).agent;

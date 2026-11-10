@@ -1408,8 +1408,11 @@ function workspaceSandboxSetupActs(
       workspaceAsked(reach, client.workspaces.sandboxSetup(workspaceId)),
     WORKSPACE_INSTALL_SCRIPT_PUT: ({ workspaceId, script }) =>
       workspaceAsked(reach, client.workspaces.putInstallScript(workspaceId, script)),
-    WORKSPACE_REPOSITORY_SETUP_PUT: ({ workspaceId, repository, script }) =>
-      workspaceAsked(reach, client.workspaces.putRepositorySetup(workspaceId, repository, script)),
+    WORKSPACE_REPOSITORY_SETUP_PUT: ({ workspaceId, repository, script, kind }) =>
+      workspaceAsked(
+        reach,
+        client.workspaces.putRepositorySetup(workspaceId, repository, script, kind),
+      ),
   };
 }
 

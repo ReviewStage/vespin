@@ -243,7 +243,7 @@ test("an Undo the host does not hear says so rather than too late, and its Try a
   fakeActs({
     ...appBridge(),
     act: (request: AnyAct): Promise<FakeActAnswer> => {
-      if (request.kind === ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE && !dropped) {
+      if (request.kind === ACT_KIND.AGENTS_INBOX_RELEASE && !dropped) {
         dropped = true;
         return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "The act port closed." });
       }

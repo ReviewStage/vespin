@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { archiveAgent, createAgent } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { createTask } from "@repo/database/models/task-store";
 import { SettledTurnListener } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -43,7 +44,8 @@ const openStarted = () =>
     yield* db.insert(user).values({ id: member, name: "Test User", email: `${member}@app.test` });
     yield* connectAgentApiKeys(member);
     const organizationId = yield* openWorkspace(member);
-    const start = { taskId: null, organizationId, descriptionSnapshot: null, repository: null };
+    const task = yield* createTask(member, { organizationId });
+    const start = { taskId: task.id, descriptionSnapshot: null, repository: null };
     const choice = {
       model: "anthropic/claude-opus-5.5",
       effort: "high",

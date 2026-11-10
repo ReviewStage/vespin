@@ -496,7 +496,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     listed: {
       tasks: overrides.tasks ?? [],
     },
-    listedAgents: { standing: [], archived: [] },
     workspaces: [],
     workspace: undefined,
     onChooseWorkspace: ignore,

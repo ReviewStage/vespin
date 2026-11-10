@@ -25,8 +25,8 @@ import { Option, Schema } from "effect";
 
 /** What the device tells the agent of the machine its turn starts on, each as the paragraph it reads. */
 export const LAUNCH_NOTE = {
-  /** The agent's folder on the device was cleared since its last turn, so it starts afresh from what it pushed. */
-  CLEARED: `Your folder on this machine was cleared since your last turn, so this turn starts in a fresh one, with none of your earlier work but what you pushed to GitHub, and with no memory of the conversation before it. Fetch your branch to carry on from what you pushed. Your transcript is still in ${PRODUCT_NAME}.`,
+  /** The agent's folder on the device was cleared since its last turn, so it starts afresh from the snapshot its archive saved, or from what it pushed. */
+  CLEARED: `Your folder on this machine was cleared since your last turn, so this turn starts in a fresh one, with no memory of the conversation before it. Where this machine saved your work when you were archived, your files stand as you left them, on a detached head at your last commit; otherwise only what you pushed to GitHub is there, so fetch your branch to carry on from it. Your transcript is still in ${PRODUCT_NAME}.`,
 } as const;
 
 /** What leads the device's notes, so the agent reads them as the app's rather than the developer's. */

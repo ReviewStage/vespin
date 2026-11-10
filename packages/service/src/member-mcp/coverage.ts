@@ -45,7 +45,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   SCREEN_ONLY: "screen-only",
   /** A sign-in or connect flow that finishes in a browser, or a link only a person opens; a disconnect is no such flow. */
   NEEDS_BROWSER: "needs-browser",
-  /** It reads or writes a secret, which no tool ever carries: a provider key or the GitHub token goes in through the CLI's stdin alone. */
+  /** It reads or writes a secret no tool carries: a provider key or the GitHub token goes in through the CLI's stdin alone. A workspace environment variable's value is the one secret a tool takes, `set_environment_variable`'s input, and no tool ever answers one. */
   SECRET: "secret",
   /** It hands a person trust in the account, or takes a way into it away under a fresh session, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",
@@ -86,6 +86,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { workspaceInvitations: ["cancel"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { plans: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { plans: ["open"] },
+  [MEMBER_MCP_TOOL.FIND_TASK]: { plans: ["find", "open"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
   [MEMBER_MCP_TOOL.READ_AGENT]: {
     agents: ["read"],
@@ -110,6 +111,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { taskFiles: ["tree"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
+  [MEMBER_MCP_TOOL.CHANGE_TASK_RELATION]: { plans: ["relation"] },
   [MEMBER_MCP_TOOL.DELETE_TASK]: { plans: ["delete"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
   [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS]: { plans: ["descriptionRevisions"] },
@@ -119,10 +121,21 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"], plans: ["create"] },
   [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send", "queue"] },
+  [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { messages: ["queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.REWIND_AGENT]: { agents: ["rewind"] },
+  [MEMBER_MCP_TOOL.DELETE_AGENT]: { agents: ["delete"] },
+  [MEMBER_MCP_TOOL.WAKE_AGENT]: { agents: ["sandboxResume", "warm"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { agentPorts: ["list", "shared"] },
   [MEMBER_MCP_TOOL.SHARE_AGENT_PORT]: { agentPorts: ["share", "unshare"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORIES]: { github: ["repositories", "tokenRepositories"] },
+  [MEMBER_MCP_TOOL.SET_TOKEN_REPOSITORY]: { github: ["setTokenRepository"] },
+  [MEMBER_MCP_TOOL.READ_REPOSITORY_FILE]: { github: ["repositoryFile"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORY_FOLDER]: { github: ["repositoryTree"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORY_SKILLS]: { github: ["repositorySkills"] },
+  [MEMBER_MCP_TOOL.READ_GITHUB_ISSUE]: { github: ["repositoryPullRequest", "repositoryIssue"] },
+  [MEMBER_MCP_TOOL.READ_GITHUB_CONNECTION]: { github: ["connection"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS]: { agentBrowserTabs: ["agentList", "list"] },
   [MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB]: { agentBrowserTabs: ["agentOpen", "open"] },
   [MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB]: {
@@ -183,6 +196,9 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { automations: ["read", "change"] },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { automations: ["run"] },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { automations: ["remove"] },
+  [MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES]: { workspaceEnvironment: ["list"] },
+  [MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["put"] },
+  [MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["delete"] },
   [MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS]: { installedSkills: ["list"] },
   [MEMBER_MCP_TOOL.READ_INSTALLED_SKILL]: { installedSkills: ["read"] },
   [MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL]: { installedSkills: ["preview"] },
@@ -256,12 +272,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   agentPages: { frame: SCREEN_ONLY },
   agents: {
-    delete: NOT_YET_BUILT,
-    warm: NOT_YET_BUILT,
-    rewind: NOT_YET_BUILT,
     reviewOptions: SCREEN_ONLY,
     workspaceTools: SCREEN_ONLY,
-    sandboxResume: NOT_YET_BUILT,
     // Note that a Terminal tab is interactive, so the CLI's `vespin agent shell` reaches it and no tool does.
     terminals: SCREEN_ONLY,
     openTerminal: SCREEN_ONLY,
@@ -273,17 +285,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   github: {
     connect: NEEDS_BROWSER,
     claim: NEEDS_BROWSER,
-    connection: NOT_YET_BUILT,
     // Note that Better Auth's unlink asks a fresh session, which no OAuth token is, so it stays the app's.
     disconnect: SECURITY,
-    repositories: NOT_YET_BUILT,
-    tokenRepositories: NOT_YET_BUILT,
-    setTokenRepository: NOT_YET_BUILT,
-    repositoryFile: NOT_YET_BUILT,
-    repositoryTree: NOT_YET_BUILT,
-    repositorySkills: NOT_YET_BUILT,
-    repositoryPullRequest: NOT_YET_BUILT,
-    repositoryIssue: NOT_YET_BUILT,
   },
   githubToken: { read: SECRET, save: SECRET, remove: SECRET },
   hosts: {
@@ -353,10 +356,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
   // Note that a revoke deletes the member's consent through Better Auth under a session of theirs, which no OAuth token carries.
   mcpClients: { revoke: NOT_YET_BUILT },
-  plans: {
-    find: NOT_YET_BUILT,
-    relation: NOT_YET_BUILT,
-  },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
@@ -366,7 +365,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
   },
-  workspaceEnvironment: { list: NOT_YET_BUILT, put: NOT_YET_BUILT, delete: NOT_YET_BUILT },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceSentry: { install: NEEDS_BROWSER },

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { readFirewallLaunch } from "@repo/database/models/sandbox-firewall-store";
+import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openTaskAgent, openWorkspace } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
@@ -77,7 +78,9 @@ const ownSession = Effect.gen(function* () {
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
-  const agentId = yield* openTaskAgent(userId, yield* openWorkspace(userId), null);
+  const organizationId = yield* openWorkspace(userId);
+  const task = yield* createTask(userId, { organizationId });
+  const agentId = yield* openTaskAgent(userId, organizationId, task.id);
   return {
     userId,
     agentId,
