@@ -678,6 +678,7 @@ it.effect(
             MEMBER_MCP_TOOL.SAVE_MEMORY,
             { workspace: `workspace-${rows.own}`, text: "Planted.", replaces: memoryId },
           ],
+          [MEMBER_MCP_TOOL.LIST_MEMORIES, { workspace }],
           [MEMBER_MCP_TOOL.FORGET_MEMORY, { workspace, memoryId }],
           [MEMBER_MCP_TOOL.LIST_AUTOMATIONS, { workspace }],
           [MEMBER_MCP_TOOL.LIST_AUTOMATIONS, { automationId }],

@@ -2,6 +2,8 @@ import { signedInAccountId } from "@repo/credentials/snapshot";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  apiKeyName,
+  PLAN_NAME,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
@@ -12,6 +14,7 @@ import {
   type ProviderKeySummary,
   type ProviderKeysAnswer,
   pastedKeyFits,
+  planNamesOf,
   SUBSCRIPTION_LABEL_MAX_CHARS,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
@@ -182,7 +185,7 @@ const HARNESS = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
     name: "Claude",
     mark: MODEL_PROVIDER.ANTHROPIC,
-    planName: "Claude plan",
+    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC],
     plan: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
     planMark: MARK_PROVIDER.CLAUDE,
     keyName: "Anthropic",
@@ -194,7 +197,7 @@ const HARNESS = {
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
     name: "Codex",
     mark: MODEL_PROVIDER.OPENAI,
-    planName: "Codex plan",
+    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI],
     plan: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
     planMark: MARK_PROVIDER.CHATGPT,
     keyName: "OpenAI",
@@ -327,11 +330,6 @@ function keysOf(
   return answer.keys.filter((one) => one.provider === provider);
 }
 
-/** A key's name: the name the account gave it, else API key and its hint, as "API key · sk-…a91F". */
-function keyName(key: ProviderKeySummary): string {
-  return key.label ?? `${WORDS.API_KEY} · ${key.hint}`;
-}
-
 /** Whether a stored plan still stands: kept, answered, or only waiting on its limit to reset. */
 function standing(plan: SubscriptionKeySummary): boolean {
   return (
@@ -352,26 +350,6 @@ function harnessReady(answer: ProviderKeysAnswer, provider: ProviderKeyProvider)
     plansOf(answer, provider).some(
       (plan) => standing(plan) && plan.status !== PROVIDER_KEY_STATUS.LIMIT_REACHED,
     ) || keysOf(answer, provider).some((key) => keyStanding(key.status))
-  );
-}
-
-/**
- * Each plan's name by its id: the name the account gave it, else the
- * ChatGPT account it signed in as, else its harness's plan name, numbered
- * by when it was added where the harness holds more than one, so a plan
- * keeps its number however it is reordered.
- */
-function planNames(
-  provider: ProviderKeyProvider,
-  plans: readonly SubscriptionKeySummary[],
-): ReadonlyMap<string, string> {
-  const { planName } = HARNESS[provider];
-  const added = plans.toSorted((a, b) => a.addedAt - b.addedAt);
-  return new Map(
-    added.map((plan, at) => [
-      plan.id,
-      plan.label ?? plan.email ?? (plans.length > 1 ? `${planName} ${at + 1}` : planName),
-    ]),
   );
 }
 
@@ -1259,7 +1237,7 @@ function KeyRow({
   const harness = HARNESS[provider];
   const removal = useKeyRemoval(provider, apiKey);
   const door = useRef<HTMLButtonElement | null>(null);
-  const name = keyName(apiKey);
+  const name = apiKeyName(apiKey);
   // Note that a key from a service that names no id has nothing to rename it or replace it by.
   const named = apiKey.id !== undefined;
   const wasOpen = useRef(open);
@@ -1363,7 +1341,7 @@ function HarnessCredentials({
   const [unconfirmed, setUnconfirmed] = useState(false);
   const addPress = useRef<HTMLButtonElement | null>(null);
   const handBack = useRef<typeof STEPS.ADD | typeof STEPS.KEY | undefined>(undefined);
-  const names = planNames(provider, plans);
+  const names = planNamesOf(provider, plans);
   const adding = open?.steps === STEPS.ADD || open?.steps === STEPS.KEY ? open.steps : undefined;
 
   // Note that the focus goes back to the row's press wherever the steps' going left it on nothing, and again once a credential they kept draws in its place, since the keys the host lays can land a draw after the steps go.

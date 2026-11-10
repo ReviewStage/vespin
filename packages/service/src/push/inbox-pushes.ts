@@ -41,6 +41,7 @@ import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readAgentOfConversation } from "@repo/database/models/agent-store";
 import { listPushDevices } from "@repo/database/models/push-device-store";
 import type { SettledAgentTurn } from "@repo/database/models/writer";
+import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -54,6 +55,7 @@ import { mentionLinksIn } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { TURN_STATUS } from "@repo/wire";
 import { Clock, Effect, Option } from "effect";
+import { TURN_FAILURE } from "../core.js";
 import { inboxItemWaitsOn, inboxWaitingCount } from "../inbox/inbox-store.js";
 import { APNS_PUSH_TYPE, type ApnsPayload, ApnsSender } from "./apns.js";
 
@@ -260,7 +262,11 @@ export function pushFailedTurn(
       collapseId: agent.id,
       payload: {
         aps: {
-          alert: alertOf(agentName(agent), RUN_FAILED_BODY),
+          // A run its plan's usage limit stopped is told so, not that it failed.
+          alert: alertOf(
+            agentName(agent),
+            turn.failure === TURN_FAILURE.PLAN_LIMIT ? LIMIT_REACHED_WORDS : RUN_FAILED_BODY,
+          ),
           "thread-id": agent.taskId ?? agent.id,
           category: PUSH_CATEGORY.RUN_FAILED,
           "mutable-content": 1,

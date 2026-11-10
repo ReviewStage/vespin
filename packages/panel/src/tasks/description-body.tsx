@@ -3,7 +3,6 @@ import { type DescriptionSection, descriptionSections } from "@repo/features/des
 import { LINK_PLACE, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import {
   type DescriptionMention,
-  type MentionLines,
   type MentionPlace,
   sectionAnchors,
 } from "@repo/features/mention-link";
@@ -102,7 +101,7 @@ import {
   type TaskReader,
   useEditReader,
 } from "./edit-ref.js";
-import { type MentionDoors, mentionLinkDrawer } from "./mention-chip.js";
+import { type MentionDoors, mentionLinkDrawer, type OpenFileLines } from "./mention-chip.js";
 import { TaskPath, TaskStandingChips, type TaskStandingDoor } from "./task-standing.js";
 import { TaskTitle } from "./task-title.js";
 import { EDITOR_PLACE, type EditorHost, useDescriptionEditing } from "./use-description-editing.js";
@@ -164,7 +163,7 @@ import {
 export interface SectionLinks {
   readonly workspace: string;
   readonly onOpen: (mention: DescriptionMention) => void;
-  readonly onOpenFile?: ((path: string, lines: MentionLines | undefined) => void) | undefined;
+  readonly onOpenFile?: ((path: string, lines: OpenFileLines | undefined) => void) | undefined;
   readonly reveal: SectionReveal | undefined;
   /** The document showed the section `reveal` asked for, so the ask can be let go. */
   readonly onRevealed?: ((ask: number) => void) | undefined;

@@ -179,6 +179,7 @@ import { steerMemberWords } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
   type MemoryCall,
+  runListMemories,
   runRecall,
   runRemember,
   SAVE_MEMORY_TOOL,
@@ -2094,6 +2095,25 @@ const MEMBER_SAVE_MEMORY_TOOL = memberMcpTool({
   experiment: EXPERIMENT.MEMORY,
 });
 
+/** A list names the workspace whose memories to list. */
+const ListMemoriesInputSchema = Schema.Struct({ workspace: MEMORY_WORKSPACE_INPUT });
+
+const MEMBER_LIST_MEMORIES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_MEMORIES,
+  description:
+    "List every memory in the shared memory of a workspace the member belongs to, most " +
+    "recently kept or corrected first, as Settings › Memory lists them: each with its id, its " +
+    "words, when it was last kept, who kept it, and whether the member may forget it. Use " +
+    `${MEMBER_MCP_TOOL.SEARCH_MEMORY} to find the few about an area at hand; list them all ` +
+    `only when the member asks to review what the workspace keeps. ${WORKSPACE_WORDS} ` +
+    "Answers `accepted` with the memories and how many there are, or `rejected` and why, such " +
+    "as the member having Memory off.",
+  input: ListMemoriesInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) => memoryAsMember(workspace, runListMemories),
+  experiment: EXPERIMENT.MEMORY,
+});
+
 /** A forget names the workspace and the memory. */
 const ForgetMemoryInputSchema = Schema.Struct({
   workspace: MEMORY_WORKSPACE_INPUT,
@@ -2383,6 +2403,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_COMMENT_TOOL,
   MEMBER_SEARCH_MEMORY_TOOL,
   MEMBER_SAVE_MEMORY_TOOL,
+  MEMBER_LIST_MEMORIES_TOOL,
   MEMBER_FORGET_MEMORY_TOOL,
   MEMBER_LIST_AUTOMATIONS_TOOL,
   MEMBER_CREATE_AUTOMATION_TOOL,

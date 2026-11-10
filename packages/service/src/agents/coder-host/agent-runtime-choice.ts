@@ -80,12 +80,16 @@ import {
 import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import { type MacOffer, MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import {
+  apiKeyName,
+  PLAN_NAME,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
   planLimitResetsAt,
+  planNamesOf,
   planStanding,
 } from "@repo/features/provider-key-wire";
+import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import { Clock, Data, Duration, Effect, Option, type Redacted, Result } from "effect";
 import { previewKeysOf } from "../../accounts/own-api-key.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
@@ -488,6 +492,21 @@ const payersOf = Effect.fnUntraced(function* (
 });
 
 /**
+ * The first of the provider's payers among `ordered` (`payersOf`) with room
+ * (`hasRoom`), passing over the one `passedOver` names; none where none has.
+ * Both a launch's choice (`turnPayerOf`) and a limit's move
+ * (`roomAfterLimit`) take it, so a limit's notice names the payer the
+ * relaunch runs on.
+ */
+function firstPayerRow(
+  ordered: readonly ProviderKeyRow[],
+  now: number,
+  passedOver?: string,
+): ProviderKeyRow | undefined {
+  return ordered.find((row) => row.id !== passedOver && hasRoom(row, now));
+}
+
+/**
  * Who pays for the next turn of the account's agent on the provider's
  * harness, chosen now and written on the agent (`recordAgentPayer`), as
  * above: the first of its subscriptions and its saved API keys, in the
@@ -502,7 +521,7 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   provider: ModelProvider,
 ): Effect.fn.Return<TurnPayer, StoreFailure, DatabaseServices> {
   const { rows, plans, ordered, environment, now } = yield* payersOf(userId, provider);
-  const first = ordered.find((row) => hasRoom(row, now)) ?? keysOf(provider, rows)[0];
+  const first = firstPayerRow(ordered, now) ?? keysOf(provider, rows)[0];
   let chosen: TurnPayer =
     first?.kind === PROVIDER_KEY_KIND.API_KEY
       ? { payer: AGENT_PAYER.API_KEY, subscriptionId: first.id }
@@ -516,39 +535,50 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   return chosen;
 });
 
-/**
- * The credential a turn cut short on the one named, a subscription at its
- * limit or a key out of quota, or on the account's first subscription where
- * none is named, goes on with at once, as `turnPayerOf` would choose the
- * next launch's: the first other of the provider's subscriptions and API
- * keys, in the account's order, with room; none where none has. Note that
- * the one cut short is passed over by name, since the turn's own word on it
- * may not be written yet.
- */
-export const nextPayerRow = /* @__PURE__ */ Effect.fnUntraced(function* (
-  userId: string,
-  provider: ModelProvider,
-  limitedId: string | undefined,
-): Effect.fn.Return<ProviderKeyRow | undefined, StoreFailure, DatabaseServices> {
-  const { plans, ordered, now } = yield* payersOf(userId, provider);
-  const limited = limitedId ?? plans[0]?.id;
-  return ordered.find((row) => row.id !== limited && hasRoom(row, now));
-});
+/** A plan or API key among `rows` named as Settings names it (`planNamesOf`, `apiKeyName`). */
+function payerNameOf(provider: ModelProvider, rows: AccountKeyRows, row: ProviderKeyRow): string {
+  if (row.kind === PROVIDER_KEY_KIND.API_KEY) return apiKeyName(row);
+  const plans = rows.filter(
+    (each) => each.provider === provider && each.kind !== PROVIDER_KEY_KIND.API_KEY,
+  );
+  const names = planNamesOf(
+    provider,
+    plans.map((each) => ({
+      id: each.id,
+      label: each.label ?? undefined,
+      email: each.accountEmail ?? undefined,
+      addedAt: each.createdAt.getTime(),
+    })),
+  );
+  return names.get(row.id) ?? PLAN_NAME[provider];
+}
 
 /**
- * Whether a turn cut short on the credential named may go on with another
- * payer at once: the next with room (`nextPayerRow`), or, where the account
- * saved no API key of the provider, a Preview's stand-in.
+ * Where a turn cut short on the credential named, a subscription at its
+ * limit or a key out of quota, or on the account's first subscription where
+ * none is named, may go on with another payer at once: the next with room,
+ * as `turnPayerOf` would choose the next launch's (`firstPayerRow`, past the
+ * one cut short), or, where the account saved no API key of the provider, a
+ * Preview's stand-in; each named as Settings names it, for the notice the
+ * turn leaves where it moved. None where no other payer has room. Note that
+ * the one cut short is passed over by name, since the turn's own word on it
+ * may not be written yet.
  */
 export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   provider: ModelProvider,
   limitedSubscriptionId: string | undefined,
-): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
-  if ((yield* nextPayerRow(userId, provider, limitedSubscriptionId)) !== undefined) return true;
-  const rows = yield* keyRowsOf(userId, undefined);
-  if (keysOf(provider, rows).length > 0) return false;
-  return yield* keepsApiKey(userId, provider, rows, yield* deploymentEnvironment);
+): Effect.fn.Return<UsageLimitMove | undefined, StoreFailure, DatabaseServices> {
+  const { rows, plans, ordered, environment, now } = yield* payersOf(userId, provider);
+  const limitedId = limitedSubscriptionId ?? plans[0]?.id;
+  const limited = rows.find((row) => row.id === limitedId);
+  const from = limited === undefined ? PLAN_NAME[provider] : payerNameOf(provider, rows, limited);
+  const next = firstPayerRow(ordered, now, limitedId);
+  if (next !== undefined) return { from, to: payerNameOf(provider, rows, next) };
+  if (keysOf(provider, rows).length > 0) return undefined;
+  if (!(yield* keepsApiKey(userId, provider, rows, environment))) return undefined;
+  // Note that a Preview's stand-in key has no row, so it is named as any API key.
+  return { from, to: "API key" };
 });
 
 /**

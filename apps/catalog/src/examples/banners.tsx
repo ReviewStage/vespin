@@ -129,6 +129,20 @@ function Banners(): React.JSX.Element {
             notice={{ agent: USAGE_LIMIT_AGENT.CLAUDE, resetsAt: Date.UTC(2026, 10, 9, 23) }}
           />
           <UsageLimitNotice notice={{ agent: USAGE_LIMIT_AGENT.CODEX, resetsAt: null }} />
+          <UsageLimitNotice
+            notice={{
+              agent: USAGE_LIMIT_AGENT.CLAUDE,
+              resetsAt: null,
+              moved: { from: "Work plan", to: "Personal plan" },
+            }}
+          />
+          <UsageLimitNotice
+            notice={{
+              agent: USAGE_LIMIT_AGENT.CODEX,
+              resetsAt: null,
+              moved: { from: "dean@acme.dev", to: "API key · sk-…a91F" },
+            }}
+          />
         </Stack>
       </CatalogSection>
       <CatalogSection id="banner-viewing-as" title="Viewing as a member">

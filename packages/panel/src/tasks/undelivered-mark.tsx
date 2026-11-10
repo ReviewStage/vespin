@@ -4,6 +4,7 @@ import { MessageFailedMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { createContext, type ReactNode, useContext } from "react";
 import { failureShown } from "../failure-report.js";
+import { refusedAtLimit } from "./agent-model.js";
 
 /**
  * undelivered-mark.tsx -- the red alert beside a line the developer sent that did not go, and the "Not delivered" its time is led by, as a chat app marks a message that did not go: refused for now, its menu offers Retry, Edit, and Delete; refused for good, it says why.
@@ -19,7 +20,9 @@ import { failureShown } from "../failure-report.js";
  * to an agent whose session has ended is refused for good, and its box
  * closes on it: its line is marked the same way, its menu saying why with
  * nothing to press, since Continue in new agent carries its words on. The
- * line marked so fades its bubble and its files (`useLineMarked`,
+ * line the plan's usage limit refused says so in the composer's words for
+ * it ("Usage limit reached · Resets …") where the others say "Not delivered".
+ * The line marked so fades its bubble and its files (`useLineMarked`,
  * `tasks.css`'s `.is-user[data-undelivered]`). The tab hands its transcript
  * the lines so marked (`SentLineMarks`), by the id each was drawn under, and
  * the lines still on their way, whose files are drawn going up.
@@ -39,8 +42,8 @@ interface SentLineMarks {
   readonly closed: string | undefined;
   /** The lines refused for now, each offering Retry, Edit, and Delete, or Delete alone while the agent is archived. */
   readonly unsent: ReadonlySet<string>;
-  /** Why each line refused for now did not go, by its id. */
-  readonly notes: ReadonlyMap<string, Failure>;
+  /** Why each line refused for now did not go, by its id, with the refusal that said so. */
+  readonly notes: ReadonlyMap<string, Failure & { readonly cause?: unknown }>;
   /** The lines on their way, whose row has not been read back yet. */
   readonly sending: ReadonlySet<string>;
   /** Sends the line again, and puts its words back in the box; none while the agent is archived and takes no message. */
@@ -110,9 +113,16 @@ export function useLineMarked(messageId: string): boolean {
   return marks.undelivered.has(messageId) || marks.unsent.has(messageId);
 }
 
+/** What a line that did not go says: the plan's limit's own words where its limit refused it for now, "Not delivered" otherwise. */
+function undeliveredWords(marks: SentLineMarks, messageId: string): string {
+  const note = marks.unsent.has(messageId) ? marks.notes.get(messageId) : undefined;
+  return note !== undefined && refusedAtLimit(note.cause) ? note.text : UNDELIVERED_WORDS;
+}
+
 /** What the time under a line that did not go is led by; nothing under any other. */
 export function useLineStatus(messageId: string): string | undefined {
-  return useLineMarked(messageId) ? UNDELIVERED_WORDS : undefined;
+  const marks = useContext(MarksContext);
+  return useLineMarked(messageId) ? undeliveredWords(marks, messageId) : undefined;
 }
 
 /** The red alert beside a line that did not go, its menu saying why and offering what mends it; nothing beside any other. */
@@ -136,7 +146,7 @@ export function UndeliveredMark({ messageId }: { messageId: string }): ReactNode
   const { retry, takeBack } = marks;
   return (
     <MessageFailedMark
-      label={UNDELIVERED_WORDS}
+      label={undeliveredWords(marks, messageId)}
       reason={marks.notes.get(messageId)?.text ?? UNDELIVERED_WORDS}
       groups={[
         ...(retry === undefined || takeBack === undefined

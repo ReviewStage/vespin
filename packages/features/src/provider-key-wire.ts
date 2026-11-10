@@ -446,3 +446,46 @@ export const chatGptDevicePollAnswerSchema = EffectSchema.Struct({
 });
 
 export type ChatGptDevicePollAnswer = typeof chatGptDevicePollAnswerSchema.Type;
+
+/** What a plan of the provider's is called wherever a surface names it and the account gave it no name. */
+export const PLAN_NAME = {
+  [PROVIDER_KEY_PROVIDER.ANTHROPIC]: "Claude plan",
+  [PROVIDER_KEY_PROVIDER.OPENAI]: "Codex plan",
+} as const satisfies Record<ProviderKeyProvider, string>;
+
+/** What a plan is named by: the name the account gave it, the ChatGPT account it signed in as, and when it was added. */
+export interface NamedPlan {
+  readonly id: string;
+  readonly label?: string | undefined;
+  readonly email?: string | undefined;
+  readonly addedAt: number;
+}
+
+/**
+ * Each of the provider's plans' name by its id, as Settings lists them and
+ * a limit's notice names them: the name the account gave it, else the
+ * ChatGPT account it signed in as, else its plan's name, numbered by when it
+ * was added where the account holds more than one, so a plan keeps its
+ * number however it is reordered.
+ */
+export function planNamesOf(
+  provider: ProviderKeyProvider,
+  plans: readonly NamedPlan[],
+): ReadonlyMap<string, string> {
+  const planName = PLAN_NAME[provider];
+  const added = plans.toSorted((a, b) => a.addedAt - b.addedAt);
+  return new Map(
+    added.map((plan, at) => [
+      plan.id,
+      plan.label ?? plan.email ?? (plans.length > 1 ? `${planName} ${at + 1}` : planName),
+    ]),
+  );
+}
+
+/** An API key's name wherever a surface names it: the name the account gave it, else its masked hint ("API key · sk-…a91F"). */
+export function apiKeyName(key: {
+  readonly label?: string | null | undefined;
+  readonly hint: string;
+}): string {
+  return key.label ?? `API key · ${key.hint}`;
+}

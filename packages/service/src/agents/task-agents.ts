@@ -16,6 +16,7 @@ import { devicesNamed } from "@repo/database/models/device-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   AGENT_STATUS,
+  type AgentFailure,
   type AgentPullRequest,
   type AgentStatus,
   PULL_REQUEST_STATE,
@@ -33,6 +34,7 @@ import {
 import { Clock, Effect } from "effect";
 import {
   agentActivityAt,
+  agentFailureOf,
   agentRunStartedAt,
   agentStatusOf,
   agentSummary,
@@ -63,6 +65,8 @@ const WORKING_STATUSES: ReadonlySet<AgentStatus> = new Set([
 /** One agent read for the list: its line, when it was started, which orders the lines, when it last did something settled, and whether it was archived, which leaves it out of all but the activity. */
 interface ReadAgent {
   readonly line: TaskAgentLine;
+  /** Why its newest turn failed, where it did (`agentFailureOf`). */
+  readonly failure: AgentFailure | undefined;
   readonly createdAt: number;
   readonly activityAt: number;
   readonly archived: boolean;
@@ -97,6 +101,7 @@ function agentLine(
         : { startedBy: { userId: agent.userId, name: starter } }),
       ...(agent.automationId === null ? undefined : { automationId: agent.automationId }),
     },
+    failure: turn === undefined ? undefined : agentFailureOf(turn),
     createdAt: agent.createdAt.getTime(),
     activityAt: agentActivityAt(lastSettledAt, agent),
     archived: agent.archivedAt !== null,
@@ -157,7 +162,12 @@ function summaryOf(read: readonly ReadAgent[]): NonNullable<HeldTaskSummary["age
     total: agents.length,
     working: working.length,
     failed: standingFailures(
-      agents.map(({ createdAt, line }) => ({ createdAt, status: line.status, at: line.at })),
+      agents.map(({ createdAt, line, failure }) => ({
+        createdAt,
+        status: line.status,
+        at: line.at,
+        failure,
+      })),
       Math.max(...read.map((agent) => agent.createdAt)),
     ),
     ...(read.length === 0
