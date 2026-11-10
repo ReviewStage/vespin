@@ -1287,7 +1287,7 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "agent's session has taken it, without waiting for it to act or reply, or `rejected` and " +
     "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
-    `\`handed-on\` where the agent stood idle and it goes at once, and \`paused\` with why where ` +
+    `\`handed-on\` where the agent stood idle and it goes at once, unconfirmed, since a refusal puts it back and pauses the queue; and \`paused\` with why where ` +
     "the queue stands paused, which sends nothing until the member resumes it in the app. " +
     FOLLOW_WORDS,
   input: MessageAgentInputSchema,
