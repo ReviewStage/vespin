@@ -133,7 +133,14 @@ test("the workspace's experiments and the account's own stand in two groups, eac
   ]);
   assert.deepEqual(
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),
-    ["Done and follow-ups", "Task descriptions", "Memory", "Bring your own machine", "Skills"],
+    [
+      "Done and follow-ups",
+      "Run actions",
+      "Task descriptions",
+      "Memory",
+      "Bring your own machine",
+      "Skills",
+    ],
   );
 });
 
@@ -205,6 +212,7 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
   });
   assert.deepEqual(feedbackAbout, [
     EXPERIMENT.TURN_END,
+    EXPERIMENT.RUN_ACTIONS,
     EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.MEMORY,
     EXPERIMENT.BRING_YOUR_OWN_HOST,

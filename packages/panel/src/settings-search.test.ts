@@ -199,6 +199,7 @@ test("an experiment is found by its name, what it brings, and what other apps ca
   );
   const experiments = [
     "Done and follow-ups",
+    "Run actions",
     "Task descriptions",
     "Bring your own machine",
     "Skills",
