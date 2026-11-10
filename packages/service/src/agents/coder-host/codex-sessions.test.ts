@@ -44,7 +44,10 @@ import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-voc
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
-import { deviceAgentLaunchSecretsSchema } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_AGENT_LINE_KIND,
+  deviceAgentLaunchSecretsSchema,
+} from "@repo/features/device-agent-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -456,9 +459,15 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             Effect.provide(services(runnerSandboxApi())),
           );
           return yield* deliveredOpen(sessions, yield* writtenLine(asking, "Fix the invitations."));
-        }).pipe(Effect.result);
-        assert.ok(
-          Result.isFailure(unasked) || unasked.success.outcome !== SESSION_SEND_OUTCOME.ACCEPTED,
+        });
+        assert.equal(unasked.outcome, SESSION_SEND_OUTCOME.FAILED);
+        const askingLines = yield* Effect.flatMap(Database, (db) =>
+          db.select().from(deviceAgentLine).where(eq(deviceAgentLine.agentId, asking.id)),
+        );
+        assert.equal(
+          askingLines.some((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH),
+          false,
+          "a launch queued for a runner that would run the mode unasked",
         );
 
         // From the host release whose runner mirrors them, they are kept at the service, its Codex home
