@@ -45,7 +45,7 @@ import {
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
-import { keySpansIn } from "@repo/features/workspace-key";
+import { keyWordsIn } from "@repo/features/workspace-key";
 import {
   DISCLOSURE_BODY,
   DISCLOSURE_LOOK,
@@ -137,7 +137,6 @@ import {
   type MarkdownComponents,
   type MarkdownNodeProps,
   type MarkdownSteps,
-  markdownStep,
   TRANSCRIPT_REMARK_STEPS,
 } from "@repo/ui/markdown";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
@@ -200,7 +199,7 @@ import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
 } from "./transcript-markdown.js";
-import { useWordTargetsFor } from "./use-known-names.js";
+import { useWordTargets } from "./use-known-names.js";
 import { opensAsLink, useOpenLink } from "./use-open-link.js";
 import { type CutBody, WHOLE_PART } from "./whole-parts.js";
 import { WorkingTime } from "./working-time.js";
@@ -298,6 +297,12 @@ const MENTION_ELEMENT = {
   TARGET: "to",
 } as const;
 
+/** The element a task's key written among the words is drawn as, and the attribute that carries the key to its chip. */
+const TASK_KEY_ELEMENT = {
+  TAG: "app-task-key",
+  KEY: "named",
+} as const;
+
 /** The element a picture's Markdown is drawn as, and the attributes that carry its address, its words, and its caption. */
 const PICTURE_ELEMENT = {
   TAG: "app-picture",
@@ -319,9 +324,10 @@ const PICTURE_ROW_ELEMENT = {
   CLASS: "transcript-pictures",
 } as const;
 
-/** The mention's element and the picture's, and a document's paragraphs of either, let through the drawing's sanitizer with what each carries. */
+/** The mention's element, a task key's, and the picture's, and a document's paragraphs of either, let through the drawing's sanitizer with what each carries. */
 const MENTION_TAGS = {
   [MENTION_ELEMENT.TAG]: [MENTION_ELEMENT.TARGET],
+  [TASK_KEY_ELEMENT.TAG]: [TASK_KEY_ELEMENT.KEY],
   [PICTURE_ELEMENT.TAG]: [PICTURE_ELEMENT.ADDRESS, PICTURE_ELEMENT.WORDS, PICTURE_ELEMENT.CAPTION],
   [LONE_LINK_ELEMENT.TAG]: [LONE_LINK_ELEMENT.TARGET, LONE_LINK_ELEMENT.WORDS],
   [PICTURE_ROW_ELEMENT.TAG]: [],
@@ -483,7 +489,7 @@ function markLoneLinks(tree: MarkdownNode, definitions: ReadonlyMap<string, Mark
 /**
  * What a task's key written among the words stands as once it is marked:
  * a node of its own rather than a link of markdown's, so it is drawn as its
- * task's chip (`MentionElement`) and held with its punctuation as a mention
+ * task's chip (`TaskKeyElement`) and held with its punctuation as a mention
  * is, yet never read as a link standing alone in its paragraph, which a
  * document draws as a card.
  */
@@ -502,10 +508,10 @@ const KEYLESS_NODES: ReadonlySet<string> = new Set([
   KEY_NODE,
 ]);
 
-/** A run of text with each key `targets` holds in it marked as its task's chip, the words between left as they were. */
-function keyedRun(text: MarkdownNode, targets: ReadonlyMap<string, string>): MarkdownNode[] {
+/** A run of text with each word shaped like a task's key marked as its task's chip, the words between left as they were. */
+function keyedRun(text: MarkdownNode): MarkdownNode[] {
   const value = text.value ?? "";
-  const spans = keySpansIn(value, targets);
+  const spans = keyWordsIn(value);
   if (spans.length === 0) return [text];
   const run: MarkdownNode[] = [];
   let from = 0;
@@ -513,7 +519,7 @@ function keyedRun(text: MarkdownNode, targets: ReadonlyMap<string, string>): Mar
     if (span.start > from) run.push({ type: "text", value: value.slice(from, span.start) });
     run.push({
       type: KEY_NODE,
-      data: { hName: MENTION_ELEMENT.TAG, hProperties: { [MENTION_ELEMENT.TARGET]: span.known } },
+      data: { hName: TASK_KEY_ELEMENT.TAG, hProperties: { [TASK_KEY_ELEMENT.KEY]: span.key } },
       children: [{ type: "text", value: span.key }],
     });
     from = span.end;
@@ -523,47 +529,29 @@ function keyedRun(text: MarkdownNode, targets: ReadonlyMap<string, string>): Mar
 }
 
 /**
- * Marks each listed task's key written among the words (`ACME-42`) to be
- * drawn as that task's chip, which says the key as written, wears the
- * task's status, and hangs its card. Note that the words themselves are
- * left as written, so an agent reading them reads the key, and that a key
- * in code, a link, or a picture's words is left alone.
+ * Marks each word shaped like a task's key among the words (`ACME-42`) to
+ * be drawn as its task's chip, which says the key as written, wears the
+ * task's status, and hangs its card, where the window lists a task by it.
+ * Note that which task a key names is read as it is drawn
+ * (`TaskKeyElement`), never here, because its library reads each block of
+ * words once, so a key read here would never follow the tasks listed after
+ * it, and words drawn again whole as they are listed would load every page
+ * drawn among them again. The words themselves are left as written, so an
+ * agent reading them reads the key, and a key in code, a link, or a
+ * picture's words is left alone.
  */
-function markTaskKeys(node: MarkdownNode, targets: ReadonlyMap<string, string>): void {
+function markTaskKeys(node: MarkdownNode): void {
   if (node.children === undefined || KEYLESS_NODES.has(node.type)) return;
   node.children = node.children.flatMap((child) => {
-    if (child.type === "text") return keyedRun(child, targets);
-    markTaskKeys(child, targets);
+    if (child.type === "text") return keyedRun(child);
+    markTaskKeys(child);
     return [child];
   });
 }
 
-/** A serial for each set of keys the words were read with, which a transcript is drawn again under once the set changes. */
-const keySerials = new WeakMap<ReadonlyMap<string, string>, number>();
-
-/** How many sets of keys have been seen, the last one's serial. */
-let keySetsSeen = 0;
-
-/**
- * The serial of a set of keys, counted from one as each is first seen.
- * Note that a transcript is drawn again under it, because its library reads
- * each block of words once and does not read it again for a change of
- * steps alone, so words drawn before the tasks were listed would never
- * chip a key; the set the words are drawn under changes only as a key
- * they name does (`useWordTargetsFor`), so a page drawn among them loads
- * again only then.
- */
-function keySerial(targets: ReadonlyMap<string, string>): number {
-  const held = keySerials.get(targets);
-  if (held !== undefined) return held;
-  keySetsSeen += 1;
-  keySerials.set(targets, keySetsSeen);
-  return keySetsSeen;
-}
-
-/** The step that marks the listed tasks' keys among the words, named apart as every step is. */
-function markTaskKeysStep(targets: ReadonlyMap<string, string>): (tree: MarkdownNode) => void {
-  return (tree) => markTaskKeys(tree, targets);
+/** The step that marks the words shaped like tasks' keys, named apart as every step is. */
+function markTaskKeysStep(): (tree: MarkdownNode) => void {
+  return markTaskKeys;
 }
 
 /** The step that marks a transcript's links and its pictures, a reference's read through its definition. */
@@ -631,23 +619,19 @@ function markDocumentStep(): (tree: MarkdownNode) => void {
 
 /**
  * The steps words are read with: the library's own; for words a person
- * typed, each line break typed kept as one; the listed tasks' keys, where
- * any are known; then the marks on its links, a document's own marks among
+ * typed, each line break typed kept as one; the words shaped like tasks'
+ * keys; then the marks on its links, a document's own marks among
  * them where the words are drawn as one. Note that Markdown joins two lines
  * with no blank line between them into one, which is right for words a
  * model wrote and wrong for words a person typed line by line into a box
  * whose Enter is a new line, as GitHub keeps a comment's line breaks for the
  * same reason.
  */
-function remarkPluginsFor(
-  typed: boolean,
-  asDocument: boolean,
-  keyTargets: ReadonlyMap<string, string>,
-): MarkdownSteps {
+function remarkPluginsFor(typed: boolean, asDocument: boolean): MarkdownSteps {
   return [
     ...TRANSCRIPT_REMARK_STEPS,
     ...(typed ? [remarkBreaks] : []),
-    ...(keyTargets.size === 0 ? [] : [markdownStep(markTaskKeysStep, keyTargets)]),
+    markTaskKeysStep,
     asDocument ? markDocumentStep : markLinksStep,
   ];
 }
@@ -673,6 +657,23 @@ function MentionElement({
       </TranscriptLink>
     )
   );
+}
+
+/**
+ * A task's key written in a transcript's words: its task's chip where the
+ * window lists a task by it (`useWordTargets`), as a link to the task is
+ * drawn (`MentionElement`), and the key as written where it lists none. It
+ * is read as it is drawn, so the chip follows the tasks as they are listed
+ * while the words around it stand.
+ */
+function TaskKeyElement({
+  node,
+  children,
+}: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
+  const doors = useMentionDoors();
+  const key = String(node?.properties[TASK_KEY_ELEMENT.KEY] ?? "");
+  const target = useWordTargets().get(key);
+  return (target === undefined ? undefined : linkChip(target, key, doors)) ?? children;
 }
 
 /** A link standing alone in its paragraph of a document: the card of what it names, or the paragraph as it was where it earns none (`lone-link-card.tsx`). */
@@ -790,6 +791,7 @@ const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
     </TranscriptLink>
   ),
   [MENTION_ELEMENT.TAG]: MentionElement,
+  [TASK_KEY_ELEMENT.TAG]: TaskKeyElement,
   [PICTURE_ELEMENT.TAG]: PictureElement,
   [LONE_LINK_ELEMENT.TAG]: LoneLinkElement,
   [PICTURE_ROW_ELEMENT.TAG]: PictureRowElement,
@@ -993,19 +995,13 @@ export function TranscriptWords({
   /** Whether the words are drawn on one line, as a queued message's row draws them. */
   line?: boolean | undefined;
 }): ReactNode {
-  const words = element === undefined ? text : element.markdown;
-  const { targets: keyTargets, drawnUnder } = useWordTargetsFor(words);
-  const remarkPlugins = useMemo(
-    () => remarkPluginsFor(typed, asDocument, keyTargets),
-    [typed, asDocument, keyTargets],
-  );
+  const remarkPlugins = useMemo(() => remarkPluginsFor(typed, asDocument), [typed, asDocument]);
   const { components, allowedTags, literal } = useElementDraw(element);
   // Note that the source stays the words as written, because a code block's copy reads it.
   return (
     <TranscriptMarkdownSource markdown={text}>
       <MessageResponse
-        key={keySerial(drawnUnder)}
-        words={words}
+        words={element === undefined ? text : element.markdown}
         streaming={streaming}
         line={line}
         components={components}

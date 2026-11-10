@@ -9,7 +9,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useAutomation } from "../automation-directory.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { appStateQuery, memoizedSelect } from "../use-app-state.js";
@@ -199,47 +199,6 @@ const selectKeyTargets = memoizedSelect(
  */
 export function useWordTargets(): ReadonlyMap<string, string> {
   return useQuery({ ...appStateQuery, select: selectKeyTargets }).data ?? NO_KEY_TARGETS;
-}
-
-/**
- * Whatever is shaped like a task's key among words as written, marks and
- * all, which every key read among their words matches
- * (`@repo/features/workspace-key`'s `keySpansIn`), and more.
- */
-const KEY_SHAPE = /[\p{Lu}\p{N}]{1,4}-\d+/gu;
-
-/** The listed keys `words` are written with, by their links; no keys, the one object, where they name none. */
-function keyTargetsIn(
-  words: string,
-  listed: ReadonlyMap<string, string>,
-): ReadonlyMap<string, string> {
-  const named = new Map<string, string>();
-  for (const [key] of words.matchAll(KEY_SHAPE)) {
-    const target = listed.get(key);
-    if (target !== undefined) named.set(key, target);
-  }
-  return named.size === 0 ? NO_KEY_TARGETS : named;
-}
-
-/**
- * The names words are drawn with as a chip (`useWordTargets`), and the
- * listing `words` were last drawn whole under: the one held while each
- * listing after it names the keys `words` are written with by the same
- * links. Note that words are drawn again whole as that listing changes
- * (`TranscriptWords`), and a page drawn among them loads again, so a task
- * listed anew that the words do not name leaves them as they were.
- */
-export function useWordTargetsFor(words: string): {
-  readonly targets: ReadonlyMap<string, string>;
-  readonly drawnUnder: ReadonlyMap<string, string>;
-} {
-  const targets = useWordTargets();
-  // Note that the listing is held in state, set as it is drawn, so a draw React throws away holds nothing.
-  const [held, hold] = useState(targets);
-  if (held !== targets && !sameTargets(keyTargetsIn(words, held), keyTargetsIn(words, targets))) {
-    hold(targets);
-  }
-  return { targets, drawnUnder: held };
 }
 
 /**
