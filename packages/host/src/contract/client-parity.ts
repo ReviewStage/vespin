@@ -99,6 +99,9 @@ const IOS = {
   WAVE_5: notYet("Answering, replying, and messaging and starting agents are iOS wave 5"),
 } as const;
 
+/** The panel draws a page in a frame of the service's, so it never reads the page's HTML itself. */
+const PANEL_PAGE_FRAME = byDesign("The panel frames a page through the service (pageFrameUrl)");
+
 /** Offered by every client. */
 const EVERYWHERE: ClientParityRow = { desktop: YES, web: YES, ios: YES };
 
@@ -306,6 +309,11 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_REVISION]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_RESTORE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_PAGE_SOURCE]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PAGE_HTML]: {
+    desktop: PANEL_PAGE_FRAME,
+    web: PANEL_PAGE_FRAME,
+    ios: IOS.TRANSCRIPT_REVIEW,
+  },
   [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: panel(IOS.TASKS),
