@@ -239,7 +239,7 @@ export interface AttachedFiles {
   readonly drop: FileDrop;
   /** The box's words as they now stand, which take off a picture whose marker they no longer hold and bring back one whose marker came back. */
   readonly follow: (words: string) => void;
-  /** The box's message gone: the pictures taken off with their chips, which undo can no longer bring back, are let go, and the next picture is "Picture 1" again. */
+  /** The box's message sent: once the box stands empty after it, the pictures taken off with their chips, which undo can no longer bring back, are let go, and the next picture is "Picture 1" again; a send that leaves the words standing lets go of nothing. */
   readonly settle: () => void;
 }
 
@@ -265,6 +265,8 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   const placed = useRef(new Set<string>());
   const stashed = useRef(new Map<string, AgentAttachment>());
   const minted = useRef(new Set<string>());
+  // Whether the box's message went, so the next time its words and files stand empty its pictures are let go.
+  const settling = useRef(false);
 
   /** The images read named as pictures, each past every name held, taken off, or handed out, so no two pictures of the box share one. */
   const named = (read: FilesRead): FilesRead => {
@@ -345,13 +347,21 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
     },
     drop,
     settle: () => {
-      placed.current.clear();
-      stashed.current.clear();
-      minted.current.clear();
+      settling.current = true;
     },
     follow: (words) => {
       if (latest.current.pictures === undefined) return;
       const held = heldNow();
+      // Note that a message is let go only once the box stands empty after it, because a send that
+      // leaves its words standing, a queued edit refused, still holds its pictures and what undo brings back.
+      if (settling.current && words === "" && held.length === 0) {
+        settling.current = false;
+        placed.current.clear();
+        stashed.current.clear();
+        minted.current.clear();
+        return;
+      }
+      if (words !== "") settling.current = false;
       // Note that a marker in code still holds its picture, which the box then draws beside its words.
       const marked = new Set(writtenMarkers(words).map((marker) => marker.name));
       const gone = held.filter(

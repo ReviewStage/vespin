@@ -410,15 +410,19 @@ function useBoxPictures(
     () => new Set(attachments.filter(isPictureFile).map((file) => file.name)),
     [attachments],
   );
-  const inWords = useMemo(() => {
+  // Note that the words are read once for every picture they name, in the order they first name each.
+  const { inWords, ordered } = useMemo(() => {
+    if (!takes) return { inWords: [], ordered: [] };
     const named = new Set(pictureMarkers(draft).map((marker) => marker.name));
-    return attachments.filter((file) => isPictureFile(file) && named.has(file.name));
-  }, [draft, attachments]);
-  const ordered = pictureMarkers(draft).flatMap((marker, index, markers) => {
-    const file = inWords.find((each) => each.name === marker.name);
-    const first = markers.findIndex((each) => each.name === marker.name) === index;
-    return file === undefined || !first ? [] : [file];
-  });
+    const pictures = attachments.filter(isPictureFile);
+    return {
+      inWords: pictures.filter((file) => named.has(file.name)),
+      ordered: [...named].flatMap((name) => {
+        const file = pictures.find((each) => each.name === name);
+        return file === undefined ? [] : [file];
+      }),
+    };
+  }, [takes, draft, attachments]);
   const chips = attachmentChips(ordered);
   const viewer = usePictureViewer(chips);
   if (!takes) return { beside: attachments, field: undefined, viewer: null };

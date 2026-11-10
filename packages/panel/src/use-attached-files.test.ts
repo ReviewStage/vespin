@@ -75,6 +75,30 @@ function QueueingBox(): ReactNode {
   });
 }
 
+/** The agent's box editing a queued message, whose Save the queue refuses, so its words stay standing. */
+function RefusedEditBox(): ReactNode {
+  const composer = useAgentComposer({
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: () => new Promise<AgentAgentAnswer>(ignore),
+  });
+  return createElement(AgentComposer, {
+    ...QUIET_COMPOSER,
+    composer,
+    skills: undefined,
+    queueing: {
+      working: true,
+      enterQueues: true,
+      onQueue: ignore,
+      editing: true,
+      onSave: ignore,
+      onSteer: ignore,
+      onCancel: ignore,
+    },
+  });
+}
+
 /** The boxes that take files, each drawn alone. */
 const BOXES = {
   agent: () => createElement(AgentBox),
@@ -209,6 +233,23 @@ test("undo bringing a deleted picture's chip back brings its picture back, thoug
     act(() => editor.commands.undo());
     await settle();
   }
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
+test("a save that leaves the box's words standing still lets one Backspace take a picture off with its chip", async () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(withQueryClient(createElement(RefusedEditBox))));
+  await settle();
+  await drop(container, [png("one.png"), png("two.png")]);
+
+  act(() => pressInComposer(container, "Enter"));
+  await settle();
+  act(() => pressInComposer(container, "Backspace"));
+  await settle();
 
   assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
 });
