@@ -24,9 +24,11 @@ import { modelsCommand } from "./models.js";
 import { pageCommand } from "./page.js";
 import { prCommand } from "./pr.js";
 import { preferencesCommand } from "./preferences.js";
+import { repoCommand } from "./repo.js";
 import { sectionCommand } from "./section.js";
 import { sentryCommand } from "./sentry.js";
 import { setupCommand } from "./setup.js";
+import { skillsCommand } from "./skills.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
 import { versionCommand } from "./version.js";
@@ -43,11 +45,13 @@ export const COMMANDS = [
   prCommand,
   workspaceCommand,
   githubCommand,
+  repoCommand,
   setupCommand,
   inboxCommand,
   memoryCommand,
   automationCommand,
   modelsCommand,
+  skillsCommand,
   integrationsCommand,
   sentryCommand,
   preferencesCommand,

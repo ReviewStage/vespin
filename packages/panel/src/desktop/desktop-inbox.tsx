@@ -1,6 +1,5 @@
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
 import {
-  anyUnread,
   holderAutomationId,
   INBOX_HOLDER,
   type InboxHolder,
@@ -29,7 +28,7 @@ import {
   sameTab,
 } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -223,6 +222,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     named,
     marks,
     standing,
+    markable: unread,
     counts,
     list,
     listedRows,
@@ -241,7 +241,6 @@ export const DesktopInbox = memo(function DesktopInbox({
     resolveItems,
     onRetry,
   } = useInboxListing(tasks, narrowedTask);
-  const unread = useMemo(() => anyUnread(standing), [standing]);
   // Mark all as read marks the listed workspace's items, or a task's alone, each on its own, since the service marks a workspace's whole.
   const { onMarkAll, onMarkEach } = marks;
   const markAll = () =>
@@ -459,7 +458,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     shown: opened?.item,
     chosen: chosen?.item,
     active: tasks.shown && !sideFocused,
-    onMark: markItem,
+    marks,
   });
   // ⌘O opens what holds the keys in its full place: the agent the panel shows while it holds them, in its task; else the item shown, in its task, or on its agent's page where it has none.
   const panelAgent =

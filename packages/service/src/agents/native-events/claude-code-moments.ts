@@ -198,6 +198,13 @@ const readTaskNotification = Schema.decodeUnknownOption(
 /** The status a task's notification says it ran to its end with, as `SDKTaskNotificationMessage` spells it; `failed` and `stopped` did not. */
 const TASK_COMPLETED = "completed";
 
+/**
+ * What Claude Code says where the session its launch was told to resume is
+ * nowhere it looks: in a `result`'s errors (`error_during_execution`), and in
+ * the SDK's error for that result, which ends the launch.
+ */
+const SESSION_NOT_FOUND = "No conversation found with session ID";
+
 const readStreamEvent = Schema.decodeUnknownOption(
   Schema.Struct({
     event: Schema.Struct({
@@ -565,6 +572,24 @@ function failureOf(result: typeof ResultSchema.Type): string {
 }
 
 /**
+ * The moments, with the session's loss said among them where a failure
+ * among them says Claude Code found no session to resume
+ * (`SESSION_NOT_FOUND`): after the result that opens the turn where none is
+ * open, and ahead of the launch's end, which reads it.
+ */
+function withSessionLost(moments: readonly NativeMoment[]): readonly NativeMoment[] {
+  const lost = moments.some(
+    (moment) =>
+      (moment.kind === NATIVE_MOMENT.RESULT && moment.failure?.includes(SESSION_NOT_FOUND)) ||
+      (moment.kind === NATIVE_MOMENT.ENDED && moment.detail?.includes(SESSION_NOT_FOUND)),
+  );
+  if (!lost) return moments;
+  const end = moments.findIndex((moment) => moment.kind === NATIVE_MOMENT.ENDED);
+  const at = end === -1 ? moments.length : end;
+  return [...moments.slice(0, at), { kind: NATIVE_MOMENT.SESSION_LOST }, ...moments.slice(at)];
+}
+
+/**
  * The end of one model turn: what its main loop cost, and why it failed
  * where it did. Note that the input the provider counts excludes what the
  * prefix cache read and what was written to it, while the record's input
@@ -799,7 +824,7 @@ function systemMoments(
  */
 export function claudeCodeMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const own = runnerMoments(message);
-  if (Option.isSome(own)) return own.value;
+  if (Option.isSome(own)) return withSessionLost(own.value);
   const envelope = readEnvelope(message);
   if (Option.isNone(envelope)) return [];
   const { type, subtype, parent_tool_use_id } = envelope.value;
@@ -814,7 +839,7 @@ export function claudeCodeMoments(message: WireValue, held: NativeHeld): readonl
     case SDK_MESSAGE.STREAM_EVENT:
       return streamMoments(message);
     case SDK_MESSAGE.RESULT:
-      return resultMoments(message);
+      return withSessionLost(resultMoments(message));
     case SDK_MESSAGE.RATE_LIMIT:
       return rateLimitMoments(message);
     default:

@@ -106,6 +106,9 @@ export type InboxProcedureSeams = AccountResolving & {
   readonly titleModel?: InboxTitleModelOf | undefined;
 };
 
+/** What starting a thread asks of the deployment: the model an untitled thread's title is generated on, for a test. */
+export type InboxTitleSeams = Pick<InboxProcedureSeams, "titleModel">;
+
 /** The agent-title model on our own key (`../agents/coder-host/model.ts`), as an agent's own title is generated, whether or not the sender saved a key; none where the deployment holds no such key. */
 const productionTitleModel: InboxTitleModelOf = () => deploymentTitleModel();
 
@@ -116,7 +119,7 @@ const productionTitleModel: InboxTitleModelOf = () => deploymentTitleModel();
  * the deployment holds no such key, the call answers nothing, or its agent
  * retitled it first (`retitleInboxThread`).
  */
-const retitled = (seams: InboxProcedureSeams, item: InboxItem, text: string) =>
+const retitled = (seams: InboxTitleSeams, item: InboxItem, text: string) =>
   Effect.gen(function* () {
     const model = yield* (seams.titleModel ?? productionTitleModel)();
     if (model === undefined) return;
@@ -641,8 +644,8 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
  * under its key is the one already written, handed off again, which the
  * steer's own key makes reach the agent once.
  */
-const started = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: InboxProcedureSeams,
+export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: InboxTitleSeams,
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   asked: {
@@ -709,18 +712,39 @@ const started = /* @__PURE__ */ Effect.fnUntraced(function* (
   return { item };
 });
 
-/** The item's reminder set for the member until the instant the body names, or ended where it names none: its id and read state, or not found. */
-const remindOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+/** The item marked read for the member, or unread until they read it again: its id and read state, or not found where they reach no such item. */
+export const markReadAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
-  input: { readonly params: { readonly id: string }; readonly body: InboxRemindRequest },
+  itemId: string,
+  unread: boolean,
 ) {
-  const itemId = yield* pathUuid(input.params.id);
-  const { until } = input.body;
+  const marked = yield* hostedStoreOrUnavailable(
+    unread ? markInboxItemUnread(userId, itemId) : markInboxItemRead(userId, itemId),
+  );
+  if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  return { id: itemId, unread, ...marked };
+});
+
+/** The item's reminder set for the member until the instant named, in epoch milliseconds, or ended where none is: its id and read state, or not found where they reach no such item. */
+export const remindAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  itemId: string,
+  until: number | null,
+) {
   const marked = yield* hostedStoreOrUnavailable(
     remindInboxItem(userId, itemId, until === null ? null : new Date(until)),
   );
   if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   return { id: itemId, ...marked };
+});
+
+/** The reminder a request's body names, set on the item its path names. */
+const remindOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  input: { readonly params: { readonly id: string }; readonly body: InboxRemindRequest },
+) {
+  const itemId = yield* pathUuid(input.params.id);
+  return yield* remindAsMember(userId, itemId, input.body.until);
 });
 
 /**
@@ -792,7 +816,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     }) {
       const agentId = yield* pathUuid(input.agentId);
       const { text, clientKey, attachments = [] } = input;
-      return yield* started(seams, writer, context.userId, {
+      return yield* startAsMember(seams, writer, context.userId, {
         agentId,
         title: inboxStartTitle(input),
         titled: input.title !== undefined,
@@ -817,18 +841,14 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
       context,
     }) {
       const itemId = yield* pathUuid(input.id);
-      const marked = yield* hostedStoreOrUnavailable(markInboxItemRead(context.userId, itemId));
-      if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { id: itemId, unread: false, ...marked };
+      return yield* markReadAsMember(context.userId, itemId, false);
     }),
     markItemUnread: signedIn.markItemUnread.use(writeReceiptMiddleware).effect(function* ({
       input,
       context,
     }) {
       const itemId = yield* pathUuid(input.id);
-      const marked = yield* hostedStoreOrUnavailable(markInboxItemUnread(context.userId, itemId));
-      if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { id: itemId, unread: true, ...marked };
+      return yield* markReadAsMember(context.userId, itemId, true);
     }),
     remindItem: signedIn.remindItem.use(writeReceiptMiddleware).effect(function* ({
       input,

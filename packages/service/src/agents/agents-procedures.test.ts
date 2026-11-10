@@ -7,6 +7,7 @@ import { recordRepositoryReads } from "@repo/database/models/github-repository-r
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
+import { setRepositorySetup } from "@repo/database/models/workspace-sandbox-script-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
@@ -16,6 +17,7 @@ import {
   type SandboxState,
   type TerminalSummary,
 } from "@repo/features/terminal-wire";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { noNetwork } from "@repo/wire/testing";
@@ -29,7 +31,11 @@ import {
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import { openGithubUser, openTokenMember } from "../testing/github-app-fake.js";
-import { keepAwakeDetached, scriptedSessionSandboxes } from "../testing/session-sandboxes-fake.js";
+import {
+  keepAwakeDetached,
+  SESSION_SANDBOXES_ASK,
+  scriptedSessionSandboxes,
+} from "../testing/session-sandboxes-fake.js";
 import { agentPortsProcedures } from "./agent-ports-procedures.js";
 import { agentsProcedures } from "./agents-procedures.js";
 import { type SandboxDeleteReach, SessionSandboxes } from "./session-sandboxes.js";
@@ -136,6 +142,21 @@ const openAgentWith = (options: { readonly claimed: boolean }) =>
 
 const openAgent = openAgentWith({ claimed: true });
 
+/** The archive script the suite's workspace keeps for the agents' repository. */
+const ARCHIVE_SCRIPT_TEXT = "docker compose down --volumes";
+
+/** The workspace's archive script for the agents' repository saved. */
+const saveArchiveScript = (workspaceId: string) =>
+  Effect.flatMap(Clock.currentTimeMillis, (now) =>
+    setRepositorySetup(
+      workspaceId,
+      "acme/relay",
+      REPOSITORY_SCRIPT_KIND.ARCHIVE,
+      ARCHIVE_SCRIPT_TEXT,
+      new Date(now),
+    ),
+  );
+
 /**
  * An agent on its starter's own GitHub token, its session claimed, in a
  * workspace with a teammate whose own verified token reads its repository
@@ -192,6 +213,7 @@ const standing = (
   sandbox: Layer.Layer<AgentSandbox>,
   sessionSandboxes: Layer.Layer<SessionSandboxes> = Layer.succeed(SessionSandboxes, {
     deleteFor: () => Effect.die("the terminals routes delete no sandbox"),
+    archiveFor: () => Effect.die("the terminals routes archive no sandbox"),
   }),
   keepAwake: SandboxDeleteReach["keepAwake"] = keepAwakeDetached,
 ) =>
@@ -472,6 +494,59 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
       });
 
       assert.equal(archived.status, 200);
+      assert.equal(yield* Queue.take(sandboxes.deletes), sessionId);
+    }),
+  );
+
+  it.effect(
+    "archiving the agent runs its repository's archive script, then deletes its sandbox",
+    () =>
+      Effect.gen(function* () {
+        const { userId, agent, sessionId } = yield* openAgent;
+        yield* saveArchiveScript(agent.organizationId);
+        const sandboxes = yield* scriptedSessionSandboxes();
+        const call = yield* standing(
+          new Map([["Bearer owner", userId]]),
+          scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
+          sandboxes.layer,
+        );
+
+        const archived = yield* call(agentOf(agent.id), "Bearer owner", {
+          method: "PATCH",
+          body: { archived: true },
+        });
+
+        assert.equal(archived.status, 200);
+        assert.deepEqual(yield* Queue.takeN(sandboxes.asked, 2), [
+          { ask: SESSION_SANDBOXES_ASK.ARCHIVE, sessionId, script: ARCHIVE_SCRIPT_TEXT },
+          { ask: SESSION_SANDBOXES_ASK.DELETE, sessionId },
+        ]);
+      }),
+  );
+
+  it.effect("an archive script that fails still leaves the archive to delete the sandbox", () =>
+    Effect.gen(function* () {
+      const { userId, agent, sessionId } = yield* openAgent;
+      yield* saveArchiveScript(agent.organizationId);
+      const sandboxes = yield* scriptedSessionSandboxes(undefined, () =>
+        Effect.fail(new SnapshotGone({})),
+      );
+      const call = yield* standing(
+        new Map([["Bearer owner", userId]]),
+        scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
+        sandboxes.layer,
+      );
+
+      const archived = yield* call(agentOf(agent.id), "Bearer owner", {
+        method: "PATCH",
+        body: { archived: true },
+      });
+
+      assert.equal(archived.status, 200);
+      assert.deepEqual(
+        (yield* Queue.takeN(sandboxes.asked, 2)).map((each) => each.ask),
+        [SESSION_SANDBOXES_ASK.ARCHIVE, SESSION_SANDBOXES_ASK.DELETE],
+      );
       assert.equal(yield* Queue.take(sandboxes.deletes), sessionId);
     }),
   );

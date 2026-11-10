@@ -188,6 +188,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         repository: agentTable.repository,
         starterId: agentTable.userId,
         starterName: outerJoined(starter.name),
+        startedByAgentId: agentTable.startedByAgentId,
         automationId: agentTable.automationId,
         automationName: sql<string | null>`${agentTable.automationOrigin} ->> 'name'`,
         runId: agentTable.automationRunId,

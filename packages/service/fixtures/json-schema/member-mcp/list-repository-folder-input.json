@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository, by its full name (owner/name), as list_repositories lists it."
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "The folder's path from the repository's root, such as src; the root where left out."
+    },
+    "recursive": {
+      "type": "boolean",
+      "description": "true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries."
+    }
+  },
+  "required": [
+    "repository"
+  ],
+  "additionalProperties": false
+}

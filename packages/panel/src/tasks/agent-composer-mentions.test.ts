@@ -1574,25 +1574,52 @@ test("a bare End and Home take the highlight to the last row and the first, a mo
   assert.equal(composerEditor(container).querySelector("[data-mention-ref]"), null);
 });
 
-test("Enter on a kind's row narrows the list to it, and ⌫ on its empty words widens it again, deleting nothing", async () => {
+test.each([
+  ["⌫", "Backspace"],
+  ["←", "ArrowLeft"],
+  ["Escape", "Escape"],
+])(
+  "Enter on a kind's row narrows the list to it, and %s on its empty words widens it again, deleting nothing and closing nothing",
+  async (_, key) => {
+    const { container } = await wideBox();
+
+    typeInComposer(container, "See @");
+    await settle();
+    highlightRow(container, "Browse", "Files and folders");
+    pressInComposer(container, "Enter");
+    await settle();
+    const narrowed = groupsListed(container);
+    const narrowedCrumb = crumb(container);
+    // Note that whether the key bubbled is read off the document, since an event forgets it was stopped once its dispatch ends.
+    const behind: string[] = [];
+    const listen = (event: KeyboardEvent) => behind.push(event.key);
+    document.addEventListener("keydown", listen);
+    const pressed = pressInComposer(container, key);
+    document.removeEventListener("keydown", listen);
+    await settle();
+
+    assert.equal(narrowedCrumb, "Files and folders");
+    assert.deepEqual(narrowed, [["Files and folders", ["apps/", "README.md"]]]);
+    assert.equal(pressed.defaultPrevented, true);
+    // An Escape the list takes is kept from the surface behind it, as one that closes the list is, so a dialog around the box stays open.
+    assert.equal(behind.includes("Escape"), false);
+    assert.equal(composerEditor(container).textContent, "See @");
+    assert.equal(crumb(container), undefined);
+    assert.ok(kindsListed(container).length > 0, "the kinds' rows stand again");
+  },
+);
+
+test("a word naming a kind leads the @ list with that kind's row, which opens it", async () => {
   const { container } = await wideBox();
 
-  typeInComposer(container, "See @");
+  typeInComposer(container, "See @file");
   await settle();
-  highlightRow(container, "Browse", "Files and folders");
-  pressInComposer(container, "Enter");
-  await settle();
-  const narrowed = groupsListed(container);
-  const narrowedCrumb = crumb(container);
-  const backspace = pressInComposer(container, "Backspace");
+  const first = groupsListed(container)[0];
+  pressInComposer(container, "ArrowRight");
   await settle();
 
-  assert.equal(narrowedCrumb, "Files and folders");
-  assert.deepEqual(narrowed, [["Files and folders", ["apps/", "README.md"]]]);
-  assert.equal(backspace.defaultPrevented, true);
-  assert.equal(composerEditor(container).textContent, "See @");
-  assert.equal(crumb(container), undefined);
-  assert.ok(kindsListed(container).length > 0, "the kinds' rows stand again");
+  assert.deepEqual(first, ["Browse", ["Files and folders"]]);
+  assert.equal(crumb(container), "Files and folders");
 });
 
 test("pressing the crumb's back arrow widens the list again and keeps the caret in the composer", async () => {

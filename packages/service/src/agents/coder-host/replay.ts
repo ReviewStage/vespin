@@ -71,7 +71,7 @@ import {
   replayTokens,
   withinWindow,
 } from "./replay-summary.js";
-import type { SnapshotOutcome } from "./snapshot.js";
+import { SNAPSHOT_MISS, type SnapshotOutcome } from "./snapshot.js";
 import { CODER_TOOL_SET, RETIRED_CODER_TOOL } from "./tool-set.js";
 import { CURSOR_START } from "./transcript.js";
 
@@ -215,6 +215,14 @@ const isAgentAttachmentType = Schema.is(Schema.Literals(Object.values(AGENT_ATTA
 /** What a source that left no branch, carried none, and could not be copied is taken up from. */
 const NO_BRANCH_WORDS =
   "It left no branch to build on, and its work could not be copied from its sandbox, so start from the repository's default branch.";
+
+/** The same for a source on a Mac, whose checkout a Start never reads, so its work stays there. */
+const NO_BRANCH_ON_MAC_WORDS =
+  "It left no branch to build on, and what it did stays on the Mac it ran on, so start from the repository's default branch.";
+
+/** What a branchless source on a Mac adds to the work it carried: what it did on top of that work stayed on the Mac. */
+const CARRIED_ON_MAC_WORDS =
+  "What it did on top of that work and did not push stays on the Mac it ran on, so it is not in that branch.";
 
 /** A text cut to the bound on one line, ending in an ellipsis where it was cut. */
 function cutLine(text: string, maximumChars: number): string {
@@ -719,12 +727,19 @@ function whereOf(
       `build on it, and open your pull request from it as usual.${own}`
     );
   }
+  const onMac = copy.miss === SNAPSHOT_MISS.ON_DEVICE;
   if (source.branch === null) {
-    return carried === undefined ? NO_BRANCH_WORDS : carriedWhere(carried);
+    if (carried === undefined) return onMac ? NO_BRANCH_ON_MAC_WORDS : NO_BRANCH_WORDS;
+    // Note that a Mac's checkout is never read for a Start, so what the source did on top of that work stays there.
+    return onMac ? `${carriedWhere(carried)} ${CARRIED_ON_MAC_WORDS}` : carriedWhere(carried);
   }
+  // Note that a Mac's checkout is never read for a Start, so what the source did not push stays on that Mac.
+  const unpushed = onMac
+    ? "what it had not pushed stays on the Mac it ran on"
+    : "what it had not pushed could not be copied from its sandbox";
   return (
     `Its branch is \`${source.branch}\`${pull}. ${capitalized(fetchWords(source.branch))} and continue there rather than ` +
-    "starting a new one; what it had not pushed could not be copied from its sandbox, so only what it pushed stands."
+    `starting a new one; ${unpushed}, so only what it pushed stands.`
   );
 }
 
@@ -1223,34 +1238,42 @@ export interface RestartFit {
  * turn's words, the developer's, and their files), then told again against
  * the window once the replay is written, as a Start's replay is
  * (`withinWindow`).
- * Nothing where it took no step of its own yet, or where its rows cannot be
- * read, which then opens the session on its next turn's words alone. Note
+ * Nothing where it has no step to hand, of its own or carried, or where its
+ * rows cannot be read, which then opens the session on its next turn's words alone. Note
  * that a line in no turn yet, as the one being sent and any waiting for the
- * launch, is left out, since each is handed on its own; and that an agent
+ * launch, is left out, since each is handed on its own, as is the line being
+ * sent where a turn already took it (`sending`), as a retried turn's opening
+ * line is, and, where that line is the agent's first message, the note and
+ * replay it carries itself; and that an agent
  * handed its description is handed none of it again here, since the next
  * turn hands its task as it stands now.
  */
 export const restartReplayOf = (
   agent: Agent,
   fit: RestartFit,
+  sending?: string,
 ): Effect.Effect<string | undefined, StoreFailure, DatabaseServices> =>
   Effect.gen(function* () {
     const read = yield* recordsOf(agent, undefined);
     if (read === undefined) return undefined;
     const records = read.records.filter(
       (record, index) =>
-        index === 0 || record.message.role !== MESSAGE_ROLE.USER || record.turnId !== undefined,
+        index === 0 ||
+        record.message.role !== MESSAGE_ROLE.USER ||
+        (record.turnId !== undefined && record.clientId !== sending),
     );
     const senders = yield* lineSendersOf(
       { userId: agent.userId, conversationId: agent.conversationId },
       records.filter((record) => record.message.role === MESSAGE_ROLE.USER).map(({ id }) => id),
     );
     const own = transcriptSteps(records, senders, undefined) ?? [];
-    if (own.length === 0) return undefined;
     const opened = records[0]?.message.role === MESSAGE_ROLE.USER ? records[0].placedAt : undefined;
-    const handed = agent.prompt === null ? undefined : briefOf(agent.prompt, opened);
+    // Note that a first message handed again carries its own note and replay, so neither is replayed ahead of it.
+    const resent = sending !== undefined && records[0]?.clientId === sending;
+    const handed = agent.prompt === null || resent ? undefined : briefOf(agent.prompt, opened);
     const mine = handed?.note === undefined ? own : [handed.note, ...own];
     const steps = [...(handed?.carried?.steps ?? []), ...mine];
+    if (steps.length === 0) return undefined;
     const totalSteps = (handed?.carried?.totalSteps ?? 0) + mine.length;
     const { windowTokens, instructionsTokens, besideBytes } = fit;
     const fitted = yield* fitReplay(

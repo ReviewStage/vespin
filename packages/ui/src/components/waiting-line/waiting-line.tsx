@@ -17,7 +17,7 @@ import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
 const LEAD_ROW = "flex items-start gap-ui-12";
 
 /** The ring's slot: a step's disc wide, one label line tall, the ring centered in it. */
-const LEAD_SLOT = "flex h-lh w-ui-20 flex-none items-center justify-center text-label";
+const LEAD_SLOT = "flex h-lh w-ui-16 flex-none items-center justify-center text-label";
 
 /** The words. */
 const LEAD_WORDS = "flex min-w-0 flex-1 flex-col gap-control-gap";

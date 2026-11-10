@@ -2563,7 +2563,7 @@ test("an agent whose starter has left the workspace makes no task in it", async 
   assert.deepEqual(await tasksNamed(agents.caller.userId, workspaceId, "Left behind"), []);
 });
 
-test("create_task makes a task related to another in one write, refusing a parent named both ways and taking the task back with a relation refused", async () => {
+test("create_task makes a task with its parent, sub-tasks, and blocks in one write, refusing a retired relation and taking the task back with one refused", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -2571,10 +2571,7 @@ test("create_task makes a task related to another in one write, refusing a paren
 
   const made = await call(
     AGENT_TOOL.CREATE_TASK,
-    {
-      name: "Invite expiry",
-      relation: { kind: TASK_CREATE_RELATION_KIND.BLOCKS, taskId: tasks.invitations },
-    },
+    { name: "Invite expiry", blocks: [tasks.invitations] },
     "call-blocks",
   );
   assert.ok(isRecord(made.task) && isWireString(made.task.id), JSON.stringify(made));
@@ -2585,19 +2582,19 @@ test("create_task makes a task related to another in one write, refusing a paren
     [made.task.id],
   );
 
+  // A session that listed the tool when it took one relation is told the fields it takes now, and nothing is made.
   assert.deepEqual(
     await call(
       AGENT_TOOL.CREATE_TASK,
       {
-        name: "Twice named",
-        parentTaskId: tasks.invitations,
-        relation: { kind: TASK_CREATE_RELATION_KIND.SUB_TASK_OF, taskId: tasks.invitations },
+        name: "Old relation",
+        relation: { kind: TASK_CREATE_RELATION_KIND.BLOCKS, taskId: tasks.invitations },
       },
-      "call-both",
+      "call-relation",
     ),
-    { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.PARENT_AND_RELATION },
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.RENAMED_RELATION },
   );
-  assert.deepEqual(await tasksNamed(alice, workspaceId, "Twice named"), []);
+  assert.deepEqual(await tasksNamed(alice, workspaceId, "Old relation"), []);
 
   // A task with a parent already takes no new one, and the task asked to be it is not left behind.
   const child = await call(
@@ -2609,15 +2606,29 @@ test("create_task makes a task related to another in one write, refusing a paren
   assert.deepEqual(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      {
-        name: "Usurper",
-        relation: { kind: TASK_CREATE_RELATION_KIND.PARENT_OF, taskId: child.task.id },
-      },
+      { name: "Usurper", subTaskIds: [child.task.id] },
       "call-usurper",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.PARENT_HELD },
   );
   assert.deepEqual(await tasksNamed(alice, workspaceId, "Usurper"), []);
+
+  // A child that waits on a sibling lands with both its parent and its block.
+  const waiting = await call(
+    AGENT_TOOL.CREATE_TASK,
+    { name: "Waits on a sibling", parentTaskId: tasks.invitations, blockedBy: [child.task.id] },
+    "call-parent-and-block",
+  );
+  assert.ok(isRecord(waiting.task) && isWireString(waiting.task.id), JSON.stringify(waiting));
+  const waited = await call(AGENT_TOOL.READ_TASK, { taskId: waiting.task.id });
+  assert.ok(isRecord(waited.task) && Array.isArray(waited.task.blockedBy), JSON.stringify(waited));
+  assert.deepEqual(
+    [
+      Option.getOrThrow(await database.run(readTaskHeader(alice, waiting.task.id))).parentTaskId,
+      waited.task.blockedBy.map((each) => (isRecord(each) ? each.id : undefined)),
+    ],
+    [tasks.invitations, [child.task.id]],
+  );
 });
 
 test("an agent whose starter has left the workspace reaches no other agent", async () => {
@@ -4120,7 +4131,11 @@ test("read_task reads a teammate's task of the caller's workspace with its descr
   const read = await call(AGENT_TOOL.READ_TASK, { taskId: taskIds.billing });
   assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(read));
   assert.ok(isRecord(read.task) && isRecord(read.description));
-  assert.deepEqual([read.task.name, read.task.isYourTask], ["Billing", false]);
+  // Bob made the Billing task, so it is answered as his, by the account his link names him by.
+  assert.deepEqual(
+    [read.task.name, read.task.isYourTask, read.task.startedByUserId],
+    ["Billing", false, teammates.userId],
+  );
   assert.deepEqual(read.description, { text: description, saved: true, leftOutChars: 0 });
   const own = await call(AGENT_TOOL.READ_TASK, { taskId: taskIds.invitations });
   assert.equal(isRecord(own.task) && own.task.isYourTask, true, JSON.stringify(own));

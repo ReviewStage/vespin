@@ -693,7 +693,7 @@ interface HeldActRefusal extends HeldRefusal {
 }
 
 /** What a refusal of a held write's inverse says, and, where part of it was not reached, what asking again takes back and what that action is called. */
-interface HeldUndoRefusal<Change> extends HeldRefusal {
+export interface HeldUndoRefusal<Change> extends HeldRefusal {
   readonly retry?: { readonly label: string; readonly change: Change };
 }
 

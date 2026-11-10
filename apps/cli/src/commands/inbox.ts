@@ -1,5 +1,5 @@
 /**
- * inbox.ts -- `vespin inbox list`, `view`, `answer`, `reply`, and `close`: the threads agents posted for the member, one read whole, its open ask answered, a message written on it, or the thread closed without an answer.
+ * inbox.ts -- `vespin inbox list`, `view`, `answer`, `reply`, `close`, `read`, `unread`, `read-all`, `remind`, and `start`: the threads agents posted for the member, one read whole, its open ask answered, a message written on it, the thread closed without an answer, the member's read state and reminders set, or a new thread started with an agent.
  *
  * `list` reads the account's open threads (`inbox.account`) and keeps those
  * of the workspace the command acts in, placing a task's thread by its
@@ -10,7 +10,10 @@
  * answer made by `@repo/features/cli-inbox-answer`), a thread that asks
  * nothing is nodded to with Got it (`inbox.answer`), and a close is
  * `inbox.close`, each against the revision just read, so a thread the
- * agent changed since is not settled unseen.
+ * agent changed since is not settled unseen. Read state and reminders are
+ * the member's own (`inbox.markItemRead`, `markItemUnread`, `markAllRead`,
+ * and `remindItem`, its time read by `@repo/features/cli-remind`), and a
+ * new thread is `inbox.start`.
  */
 
 import { randomUUID } from "node:crypto";
@@ -20,6 +23,9 @@ import {
 } from "@repo/features/account-inbox-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { CLI_DO_ANSWER, cliInboxAnswer } from "@repo/features/cli-inbox-answer";
+import { cliRemindAt } from "@repo/features/cli-remind";
+import { readerZone } from "@repo/features/date-mention";
+import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import {
   INBOX_ASK,
   INBOX_MESSAGE_AUTHOR,
@@ -32,7 +38,7 @@ import {
   openAskOf,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
-import { Effect, Option } from "effect";
+import { Clock, Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, readInput } from "../output.js";
 import { askService, session } from "../session.js";
@@ -386,9 +392,164 @@ const closeCommand = Command.make(
   Command.withExamples([{ command: "vespin inbox close <thread>", description: "Close a thread" }]),
 );
 
+/** Whether a thread is unread, as a read-state write answers it. */
+function readLine(unread: boolean): string {
+  return unread ? "Marked unread." : "Marked read.";
+}
+
+const readCommand = Command.make("read", { thread: threadArgument }, ({ thread }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const marked = yield* askService(hosted.inbox.markItemRead, { id: thread });
+    yield* answer({ json: marked, lines: [readLine(marked.unread)], ids: [marked.id] });
+  }),
+).pipe(
+  Command.withDescription("Mark a thread read for you"),
+  Command.withExamples([{ command: "vespin inbox read <thread>", description: "Mark it read" }]),
+);
+
+const unreadCommand = Command.make("unread", { thread: threadArgument }, ({ thread }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const marked = yield* askService(hosted.inbox.markItemUnread, { id: thread });
+    yield* answer({ json: marked, lines: [readLine(marked.unread)], ids: [marked.id] });
+  }),
+).pipe(
+  Command.withDescription("Mark a thread unread for you, until you read it again"),
+  Command.withExamples([
+    { command: "vespin inbox unread <thread>", description: "Mark it unread" },
+  ]),
+);
+
+const readAllCommand = Command.make("read-all", {}, () =>
+  Effect.gen(function* () {
+    const { workspace } = yield* resolveWorkspace;
+    const { hosted } = yield* session;
+    const { marked } = yield* askService(hosted.inbox.markAllRead, { workspaceId: workspace.id });
+    yield* answer({
+      json: { workspace: { id: workspace.id, slug: workspace.slug }, marked },
+      lines: [`Marked ${marked} ${marked === 1 ? "thread" : "threads"} read.`],
+    });
+  }),
+).pipe(
+  Command.withDescription("Mark every thread of the workspace read for you"),
+  Command.withExamples([
+    { command: "vespin inbox read-all", description: "Clear the workspace's unread marks" },
+  ]),
+);
+
+const remindCommand = Command.make(
+  "remind",
+  {
+    thread: threadArgument,
+    when: Argument.String("when").pipe(
+      Argument.variadic(),
+      Argument.withDescription(
+        "When it comes back, such as tomorrow, fri 3pm, or nov 12 9:30am; a day alone at 9 AM",
+      ),
+    ),
+    clear: Flag.Boolean("clear").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("End the reminder instead"),
+    ),
+  },
+  ({ thread, when, clear }) =>
+    Effect.gen(function* () {
+      if (clear === when.length > 0) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "Name when it comes back, or --clear to end its reminder.",
+        });
+      }
+      const now = yield* Clock.currentTimeMillis;
+      const remind = clear ? { at: null } : cliRemindAt(when.join(" "), now, readerZone());
+      if ("refusal" in remind) {
+        return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: remind.refusal });
+      }
+      const { hosted } = yield* session;
+      const marked = yield* askService(hosted.inbox.remindItem, {
+        params: { id: thread },
+        body: { until: remind.at },
+      });
+      const line =
+        remind.at === null
+          ? "Reminder ended."
+          : `Out of your inbox until ${new Date(remind.at).toLocaleString()}.`;
+      yield* answer({
+        json: { ...marked, remindAt: remind.at },
+        lines: [line],
+        ids: [marked.id],
+      });
+    }),
+).pipe(
+  Command.withAlias("snooze"),
+  Command.withDescription("Keep a thread out of your inbox until a time, then bring it back"),
+  Command.withExamples([
+    { command: "vespin inbox remind <thread> tomorrow", description: "Back tomorrow at 9 AM" },
+    { command: "vespin inbox snooze <thread> fri 3pm", description: "Back Friday at 3 PM" },
+    { command: "vespin inbox remind <thread> --clear", description: "End its reminder" },
+  ]),
+);
+
+const startCommand = Command.make(
+  "start",
+  {
+    agent: Argument.String("agent").pipe(Argument.withDescription("The agent's id")),
+    title: Flag.String("title").pipe(
+      Flag.withAlias("t"),
+      Flag.optional,
+      Flag.withDescription("The thread's subject; titled from the message where none is named"),
+    ),
+    input: Flag.String("input").pipe(
+      Flag.withAlias("F"),
+      Flag.withDescription("The first message, from a file or - for stdin"),
+    ),
+  },
+  ({ agent, title, input }) =>
+    Effect.gen(function* () {
+      const text = (yield* readInput(input)).trim();
+      if (text === "") {
+        return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: "The message is empty." });
+      }
+      const { hosted } = yield* session;
+      const subject = Option.getOrUndefined(title)?.trim();
+      const sent = yield* askService(
+        hosted.inbox.start,
+        {
+          agentId: agent,
+          text,
+          clientKey: clientKey(),
+          ...(subject === undefined || subject === "" ? undefined : { title: subject }),
+        },
+        HOSTED_DEADLINE.STEER,
+      );
+      yield* written(sent.item, `Started ${sent.item.id}.`);
+    }),
+).pipe(
+  Command.withDescription("Start a thread with an agent, which reaches it as a message"),
+  Command.withExamples([
+    {
+      command:
+        'echo "Can you check the flaky test?" | vespin inbox start <agent> -t "Flaky test" -F -',
+      description: "Start a thread from stdin",
+    },
+  ]),
+);
+
 export const inboxCommand = Command.make("inbox").pipe(
   Command.withDescription("Read and answer the threads agents posted for you"),
-  Command.withSubcommands([listCommand, viewCommand, answerCommand, replyCommand, closeCommand]),
+  Command.withSubcommands([
+    listCommand,
+    viewCommand,
+    answerCommand,
+    replyCommand,
+    closeCommand,
+    readCommand,
+    unreadCommand,
+    readAllCommand,
+    remindCommand,
+    startCommand,
+  ]),
   Command.withExamples([
     { command: "vespin inbox list --unread", description: "The threads you have not read" },
   ]),

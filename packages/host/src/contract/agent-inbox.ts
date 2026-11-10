@@ -30,8 +30,6 @@ import {
   agentInboxAttachmentParamsSchema,
   agentInboxAttachmentViewSchema,
   agentInboxCloseParamsSchema,
-  agentInboxCloseReleasedViewSchema,
-  agentInboxCloseReleaseParamsSchema,
   agentInboxItemHomeParamsSchema,
   agentInboxItemHomeViewSchema,
   agentInboxMessagedViewSchema,
@@ -40,6 +38,8 @@ import {
   agentInboxReadAllViewSchema,
   agentInboxReadStateParamsSchema,
   agentInboxReadStateViewSchema,
+  agentInboxReleasedViewSchema,
+  agentInboxReleaseParamsSchema,
   agentInboxRemindParamsSchema,
   agentInboxScopeSchema,
   agentInboxStartParamsSchema,
@@ -72,11 +72,11 @@ export const AGENT_INBOX_ACTS = declaredActs({
     door: ACT.ROW_WRITE,
     unanswered: UNANSWERED,
   }),
-  // Note that a release the host could not answer reads as a close no longer held.
-  AGENTS_INBOX_CLOSE_RELEASE: hostAct({
-    input: agentInboxCloseReleaseParamsSchema,
-    output: agentInboxCloseReleasedViewSchema,
-    refusal: "Could not undo resolving the inbox item on this system.",
+  // Note that a release the host could not answer reads as a close or nod no longer held.
+  AGENTS_INBOX_RELEASE: hostAct({
+    input: agentInboxReleaseParamsSchema,
+    output: agentInboxReleasedViewSchema,
+    refusal: "Could not undo on this system.",
     panelOnly: true,
     door: ACT.LOCAL_WRITE,
     unanswered: { held: false },

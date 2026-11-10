@@ -152,6 +152,8 @@ const agentLiveRowSchema = EffectSchema.Struct({
   repository: EffectSchema.NullOr(EffectSchema.String),
   starterId: EffectSchema.String,
   starterName: EffectSchema.NullOr(EffectSchema.String),
+  /** The coding agent that started this one; null where none did, and absent from a statement before it was carried. */
+  startedByAgentId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   automationId: EffectSchema.NullOr(EffectSchema.String),
   automationName: EffectSchema.NullOr(EffectSchema.String),
   /** The run the agent belongs to, and the automation that run belongs to; null where it belongs to none, and absent from a statement before they were carried. */
@@ -524,6 +526,7 @@ function agentSummaryOf(
     ...(row.starterName === null
       ? undefined
       : { startedBy: { userId: row.starterId, name: row.starterName } }),
+    ...(row.startedByAgentId == null ? undefined : { startedByAgentId: row.startedByAgentId }),
     ...(row.automationId === null ? undefined : { automationId: row.automationId }),
     ...(row.automationName === null ? undefined : { automationName: row.automationName }),
     ...(row.source == null ? undefined : { source: row.source }),

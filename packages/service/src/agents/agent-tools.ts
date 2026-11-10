@@ -117,7 +117,7 @@ import {
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "../tasks/task-change.js";
 import { createTaskAsked } from "../tasks/task-create-relation.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
-import { agentStarterName, controlsAgent } from "./agent-reach.js";
+import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
 import { addAgentRepository, addedRepositoryLine } from "./coder-host/agent-repository-add.js";
 import {
@@ -2111,7 +2111,7 @@ const sourceLanding = (
     const found = yield* workspaceAgentOf(caller, from.agentId);
     if (Option.isNone(found)) return Result.fail(START_AGENT_REFUSAL.NO_SOURCE);
     const { agent: source, workspaceId } = found.value;
-    if (!controlsAgent(callerUserId(caller), source)) {
+    if (!startsFromAgent(callerUserId(caller), source)) {
       return Result.fail(`Not started: only ${yield* agentStarterName(source)} can do this.`);
     }
     if (named !== undefined && named !== source.taskId) {
@@ -2480,7 +2480,7 @@ interface TaskUpdateAnswered {
 }
 
 /** A task's change as the model reads it: the task as it now stands, its parent and its blocks where the call named them, and whether every change named already stood before the call. */
-const taskUpdateAnswer = (
+export const taskUpdateAnswer = (
   userId: string,
   task: StoredTask["task"],
   { already, section, parentNamed, blocksNamed }: TaskUpdateAnswered,
