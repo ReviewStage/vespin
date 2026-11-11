@@ -291,8 +291,10 @@ function reportEverywhere(message: string): void {
   reportToStderr(message);
   logToFile(message);
   if (SENTRY_DSN === "") return;
-  if (FAILING.test(message)) Sentry.captureMessage(message, "error");
-  else Sentry.logger.info(message);
+  // Note that a line is sent up to what its step said of itself, so an error's or a tool's words after it stay in the log.
+  const ours = message.split(": ").slice(0, 2).join(": ");
+  if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
+  else Sentry.logger.info(ours);
 }
 
 const nodeServices = Layer.mergeAll(

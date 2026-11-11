@@ -85,14 +85,21 @@ const FAILING = /could not|couldn't|failed|refused/i;
 
 /**
  * A line main reports, told to Sentry where it is about This Mac's host
- * setup: as an error where it says something failed, as a log line
- * otherwise. Note that only those lines leave, our own words naming no
- * secret, so every other line main reports stays on stderr.
+ * setup, up to what its step said of itself: as an error where it says
+ * something failed, as a log line otherwise. Note that only those lines
+ * leave, and only our own words of them, so a command's output and every
+ * other line main reports stay on stderr.
  */
 export function reportThisMacToSentry(message: string): void {
   if (!message.startsWith(THIS_MAC_LINE)) return;
-  if (FAILING.test(message)) Sentry.captureMessage(message, "error");
-  else Sentry.logger.info(message);
+  const ours = ownWords(message);
+  if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
+  else Sentry.logger.info(ours);
+}
+
+/** A reported line up to what a step said of itself, so a command's output after it stays on stderr: `this Mac's host: could not install it` of `…: <stderr>`. */
+function ownWords(message: string): string {
+  return message.split(": ").slice(0, 2).join(": ");
 }
 
 /** Sentry's status code for a span that ended in error, as its SDK writes it. */

@@ -700,6 +700,8 @@ main() {
   fi
 
   connect_box
+  # Note that the host restarted below says where its setup stands afresh, so a status an earlier run left is cleared first.
+  rm -f "$HOME/.local/state/vespin-host/setup-status.json"
   if [ "$kernel" = "Darwin" ]; then
     restart_mac_agent
   else

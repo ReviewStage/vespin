@@ -498,10 +498,7 @@ export function composeLocalAgents(
               return yield* Effect.result(platform.clis.ready(preparing));
             }),
           );
-          if (Result.isSuccess(ready)) {
-            yield* keptStatus(SETUP_STEP.READY);
-            return true;
-          }
+          if (Result.isSuccess(ready)) return true;
           report(`the local agents' setup failed: ${ready.failure.detail}`);
           failure = ready.failure.detail;
           yield* keptStatus(SETUP_STEP.FAILED, failure);
@@ -1386,6 +1383,8 @@ export function composeLocalAgents(
         if (!(yield* readyForOpening(registered))) return true;
         const shellVariables = yield* shellEnvironment;
         if (!(yield* asked(registered({})))) return false;
+        // Note that the machine says it is ready only once the service took it as ready.
+        yield* keptStatus(SETUP_STEP.READY);
         yield* Effect.scoped(follow(folder, shellVariables));
         return true;
       });
