@@ -451,13 +451,16 @@ export function NewTaskScreen({ parent }: { readonly parent?: string | undefined
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const listed = view?.tasks ?? NO_TASKS;
   const chosen = useChosenWorkspace(workspaces).chosen;
+  // Note that a sub-task starts in its parent's workspace by the id its row holds, read before the workspace list may be, and holds its start until that row is read.
   const parentIn = listed.find((task) => task.id === parent)?.workspaceId;
-  const workspace = workspaces.find((each) => each.id === parentIn) ?? chosen;
+  const workspaceId = parent === undefined ? chosen?.id : parentIn;
+  const placed = workspaceId !== undefined || parent === undefined;
+  const workspace = workspaces.find((each) => each.id === workspaceId) ?? chosen;
   const repository = useRepositoryPick(workspace);
-  const relation = useRelationPick(listed, workspace?.id, parent);
+  const relation = useRelationPick(listed, workspaceId, parent);
   const pick = useModelPick();
-  const startTask = useStartTask(workspace?.id);
-  const fileTask = useFileTask(workspace?.id);
+  const startTask = useStartTask(workspaceId);
+  const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
@@ -487,9 +490,9 @@ export function NewTaskScreen({ parent }: { readonly parent?: string | undefined
     <>
       <SheetBar
         title={WORDS.NEW_TASK}
-        ready={drafted && !starting}
+        ready={drafted && placed && !starting}
         onStart={start}
-        file={{ ready: filed !== undefined && !starting, onFile: file }}
+        file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
       />
       <Screen>
