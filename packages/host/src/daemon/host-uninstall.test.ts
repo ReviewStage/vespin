@@ -3,8 +3,9 @@ import { describe, expect, it } from "@effect/vitest";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
-import { Effect, Layer } from "effect";
+import { Effect, Exit, Layer } from "effect";
 import * as FileSystem from "effect/FileSystem";
+import { systemError } from "effect/PlatformError";
 import { writeHostDevice } from "../host-device-record.js";
 import { keepOwnedAgent } from "../local-agent-state.js";
 import { HOST_LEAVE_OUTCOME } from "./host-leave.js";
@@ -87,6 +88,39 @@ describe("the bundled host's uninstall", () => {
       }).pipe(Effect.provide(http.layer));
       expect(left).toBe(HOST_LEAVE_OUTCOME.UNANSWERED);
       expect(yield* standing([stateRoot])).toEqual([false]);
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+  );
+
+  it.effect("removes the state, and says so, where an agent's folder cannot be removed", () =>
+    Effect.gen(function* () {
+      const { home, stateRoot, folders } = yield* mac;
+      const http = recordingHttpClient(() => jsonResponse({ done: true }));
+      // Note that the owned agent's folder refuses its removal, as one the member's own permissions lock does.
+      const locked = Layer.effect(
+        FileSystem.FileSystem,
+        Effect.map(FileSystem.FileSystem, (fileSystem) => ({
+          ...fileSystem,
+          remove: (path: string, options?: Parameters<typeof fileSystem.remove>[1]) =>
+            path === folders.owned
+              ? Effect.fail(
+                  systemError({
+                    _tag: "PermissionDenied",
+                    module: "FileSystem",
+                    method: "remove",
+                    pathOrDescriptor: path,
+                  }),
+                )
+              : fileSystem.remove(path, options),
+        })),
+      ).pipe(Layer.provide(NodeFileSystem.layer));
+      const uninstalled = yield* uninstallBundledHost({
+        stateRoot,
+        home,
+        version: "0.1.0",
+        removeAgentFolders: true,
+      }).pipe(Effect.provide(Layer.merge(http.layer, locked)), Effect.exit);
+      expect(Exit.isFailure(uninstalled)).toBe(true);
+      expect(yield* standing([stateRoot, folders.owned])).toEqual([false, true]);
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
   );
 });

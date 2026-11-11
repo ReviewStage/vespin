@@ -1,5 +1,5 @@
 import { deviceAgentsFolder } from "@repo/features/device-agent-wire";
-import { Effect, Path } from "effect";
+import { Effect, Exit, Path } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { ownedAgents } from "../local-agent-state.js";
 import { leaveHostDevice } from "./host-leave.js";
@@ -20,7 +20,10 @@ import { leaveHostDevice } from "./host-leave.js";
  * agents' folders the host made are removed (`owned-agents` in its state),
  * never another install's, and `~/.vespin/clones`, which every install for
  * the account shares, stays. `~/.vespin/agents` and `~/.vespin` go only
- * once nothing else stands in them.
+ * once nothing else stands in them. Each folder is tried whatever became of
+ * the others, and the state goes even where one could not be removed, since
+ * the box has left and its secret must not stay; the uninstall then fails
+ * with the first folder that stood.
  */
 
 export interface BundledHostUninstallInput {
@@ -47,14 +50,17 @@ export const uninstallBundledHost = Effect.fnUntraced(function* (input: BundledH
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const left = yield* leaveHostDevice({ stateRoot: input.stateRoot, version: input.version });
+  const agents = deviceAgentsFolder(input.home);
+  const folders = input.removeAgentFolders ? yield* ownedAgents(input.stateRoot) : [];
+  const removals = yield* Effect.forEach(folders, (agentId) =>
+    Effect.exit(fileSystem.remove(path.join(agents, agentId), { recursive: true, force: true })),
+  );
   if (input.removeAgentFolders) {
-    const agents = deviceAgentsFolder(input.home);
-    for (const agentId of yield* ownedAgents(input.stateRoot)) {
-      yield* fileSystem.remove(path.join(agents, agentId), { recursive: true, force: true });
-    }
     yield* removedIfEmpty(agents);
     yield* removedIfEmpty(path.dirname(agents));
   }
   yield* fileSystem.remove(input.stateRoot, { recursive: true, force: true });
+  const stood = removals.find(Exit.isFailure);
+  if (stood !== undefined) return yield* Effect.failCause(stood.cause);
   return left;
 });
