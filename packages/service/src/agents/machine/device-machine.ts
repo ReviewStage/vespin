@@ -16,8 +16,8 @@
  * (`deviceAgentLayout`). A Mac whose release bundles a runner that keeps the
  * CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`), by the
  * host version it last called with, has it kept there, as a sandbox's is,
- * Codex's threads at their default under the agent's home named for the
- * mirror; an older one keeps its sessions on its disk alone. Either resumes
+ * its runner mirroring Codex's threads from their default under the
+ * machine's own home; an older one keeps its sessions on its disk alone. Either resumes
  * a session the store does not hold whole from its disk (`diskSessions`).
  * `launchRunner` queues the launch line, its runner's
  * environment and first lines sealed together under the deployment's key
@@ -162,9 +162,6 @@ export const MAC_MACHINE = {
    */
   TRANSCRIPTS_SINCE: "0.11.0",
 } as const;
-
-/** Codex's own folder under a home, where it keeps its threads unless `CODEX_HOME` names another. */
-const CODEX_DEFAULT_HOME = ".codex";
 
 /**
  * The machine over the Mac, and whether a session is a local agent's, which
@@ -335,9 +332,9 @@ function deviceMachineOver(
         sharedFiles: folders.temp,
         claudeExecutable: device.value.claudeExecutable,
         codexExecutable: device.value.codexExecutable ?? undefined,
-        // Note that a Mac's Codex keeps its threads at its default under the agent's own home, named
-        // only where the runner mirrors them, since the runner finds them by `CODEX_HOME` alone.
-        codexHome: kept ? [folders.home, CODEX_DEFAULT_HOME].join("/") : undefined,
+        // Note that a Mac's Codex keeps its threads and its login at its own default under the machine's
+        // home, which its runner finds by itself, so nothing names `CODEX_HOME` for it.
+        codexHome: undefined,
         // Note that the Mac's follower writes its lines to the stdin of the runner its release bundled.
         linesRead: false,
         transcriptsKept: kept,
