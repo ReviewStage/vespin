@@ -375,6 +375,37 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a command write answered after the account changes is answered to the window but never laid on the list of the account signed in after",
+  () =>
+    Effect.gen(function* () {
+      let signedIn = "user-dana";
+      const { acts, open, holdCommandAdds, allowedCommands } = yield* subject({
+        accountId: () => signedIn,
+      });
+      const answered = yield* Deferred.make<void>();
+      holdCommandAdds(Deferred.await(answered));
+      yield* acts.ALLOWED_COMMANDS_FOLLOW.hold(undefined);
+      yield* settled;
+
+      const adding = yield* Effect.forkChild(
+        acts.ALLOWED_COMMANDS_WRITE({ add: ["pnpm", "test"] }),
+      );
+      yield* settled;
+      signedIn = "user-eli";
+      yield* open;
+      yield* settled;
+      yield* Deferred.succeed(answered, undefined);
+      const answer = yield* Fiber.join(adding);
+      yield* settled;
+
+      assert.ok("commands" in answer && answer.commands.length === 1);
+      const told = allowedCommands().at(-1);
+      assert.ok(isRecord(told));
+      assert.deepEqual(told["user-eli"], { rows: { commands: [] } });
+    }),
+);
+
 it.effect("a closed gate answers a forget unanswered before the service is asked", () =>
   Effect.gen(function* () {
     const signedOut = yield* subject({ signedIn: false });

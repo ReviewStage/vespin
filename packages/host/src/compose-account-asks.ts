@@ -346,12 +346,18 @@ function writesAnswered(
         : Effect.andThen(keys.answered(userId, keyListOf(answer)), dependencies.modelsMoved);
     });
   return {
-    /** A write's answer of the account's always-allowed commands, laid as the list stands for the account signed in where it carries it, and answered whole to the window that asked. */
-    commandsWritten: (answer: AllowedCommandsWriteAnswerView) =>
+    /**
+     * A write's answer of the account's always-allowed commands, laid as the
+     * list stands where it carries it, and answered whole to the window that
+     * asked. Note that it is laid only while the account that sent the write
+     * (`sentFor`) is still the one signed in, because an answer landing after
+     * a switch is the other account's list.
+     */
+    commandsWritten: (sentFor: string | undefined, answer: AllowedCommandsWriteAnswerView) =>
       Effect.as(
         Effect.suspend(() => {
           const userId = dependencies.accountId();
-          return userId === undefined || "failure" in answer
+          return userId === undefined || userId !== sentFor || "failure" in answer
             ? Effect.void
             : commands.answered(userId, { commands: answer.commands });
         }),
@@ -479,7 +485,9 @@ function actsOf(
       Effect.suspend(() => {
         const sentFor = dependencies.accountId();
         return commandsInTurn(
-          Effect.flatMap(allowedCommandWrite(dependencies, asked, write, sentFor), commandsWritten),
+          Effect.flatMap(allowedCommandWrite(dependencies, asked, write, sentFor), (answer) =>
+            commandsWritten(sentFor, answer),
+          ),
         );
       }),
     MEMORIES_FORGET: declaredWrite(
