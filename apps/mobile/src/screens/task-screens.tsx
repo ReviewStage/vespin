@@ -27,7 +27,6 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { archiveStopWords } from "@repo/features/tasks-model";
 import { provenanceText } from "@repo/features/time-format";
 import { readingWords, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
@@ -68,7 +67,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, useState } from "react";
-import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
+import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/use-agent.js";
+import { archiveQuestion } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -623,13 +623,13 @@ function agentSwipes(
   ];
 }
 
-/** What Archive on an agent's row asks first, as the agent page's menu asks of an agent at rest: its title and its act. */
-const ARCHIVE_ROW = { title: archiveStopWords(false).title, act: "Archive agent" } as const;
-
 /**
  * Archive on an agent's row, asked first: `archive` raises the question for
  * an agent, and `ask` is the system's alert that asks it, which the screen
- * stands beside its `<Screen>`, as every list's questions stand.
+ * stands beside its `<Screen>`, as every list's questions stand. Note that
+ * the question reads where the agent stands now, as the agent page's menu
+ * asks (`archiveQuestion`), because one that starts working while the alert
+ * is up would otherwise be stopped and archived without a word of it.
  */
 export function useAgentArchiveAsk(): {
   readonly archive: (agentId: string) => void;
@@ -637,13 +637,16 @@ export function useAgentArchiveAsk(): {
 } {
   const acts = useAgentRowActs();
   const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
+  const agent = useFollowedAgent(asked?.agentId ?? "");
+  const question = archiveQuestion(agent !== undefined && agentStillWriting(agent.status));
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
   return {
     archive: (agentId) => setAsked({ agentId, presented: true }),
     ask: (
       <ConfirmAsk
-        title={ARCHIVE_ROW.title}
-        act={ARCHIVE_ROW.act}
+        title={question.title}
+        message={question.message}
+        act={question.act}
         destructive
         presented={asked?.presented === true}
         onAct={() => {
