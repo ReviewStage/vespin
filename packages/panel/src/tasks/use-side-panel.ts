@@ -287,6 +287,7 @@ const sidePanelTabSchema = Schema.Literals(SIDE_PANEL_TABS);
 const changesTabSchema = storedStripTab(STRIP_TAB_KIND.CHANGES, {
   changes: Schema.String,
   number: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+  turn: Schema.optionalKey(Schema.String),
 });
 const anyTabSchema = Schema.Union([sidePanelTabSchema, changesTabSchema]);
 

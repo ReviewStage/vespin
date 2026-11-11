@@ -81,6 +81,20 @@ function landedChanges(answer: AgentChangesAnswerView) {
 }
 
 /**
+ * The files one of an agent's turns changed, read on its machine between the
+ * checkouts its runner recorded, as the turn's Changes tab is first shown and
+ * on Retry; a refusal stands as the answer, which the tab says by name.
+ */
+export function agentTurnChangesQueryOptions(agentId: string, messageId: string) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.AGENT_TURN_CHANGES, agentId, messageId],
+    queryFn: () => askAct(ACT_KIND.AGENTS_TURN_CHANGES, { agentId, messageId }),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+}
+
+/**
  * An agent's changes, its pull request's files, or those of the pull request
  * of its repository by the number given. Its Changes tab reads them as it is
  * first shown, as its agent ends, and on Refresh, so the query is read on

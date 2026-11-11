@@ -162,6 +162,8 @@ function repositoryOfLine(line: TaskPullRequestLine): string | undefined {
 function openPullRequestOf(pin: SidebarPin, tasks: TasksControl): AgentPullRequest | undefined {
   const { tab } = pin;
   if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
+  // A turn's Changes tab shows no pull request.
+  if (tab.turn !== undefined) return undefined;
   if (pinTaskId(pin) !== tasks.activeTaskId) return undefined;
   return pullRequestOfTab(tasks.agents, tab);
 }
@@ -183,7 +185,9 @@ function pinPullRequest(
   taskPullRequests: readonly TaskPullRequests[] | undefined,
 ): PinnedPullRequest | undefined {
   const { tab } = pin;
-  if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
+  if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.CHANGES || tab.turn !== undefined) {
+    return undefined;
+  }
   const own = openPullRequestOf(pin, tasks);
   if (own !== undefined) return own;
   const lines = pullRequestsOfTask(taskPullRequests, on.task.id);

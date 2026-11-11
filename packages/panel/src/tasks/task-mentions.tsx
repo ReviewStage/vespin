@@ -175,7 +175,7 @@ export function tasklessMentions(
   place: TasklessPlace,
   onOpenTask: MentionDoors["onOpenTask"],
   readAgents?: MentionAgentsReader,
-  opens: Partial<Pick<MentionDoors, "pullRequestOf" | "onOpenFile">> = {},
+  opens: Partial<Pick<MentionDoors, "pullRequestOf" | "onOpenFile" | "onOpenTurnChanges">> = {},
   holds?: TasklessHolding,
 ): TaskMentionsValue {
   const { workspace, workspaceId, repository } = place;
@@ -196,6 +196,7 @@ export function tasklessMentions(
       anchors: NO_ANCHORS,
       onOpenTask,
       onOpenFile: repository === null ? undefined : opens.onOpenFile,
+      onOpenTurnChanges: repository === null ? undefined : opens.onOpenTurnChanges,
       pullRequestOf: opens.pullRequestOf,
     },
   };
@@ -228,7 +229,10 @@ export function heldTaskMentions(
   workspace: string,
   text: string | undefined,
   { pages, agents, readAgents }: TaskHolding,
-  doors: Pick<MentionDoors, "onOpenTask" | "onOpenFile" | "agentOf" | "pullRequestOf">,
+  doors: Pick<
+    MentionDoors,
+    "onOpenTask" | "onOpenFile" | "onOpenTurnChanges" | "agentOf" | "pullRequestOf"
+  >,
 ): TaskMentionsValue {
   const holder = { taskId: task.id };
   const { repository } = task;

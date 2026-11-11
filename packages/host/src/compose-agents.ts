@@ -246,6 +246,7 @@ export type AgentClient = Pick<
   | "agent"
   | "pullRequest"
   | "changes"
+  | "turnChanges"
   | "overviewPullRequest"
   | "reviewOptions"
   | "workspaceTools"
@@ -1063,6 +1064,7 @@ function composed(
     AGENTS_DELETE: declaredWrite(dependencies.pool, deleted),
     AGENTS_PAGE: ({ agentId }) => asked(client.agent(agentId)),
     AGENTS_CHANGES: ({ agentId, number }) => asked(client.changes(agentId, number)),
+    AGENTS_TURN_CHANGES: ({ agentId, messageId }) => asked(client.turnChanges(agentId, messageId)),
     AGENTS_PULL_REQUEST_ACTION: ({ agentId, number, request }) =>
       asked(client.pullRequestAction(agentId, request, number)),
     AGENTS_GITHUB_IMAGE: ({ agentId, src }) => {

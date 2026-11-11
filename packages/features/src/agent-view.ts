@@ -807,6 +807,12 @@ export const agentPullRequestReadParamsSchema = EffectSchema.Struct({
 
 export type AgentPullRequestReadParams = typeof agentPullRequestReadParamsSchema.Type;
 
+/** What a read of one turn's changes names: the agent, and the developer's line that opened the turn. */
+export const agentTurnChangesParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  messageId: EffectSchema.NonEmptyString,
+});
+
 /** The parts of a pull request its Pull request tab holds, each a read of its own: the pull request itself, its checks, its conversation, what the agent published, what its reviewer and label pickers offer, and which of its files the member marked viewed. */
 export const PULL_REQUEST_PART = {
   PULL_REQUEST: "pullRequest",

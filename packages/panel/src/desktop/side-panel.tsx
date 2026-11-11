@@ -199,7 +199,7 @@ import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useFileTreeWidth } from "./folded-groups.js";
 import { type KeptPage, keptPagesAfter } from "./kept-pages.js";
 import { AgentMenuTab } from "./main-tabs.js";
-import { PULL_REQUEST_TAB, pullRequestTabLoaded } from "./pages-on-demand.js";
+import { PULL_REQUEST_TAB, pullRequestTabLoaded, TURN_CHANGES_TAB } from "./pages-on-demand.js";
 import { paneTiming, pastRightEdge } from "./pane-motion.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.js";
 import {
@@ -1032,6 +1032,13 @@ function hungCard(subject: CardSubject): ReactNode {
 
 /** A Pull request tab's look, named by its pull request's number and title as the task's agents last read it, wearing its mark for where it stands. */
 function changesLook(tab: ChangesStripTab, agents: AgentsControl): KindLook {
+  // A turn's changes wear the changes' glyph under their own name, since no pull request stands behind them.
+  if (tab.turn !== undefined) {
+    return {
+      ...tabLook({ kind: TAB_KIND.CHANGES, pullRequest: undefined }),
+      label: TAB_WORDS.TURN_CHANGES,
+    };
+  }
   return tabLook({ kind: TAB_KIND.CHANGES, pullRequest: pullRequestOfTab(agents, tab) });
 }
 
@@ -2241,6 +2248,23 @@ function TabContent({
       return <SpinnerRegion delay label={readingWords("the page")} />;
     }
     case STRIP_TAB_KIND.CHANGES: {
+      // A turn's changes stand in a tab of their own, read on the agent's machine, with no pull request behind them.
+      if (tab.turn !== undefined) {
+        return (
+          <LazyBoundary
+            key={tabKey(tab)}
+            fallback={<SpinnerRegion delay label={readingWords("the turn's changes")} />}
+            loaded={pullRequestTabLoaded}
+          >
+            <TURN_CHANGES_TAB
+              agentId={tab.changes}
+              messageId={tab.turn}
+              shown={shown}
+              tree={fileTree}
+            />
+          </LazyBoundary>
+        );
+      }
       // Note that a link in a pull request's own tab, to its earlier entries or a reply, leaves for GitHub, because the tab already is that pull request.
       return (
         <PullRequestsOnGitHub key={tabKey(tab)}>

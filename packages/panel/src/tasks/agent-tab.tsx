@@ -71,6 +71,7 @@ import {
   toolTarget,
   type WorkerJobs,
 } from "@repo/features/tool-call-model";
+import { turnLinesOf } from "@repo/features/turn-files";
 import {
   CALL_KIND,
   CALL_WORDS,
@@ -2974,6 +2975,7 @@ function AgentTabView({
   );
   const workspaceId = useQuery({ ...appStateQuery, select: selectWorkspace }).data;
   const restores = useWorkspaceExperiment(workspaceId, EXPERIMENT.REWIND_FILES);
+  const turnLines = useMemo(() => (restores ? turnLinesOf(kept) : undefined), [restores, kept]);
   const points = useKept(
     useMemo(
       () => rewindPoints(kept, pending, readerId, going, restores),
@@ -3143,7 +3145,7 @@ function AgentTabView({
             <MentionedServers value={mentioned}>
               <UndeliveredLines value={marks}>
                 <RewindProvider value={rewind}>
-                  <TurnFilesOn value={restores}>
+                  <TurnFilesOn value={turnLines}>
                     <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
                       <AutomationsWanted wanted={automationLines}>
                         <ApprovalsProvider asks={approvals.asks}>

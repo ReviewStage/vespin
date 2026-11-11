@@ -317,12 +317,15 @@ const STRIP_TAB_KINDS = {
   },
   [STRIP_TAB_KIND.CHANGES]: {
     title: (tab, names) => names.pullRequest(tab),
-    untitled: () => TAB_WORDS.PULL_REQUEST,
-    look: (_tab, known) => ({ kind: TAB_KIND.CHANGES, pullRequest: known.pullRequest }),
+    untitled: (tab) => (tab.turn === undefined ? TAB_WORDS.PULL_REQUEST : TAB_WORDS.TURN_CHANGES),
+    look: (tab, known) => ({
+      kind: TAB_KIND.CHANGES,
+      pullRequest: tab.turn === undefined ? known.pullRequest : undefined,
+    }),
     surface: surfaceOf(PRODUCT_SURFACE.PULL_REQUEST),
-    // A Changes tab on another pull request of the agent's repository, by its number, is no place a link names.
+    // A Changes tab on another pull request of the agent's repository, by its number, or on one turn, is no place a link names.
     link: (tab) =>
-      tab.number === undefined
+      tab.number === undefined && tab.turn === undefined
         ? { kind: LINK_DESTINATION.CHANGES, agentId: tab.changes }
         : undefined,
     drawsAgain: (tab, draws) => drawsChanges(tab, { taskAgents: draws.taskAgents }),
@@ -425,9 +428,11 @@ export const UNREAD_TAB_NAMES: TabNames = {
   subagent: () => undefined,
   file: fileName,
   pullRequest: (tab) =>
-    tab.number === undefined
-      ? TAB_WORDS.PULL_REQUEST
-      : pullRequestLabelOf({ number: tab.number, title: TAB_WORDS.PULL_REQUEST }),
+    tab.turn !== undefined
+      ? TAB_WORDS.TURN_CHANGES
+      : tab.number === undefined
+        ? TAB_WORDS.PULL_REQUEST
+        : pullRequestLabelOf({ number: tab.number, title: TAB_WORDS.PULL_REQUEST }),
   page: () => undefined,
   browser: () => TAB_WORDS.BROWSER,
 };
