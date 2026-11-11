@@ -82,7 +82,7 @@ export const AGENT_TOOL = {
   READ_PAGE: "read_page",
   // Pictures from a coding agent's sandbox, shown in its transcript.
   SHOW_IMAGE: "show_image",
-  // A wakeup a coding agent books for later, on a harness with no wakeup of its own: its turn ends, and the prompt opens its next turn when due.
+  // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
   END_TURN: "end_turn",
@@ -196,7 +196,8 @@ export const RENAMED_TOOL: ReadonlyMap<string, AgentTool> = new Map([
  * Claude Code's own tools, by the names its CLI calls them, which a coding
  * agent running on Claude Code calls in place of our shell, file, search,
  * todo, delegation, skill, and web tools, and waits with (background Bash,
- * `Monitor`, `ScheduleWakeup`). Its to-dos are the CLI's task list, one
+ * `Monitor`; an older transcript also names `ScheduleWakeup`, which a
+ * launch now denies it for our `schedule_wakeup`). Its to-dos are the CLI's task list, one
  * task created, updated, listed, and read at a time (the four `Task*`
  * tools, which replaced `TodoWrite`'s whole list in CLI 2.1.304; an older
  * transcript still names `TodoWrite`). It stops what it started in the

@@ -20,7 +20,7 @@ import {
 import { readTaskHeader } from "@repo/database/models/task-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
-import { PAGE_OWNER, PAGE_SHOWER } from "@repo/features/page-wire";
+import { PAGE_SHOWER } from "@repo/features/page-wire";
 import { Effect, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import type { UnparsedWireValue, WireRecord } from "../../core.js";
@@ -225,7 +225,7 @@ export function runAgentShowPage(
     const { id: agentId, taskId } = found.success;
     const binding = {
       userId: admitted.target.userId,
-      owner: { kind: PAGE_OWNER.TASK, taskId } as const,
+      taskId,
       sandbox: { door: sandbox, checkout: CODER.CHECKOUT_PATH },
     };
     return yield* runShowPage(binding, input, {

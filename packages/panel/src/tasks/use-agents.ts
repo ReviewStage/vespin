@@ -1,4 +1,4 @@
-import { STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent-refusal-words";
+import { CLEAR_FAILED, STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
@@ -496,6 +496,8 @@ export interface AgentsControl {
   onStop: (agentId: string) => Promise<boolean>;
   /** Takes one agent back to just before one of the developer's lines, stopping it first. */
   onRewind: (agentId: string, messageId: string, restoreFiles?: boolean) => Promise<AgentActAnswer>;
+  /** Starts one agent's harness on a fresh session in the same agent (`/clear`), answering whether the service did; a refusal is said in a toast. */
+  onClear: (agentId: string) => Promise<boolean>;
   /** Sends one agent a message under the key the composer made. */
   onMessage: MessageSender;
   /**
@@ -901,6 +903,7 @@ export function useAgents(input: {
   );
   const { mutateAsync: sendStop } = useMutation(actMutation(ACT_KIND.AGENTS_STOP));
   const { mutateAsync: sendRewind } = useMutation(actMutation(ACT_KIND.AGENTS_REWIND));
+  const { mutateAsync: sendClear } = useMutation(actMutation(ACT_KIND.AGENTS_CLEAR));
   const { mutateAsync: sendMessage } = useMutation(
     sendMutation(ACT_KIND.AGENTS_MESSAGE, () => SENTRY_SEND_SPAN.AGENT_SEND),
   );
@@ -1540,6 +1543,17 @@ export function useAgents(input: {
     [sendRewind],
   );
 
+  const onClear = async (agentId: string): Promise<boolean> => {
+    const answer = await sendClear({ agentId }).catch(agentUnreached);
+    if (!("failure" in answer)) return true;
+    failed(CLEAR_FAILED, {
+      surface: FAILURE_SURFACE.AGENT_CLEAR,
+      cause: answer,
+      about: { agentId },
+    });
+    return false;
+  };
+
   const onMessage = useCallback<MessageSender>(
     async (agentId, text, clientKey, attachments) => {
       // Note that a message that opens the agent's sandbox anew while its image is prepared is
@@ -1842,6 +1856,7 @@ export function useAgents(input: {
     },
     onStop,
     onRewind,
+    onClear,
     onMessage,
     onRetry,
     onChoose,

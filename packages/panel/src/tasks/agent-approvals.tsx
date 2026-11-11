@@ -13,6 +13,7 @@ import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
+import { PERMISSION_MODE_HINT, PERMISSION_MODE_LABEL, PERMISSION_MODE_LIST } from "@repo/settings";
 import {
   APPROVAL_ACTION,
   type ApprovalAction,
@@ -100,22 +101,6 @@ export type ApprovalAnswerWriter = (
   request: ApprovalAnswerRequest,
 ) => Promise<ApprovalActAnswer>;
 
-/** What the menu calls each mode, and what each does, in the Codex app's words. */
-export const MODE_WORDS = {
-  [AGENT_PERMISSION_MODE.ASK]: {
-    label: "Ask for approval",
-    hint: "Always ask to edit external files and use the internet",
-  },
-  [AGENT_PERMISSION_MODE.AUTO]: {
-    label: "Approve for me",
-    hint: "Only ask for actions detected as potentially unsafe",
-  },
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: {
-    label: "Full access",
-    hint: "Unrestricted access to the internet and any file on your computer",
-  },
-} as const satisfies Record<AgentPermissionMode, { label: string; hint: string }>;
-
 /** The glyph each mode wears: a hand, a shield round a prompt, a shield round a "!". */
 export const MODE_GLYPH = {
   [AGENT_PERMISSION_MODE.ASK]: AskFirstIcon,
@@ -124,11 +109,7 @@ export const MODE_GLYPH = {
 } as const satisfies Record<AgentPermissionMode, () => React.JSX.Element>;
 
 /** The modes in the order the menu offers them: the most asking first, Full access last, as Codex orders its own. */
-export const MODES = [
-  AGENT_PERMISSION_MODE.ASK,
-  AGENT_PERMISSION_MODE.AUTO,
-  AGENT_PERMISSION_MODE.FULL_ACCESS,
-] as const;
+export const MODES = PERMISSION_MODE_LIST;
 
 /** What the modes are called as a row among the model menu's. */
 export const MODE_GROUP = "Permissions";
@@ -223,7 +204,7 @@ export function useAgentPermissionMode(input: {
     setNote(undefined);
     showToast({
       replayUnmasked: true,
-      words: `${MODE_WORDS[mode].label}. ${MODE_APPLIES}`,
+      words: `${PERMISSION_MODE_LABEL[mode]}. ${MODE_APPLIES}`,
       tone: STATUS_TONE.COMPLETE,
       glyph: MODE_GLYPH[mode],
     });
@@ -252,9 +233,9 @@ export function modeMenuRows(): readonly MenuRow[] {
     const Glyph = MODE_GLYPH[mode];
     return {
       id: mode,
-      label: MODE_WORDS[mode].label,
+      label: PERMISSION_MODE_LABEL[mode],
       icon: <Glyph />,
-      detail: MODE_WORDS[mode].hint,
+      detail: PERMISSION_MODE_HINT[mode],
       detailUnder: true,
     };
   });

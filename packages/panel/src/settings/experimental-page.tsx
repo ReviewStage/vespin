@@ -98,6 +98,12 @@ const FLIP_WORDS = {
     off: (workspace: string) =>
       `Takes that choice off Rewind and Edit for everyone in ${workspace}; a rewind then takes back the conversation alone.`,
   },
+  [EXPERIMENT.RUN_ACTIONS]: {
+    on: (workspace: string) =>
+      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over every cloud agent's tabs, and Run rows in ⌘K, that run one in the agent's sandbox when pressed.`,
+    off: (workspace: string) =>
+      `Hides the Run button, its ⌘K rows, and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
+  },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>
       `Shows each task's description, its comments and version history to everyone in ${workspace}, and has agents keep descriptions current as they work.`,

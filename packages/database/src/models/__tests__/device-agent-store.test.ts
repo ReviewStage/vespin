@@ -42,6 +42,7 @@ import {
   settleLapsedDeviceAgentLine,
   stepDeviceAgentLaunch,
   withdrawExpiredDeviceAgentRows,
+  withdrawUnclaimedDeviceAgentLine,
 } from "../device-agent-store.js";
 import { beatDevice, registerDevice } from "../device-store.js";
 
@@ -626,6 +627,35 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
 
       assert.equal(answered._tag, "Failure");
       assert.deepEqual(yield* deviceAgentRequestAnswer(userId, id), Option.none());
+    }),
+  );
+
+  it.effect("a withdrawal takes back a line its Mac has not claimed, and leaves one claimed", () =>
+    Effect.gen(function* () {
+      const { userId, deviceId, agentId } = yield* openAccount();
+      const other = yield* openAccount();
+      const running = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
+      yield* claimDeviceAgentLine(userId, deviceId, running.id);
+      const left = Option.getOrThrow(
+        yield* queueDeviceAgentLine(userId, message(agentId, "never taken")),
+      );
+
+      yield* withdrawUnclaimedDeviceAgentLine(other.userId, left.id);
+      const stillWaiting = yield* deviceAgentLinesWaiting(userId, deviceId);
+      yield* withdrawUnclaimedDeviceAgentLine(userId, left.id);
+      yield* withdrawUnclaimedDeviceAgentLine(userId, running.id);
+
+      assert.deepEqual(
+        stillWaiting.map((line) => line.id),
+        [left.id],
+        "another account withdraws nothing",
+      );
+      assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+      assert.equal(
+        Option.isSome(yield* settleDeviceAgentLine(userId, deviceId, running.id, 0)),
+        true,
+        "the claimed line is still there to settle",
+      );
     }),
   );
 

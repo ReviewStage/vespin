@@ -49,9 +49,11 @@ import {
 } from "./workspace-invitation-wire.js";
 import {
   type RepositoryScriptKind,
+  type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
   workspaceRepositorySetupPutRequestSchema,
+  workspaceRunActionsPutRequestSchema,
 } from "./workspace-sandbox-setup-wire.js";
 import {
   type Workspace,
@@ -516,6 +518,22 @@ export class HostedWorkspaceClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
       hostedCall(this.#hosted.workspaceSandboxSetup.putRepository, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** A repository's run actions saved by an owner or admin, the whole list in its order, an empty list removing it, answering the setup as it then stands; a list the service would refuse by shape never travels. */
+  putRunActions(
+    workspaceId: string,
+    repository: string,
+    actions: readonly RunActionPut[],
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSetupAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceRunActionsPutRequestSchema)({ workspaceId, repository, actions }),
+    );
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSetup.putRunActions, admitted),
       (answer) => answer,
     );
   }

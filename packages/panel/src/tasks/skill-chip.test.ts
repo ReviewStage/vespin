@@ -94,7 +94,7 @@ async function mounted(view: ReactNode, source: SkillSource = reading) {
 }
 
 /** The composer holding the words given, as the developer left them. */
-function Composer({ words }: { words: string }): ReactNode {
+function Composer({ words, commands = false }: { words: string; commands?: boolean }): ReactNode {
   const [draft, setDraft] = useState(words);
   const [attachments, setAttachments] = useState<readonly AgentAttachment[]>([]);
   return createElement(AgentComposer, {
@@ -112,6 +112,7 @@ function Composer({ words }: { words: string }): ReactNode {
       sent: [],
     },
     skills: reading,
+    onClear: commands ? () => Promise.resolve(true) : undefined,
   });
 }
 
@@ -222,6 +223,32 @@ test("an installed skill's chip is no button, yet takes the focus for its card, 
   focusRestOn(release);
   const repository = [...document.querySelectorAll(".ui-tooltip-card > [data-skill-card]")].at(-1);
   assert.equal(repository?.querySelector(".ui-hover-card-sub")?.textContent, "Repository skill");
+});
+
+test("a /compact opening a message is the command's chip in the composer and in its sent bubble, hanging the command's card and opening nothing, while one later in the words stays words", async () => {
+  const { container } = await mounted(
+    createElement(
+      "div",
+      null,
+      createElement(Composer, { words: "/compact keep the plan", commands: true }),
+      createElement(SentWords, { text: "/compact keep the plan" }),
+      createElement(SentWords, { text: "Then /compact again." }),
+    ),
+  );
+  const chips = [...container.querySelectorAll<HTMLElement>("[data-command-ref]")];
+  assert.equal(chips.length, 2, "the composer's and the first sent message's");
+  assert.ok(
+    chips.every((chip) => !chip.matches("button, [role='button']")),
+    "a command opens nothing",
+  );
+  document.documentElement.dataset.keyboard = "true";
+  const [boxed] = chips;
+  assert.ok(boxed);
+  focusRestOn(boxed);
+  const card = document.querySelector<HTMLElement>(".ui-tooltip-card > [data-command-card]");
+  assert.equal(card?.querySelector(".ui-hover-card-sub")?.textContent, "Command");
+  assert.ok(card?.textContent?.includes("Summarize to free up context"));
+  assert.ok(container.textContent?.includes("Then /compact again."));
 });
 
 /** A node's words as drawn, without those only a screen reader hears. */

@@ -6,9 +6,7 @@
  * sidebar starts from (`DEFAULT_TASK_LIST_VIEW`): the reader's own tasks,
  * to do and in progress, grouped by repository, the pinned repositories'
  * groups first. A pin is the reader's own choice and is never filtered, as
- * the sidebar never filters one. Note that the list holds tasks alone: an
- * agent with no task, which the sidebar lists among them, opens a
- * transcript a phone does not draw yet.
+ * the sidebar never filters one.
  */
 
 import { inPinOrder } from "./pin-order.js";

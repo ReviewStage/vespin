@@ -87,7 +87,7 @@ import {
   readHostDevice,
 } from "@repo/host/daemon";
 import { Environment, reporterLayer } from "@repo/host/effect";
-import { reportToStderr } from "@repo/host/node";
+import { armedWatchLayer, reportToStderr } from "@repo/host/node";
 import { ConfigProvider, Duration, Effect, Exit, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -185,7 +185,9 @@ const runtime: HostRuntime | undefined =
 
 const nodeServices = Layer.mergeAll(
   NodeChildProcessSpawner.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
+    ),
   ),
   FetchHttpClient.layer,
   reporterLayer(reportToStderr),

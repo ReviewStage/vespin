@@ -3,18 +3,19 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import {
-  keepDescriptionAttachment,
   DESCRIPTION_ATTACHMENT_KEEP,
+  keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
 import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
-import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
+import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
 import { unparsedWire } from "@repo/wire";
 import { webmBytes } from "@repo/wire/testing";
 import { Effect } from "effect";
 import { Base64 } from "effect/encoding";
+import type { DescriptionDocumentBinding } from "./description-notes.js";
 import {
   lookNamedOnly,
   PICTURE_LOOK_REFUSAL,
@@ -22,7 +23,6 @@ import {
   pictureNotLooked,
   runLookAtPicture,
 } from "./picture-look.js";
-import type { DescriptionDocumentBinding } from "./description-notes.js";
 
 /**
  * `look_at_picture`, the planning model's and a coding agent's look at one

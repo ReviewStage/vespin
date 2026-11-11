@@ -14,8 +14,9 @@ import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { Effect } from "effect";
 import { agentSandboxName } from "../agent-sandbox-open.js";
+import { RESTORE_OUTCOME } from "../machine/agent-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
-import { RESTORE_OUTCOME, restoreCheckout } from "./checkout-restore.js";
+import { restoreCheckout } from "./checkout-restore.js";
 
 const SESSION = "session-for-restore";
 const SNAPSHOT = {
@@ -36,7 +37,7 @@ const restored = (exitCode: number, sessionId = SESSION) =>
         tags: { sessionId: SESSION },
         env: {},
       });
-      return yield* restoreCheckout({ userId: "user-1", sessionId, snapshot: SNAPSHOT });
+      return yield* restoreCheckout(sandboxes, { sessionId, snapshot: SNAPSHOT });
     }).pipe(Effect.provide(memory.layer));
     return { outcome, state: memory.state };
   });
@@ -85,11 +86,10 @@ it.layer(getTestDB())("a cloud agent's checkout restored", (it) => {
           tags: { sessionId: SESSION },
         });
         memory.state.goneSnapshots.add("snap_expired");
-        const outcome = yield* restoreCheckout({
-          userId: "user-1",
+        const outcome = yield* restoreCheckout(memory.service, {
           sessionId: SESSION,
           snapshot: SNAPSHOT,
-        }).pipe(Effect.provide(memory.layer));
+        });
         assert.deepEqual([outcome, memory.state.commands], [RESTORE_OUTCOME.MISSING, []]);
       }),
   );

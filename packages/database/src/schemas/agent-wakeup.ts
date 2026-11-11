@@ -5,8 +5,7 @@ import { agentTable } from "./agent.js";
 /**
  * agent-wakeup.ts -- the wakeup a coding agent booked with `schedule_wakeup`, kept until the scheduled sweep delivers it.
  *
- * An agent whose harness has no wakeup of its own (Codex) books one through
- * our tool: a prompt and the instant it comes due. Its turn then ends, and
+ * A coding agent, on either harness, books one through our tool: a prompt and the instant it comes due. Its turn then ends, and
  * the scheduled sweep hands the prompt back to the agent as a line of its
  * own once due, which opens its next turn (`@repo/service`'s
  * `maintenance/wakeup-sweep.ts`). One row per agent: booking again replaces

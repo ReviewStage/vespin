@@ -22,10 +22,10 @@
  * service's.
  */
 
-import type { UnparsedWireValue } from "@repo/wire";
 import { type Client, createORPCClient, ORPCError } from "@orpc/client";
 import type { InferSchemaInput, ProcedureContract } from "@orpc/contract";
 import { OpenAPILink } from "@orpc/openapi/fetch";
+import type { UnparsedWireValue } from "@repo/wire";
 import { Result, Schema } from "effect";
 import { readServiceAnswer } from "../service-wire.js";
 import { hostedContract } from "./index.js";

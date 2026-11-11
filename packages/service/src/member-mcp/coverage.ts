@@ -293,6 +293,9 @@ export const MEMBER_MCP_EXCLUSIONS = {
     openTerminal: SCREEN_ONLY,
     renameTerminal: SCREEN_ONLY,
     endTerminal: SCREEN_ONLY,
+    runAction: NOT_YET_BUILT,
+    stopRunAction: NOT_YET_BUILT,
+    clear: NOT_YET_BUILT,
   },
   dictation: { transcribe: SCREEN_ONLY },
   events: { record: INTERNAL },
@@ -380,6 +383,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
+  workspaceSandboxSetup: { putRunActions: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {

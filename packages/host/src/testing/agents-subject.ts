@@ -585,6 +585,11 @@ function fakeService() {
         asked.push(`rewind:${agentId}:${messageId}`);
         return { agent: AGENT };
       }),
+    clear: (agentId) =>
+      Effect.sync(() => {
+        asked.push(`clear:${agentId}`);
+        return { agent: AGENT };
+      }),
     warm: () => Effect.succeed({ warm: true as const }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
@@ -761,7 +766,7 @@ function fakeService() {
     inboxItemHome: (itemId) =>
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
-        return { agentId: ITEM.agentId, planId: null, workspaceId: "workspace-1" };
+        return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {

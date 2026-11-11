@@ -166,6 +166,7 @@ import { useFailedRunsMark } from "./failed-runs.js";
 import { withoutFinishedRunTasks } from "./finished-runs.js";
 import { type FoldedGroups, useFoldedGroups } from "./folded-groups.js";
 import { type HoverPane, useHoverPane } from "./hover-pane.js";
+import { MacResourcesButton } from "./mac-resources.js";
 import {
   childTasksFold,
   listedSlot,
@@ -247,7 +248,9 @@ function useSidebarEdge(
  * it when it folds, after the column's drag strip so they claim their
  * presses back from the window frame. A way with nothing along it is dimmed
  * rather than gone, so neither button moves. The chords are the shell's to
- * offer, since they answer while the column is folded too. A phone draws
+ * offer, since they answer while the column is folded too. Resources stands
+ * before them in the desktop app (`mac-resources.tsx`), so it too is in sight
+ * only while the column is. A phone draws
  * none: its places bar and each page's own Back are how it moves, and the
  * drawer's head is short of room.
  */
@@ -261,6 +264,7 @@ export function HistoryButtons({
   if (room === SHELL_ROOM.NARROW) return null;
   return (
     <div className="title-bar-controls" data-edge="column">
+      <MacResourcesButton />
       <HistoryButton
         label="Back"
         command={APP_COMMAND.BACK}

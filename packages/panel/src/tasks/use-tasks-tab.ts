@@ -2365,13 +2365,18 @@ export function useTasksTab(input: {
    * so the list it opens in holds it; a link never narrows the Inbox to its
    * task, which only the task's own "needs you" count does (`onShowInbox`).
    */
-  const openInboxItemOn = (workspace: string, place: InboxItemPlace, planId: string | null) => {
+  const openInboxItemOn = (
+    workspace: string,
+    place: InboxItemPlace,
+    planId: string | undefined,
+  ) => {
     // An item of a task the account lists is shown in the task's own workspace, whatever the slug says.
-    const holder = planId === null ? undefined : viewed.tasks.find((task) => task.id === planId);
+    const holder =
+      planId === undefined ? undefined : viewed.tasks.find((task) => task.id === planId);
     const linked = linkedHome(holder?.workspaceId ?? workspace);
-    // Note that an item whose task was not found, its agent read as standing on none, is named by its id alone, which the Inbox says is missing where no read holds it.
+    // Note that an item whose agent was not found is named by its id alone, which the Inbox says is missing where no read holds it.
     const chosen: InboxChoice =
-      planId === null
+      planId === undefined
         ? { itemId: place.itemId, opened: true }
         : {
             taskId: planId,
@@ -2444,7 +2449,7 @@ export function useTasksTab(input: {
       const opening = keepLinkLanded();
       readAgentById(queryClient, place.agentId).then((agent) => {
         if (!current()) return;
-        opening(() => openInboxItemOn(workspace, place, agent?.planId ?? null));
+        opening(() => openInboxItemOn(workspace, place, agent?.planId));
       });
     }
   };

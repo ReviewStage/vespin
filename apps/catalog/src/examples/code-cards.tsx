@@ -2,6 +2,7 @@ import {
   CODE_CARD_TITLE,
   CODE_ROW,
   CodeCard,
+  CodeCardHeader,
   CodeEditor,
   FileCodeCard,
   TerminalIcon,
@@ -17,7 +18,9 @@ import { CatalogSection } from "../section";
  * runs, a block of 60 lines cut at 40 behind Show all, a suggestion drawn
  * as rows on the added and removed grounds, a body the caller draws under
  * a header with an action of its own, and a file's lines with the file's
- * opening beside the Copy, as an Inbox item's code stands; and a code
+ * opening beside the Copy, as an Inbox item's code stands; the header
+ * alone, its language a press opening its menu, as a block open in a
+ * text's editor wears it; and a code
  * editor over the same colored lines, its edited lines drawn plain until
  * colored again, one numbering its lines in a gutter as a script's editor
  * does, and an empty one with its placeholder. The catalog's
@@ -82,6 +85,27 @@ function EmptyCode(): React.JSX.Element {
   );
 }
 
+/** The header alone, its language a press, as a block open in a text's editor wears it; the press here only says the menu is open. */
+function PickedLanguage(): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <CodeCardHeader
+      glyph={<TerminalIcon />}
+      title="Shell"
+      titleIs={CODE_CARD_TITLE.WORDS}
+      copied={SHORT}
+      copy={copyToClipboard}
+      picker={{
+        label: "Language: Shell",
+        open,
+        menuId: "catalog-code-language",
+        onPress: () => setOpen(!open),
+        menu: null,
+      }}
+    />
+  );
+}
+
 function CodeCards(): React.JSX.Element {
   return (
     <>
@@ -136,6 +160,9 @@ function CodeCards(): React.JSX.Element {
           copy={copyToClipboard}
           onOpen={() => {}}
         />
+      </CatalogSection>
+      <CatalogSection id="code-card-header-picker" title="The header alone, its language a press">
+        <PickedLanguage />
       </CatalogSection>
       <CatalogSection
         id="code-editor"

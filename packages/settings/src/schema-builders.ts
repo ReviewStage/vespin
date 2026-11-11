@@ -222,6 +222,8 @@ export function choiceSetting<
     token: (value: Value) => string;
     /** How a value is worded on the control, when that differs from `token`. */
     optionLabel?: (value: Value) => string;
+    /** What a value does, said under its name on the control; none where its name says it. */
+    optionHint?: (value: Value) => string;
     default: Default;
     /** The word for no choice at all, required where the default is nothing. */
     absent?: string;
@@ -260,7 +262,11 @@ export function choiceSetting<
     value: (stored) => tokenOf(stored),
     search: spec.search,
     options: (): readonly SettingOption[] =>
-      spec.values.map((value) => ({ value: spec.token(value), label: optionLabel(value) })),
+      spec.values.map((value) => ({
+        value: spec.token(value),
+        label: optionLabel(value),
+        ...(spec.optionHint === undefined ? undefined : { hint: spec.optionHint(value) }),
+      })),
     stored: (token) => byToken.get(token),
   };
   return {

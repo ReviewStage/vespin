@@ -162,6 +162,7 @@ import {
   refreshAgentCheckout,
   writeAgentCredential,
 } from "../coder-host/checkout.js";
+import { restoreCheckout } from "../coder-host/checkout-restore.js";
 import { NATIVE_SKILLS_PATH } from "../coder-host/native-skills.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
@@ -527,6 +528,7 @@ function markOf(record: AgentRunnerRecord): RunnerMark {
   return {
     firstSequence: record.firstSequence,
     ...(record.fingerprint === null ? {} : { fingerprint: record.fingerprint }),
+    ...(record.permissionMode === null ? {} : { permissionMode: record.permissionMode }),
     linesRead: true,
   };
 }
@@ -545,6 +547,7 @@ function storedRecord(
     sandboxName: name,
     firstSequence: mark.firstSequence,
     fingerprint: mark.fingerprint ?? null,
+    permissionMode: mark.permissionMode ?? null,
     sandboxSessionId: runner?.running ?? null,
     commandId: runner?.command ?? null,
   };
@@ -798,6 +801,8 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
           ran.exitCode === 0 ? new Uint8Array(Buffer.from(ran.stdout, "base64")) : undefined,
         ),
       ),
+
+    restoreCheckout: (session, snapshot) => restoreCheckout(api, { sessionId: session, snapshot }),
 
     phoneVideo: (session, path) =>
       Effect.flatMap(runningSession(session), (running) =>

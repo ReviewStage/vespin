@@ -1785,6 +1785,38 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message opening with a command the CLI runs goes bare, and one that would change the agent's row goes behind words",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+        yield* sessions.send(opened.sessionId, message(agent, "/compact keep the plan"));
+        yield* sessions.send(opened.sessionId, message(agent, "/effort low"));
+
+        const [compact, effort] = (yield* launchLines(api.commands[0]))
+          .filter(
+            (line): line is Extract<InputLine, { type: "message" }> =>
+              (line as InputLine).type === INPUT_LINE.MESSAGE,
+          )
+          .slice(1);
+        assert.deepEqual(compact?.content, [{ type: "text", text: "/compact keep the plan" }]);
+        // The CLI runs a command from the last text block alone, so the turn's words after it leave it words.
+        assert.deepEqual(effort?.content[0], { type: "text", text: "/effort low" });
+        assert.equal(effort?.content.length, 2);
+      }),
+  );
+
+  it.effect(
     "a change of model and effort reaches the running runner as a model line alone, a fast version as its base model with fast mode on, and a session with no runner takes nothing",
     () =>
       Effect.gen(function* () {
@@ -3448,6 +3480,51 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message sent while another call holds the lease waits on it where the warm runner was launched in another mode, and goes to a launch in the agent's mode",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 1 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        sequence.next = 2;
+        // The member asks for approvals while another instance's call holds the lease.
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const elsewhere = randomUUID();
+        const heldUntil = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
+        assert.equal(yield* claimAgentRunnerLease(agent.id, elsewhere, now, heldUntil), true);
+
+        const sending = yield* Effect.forkChild(
+          sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails."),
+        );
+        yield* turnsPass;
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+        yield* turnsPass;
+        // Nothing is queued for the runner launched with full access while the lease stands.
+        const [first] = api.commands;
+        assert.ok(first !== undefined);
+        assert.ok(!JSON.stringify(yield* handedLines(userId, first)).includes("Now the emails."));
+        yield* releaseAgentRunnerLease(agent.id, elsewhere);
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+
+        assert.equal((yield* Fiber.join(sending)).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const second = api.commands[1];
+        assert.ok(second !== undefined);
+        const [config] = (yield* launchLines(second)) as [ClaudeCodeConfig];
+        assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
+        assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Now the emails."));
+      }),
+  );
+
+  it.effect(
     "reset deletes the sandbox and retires the runner's bearer; a session gone answers retired",
     () =>
       Effect.gen(function* () {
@@ -4226,7 +4303,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it",
+    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it, and once cleared opens a fresh one of its own",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4265,6 +4342,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [config.resume, config.fork, config.rewindBefore],
           [CLI_SESSION, true, "source-line"],
         );
+
+        // A clear marks the transcript and lets the session go; the next place made anew starts afresh.
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* writer.markSessionCleared({ userId, conversationId: continued.conversationId });
+        yield* recordAgentNativeSession(userId, continued.id, null);
+        const fresh = runnerSandboxApi();
+        const reopened = yield* deliveredOpen(
+          yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(fresh))),
+          yield* writtenLine(continued, "Start over."),
+        );
+        assert.ok(reopened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const [freshConfig] = (yield* launchLines(fresh.commands[0])) as [
+          ClaudeCodeConfig,
+          InputLine,
+        ];
+        assert.deepEqual([freshConfig.resume, freshConfig.fork], [undefined, undefined]);
       }),
   );
 

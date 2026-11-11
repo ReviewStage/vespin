@@ -11,12 +11,14 @@ class StandInParam {
   value = 0;
   setValueAtTime(): void {}
   exponentialRampToValueAtTime(): void {}
+  linearRampToValueAtTime(): void {}
 }
 
 class StandInNode {
   readonly gain = new StandInParam();
   readonly frequency = new StandInParam();
   readonly Q = new StandInParam();
+  readonly detune = new StandInParam();
   type = "";
   buffer: unknown;
   connect<Next>(next: Next): Next {
@@ -49,6 +51,7 @@ class StandInAudioContext {
   createBiquadFilter = (): StandInNode => new StandInNode();
   createBuffer = (): StandInNode => new StandInNode();
   createBufferSource = (): StandInNode => new StandInNode();
+  createConvolver = (): StandInNode => new StandInNode();
 }
 
 /** A fresh player, since its one audio context and its busy mark live as long as the module. */
@@ -71,7 +74,7 @@ describe("playCompletionSound", () => {
     vi.unstubAllGlobals();
   });
 
-  it("plays nothing while a sound is still sounding, and plays again once it has ended", async () => {
+  it("plays nothing for the sound still sounding, but cuts in with another, and plays again once it has ended", async () => {
     vi.stubGlobal("AudioContext", StandInAudioContext);
     const play = await freshPlayer();
 
@@ -80,12 +83,17 @@ describe("playCompletionSound", () => {
     expect(first).toBeGreaterThan(0);
 
     clock.now += 0.1;
-    play(COMPLETION_SOUND.BELL);
+    play(COMPLETION_SOUND.CHIME);
     expect(started).toHaveLength(first);
 
+    clock.now += 0.1;
+    play(COMPLETION_SOUND.KNOCK);
+    const cutIn = started.length;
+    expect(cutIn).toBeGreaterThan(first);
+
     clock.now += 2;
-    play(COMPLETION_SOUND.PING);
-    expect(started.length).toBeGreaterThan(first);
+    play(COMPLETION_SOUND.KNOCK);
+    expect(started.length).toBeGreaterThan(cutIn);
   });
 
   it("drops a sound asked for while the context is suspended rather than queueing it", async () => {

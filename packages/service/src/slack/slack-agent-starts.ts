@@ -33,8 +33,7 @@
  * agent continues it as Continue does, handed its work, a summary of its
  * transcript, and the message, and the thread moves to it, with one line in
  * the thread linking it, the new agent on the ended one's own task, as
- * Continue puts it, and on no task only for an agent started from Slack
- * before its starts made tasks; any other
+ * Continue puts it; any other
  * makes a task and starts an agent as the writer on it, on the one path a
  * Start takes (`coder-host/start.ts`), both keyed by Slack's event id. The
  * task starts untitled, for its agent's title to name it, with a blank

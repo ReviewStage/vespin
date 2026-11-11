@@ -28,7 +28,7 @@ import {
   sectionAnchors,
   type TaskMention,
 } from "@repo/features/mention-link";
-import { PAGE_OWNER, type PageLine, type PageOwner } from "@repo/features/page-wire";
+import type { PageLine } from "@repo/features/page-wire";
 import type { Task } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
 
@@ -73,14 +73,13 @@ import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wir
  * automation's own prompt mentions, never a webhook body's or a GitHub
  * event's; but a message steering a turn already running
  * reaches one handed only what it started with, so the note says a server
- * not among its connections joins at its next turn. An agent with no task
- * is handed the notes alone.
+ * not among its connections joins at its next turn.
  *
  * A page an agent showed on the plan is named by its id, read at the send
  * off the agent's own plan (`mentioned-reads.ts`) and handed here as
  * `MentionedReads`; one of another plan is handed nothing, as a section of
  * one is. A coding agent is named by its id too, and read on any task of
- * the agent's workspace or on none, as the sender could open it; one the
+ * the agent's workspace, as the sender could open it; one the
  * send did not find there, of another workspace or gone, is named as not
  * found. An agent is handed as its task and where its work stands on
  * GitHub, its branch and its pull request, which the agent reads with `gh`
@@ -113,7 +112,7 @@ export interface MentionedAgent {
   readonly id: string;
   /** Its title, or its model's id where it has none yet. */
   readonly name: string;
-  /** The task it works on; null for an agent on none. */
+  /** The task it works on; null for one the sender cannot open. */
   readonly task: { readonly id: string; readonly name: string } | null;
   /** The repository it works in; null for an agent with none. */
   readonly repository: string | null;
@@ -265,17 +264,10 @@ type Handed =
  * read that answers its HTML as it stands, and how to write its next
  * version; never its HTML, which `read_page` answers when the agent wants it.
  */
-function pageNoteOf(
-  pageId: string,
-  name: string,
-  reads: MentionedReads,
-  owner: PageOwner | undefined,
-): string {
+function pageNoteOf(pageId: string, name: string, reads: MentionedReads): string {
   const page = reads.pages.get(pageId);
-  const on = owner?.kind === PAGE_OWNER.AGENT ? "among your own pages" : "on this task";
-  if (page === undefined) return `The page "${name}": no longer ${on}.`;
-  const shown = owner?.kind === PAGE_OWNER.AGENT ? "that you showed" : "shown on this task";
-  return `The developer pointed you at the page "${page.title}" (id \`${page.id}\`, version ${page.version}) ${shown}. Read it as the developer saw it with \`${AGENT_TOOL.READ_PAGE}\`, \`pageId: "${page.id}"\`, and \`version: ${page.version}\`, or leave the version out for its newest. To change it, show it again with \`${AGENT_TOOL.SHOW_PAGE}\` and \`page: "${page.id}"\`, which writes its next version in its place.`;
+  if (page === undefined) return `The page "${name}": no longer on this task.`;
+  return `The developer pointed you at the page "${page.title}" (id \`${page.id}\`, version ${page.version}) shown on this task. Read it as the developer saw it with \`${AGENT_TOOL.READ_PAGE}\`, \`pageId: "${page.id}"\`, and \`version: ${page.version}\`, or leave the version out for its newest. To change it, show it again with \`${AGENT_TOOL.SHOW_PAGE}\` and \`page: "${page.id}"\`, which writes its next version in its place.`;
 }
 
 /** How the agent reads another agent's work: its pull request's diff, else its branch's, by the repository the agent shares with it or names. */
@@ -295,7 +287,7 @@ function readingOf(agent: MentionedAgent, repository: string | null): string {
 
 /** Where a mentioned agent works, beside the plan of the agent it is handed to. */
 function taskWords(agent: MentionedAgent, task: Task | undefined): string {
-  if (agent.task === null) return "on no task";
+  if (agent.task === null) return "on a task you cannot open";
   if (agent.task.id === task?.id) return "on this task";
   return `on the task "${agent.task.name}"`;
 }
@@ -369,28 +361,12 @@ function noteOf(mention: ServerMention): string {
   return `The developer pointed you at the tool \`${mention.tool}\` of ${server} for this message: run it in preference to other tools. ${joins}`;
 }
 
-/**
- * What the pages the agent is handed stand on: its task's, or, for an agent
- * on no task, its own, as it shows them; none where neither is known, as
- * before a new agent is made, when it has shown none.
- */
-export function pagesOwnerOf(
-  task: Task | undefined,
-  agentId: string | undefined,
-): PageOwner | undefined {
-  if (task !== undefined) return { kind: PAGE_OWNER.TASK, taskId: task.id };
-  return agentId === undefined ? undefined : { kind: PAGE_OWNER.AGENT, agentId };
-}
-
-/** Whether a page's mention names a page standing on `owner`. */
+/** Whether a page's mention names a page standing on the agent's task. */
 function standsOn(
   mention: Extract<Mention, { kind: typeof MENTION_KIND.PAGE }>,
-  owner: PageOwner | undefined,
+  task: Task | undefined,
 ): boolean {
-  if (owner === undefined) return false;
-  return owner.kind === PAGE_OWNER.TASK
-    ? "taskId" in mention && mention.taskId === owner.taskId
-    : "agentId" in mention && mention.agentId.toLowerCase() === owner.agentId.toLowerCase();
+  return task !== undefined && "taskId" in mention && mention.taskId === task.id;
 }
 
 /**
@@ -412,12 +388,11 @@ function numberedTaskOf(
   return { kind: HANDED_KIND.NUMBERED_TASK, taskId: mention.taskId, link };
 }
 
-/** The mention as the part hands it, where it hands it anything: what stands on another plan, or on a plan where the agent has none, is handed nothing but the id of a task a link names by its number, nor a page that stands on neither its task nor, on none, itself, but for a coding agent, which is read across the workspace. */
+/** The mention as the part hands it, where it hands it anything: what stands on another plan is handed nothing but the id of a task a link names by its number, nor a page that stands off its task, but for a coding agent, which is read across the workspace. */
 function handedMention(
   mention: Mention,
   target: string,
   task: Task | undefined,
-  owner: PageOwner | undefined,
 ): Handed | undefined {
   const numbered = numberedTaskOf(mention, target, task);
   if (numbered !== undefined) return numbered;
@@ -426,7 +401,7 @@ function handedMention(
     case MENTION_KIND.SECTION:
       return mention.taskId === task?.id ? mention : undefined;
     case MENTION_KIND.PAGE:
-      return standsOn(mention, owner) ? mention : undefined;
+      return standsOn(mention, task) ? mention : undefined;
     case MENTION_KIND.AGENT:
     case MENTION_KIND.PERSON:
     case MENTION_KIND.SERVER:
@@ -501,14 +476,13 @@ function handedAs(
   { mention, name }: HandedMention,
   task: Task | undefined,
   reads: MentionedReads,
-  owner: PageOwner | undefined,
 ): string {
   switch (mention.kind) {
     case MENTION_KIND.TASK:
     case MENTION_KIND.SECTION:
       return task === undefined ? "" : excerptOf({ mention, name }, task);
     case MENTION_KIND.PAGE:
-      return pageNoteOf(mention.pageId, name, reads, owner);
+      return pageNoteOf(mention.pageId, name, reads);
     case MENTION_KIND.AGENT:
       return agentNoteOf(mention.agentId, name, reads, task);
     case MENTION_KIND.PERSON:
@@ -531,20 +505,18 @@ export interface MentionedIds {
   readonly people: readonly string[];
 }
 
-/** The pages of the plan, where there is one, else of the agent `agentId` names, the agents on any task or none, and the people, that the words mention, by id, each once: what the send reads for `mentionedContext` to hand. */
+/** The pages of the plan, the agents on any task, and the people, that the words mention, by id, each once: what the send reads for `mentionedContext` to hand. */
 export function mentionedIds(
   words: string,
   task: Task | undefined,
-  agentId?: string | undefined,
   tasks: MentionedTasks = NO_MENTIONED_READS.tasks,
 ): MentionedIds {
-  const owner = pagesOwnerOf(task, agentId);
   const pages = new Set<string>();
   const agents = new Set<string>();
   const people = new Set<string>();
   const handed = handedMentionsIn(words, task?.repository ?? null, { taskIdOf: foundTask(tasks) });
   for (const { mention } of handed) {
-    if (mention.kind === MENTION_KIND.PAGE && standsOn(mention, owner)) pages.add(mention.pageId);
+    if (mention.kind === MENTION_KIND.PAGE && standsOn(mention, task)) pages.add(mention.pageId);
     if (mention.kind === MENTION_KIND.AGENT) agents.add(mention.agentId.toLowerCase());
     if (mention.kind === MENTION_KIND.PERSON) people.add(mention.userId);
   }
@@ -573,23 +545,19 @@ export function mentionedServers(words: string, repository: string | null): read
  * task as the send read it, each of its pages and each of the workspace's
  * agents and people they mention, as the send read them into `reads`, and a note for
  * each MCP server or tool they mention; nothing where they mention none of
- * these. An agent with no plan is handed the notes, the agents, and the
- * pages it showed itself, which `agentId` names it by; one whose workspace has
- * Task descriptions off (`workspace-experiment-on.ts`) is handed no excerpt of the description.
+ * these. An agent whose workspace has Task descriptions off (`workspace-experiment-on.ts`) is handed no excerpt of the description.
  */
 export function mentionedContext(
   words: string,
   task: Task | undefined,
   reads: MentionedReads = NO_MENTIONED_READS,
-  agentId?: string | undefined,
   descriptionsOn = true,
 ): string | undefined {
-  const owner = pagesOwnerOf(task, agentId);
   const named: HandedMention[] = [];
   const repository = task?.repository ?? null;
   const taskIdOf = foundTask(reads.tasks);
   for (const { mention, label, target } of handedMentionsIn(words, repository, { taskIdOf })) {
-    const handed = handedMention(mention, target, task, owner);
+    const handed = handedMention(mention, target, task);
     if (handed === undefined) continue;
     if (
       !descriptionsOn &&
@@ -610,7 +578,7 @@ export function mentionedContext(
   // ending the part, so a shorter one after it still goes; what was passed
   // over is counted, and said once at the end.
   for (const mention of named) {
-    const excerpt = `\n\n${handedAs(mention, task, reads, owner)}`;
+    const excerpt = `\n\n${handedAs(mention, task, reads)}`;
     if (part.length + excerpt.length + LEFT_OUT_ROOM <= MENTIONED_BOUNDS.PART_CHARS)
       part += excerpt;
     else left += 1;

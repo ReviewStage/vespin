@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { APPROVAL_DECISION, INPUT_LINE } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { listPendingApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations } from "@repo/database/schemas/storage";
@@ -25,9 +27,11 @@ import {
   AGENT,
   fakeAgentSessions,
   messagedAgent,
+  openTask,
   readAnswer,
   refusal,
   request,
+  startAs,
 } from "../testing/agents-app-support.js";
 import { RUNNER_ANSWER, type RunnerAnswer } from "./coder-host/runtime-sessions.js";
 
@@ -36,7 +40,8 @@ import { RUNNER_ANSWER, type RunnerAnswer } from "./coder-host/runtime-sessions.
  * router: a mode is set by a member who controls a Claude Code agent and
  * reaches it from its next turn; an answer is written to the agent's runner
  * and settles its ask, by a member who controls the agent alone; and an ask
- * that no longer waits is refused with how it stands, writing nothing.
+ * that no longer waits is refused with how it stands, writing nothing. A
+ * new Claude Code agent starts on its starter's Default permissions.
  * Synthetic accounts, agents, and calls throughout; the store is PGlite.
  */
 
@@ -118,6 +123,25 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
         assert.equal(onCodex.agent.permissionMode, AGENT_PERMISSION_MODE.AUTO);
         // Full access is any harness's, and is said by saying nothing.
         assert.equal(backToFull.agent.permissionMode, undefined);
+      }),
+  );
+
+  it.effect(
+    "a member's Default permissions is the mode their new Claude Code agent starts on",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* openTask({ agentSessions: fakeAgentSessions() });
+        const start = () =>
+          opened.ask(startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID() }));
+        const before = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
+        yield* writeAccountPreferences(opened.owner, {
+          agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
+        });
+        const after = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
+
+        // Full access is the default, and is said by saying nothing.
+        assert.equal(before.agent.permissionMode, undefined);
+        assert.equal(after.agent.permissionMode, AGENT_PERMISSION_MODE.ASK);
       }),
   );
 

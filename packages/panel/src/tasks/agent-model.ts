@@ -5,7 +5,13 @@ import {
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
-import { AGENT_PART, type AgentPart, agentParts, messageWords } from "@repo/features/agent-parts";
+import {
+  AGENT_PART,
+  type AgentPart,
+  agentParts,
+  endTurnSummary,
+  messageWords,
+} from "@repo/features/agent-parts";
 import {
   ACTION,
   credentialMissingWords,
@@ -2026,7 +2032,8 @@ const SENTENCE_END = /[.!?](?=\s|$)/u;
 /**
  * What a turn that finished replied, as a reader hears it: its newest
  * reply's last stretch of words, after the turn's last call, cut to its
- * first sentence, or to its first words where that runs on. Nothing where
+ * first sentence, or to its first words where that runs on; the summary of
+ * its `end_turn`, where it ended with one. Nothing where
  * there is no reply, or no words follow its last call, as a turn that ended
  * on a call.
  */
@@ -2039,7 +2046,9 @@ export function finishedReplyLead(
   const parts = agentParts(reply);
   const lastCall = parts.findLastIndex((part) => part.kind === AGENT_PART.TOOL);
   const last = parts.slice(lastCall + 1).findLast((part) => part.kind === AGENT_PART.TEXT);
-  const words = last?.kind === AGENT_PART.TEXT ? plainWords(last.text) : "";
+  // Note that a turn ended with `end_turn` replied in its summary, whatever it wrote around the call.
+  const said = endTurnSummary(parts) ?? (last?.kind === AGENT_PART.TEXT ? last.text : "");
+  const words = plainWords(said);
   if (words === "") return undefined;
   const end = SENTENCE_END.exec(words);
   const sentence = end === null ? words : words.slice(0, end.index + 1);

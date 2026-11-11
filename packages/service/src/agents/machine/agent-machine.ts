@@ -38,7 +38,9 @@
 import type { LaunchPath } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
+import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
@@ -137,6 +139,8 @@ export interface RunnerMark {
   readonly firstSequence: number;
   /** None for a launch from before fingerprints were recorded. */
   readonly fingerprint?: string;
+  /** The permission mode the launch runs its agent in; none for a launch from before it was recorded, and for a Mac's, whose sends never pass it by. */
+  readonly permissionMode?: AgentPermissionMode;
   /** Whether the launch reads its lines from the service (`MachineLayout`'s `linesRead`); none for one the service writes them to the stdin of, a launch from before the read among them. */
   readonly linesRead?: boolean;
 }
@@ -231,6 +235,16 @@ export interface DeliveredCredentials {
   readonly env: Readonly<Record<string, string>>;
   readonly swaps: LaunchSwaps;
 }
+
+/** What a checkout's restore came to: put back, the snapshot not in the checkout any more, a failure, or a machine that restores none, a Mac whose host predates the line. */
+export const RESTORE_OUTCOME = {
+  RESTORED: "restored",
+  MISSING: "missing",
+  FAILED: "failed",
+  UNSUPPORTED: "unsupported",
+} as const;
+
+export type RestoreOutcome = (typeof RESTORE_OUTCOME)[keyof typeof RESTORE_OUTCOME];
 
 /** A runner launched in a place: the place, and the machine's own id for the runner's process. */
 export interface RunnerHandle extends MachinePlace {
@@ -455,6 +469,19 @@ export interface AgentMachineService {
    * false.
    */
   readonly wrote: (handle: RunnerHandle, text: string) => Effect.Effect<boolean, SandboxError>;
+  /**
+   * The session's checkout put back to the snapshot its runner took before
+   * a turn, by the one restore script both machines run
+   * (`@repo/features/checkout-restore`), once the runner is ended: in a
+   * sandbox, woken where it stopped; on a Mac, by a restore line its host
+   * follows and settles with the script's exit. Refused (`LaunchRefused`)
+   * where the Mac is away or removed, as a line to it is. A sandbox's
+   * restore is a use of it, recorded in the store (`../sandbox-use.ts`).
+   */
+  readonly restoreCheckout: (
+    session: string,
+    snapshot: TurnCheckoutSnapshot,
+  ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices>;
   /** The runner's exit code, null while it runs, or gone where the machine no longer knows it; waiting at most `within` for the exit. */
   readonly runnerExit: (
     handle: RunnerHandle,

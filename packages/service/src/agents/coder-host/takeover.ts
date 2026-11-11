@@ -84,8 +84,7 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 /**
  * takeover.ts -- what a Start does because it starts from another agent: the continue-versus-fork rules, the read of the source it inherits from, and the source's stop around the new agent's open.
  *
- * A Start from another agent of the task, or of the workspace where the
- * source has no task, to continue it or to fork it at one of its messages,
+ * A Start from another agent, to continue it or to fork it at one of its messages,
  * hands the new agent that agent's brief with its transcript replayed after
  * it (`replay.ts`) and its work, what it had not pushed included, in a
  * snapshot of its stopped sandbox or copied to a branch of its own

@@ -1,8 +1,7 @@
 /**
  * page-frame.ts -- a browser's page frame, answered: sent on to the version's link on the sandbox's own site, minted for the account that asks, or to the page saying pages open in the Mac app where the deployment has no sandbox.
  *
- * The frame's address is the app's own (a plan's page version's `frame`, and
- * its twin under an agent on no task), so the browser asks it with the
+ * The frame's address is the app's own (a plan's page version's `frame`), so the browser asks it with the
  * session cookie, and the answer is a redirect the frame follows at once.
  * The link stands only in the answer's `Location`, never in the app's script,
  * its document, or its screen recording; the answer is kept by no cache

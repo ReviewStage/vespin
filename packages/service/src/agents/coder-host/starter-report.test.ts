@@ -211,4 +211,13 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
     } as unknown as StoredUIMessage),
     said,
   );
+  // A later call refused stands for the turn over an earlier one taken.
+  const refused = ended("output-error").parts[1];
+  assert.equal(
+    lastSaid({
+      ...unanswered,
+      parts: [text, call, { ...refused, toolCallId: "call-2" }],
+    } as unknown as StoredUIMessage),
+    said,
+  );
 });

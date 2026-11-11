@@ -778,6 +778,21 @@ const deleteRequest = SqlSchema.void({
     ),
 });
 
+const deleteUnclaimedLine = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, id: Schema.String }),
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db.delete(deviceAgentLine).where(
+        and(
+          eq(deviceAgentLine.id, id),
+          eq(deviceAgentLine.userId, userId),
+          // A line claimed is a runner at work on it, whose exit is still to come.
+          isNull(deviceAgentLine.claimedAt),
+        ),
+      ),
+    ),
+});
+
 const deleteExpiredLines = SqlSchema.void({
   Request: Schema.Struct({ userId: Schema.String, before: Schema.Date }),
   execute: ({ userId, before }) =>
@@ -1258,6 +1273,18 @@ export function deviceAgentRequestAnswer(
 /** Withdraws a request, answered or not, once its caller stops waiting on it. */
 export function withdrawDeviceAgentRequest(userId: string, id: string): DeviceAgentEffect<void> {
   return deleteRequest({ userId, id });
+}
+
+/**
+ * Withdraws a line its Mac has not claimed, once its caller stops waiting
+ * on it, so a Mac back later does not act on what nobody waits for; one
+ * claimed stands, its runner at work on it and its exit still to come.
+ */
+export function withdrawUnclaimedDeviceAgentLine(
+  userId: string,
+  id: string,
+): DeviceAgentEffect<void> {
+  return deleteUnclaimedLine({ userId, id });
 }
 
 /**

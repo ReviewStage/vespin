@@ -1,16 +1,15 @@
 import type { CodeLines } from "@repo/features/tasks-view";
-import { CODE_CARD_TITLE, CODE_ROW, CodeCard, type CodeRow, DraftCard } from "@repo/ui";
+import { CODE_ROW, CodeCard, type CodeRow, DraftCard } from "@repo/ui";
 import { draftKindOf } from "@repo/ui/draft-text";
 import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from "react";
 import { colorable, coloringQueryOptions } from "../code-coloring.js";
-import { codeLanguage, codeTitle } from "../code-language.js";
 import { copyRichThroughShell, copyThroughShell } from "../copy-feedback.js";
 import { DescriptionDiagram } from "../description-diagram.js";
 import { TextLink } from "../text-link.js";
-import { FileTypeIcon } from "./file-type-icon.js";
+import { fenceHeading, SUGGESTION_LANGUAGE, suggests } from "./code-fence-heading.js";
 import { useOpenLink } from "./use-open-link.js";
 
 /**
@@ -36,12 +35,6 @@ import { useOpenLink } from "./use-open-link.js";
  * its header, its one Copy, its cut at 40 lines, and the screen recording's
  * leaving its lines out are the card's.
  */
-
-/** The language a suggestion is written in, and what a suggestion's block's header calls it. */
-const SUGGESTION = {
-  LANGUAGE: "suggestion",
-  LABEL: "Suggested change",
-} as const;
 
 /** The language a fence names to be drawn as its diagram once it is whole. */
 const MERMAID_LANGUAGE = "mermaid";
@@ -130,7 +123,7 @@ function useColoredLines(language: string, code: string, whole: boolean): CodeLi
  */
 function rowsOf(language: string, code: string): readonly Row[] | undefined {
   const lines = code.split("\n");
-  if (language === SUGGESTION.LANGUAGE) {
+  if (language === SUGGESTION_LANGUAGE) {
     return lines.map((text) => ({ kind: CODE_ROW.ADDED, text }));
   }
   if (language === SUGGESTED_CHANGE_LANGUAGE) {
@@ -161,10 +154,8 @@ function addedText(rows: readonly Row[]): string {
 }
 
 /**
- * A fenced block as a `CodeCard`: its language in the header, by the name
- * a reader says it by after its file icon ("TypeScript"), its id where it
- * is one this file has no name for, and "text" for a fence that names
- * none, over its lines, which keep whole and
+ * A fenced block as a `CodeCard`: its language in the header, as every
+ * fence is headed (`fenceHeading`), over its lines, which keep whole and
  * scroll sideways inside the card rather than widening the transcript. A
  * ```suggestion block, a change suggested to the lines a review comment is
  * on, is headed as GitHub heads one, its lines drawn as rows on the added
@@ -177,18 +168,16 @@ function CodeFence({ language, code }: { language: string; code: string }): Reac
   const openTail = useContext(OpenFenceTail);
   // Note that the block still open is the one the words end on, so its last line ends them.
   const whole = openTail === undefined || !openTail.endsWith(code.split("\n").at(-1) ?? "");
-  const suggesting = language === SUGGESTION.LANGUAGE || language === SUGGESTED_CHANGE_LANGUAGE;
+  const suggesting = suggests(language);
   // Note that a suggestion names no language of its own to color it in.
   const lines = useColoredLines(language, code, whole && !suggesting);
   const rows = rowsOf(language, code);
-  const known = codeLanguage(language);
-  const { extension } = known;
-  const name = suggesting ? undefined : known.name;
+  const heading = fenceHeading(language);
   return (
     <CodeCard
-      glyph={name === undefined ? undefined : <FileTypeIcon name={`code.${extension}`} />}
-      title={suggesting ? SUGGESTION.LABEL : codeTitle(language)}
-      titleIs={suggesting || name !== undefined ? CODE_CARD_TITLE.WORDS : CODE_CARD_TITLE.NAME}
+      glyph={heading.glyph}
+      title={heading.title}
+      titleIs={heading.titleIs}
       code={rows === undefined ? code : rows.map((row) => row.text).join("\n")}
       lines={lines}
       rows={rows?.map((row) => row.kind)}
