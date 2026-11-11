@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, a thread with a picture opened full screen and a video in the system's player, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -99,6 +99,23 @@ appId: dev.vespin.ios
     timeout: 15000
 - assertNotVisible: ".*can't play here.*"
 - takeScreenshot: inbox-video
+# The thread's ⋯ menu opens Remind me too: a compact window's bar holds the
+# menu, and a regular window's detail column its own, the last "More" on
+# screen beside the sidebar's. The sheet stands over the whole thread, and a
+# split view's thread fills its column's height beneath it. A tap off the
+# sheet closes it unchanged, so the row's Remind me below still finds the
+# thread under Open.
+- tapOn:
+    text: "More"
+    index: -1
+- tapOn: "Remind me"
+- assertVisible: "Pick a date and time…"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-thread-remind
+- tapOn:
+    point: "50%, 5%"
+- waitForAnimationToEnd
+- assertNotVisible: "Pick a date and time…"
 # Back on the list, the search, a round glass button in the bar, narrows it to
 # the threads whose words hold every word typed. It comes last, since its
 # keyboard stands over the rows.
