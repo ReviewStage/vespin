@@ -8,7 +8,12 @@ import {
   type ScrollFadeInset,
   Tooltip,
 } from "@repo/ui";
-import { type VirtualRowPlace, VirtualRows, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
+import {
+  noteScrollLog,
+  type VirtualRowPlace,
+  VirtualRows,
+  type VirtualRowsHandle,
+} from "@repo/ui/virtual-rows";
 import { ArrowDownIcon } from "lucide-react";
 import {
   type ComponentProps,
@@ -130,7 +135,10 @@ export function Conversation({
     if (element === null) return;
     // Note that a scroll past the top, as Safari's bounce reports, is no place the reader stands, as the docs' example says.
     const top = element.scrollTop;
-    if (top >= 0 && top <= element.clientHeight * NEAR_TOP_SCREENS) nearTop.current?.();
+    if (top < 0 || top > element.clientHeight * NEAR_TOP_SCREENS) return;
+    // Where the console asks (`scroll-log.ts`), each ask says how near the top the reader stood, so a page landing after they reached it shows as one asked too late.
+    if (nearTop.current !== undefined) noteScrollLog("older", { top: Math.round(top) });
+    nearTop.current?.();
   }, [list]);
   const scrollToBottom = useCallback(() => {
     rows.current?.current?.scrollToEnd();

@@ -29,6 +29,9 @@ import { joinRefs } from "../../join-refs.js";
 import { offsetWithin } from "../../offset-within.js";
 import { motionRows } from "../list-motion/list-motion.js";
 import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/roving-keys.js";
+import { noteResize, noteScrollLog, SCROLL_LOG_PLACE, scrollLogging } from "./scroll-log.js";
+
+export { noteScrollLog } from "./scroll-log.js";
 
 /**
  * virtual-rows.tsx -- a long run of rows in a scroller of the caller's, drawing only those near the view, anchored to its last.
@@ -109,6 +112,11 @@ import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/rovin
  *
  * The virtualizer is TanStack Virtual's, used as its docs show: headless,
  * so the rows are the caller's own elements in the caller's own scroller.
+ *
+ * Where the console asks for it (`scroll-log.ts`), the run logs each row it
+ * measures anew and how far the virtualizer moved the scroll for it, and
+ * each page of rows landing at either end, so a jump can be traced to what
+ * moved the scroll and what did not.
  */
 
 /** The attribute each drawn row wears naming its key. */
@@ -221,6 +229,33 @@ export function sizeWhileShown<Item extends Element>(
 /** The room a run takes its view to have before its scroller is measured: the window's, which no view of it outgrows. */
 function windowRect(): Rect {
   return { width: window.innerWidth, height: window.innerHeight };
+}
+
+/** Notes a row measured at `height` in the scroll log, where its height changed: where it stood against the view's top, and what the reader was doing. */
+function noteMeasured(
+  instance: Virtualizer<HTMLElement, HTMLElement>,
+  element: HTMLElement,
+  key: string,
+  height: number,
+  estimate: number,
+): void {
+  const box = instance.scrollElement;
+  const item = instance.measurementsCache[instance.indexFromElement(element)];
+  const held = instance.itemSizeCache.get(key);
+  const from = held ?? item?.size ?? estimate;
+  if (box === null || item === undefined || from === height) return;
+  const top = instance.scrollOffset ?? box.scrollTop;
+  const place =
+    item.start + from <= top
+      ? SCROLL_LOG_PLACE.ABOVE
+      : item.start < top
+        ? SCROLL_LOG_PLACE.ACROSS
+        : SCROLL_LOG_PLACE.BELOW;
+  noteResize(
+    box,
+    { key, from, to: height, first: held === undefined, place },
+    { direction: instance.scrollDirection, scrolling: instance.isScrolling },
+  );
 }
 
 /** Whether two runs of keys name the same rows in the same order. */
@@ -405,12 +440,31 @@ export function VirtualRows({
       instance: Virtualizer<HTMLElement, HTMLElement>,
     ): number => {
       const height = measureElement(element, entry, instance);
-      if (height > 0 || element.getClientRects().length > 0) return height;
       const key = element.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ?? "";
+      if (height > 0 || element.getClientRects().length > 0) {
+        if (scrollLogging()) noteMeasured(instance, element, key, height, estimate);
+        return height;
+      }
       return instance.itemSizeCache.get(key) ?? estimate;
     },
     [estimate],
   );
+  // Where the console asks, a page landing at either end is logged with where the scroll stood before it and once the virtualizer anchored it.
+  // Note that the row at the view's top is the one the virtualizer anchors a page landing above by, so the log says whether it outlived the page; both are read before the virtualizer takes this draw's keys, while its rows are still the last draw's.
+  const lastVirtualizer = useRef<Virtualizer<HTMLElement, HTMLElement> | undefined>(undefined);
+  const edges = useRef<{
+    first: string | undefined;
+    last: string | undefined;
+    count: number;
+    top: number;
+    atTop: string | undefined;
+  }>({ first: keys[0], last: keys.at(-1), count: keys.length, top: 0, atTop: undefined });
+  if (scrollLogging()) {
+    const top = scroller.current?.scrollTop ?? 0;
+    const key = lastVirtualizer.current?.getVirtualItems().find((item) => item.end > top)?.key;
+    edges.current.top = top;
+    edges.current.atTop = key === undefined ? undefined : String(key);
+  }
   // What the run measured when last drawn, taken once, as the virtualizer reads it once.
   const [seed] = useState(() => [...measurements]);
   const virtualizer = useVirtualizer<HTMLElement, HTMLElement>({
@@ -436,6 +490,25 @@ export function VirtualRows({
     directDomUpdates: true,
     directDomUpdatesMode: "position",
   });
+  lastVirtualizer.current = virtualizer;
+  useLayoutEffect(() => {
+    const was = edges.current;
+    const first = keys[0];
+    const last = keys.at(-1);
+    edges.current = { ...was, first, last, count: keys.length };
+    if (!scrollLogging() || (first === was.first && last === was.last)) return;
+    const after = scroller.current?.scrollTop ?? 0;
+    noteScrollLog("edges", {
+      added: keys.length - was.count,
+      firstChanged: first !== was.first,
+      lastChanged: last !== was.last,
+      atTop: was.atTop,
+      atTopKept: was.atTop === undefined || keys.includes(was.atTop),
+      top: Math.round(was.top),
+      after: Math.round(after),
+      moved: Math.round(after - was.top),
+    });
+  }, [keys, scroller]);
   // What the run measured is handed back as it is let go, the rows it measured alone (`takeSnapshot()`).
   const heard = useRef(onMeasurements);
   heard.current = onMeasurements;
