@@ -333,6 +333,28 @@ test("an item chosen by a notification's click, in an Inbox showing its list alo
   );
 });
 
+test("an item opened at its address alone, as a reloaded window opens it, gives way to a row pressed after it", async () => {
+  const previous = fakeActsAnswer();
+  fakeActs({
+    ...appBridge(),
+    act: (request: AnyAct): Promise<FakeActAnswer> =>
+      request.kind === ACT_KIND.AGENTS_INBOX_ITEM_HOME
+        ? Promise.resolve({
+            status: FAKE_ANSWER.DONE,
+            value: { planId: BILLING.id, agentId: AGENT.id, workspaceId: ACME.id },
+          })
+        : previous(request),
+  });
+  const { page } = mount({ chosen: ON_THRESHOLD, byAddress: true });
+  await settle();
+  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, THRESHOLD.title);
+
+  act(() => rowNamed(page, EXPIRY.title).click());
+  await settle();
+
+  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, EXPIRY.title);
+});
+
 test("an item's row offers Copy link on a right-click, copying the item's link by its id alone, whichever agent posted it and task holds it", async () => {
   world.listedWorkspace = {
     id: "workspace-acme",
