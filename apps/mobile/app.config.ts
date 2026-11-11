@@ -232,6 +232,7 @@ const SHARE_EXTENSION: AppExtension = {
     { FROM: "share-extension", NAME: "SharedItems.swift" },
     { FROM: "share-extension", NAME: "AppGroupFiles.swift" },
     { FROM: "share-extension", NAME: "ShareStart.swift" },
+    { FROM: "share-extension", NAME: "ShareNotice.swift" },
     { FROM: "modules/share-token/ios", NAME: "ShareToken.swift" },
   ],
   EXTENSION_POINT: "com.apple.share-services",

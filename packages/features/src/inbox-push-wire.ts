@@ -8,7 +8,10 @@
  * and what the app sends there. A decide's buttons are named by each
  * option's place in the payload's `options`, 0 first, which the app's
  * Notification Service Extension writes as each action's identifier; a
- * reply typed in place comes back under `INBOX_PUSH_ACTION.REPLY`.
+ * reply typed in place comes back under `INBOX_PUSH_ACTION.REPLY`. The
+ * app's share extension posts one notification of its own, a local one
+ * naming the task it started (`PUSH_KIND.SHARE_STARTED`), which a tap opens
+ * the same way.
  */
 
 import { Schema as EffectSchema } from "effect";
@@ -25,6 +28,8 @@ export const PUSH_KIND = {
   RUN_FAILED: "run-failed",
   /** A thread settled, so its delivered notification is removed; a background push. */
   SETTLED: "settled",
+  /** A task the share sheet started, posted on the phone itself rather than pushed. */
+  SHARE_STARTED: "share-started",
 } as const;
 
 /** The actions the app offers on an alert, as its `aps.category` names them; the app registers each. */
@@ -88,11 +93,19 @@ const settledPushSchema = EffectSchema.Struct({
   itemId: idSchema,
 });
 
+/** The share sheet's notification of a task it started, and its agent where one started. */
+const shareStartedPushSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(PUSH_KIND.SHARE_STARTED),
+  taskId: idSchema,
+  agentId: EffectSchema.optionalKey(idSchema),
+});
+
 /** What a push carries beside `aps`, by its kind. */
 const inboxPushSchema = EffectSchema.Union([
   threadPushSchema,
   runFailedPushSchema,
   settledPushSchema,
+  shareStartedPushSchema,
 ]);
 
 export type InboxPush = typeof inboxPushSchema.Type;
@@ -134,10 +147,15 @@ export function inboxPushOf(payload: unknown): InboxPush | undefined {
 }
 
 /** The route a push opens on. */
-function routeOf(push: InboxPush): string | undefined {
-  if (push.kind !== PUSH_KIND.RUN_FAILED)
+function routeOf(
+  push: Exclude<InboxPush, { readonly kind: typeof PUSH_KIND.SETTLED }>,
+): string | undefined {
+  if (push.kind === PUSH_KIND.RUN_FAILED) return iosAgentRoute(push.agentId);
+  if (push.kind !== PUSH_KIND.SHARE_STARTED)
     return iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: push.itemId });
-  return iosAgentRoute(push.agentId);
+  return push.agentId === undefined
+    ? iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: push.taskId })
+    : iosAgentRoute(push.agentId);
 }
 
 /** What an action on a thread's push sends: a decide's option by its place, or words typed in place; nothing for a tap. */
@@ -159,9 +177,10 @@ function pressOf(
 /**
  * Where a tap or an action on a notification takes the app, and what it
  * sends there: a thread's push opens the thread, with its option or its
- * words where an action pressed one; a failed run opens its task, or the
- * Inbox where a push names none. None for a payload that is not the
- * service's or a settled thread's background push, which nobody taps.
+ * words where an action pressed one; a failed run opens its agent; a task
+ * the share sheet started opens its agent, or the task where none started.
+ * None for a payload that is not the service's or a settled thread's
+ * background push, which nobody taps.
  */
 export function inboxPushResponseOf(
   payload: unknown,
@@ -171,6 +190,9 @@ export function inboxPushResponseOf(
   if (push === undefined || push.kind === PUSH_KIND.SETTLED) return undefined;
   const route = routeOf(push);
   if (route === undefined) return undefined;
-  const press = push.kind === PUSH_KIND.RUN_FAILED ? undefined : pressOf(push, action);
+  const press =
+    push.kind === PUSH_KIND.RUN_FAILED || push.kind === PUSH_KIND.SHARE_STARTED
+      ? undefined
+      : pressOf(push, action);
   return press === undefined ? { route } : { route, press };
 }

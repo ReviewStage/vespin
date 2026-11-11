@@ -302,7 +302,11 @@ was issued, is rewritten each time the token is renewed, and is deleted when
 you sign out. When you share text or a link to Vespin from another app and press
 Start, the share sheet sends **the words you shared and edited**, with the
 workspace and repository you picked, to the Service under that token, exactly
-as the app's New task does, and the task starts there. Where the task
+as the app's New task does, and the task starts there. Where you allow
+Vespin's notifications, the share sheet then posts one on the phone itself,
+never through Apple's push service, which says "Task started" and nothing
+of the task, and carries the ids of the task and its agent for the app to
+open when you tap it. Where the task
 doesn't start, because the token has expired, the Service refuses it, or the
 Service doesn't answer, the share sheet keeps those words and picks as a
 draft in the same folder instead, which the app opens New task on the next
