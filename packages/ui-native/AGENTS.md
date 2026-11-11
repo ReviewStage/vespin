@@ -31,15 +31,19 @@ builds a control of its own.
   field at a SwiftUI column's foot in the system's own glass, where no React
   Native bar can stand, such as a split view's detail. Its round button is
   Send, or, with nothing typed, Stop while an agent works, and its head,
-  inside the same glass, holds an agent's `QueuedLines` (Steer and Delete),
-  its `AttachedPictures`, and an `AskNote`.
+  inside the same glass, holds an agent's `HeldCallBanner` (the oldest call
+  it holds for an answer, with Deny and Allow), its `QueuedLines` (Steer
+  and Delete), its `AttachedPictures`, and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
   `expo-video`, which says so in its place where the player cannot read the
   file. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (a lazy `FlatList`, drawn newest last and anchored there, with
-  Jump to latest once the reader scrolls back), under `AgentHead`; its rows
+  Jump to latest once the reader scrolls back, and its older pages read as
+  the reader scrolls up to its oldest row, which holds its place as they
+  land), under `AgentHead`, where the agent stands and its model; a call
+  the agent holds for an answer says so under its line with Deny and Allow; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
   the agent's thinking left out, and each call leads with the glyph for its
@@ -105,7 +109,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Inline titles, no large titles.** A tab's root shows its name small and
   inline. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
-  under it; a split view's detail column draws the same path in its bar.
+  under it; a split view's detail column draws the same path in its bar. An
+  agent's page names the agent in the bar in the ink instead, as Messages
+  names a conversation, since its transcript opens at its newest row.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back

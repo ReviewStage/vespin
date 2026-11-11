@@ -1,5 +1,5 @@
 #!/bin/sh
-# vespin-host -- the host's one command: `uninstall` removes the host from Vespin and from the account it is installed in, with no sudo, with its service, its agents' folders, its state and its releases; every other command is the daemon's own (lib/vespin-host.mjs), run on the Node the release carries.
+# vespin-host -- the host's one command: `uninstall` removes the host from Vespin and from the account it is installed in, with no sudo, with its service, its agents' folders, its state and its releases, and `uninstall --keep-agents` all of that but the agents' folders and the log; every other command is the daemon's own (lib/vespin-host.mjs), run on the Node the release carries.
 #
 # Shipped as bin/vespin-host in every release tarball, a Mac's among them
 # (scripts/release-layout.ts). The account install unpacks each release into
@@ -64,9 +64,10 @@ remove_user_unit() {
   printf 'Stopped and removed %s.\n' "$unit_file"
 }
 
-# Boots out and removes the account's LaunchAgent and its log, refusing, with
-# nothing removed, while it is still loaded.
+# Boots out and removes the account's LaunchAgent, and its log unless told to
+# keep it, refusing, with nothing removed, while it is still loaded.
 remove_launch_agent() {
+  keep_log="$1"
   plist="$HOME/Library/LaunchAgents/$MAC_LABEL.plist"
   agent="gui/$(id -u)/$MAC_LABEL"
   launchctl bootout "$agent" >/dev/null 2>&1 || true
@@ -78,7 +79,7 @@ remove_launch_agent() {
     rm -f "$plist"
     printf 'Stopped and removed %s.\n' "$plist"
   fi
-  if [ -e "$HOME/$MAC_LOG_FOLDER" ]; then
+  if [ "$keep_log" = no ] && [ -e "$HOME/$MAC_LOG_FOLDER" ]; then
     rm -rf "${HOME:?}/$MAC_LOG_FOLDER"
     printf 'Removed %s.\n' "$HOME/$MAC_LOG_FOLDER"
   fi
@@ -92,8 +93,12 @@ remove_launch_agent() {
 # was not pushed, and asks to go on where a person runs it at a terminal.
 # Note that ~/.vespin/clones stays, since every install for the account
 # shares it, and so does a Linux account's lingering, said where it is on.
+# With keep_agents yes, as the daemon runs it once its box is removed from
+# another device, it asks nothing and keeps every agent's folder and a Mac's
+# log, so the removal never takes work that was not pushed.
 uninstall_account() {
   home="$1"
+  keep_agents="$2"
   if [ "$(readlink -f "${HOME:-/}")" != "$home" ]; then
     printf 'This Vespin host is installed in the account whose home is %s. Run ~/%s uninstall as that account, without sudo.\n' "$home" "$ACCOUNT_LINK" >&2
     exit 1
@@ -103,7 +108,7 @@ uninstall_account() {
     [ -e "$owned" ] && [ -e "$HOME/$AGENTS_FOLDER/${owned##*/}" ] || continue
     agents=$((agents + 1))
   done
-  if [ "$agents" -gt 0 ]; then
+  if [ "$keep_agents" = no ] && [ "$agents" -gt 0 ]; then
     printf 'This removes the folders under %s of the agents Vespin host ran here (%s). Work in them that was not pushed goes with them.\n' "$HOME/$AGENTS_FOLDER" "$agents" >&2
     if [ -t 0 ]; then
       printf 'Remove Vespin host and those folders? [y/N] ' >&2
@@ -119,7 +124,7 @@ uninstall_account() {
   fi
   kernel="$(uname -s)"
   case "$kernel" in
-    Darwin) remove_launch_agent ;;
+    Darwin) remove_launch_agent "$keep_agents" ;;
     *) remove_user_unit ;;
   esac
   # Note that the host leaves its account once its service has stopped and before its secret goes, so it leaves Settings › Hosts too, and that one whose service cannot be reached is still removed from the box, which says to remove it there.
@@ -128,13 +133,16 @@ uninstall_account() {
     left=yes
   fi
   for owned in "$HOME/$ACCOUNT_STATE/$OWNED_AGENTS"/*; do
-    [ -e "$owned" ] || continue
+    [ "$keep_agents" = no ] && [ -e "$owned" ] || continue
     folder="${HOME:?}/$AGENTS_FOLDER/${owned##*/}"
     [ -e "$folder" ] || continue
     rm -rf "$folder"
     printf 'Removed %s.\n' "$folder"
   done
   rmdir "${HOME:?}/$AGENTS_FOLDER" "${HOME:?}/.vespin" 2>/dev/null || true
+  if [ "$keep_agents" = yes ] && [ -e "$HOME/$AGENTS_FOLDER" ]; then
+    printf 'Kept the agents'"'"' folders in %s, with any work in them that was not pushed.\n' "$HOME/$AGENTS_FOLDER"
+  fi
   for folder in "${HOME:?}/$ACCOUNT_STATE" "${HOME:?}/$ACCOUNT_RELEASES"; do
     [ -e "$folder" ] || continue
     rm -rf "$folder"
@@ -163,15 +171,24 @@ uninstall_account() {
 }
 
 uninstall() {
+  case "${1:-}" in
+    "") keep_agents=no ;;
+    --keep-agents) keep_agents=yes ;;
+    *)
+      printf 'usage: vespin-host uninstall [--keep-agents]\n' >&2
+      exit 64
+      ;;
+  esac
   if ! home="$(account_home)"; then
     printf 'vespin-host uninstall removes an install the install script made, under ~/%s.\n' "$ACCOUNT_RELEASES" >&2
     exit 1
   fi
-  uninstall_account "$home"
+  uninstall_account "$home" "$keep_agents"
 }
 
 if [ "${1:-}" = "uninstall" ]; then
-  uninstall
+  shift
+  uninstall "$@"
   exit 0
 fi
 # Note that the account install's state root is named here, so a command run by hand, a connect among them, reads and writes the record its service runs on.

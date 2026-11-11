@@ -1,3 +1,4 @@
+import { APPROVAL_PRESS_WORDS } from "@repo/features/agent-approval-model";
 import { type ReactNode, useState } from "react";
 import type { ShownError } from "../../reported-failure.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
@@ -40,8 +41,8 @@ export type ApprovalAction = (typeof APPROVAL_ACTION)[keyof typeof APPROVAL_ACTI
 
 /** What the denial's field and its presses say, wherever its field is drawn. */
 export const DENY_NOTE_WORDS = {
-  DENY: "Deny",
-  DENYING: "Denying",
+  DENY: APPROVAL_PRESS_WORDS.DENY,
+  DENYING: APPROVAL_PRESS_WORDS.DENYING,
   CANCEL: "Cancel",
   LABEL: "Why you denied it",
   PLACEHOLDER: "Tell the agent why (optional)",
@@ -49,9 +50,9 @@ export const DENY_NOTE_WORDS = {
 
 /** The presses' words. */
 const WORDS = {
-  ALLOW: "Allow",
-  ALLOW_FOR_AGENT: "Always allow",
-  ALLOWING: "Allowing",
+  ALLOW: APPROVAL_PRESS_WORDS.ALLOW,
+  ALLOW_FOR_AGENT: APPROVAL_PRESS_WORDS.ALLOW_FOR_AGENT,
+  ALLOWING: APPROVAL_PRESS_WORDS.ALLOWING,
   ...DENY_NOTE_WORDS,
 } as const;
 

@@ -1,5 +1,6 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header, and a page it showed, opened whole.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, and a page it showed, opened whole.
 
+import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
@@ -13,7 +14,7 @@ import {
 } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
-import { selectInboxReader, selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   AgentHead,
   AgentTranscript,
@@ -25,8 +26,8 @@ import {
   DOCK_ROOM,
   EmptyState,
   GlassDock,
+  HeldCallBanner,
   NO_TOGGLES,
-  PATH_PART,
   QueuedLines,
   Screen,
   SealedPage,
@@ -46,8 +47,11 @@ import {
   useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
+  useOlderPages,
   usePageHtml,
+  useTranscriptRetry,
 } from "../agents/use-agent.js";
+import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
 import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -60,10 +64,11 @@ const UNTITLED_AGENT = "Agent";
 /** What the page's menu opens the agent on. */
 const OPEN_ON_WEB = "Open on vespin.dev";
 
-/** What stands in the transcript's place while it is read, and where it could not be. */
+/** What stands in the transcript's place while it is read, and where it could not be, with what reads it again. */
 const TRANSCRIPT_WORDS = {
   READING: "Reading the transcript",
   FAILED: "The transcript could not be read.",
+  RETRY: "Try again",
 } as const;
 
 /** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
@@ -75,15 +80,6 @@ const PAGE_WORDS = {
   READING: "Reading the page",
   FAILED: "The page could not be read.",
 } as const;
-
-/** The name of the task the agent works on, by its id, as the list holds it; none before the agent or the list is read. */
-function useTaskName(taskId: string | undefined): string | undefined {
-  const { data } = useQuery({
-    ...appStateQuery,
-    select: (state) => selectTasks(state).tasks.find(({ id }) => id === taskId)?.name,
-  });
-  return data;
-}
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read. */
 function useAgentAddress(
@@ -147,14 +143,24 @@ function CardMergeAsk({
   );
 }
 
-/** The agent's composer at the page's foot: the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
-function AgentComposerBar({ composer }: { readonly composer: AgentComposer }) {
+/** The agent's composer at the page's foot: a call waiting on an answer, the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
+function AgentComposerBar({
+  composer,
+  banner,
+}: {
+  readonly composer: AgentComposer;
+  readonly banner: AgentApprovals["banner"];
+}) {
   const head =
+    banner === undefined &&
     composer.queued.length === 0 &&
     composer.paused === undefined &&
     composer.attached.length === 0 &&
     composer.note === undefined ? undefined : (
       <>
+        {banner === undefined ? null : (
+          <HeldCallBanner {...banner} denies={composer.sendQueues ? undefined : DENIES_WAITING} />
+        )}
         <QueuedLines
           lines={composer.queued}
           paused={composer.paused}
@@ -181,18 +187,24 @@ function AgentComposerBar({ composer }: { readonly composer: AgentComposer }) {
 }
 
 /**
- * One agent's page: the system's header holding its path, the task it works
- * on and the agent, small and muted, with a menu that opens it on
- * vespin.dev, over its transcript as one lazy list, its head the agent's
- * title, where it stands, and the model it runs on. The
- * transcript is held live while the page is in focus, so a turn under way
- * draws as it moves; each call opens in place, a fold opens on what it
- * holds, a page the agent showed opens whole, and a pull request it opened
- * opens its own screen, its card offering Review, which opens it on GitHub,
- * and Merge where it may merge now, which asks first. Its composer floats
- * over the transcript's foot: a follow-up, with the photos the + attaches,
- * steers the turn under way or waits behind it as the member's Follow-up
- * behavior says, and Stop stands in Send's place while the agent works.
+ * One agent's page: the system's header naming the agent in the ink, as
+ * Messages names a conversation, since the transcript opens at its newest
+ * row and its head scrolls away, its back button leading to the task, with
+ * a menu that opens it on vespin.dev, over its transcript as one lazy list,
+ * its head where the agent stands and the model it runs on. The transcript
+ * is held live while the page is in focus, so a turn under way draws as it
+ * moves, and its older pages are read as the reader scrolls up to them; one
+ * that could not be read offers Try again. Each call opens in place, and
+ * one the agent holds for an answer says so under its line with Deny and
+ * Allow; a fold opens on what it holds, a page the agent showed opens
+ * whole, and a pull request it opened opens its own screen, its card
+ * offering Review, which opens it on GitHub, and Merge where it may merge
+ * now, which asks first. Its composer floats over the transcript's foot:
+ * while a call waits, a banner over its field answers the oldest, and says
+ * that a message sent now denies it where Send would not queue it, and a
+ * follow-up, with the photos the + attaches, steers the turn under way or
+ * waits behind it as the member's Follow-up behavior says, and Stop stands
+ * in Send's place while the agent works.
  */
 export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
@@ -215,7 +227,6 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const taskName = useTaskName(agent?.planId);
   const address = useAgentAddress(id, agent?.workspaceId, agent?.planId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
@@ -233,7 +244,10 @@ export function AgentScreen() {
     [messages, status, readerId, toggles, pullRequests],
   );
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
-  const composer = useAgentComposer(id, agent, transcript, status);
+  const approvals = useAgentApprovals(agent, id);
+  const composer = useAgentComposer(id, agent, transcript, status, approvals.messageSent);
+  const older = useOlderPages(id, transcript?.before);
+  const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
   const title = cardTitle(agent?.title ?? transcript?.word?.title ?? UNTITLED_AGENT);
   const failed = held?.failed === true || transcript?.failure !== undefined;
@@ -246,8 +260,8 @@ export function AgentScreen() {
     <>
       <Stack.Screen
         options={{
-          title: [...(taskName === undefined ? [] : [taskName]), title].join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+          title,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -258,12 +272,11 @@ export function AgentScreen() {
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
-      <GlassDock bar={<AgentComposerBar composer={composer} />}>
+      <GlassDock bar={<AgentComposerBar composer={composer} banner={approvals.banner} />}>
         <AgentTranscript
           items={items}
           head={
             <AgentHead
-              title={title}
               model={agent === undefined ? undefined : modelLabel(agent.model)}
               status={status}
             />
@@ -272,7 +285,10 @@ export function AgentScreen() {
             title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
             symbol: failed ? "exclamationmark.triangle" : "text.bubble",
             loading: !failed,
+            action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
           }}
+          older={older}
+          heldCall={approvals.heldCall}
           repository={agent?.repository}
           onOpenLink={openLink}
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}

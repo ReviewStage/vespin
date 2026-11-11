@@ -116,6 +116,8 @@ export interface AgentComposer {
   /** Whether Send stands lit with no words typed: a picture is attached. */
   readonly sendable: boolean;
   readonly send: () => void;
+  /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
+  readonly sendQueues: boolean;
   readonly attached: readonly AttachedPicture[];
   readonly attach: () => void;
   readonly detach: (id: string) => void;
@@ -137,13 +139,15 @@ export interface AgentComposer {
  * The composer of the agent `agentId` names, whose followed row is `agent`
  * and whose transcript the page holds as `transcript`. Only the agent's
  * starter may change its queue, as the service holds, so a teammate's
- * Send never queues and their queue offers no Steer or Delete.
+ * Send never queues and their queue offers no Steer or Delete. `onMessage`
+ * hears each message sent straight to the agent, and whether it was taken.
  */
 export function useAgentComposer(
   agentId: string,
   agent: FollowedAgent | undefined,
   transcript: AppTranscript | undefined,
   status: AgentStatus | undefined,
+  onMessage?: (taken: Promise<boolean>) => void,
 ): AgentComposer {
   const acts = useHostActs();
   const { data: enterQueues = false } = useQuery({
@@ -161,6 +165,8 @@ export function useAgentComposer(
   const starter = agent?.startedBy;
   const controlsQueue =
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
+  // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
+  const sendQueues = writing && enterQueues && controlsQueue;
   // A Stop stands pressed until the agent stops writing.
   useEffect(() => {
     if (!writing) setStopping(false);
@@ -192,7 +198,7 @@ export function useAgentComposer(
     setWords("");
     setPictures([]);
     setNote(undefined);
-    if (writing && enterQueues && controlsQueue) {
+    if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
       acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change })
         .then((answer) => {
@@ -205,7 +211,19 @@ export function useAgentComposer(
         });
       return;
     }
-    acts[ACT_KIND.AGENTS_MESSAGE]({ agentId, text, clientKey: sent.id, ...attachments })
+    const message = acts[ACT_KIND.AGENTS_MESSAGE]({
+      agentId,
+      text,
+      clientKey: sent.id,
+      ...attachments,
+    });
+    onMessage?.(
+      message.then(
+        (answer) => !("failure" in answer),
+        () => false,
+      ),
+    );
+    message
       .then((answer) => {
         if ("failure" in answer) handBack(sent, messageFailureWords(answer.failure));
         else settled(sent);
@@ -298,6 +316,7 @@ export function useAgentComposer(
   ];
   return {
     placeholder: PLACEHOLDER,
+    sendQueues,
     words,
     onWords: (typed) => {
       setWords(typed);
