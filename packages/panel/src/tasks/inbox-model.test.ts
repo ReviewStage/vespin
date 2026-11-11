@@ -1264,7 +1264,7 @@ test("a thread's row previews its latest message, an answer led by its answerer 
     "You: Chose 7 days",
   );
   const note = message({
-    text: "Shipped **#42**. ![The flow](https://example.com/flow.png) `![`",
+    text: "Shipped **#42**. ![The flow](https://example.com/flow.png) `![`\n\n    ![",
     createdAt: 3_000,
     author: INBOX_MESSAGE_AUTHOR.AGENT,
   });
@@ -1274,7 +1274,7 @@ test("a thread's row previews its latest message, an answer led by its answerer 
     answeredBy: YOU,
     thread: [note],
   });
-  assert.equal(inboxPreview(settledNote, previewName), "Shipped #42. The flow ![");
+  assert.equal(inboxPreview(settledNote, previewName), "Shipped #42. The flow ![ ![");
   assert.equal(inboxLineKind(settledNote), INBOX_LINE.SAID);
 });
 
