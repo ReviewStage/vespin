@@ -89,7 +89,7 @@ import { version as appVersion } from "../../package.json";
 import { type ConnectTabs, connectTabs, tabBrowser } from "./connect-tab";
 import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-file-system";
 import { type PageLeave, tabLeave } from "./page-leave";
-import { failedChunkAnswer, PRELOAD_ERROR, staleBuildTab } from "./stale-build";
+import { PRELOAD_ERROR, staleBuild, staleBuildTab } from "./stale-build";
 import { developmentFixtureProfile } from "./web-fixture";
 import {
   askTabNotifications,
@@ -550,8 +550,8 @@ const composedWeb = (
  * seams, an agent's terminals its one platform concern, then the composers
  * started in the launch's order, then the operator's first bootstrap read
  * into the document, so the panel's first read finds the account already
- * settled. Beside it, a chunk that fails to load once a deploy took it away
- * moves the tab onto the build now live (`stale-build.ts`). The scope this
+ * settled. Beside it, a tab a deploy left behind moves onto the build now
+ * live (`stale-build.ts`). The scope this
  * is built in is the tab's; closing it is the host's drain.
  */
 export function composeWeb(
@@ -588,18 +588,26 @@ export function composeWeb(
       ).pipe(Layer.provideMerge(hostStandingLayer)),
     ),
   );
-  // A tab left open across a deploy asks to move onto the build now live once a chunk of its own fails to load.
-  const staleBuild = Layer.effectDiscard(
-    Effect.forkScoped(
-      Effect.suspend(() =>
-        Stream.runForEach(
-          Stream.fromEventListener(window, PRELOAD_ERROR),
-          failedChunkAnswer(staleBuildTab(tab)),
+  // A tab left open across a deploy moves onto the build now live on its next page, or asks to once a chunk of its own fails to load.
+  const movesOntoLiveBuild = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const build = staleBuild(staleBuildTab(tab, history));
+      yield* Effect.forkScoped(
+        Stream.runForEach(Stream.fromEventListener(window, PRELOAD_ERROR), build.failedChunk),
+      );
+      yield* Effect.forkScoped(
+        Stream.fromEventListener(document, "visibilitychange").pipe(
+          Stream.filter(() => document.visibilityState === "visible"),
+          Stream.runForEach(() => build.returned),
         ),
-      ),
-    ),
+      );
+      yield* Effect.acquireRelease(
+        Effect.sync(() => history.subscribe(({ action }) => build.moved(action.type))),
+        (unsubscribe) => Effect.sync(unsubscribe),
+      );
+    }),
   );
-  return Layer.merge(launched, staleBuild).pipe(
+  return Layer.merge(launched, movesOntoLiveBuild).pipe(
     Layer.provideMerge(composedWeb(fork, tab, history, linkPlatform, fixture)),
     Layer.provideMerge(assembly),
     Layer.provide(httpClient),
