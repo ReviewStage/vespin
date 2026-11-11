@@ -278,6 +278,8 @@ export * from "./components/popover-icon-button/popover-icon-button.js";
 
 export * from "./components/popover-panel/popover-panel.js";
 
+export * from "./components/port-table/port-table.js";
+
 export * from "./components/portal-fence/portal-fence.js";
 
 export * from "./components/progress/progress.js";

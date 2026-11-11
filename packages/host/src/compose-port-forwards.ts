@@ -1,21 +1,28 @@
 /**
- * compose-port-forwards.ts -- a coding agent's cloud ports forwarded to this Mac's `127.0.0.1`, on the window's behalf: forwarding read and turned on or off for one agent at a time, a loopback listener kept for each port the service detects, and each connection it accepts carried over the service's tunnel.
+ * compose-port-forwards.ts -- a coding agent's cloud ports forwarded to this Mac's `127.0.0.1`, on the window's behalf: one port at a time forwarded or let go, for one agent at a time, a loopback listener kept for each such port the service detects, and each connection it accepts carried over the service's tunnel.
  *
  * How the forwarded agent's forwarding stands is told to the windows as
  * `PORT_FORWARDS_CHANGED` each time it moves, which the client lays in app
  * state (`portForwarding`); nothing reads it on a timer of its own.
  *
- * Turning forwarding on reads the agent's listening ports every few seconds
- * for as long as it is on, forwarding what already listens; nothing is
- * started or woken in the sandbox on its behalf, and a stopped sandbox reads
- * as not running until it runs; once a sandbox seen running stops,
- * forwarding is turned off, so it waits on no agent whose ports are gone.
- * Each port read is forwarded in a scope of its own
+ * Forwarding a port reads the agent's listening ports at once, so the act
+ * answers with the port's local address where it already listens, and
+ * every few seconds after for as long as any of the agent's ports is
+ * forwarded; nothing is started or woken in the sandbox on its behalf, and a
+ * stopped sandbox reads as not running until it runs; once a sandbox seen
+ * running stops, forwarding is turned off, so it waits on no agent whose
+ * ports are gone. Of the ports read, only the ones the developer asked for
+ * are forwarded, each in a scope of its own
  * (`@repo/features/port-forward-tunnel`: its loopback listener, over the
  * `ListenOnLoopback` seam the desktop's launch hands over `node:net`, and
- * its tunnel); a port no longer read is let go by closing that scope, its
- * connections with it. Turning it on for another agent turns it off for the
- * first.
+ * its tunnel); the rest are told as `OFF`, and a port let go, or no longer
+ * read, is closed with that scope, its connections with it. A chosen port
+ * a read no longer lists is no longer chosen, so a server that stops is
+ * opened again with Open. Letting the last one go, or a read that leaves
+ * none chosen, turns the agent's forwarding off, so it never stands on with
+ * nothing forwarded; and forwarding a port of another agent turns it off
+ * for the first. Every read and every act runs
+ * one at a time, so two never forward one port twice.
  *
  * The forwarded agent's port shared by public link is read from the service
  * at the first look its sandbox runs, and again at each look while one is
@@ -94,6 +101,10 @@ interface Forwarding {
   readonly agentId: string;
   readonly scope: Scope.Closeable;
   running: boolean;
+  /** The ports the developer asked to reach this Mac; only these are forwarded. */
+  readonly chosen: Set<number>;
+  /** The ports the last read listed, forwarded or not. */
+  listed: readonly number[];
   readonly forwards: Map<number, Forward>;
   /** What serves each port, as the last read said. */
   labels: ReadonlyMap<number, string>;
@@ -127,7 +138,7 @@ export function composePortForwards(
     const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
     let forwarding: Forwarding | undefined;
     let toldText = JSON.stringify(null);
-    // Note that turning forwarding on or off runs one at a time, because each lets the forwarded agent go across a wait and a second move in that wait would leave a scope no one closes.
+    // Note that every read and act runs one at a time, because each moves the forwards across a wait and a second move in that wait would forward a port twice or leave a scope no one closes.
     const oneAtATime = (yield* Semaphore.make(1)).withPermits(1);
 
     /** How the forwarded agent's forwarding stands, told to the windows where it moved since it was last told. */
@@ -164,32 +175,35 @@ export function composePortForwards(
         return { forwarded, scope } satisfies Forward;
       });
 
-    /** One read of the agent's ports, the forwards made to follow it: each port read forwarded, and each no longer read let go. */
+    /**
+     * One read of the agent's ports, the forwards made to follow it: each
+     * chosen port read forwarded, and each no longer read or chosen let go.
+     * It answers whether the agent's forwarding should end: its sandbox, seen
+     * running, stopped, or no chosen port is left.
+     */
     const look = (current: Forwarding) =>
       Effect.gen(function* () {
         const answer = yield* withHttp(client.list(current.agentId));
 
-        if ("failure" in answer) return;
+        if ("failure" in answer) return false;
 
-        // Note that a sandbox seen running and now stopped ends the forward, so the next agent may take the ports, and the release is forked because it closes the scope this read runs in.
-        if (current.running && !answer.running) {
-          yield* Effect.forkIn(released(current), lifetimeScope);
-
-          return;
-        }
-
+        // Note that a sandbox seen running and now stopped ends the forward, so the next agent may take the ports.
+        if (current.running && !answer.running) return true;
         current.running = answer.running;
+        current.listed = answer.ports;
         current.labels = new Map((answer.labels ?? []).map(({ port, label }) => [port, label]));
         const read = new Set(answer.ports);
 
-        for (const [port, forward] of current.forwards) {
-          if (read.has(port)) continue;
-          current.forwards.delete(port);
-          yield* Scope.close(forward.scope, Exit.void);
+        for (const port of [...current.chosen]) {
+          if (!read.has(port)) current.chosen.delete(port);
+        }
+
+        for (const port of [...current.forwards.keys()]) {
+          if (!read.has(port) || !current.chosen.has(port)) yield* letPortGo(current, port);
         }
 
         for (const port of answer.ports) {
-          if (!current.forwards.has(port))
+          if (current.chosen.has(port) && !current.forwards.has(port))
             current.forwards.set(port, yield* forwarded(current, port));
         }
 
@@ -205,6 +219,17 @@ export function composePortForwards(
         }
 
         yield* tell;
+
+        return current.chosen.size === 0;
+      });
+
+    /** One port's forward closed, its connections with it. */
+    const letPortGo = (current: Forwarding, port: number) =>
+      Effect.suspend(() => {
+        const forward = current.forwards.get(port);
+        current.forwards.delete(port);
+
+        return forward === undefined ? Effect.void : Scope.close(forward.scope, Exit.void);
       });
 
     /** The ending agent's public link closed, a close the service refuses logged rather than holding forwarding on. */
@@ -238,26 +263,28 @@ export function composePortForwards(
             );
       });
 
-    /** Forwarding let go for the agent, unless another agent has taken it since. */
-    const turnOff = (agentId: string) =>
-      oneAtATime(
-        Effect.suspend(() => (forwarding?.agentId === agentId ? letGo(false) : Effect.void)),
-      );
+    const turnOff = letGo(false);
 
-    /** Forwarding let go for the forward it was on, unless another has taken it since. */
+    /** Forwarding let go for the agent it was on, unless another agent has taken it since. */
     const released = (current: Forwarding) =>
-      oneAtATime(Effect.suspend(() => (forwarding === current ? letGo(false) : Effect.void)));
+      oneAtATime(Effect.suspend(() => (forwarding === current ? turnOff : Effect.void)));
 
-    /** Forwarding started for the agent, and whichever agent was forwarded before let go. */
+    /**
+     * The agent's forwarding, started where it was not, whichever agent was
+     * forwarded before let go. Note that its reads repeat after a wait,
+     * because the act that started it reads once itself.
+     */
     const turnOn = (agentId: string) =>
       Effect.gen(function* () {
-        if (forwarding?.agentId === agentId) return;
-        yield* letGo(false);
+        if (forwarding?.agentId === agentId) return forwarding;
+        yield* turnOff;
 
         const current: Forwarding = {
           agentId,
           scope: yield* Scope.fork(lifetimeScope),
           running: false,
+          chosen: new Set(),
+          listed: [],
           forwards: new Map(),
           labels: new Map(),
           share: { read: SHARE_READ.UNREAD },
@@ -265,31 +292,41 @@ export function composePortForwards(
         };
 
         forwarding = current;
-        yield* tell;
+
+        // Note that a read ending the forward forks its release, because the release closes the scope this read runs in.
+        const followed = oneAtATime(look(current)).pipe(
+          Effect.flatMap((ended) =>
+            ended ? Effect.asVoid(Effect.forkIn(released(current), lifetimeScope)) : Effect.void,
+          ),
+        );
+
         yield* Effect.forkIn(
-          Effect.repeat(look(current), Schedule.spaced(PORT_FORWARD.LOOK_EVERY)),
+          Effect.sleep(PORT_FORWARD.LOOK_EVERY).pipe(
+            Effect.andThen(Effect.repeat(followed, Schedule.spaced(PORT_FORWARD.LOOK_EVERY))),
+          ),
           current.scope,
         );
-      }).pipe(oneAtATime);
 
-    /** How the agent's forwarding stands, its ports the lowest first. */
+        return current;
+      });
+
+    /** How the agent's forwarding stands, its ports the lowest first, each forwarded or `OFF`. */
     const standing = (agentId: string): PortForwardingAnswer => {
       if (forwarding?.agentId !== agentId) return OFF;
-
-      const forwards = [...forwarding.forwards.values()]
-        .map((forward) => forward.forwarded)
-        .sort((a, b) => a.port - b.port);
-
-      const { labels } = forwarding;
+      const { labels, forwards, listed } = forwarding;
       const shared = sharedLink(forwarding);
+      const ports = [...new Set([...listed, ...forwards.keys()])].sort((a, b) => a - b);
 
       return {
         on: true,
         running: forwarding.running,
         ...(shared !== undefined && { shared }),
-        ports: forwards.map((forward) => {
-          const label = labels.get(forward.port);
+        ports: ports.map((port) => {
+          const label = labels.get(port);
           const served = label === undefined ? {} : { label };
+          const forward = forwards.get(port)?.forwarded;
+
+          if (forward === undefined) return { port, state: PORT_FORWARD_STATE.OFF, ...served };
 
           if (forward.localPort === undefined) {
             return { port: forward.port, state: PORT_FORWARD_STATE.UNAVAILABLE, ...served };
@@ -307,44 +344,59 @@ export function composePortForwards(
     const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.PORT_FORWARDS> = {};
 
     const acts: HostActTable<typeof PORT_FORWARD_ACTS> = {
-      PORT_FORWARD_SET: ({ agentId, on }) =>
-        Effect.gen(function* () {
-          if (!on) {
-            yield* turnOff(agentId);
+      PORT_FORWARD_SET: ({ agentId, port, on }) =>
+        oneAtATime(
+          Effect.gen(function* () {
+            if (!on) {
+              const current = forwarding;
+
+              if (current?.agentId !== agentId) return standing(agentId);
+              current.chosen.delete(port);
+              yield* letPortGo(current, port);
+              yield* current.chosen.size === 0 ? turnOff : tell;
+
+              return standing(agentId);
+            }
+
+            // Note that a signed-out host refuses in the act's own sentence, as the Gateway's refusal of its method was drawn.
+            if (!gate()) return yield* Effect.fail(new ActRefused({}));
+            const current = yield* turnOn(agentId);
+            current.chosen.add(port);
+            yield* look(current);
+
+            // Note that a port the read did not forward is not kept chosen, so forwarding never stands on with nothing to stop.
+            if (!current.forwards.has(port)) current.chosen.delete(port);
+            yield* current.chosen.size === 0 ? turnOff : tell;
 
             return standing(agentId);
-          }
-
-          // Note that a signed-out host refuses in the act's own sentence, as the Gateway's refusal of its method was drawn.
-          if (!gate()) return yield* Effect.fail(new ActRefused({}));
-          yield* turnOn(agentId);
-
-          return standing(agentId);
-        }),
+          }),
+        ),
       PORT_SHARE_SET: ({ agentId, port }) =>
-        Effect.gen(function* () {
-          const current = forwarding;
+        oneAtATime(
+          Effect.gen(function* () {
+            const current = forwarding;
 
-          if (current?.agentId !== agentId || !gate())
-            return yield* Effect.fail(new ActRefused({}));
+            if (current?.agentId !== agentId || !gate())
+              return yield* Effect.fail(new ActRefused({}));
 
-          if (port === null) {
-            const answer = yield* withHttp(client.unshare(agentId));
+            if (port === null) {
+              const answer = yield* withHttp(client.unshare(agentId));
 
-            if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
-            current.share = shareRead(null);
-          } else {
-            const answer = yield* withHttp(client.share(agentId, port));
+              if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
+              current.share = shareRead(null);
+            } else {
+              const answer = yield* withHttp(client.share(agentId, port));
 
-            if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
-            current.share = shareRead({ port, url: answer.url });
-          }
+              if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
+              current.share = shareRead({ port, url: answer.url });
+            }
 
-          current.shareMoves++;
-          yield* tell;
+            current.shareMoves++;
+            yield* tell;
 
-          return standing(agentId);
-        }),
+            return standing(agentId);
+          }),
+        ),
     };
 
     return { methods, acts, lifetime: Effect.void, reset: oneAtATime(letGo(true)) };

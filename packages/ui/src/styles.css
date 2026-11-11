@@ -51,6 +51,7 @@
 @import "./components/hold-press/hold-press.css";
 @import "./components/inline-ref/inline-ref.css";
 @import "./components/rolling-number/rolling-number.css";
+@import "./components/port-table/port-table.css";
 @import "./components/prose/prose.css";
 @import "./marks/harness-mark.css";
 @import "./marks/product-mark.css";
