@@ -1,6 +1,6 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
-export { AccountButton, type BarAccount } from "./account-button.js";
+export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 export {
   ANSWER_FIELD,
   type AnswerField,

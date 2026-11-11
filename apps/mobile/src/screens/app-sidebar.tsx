@@ -1,6 +1,7 @@
 // app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
 
 import {
+  AccountBarItem,
   type ColumnBar,
   GroupRow,
   LIST_LOOK,
@@ -12,7 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useInboxBadge } from "../inbox/use-inbox.js";
-import { useOpenSettings } from "../settings-button.js";
+import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -111,6 +112,7 @@ export function useAppSidebar(
   const router = useRouter();
   const waiting = useInboxBadge();
   const openSettings = useOpenSettings();
+  const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
@@ -124,7 +126,10 @@ export function useAppSidebar(
   const columns = (list?: ListColumn | undefined): SidebarColumns => {
     const visibility = { sidebarShown: shown, onSidebarShownChange: setShown };
     if (!threeColumns && list !== undefined) {
-      return { sidebar: list.view, sidebarBar: { ...list.bar, leading: header }, ...visibility };
+      // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
+      const leading =
+        header ?? (account === undefined ? undefined : <AccountBarItem {...account} />);
+      return { sidebar: list.view, sidebarBar: { ...list.bar, leading }, ...visibility };
     }
     return {
       sidebar: (
