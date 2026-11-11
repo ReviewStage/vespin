@@ -148,7 +148,6 @@ function mount(
             newAgent: newAgent
               ? { label: "New agent", onSelect: () => opened.phone.push("new agent") }
               : undefined,
-            starts: [],
             phone: !phone
               ? undefined
               : {

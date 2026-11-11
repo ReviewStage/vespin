@@ -2459,7 +2459,7 @@ test("the pill, the title, and the files' count stand from what Vespin holds bef
   ]);
 });
 
-test("until the pull request's own read lands, the line under the title draws what its link's card draws of it, as the host holds it for the agent's workspace", async () => {
+test("until the pull request's own read lands, the line under the title draws what its link's card draws of it, as the host holds it for the agent's task's workspace", async () => {
   const workspace = {
     id: "workspace-acme",
     name: "Acme",
@@ -2485,13 +2485,26 @@ test("until the pull request's own read lands, the line under the title draws wh
       const state = await earlier();
       return {
         ...state,
-        tasks: { ...IDLE_TASKS_VIEW, workspaces: [workspace] },
+        tasks: {
+          ...IDLE_TASKS_VIEW,
+          workspaces: [workspace],
+          tasks: [
+            {
+              id: AGENT.planId,
+              workspaceId: workspace.id,
+              name: "Expire invitations",
+              createdAt: 1,
+              updatedAt: 1,
+              repository: "acme/relay",
+            },
+          ],
+        },
         [LIVE_READ.LINK_STANDINGS]: { [workspace.id]: { [PAGE]: { rows: { pullRequest } } } },
       };
     },
   });
   const control = controlAnswering({ pullRequest: held<never>().read });
-  const tab = await draw({ ...control, workspaceId: workspace.id });
+  const tab = await draw(control);
 
   await vi.waitFor(() => assert.deepEqual(waiting(tab), ["Reading description"]));
   assert.equal(tab.querySelector(".pull-request-branches")?.textContent, "main ← luke/expiry-job");

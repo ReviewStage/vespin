@@ -60,34 +60,26 @@ export function useAgentPullRequest(input: {
 /** No agent has a pull request, one map so a render that has none hands down the same one. */
 const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
-/** Whose agents' pull requests: a plan's, or one agent's on no task, by its id. */
-export type PullRequestHolder = { readonly taskId: string } | { readonly agentId: string };
-
 /**
- * Which of a plan's agents have a pull request, or whether the one agent on
- * no task given has, as the side panel's "+", the task's summary, and ⌘K
- * offer its Changes tab by: what the task list carries of each (`listed`),
- * as the service last read it on GitHub, archived agents among them, so
- * choosing a task, or an item of it, reads nothing. A read of what an agent
- * published, its tab's (`useAgentPullRequest`) among them, is written on the
- * agent's row too, which the list then carries. Note that the
- * map is built again only as the list's pull requests move, since the
- * document keeps their identity while none does, so nothing drawn from it is
- * drawn again.
+ * Which of a task's agents have a pull request, as the side panel's "+",
+ * the task's summary, and ⌘K offer its Changes tab by: what the task list
+ * carries of each (`listed`), as the service last read it on GitHub,
+ * archived agents among them, so choosing a task, or an item of it, reads
+ * nothing. A read of what an agent published, its tab's
+ * (`useAgentPullRequest`) among them, is written on the agent's row too,
+ * which the list then carries. Note that the map is built again only as the
+ * list's pull requests move, since the document keeps their identity while
+ * none does, so nothing drawn from it is drawn again.
  */
 export function useListedPullRequests(
   listed: readonly ListedPullRequest[] | undefined,
-  holder: PullRequestHolder | undefined,
+  taskId: string | undefined,
 ): ReadonlyMap<string, AgentPullRequest> {
-  const taskId = holder !== undefined && "taskId" in holder ? holder.taskId : undefined;
-  const agentId = holder !== undefined && "agentId" in holder ? holder.agentId : undefined;
   return useMemo(() => {
-    const own = (listed ?? []).filter((each) =>
-      taskId !== undefined ? each.taskId === taskId : each.agentId === agentId,
-    );
+    const own = (listed ?? []).filter((each) => each.taskId === taskId);
     if (own.length === 0) return NO_PULL_REQUESTS;
     return new Map(own.map((each) => [each.agentId, each.pullRequest]));
-  }, [listed, taskId, agentId]);
+  }, [listed, taskId]);
 }
 
 /**

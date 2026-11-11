@@ -449,7 +449,8 @@ export const ROUTED_PLACE = {
     claims: everyAddress,
     // Note that its route draws the page under any address, as it always has, so this gate is Back and Forward's alone.
     gate: workspaceGate,
-    stillThere: () => true,
+    // Note that the page only opens its agent on its task (`desktop-agent-page.tsx`), so Back and Forward pass over its step to the task's.
+    stillThere: () => false,
     binding: PLACE_BINDING.KEPT,
     overThePlan: true,
     inTaskPlace: true,

@@ -16,7 +16,7 @@ import { askAct } from "../act.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { pullRequestAsked } from "./pull-request-number.js";
 
-/** An agent's page, as a link to it or a row naming it by its id alone reads it. */
+/** One agent by its id alone, as its own address or a row naming it reads it. */
 export function agentPageQueryOptions(agentId: string) {
   return queryOptions({
     queryKey: [QUERY_ROOT.AGENT_PAGE, agentId],
