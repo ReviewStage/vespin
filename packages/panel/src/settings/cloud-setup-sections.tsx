@@ -1,7 +1,10 @@
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { momentText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import {
+  type CloudSetupScriptRun,
   REPOSITORY_SCRIPT_KIND,
   type RepositoryRunActions,
   type RepositoryScriptKind,
@@ -27,7 +30,9 @@ import {
   FormField,
   GAP,
   GlyphSlot,
+  INLINE_REF_LOOK,
   Inline,
+  InlineRef,
   OneLine,
   PlusIcon,
   POPOVER_ALIGN,
@@ -41,7 +46,13 @@ import {
   SettingsRowsSkeleton,
   SettingsSection,
   Stack,
+  TEXT_ELEMENT,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   TextField,
+  TIME_LOOK,
+  Time,
   TrashIcon,
   useConfirmDialog,
 } from "@repo/ui";
@@ -66,6 +77,7 @@ import { QUERY_ROOT } from "../query-keys.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { useRepositoryMenu } from "../tasks/repository-chip.js";
 import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
+import { useOpenPlace } from "../tasks/use-open-link.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
@@ -90,7 +102,11 @@ import { MenuRow } from "./menu-row.js";
  * yet, adds a setup or archive script from a repository picked in the menu a
  * task's repository is picked in, and removes one from its ⋯, a removal
  * asking first. Each save answers the setup as it then stands, which the
- * sections draw at once.
+ * sections draw at once. Under a saved script's name stands how it last ran in
+ * a cloud sandbox, so an owner sees whether it works without starting an
+ * agent: when, in which agent's sandbox, whose name opens the agent so its
+ * Terminal shows the log, and how it exited, a failure in the danger ink;
+ * a script saved since that run says it has not run since.
  */
 
 /** A script's row while the setup is read. */
@@ -252,6 +268,60 @@ function ScriptEditor({
   );
 }
 
+/** A script as saved: when it was saved, and how it last ran where it has. */
+type SavedScript = NonNullable<WorkspaceSandboxSetupAnswer["install"]>;
+
+/**
+ * How a saved script last ran, as the line under its name says it: when, in
+ * which agent's sandbox, whose name opens that agent, and how it exited, in
+ * the danger ink where it failed. It holds to one line, fading where it is
+ * cut and saying itself whole in its hint, as the name above it does, so the
+ * narrower words an edit's Discard and Save leave never rewrap it and move
+ * the editor. Note that a run from before the script's last save is not said
+ * as the script's, because what ran is no longer what is saved.
+ */
+function LastRun({
+  run,
+  savedAt,
+}: {
+  run: CloudSetupScriptRun;
+  savedAt: number;
+}): React.JSX.Element {
+  const openPlace = useOpenPlace();
+  if (run.ranAt < savedAt) return <OneLine>Hasn't run since it was saved.</OneLine>;
+  const { agent } = run;
+  return (
+    <OneLine words={`Last ran ${momentText(run.ranAt)} in ${agent.name}, exited ${run.exitCode}`}>
+      <Text
+        as={TEXT_ELEMENT.SPAN}
+        variant={TEXT_VARIANT.INHERIT}
+        tone={run.exitCode === 0 ? TEXT_TONE.MUTED : TEXT_TONE.DANGER}
+      >
+        Last ran <Time at={run.ranAt} look={TIME_LOOK.AGO} hint={false} />
+        {" in "}
+        <ReplayMask>
+          <InlineRef
+            look={INLINE_REF_LOOK.LINK}
+            label={agent.name}
+            hint={false}
+            onPress={
+              openPlace === undefined
+                ? undefined
+                : () =>
+                    openPlace({
+                      kind: LINK_DESTINATION.AGENT,
+                      planId: agent.taskId,
+                      agentId: agent.id,
+                    })
+            }
+          />
+        </ReplayMask>
+        {`, exited ${run.exitCode}`}
+      </Text>
+    </OneLine>
+  );
+}
+
 /** A row's way out of an edit and its Save, at the row's end. */
 function EditActions({
   leave,
@@ -303,12 +373,15 @@ function ScriptRow({
   manages,
   pictures,
   added,
+  saved,
 }: {
   workspaceId: string;
   name: string;
   target: ScriptTarget;
   /** The script as saved; empty for an install script or a setup script not yet saved. */
   script: string;
+  /** The script as saved, with how it last ran; none while it is not yet saved. */
+  saved: SavedScript | undefined;
   manages: boolean;
   /** Whether a repository is drawn with its owner's picture (`RepositoryPicture`). */
   pictures: boolean;
@@ -369,6 +442,10 @@ function ScriptRow({
                   <OneLine>{name}</OneLine>
                 </ReplayMask>
               </Inline>
+            ),
+          description:
+            saved?.lastRun === undefined ? undefined : (
+              <LastRun run={saved.lastRun} savedAt={saved.updatedAt} />
             ),
           error: saveRefusal(saving.error),
           // Note that Discard and Save stay beside the name at any width, the name giving way, since dropping under it would move the editor at a phone's width.
@@ -539,6 +616,7 @@ function RepositoryScriptsSection({
               manages={manages}
               pictures={pictures}
               added={"added" in each ? { onCancel: () => letGo(each.repository) } : undefined}
+              saved={"added" in each ? undefined : each}
             />
           ))}
         </>
@@ -982,6 +1060,7 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
               script={answer?.install?.script ?? ""}
               manages={manages}
               pictures={pictures}
+              saved={answer?.install ?? undefined}
             />
           ))}
       </SettingsSection>

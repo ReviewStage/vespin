@@ -647,7 +647,27 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
 
 /* ----- Settings › Cloud environment's scripts ----- */
 
-/** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, an archive script for one, and run actions for one. */
+/** The agents whose sandboxes Acme's scripts last ran in, as Settings › Cloud setup names them. */
+const SETUP_RUN_AGENT = {
+  LOGIN: {
+    id: "8f0c5a1e-3b7d-4c2a-9e61-5d4f2b8a7c10",
+    taskId: "1d2e3f40-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    name: "Fix the login redirect",
+  },
+  RELAY: {
+    id: "2b9e7d4c-6a1f-4e3b-8c5d-7f0a9e2b1c64",
+    taskId: "6f7e8d9c-0b1a-4c2d-9e3f-4a5b6c7d8e9f",
+    name: "Retry the relay's webhooks",
+  },
+} as const;
+
+/**
+ * Acme's sandbox setup, as a save leaves it: an install script, setup
+ * scripts for two of its repositories, an archive script for one, and run
+ * actions for one, each script with how it last ran: the install script
+ * and the archive script cleanly, `acme/api`'s setup script failing, and
+ * `acme/relay`'s saved since its run.
+ */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
     script: [
@@ -656,20 +676,28 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       "curl -fsSL https://bun.sh/install | bash",
     ].join("\n"),
     updatedAt: NOW - 4 * DAY,
+    lastRun: { ranAt: NOW - 2 * HOUR, exitCode: 0, agent: SETUP_RUN_AGENT.LOGIN },
   },
   setups: [
-    { repository: "acme/api", script: "uv sync\ndocker compose pull", updatedAt: NOW - DAY },
+    {
+      repository: "acme/api",
+      script: "uv sync\ndocker compose pull",
+      updatedAt: NOW - DAY,
+      lastRun: { ranAt: NOW - 2 * HOUR, exitCode: 1, agent: SETUP_RUN_AGENT.LOGIN },
+    },
     {
       repository: "acme/relay",
       script: "pnpm install\ncp .env.example .env\ndocker compose up -d --wait",
       updatedAt: NOW - 2 * HOUR,
+      lastRun: { ranAt: NOW - 3 * DAY, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
     },
   ],
   archives: [
     {
       repository: "acme/relay",
       script: "docker compose down --volumes\n./scripts/drop-preview-database.sh",
-      updatedAt: NOW - HOUR,
+      updatedAt: NOW - DAY,
+      lastRun: { ranAt: NOW - HOUR, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
     },
   ],
   runActions: [
@@ -724,15 +752,23 @@ function sandboxSetupAnswer(
   if (repository === undefined) {
     acmeSandboxSetup = {
       ...acmeSandboxSetup,
-      install: removes ? null : { script, updatedAt: NOW },
+      install: removes ? null : { ...acmeSandboxSetup.install, script, updatedAt: NOW },
     };
     return acmeSandboxSetup;
   }
   const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
-  const others = acmeSandboxSetup[list].filter(
-    (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
-  );
-  const scripts = removes ? others : [...others, { repository, script, updatedAt: NOW }];
+  const named = (each: { readonly repository: string }) =>
+    each.repository.toLowerCase() === repository.toLowerCase();
+  const others = acmeSandboxSetup[list].filter((each) => !named(each));
+  // A save keeps the script's last run, which ran before it.
+  const lastRun = acmeSandboxSetup[list].find(named)?.lastRun;
+  const saved = {
+    repository,
+    script,
+    updatedAt: NOW,
+    ...(lastRun === undefined ? undefined : { lastRun }),
+  };
+  const scripts = removes ? others : [...others, saved];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
     [list]: scripts.sort((one, other) =>
