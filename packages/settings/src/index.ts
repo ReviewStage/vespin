@@ -83,6 +83,7 @@ export {
   PERMISSION_MODE_HINT,
   PERMISSION_MODE_LABEL,
   PERMISSION_MODE_LIST,
+  PERMISSION_MODE_WORDS,
 } from "./permission-mode.js";
 export {
   isPullRequestOpen,

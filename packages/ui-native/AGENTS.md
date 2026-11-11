@@ -21,6 +21,9 @@ builds a control of its own.
   for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a sheet that starts work,
+  `SwitchRow` and `HintPickRows` (a choice among a few, what each does under
+  its name) for an agent's options, `RenameAsk` (the system's alert a name is
+  typed in),
   `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
@@ -30,10 +33,12 @@ builds a control of its own.
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
   field at a SwiftUI column's foot in the system's own glass, where no React
   Native bar can stand, such as a split view's detail. Its round button is
-  Send, or, with nothing typed, Stop while an agent works, and its head,
-  inside the same glass, holds an agent's `HeldCallBanner` (the oldest call
-  it holds for an answer, with Deny and Allow), its `QueuedLines` (Steer
-  and Delete), its `AttachedPictures`, and an `AskNote`.
+  Send, or, with nothing typed, Stop while an agent works; its + is one act
+  or a native menu (`ComposerMenu`: an agent's Photos, Options, permission
+  mode, and Fast); and its head, inside the same glass, holds an agent's
+  `HeldCallBanner` (the oldest call it holds for an answer, with Deny and
+  Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
+  Delete), its `AttachedPictures`, and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through

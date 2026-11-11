@@ -148,10 +148,10 @@ export function SearchScreen() {
         ) : (
           <FoundList found={found} listing={listing} onOpen={open} onRemind={remind.open} />
         )}
-        <StatusQuestionAsk question={status} />
-        <StatusQuestionAsk question={deletion} />
-        {remind.sheet}
       </Screen>
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
+      {remind.sheet}
     </>
   );
 }

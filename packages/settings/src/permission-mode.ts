@@ -41,6 +41,14 @@ export const PERMISSION_MODE_HINT = {
     "Unrestricted access to the internet and any file on your computer",
 } as const satisfies Record<AgentPermissionMode, string>;
 
+/** What a running agent's mode control says around the modes: its name among the model's rows, the question it heads them with, when a change reaches the agent, and why one did not take. */
+export const PERMISSION_MODE_WORDS = {
+  GROUP: "Permissions",
+  QUESTION: "How should actions be approved?",
+  APPLIES: "Takes effect from the next turn.",
+  CHANGE_FAILED: "The permission mode could not be changed.",
+} as const;
+
 const readsPermissionMode = Schema.is(Schema.Literals(PERMISSION_MODE_LIST));
 
 /** Guards a mode arriving from storage or the wire. */

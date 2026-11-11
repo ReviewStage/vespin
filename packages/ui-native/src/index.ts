@@ -27,12 +27,14 @@ export {
 } from "./button.js";
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
-export { Composer, ComposerFoot } from "./composer.js";
+export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
 export {
   type AttachedPicture,
   AttachedPictures,
   type QueuedLine,
   QueuedLines,
+  type SkillSuggestion,
+  SkillSuggestions,
 } from "./composer-head.js";
 export { EmptyState } from "./empty-state.js";
 export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
@@ -67,6 +69,7 @@ export {
   WorkingMark,
 } from "./marks.js";
 export { monogramOf } from "./monogram.js";
+export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 export { PageHeader } from "./page-header.js";
 export {
   PROVIDER_MARK_ASSET,

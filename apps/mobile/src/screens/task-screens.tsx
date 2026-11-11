@@ -837,9 +837,9 @@ function TasksStackList() {
           onSelect={(id) => router.push(`/tasks/${encodeURIComponent(id)}`)}
           onRefresh={refreshTasks}
         />
-        <StatusQuestionAsk question={status} />
-        <StatusQuestionAsk question={deletion} />
       </Screen>
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
     </>
   );
 }
@@ -920,9 +920,9 @@ function TasksSplitScreen({
           }
           sidebarSearch={{ placeholder: SEARCH_TASKS, onChange: setSearch }}
         />
-        <StatusQuestionAsk question={status} />
-        <StatusQuestionAsk question={deletion} />
       </Screen>
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
     </>
   );
 }
@@ -1011,9 +1011,9 @@ export function TaskScreen() {
         ) : (
           <EmptyState title={READING_TASK} symbol="checklist" />
         )}
-        <StatusQuestionAsk question={question} />
-        <StatusQuestionAsk question={deletion.question} />
       </Screen>
+      <StatusQuestionAsk question={question} />
+      <StatusQuestionAsk question={deletion.question} />
     </>
   );
 }

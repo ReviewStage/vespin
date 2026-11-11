@@ -1,4 +1,5 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { serverStandings } from "@repo/features/agent-servers-model";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   signInBegun as begunSignIn,
@@ -93,14 +94,7 @@ function providerOfServer(server: string): IntegrationProvider | undefined {
 
 /** Where every server stands as the host's read holds it: each provider's word, then each account's over it. */
 function standingOfRead(answer: IntegrationStatusesAnswer): Standing {
-  return new Map([
-    ...INTEGRATION_PROVIDER_LIST.map(
-      (provider) => [provider, answer.integrations[provider]] as const,
-    ),
-    ...(answer.accounts ?? NO_ACCOUNTS).map(
-      (account) => [account.connection, account.status] as const,
-    ),
-  ]);
+  return serverStandings(answer);
 }
 
 const NO_SIGN_INS: SignIns = new Map();

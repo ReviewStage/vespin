@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import type { SkillsRead } from "@repo/features/skill-mention";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import type { ComposerTrigger } from "../description-editor/contract.js";
-import {
-  type SkillPicker,
-  type SkillSource,
-  type SkillsRead,
-  useSkillPicker,
-} from "./skill-picker.js";
+import { type SkillPicker, type SkillSource, useSkillPicker } from "./skill-picker.js";
 
 /**
  * skill-picker.test.ts -- the `/` skill list's foot, which names the keys it hears as every list's does, its line where no skill matches, and the skills read again behind those drawn as another `/` opens it.

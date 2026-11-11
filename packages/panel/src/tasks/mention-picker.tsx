@@ -1,3 +1,4 @@
+import type { NamedServer } from "@repo/features/agent-servers-model";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
@@ -35,6 +36,7 @@ import {
 } from "@repo/features/search-score";
 import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { SkillOption } from "@repo/features/skill-mention";
 import { skillWord } from "@repo/features/skill-word";
 import { TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
 import {
@@ -82,8 +84,6 @@ import {
   useMinute,
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
-import type { NamedServer } from "@repo/ui/agent-servers-model";
-import type { SkillOption } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import {
   queryOptions,
