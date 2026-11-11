@@ -38,8 +38,8 @@ beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 /**
  * plain-links.test.ts -- a link the window has no chip for is one plain
  * link wherever words are drawn: a transcript, the description read and edited, and
- * a version. A bare address says its host and path and a labeled one its
- * label, and a plain link pressed opens in the browser, in the description or a
+ * a version. A bare address says itself without its scheme and a labeled
+ * one its label, and a plain link pressed opens in the browser, in the description or a
  * version without opening the section's editor. Synthetic description and
  * repository.
  */
@@ -63,8 +63,11 @@ const TASK: Task = {
   document: { body: `## Rollout\n\n${WORDS}`, assumptions: [] },
 };
 
-/** What every surface draws the two plain links as: the label, and the bare address cut short. */
-const PLAIN = ["the docs", "postgresql.org/docs/…/sql-createindex.html"];
+/** What every surface draws the two plain links as: the label, and the bare address without its scheme. */
+const PLAIN = [
+  "the docs",
+  "www.postgresql.org/docs/current/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY",
+];
 
 const PAGE: TaskMentionsValue = {
   holder: { taskId: TASK_ID },

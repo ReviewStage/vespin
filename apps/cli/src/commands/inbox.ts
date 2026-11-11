@@ -25,13 +25,18 @@ import { readerZone } from "@repo/features/date-mention";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import {
   INBOX_ASK,
+  INBOX_FILE_TYPE,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
   type InboxItem,
   type InboxMessage,
+  type InboxOption,
+  type InboxOptionMedia,
   type InboxReadAsk,
   knownAsk,
+  knownOptionMedia,
   openAskOf,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
@@ -103,6 +108,34 @@ function authorOf(message: InboxMessage): string {
   return message.member?.name ?? "Member";
 }
 
+/** What a piece of an option's media is called on its line. */
+const MEDIA_WORD = {
+  PICTURE: "Picture",
+  RECORDING: "Recording",
+  PAGE: "Page",
+  LINK: "Link",
+} as const;
+
+/** One piece of an option's media as its line says it: a file by its caption, which the thread on the web shows, a page by its title and id, and an address whole. */
+function mediaLine(piece: InboxOptionMedia, at: number): string {
+  switch (piece.type) {
+    case INBOX_OPTION_MEDIA.FILE: {
+      const word =
+        piece.mediaType === INBOX_FILE_TYPE.WEBM ? MEDIA_WORD.RECORDING : MEDIA_WORD.PICTURE;
+      return `      ${word}: ${piece.caption ?? `${at + 1}`}`;
+    }
+    case INBOX_OPTION_MEDIA.PAGE:
+      return `      ${MEDIA_WORD.PAGE}: ${piece.title} (page ${piece.pageId})`;
+    case INBOX_OPTION_MEDIA.LINK:
+      return `      ${MEDIA_WORD.LINK}: ${piece.label === undefined ? "" : `${piece.label} `}${piece.url}`;
+  }
+}
+
+/** An option's media, a line each under it. */
+function mediaLines(option: InboxOption): readonly string[] {
+  return knownOptionMedia(option).map(mediaLine);
+}
+
 /** An ask's lines: what it takes, and how to answer it with `inbox answer`. */
 function askLines(read: InboxReadAsk, thread: string): readonly string[] {
   const ask = knownAsk(read);
@@ -112,13 +145,14 @@ function askLines(read: InboxReadAsk, thread: string): readonly string[] {
       const recommended = new Set(recommendedLabels(ask));
       return [
         `Decide${ask.multiple === true ? " (pick one or more)" : ""}:`,
-        ...ask.options.map((option) =>
+        ...ask.options.flatMap((option) => [
           [
             `  - ${option.label}`,
             recommended.has(option.label) ? " (recommended)" : "",
             option.detail === undefined ? "" : `: ${option.detail}`,
           ].join(""),
-        ),
+          ...mediaLines(option),
+        ]),
         `Answer: vespin inbox answer ${thread} "<option>"`,
       ];
     }

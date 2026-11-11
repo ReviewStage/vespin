@@ -42,7 +42,10 @@ import {
   DEVICE_SETUP,
   type DeviceAgentLine,
   type DeviceAgentRelease,
-  deviceAgentLayout,
+  deviceAgentAttachmentsFolder,
+  deviceAgentLayoutIn,
+  deviceAgentsFolder,
+  deviceAgentTempFolder,
   HOST_UPDATE,
 } from "@repo/features/device-agent-wire";
 import { HOST_TARGET, hostTarballUrl } from "@repo/features/host-release";
@@ -80,7 +83,16 @@ const LINE_ID = "0e9b7c1d-5a2f-4e63-8b40-7c1d2e3f4a5b";
 /** A launch the service holds the device to that this run of the follower never claimed. */
 const GONE_LINE_ID = "3c5d7e9f-1a2b-4c3d-8e4f-5a6b7c8d9e0f";
 const STATE_ROOT = "/Users/dev/Library/Application Support/Vespin";
-const LAYOUT = deviceAgentLayout(HOME, AGENT_ID);
+/** The machine's own temp folder, as the platform hands it. */
+const MACHINE_TEMP = "/var/folders/dv/fixture/T";
+const LAYOUT = deviceAgentLayoutIn(
+  {
+    agentsFolder: deviceAgentsFolder(HOME),
+    tempFolder: deviceAgentTempFolder(MACHINE_TEMP),
+    attachmentsFolder: deviceAgentAttachmentsFolder(STATE_ROOT),
+  },
+  AGENT_ID,
+);
 const SECRET_ENV = { APP_RUNNER_TOKEN: "runner-secret" };
 /** The runner's own start on the box, as the platform launches it. */
 const RUNNER = "/opt/vespin-host/node/bin/node";
@@ -305,6 +317,7 @@ const followingDevice = (
         clis: fakeClis(ready),
         runnerBundle: "/opt/agent/agent-runner/agent-runner.mjs",
         runnerEnv: {},
+        tempFolder: MACHINE_TEMP,
         deviceName: "Studio",
         deviceMachine: {},
         devicePlatform: DEVICE_PLATFORM.DARWIN,

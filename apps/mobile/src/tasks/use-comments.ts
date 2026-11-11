@@ -155,7 +155,8 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
             return;
           }
           buzz(BUZZ.ERROR);
-          setWords((now) => (now === "" ? kept : now));
+          // Note that words typed while it was out stay, after the reply given back, so neither is lost.
+          setWords((now) => (now.trim() === "" ? kept : `${kept}\n\n${now}`));
           setNote(NOT_POSTED);
         })
         .finally(() => setSending(false));

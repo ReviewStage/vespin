@@ -470,6 +470,8 @@ export function NewTaskScreen({ parent }: { readonly parent?: string | undefined
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
+  // Note that a relation picked holds the start until it names a task, so the task never starts unrelated.
+  const relationReady = relation.kind === NO_RELATION || relation.relation !== undefined;
   const tree = inTree(relation.relation)
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
@@ -492,9 +494,12 @@ export function NewTaskScreen({ parent }: { readonly parent?: string | undefined
     <>
       <SheetBar
         title={WORDS.NEW_TASK}
-        ready={drafted && placed && !starting}
+        ready={drafted && placed && relationReady && !starting}
         onStart={start}
-        file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
+        file={{
+          ready: filed !== undefined && placed && relationReady && !starting,
+          onFile: file,
+        }}
         kept={kept}
       />
       <Screen>

@@ -1,16 +1,15 @@
 /**
- * link-face.ts -- what a plain link's words say: its label, or, where its words are its own address, the address cut to its host and path.
+ * link-face.ts -- what a plain link's words say: its label, or, where its words are its own address, the whole address without its scheme.
  *
  * A link the window draws as words rather than a chip (the desktop's
  * `text-link.tsx`) says its label. Where its words are its address, as a
  * bare `https://…` written into a reply or a description autolinks to itself, it
- * says the address as a reader names a page instead: the host without its
- * `www.`, then the path, a short query kept and the fragment dropped, and
- * past a bound the middle steps folded to `…` and a long last step cut. The
- * whole address stays the link's own, shown on hover. A page a call's row
- * in a transcript names by its website chip says its site alone (`siteName`).
- * Nothing here draws: both of the desktop's Markdown renderers read the
- * same face.
+ * says the whole address but for its scheme and a trailing slash, its steps
+ * decoded, and wraps where it runs long rather than folding any of it away,
+ * since the steps a fold would hide are the ones that tell two addresses on
+ * one site apart. A page a call's row in a transcript names by its website
+ * chip says its site alone (`siteName`). Nothing here draws: both of the
+ * desktop's Markdown renderers read the same face.
  */
 
 import { TEXT_LINK_MARK_CLASS } from "./components/text-link/text-link.js";
@@ -34,22 +33,11 @@ const INERT_LINK_MARK_ATTRIBUTES = {
   class: "text-inherit no-underline cursor-text",
 } as const;
 
-/** A link's face: the words it says, and whether they are its address cut short. */
+/** A link's face: the words it says, and whether they are its address said bare. */
 export interface LinkFace {
   readonly words: string;
-  readonly shortened: boolean;
+  readonly bare: boolean;
 }
-
-const SHORT_URL = {
-  /** The most characters a short address says before its middle steps fold. */
-  MAX_CHARS: 44,
-  /** The most characters of a folded address's last step. */
-  MAX_LEAF_CHARS: 24,
-  /** The longest query a short address keeps, `?` and all. */
-  MAX_QUERY_CHARS: 24,
-} as const;
-
-const FOLD = "…";
 
 /** The schemes a link's words may spell its address with. */
 const WEB_SCHEME = /^https?:\/\//iu;
@@ -66,36 +54,20 @@ function bareAddress(address: string): string {
   return address.trim().replace(WEB_SCHEME, "").replace(/\/$/u, "");
 }
 
-/** A path step as words, decoded where it decodes. */
-function stepWords(step: string): string {
-  try {
-    return decodeURIComponent(step);
-  } catch {
-    return step;
-  }
-}
-
-/** Words cut to a bound, the cut marked. */
-function cut(words: string, room: number): string {
-  return words.length <= room ? words : `${words.slice(0, room - 1)}${FOLD}`;
-}
-
-/** A web address as a reader names its page: host and path, folded past the bound; nothing for an address that is not the web's. */
-export function shortUrl(href: string): string | undefined {
+/**
+ * A web address as a reader says it: whole but for its scheme and a
+ * trailing slash, decoded where it decodes; nothing for an address that is
+ * not the web's. Note that `decodeURI` leaves an escaped `/`, `?`, or `#`
+ * as it is, so the words still name the same steps the address does.
+ */
+function bareUrl(href: string): string | undefined {
   if (!WEB_SCHEME.test(href) || !URL.canParse(href)) return undefined;
-  const url = new URL(href);
-  const host = url.hostname.replace(/^www\./u, "");
-  const steps = url.pathname
-    .split("/")
-    .filter((step) => step !== "")
-    .map(stepWords);
-  const query = url.search.length <= SHORT_URL.MAX_QUERY_CHARS ? url.search : "";
-  const whole = `${[host, ...steps].join("/")}${query}`;
-  if (whole.length <= SHORT_URL.MAX_CHARS) return whole;
-  const leaf = cut(steps.at(-1) ?? "", SHORT_URL.MAX_LEAF_CHARS);
-  const headed = `${host}/${steps[0]}/${FOLD}/${leaf}`;
-  if (steps.length > 2 && headed.length <= SHORT_URL.MAX_CHARS) return headed;
-  return steps.length > 1 ? `${host}/${FOLD}/${leaf}` : `${host}/${leaf}`;
+  const bare = bareAddress(href);
+  try {
+    return decodeURI(bare);
+  } catch {
+    return bare;
+  }
 }
 
 /** Whether a link's words are its own address, spelled with or without its scheme and trailing slash. */
@@ -103,8 +75,8 @@ function saysOwnAddress(href: string, words: string): boolean {
   return bareAddress(words) === bareAddress(href);
 }
 
-/** What a link to `href` labeled `words` says: its address cut short where the words are the address, its label otherwise. */
+/** What a link to `href` labeled `words` says: its address said bare where the words are the address, its label otherwise. */
 export function linkFace(href: string, words: string): LinkFace {
-  const short = saysOwnAddress(href, words) ? shortUrl(href) : undefined;
-  return short === undefined ? { words, shortened: false } : { words: short, shortened: true };
+  const bare = saysOwnAddress(href, words) ? bareUrl(href) : undefined;
+  return bare === undefined ? { words, bare: false } : { words: bare, bare: true };
 }

@@ -23,6 +23,7 @@ import {
   mentionsIn,
   pageRepositoryOf,
   pastedLinkMention,
+  placeholderLinksIn,
   sectionAnchors,
   withoutMemberLinks,
 } from "./mention-link.js";
@@ -399,6 +400,21 @@ test("every @ link outside code is one a writer keeps, whatever its target names
       { label: "@Escaped", target: "https://linear.app/b" },
     ],
   );
+});
+
+test("a link of ours with a placeholder where an id goes is caught, written or encoded, @ or not, and a place, a page the link reader does not know, another site, or code is not", () => {
+  const words = [
+    "Started [@its agent](https://vespin.dev/acme/agent/{AGENT}) on [it](https://vespin.dev/acme/task/<task-id>)",
+    "and [@its page](https://vespin.dev/acme/task/42/page/%7BPAGE%7D), beside [@Rollout](https://vespin.dev/acme/task/42#rollout),",
+    "[@Run](https://vespin.dev/acme/agent/a1), [@New automation](https://vespin.dev/acme/automations/new),",
+    "[@Linear](https://linear.app/a/{x}), and the rule's own `https://vespin.dev/acme/agent/<agent-id>`.",
+  ].join("\n");
+
+  assert.deepEqual(placeholderLinksIn(words), [
+    "https://vespin.dev/acme/agent/{AGENT}",
+    "https://vespin.dev/acme/task/<task-id>",
+    "https://vespin.dev/acme/task/42/page/%7BPAGE%7D",
+  ]);
 });
 
 test("the mentions in a message are its @ links outside code, in order, their labels unescaped", () => {

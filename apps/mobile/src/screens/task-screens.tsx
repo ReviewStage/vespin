@@ -60,6 +60,7 @@ import {
   TaskRow,
   useColors,
   WordsRow,
+  WorkspaceSwitcherMenu,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -87,6 +88,7 @@ import {
 } from "../tasks/use-tasks.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
@@ -807,16 +809,17 @@ function useTasksScreen() {
   return { search, setSearch, listing, status, deletion, refreshTasks };
 }
 
-// A compact window: the tree under the Stack's inline title, the account's
-// photo opening Settings at the bar's leading edge and its search a round
-// glass button at its trailing one, each row pushing its task as the Stack's
-// next screen.
+// A compact window: the tree under the workspace switcher, standing as the
+// Stack's inline title, the account's photo opening Settings at the bar's
+// leading edge and its search a round glass button at its trailing one, each
+// row pushing its task as the Stack's next screen.
 function TasksStackList() {
   const router = useRouter();
+  const switcher = useWorkspaceSwitcher();
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen();
   return (
     <>
-      <Stack.Screen options={{ title: TASKS_TITLE }}>
+      <Stack.Screen options={{ title: TASKS_TITLE, ...switcherTitle(switcher) }}>
         <Stack.SearchBar
           placeholder={SEARCH_TASKS}
           placement="integratedButton"
@@ -869,6 +872,7 @@ function TasksSplitScreen({
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const read = useTasksRead();
   const account = useSettingsAccount();
+  const switcher = useWorkspaceSwitcher();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
   const tree = (
@@ -911,6 +915,9 @@ function TasksSplitScreen({
               : { path: taskPath(overview.task, overview.workspace), status: overview.task.status }
           }
           sidebarAccount={account}
+          sidebarHeader={
+            switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />
+          }
           sidebarSearch={{ placeholder: SEARCH_TASKS, onChange: setSearch }}
         />
         <StatusQuestionAsk question={status} />

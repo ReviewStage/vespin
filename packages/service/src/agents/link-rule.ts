@@ -23,6 +23,16 @@ export function linkRuleWords(home: string): string {
     `\`${home}/task/<task-id>\`, an automation \`${home}/automation/<automation-id>\`, a member ` +
     `\`${home}/person/<user-id>\`, a thread \`${home}/inbox/<item-id>\`, and a page under the ` +
     `task it was shown on, \`${home}/task/<task-id>/page/<page-id>\`; such as ` +
-    `\`[@Nightly triage](${home}/automation/<automation-id>)\`.`
+    `\`[@Nightly triage](${home}/automation/<automation-id>)\`. Write one only once the tool ` +
+    "that answers its id has answered, never with a placeholder for the id, so a thing you " +
+    "start is linked only in a call after the one that starts it."
+  );
+}
+
+/** Why words holding links with a placeholder for an id were not published, after the refusal's lead. */
+export function placeholderLinksWords(targets: readonly string[]): string {
+  return (
+    `these links hold a placeholder where an id goes, so they lead nowhere: ${targets.map((target) => `\`${target}\``).join(", ")}. ` +
+    "Write each from the id the tool answered, once it has answered."
   );
 }

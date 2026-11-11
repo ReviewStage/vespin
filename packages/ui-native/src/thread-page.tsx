@@ -12,6 +12,9 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
+  accessibilityElement,
+  accessibilityLabel,
   font,
   foregroundStyle,
   frame,
@@ -21,9 +24,10 @@ import {
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { sinceText } from "@repo/features/time-format";
+import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
+import { useAccessibilitySize } from "./accessibility.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
@@ -126,6 +130,7 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
         modifiers={[
           font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
           foregroundStyle(colors.TEXT),
+          accessibilityAddTraits(["isHeader"]),
         ]}
       >
         {title}
@@ -176,6 +181,9 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
   );
 }
 
+/** What a sent answer's mark is heard as: it went ahead with what was asked, or held back. */
+const STAMP_HEARD = { AHEAD: "Went ahead", HELD: "Held back" } as const;
+
 /** A sent answer's stamp under its writer's name, where its words start: its mark and its words, 13 pt. */
 function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["stamp"]> }) {
   const colors = useColors();
@@ -188,6 +196,7 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
         systemName={stamp.ahead ? "checkmark" : "arrow.uturn.backward"}
         size={MARK_SIZE.GLYPH - 2}
         color={stamp.ahead ? colors.COMPLETE : colors.TEXT_MUTED}
+        modifiers={[accessibilityLabel(stamp.ahead ? STAMP_HEARD.AHEAD : STAMP_HEARD.HELD)]}
       />
       <Text
         modifiers={[
@@ -217,10 +226,21 @@ function MessageView({
   readonly message: ThreadMessage;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
   const { writer } = message;
+  const moment = now ?? Date.now();
+  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from message to message.
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
-      <HStack spacing={WRITER_GAP} modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+      <HStack
+        spacing={WRITER_GAP}
+        modifiers={[
+          padding({ horizontal: SPACE.EDGE }),
+          accessibilityElement("ignore"),
+          accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+          accessibilityAddTraits(["isHeader"]),
+        ]}
+      >
         {writer.agent ? (
           <AgentTile name={writer.name} size={MARK_SIZE.WRITER} />
         ) : (
@@ -230,7 +250,7 @@ function MessageView({
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
             foregroundStyle(colors.TEXT),
-            lineLimit(1),
+            lineLimit(large ? 2 : 1),
           ]}
         >
           {writer.name}
@@ -242,7 +262,7 @@ function MessageView({
             foregroundStyle(colors.TEXT_MUTED),
           ]}
         >
-          {sinceText(message.at, now ?? Date.now())}
+          {sinceText(message.at, moment)}
         </Text>
         <Spacer />
       </HStack>

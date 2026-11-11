@@ -2,16 +2,22 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { logMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { MEMORY_OUTCOME, rememberMemory } from "@repo/database/models/memory-store";
 import { user } from "@repo/database/schemas/auth";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
-import { expectTopicsFire, getTestDB, openWorkspace } from "@repo/database/testing";
+import {
+  expectTopicsFire,
+  getTestDB,
+  openAgentOnOwnTask,
+  openWorkspace,
+} from "@repo/database/testing";
 import { Effect } from "effect";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 
 /**
  * A workspace's memories on the migrated capture: a memory kept, corrected,
- * and forgotten, each through its real writer, notifies the workspace's
+ * recalled, and forgotten, each through its real writer, notifies the workspace's
  * memory topic alone, which the memories' live read is woken on, and never
  * the workspace's own, which would wake every member's task list on each
  * agent's `save_memory`; and a forget answers the very transaction its
@@ -29,7 +35,7 @@ const openAccount = Effect.gen(function* () {
 
 it.layer(getTestDB())("what moves a workspace's memories notifies", (it) => {
   it.effect(
-    "a memory kept, corrected, and forgotten each notify the workspace's memory topic alone, and the forget answers its notification's transaction",
+    "a memory kept, corrected, recalled, and forgotten each notify the workspace's memory topic alone, and the forget answers its notification's transaction",
     () =>
       Effect.gen(function* () {
         const userId = yield* openAccount;
@@ -47,6 +53,11 @@ it.layer(getTestDB())("what moves a workspace's memories notifies", (it) => {
           memories,
         );
         assert.equal(corrected.value.kind, MEMORY_OUTCOME.CORRECTED);
+        const agentId = yield* openAgentOnOwnTask(userId, workspaceId);
+        yield* expectTopicsFire(
+          logMemoryRecalls(workspaceId, [id], { agentId, messageId: null }),
+          memories,
+        );
 
         const forgot = yield* expectTopicsFire(
           forgetWorkspaceMemory(userId, workspaceId, id),

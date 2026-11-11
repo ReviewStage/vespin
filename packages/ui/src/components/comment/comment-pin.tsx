@@ -3,6 +3,7 @@ import { PencilLineIcon } from "../../icons/icons.js";
 import { drawsSomething } from "../../said.js";
 import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Tooltip } from "../tooltip/hint.js";
+import type { CardBox } from "../tooltip/tooltip.js";
 import type { CommentAuthor } from "./comment.js";
 
 /**
@@ -118,6 +119,7 @@ export function CommentPin({
   stands = COMMENT_PIN_STANDS.BESIDE,
   onPress,
   onHover,
+  cardAt,
   ...face
 }: PinFace & {
   /** The pin's name, which says how many comments it opens. */
@@ -131,11 +133,13 @@ export function CommentPin({
   onPress: () => void;
   /** Told the pointer or the focus came onto the pin, and went. */
   onHover: (over: boolean) => void;
+  /** Where its preview hangs from in the window, as its comments open there when pressed; the pin where this answers none. */
+  cardAt?: (() => CardBox | undefined) | undefined;
 }): React.JSX.Element {
   const look = face.look ?? COMMENT_PIN_LOOK.POSTED;
   return (
     // Note that its comments open tell the pointer nothing more, so no card stands over them.
-    <Tooltip label={open ? undefined : label} card={open ? undefined : preview}>
+    <Tooltip label={open ? undefined : label} card={open ? undefined : preview} cardAt={cardAt}>
       <button
         type="button"
         className={`ui-comment-pin inline-flex cursor-press items-center gap-ui-2 rounded-ui-full ${POINT[stands]} border ${EDGE[look]} bg-popover p-ui-4 text-caption text-foreground shadow-menu aria-expanded:shadow-menu-open-edge pointer-coarse:relative pointer-coarse:before:absolute pointer-coarse:before:top-1/2 pointer-coarse:before:left-1/2 pointer-coarse:before:w-[max(100%,var(--ui-touch-target))] pointer-coarse:before:h-touch pointer-coarse:before:[transform:translate(-50%,-50%)] pointer-coarse:before:content-['']`}

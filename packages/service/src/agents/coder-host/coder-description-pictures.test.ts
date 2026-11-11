@@ -185,7 +185,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
   );
 
   it.effect(
-    "a missing file, a file that is no image, one past the bound, and pictures past the plan's bound each refuse the call, nothing is saved, and no picture kept before the refusal holds a place in the bound",
+    "a missing file, a file that is no image, one past the bound, pictures past the plan's bound, and a later note's link that leads nowhere each refuse the call, nothing is saved, and no picture kept before the refusal holds a place in the bound",
     () =>
       Effect.gen(function* () {
         const { owner, taskId, agentId } = yield* openAgentTask;
@@ -231,7 +231,27 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           descriptionEditRejected(`${TASK_PICTURE_FILE_REFUSAL.TOO_LARGE} huge.png`),
           descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_PICTURES),
         ]);
-        assert.equal(Option.getOrThrow(yield* readTask(owner, taskId)).text, before);
+        // A link written before the tool that answers its id has answered holds a placeholder, which leads nowhere.
+        const placeholder = "https://vespin.dev/acme/agent/{AGENT}";
+        const unread = yield* recordDescriptionEdit(
+          { userId: owner, taskId },
+          { agentId },
+          unparsedWire({
+            notes: [
+              { kind: "add", section: "Approach", text: "- The members page lists invites." },
+              { kind: "add", section: "Approach", text: `- Started [@its agent](${placeholder}).` },
+            ],
+          }),
+          0,
+          sandbox,
+        );
+        assert.ok(
+          unread.status === ACTION_RESULT_STATUS.REJECTED && unread.reason.includes(placeholder),
+          JSON.stringify(unread),
+        );
+        const stored = Option.getOrThrow(yield* readTask(owner, taskId));
+        assert.equal(stored.text, before);
+        assert.deepEqual(stored.agentEdits, []);
         assert.deepEqual(lastPlace, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           taken: 1,

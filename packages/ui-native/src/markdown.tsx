@@ -148,6 +148,8 @@ interface Drawing {
   readonly pictureSource: (written: string) => string | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
+  readonly headings: boolean;
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -292,20 +294,27 @@ function Line({
   runs,
   drawing,
   style,
+  heading,
 }: {
   readonly runs: readonly MarkdownRun[];
   readonly drawing: Drawing;
   readonly style?: TextStyle | undefined;
+  /** Whether the line is heard as a heading. */
+  readonly heading?: boolean | undefined;
 }) {
   return (
     <Text
       accessibilityLabel={heardLine(runs)}
+      {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
     >
       <Runs runs={runs} drawing={drawing} />
     </Text>
   );
 }
+
+/** What a task box in a list is heard as, ticked or not. */
+const TASK_BOX_HEARD = { DONE: "Done", OPEN: "Not done" } as const;
 
 /** A list item's marker: its task box, its number, or its bullet. */
 function Marker({
@@ -325,6 +334,7 @@ function Marker({
         style={{ width, paddingTop: 2 * fontScale }}
         accessible
         accessibilityRole="checkbox"
+        accessibilityLabel={checked ? TASK_BOX_HEARD.DONE : TASK_BOX_HEARD.OPEN}
         accessibilityState={{ checked }}
       >
         <SymbolView
@@ -335,10 +345,11 @@ function Marker({
       </View>
     );
   }
+  // Note that a bullet is never heard, while an ordered list's number is, since its order is part of what it says.
   return (
     <Text
       style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}
-      accessibilityElementsHidden
+      accessibilityElementsHidden={number === undefined}
     >
       {number === undefined ? "•" : `${number}.`}
     </Text>
@@ -461,6 +472,8 @@ type PictureProps = {
   readonly source: string | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
+  /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
+  readonly shape?: number | undefined;
 };
 
 /**
@@ -473,14 +486,17 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt }: PictureProps) {
+export function Picture({ source, alt, shape }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
-  const well = [styles.picture, { aspectRatio: aspect ?? 16 / 9, backgroundColor: colors.WELL }];
+  const well = [
+    styles.picture,
+    { aspectRatio: shape ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+  ];
   if (source === undefined) {
     return (
       <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
@@ -559,7 +575,11 @@ function PictureBlock({
   const video = drawing.videoAt(source);
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
   return (
-    <Video source={video.source} label={video.label} onOpenElsewhere={video.onOpenElsewhere} />
+    <Video
+      source={video.source}
+      label={alt.trim() === "" ? video.label : alt}
+      onOpenElsewhere={video.onOpenElsewhere}
+    />
   );
 }
 
@@ -573,12 +593,13 @@ function BlockView({
   const { colors } = drawing;
   switch (block.kind) {
     case MARKDOWN_BLOCK.HEADING:
-      // Note that a heading is styled, never announced as one, as the panel's are: a reader walking the screen's headings meets the screen's, not a message's.
+      // Note that a message's heading is styled, never announced as one, as the panel's are: a reader walking the screen's headings meets the screen's, not a message's. A page of words alone, such as a task's description opened whole, announces its own.
       return (
         <Line
           runs={block.runs}
           drawing={drawing}
           style={{ ...HEADING_LOOK[block.level], color: colors.TEXT }}
+          heading={drawing.headings}
         />
       );
     case MARKDOWN_BLOCK.PARAGRAPH:
@@ -627,6 +648,8 @@ type MarkdownProps = {
   readonly pictureSource?: ((written: string) => string | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
+  readonly headings?: boolean | undefined;
 };
 
 /** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
@@ -660,6 +683,7 @@ export function Markdown({
   typed,
   pictureSource = namedSource,
   videoAt = noVideo,
+  headings = false,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -674,6 +698,7 @@ export function Markdown({
     openLink: onOpenLink,
     pictureSource,
     videoAt,
+    headings,
   };
   return (
     <View style={styles.flow}>

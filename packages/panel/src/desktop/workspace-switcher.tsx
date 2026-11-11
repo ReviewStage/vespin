@@ -1,3 +1,4 @@
+import { WORKSPACE_SWITCHER_WORDS, workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { ChevronDownIcon, dropBelowStart, GearIcon, NavItem, PlusIcon, useMenu } from "@repo/ui";
@@ -10,7 +11,7 @@ import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { useOpenNewWorkspace } from "./new-workspace.js";
-import { sharedWords, WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
+import { WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
 import { WorkspaceTile } from "./workspace-tile.js";
 
 /**
@@ -85,7 +86,7 @@ export function workspaceMenuGroups(
           <WorkspaceTile workspace={workspace} />
         </ReplayMask>
       ),
-      detail: sharedWords(workspace.memberCount, workspace.id === first),
+      detail: workspaceSharedWords(workspace.memberCount, workspace.id === first),
       card: <WorkspaceCard workspace={workspace} personal={workspace.id === first} />,
       checked: workspace.id === listed.id,
       onSelect: () => tasks.onChooseWorkspace(workspace.id),
@@ -94,9 +95,13 @@ export function workspaceMenuGroups(
   return [
     choices,
     [
-      { label: "New workspace", icon: <PlusIcon />, onSelect: doors.onNewWorkspace },
       {
-        label: "Workspace settings",
+        label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE,
+        icon: <PlusIcon />,
+        onSelect: doors.onNewWorkspace,
+      },
+      {
+        label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS,
         icon: <GearIcon />,
         onSelect: () =>
           doors.onOpenSettings({ page: SETTINGS_VIEW.WORKSPACE, workspaceId: listed.id }),
@@ -105,7 +110,7 @@ export function workspaceMenuGroups(
         ? []
         : [
             {
-              label: "Admin",
+              label: WORKSPACE_SWITCHER_WORDS.ADMIN,
               icon: <ShieldUserIcon />,
               onSelect: doors.admin.onOpen,
               // The pointer on the item is the way to the place, so its chunk, charts and all, is read now rather than at the press.
@@ -145,7 +150,10 @@ export function WorkspaceSwitcher({
     <div className="sidebar-workspace flex flex-none items-center gap-control-gap">
       <NavItem
         // The name a reader hears says who shares it too, since the label stands for the button's text.
-        aria-label={[`Workspace: ${listed.name}`, sharedWords(listed.memberCount, personal)]
+        aria-label={[
+          `Workspace: ${listed.name}`,
+          workspaceSharedWords(listed.memberCount, personal),
+        ]
           .filter((part) => part !== undefined)
           .join(", ")}
         menu={menu.trigger(dropBelowStart)}
@@ -156,7 +164,7 @@ export function WorkspaceSwitcher({
       <NewTaskButton tasks={tasks} current={newTask.shown} onNewTask={newTask.onOpen} />
       {menu.drawn === undefined ? null : (
         <ActionMenu
-          label="Workspaces"
+          label={WORKSPACE_SWITCHER_WORDS.MENU}
           replayUnmasked
           menu={menu.drawn}
           groups={workspaceMenuGroups(listed, tasks, doors)}

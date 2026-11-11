@@ -144,6 +144,7 @@ const FENCE_LANGUAGE = {
   [TOOL_BLOCK.PATCH]: "diff",
   [TOOL_BLOCK.JSON]: "json",
   [TOOL_BLOCK.TEXT]: "",
+  [TOOL_BLOCK.MARKDOWN]: "markdown",
 } as const satisfies Record<ToolBlock["kind"], string>;
 
 /** The kinds of block a copy reads a turn into, whichever wire the turn came from. */

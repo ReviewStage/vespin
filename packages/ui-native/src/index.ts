@@ -25,7 +25,8 @@ export {
   ScopePills,
   StatusChip,
 } from "./button.js";
-export { type Choice, ChoiceList } from "./choice-list.js";
+export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
+export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 export { Composer, ComposerFoot } from "./composer.js";
 export {
   type AttachedPicture,
@@ -90,7 +91,11 @@ export {
   ActionRow,
   type PickOption,
   PickRows,
+  PUSH_ROW_GOES,
+  PushRow,
+  type PushRowGoes,
   SettingsForm,
+  ToggleRow,
   ValueRow,
 } from "./settings-form.js";
 export type { SfSymbol } from "./sf-symbol.js";
@@ -147,3 +152,12 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 export { Video } from "./video.js";
+export {
+  newWorkspaceAction,
+  type SwitcherAction,
+  type SwitcherWorkspace,
+  WorkspaceSwitcher,
+  WorkspaceSwitcherMenu,
+  WorkspaceTile,
+  workspaceSettingsAction,
+} from "./workspace-switcher.js";

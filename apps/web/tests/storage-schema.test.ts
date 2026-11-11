@@ -89,6 +89,7 @@ const DECLARED_TABLES = [
   "mac_command",
   "mac_command_listener",
   "memory",
+  "memory_recall",
   "member",
   "member_presence",
   "messages",

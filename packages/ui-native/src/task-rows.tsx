@@ -10,7 +10,9 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityHint,
   accessibilityLabel,
+  accessibilityValue,
   buttonStyle,
   font,
   foregroundStyle,
@@ -24,6 +26,8 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
@@ -39,6 +43,12 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
 const LINE_PART = "· ";
+
+/** What a pull request's number in an agent's line is heard to do. */
+const OPENS_PULL_REQUEST = "Opens the pull request";
+
+/** What a group of tasks' count is heard as. */
+const TASKS_WORDS = { one: "task", many: "tasks" } as const;
 
 /** What an agent's line says of its state, as the panel's agent mark is heard. */
 const AGENT_STATE_WORDS = { WORKING: "Working", FAILED: "Failed" } as const;
@@ -173,7 +183,14 @@ function PullRequestLink({
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequest.state];
   return (
-    <SwiftUIButton onPress={pullRequest.onPress} modifiers={[buttonStyle("borderless")]}>
+    <SwiftUIButton
+      onPress={pullRequest.onPress}
+      modifiers={[
+        buttonStyle("borderless"),
+        accessibilityValue(PULL_REQUEST_STATE_LABEL[pullRequest.state]),
+        accessibilityHint(OPENS_PULL_REQUEST),
+      ]}
+    >
       <HStack spacing={SPACE.TIGHT}>
         <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
         <Text
@@ -199,7 +216,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER),
+          foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER_TEXT),
         ]}
       >
         {working ? AGENT_STATE_WORDS.WORKING : AGENT_STATE_WORDS.FAILED}
@@ -279,7 +296,16 @@ export function RelationRow({ id, name, status, relation, holding = false }: Rel
       end={<EndWords words={relation} ink={holding ? colors.ATTENTION : undefined} />}
     />
   );
-  return <RowFrame id={id} row={row} />;
+  return (
+    <RowFrame
+      id={id}
+      row={row}
+      heard={{
+        label: name,
+        value: [status === undefined ? undefined : TASK_STATUS_WORDS[status], relation],
+      }}
+    />
+  );
 }
 
 type LinkRowProps = {
@@ -348,7 +374,16 @@ export function GroupRow({ id, title, symbol, count }: GroupRowProps) {
       end={<EndWords words={String(count)} />}
     />
   );
-  return <RowFrame id={id} row={row} />;
+  return (
+    <RowFrame
+      id={id}
+      row={row}
+      heard={{
+        label: title,
+        value: [`${count} ${count === 1 ? TASKS_WORDS.one : TASKS_WORDS.many}`],
+      }}
+    />
+  );
 }
 
 type WordsRowProps = {
@@ -382,7 +417,7 @@ export function WordsRow({ words, repository, onOpenLink }: WordsRowProps) {
     >
       <RNHostView matchContents={{ vertical: true }}>
         <View>
-          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} />
+          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} headings />
         </View>
       </RNHostView>
     </VStack>

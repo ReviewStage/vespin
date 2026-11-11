@@ -250,6 +250,7 @@ const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
       installFolder,
       arch: boxArch,
       stateRoot,
+      tempFolder: os.tmpdir(),
       node: process.execPath,
       // Note that every agent runs as the daemon's user, the member's own or root on a dedicated box.
       user: { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },

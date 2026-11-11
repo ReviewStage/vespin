@@ -427,6 +427,9 @@ function memory(
     forgettable: true,
     createdAt: NOW - agoDays * DAY,
     updatedAt: NOW - agoDays * DAY,
+    source: null,
+    recalls30d: 0,
+    lastRecalledAt: null,
     ...patch,
   };
 }

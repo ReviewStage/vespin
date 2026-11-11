@@ -1,15 +1,31 @@
 // inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note or replies, and Remind me and Resolve.
 
 import { ASK_PRESS, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
-import { fieldValueOf, shownTicks, withStep, withValue } from "@repo/features/inbox-draft";
+import {
+  fieldValueOf,
+  picksNone,
+  shownTicks,
+  withNoneOfThese,
+  withPicks,
+  withStep,
+  withValue,
+} from "@repo/features/inbox-draft";
 import { knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_FIELD,
+  INBOX_FILE_TYPE,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
   type InboxItem,
+  type InboxOption,
+  type InboxOptionMedia,
+  type InboxOptionPage,
+  knownOptionMedia,
+  NONE_OF_THESE,
   openAskOf,
+  optionsCarryMedia,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
 import {
@@ -19,7 +35,10 @@ import {
   AnswerFields,
   AskNote,
   type BarMenu,
+  CHOICE_MEDIA,
+  type Choice,
   ChoiceList,
+  type ChoiceMedia,
   Composer,
   ComposerFoot,
   StepList,
@@ -58,6 +77,62 @@ function typedValue(
   return Number.isFinite(number) ? number : typed;
 }
 
+/** What an open ask's option media is opened and drawn by: each file's bytes as read, a page in the app or Safari, an address in Safari, and a recording the player cannot read on the web. */
+export interface OptionMediaDoors {
+  readonly source: (attachmentId: string) => string | undefined;
+  readonly openPage: (page: InboxOptionPage) => void;
+  readonly openLink: (address: string) => void;
+  readonly openVideoElsewhere: () => void;
+}
+
+/** What a picture's and a recording's tile is called where its agent gave it no caption. */
+const PICTURE_WORD = "Picture";
+const RECORDING_WORD = "Recording";
+
+/** One piece of an option's media as the card draws it: a file from its bytes as read, under its caption, and a page or an address opened through `doors`. */
+function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
+  switch (piece.type) {
+    case INBOX_OPTION_MEDIA.FILE: {
+      const recording = piece.mediaType === INBOX_FILE_TYPE.WEBM;
+      return {
+        kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
+        title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
+        source: doors.source(piece.attachmentId),
+        onOpen: recording ? doors.openVideoElsewhere : undefined,
+      };
+    }
+    case INBOX_OPTION_MEDIA.PAGE:
+      return {
+        kind: CHOICE_MEDIA.PAGE,
+        title: piece.title,
+        onOpen: () => doors.openPage(piece),
+      };
+    case INBOX_OPTION_MEDIA.LINK:
+      return {
+        kind: CHOICE_MEDIA.LINK,
+        title: piece.label ?? piece.url,
+        onOpen: () => doors.openLink(piece.url),
+      };
+  }
+}
+
+/** An option as the card draws it: its label, its detail, and its media. */
+function cardChoice(option: InboxOption, doors: OptionMediaDoors): Choice {
+  const media = knownOptionMedia(option).map((piece) => cardMedia(piece, doors));
+  return { label: option.label, detail: option.detail, media };
+}
+
+/** The files an open ask's options carry, by attachment and kind, which the thread reads beside its messages' own. */
+export function openAskFiles(item: InboxItem) {
+  const ask = openAsk(item);
+  if (ask?.type !== INBOX_ASK.DECIDE) return [];
+  return ask.options.flatMap((option) =>
+    knownOptionMedia(option).flatMap((piece) =>
+      piece.type === INBOX_OPTION_MEDIA.FILE ? [piece] : [],
+    ),
+  );
+}
+
 /** The thread's open ask, where it stands open and this build knows it; none otherwise. */
 function openAsk(item: InboxItem) {
   if (item.status !== INBOX_STATUS.OPEN) return undefined;
@@ -81,23 +156,35 @@ function controlsStand(item: InboxItem): boolean {
 export function OpenAskCard({
   item,
   answer,
+  doors,
 }: {
   readonly item: InboxItem;
   readonly answer: ThreadAnswer;
+  readonly doors: OptionMediaDoors;
 }): ReactNode {
   const { draft, onDraft, note, send } = answer;
   const ask = openAsk(item);
   const said = note === undefined ? null : <AskNote words={note} />;
   if (ask === undefined) return said;
   if (ask.type === INBOX_ASK.DECIDE) {
+    const cards = optionsCarryMedia(ask);
     return (
       <>
         <ChoiceList
-          choices={ask.options}
+          choices={ask.options.map((option) => cardChoice(option, doors))}
           recommended={recommendedLabels(ask)}
           picked={draft.choices}
           multiple={ask.multiple === true}
-          onChange={(choices) => onDraft({ ...draft, choices })}
+          onChange={(choices) => onDraft(withPicks(draft, choices))}
+          none={
+            cards
+              ? {
+                  label: NONE_OF_THESE,
+                  picked: picksNone(draft),
+                  onPress: () => onDraft(withNoneOfThese(draft)),
+                }
+              : undefined
+          }
         />
         {said}
       </>

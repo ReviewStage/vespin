@@ -1,5 +1,5 @@
 /**
- * memory-provenance.ts -- whether a coding agent's turn may keep a memory: never one an automation opened, nor one that read the web.
+ * memory-provenance.ts -- whether a coding agent's turn may keep a memory, never one an automation opened nor one that read the web, and where what it keeps or recalls comes from.
  *
  * What the workspace keeps is meant to be what a member settled, so where a
  * turn's words came from decides whether it may keep anything, whatever the
@@ -19,6 +19,11 @@
  * journal is what the turn has recorded so far; and that a worker's read is
  * its own conversation's, not the turn's. An agent with no turn under way,
  * as a call replayed after its turn settled, is refused nothing here.
+ *
+ * The same read says where a memory the turn keeps, or recalls, comes from
+ * (`MemorySource`): the agent, and the line that opened its turn, by the
+ * `messages` id a link to the agent's transcript lands on. A turn no line
+ * opened, or none under way, names the agent alone.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
@@ -27,9 +32,11 @@ import {
   lineSendersOf,
   RUNNING_TURN_STATUSES,
 } from "@repo/database/models/agent-store";
+import type { MemorySource } from "@repo/database/models/memory-store";
 import {
   latestTurnsOf,
   listTurnOpeners,
+  type MessageListRead,
   readMessageByClientId,
 } from "@repo/database/models/message-reads";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -37,6 +44,7 @@ import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL } from "@repo/features/agent-t
 import { automationRun } from "@repo/features/model-label";
 import { toolPartName } from "@repo/wire/ui-messages";
 import { Effect } from "effect";
+import { logStoreFailure } from "../http/store-failure.js";
 import { CODER_TOOL_SET, RETIRED_CODER_TOOL } from "./coder-host/tool-set.js";
 
 /** Why a turn may keep no memory, in words the model can act on. */
@@ -93,12 +101,36 @@ const automationLine = (agent: Agent, messageId: string) =>
     },
   );
 
-/** Whether the turn's opening line was an automation's run. */
-const openedByAutomation = (agent: Agent, turnId: string) =>
+/** The agent's turn under way: its id, and the read of the line that opened it. */
+interface TurnUnderWay {
+  readonly id: string;
+  readonly openers: MessageListRead;
+}
+
+/** The agent's newest turn while it runs, with its opening line read; none where no turn runs. */
+const turnUnderWay = (
+  agent: Agent,
+): Effect.Effect<TurnUnderWay | undefined, StoreFailure, DatabaseServices> =>
   Effect.gen(function* () {
+    const turn = (yield* latestTurnsOf(agent.userId, [agent.conversationId])).get(
+      agent.conversationId,
+    );
+    if (turn === undefined || !RUNNING_TURN_STATUSES.has(turn.status)) return undefined;
     const openers = yield* listTurnOpeners(agent.userId, agent.conversationId, CODER_TOOL_SET, [
-      turnId,
+      turn.id,
     ]);
+    return { id: turn.id, openers };
+  });
+
+/** Where words the agent keeps or recalls in the turn come from: the agent, and the line that opened the turn where one did and reads. */
+function sourceOf(agent: Agent, turn: TurnUnderWay | undefined): MemorySource {
+  const opener = turn?.openers.ok === true ? turn.openers.value[0] : undefined;
+  return { agentId: agent.id, messageId: opener?.id ?? null };
+}
+
+/** Whether the turn's opening line was an automation's run. */
+const openedByAutomation = (agent: Agent, openers: MessageListRead) =>
+  Effect.gen(function* () {
     if (!openers.ok) return undefined;
     const opener = openers.value[0];
     if (opener === undefined) return false;
@@ -117,21 +149,19 @@ const readTheWeb = (agent: Agent, turnId: string) =>
     },
   );
 
-/**
- * Why the agent's turn under way may keep no memory, or nothing where it
- * may, as above; a record that does not read refuses, since nothing then
- * says the turn's words were a member's.
- */
-export function rememberRefusal(
-  agent: Agent,
-): Effect.Effect<string | undefined, StoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const turn = (yield* latestTurnsOf(agent.userId, [agent.conversationId])).get(
-      agent.conversationId,
-    );
-    if (turn === undefined || !RUNNING_TURN_STATUSES.has(turn.status)) return undefined;
+/** Whether the agent's turn may keep a memory, and where one it keeps comes from. */
+export interface MemoryProvenance {
+  /** Why the turn may keep none, in words the model can act on; none where it may. */
+  readonly refusal: string | undefined;
+  readonly source: MemorySource;
+}
+
+/** Why the turn under way may keep no memory, as above; none where no turn runs. */
+const refusalOf = (agent: Agent, turn: TurnUnderWay | undefined) =>
+  Effect.gen(function* () {
+    if (turn === undefined) return undefined;
     const [automation, web] = yield* Effect.all(
-      [openedByAutomation(agent, turn.id), readTheWeb(agent, turn.id)],
+      [openedByAutomation(agent, turn.openers), readTheWeb(agent, turn.id)],
       { concurrency: "unbounded" },
     );
     if (automation === true) return MEMORY_PROVENANCE_REFUSAL.AUTOMATION;
@@ -139,4 +169,30 @@ export function rememberRefusal(
     if (automation === undefined || web === undefined) return MEMORY_PROVENANCE_REFUSAL.UNREADABLE;
     return undefined;
   });
+
+/**
+ * Why the agent's turn under way may keep no memory, none where it may, as
+ * above, and where what it keeps comes from; a record that does not read
+ * refuses, since nothing then says the turn's words were a member's.
+ */
+export function rememberProvenance(
+  agent: Agent,
+): Effect.Effect<MemoryProvenance, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const turn = yield* turnUnderWay(agent);
+    return { refusal: yield* refusalOf(agent, turn), source: sourceOf(agent, turn) };
+  });
+}
+
+/**
+ * Where the memories the agent recalls in its turn under way are recalled
+ * from, by its search or as the turn opens. It never fails: a turn that
+ * cannot be read is logged for the operator and names the agent alone,
+ * because logging a recall must never cost the recall itself.
+ */
+export function recallSource(agent: Agent): Effect.Effect<MemorySource, never, DatabaseServices> {
+  return Effect.catch(
+    Effect.map(turnUnderWay(agent), (turn) => sourceOf(agent, turn)),
+    (failure) => Effect.as(logStoreFailure(failure), { agentId: agent.id, messageId: null }),
+  );
 }
