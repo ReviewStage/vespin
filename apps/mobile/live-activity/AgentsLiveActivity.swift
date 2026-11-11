@@ -1,4 +1,4 @@
-// AgentsLiveActivity.swift -- the widget extension: the member's running agents in the Dynamic Island, on the Lock Screen, and on an Apple Watch or in CarPlay.
+// AgentsLiveActivity.swift -- the widget extension: the member's running agents in the Dynamic Island, on the Lock Screen, and on an Apple Watch or in CarPlay, beside the Inbox widget (`InboxWidget.swift`).
 //
 // One activity stands for every running agent of the member's
 // (`AgentsActivityAttributes`). The compact and minimal presentations say
@@ -19,6 +19,7 @@ import WidgetKit
 struct AgentsWidgets: WidgetBundle {
   var body: some Widget {
     AgentsLiveActivity()
+    InboxWidget()
   }
 }
 
