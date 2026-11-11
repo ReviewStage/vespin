@@ -1,5 +1,6 @@
 import { Schema as EffectSchema } from "effect";
 import { checkoutIdentitySchema } from "./checkout-identity.js";
+import { DEVICE_AGENT_FOLDER } from "./checkout-path.js";
 import { HOST_TARGET } from "./host-release.js";
 import { wireUuidSchema } from "./service-wire.js";
 
@@ -310,14 +311,6 @@ export const deviceAgentAnswerSchema = EffectSchema.Union([
 ]);
 
 export type DeviceAgentAnswer = typeof deviceAgentAnswerSchema.Type;
-
-/** The folders under a Mac's home its local agents' things stand in (`deviceAgentLayoutIn`). */
-const DEVICE_AGENT_FOLDER = {
-  /** Every local agent's folder, one per agent under its id. */
-  ROOT: ".vespin/agents",
-  /** The agent's worktree, which the Mac makes as it takes the launch line. */
-  REPOSITORY: "repository",
-} as const;
 
 /** The folders a Mac keeps its local agents' other things in, each under a folder of the machine's own, one per agent under its id. */
 const DEVICE_AGENT_ROOT = {
