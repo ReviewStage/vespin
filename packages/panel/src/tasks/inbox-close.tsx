@@ -5,6 +5,7 @@ import {
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
+import { RETRY } from "@repo/features/inbox-list-model";
 import {
   INBOX_STATUS,
   INBOX_TAKE_BACK,
@@ -61,9 +62,6 @@ const RESOLVE_UNTAKEN = {
   told: "Can't undo: the agent was already told.",
   movedOn: "Can't undo: it changed since you resolved it.",
 } as const;
-
-/** What a toast's action that asks a take-back again is called. */
-const TRY_AGAIN = "Try again";
 
 /** How one take-back answered: taken back, refused as told to its agent or as moved on, or not reached, so it may be asked again. */
 const TOOK_BACK = {
@@ -161,7 +159,7 @@ export function untakenSettles(
       words: words.unreached,
       failure: { surface, cause: words.unreached },
       retry: {
-        label: TRY_AGAIN,
+        label: RETRY,
         change: { items: items.filter(missed), keys: keys.filter(missed) },
       },
     };
