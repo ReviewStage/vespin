@@ -39,6 +39,7 @@ const CAPTION = {
   [ALWAYS_ALLOW_UI.REPOSITORY]:
     "What your agents run without asking, kept for the repository it was allowed in.",
   [ALWAYS_ALLOW_UI.CHOOSE]: "What your agents run without asking, where you chose.",
+  [ALWAYS_ALLOW_UI.ACCOUNT]: "Commands your agents run without asking, in every repository.",
 } as const satisfies Record<AlwaysAllowUi, string>;
 
 /** Where a rule applies, as its row says. */
@@ -48,7 +49,16 @@ function placeOf(rule: KeptRule): string {
 }
 
 /** One kept rule, its Remove alone at its end. */
-function RuleRow({ rule, onRemove }: { rule: KeptRule; onRemove: () => void }): React.JSX.Element {
+function RuleRow({
+  rule,
+  account,
+  onRemove,
+}: {
+  rule: KeptRule;
+  /** Whether the list is `d`'s, one for every harness and repository, so the row names neither. */
+  account: boolean;
+  onRemove: () => void;
+}): React.JSX.Element {
   const provider =
     rule.harness === ALWAYS_ALLOW_HARNESS.CODEX ? MODEL_PROVIDER.OPENAI : MODEL_PROVIDER.ANTHROPIC;
   return (
@@ -57,7 +67,7 @@ function RuleRow({ rule, onRemove }: { rule: KeptRule; onRemove: () => void }): 
       alone
       actions={[{ label: "Remove", icon: <GLYPH.DELETE />, onSelect: onRemove }]}
       row={{
-        leading: (
+        leading: account ? undefined : (
           <SettingsRowMark>
             <HarnessMark provider={provider} />
           </SettingsRowMark>
@@ -67,7 +77,11 @@ function RuleRow({ rule, onRemove }: { rule: KeptRule; onRemove: () => void }): 
             {rule.rule}
           </Text>
         ),
-        description: (
+        description: account ? (
+          <>
+            Added <Time at={rule.addedAt} look={TIME_LOOK.PROVENANCE} /> by {rule.from}
+          </>
+        ) : (
           <>
             {placeOf(rule)} · {rule.says} · Added{" "}
             <Time at={rule.addedAt} look={TIME_LOOK.PROVENANCE} /> by {rule.from}
@@ -91,6 +105,7 @@ export function AlwaysAllowedSection({ ui }: { ui: AlwaysAllowUi }): React.JSX.E
           <RuleRow
             key={rule.id}
             rule={rule}
+            account={ui === ALWAYS_ALLOW_UI.ACCOUNT}
             onRemove={() => setRemoved((was) => new Set(was).add(rule.id))}
           />
         ))

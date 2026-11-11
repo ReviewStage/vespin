@@ -35,6 +35,7 @@ export const ALWAYS_ALLOW_UI = {
   HARNESS: "a",
   REPOSITORY: "b",
   CHOOSE: "c",
+  ACCOUNT: "d",
 } as const;
 
 export type AlwaysAllowUi = (typeof ALWAYS_ALLOW_UI)[keyof typeof ALWAYS_ALLOW_UI];
@@ -188,8 +189,25 @@ export interface KeptRule {
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.now();
 
+/** The command prefixes the fixture's member keeps under `d`, one list for every harness and repository. */
+const ACCOUNT_RULES: readonly KeptRule[] = [
+  ["a1", "pnpm test", 2 * 60 * 60 * 1000, "Add teammate invitations", ALWAYS_ALLOW_HARNESS.CLAUDE],
+  ["a2", "gh pr view", DAY, "Send the weekly digest", ALWAYS_ALLOW_HARNESS.CODEX],
+  ["a3", "pnpm db:generate", 3 * DAY, "Build teammate invitations", ALWAYS_ALLOW_HARNESS.CLAUDE],
+  ["a4", "cargo test", 9 * DAY, "Usage alerts", ALWAYS_ALLOW_HARNESS.CODEX],
+].map(([id, rule, ago, from, harness]) => ({
+  id: id as string,
+  harness: harness as AlwaysAllowHarness,
+  rule: rule as string,
+  says: "Commands that start with",
+  scope: RULE_SCOPE.EVERYWHERE,
+  addedAt: NOW - (ago as number),
+  from: from as string,
+}));
+
 /** The rules the fixture's member keeps, in each mockup's scopes. */
 export function keptRules(ui: AlwaysAllowUi): readonly KeptRule[] {
+  if (ui === ALWAYS_ALLOW_UI.ACCOUNT) return ACCOUNT_RULES;
   const codexScope = ui === ALWAYS_ALLOW_UI.HARNESS ? RULE_SCOPE.EVERYWHERE : RULE_SCOPE.REPOSITORY;
   const codexRepository = ui === ALWAYS_ALLOW_UI.HARNESS ? undefined : { repository: "relay" };
   return [

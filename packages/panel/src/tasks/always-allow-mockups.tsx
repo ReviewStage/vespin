@@ -68,10 +68,22 @@ function scopeOf(ui: AlwaysAllowUi, harness: AlwaysAllowHarness): RuleScope {
   return RULE_SCOPE.REPOSITORY;
 }
 
+/** The staged call's command prefix in harness-neutral words, as `d` keeps it for both. */
+function prefixWords(): ReactNode {
+  return (
+    <>
+      commands that start with <Rule>{SUGGESTED_RULE[ALWAYS_ALLOW_HARNESS.CODEX]}</Rule>
+    </>
+  );
+}
+
 /** What Always allow says before it is pressed, under a mockup. */
 export function keepsOf(ui: AlwaysAllowUi, onAllow: () => void): AlwaysAllowKeeps | undefined {
   const harness = alwaysAllowHarness();
   if (ui === ALWAYS_ALLOW_UI.CURRENT) return undefined;
+  if (ui === ALWAYS_ALLOW_UI.ACCOUNT) {
+    return { line: <>Always allow won't ask again for {prefixWords()}.</> };
+  }
   if (ui === ALWAYS_ALLOW_UI.CHOOSE) {
     return {
       line: (
@@ -105,9 +117,11 @@ export function AnsweredKeeps({ ui }: { ui: AlwaysAllowUi }): React.JSX.Element 
   const harness = alwaysAllowHarness();
   const openSettings = useOpenSettings();
   const scope = scopeOf(ui, harness);
+  const account = ui === ALWAYS_ALLOW_UI.ACCOUNT;
   return (
     <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-      Won't ask again for {ruleWords(harness)} {scopeWords(scope)}.{" "}
+      Won't ask again for {account ? prefixWords() : ruleWords(harness)}
+      {account ? "" : ` ${scopeWords(scope)}`}.{" "}
       {scope === RULE_SCOPE.AGENT ? null : (
         <TextButton
           tone={TEXT_BUTTON_TONE.ACCENT}
