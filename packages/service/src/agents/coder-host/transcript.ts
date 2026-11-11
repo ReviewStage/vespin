@@ -223,7 +223,6 @@ type AgentStart = Pick<AgentStanding, "createdAt" | "blank">;
 const bootOnPage = (row: AgentBootRow): AgentBoot => ({
   phase: row.phase,
   since: row.phaseAt.getTime(),
-  ...(row.setupExit === undefined ? undefined : { setupExit: row.setupExit }),
   ...(row.failure === undefined ? undefined : { failure: row.failure }),
 });
 

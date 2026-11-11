@@ -67,7 +67,7 @@ test("an agent started blank with no turn reads completed however long ago it st
 });
 
 test("an agent whose first launch boots reads starting however long it boots and failed once its boot failed, and the clock moves it nowhere", () => {
-  const longBoot = { ...standing(STARTING_GRACE_MILLIS * 3), boot: BOOT_PHASE.RUNNING_SCRIPTS };
+  const longBoot = { ...standing(STARTING_GRACE_MILLIS * 3), boot: BOOT_PHASE.STARTING };
   assert.equal(agentStatusAt(undefined, longBoot), AGENT_STATUS.STARTING);
   assert.equal(
     statusClockEdge(undefined, { ...standing(0), boot: BOOT_PHASE.STARTING }),

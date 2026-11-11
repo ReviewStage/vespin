@@ -24,7 +24,7 @@ import { AGENT_STATUS, type AgentStatus, type AgentTurn, turnStatusOfWord } from
  * `statusClockEdge`, the instant the clock alone moves it. An agent whose
  * first launch boots its machine before its first turn (`agent-boot.ts`)
  * reads from its boot record instead: starting for as long as it boots,
- * however long its setup takes, since the boot's own deadline is what fails
+ * however long that takes, since the boot's own deadline is what fails
  * a boot that never comes up, and failed once it did.
  */
 

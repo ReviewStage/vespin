@@ -2717,7 +2717,7 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
   queue: EffectSchema.optionalKey(agentQueueSchema),
   /**
    * The agent's first launch while it stands (`agent-boot.ts`): its machine
-   * booting, its setup scripts running, its first message going, or the boot
+   * booting, its first message going, or the boot
    * failed, on its own transcript until its first turn settles; absent on a
    * worker's page, for an agent whose first launch is over or never booted
    * this way, and from a service older than it.

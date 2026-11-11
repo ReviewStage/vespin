@@ -125,12 +125,11 @@ export const AGENT_TRANSCRIPT_READ = liveRead({
       order: [["id", ORDER.ASC]],
       optional: true,
     }),
-    /** The agent's first launch while its boot record stands, a row at most: its attempt, phase, setup scripts' exit code, and why it failed; none once its first turn settled, on a worker's transcript, and absent from a service older than it. */
+    /** The agent's first launch while its boot record stands, a row at most: its attempt, phase, and why it failed; none once its first turn settled, on a worker's transcript, and absent from a service older than it. */
     boot: liveRows({
       row: EffectSchema.Struct({
         attempt: countedNumber,
         phase: EffectSchema.String,
-        setupExit: EffectSchema.NullOr(EffectSchema.Number),
         failure: EffectSchema.NullOr(EffectSchema.String),
       }),
       key: "attempt",

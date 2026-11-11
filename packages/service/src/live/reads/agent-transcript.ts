@@ -519,7 +519,6 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
       columns: {
         attempt: agentBootTable.attempt,
         phase: agentBootTable.phase,
-        setupExit: agentBootTable.setupExit,
         failure: agentBootTable.failure,
       },
     },
