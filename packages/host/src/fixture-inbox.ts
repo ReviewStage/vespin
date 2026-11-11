@@ -231,14 +231,51 @@ const RECORDED = {
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
 } as const;
 
-/** The turn-end thread's option files, by the attachment each is read by: two stills of the card and a recording of it. */
+/** The turn-end thread's option files, by the attachment each is read by: a still of the card, one of the dock, and a recording of it. */
 const TURN_END = {
   ITEM: fixtureId(6),
   CARD: "b4a5d758-90c1-4dea-85a2-3c4d5e6f7081",
-  CARD_PHONE: "c5b6e869-a1d2-4efb-96b3-4d5e6f708192",
   DOCK: "d6c7f97a-b2e3-4f0c-a7c4-5e6f708192a3",
   RECORDING: "e7d80a8b-c3f4-401d-b8d5-6f708192a3b4",
 } as const;
+
+/** One of the turn-end thread's option files as its option names it. */
+function turnEndMedia(attachmentId: string, caption: string, recording = false) {
+  const mediaType = recording ? CONVERSATION_MEDIA_TYPE.WEBM : AGENT_ATTACHMENT_TYPE.PNG;
+  return { type: INBOX_OPTION_MEDIA.FILE, attachmentId, mediaType, caption } as const;
+}
+
+/** The turn-end thread's options: a card with its still and a page, the dock with a still, a recording, and a link, and one with none. */
+const TURN_END_OPTIONS = [
+  {
+    label: "A done card",
+    detail: "Archive, plus the follow-ups the agent mentioned.",
+    media: [
+      turnEndMedia(TURN_END.CARD, "On a desktop"),
+      {
+        type: INBOX_OPTION_MEDIA.PAGE,
+        pageId: FIXTURE_PAGE.id,
+        version: FIXTURE_PAGE.version,
+        title: FIXTURE_PAGE.title,
+        place: { taskId: TASK.INVITES },
+      },
+    ],
+  },
+  {
+    label: "Two states of the dock",
+    detail: "Needs you, then Done.",
+    media: [
+      turnEndMedia(TURN_END.DOCK, "The dock at rest"),
+      turnEndMedia(TURN_END.RECORDING, "Ticking two follow-ups", true),
+      {
+        type: INBOX_OPTION_MEDIA.LINK,
+        url: "https://preview.example.com/dock",
+        label: "The dock on the preview",
+      },
+    ],
+  },
+  { label: "Leave it as it is", detail: "The transcript ends on Worked for." },
+] as const;
 
 /** A turn-end option's file as the service answers it: each still the fixture's picture, and the recording its video, as an MP4 to a reader that plays one. */
 function turnEndFile(
@@ -250,7 +287,7 @@ function turnEndFile(
       ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
       : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
   }
-  const stills: readonly string[] = [TURN_END.CARD, TURN_END.CARD_PHONE, TURN_END.DOCK];
+  const stills: readonly string[] = [TURN_END.CARD, TURN_END.DOCK];
   return stills.includes(attachmentId)
     ? { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG }
     : { failure: AGENT_CALL_FAILURE.NOT_FOUND };
@@ -323,76 +360,26 @@ const INVITES_ITEMS: readonly InboxItem[] = [
         "Three directions for what a turn shows once the agent is done. Each card holds its shots; press one to look closer.",
         {
           type: INBOX_ASK.DECIDE,
-          options: [
-            {
-              label: "A done card",
-              detail: "Archive, plus the follow-ups the agent mentioned.",
-              media: [
-                {
-                  type: INBOX_OPTION_MEDIA.FILE,
-                  attachmentId: TURN_END.CARD,
-                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
-                  caption: "On a desktop",
-                },
-                {
-                  type: INBOX_OPTION_MEDIA.FILE,
-                  attachmentId: TURN_END.CARD_PHONE,
-                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
-                  caption: "On a phone",
-                },
-                {
-                  type: INBOX_OPTION_MEDIA.PAGE,
-                  pageId: FIXTURE_PAGE.id,
-                  version: FIXTURE_PAGE.version,
-                  title: FIXTURE_PAGE.title,
-                  place: { taskId: TASK.INVITES },
-                },
-              ],
-            },
-            {
-              label: "Two states of the dock",
-              detail: "Needs you, then Done.",
-              media: [
-                {
-                  type: INBOX_OPTION_MEDIA.FILE,
-                  attachmentId: TURN_END.DOCK,
-                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
-                  caption: "The dock at rest",
-                },
-                {
-                  type: INBOX_OPTION_MEDIA.FILE,
-                  attachmentId: TURN_END.RECORDING,
-                  mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
-                  caption: "Ticking two follow-ups",
-                },
-                {
-                  type: INBOX_OPTION_MEDIA.LINK,
-                  url: "https://preview.example.com/dock",
-                  label: "The dock on the preview",
-                },
-              ],
-            },
-            { label: "Leave it as it is", detail: "The transcript ends on Worked for." },
-          ],
+          options: TURN_END_OPTIONS,
           multiple: true,
           recommended: "A done card",
           ...OPEN,
         },
       ),
-      files: [
-        { attachmentId: TURN_END.CARD, name: "card.png", mediaType: AGENT_ATTACHMENT_TYPE.PNG },
-        {
-          attachmentId: TURN_END.CARD_PHONE,
-          name: "card-phone.png",
-          mediaType: AGENT_ATTACHMENT_TYPE.PNG,
-        },
-        { attachmentId: TURN_END.DOCK, name: "dock.png", mediaType: AGENT_ATTACHMENT_TYPE.PNG },
-        {
-          attachmentId: TURN_END.RECORDING,
-          name: "dock.webm",
-          mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
-        },
-      ],
+      // Note that the options' files are the message's own, as the service keeps them.
+      files: TURN_END_OPTIONS.flatMap((option) =>
+        ("media" in option ? option.media : []).flatMap((media) =>
+          media.type === INBOX_OPTION_MEDIA.FILE
+            ? [
+                {
+                  attachmentId: media.attachmentId,
+                  name: media.caption,
+                  mediaType: media.mediaType,
+                },
+              ]
+            : [],
+        ),
+      ),
     },
   ]),
   item(3, AGENT.INVITES, "invite-limits", "Invite limits", [

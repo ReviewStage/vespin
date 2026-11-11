@@ -20,6 +20,8 @@ import {
   MARK_PROVIDER,
   OPTION_MEDIA_KIND,
   OptionMedia,
+  type OptionMediaKind,
+  type OptionMediaPiece,
   PAGE_THUMB_FIT,
   PageThumb,
   PROVIDER_MARK_SIZE,
@@ -154,7 +156,7 @@ const CREDENTIAL_ROWS: readonly ChoiceOption<string>[] = [
   },
 ];
 
-/** A made-up screenshot `width` by `height`, its ground `fill`, with a bar and a block on it, as an option's picture. */
+/** A made-up screenshot `width` by `height`, its ground `fill`, with a bar and a block on it. */
 function shot(width: number, height: number, fill: string): string {
   const bar = Math.max(6, Math.round(height * 0.08));
   return `data:image/svg+xml,${encodeURIComponent(
@@ -164,46 +166,40 @@ function shot(width: number, height: number, fill: string): string {
 
 const PAGE = `data:text/html,${encodeURIComponent("<body style='margin:0;font:48px sans-serif;background:#fff;padding:32px'><h1>Directions</h1><p>Three ways a turn could end.</p>")}`;
 
-/** A tile's thumb as an option's card draws one: whole on its ground, filling the tile. */
-function thumbOf(image: string): React.JSX.Element {
-  return <PageThumb fit={PAGE_THUMB_FIT.CONTAIN} image={image} />;
-}
-
 /** Nothing opens in the catalog. */
 const OPEN = () => undefined;
 
-/** A choice between designs, every kind and shape an option's media comes in, and None of these after them. */
+/** A picture or a recording `width` by `height` as an option's tile, whole on its ground. */
+function filed(
+  id: string,
+  caption: string | undefined,
+  width: number,
+  height: number,
+  kind: OptionMediaKind = OPTION_MEDIA_KIND.PICTURE,
+): OptionMediaPiece {
+  const image = shot(width, height, `hsl(${(width * 7 + height) % 360} 60% 60%)`);
+  const thumb = <PageThumb fit={PAGE_THUMB_FIT.CONTAIN} image={image} />;
+  return { id, kind, caption, thumb, onOpen: OPEN };
+}
+
+/**
+ * A choice between designs: each kind of media, then the shapes and the
+ * states a tile meets (a tall phone shot, a wide banner, a small icon never
+ * enlarged, no caption, a long one cut short, one still read, one gone),
+ * an option with none, and None of these.
+ */
 const DESIGNS: readonly ChoiceOption<string>[] = [
   {
     value: "kinds",
     label: "Every kind",
-    state: "A picture, a phone shot, a recording, a page, and two links.",
+    state: "A picture, a recording, a page, and a link.",
     badge: "Recommended",
     below: (
       <OptionMedia
         label="Every kind"
         pieces={[
-          {
-            id: "desktop",
-            kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: "On a desktop",
-            thumb: thumbOf(shot(1440, 900, "#5b8def")),
-            onOpen: OPEN,
-          },
-          {
-            id: "phone",
-            kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: "On a phone",
-            thumb: thumbOf(shot(390, 844, "#e07a5f")),
-            onOpen: OPEN,
-          },
-          {
-            id: "recording",
-            kind: OPTION_MEDIA_KIND.RECORDING,
-            caption: "Ticking two follow-ups",
-            thumb: thumbOf(shot(1280, 720, "#81b29a")),
-            onOpen: OPEN,
-          },
+          filed("desktop", "On a desktop", 1440, 900),
+          filed("recording", "Ticking two follow-ups", 1280, 720, OPTION_MEDIA_KIND.RECORDING),
           {
             id: "page",
             kind: OPTION_MEDIA_KIND.PAGE,
@@ -211,17 +207,11 @@ const DESIGNS: readonly ChoiceOption<string>[] = [
             thumb: (
               <PageThumb frame={{ title: "Directions", src: PAGE, sandbox: "allow-scripts" }} />
             ),
+            mark: <GLYPH.PAGE />,
             onOpen: OPEN,
           },
           {
             id: "link",
-            kind: OPTION_MEDIA_KIND.LINK,
-            caption: "The dock on the preview",
-            thumb: <PageThumb glyph={<ExternalIcon />} />,
-            onOpen: OPEN,
-          },
-          {
-            id: "host",
             kind: OPTION_MEDIA_KIND.LINK,
             caption: "preview.example.com",
             thumb: <PageThumb glyph={<ExternalIcon />} />,
@@ -233,71 +223,21 @@ const DESIGNS: readonly ChoiceOption<string>[] = [
   },
   {
     value: "shapes",
-    label: "Odd shapes and captions",
-    state: "Square, a wide banner, a long scroll, a small icon, no caption, and a long one.",
+    label: "Shapes, captions, and states",
+    state: "Tall, wide, a small icon, no caption, a long one, on its way, and gone.",
     below: (
       <OptionMedia
-        label="Odd shapes and captions"
+        label="Shapes, captions, and states"
         pieces={[
-          {
-            id: "square",
-            kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: "Square avatar crop",
-            thumb: thumbOf(shot(800, 800, "#9b5de5")),
-            onOpen: OPEN,
-          },
-          {
-            id: "banner",
-            kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: "Banner, 4 to 1",
-            thumb: thumbOf(shot(1600, 400, "#f15bb5")),
-            onOpen: OPEN,
-          },
-          {
-            id: "scroll",
-            kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: "The whole settings page, scrolled",
-            thumb: thumbOf(shot(600, 2400, "#00bbf9")),
-            onOpen: OPEN,
-          },
-          {
-            id: "icon",
-            kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: "App icon",
-            thumb: thumbOf(shot(64, 64, "#fee440")),
-            onOpen: OPEN,
-          },
-          {
-            id: "bare",
-            kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: undefined,
-            thumb: thumbOf(shot(1200, 800, "#00f5d4")),
-            onOpen: OPEN,
-          },
-          {
-            id: "long",
-            kind: OPTION_MEDIA_KIND.RECORDING,
-            caption:
-              "The whole flow from opening a thread to sending the answer with a note and two files",
-            thumb: thumbOf(shot(1920, 1080, "#577590")),
-            onOpen: OPEN,
-          },
-        ]}
-      />
-    ),
-  },
-  {
-    value: "states",
-    label: "While reading, and gone",
-    state: "A picture on its way, and one whose file could not be read.",
-    below: (
-      <OptionMedia
-        label="While reading, and gone"
-        pieces={[
+          filed("phone", "On a phone", 390, 844),
+          filed("banner", "Banner, 4 to 1", 1600, 400),
+          filed("icon", "App icon", 64, 64),
+          filed("bare", undefined, 1200, 800),
+          filed("long", "The whole flow from opening a thread to sending the answer", 1920, 1080),
           {
             id: "reading",
             kind: OPTION_MEDIA_KIND.PICTURE,
-            caption: "Still on its way",
+            caption: "On its way",
             thumb: <PageThumb />,
             onOpen: OPEN,
           },
