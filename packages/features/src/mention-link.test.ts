@@ -11,8 +11,8 @@ import {
   isMentionableTool,
   isMentionLabel,
   LINK_CHIP,
+  linkChipOf,
   linkLabels,
-  linkMention,
   linksIn,
   MENTION_KIND,
   type Mention,
@@ -299,8 +299,8 @@ test("only a label that starts with @ and says more is a mention's, which its ch
 test("any link whose target names a mention is one, whatever its label says, named by its label without its @", () => {
   const lines = `https://github.com/${REPOSITORY}/blob/0a1b2c3d/apps/web/store.ts#L3-L5`;
   const read = (label: string, target: string) => {
-    const found = linkMention(label, target, REPOSITORY);
-    return found === undefined ? undefined : [found.mention.kind, found.name];
+    const found = linkChipOf(label, target, REPOSITORY);
+    return found?.kind === LINK_CHIP.MENTION ? [found.mention.kind, found.name] : undefined;
   };
 
   assert.deepEqual(read("@Rollout", encodeMention(ROLLOUT, PLACE)), [
@@ -321,7 +321,7 @@ test("any link whose target names a mention is one, whatever its label says, nam
 });
 
 test("a bare address is named by what it says of the thing: a file's name and lines, a section's anchor, a page's last steps", () => {
-  const named = (address: string) => linkMention(address, address, REPOSITORY)?.name;
+  const named = (address: string) => linkChipOf(address, address, REPOSITORY)?.name;
 
   assert.equal(
     named(`https://github.com/${REPOSITORY}/blob/0a1b2c3d/apps/web/store.ts#L3-L5`),
@@ -345,10 +345,10 @@ test("a label that spells another address than its target is the author's words,
   const issue = "https://linear.app/acme/issue/ACME-142/fix-the-thing";
 
   assert.equal(
-    linkMention("https://example.com/notes", issue, REPOSITORY)?.name,
+    linkChipOf("https://example.com/notes", issue, REPOSITORY)?.name,
     "https://example.com/notes",
   );
-  assert.equal(linkMention(issue, issue, REPOSITORY)?.name, "ACME-142/fix-the-thing");
+  assert.equal(linkChipOf(issue, issue, REPOSITORY)?.name, "ACME-142/fix-the-thing");
 });
 
 test("a target may name a chip when it names a mention with no repository, is any page of GitHub's, however long, or is any place of ours", () => {
@@ -662,9 +662,9 @@ test("a Google Maps page reads as the site's link and is named by the place its 
     site: LINK_SITE.GOOGLE_MAPS,
     url,
   });
-  assert.equal(linkMention(url, url, REPOSITORY)?.name, "Ferry Building");
+  assert.equal(linkChipOf(url, url, REPOSITORY)?.name, "Ferry Building");
   assert.equal(pastedLinkChip("https://maps.app.goo.gl/Ab12Cd34", REPOSITORY)?.name, "Google Maps");
-  assert.equal(linkMention("the pier", url, REPOSITORY)?.name, "the pier");
+  assert.equal(linkChipOf("the pier", url, REPOSITORY)?.name, "the pier");
 });
 
 test("a page's address stays one markdown link's however many parentheses it keeps", () => {
@@ -822,11 +822,12 @@ test("a page of a plan is its Vespin link, an agent of one is the agent's own, a
     decodeMention(`vespin://vespin.dev/acme/plan/${TASK_ID}/agent/agent-1`, null),
     agent,
   );
-  assert.deepEqual(linkMention(`${taskLink}/page/page-1`, `${taskLink}/page/page-1`, null), {
+  assert.deepEqual(linkChipOf(`${taskLink}/page/page-1`, `${taskLink}/page/page-1`, null), {
+    kind: LINK_CHIP.MENTION,
     mention: page,
     name: "Page",
   });
-  assert.deepEqual(linkMention("", `${taskLink}/agent/agent-1`, null)?.name, "Agent");
+  assert.deepEqual(linkChipOf("", `${taskLink}/agent/agent-1`, null)?.name, "Agent");
   for (const target of [
     `${taskLink}/page/page-1/version/2`,
     `${taskLink}/agent/agent-1/changes`,
@@ -845,7 +846,8 @@ test("an agent on no task is mentioned by its own Vespin link under the workspac
   assert.equal(encodeMention(agent, PLACE), "https://vespin.dev/acme/agent/agent-9");
   assert.deepEqual(decodeMention("https://vespin.dev/acme/agent/agent-9", null), agent);
   assert.deepEqual(decodeMention("vespin://vespin.dev/acme/agent/agent-9", null), agent);
-  assert.deepEqual(linkMention("", "https://vespin.dev/acme/agent/agent-9", null), {
+  assert.deepEqual(linkChipOf("", "https://vespin.dev/acme/agent/agent-9", null), {
+    kind: LINK_CHIP.MENTION,
     mention: agent,
     name: "Agent",
   });
@@ -866,7 +868,11 @@ test("a page an agent on no task showed is mentioned under the agent's own link,
   assert.equal(encodeMention(page, PLACE), target);
   assert.deepEqual(decodeMention(target, null), page);
   assert.deepEqual(decodeMention("vespin://vespin.dev/acme/agent/agent-9/page/page-1", null), page);
-  assert.deepEqual(linkMention("", target, null), { mention: page, name: "Page" });
+  assert.deepEqual(linkChipOf("", target, null), {
+    kind: LINK_CHIP.MENTION,
+    mention: page,
+    name: "Page",
+  });
   for (const bent of [
     `${target}/source`,
     `${target}#top`,
@@ -885,7 +891,11 @@ test("a person is mentioned by their page's Vespin link under the workspace, rea
   assert.deepEqual(decodeMention(page, null), person);
   assert.deepEqual(decodeMention("vespin://vespin.dev/acme/person/user_Ab-9", null), person);
   assert.deepEqual(decodeMention(`${page}/`, null), person);
-  assert.deepEqual(linkMention("@Dana Reyes", page, null), { mention: person, name: "Dana Reyes" });
+  assert.deepEqual(linkChipOf("@Dana Reyes", page, null), {
+    kind: LINK_CHIP.MENTION,
+    mention: person,
+    name: "Dana Reyes",
+  });
   assert.deepEqual(pastedLinkChip(page, REPOSITORY), {
     kind: LINK_CHIP.MENTION,
     mention: person,
@@ -911,7 +921,7 @@ test("an old Vespin issue page's link names nothing now that Vespin keeps no iss
 
   assert.equal(decodeMention(page, null), undefined);
   assert.equal(decodeMention(page.replace("https:", "vespin:"), null), undefined);
-  assert.equal(linkMention("@ACME-7 Token refresh fails", page, null), undefined);
+  assert.equal(linkChipOf("@ACME-7 Token refresh fails", page, null), undefined);
   assert.equal(pastedLinkChip(page, REPOSITORY), undefined);
   assert.deepEqual(handedMentionsIn(`See ${page} or [@ACME-7](${page}).`, REPOSITORY), []);
 });
@@ -1099,7 +1109,8 @@ test("a date that is no day, a range out of order or of two kinds, or a step pas
 });
 
 test("a date written bare or pasted is named by its date in full", () => {
-  assert.deepEqual(linkMention("luke://date/2026-10-20", "luke://date/2026-10-20", REPOSITORY), {
+  assert.deepEqual(linkChipOf("luke://date/2026-10-20", "luke://date/2026-10-20", REPOSITORY), {
+    kind: LINK_CHIP.MENTION,
     mention: { kind: MENTION_KIND.DATE, start: "2026-10-20" },
     name: "Oct 20, 2026",
   });

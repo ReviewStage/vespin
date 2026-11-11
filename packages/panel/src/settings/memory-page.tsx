@@ -805,7 +805,13 @@ function MemoryWords({
     <Stack gap={GAP.TIGHT}>
       <Tooltip label={`Saved by ${actorName(shown.actor)}`} card={<KeeperCard shown={shown} />}>
         <div className="memory-words">
-          <MarkdownMessage words={shown.memory.text} className="memory-text" found={found} />
+          {/* A memory's words stand inside its row's card, so they stay words going nowhere, links among them. */}
+          <MarkdownMessage
+            words={shown.memory.text}
+            className="memory-text"
+            found={found}
+            link={null}
+          />
         </div>
       </Tooltip>
       <Inline gap={GAP.ICON}>

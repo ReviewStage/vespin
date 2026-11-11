@@ -218,6 +218,7 @@ test("a picture from outside Vespin is a link to it, and nothing is read for it"
 test("words drawn with no picture drawer, as a reply is, keep a picture as its alt text", async () => {
   const view = await drawn(
     createElement(MarkdownMessage, {
+      link: null,
       words: `![Invite email](${picture("7a1d4e90-0c3f-4b6a-9d2e-5f6a7b8c9d03", MOCK)})`,
     }),
   );

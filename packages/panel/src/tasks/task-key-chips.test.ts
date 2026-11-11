@@ -212,7 +212,7 @@ test("in a description's or a comment's words a listed task's key is its chip, a
   const chipped = await drawn(
     createElement(MarkdownMessage, { words, link: mentionLinkDrawer(doors) }),
   );
-  const plain = await drawn(createElement(MarkdownMessage, { words }));
+  const plain = await drawn(createElement(MarkdownMessage, { words, link: null }));
 
   assert.deepEqual(chips(chipped), [[MENTION_KIND.TASK, "STAG-421"]]);
   assert.equal(chipped.querySelector("code")?.textContent, "STAG-422");

@@ -222,7 +222,11 @@ test("a picture replaced in a version reads as the old one struck and the new on
 
   const drawn = renderToStaticMarkup(
     withQueryClient(
-      createElement(MarkdownMessage, { words: unit.words, edit: { marks: unit.marks } }),
+      createElement(MarkdownMessage, {
+        words: unit.words,
+        link: null,
+        edit: { marks: unit.marks },
+      }),
     ),
   );
 

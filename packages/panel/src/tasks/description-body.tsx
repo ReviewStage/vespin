@@ -981,7 +981,7 @@ const DocumentUnit = memo(function DocumentUnit({
       words={view.words}
       className={unitClass(changed)}
       edit={edit}
-      link={link}
+      link={link ?? null}
       openLink={openLink}
       diagrams
       picture={picture}

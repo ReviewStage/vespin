@@ -322,7 +322,9 @@ test("a fence in another language, and a Mermaid fence where the words are not a
   const shell = "```sh\npnpm install\n```";
 
   const page = await drawn(createElement(DescriptionBody, { task: taskWith(shell) }));
-  const caption = await drawn(createElement(MarkdownMessage, { words: mermaidFence(code) }));
+  const caption = await drawn(
+    createElement(MarkdownMessage, { words: mermaidFence(code), link: null }),
+  );
 
   assert.equal(page.querySelector(".description-diagram"), null);
   assert.equal(page.querySelector("pre")?.textContent, "pnpm install");

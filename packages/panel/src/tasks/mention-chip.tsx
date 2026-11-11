@@ -38,7 +38,6 @@ import {
   isBareLink,
   LINK_CHIP,
   linkChipOf,
-  linkMention,
   MENTION_KIND,
   type Mention,
   type MentionLines,
@@ -102,7 +101,7 @@ import { useWordsDates } from "./words-dates.js";
  * mention-chip.tsx -- a mention drawn in words as its chip: its kind's glyph and its name, a button that opens what it names, or a link where that leaves the app, hanging a card that says what that is, struck through where what it names is gone.
  *
  * A mention is written into markdown as a link whose target names it
- * (`@repo/features/mention-link`'s `linkMention`), a developer's with a
+ * (`@repo/features/mention-link`'s `linkChipOf`), a developer's with a
  * label starting with `@`, and wherever words are drawn, the link is drawn
  * as this chip: a pill on the words' line, the kind's glyph and the name the
  * mention was written with, cut to the chip's width. A press opens it: a
@@ -903,8 +902,8 @@ function NumberedLinkChip({
   const byId =
     taskId === undefined ? undefined : linkOf(withTaskId(read.place, taskId), read.workspace);
   const found =
-    byId === undefined ? undefined : linkMention(bare ? byId : label, byId, doors.place.repository);
-  if (found !== undefined) {
+    byId === undefined ? undefined : linkChipOf(bare ? byId : label, byId, doors.place.repository);
+  if (found?.kind === LINK_CHIP.MENTION) {
     return (
       <MentionChip
         mention={found.mention}
@@ -976,9 +975,10 @@ export function fileChip(written: string, doors: MentionDoors, state?: ReactNode
   const path = checkoutRelativePath(written);
   if (repository === null || path === undefined) return undefined;
   const target = encodeMention({ kind: MENTION_KIND.FILE, path }, doors.place);
-  const found = linkMention(target, target, repository);
+  const found = linkChipOf(target, target, repository);
   // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
-  if (found?.mention.kind !== MENTION_KIND.FILE) return undefined;
+  if (found?.kind !== LINK_CHIP.MENTION || found.mention.kind !== MENTION_KIND.FILE)
+    return undefined;
   return (
     <MentionChip
       mention={found.mention}
@@ -1248,7 +1248,7 @@ function datePicked(
   else if (keyed) node.focusAfter();
 }
 
-/** A mention an editor holds, as its node names it: its chip where its target names a mention, a place's in the app where it names a place no mention does (an Inbox thread, `linkChip`), and its words where it names neither; a date's opens its picker where the editor hands what changes it. */
+/** A mention an editor holds, as its node names it: the chip its link draws in words (`linkChip`), a mention's or a place's in the app, and its words where it names neither; a date's opens its picker where the editor hands what changes it. */
 export function MentionNodeChip({
   mention,
   doors,
@@ -1277,27 +1277,26 @@ function NodeChip({
   doors: MentionDoors;
   edit: MentionNodeEdit | undefined;
 }): React.JSX.Element {
-  const named = decodeMention(mention.target, doors.place.repository);
-  if (named === undefined) {
-    const written = `${MENTION_SIGIL}${mention.name}`;
+  const written = `${MENTION_SIGIL}${mention.name}`;
+  const chip = linkChipOf(written, mention.target, doors.place.repository);
+  // A date's chip held in an editor opens its picker, which names the node anew; every other chip is the one its link draws in words.
+  if (chip?.kind !== LINK_CHIP.MENTION || chip.mention.kind !== MENTION_KIND.DATE) {
     return linkChip(mention.target, written, doors) ?? <>{written}</>;
   }
-  if (named.kind === MENTION_KIND.DATE) {
-    return (
-      <DateChip
-        date={named}
-        onPick={
-          edit === undefined
-            ? undefined
-            : (chip) =>
-                edit.pickDate({
-                  at: chip,
-                  date: named,
-                  onClose: (picked) => datePicked(edit.node, named, picked, doors.place),
-                })
-        }
-      />
-    );
-  }
-  return <MentionChip mention={named} target={mention.target} name={mention.name} doors={doors} />;
+  const date = chip.mention;
+  return (
+    <DateChip
+      date={date}
+      onPick={
+        edit === undefined
+          ? undefined
+          : (at) =>
+              edit.pickDate({
+                at,
+                date,
+                onClose: (picked) => datePicked(edit.node, date, picked, doors.place),
+              })
+      }
+    />
+  );
 }

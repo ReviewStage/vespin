@@ -55,7 +55,7 @@ import { DESCRIPTION_SECTION_BOUNDS } from "./task-wire.js";
  *
  * Drawn, the `@` is not asked for: wherever the app draws words a person,
  * the app, or an agent wrote, any link whose target names a mention is drawn
- * as its chip (`linkMention`), a bare address among them, so an agent that
+ * as its chip (`linkChipOf`), a bare address among them, so an agent that
  * writes a file's GitHub page or a Linear issue's address is drawn as a
  * developer's mention of it is. The `@` still says which links a developer
  * placed, which a writer must keep (`mentionLinksIn`). An agent is handed
@@ -976,7 +976,7 @@ export function mayNameChip(target: string): boolean {
  * address says of the thing. Nothing for a link whose target names none,
  * which stays a link.
  */
-export function linkMention(
+function linkMention(
   label: string,
   target: string,
   repository: string | null,

@@ -235,7 +235,7 @@ function SkillFileDialog({
       ) : (
         <Stack gap={GAP.FIELD}>
           <ReplayMask>
-            <MarkdownMessage words={fencedSkillFile(read.content.skillFile)} />
+            <MarkdownMessage words={fencedSkillFile(read.content.skillFile)} link={null} />
           </ReplayMask>
           <Stack gap={GAP.ITEM}>
             <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.H3}>
