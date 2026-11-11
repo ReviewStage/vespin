@@ -45,7 +45,7 @@ const NAME_MAX_WIDTH = 180;
 /** The chevron after the name, which says the name opens a menu, in the body's ink, since the muted ink faded into a dark bar's glass. */
 const CHEVRON_SIZE = 10;
 
-/** How the switcher's button stands: the tile and the name, where a sidebar's row has room, or the tile alone, where a bar's title stands beside it. */
+/** How the switcher's button stands: the tile, the name and ⌄, where a sidebar's row has room, or the tile alone at a bar's photo size, where a bar's title stands beside it, as the App Store and Gmail stand an account's photo that opens a menu, with no ⌄. */
 export const SWITCHER_LOOK = {
   NAMED: "named",
   TILE: "tile",
@@ -184,9 +184,11 @@ export function WorkspaceSwitcherMenu({
     <Menu
       modifiers={[accessibilityLabel(heardAs(chosen)), accessibilityIdentifier(SWITCHER_ID)]}
       label={
-        <HStack spacing={SPACE.TIGHT + 2}>
-          <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
-          {look === SWITCHER_LOOK.TILE ? null : (
+        look === SWITCHER_LOOK.TILE ? (
+          <WorkspaceTile workspace={chosen} size={MARK_SIZE.BAR_FACE} />
+        ) : (
+          <HStack spacing={SPACE.TIGHT + 2}>
+            <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
             <Text
               modifiers={[
                 font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
@@ -197,14 +199,14 @@ export function WorkspaceSwitcherMenu({
             >
               {chosen.name}
             </Text>
-          )}
-          <Image
-            systemName="chevron.down"
-            size={CHEVRON_SIZE}
-            color={colors.TEXT_BODY}
-            modifiers={[accessibilityHidden()]}
-          />
-        </HStack>
+            <Image
+              systemName="chevron.down"
+              size={CHEVRON_SIZE}
+              color={colors.TEXT_BODY}
+              modifiers={[accessibilityHidden()]}
+            />
+          </HStack>
+        )
       }
     >
       {workspaces.map((workspace) => (
@@ -242,10 +244,11 @@ export function WorkspaceSwitcherMenu({
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
  * holds React Native views: the same menu in a SwiftUI host the size of its
- * label, standing as the one bar item at the bar's leading edge, as Linear's
- * iPhone app stands its workspace there: the tile and ⌄ alone, so the
- * screen's own title keeps its place in the bar, and the menu names the
- * workspace, checked. Note that it stands as a
+ * label, standing as the one bar item at the bar's leading edge: the tile
+ * alone, at the size the account's photo stood, in the round glass the bar
+ * stands it in, as the App Store and Gmail stand a photo that opens a menu,
+ * so the screen's own title keeps its place in the bar and the menu names
+ * the workspace, checked. Note that it stands as a
  * bar item rather than the bar's title view, because a host sized to its
  * contents drew at no size at all in the native stack's title on iOS 27.
  */
