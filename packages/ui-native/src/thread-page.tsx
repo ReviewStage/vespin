@@ -33,7 +33,7 @@ import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
@@ -306,7 +306,9 @@ export function ThreadPage(props: ThreadPageProps) {
             alignment="leading"
             spacing={SPACE.EDGE}
             modifiers={[
-              frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+              // Note that a wide window centers the thread's column at the reading width, as Mail centers a message, rather than running its lines across the screen.
+              frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
+              frame({ maxWidth: Number.POSITIVE_INFINITY }),
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >
