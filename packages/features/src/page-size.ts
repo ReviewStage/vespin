@@ -70,7 +70,8 @@ export const PAGE_SIZE_SCRIPT = `(() => {
   addEventListener("load", post, { once: true });
   addEventListener(${JSON.stringify(PAGE_THEME_WORN_EVENT)}, () => {
     themed = true;
-    post();
+    // Note that a theme worn while the page is still read leaves its first height to \`watch\`, once it is whole.
+    if (document.readyState !== "loading") post();
   });
 })();`;
 
