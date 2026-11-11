@@ -33,6 +33,7 @@ import { ResponseHeadersHandlerPlugin } from "@orpc/server/plugins";
 import type { StandardHandlerInterceptor } from "@orpc/server/standard";
 import { presentedClient } from "@repo/features/client-identity";
 import { getBodyCap, RETIRED_TASK_PATHS } from "@repo/features/contract";
+import { FUNCTION_BODY_LIMIT_BYTES } from "@repo/features/request-body-limit";
 import { HTTP_METHOD } from "@repo/wire";
 import type { Context } from "effect";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -74,7 +75,7 @@ const SAME_ORIGIN_ANSWER = {
  * an inbox thread, about 4.42 MB, which carries a form's values with its
  * files).
  */
-export const HOSTED_BODY_CEILING_BYTES = 4_500_000;
+export const HOSTED_BODY_CEILING_BYTES = FUNCTION_BODY_LIMIT_BYTES;
 
 /**
  * The oldest hosted API version the service still serves
