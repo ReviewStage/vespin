@@ -216,9 +216,15 @@ pull request with UI shows its screenshots to the developer in a thread.
   `metro.config.js` reads it as the `.ts` beside it, as it reads a workspace
   package's `exports`.
 - **Layout follows the window, never the device.** `useWindowSizeClass` reads
-  the window's width into a compact or regular size class; a regular window
-  stands list and detail side by side in `NavigationSplitView`, whether it is
-  an iPad's, the unfolded iPhone Duo's, or a Split View pane.
+  the window's width into a compact or regular size class. A compact window
+  keeps the system's tab bar with stack navigation. A regular one, whether
+  it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
+  list and detail side by side in `NavigationSplitView`; where it is wide
+  enough for three columns, an iPad's in landscape, it hides the tab bar and
+  stands the app sidebar first (`src/screens/app-sidebar.tsx`: the places,
+  Pinned and the member's sections, the workspace switcher, and Settings),
+  as Mail does. Whether the first column stands is one answer every tab
+  shares (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
 - **React 19.3** comes through the `mobile` pnpm catalog, since React Native

@@ -9,11 +9,14 @@ builds a control of its own.
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow` (a
   task on one line, its sub-tasks folded under the panel's chevron), a task
-  page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `GroupRow`, `LinkRow`,
-  and `WordsRow` for its description), `SplitView` (two columns or three, its
-  sidebar's bar holding an act, a `BarMenu` such as the ⋯ menu, and a
-  search, and its detail's bar the page's path and a `BarMenu` such as a
-  task's ⋯), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
+  page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and `WordsRow` for its
+  description), `GroupRow` (a place a regular window's sidebar opens, such
+  as the Inbox with its count), `SplitView` (the app's sidebar, the list,
+  and the detail, or the list and the detail, each column under its own
+  `ColumnBar`: its inline title, the account's photo, a header such as the
+  workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an act, a
+  search, and the acts at its foot, the sidebar shown or hidden as its
+  caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
@@ -121,7 +124,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
   button is the chevron alone. The account's photo leads each tab's root bar
-  and opens Settings (`AccountButton`, `SplitView`'s `sidebarAccount`): the
+  and opens Settings (`AccountButton`, `SplitView`'s `sidebarBar`): the
   system stands it in the same round glass, the photo clipped to a circle
   inside. Nothing draws a copy of glass.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
@@ -157,7 +160,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   asks first asking in `ConfirmAsk`.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
-  New task; a regular window's sidebar keeps its labels.
+  New task; a regular window's sidebar keeps its labels. A window wide enough
+  for three columns hides it and stands the app sidebar instead, whose
+  `GroupRow`s carry the places' names.
 
 ## Accessibility
 

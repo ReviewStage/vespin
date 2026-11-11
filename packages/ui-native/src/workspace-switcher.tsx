@@ -70,7 +70,7 @@ type WorkspaceSwitcherProps = {
   /** The one the phone works in, which the bar names and the menu checks. */
   readonly chosen: SwitcherWorkspace;
   readonly onChoose: (id: string) => void;
-  /** The acts under the workspaces: New workspace, then Workspace settings. */
+  /** The acts under the workspaces: New workspace, Workspace settings, then Settings. */
   readonly actions: readonly SwitcherAction[];
 };
 
@@ -215,7 +215,12 @@ export function newWorkspaceAction(onPress: () => void): SwitcherAction {
   return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: "plus", onPress };
 }
 
-/** The menu's act that opens the chosen workspace's settings, as the panel words it. */
+/** The menu's act that opens the chosen workspace's settings, as the panel words it, by a workspace's glyph so it stands apart from Settings' gear. */
 export function workspaceSettingsAction(onPress: () => void): SwitcherAction {
-  return { label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, symbol: "gearshape", onPress };
+  return { label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, symbol: "building.2", onPress };
+}
+
+/** The menu's last act, Settings: the same Settings the account's photo opens, found from the workspace's name as well. */
+export function settingsAction(onPress: () => void): SwitcherAction {
+  return { label: "Settings", symbol: "gearshape", onPress };
 }
