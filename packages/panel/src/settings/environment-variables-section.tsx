@@ -8,6 +8,7 @@ import {
 import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   BUTTON_VARIANT,
   Button,
@@ -262,6 +263,7 @@ export function EnvironmentVariablesSection({
     <>
       <SettingsSection
         title="Variables"
+        anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_VARIABLES}
         action={
           manages ? (
             <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={add.ask}>
