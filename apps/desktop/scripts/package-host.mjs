@@ -81,5 +81,6 @@ pnpm(
   "--folder",
   host.release,
 );
+fs.mkdirSync(path.dirname(host.plist), { recursive: true });
 fs.writeFileSync(host.plist, launchAgentPlist());
 process.stdout.write(`Readied the host for the bundle: ${path.dirname(host.plist)}\n`);
