@@ -3,7 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vitest";
-import { VIDEO_PLAYER_PLACE, VideoPlayer } from "../../index.js";
+import { VIDEO_PLAYER_PLACE, VideoPlayer, type VideoPlayerPlace } from "../../index.js";
 
 /**
  * video-player.test.ts -- while focus is in a video's player, Space or K
@@ -14,7 +14,9 @@ import { VIDEO_PLAYER_PLACE, VideoPlayer } from "../../index.js";
  * around it, whose arrows may walk files; a button's own Space is left to
  * the button. Until its size is read it says it is loading, with no bar.
  * In the viewer it starts at
- * once, unless motion is held still. The browser's media element is
+ * once, unless motion is held still. A recording drawn again, as Expand
+ * draws it in the viewer, starts where it was left, and the player it was
+ * left in goes on from the viewer's place when played again. The browser's media element is
  * the boundary, so a stand-in plays, pauses, seeks, and opens Safari's own
  * player as one does, telling its events, and the player is read by what its
  * bar shows. Full screen, where the browser fills the screen with no element,
@@ -86,7 +88,11 @@ function standInMedia(video: HTMLVideoElement): () => number {
 }
 
 /** Draws a player inside a box that records every key reaching it, its video a stand-in. */
-function mountPlayer(onExpand?: () => void, dataUrl = WEBM_URL) {
+function mountPlayer(
+  onExpand?: () => void,
+  dataUrl = WEBM_URL,
+  place: VideoPlayerPlace = VIDEO_PLAYER_PLACE.INLINE,
+) {
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:recording");
   vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
   const reached: string[] = [];
@@ -103,7 +109,7 @@ function mountPlayer(onExpand?: () => void, dataUrl = WEBM_URL) {
         createElement(VideoPlayer, {
           dataUrl,
           label: "Inviting a member",
-          place: VIDEO_PLAYER_PLACE.INLINE,
+          place,
           onExpand,
         }),
       ),
@@ -235,6 +241,20 @@ test("Full screen opens the video in the browser's own player where the browser 
   const { video, pressButton } = mountPlayer();
   pressButton("Full screen");
   expect(Reflect.get(video, "webkitDisplayingFullscreen")).toBe(true);
+});
+
+test("a recording opened in the viewer starts where it was left, and its first player goes on from the viewer's place", () => {
+  // Note that the recording is one no other test plays, because where a recording was left outlives its player.
+  const kept = "data:video/webm;base64,GkXfo0KG";
+  const inline = mountPlayer(() => undefined, kept);
+  inline.press("ArrowRight");
+  inline.press("ArrowRight");
+  inline.pressButton("Expand");
+  const viewer = mountPlayer(undefined, kept, VIDEO_PLAYER_PLACE.VIEWER);
+  expect(viewer.playhead()).toBe(10);
+  viewer.press("ArrowRight");
+  inline.pressButton("Play");
+  expect(inline.playhead()).toBe(15);
 });
 
 /** Draws a player in the viewer, as the file viewer an Expand opens does, and answers its video. */
