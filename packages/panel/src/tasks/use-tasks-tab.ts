@@ -244,7 +244,7 @@ interface InboxViewControl {
   readonly single?: boolean;
   /** Says whether the Inbox shows one column. */
   readonly onSingle?: (single: boolean) => void;
-  /** The pages of the chosen item's task as they move, which the panel beside it opens; none until read, or for an item of an agent with no task. */
+  /** The pages of the chosen item's task as they move, which the panel beside it opens; none until read. */
   readonly pages: readonly PageLine[] | undefined;
   /** Tells the agents the Inbox read of the chosen item's task, whose Pull request tabs the panel beside it draws (`use-inbox-task-agents.ts`). */
   readonly onTaskAgents: (
@@ -255,16 +255,15 @@ interface InboxViewControl {
 }
 
 /**
- * One agent's page, standing in the task's place beside the sidebar as the
- * Inbox does: the agent a link names by itself, drawn as its tab would be. It is the router's
- * (`agent-route.ts`), as the Inbox is, so it leaves the task the host has
- * open as it stands; opening any task, the Inbox, or home leaves it.
+ * One agent's own address, standing in the task's place beside the sidebar
+ * as the Inbox does while it reads the agent, which it then opens on its task
+ * (`desktop-agent-page.tsx`). It is the router's (`agent-route.ts`), as the
+ * Inbox is, so it leaves the task the host has open as it stands; opening
+ * any task, the Inbox, or home leaves it.
  */
 interface AgentViewControl {
   /** The agent whose page stands, none while none does. */
   readonly agentId: string | undefined;
-  /** The pages that agent showed on itself, each by its newest version; none until read. */
-  readonly pages?: readonly PageLine[] | undefined;
   readonly onOpen: (agentId: string) => void;
   readonly onClose: () => void;
 }
@@ -411,8 +410,8 @@ export interface TasksControl {
   onShowMention: (mention: DescriptionMention) => void;
   /**
    * Opens the place an app link names, of the Plans tab's: a task, its
-   * section, version, page, call, or turn; an agent, on its task's tab or
-   * its own page; an Inbox item, in its task's Inbox tab, or the Inbox on one with no task; Automations, on one. A
+   * section, version, page, call, or turn; an agent, on its task's tab; an
+   * Inbox item, in its task's Inbox tab; Automations, on one. A
    * place of a workspace the account lists by the link's slug is shown in
    * it. Whoever cannot read the place is told so where it would stand, by
    * the place's own read, which is checked against them. The window moves
@@ -453,7 +452,7 @@ export interface TasksControl {
   inboxView: InboxViewControl;
   /** Says which agent's card in the column shows its threads in its transcript's place (`agent-threads.tsx`), none while it shows its transcript, so main is not told that transcript is on screen. */
   onThreadsShown: (agentId: string | undefined) => void;
-  /** One agent's page: which agent's stands in the task's place, if any, and its presses. */
+  /** One agent's own address: which agent's stands in the task's place, if any, and its presses. */
   agentView: AgentViewControl;
   /**
    * Opens `userId`'s page in `workspaceId`, the window listing it first where it lists another; in the listed workspace
@@ -474,7 +473,7 @@ export interface TasksControl {
   /** A Home or Board link whose first step names none of the reader's workspaces, which stands as not found (`desktop-shell.tsx`). */
   /** Opens a task's file in its side panel at the commit named, or its default branch's head where none is, the reference's lines lit, opening the task first where it is not the open one: what an inbox item's code opens. */
   onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) => void;
-  /** Opens a tab-shaped pin of the sidebar's: its holder, the task where it is not the open one or the agent's own page, and the tab in its column, an agent's in the task's own and any other in the side panel. */
+  /** Opens a tab-shaped pin of the sidebar's: its holder, the task where it is not the open one, and the tab in its column, an agent's in the task's own and any other in the side panel. */
   onOpenPinnedTab: (pin: SidebarPin) => void;
   /** Opens the tab closed latest again as it stood, on its task, opening the task first where it is not the open one; none while no closed tab is kept. */
   onReopenClosedTab: (() => void) | undefined;
@@ -623,7 +622,7 @@ const NO_PAGES: readonly PageLine[] = [];
 /** The account's workspaces before their first read lands, whose experiments are all off. */
 const NO_CHOOSING: readonly Workspace[] = [];
 
-/** What the Inbox's bare panel, and an agent's own page, hold of the plan's panel kinds: nothing, the task's page drawing what they show. */
+/** What the Inbox's bare panel holds of the plan's panel kinds: nothing, the task's page drawing what they show. */
 const NO_HOLDS: TaskHolds = {};
 
 /** No ids, the same array every render. */
@@ -1086,13 +1085,6 @@ export function useTasksTab(input: {
     pagesQuery(viewed.activeTaskId === undefined ? undefined : { taskId: viewed.activeTaskId }),
   ).data;
   const pages = useMemo(() => (taskPages ?? NO_PAGES).map((page) => page.id), [taskPages]);
-  // While an agent's page stands, the panel is that agent's: its workers', its Changes', and its
-  // Terminal's tabs, and nothing of the plan the host has open beneath it, which keeps its own.
-  const pageAgent = agentView?.agentId;
-  const pageAgents = useMemo(
-    () => (pageAgent === undefined ? undefined : [pageAgent]),
-    [pageAgent],
-  );
   // The Inbox lists the listed workspace's items alone, so a choice another workspace's list made gives way with it.
   const inboxChosen = listedInboxChoice(inboxView?.chosen, {
     tasks: tasks.tasks,
@@ -1108,28 +1100,14 @@ export function useTasksTab(input: {
       inboxView === undefined || inboxTask === undefined ? undefined : { taskId: inboxTask },
     ),
   ).data;
-  // An agent on no task shows its pages on itself, which its page's panel draws as a task's draws its own.
-  const agentPages = useQuery(
-    pagesQuery(
-      inboxView !== undefined || pageAgent === undefined ? undefined : { agentId: pageAgent },
-    ),
-  ).data;
-  const agentPageIds = useMemo(() => (agentPages ?? NO_PAGES).map((page) => page.id), [agentPages]);
   const inboxPageIds = useMemo(() => (inboxPages ?? NO_PAGES).map((page) => page.id), [inboxPages]);
   const inboxTaskAgents = useInboxTaskAgents(inboxView === undefined ? undefined : inboxTask);
-  // The cloud Browser tabs, which the panel draws by its holder: an agent's page its agent's,
-  // on a task or on none, and a task's own panel its agents', never the Inbox's.
+  // The cloud Browser tabs, which the panel draws by its holder: a task's own panel its agents', never the Inbox's.
   const activeTaskId = viewed.activeTaskId;
   const cloudPlace = useMemo(
     () =>
-      inboxView !== undefined
-        ? undefined
-        : pageAgent !== undefined
-          ? { agentId: pageAgent }
-          : activeTaskId === undefined
-            ? undefined
-            : { taskId: activeTaskId },
-    [inboxView, pageAgent, activeTaskId],
+      inboxView !== undefined || activeTaskId === undefined ? undefined : { taskId: activeTaskId },
+    [inboxView, activeTaskId],
   );
   const cloudListed = useCloudBrowserTabs(cloudPlace, cloudPlace !== undefined);
   // A draft of a tab in an agent's browser stands in the strip after the tabs the service lists.
@@ -1145,10 +1123,8 @@ export function useTasksTab(input: {
     [cloudPlace, cloudListed, cloudDrafts],
   );
   // Where the panel's file and page tabs opened here read, saved with each tab: the task the panel
-  // stands for and its repository, or, beside an agent on no task, the agent's pages and no files,
-  // whose opener names the workspace and repository it reads them through (`desktop-agent-page.tsx`).
-  const panelTaskId =
-    inboxView !== undefined ? inboxTask : pageAgents === undefined ? activeTaskId : undefined;
+  // stands for and its repository.
+  const panelTaskId = inboxView !== undefined ? inboxTask : activeTaskId;
   const panelRepository = tasks.tasks.find((task) => task.id === panelTaskId)?.repository ?? null;
   const panelFileReads = useMemo(
     () =>
@@ -1157,15 +1133,9 @@ export function useTasksTab(input: {
         : { place: { taskId: panelTaskId }, repository: panelRepository },
     [panelTaskId, panelRepository],
   );
-  const panelPagesAgent = inboxView !== undefined ? undefined : pageAgent;
   const panelPages = useMemo(
-    () =>
-      panelTaskId !== undefined
-        ? { taskId: panelTaskId }
-        : panelPagesAgent === undefined
-          ? undefined
-          : { agentId: panelPagesAgent },
-    [panelTaskId, panelPagesAgent],
+    () => (panelTaskId === undefined ? undefined : { taskId: panelTaskId }),
+    [panelTaskId],
   );
   // The agent the task's column shows, whose tabs alone its side panel draws (`ownerOf`).
   const columnAgent =
@@ -1199,24 +1169,22 @@ export function useTasksTab(input: {
           // An item of a task stands beside the strip of the agent that posted it, as that agent's column draws it.
           agent: inboxChosen === undefined ? undefined : choiceItemAgentOf(inboxChosen),
         }
-      : pageAgents === undefined
-        ? {
-            id: viewed.activeTaskId,
-            holds: NO_HOLDS,
-            files: panelFileReads,
-            pages: panelPages,
-            agent: columnAgent,
-          }
-        : { id: pageAgent, holds: NO_HOLDS, pages: panelPages },
-    inboxView !== undefined ? NO_IDS : (pageAgents ?? mainTabs.openAgents),
+      : {
+          id: viewed.activeTaskId,
+          holds: NO_HOLDS,
+          files: panelFileReads,
+          pages: panelPages,
+          agent: columnAgent,
+        },
+    inboxView !== undefined ? NO_IDS : mainTabs.openAgents,
     NO_IDS,
-    inboxView !== undefined ? inboxPageIds : pageAgents === undefined ? pages : agentPageIds,
+    inboxView !== undefined ? inboxPageIds : pages,
     // Note that the task's agents in the Inbox are its own read's (`desktop-inbox.tsx`), which the panel draws a Pull request tab by (`use-inbox-task-agents.ts`).
-    inboxView !== undefined ? inboxTaskAgents.agentIds : (pageAgents ?? agents.agentIds),
+    inboxView !== undefined ? inboxTaskAgents.agentIds : agents.agentIds,
     input.room,
     cloudBrowsers,
     // Every agent of the task, an archived one among them, whose Pull request tab stands as a live agent's does.
-    inboxView !== undefined ? inboxTaskAgents.heldIds : (pageAgents ?? agents.heldIds),
+    inboxView !== undefined ? inboxTaskAgents.heldIds : agents.heldIds,
     cloudBrowserAgents,
   );
   const { keys: tabKeys, onKeys, onKeysTaken } = useColumnKeys();
@@ -1329,8 +1297,7 @@ export function useTasksTab(input: {
   }, [draftInView, blankDraft, columnSettled]);
   // The agent whose card in the column shows its threads rather than its transcript, as the task's page says.
   const [threadsShown, setThreadsShown] = useState<string | undefined>(undefined);
-  // An agent's page stands in the task's place, showing its agent as its tab would.
-  // An agent's transcript beside the Inbox shows its agent the same way, while the panel stands open on it.
+  // An agent's transcript beside the Inbox shows its agent as its tab would, while the panel stands open on it.
   const inboxTranscript =
     stateShown &&
     fixture === undefined &&
@@ -2297,25 +2264,22 @@ export function useTasksTab(input: {
   };
 
   // An agent's place opened by the agent as the list or the service has it: on its task, an archived agent's tab among its tabs.
-  // Note that an agent read on no task, which no service writes any more, stands on its own page, as an agent not read does.
-  const openFoundAgent = (agent: AgentSummary, place: AgentPlace, home?: string) => {
-    if (agent.planId === null) linkArrive(() => openAgentPage(place.agentId, home), NOTHING);
-    else openOnTask(agent.planId, place);
-  };
+  const openFoundAgent = (agent: AgentSummary, place: AgentPlace) =>
+    openOnTask(agent.planId, place);
 
   /**
-   * An agent's place opened on its task where it has one, else on its page.
+   * An agent's place opened on its task, or through its own address, which says it is not found, where it is not read.
    * Note that a link names the task only where it was written under it, so
    * one naming none finds the task by the agent: at once where the agent is
    * the open task's or one the list followed live carries, else by reading
    * the agent, which opens nothing where the window moved on before it
    * answered.
    */
-  // A page an agent showed on itself, by the agent's id, opened on the agent's task as the list or the service has it;
-  // on the agent's own page where neither reads it on one.
+  // A page an older link names under the agent that showed it, opened on the agent's task as the list or the service has it;
+  // through the agent's own address, which says it is not found, where neither reads it.
   const openAgentsPage = (agentId: string, pageId: string, home: string) => {
     const onAgent = (agent: AgentSummary | undefined) => {
-      if (agent === undefined || agent.planId === null) {
+      if (agent === undefined) {
         linkArrive(() => openAgentPage(agentId, home), NOTHING);
         return;
       }
@@ -2343,7 +2307,7 @@ export function useTasksTab(input: {
     if (place.planId !== undefined) openOnTask(place.planId, place);
     else if (open !== undefined && agents.agentIds?.includes(place.agentId))
       openOnTask(open, place);
-    else if (listed !== undefined) openFoundAgent(listed, place, home);
+    else if (listed !== undefined) openFoundAgent(listed, place);
     else {
       const current = linkRead();
       const opening = keepLinkLanded();
@@ -2352,7 +2316,7 @@ export function useTasksTab(input: {
         // Note that an agent not read may yet be on a task, so its page stands alone, its own read saying whether it is there, and no tab of a panel it may not hold opens.
         opening(() => {
           if (agent === undefined) linkArrive(() => openAgentPage(place.agentId, home), NOTHING);
-          else openFoundAgent(agent, place, home);
+          else openFoundAgent(agent, place);
         });
       });
     }
@@ -2537,7 +2501,7 @@ export function useTasksTab(input: {
    * A link place opened as its route reads it (`places/link-places.ts`): a
    * comment thread or a section opens its task's Overview, asking its page
    * to bring the thread or the section into view, and a page opens the side
-   * panel on its tab, on its task or on the page of its agent on no task.
+   * panel on its tab, on its task, or on its agent's task for an older link naming the agent.
    * Each is the description's but a page, so while descriptions are off a
    * link to one opens the task's agents. A routed place's own page opens
    * through the door that place has: the task's tabs, its version history,
@@ -2804,9 +2768,7 @@ export function useTasksTab(input: {
   const standsOpen = (closed: ClosedTab): boolean =>
     closed.strip === CLOSED_TAB_STRIP.COLUMN
       ? mainTabs.tabs.some((each) => sameTab(each, closed.tab))
-      : inboxView === undefined &&
-        pageAgents === undefined &&
-        sidePanel.strip.some((each) => sameTab(each, closed.tab));
+      : inboxView === undefined && sidePanel.strip.some((each) => sameTab(each, closed.tab));
   const drawsAgain = (closed: ClosedTab): boolean =>
     !standsOpen(closed) &&
     stripTabDrawsAgain(closed.tab, {
@@ -2868,7 +2830,7 @@ export function useTasksTab(input: {
                 (awakeAgents.includes(tab.agent) || input.unseenAgents.includes(tab.agent))),
           },
     panel:
-      inboxView !== undefined || pageAgents !== undefined
+      inboxView !== undefined
         ? undefined
         : {
             tabs: sidePanel.strip,
@@ -2953,7 +2915,6 @@ export function useTasksTab(input: {
     if (
       sidePanel.open ||
       sidePanel.strip.length > 0 ||
-      pageAgents !== undefined ||
       inboxView !== undefined ||
       task === undefined
     ) {
@@ -3110,7 +3071,6 @@ export function useTasksTab(input: {
     // An agent's page stands over the task's place as the Inbox does, so a version history there gives way.
     agentView: {
       agentId: agentView?.agentId,
-      pages: agentPages,
       // An agent's page is only the router's move there, which asks as it goes while a page holds unsaved work.
       onOpen: (agentId: string) => openAgentPage(agentId),
       // Note that its close is its route's move to the place the window's state says, which the router's blocker holds.

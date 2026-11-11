@@ -7,9 +7,6 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { INBOX_MESSAGE_AUTHOR, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { pageFrameUrl } from "@repo/features/page-frame";
-import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -54,7 +51,6 @@ import {
   ROW_TITLE,
   readTitle,
   rowNamed,
-  saying,
   settle,
   showScope,
   standKeymap,
@@ -63,7 +59,6 @@ import {
   wayBack,
   world,
 } from "../testing/desktop-inbox.js";
-import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { tasksControl } from "../testing/tasks-control.js";
 
@@ -312,67 +307,6 @@ test("a chosen item whose plan leaves the account's list, deleted on another Mac
   assert.equal(
     page.querySelector(".inbox-view-items")?.textContent,
     "Choose an item, or step with J K",
-  );
-});
-
-test("a link alone on its line to a page an agent showed on itself, as an older link names it, stands as the page's row, hanging the card a plan's page hangs, its title, version and the agent that showed it, read as it is first hung; one of an agent the reader cannot reach says it can't be read", async () => {
-  const ledger: PageLine = {
-    id: "4a5b6c7d-8e9f-4a0b-8c1d-2e3f4a5b6c7d",
-    title: "Flake ledger",
-    version: 3,
-    at: 1_000,
-    shownBy: { kind: PAGE_SHOWER.AGENT, agentId: AGENT.id },
-  };
-  const unreachable = "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d";
-  world.agentPages = new Map([[AGENT.id, [ledger]]]);
-  const shown = linkOf(
-    { kind: LINK_DESTINATION.PAGE, agentId: AGENT.id, pageId: ledger.id },
-    "acme",
-  );
-  const hidden = linkOf(
-    { kind: LINK_DESTINATION.PAGE, agentId: unreachable, pageId: ledger.id },
-    "acme",
-  );
-  const words = [shown, `[@Their ledger](${hidden})`].join("\n\n");
-  world.inboxes.set(BILLING.id, [saying(THRESHOLD, words), RETRY]);
-  const { page } = mount();
-  await settle();
-  act(() => rowNamed(page, THRESHOLD.title).click());
-  await settle();
-
-  const rows = [...page.querySelectorAll('[data-inbox-message-text] [data-lone-link="page"]')];
-  assert.equal(rows.length, 2, "each link alone on its line stands as a page's row");
-  const [mine, theirs] = rows.map((row) => row.querySelector("button.ui-list-row-main"));
-  assert.ok(mine && theirs);
-  restOn(mine);
-  await settle();
-  const card = document.querySelector(".ui-tooltip-card [data-page-card]");
-  assert.ok(card, "the agent's page hangs the page's own card");
-  assert.equal(card.querySelector(".ui-hover-card-name")?.textContent, "Flake ledger");
-  assert.deepEqual(
-    [
-      card.querySelector(".ui-hover-card-sub")?.textContent,
-      card.querySelector(".ui-hover-card-row")?.textContent,
-    ],
-    ["Version 3", `Shown by ${AGENT.title}`],
-  );
-  assert.equal(
-    card.querySelector(".ui-page-thumb-frame")?.getAttribute("src"),
-    pageFrameUrl({ agentId: AGENT.id, pageId: ledger.id, version: 3 }),
-  );
-  act(() => {
-    mine.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
-  });
-
-  restOn(theirs);
-  await settle();
-  const refused = document.querySelector(".ui-tooltip-card [data-page-card]");
-  assert.deepEqual(
-    [
-      refused?.querySelector(".ui-hover-card-name")?.textContent,
-      refused?.querySelector(".ui-hover-card-note")?.textContent,
-    ],
-    ["Their ledger", "Can't read this page."],
   );
 });
 

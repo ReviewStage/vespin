@@ -39,7 +39,7 @@ import { useOpenPlace } from "./use-open-link.js";
  * page's shape, in a quiet ground, so the card is placed once at its size.
  */
 
-/** A page with an id and a version, on the plan it is of, or the agent on no task. */
+/** A page with an id and a version, on the task it is of. */
 interface CardPage {
   readonly place: PagePlace;
   readonly page: PageLine;

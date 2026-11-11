@@ -915,8 +915,8 @@ export function holdPages(
     [TASKS_ACT_KIND.TASKS_PAGES_FOLLOW]: (place) => {
       asked.push(place);
       const read = pagesOf(place);
-      const kind = "taskId" in place ? PAGE_OWNER.TASK : PAGE_OWNER.AGENT;
-      const id = "taskId" in place ? place.taskId : place.agentId;
+      const kind = PAGE_OWNER.TASK;
+      const id = place.taskId;
       // Note that the host pushes what it read once the hold is taken, never inside it.
       if (read !== undefined && held[kind][id] === undefined) {
         held = { ...held, [kind]: { ...held[kind], [id]: read } };

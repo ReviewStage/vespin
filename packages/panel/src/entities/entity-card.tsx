@@ -54,7 +54,7 @@ export interface EntityCardAt {
   readonly name: string;
   /** The slug of the workspace the link was written under. */
   readonly workspace: string;
-  /** The workspace the words are of, by its id, which an agent on no task is read in. */
+  /** The workspace the words are of, by its id. */
   readonly wordsWorkspaceId: string | undefined;
   /** The repository the place names, `owner/name`, which a file is read in. */
   readonly repository: string | undefined;
@@ -124,14 +124,18 @@ const ENTITY_CARD: EntityCards = {
     <VersionChipCard taskId={version.planId} revision={version.revision} fallback={at.own} />
   ),
   [ENTITY_KIND.COMMENT]: OWN_CARD,
-  [ENTITY_KIND.PAGE]: (page, at) => (
-    <PageChipCard
-      place={"taskId" in page ? { taskId: page.taskId } : { agentId: page.agentId }}
-      pageId={page.pageId}
-      reading={reading(at)}
-      fallback={<UnreadPageCard glyph={at.glyph} name={at.name} />}
-    />
-  ),
+  // Note that an older link's page an agent showed on itself names no task to read it through, so it hangs the card of a page not read.
+  [ENTITY_KIND.PAGE]: (page, at) =>
+    "taskId" in page ? (
+      <PageChipCard
+        place={{ taskId: page.taskId }}
+        pageId={page.pageId}
+        reading={reading(at)}
+        fallback={<UnreadPageCard glyph={at.glyph} name={at.name} />}
+      />
+    ) : (
+      <UnreadPageCard glyph={at.glyph} name={at.name} />
+    ),
   [ENTITY_KIND.AGENT]: (agent, at) => (
     <MentionedAgentCard agentId={agent.agentId} reading={reading(at)} fallback={at.own} />
   ),

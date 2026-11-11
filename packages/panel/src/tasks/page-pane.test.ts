@@ -58,7 +58,7 @@ import { PagePane } from "./page-pane.js";
  */
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
-const AGENT = "0c4e2b1d-9f3a-4e6b-8d7c-1a2b3c4d5e6f";
+const _AGENT = "0c4e2b1d-9f3a-4e6b-8d7c-1a2b3c4d5e6f";
 
 const FUNNEL: PageLine = {
   id: "5d1c3f9a-7e2b-4c8d-9f10-2a3b4c5d6e7f",
@@ -279,10 +279,7 @@ test("over the source, View settings offers the settings its lines follow, and t
   assert.deepEqual(handed(), [["Open in browser"], ["Copy source"], ["Reload page"]]);
 });
 
-test.each([
-  { holder: "a task's page", place: { taskId: TASK }, path: `task/${TASK}` },
-  { holder: "a page of an agent on no task", place: { agentId: AGENT }, path: `agent/${AGENT}` },
-])(
+test.each([{ holder: "a task's page", place: { taskId: TASK }, path: `task/${TASK}` }])(
   "Open in browser on $holder opens its own Vespin link, flagged to stay on the web, never the address it is framed from",
   ({ place, path }) => {
     const opened: string[] = [];

@@ -5,7 +5,7 @@
  * agent's page, which its step does not stand at: a section and a comment
  * thread open the task's Overview, a page opens the side panel on it, and an
  * agent's place opens its tab in the column, or its tab of the side panel,
- * on its task, or on the agent's own page where it is on none.
+ * on its task.
  * Its route is where its params are read (`panel-router.tsx`), so a link is
  * opened by matching it on the route tree, whichever door hands it: a press
  * in the window, the desktop's `SHOW_LINK`, or a page loaded at its address.
@@ -169,7 +169,7 @@ export const LINK_ROUTED_PLACE = {
       "/places/$workspace/task/$taskId/page/$pageId",
       "/places/$workspace/agent/$agentId/page/$pageId",
     ],
-    // A page of an agent on no task is its page's, under the agent its address names.
+    // A page an older link names under the agent that showed it opens on the agent's task, once read.
     read: ({ params }) => {
       const { taskId, agentId, pageId } = params;
       if (pageId === undefined) return undefined;
@@ -445,8 +445,8 @@ export function opensAtItsRoute(link: ReadLink): boolean {
 /**
  * What a link to `place` opens on the Tasks tab, by its declaration: where
  * the place is of the task the tab shows (`standingTask`), with nothing over
- * its plan, its declaration's answer, a page of an agent on no task being no
- * task's; anywhere else the window goes there.
+ * its plan, its declaration's answer, a page an older link names under its
+ * agent being no task's; anywhere else the window goes there.
  */
 export function onTasksTab(
   place: LinkDestination,
