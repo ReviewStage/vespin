@@ -10,7 +10,9 @@
  * transcript draws it as one, and the line after a quote is never pulled
  * into it. Read back, as a draft or a message that did not go comes back
  * into the box, a run of quoted lines with a blank line or the message's
- * edge on each side is a quote again; any other line is the words it is.
+ * edge on each side is a quote again, but inside a fenced block, whose
+ * lines are its code as written (`fenceAfter`); any other line is the
+ * words it is.
  * The picked words are kept as the selection read them, but for the blank
  * lines around them and runs of them inside, whole: only the message's own
  * bound cuts a quote, where the box has no room left for all of it
@@ -101,18 +103,23 @@ function quoteEnd(lines: readonly string[], at: number): number | undefined {
 /**
  * A message read as its blocks: each quote, the blank lines that only part
  * it from its neighbors left out, and the developer's lines between, as
- * they stand. Words with no quote are one block of their lines, and no
- * words at all are one empty line.
+ * they stand, a fenced block's among them whole, a `>` line in it included.
+ * Words with no quote are one block of their lines, and no words at all are
+ * one empty line.
  */
 export function messageBlocks(text: string): readonly MessageBlock[] {
   const lines = text.split(NEWLINE);
   const blocks: MessageBlock[] = [];
   let words: string[] = [];
+  let fence: string | undefined;
   let at = 0;
   while (at < lines.length) {
-    const end = quoteEnd(lines, at);
+    // Note that a quote's own lines all open with `>`, so none opens or closes a fence, and only the developer's lines move it.
+    const end = fence === undefined ? quoteEnd(lines, at) : undefined;
     if (end === undefined) {
-      words.push(lines[at] ?? "");
+      const line = lines[at] ?? "";
+      fence = fenceAfter(fence, line);
+      words.push(line);
       at += 1;
       continue;
     }
