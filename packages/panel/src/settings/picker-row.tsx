@@ -66,7 +66,7 @@ interface PickerProps {
   /** Whether its menu's words are the app's own, which a screen recording shows as they read, but for a row that is `replayMasked` (`SearchableMenu`'s `replayUnmasked`). */
   replayUnmasked?: boolean | undefined;
   rows: readonly MenuRow[];
-  /** Rows pinned under the list that act rather than pick, such as a sound's Upload; the menu closes as one is pressed. */
+  /** Rows pinned under the list that act rather than pick, such as a sound's Upload; the menu closes as one is pressed, as it does on a row's act. */
   foot?: readonly FootRow[] | undefined;
   /** Present, the menu opens on a search over the rows; absent, the list is short enough to read whole. */
   placeholder?: string | undefined;
@@ -194,7 +194,6 @@ export function Picker({
           id={menuId}
           label={label}
           placeholder={placeholder}
-          rows={rows}
           value={value}
           note={note}
           noMatch={noMatch}
@@ -202,6 +201,21 @@ export function Picker({
           width={menuWidth}
           replayUnmasked={replayUnmasked}
           onSearch={onSearch}
+          // Note that a row's act closes the menu as a pinned row's press does, since each hands on to a dialog.
+          rows={rows.map((listed) =>
+            listed.actions === undefined
+              ? listed
+              : {
+                  ...listed,
+                  actions: {
+                    ...listed.actions,
+                    onPick: (id) => {
+                      close();
+                      listed.actions?.onPick(id);
+                    },
+                  },
+                },
+          )}
           foot={foot?.map((pinned) => {
             const press = pinned.onPress;
             return press === undefined

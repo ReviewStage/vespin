@@ -8,7 +8,7 @@ import {
   settingFromOption,
   settingRowsForPage,
 } from "@repo/settings";
-import type { FootRow } from "@repo/ui";
+import type { FootRow, RowActions } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { APP_SETTING_KIND, APP_TOGGLE_VALUE } from "@repo/wire/app-settings";
 import { useSettingRowWrite } from "./row-write.js";
@@ -24,8 +24,12 @@ import { SwitchRow } from "./switch-row.js";
 export interface OwnOptions {
   /** The schema's option every own option stores; listed itself only while it is stored and no own option is chosen. */
   readonly token: string;
-  /** Each own option by its value and words, which are a person's own and kept masked in a screen recording. */
-  readonly options: readonly { readonly value: string; readonly label: string }[];
+  /** Each own option by its value and words, which are a person's own and kept masked in a screen recording, and the acts its ⋯ opens. */
+  readonly options: readonly {
+    readonly value: string;
+    readonly label: string;
+    readonly actions?: RowActions | undefined;
+  }[];
   readonly chosen: string | undefined;
   readonly pick: (value: string) => void;
 }

@@ -64,9 +64,8 @@ import type { ChoiceMenu } from "./schema-rows.js";
  * your-sounds.tsx -- the sounds the account keeps of its own, in Settings' Notifications: listed first in each sound's pop-up, added from it or from the + beside Play under a name the member gives, and listed apart to play, rename, or remove.
  *
  * Each of the account's two sounds lists its own sounds by name under
- * Yours, then Simple and Playful, and pins Add a sound… at its menu's foot,
- * with Rename this sound… and Remove this sound… while it plays one of them;
- * the + beside Play adds one too, so adding never hides in the menu. A
+ * Yours, each with a ⋯ that renames or removes it, then Simple and Playful,
+ * and pins Add a sound… at its menu's foot; the + beside Play adds one too, so adding never hides in the menu. A
  * picked file is read on this machine first (`sound-clip.ts`'s
  * `clipOfFile`) and refused under its row in a sentence naming the file;
  * a file it reads asks for the sound's name, its own name offered to
@@ -86,8 +85,7 @@ const SOUND_WORDS = {
   READING: "Loading",
   RENAME: "Rename…",
   REMOVE: "Remove…",
-  RENAME_THIS: "Rename this sound…",
-  REMOVE_THIS: "Remove this sound…",
+  THING: "Sound",
   NAME_LABEL: "Name",
   NAME_TITLE: "Name this sound",
   RENAME_TITLE: "Rename sound",
@@ -101,6 +99,18 @@ const SOUND_WORDS = {
   NOT_ADDED: "Your sound could not be added.",
   NOT_REMOVED: "Your sound could not be removed.",
 } as const;
+
+/** What a sound of the account's own offers from its ⋯ in a sound's menu. */
+const SOUND_ACT = {
+  RENAME: "rename",
+  REMOVE: "remove",
+} as const;
+
+/** Those acts as the rows its ⋯ opens. */
+const SOUND_ACTS = [
+  { id: SOUND_ACT.RENAME, label: SOUND_WORDS.RENAME, icon: <GLYPH.RENAME /> },
+  { id: SOUND_ACT.REMOVE, label: SOUND_WORDS.REMOVE, icon: <TrashIcon /> },
+] as const;
 
 /** The setting each of the account's two sounds is stored as. */
 const FIELD_OF_SLOT = {
@@ -126,7 +136,7 @@ type Naming =
   | { readonly slot: SoundClipSlot; readonly read: Extract<ClipRead, { clip: string }> }
   | { readonly sound: Sound };
 
-/** What a sound of the account's own is renamed and removed by, from its row's menu or the list. */
+/** What a sound of the account's own is renamed and removed by, from its ⋯ in a sound's menu or in the list. */
 interface SoundManage {
   readonly rename: (sound: Sound) => void;
   readonly remove: (sound: Sound) => void;
@@ -155,7 +165,6 @@ function useSlot(
   const write = useSettingRowWrite(field, (value: string) => settingFromOption(field, value, view));
   const { mutate: sendChoice } = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
-  const playing = stored ? chosenSound(sounds, slot) : undefined;
   const chosen = chosenSound(sounds, slot)?.id;
   const choose = (id: string) => {
     sendChoice({ slot, id });
@@ -166,30 +175,21 @@ function useSlot(
       section: sectionOf,
       own: {
         token,
-        options: (sounds?.list ?? []).map((sound) => ({ value: sound.id, label: sound.name })),
+        // Note that each sound's ⋯ renames or removes it in place, beside its name, before the check of the one playing.
+        options: (sounds?.list ?? []).map((sound) => ({
+          value: sound.id,
+          label: sound.name,
+          actions: {
+            thing: SOUND_WORDS.THING,
+            rows: SOUND_ACTS,
+            onPick: (act: string) =>
+              act === SOUND_ACT.RENAME ? manage.rename(sound) : manage.remove(sound),
+          },
+        })),
         chosen,
         pick: choose,
       },
-      // Note that the sound this row plays is renamed and removed from its own menu, so its acts are never only in a list further down.
-      foot: [
-        { id: "add", label: SOUND_WORDS.ADD, icon: <PlusIcon />, onPress: () => add(slot) },
-        ...(playing === undefined
-          ? []
-          : [
-              {
-                id: "rename",
-                label: SOUND_WORDS.RENAME_THIS,
-                icon: <GLYPH.RENAME />,
-                onPress: () => manage.rename(playing),
-              },
-              {
-                id: "remove",
-                label: SOUND_WORDS.REMOVE_THIS,
-                icon: <TrashIcon />,
-                onPress: () => manage.remove(playing),
-              },
-            ]),
-      ],
+      foot: [{ id: "add", label: SOUND_WORDS.ADD, icon: <PlusIcon />, onPress: () => add(slot) }],
       // Note that a refusal names the picked file; the row masks its error for session replay.
       error: refusedShown(refusal, FAILURE_SURFACE.SOUND_CLIP_WRITE),
     },

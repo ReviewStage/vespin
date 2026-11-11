@@ -238,6 +238,22 @@ test("Slack notifications stand under Notifications only once a workspace has th
 });
 
 /** The words the menu `chip` opens holds, its picks and its pinned presses alike. */
+/** The words of the acts the ⋯ of the account's own sound opens in the `chip` pop-up. */
+function actsOf(page: HTMLElement, chip: string): string {
+  const opener =
+    page.querySelector<HTMLButtonElement>(`button[aria-label="${chip}"]`) ??
+    assert.fail(`the ${chip} pop-up is drawn`);
+  act(() => opener.click());
+  const menu = document.getElementById(opener.getAttribute("aria-controls") ?? "");
+  const more =
+    menu?.querySelector<HTMLButtonElement>('[role="option"] button[aria-label="Sound actions"]') ??
+    assert.fail("a sound of the account's own draws its ⋯");
+  act(() => more.click());
+  const words = menu?.querySelector('[aria-label="Sound actions"][role="listbox"]')?.textContent;
+  act(() => opener.click());
+  return words ?? assert.fail("its acts open");
+}
+
 function menuOf(page: HTMLElement, chip: string): string {
   const opener =
     page.querySelector<HTMLButtonElement>(`button[aria-label="${chip}"]`) ??
@@ -272,11 +288,10 @@ test("each sound lists the account's own sounds by name, the one it plays chosen
   );
 
   // The finish plays the account's own Glass, so its pop-up names it.
-  const finish = await vi.waitFor(() => menuOf(page, "When an agent finishes: Glass"));
-  assert.ok(finish.includes("Rename this sound…") && finish.includes("Remove this sound…"));
+  await vi.waitFor(() => menuOf(page, "When an agent finishes: Glass"));
   const ask = menuOf(page, "When something needs you: Knock");
   assert.ok(ask.includes("Glass"), "either sound may pick any of the account's own");
   assert.ok(ask.includes("Add a sound…"));
-  assert.ok(!ask.includes("Remove this sound…"), "a sound playing a recipe manages none");
+  assert.equal(actsOf(page, "When an agent finishes: Glass"), "Rename…Remove…");
   assert.ok(page.textContent?.includes("Your sounds"));
 });

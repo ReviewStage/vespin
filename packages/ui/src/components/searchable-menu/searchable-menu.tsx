@@ -32,6 +32,7 @@ import { MenuReplayUnmasked } from "../menu/menu-replay.js";
 import { inNarrowRoom, MenuSheetFrame, type SheetBack } from "../menu/menu-sheet.js";
 import { MENU_SURFACE_INSET, MenuSurface } from "../menu/menu-surface.js";
 import { useSubmenuAim } from "../menu/submenu-aim.js";
+import { moreLabel } from "../more-button/more-button.js";
 import { SEARCH_FIELD_LOOK, SearchField } from "../search-field/search-field.js";
 import { SearchMatch } from "../search-match/search-match.js";
 import { Shortcut } from "../shortcut/shortcut.js";
@@ -62,6 +63,10 @@ import { RowHint, RowHintOptions, Tooltip } from "../tooltip/hint.js";
  * tab, and where it opens), anchored to the row and turned to the other
  * side where the window leaves no room; a search matches a listed row by
  * its submenu's rows as well. Focus
+ * A listed row may also carry acts on its own thing (`actions`), Rename
+ * and Remove on a sound a member added, which its ⋯ opens beside it as a
+ * submenu, shown as the row is highlighted, before its check; a press on
+ * the row still picks it, and the pointer resting on it opens nothing. Focus
  * stays in the field the whole time: the arrows move one highlight
  * through the rows that match and on through the pinned rows, past any
  * that cannot be picked now, which are dimmed and say why, Enter picks
@@ -182,6 +187,8 @@ export interface MenuRow {
   searchOnly?: boolean | undefined;
   /** Rows the row opens beside itself rather than being picked, as a pinned row's submenu: where a new Browser tab opens. */
   submenu?: Submenu | undefined;
+  /** Acts on the row's own thing, which its ⋯ (and Right) opens beside it while a press on the row still picks it: a sound's Rename and Remove. */
+  actions?: RowActions | undefined;
   /** The card hung beside the row while the pointer rests on it, as ⌘K hangs an agent's: an agent's own card. */
   card?: React.ReactNode;
   /** Marks at the row's end, after its shortcut, as ⌘K's rows end: a teammate's face, a failed agent's mark. */
@@ -210,6 +217,30 @@ interface Submenu {
   note?: string | undefined;
   /** Whether a pick in it leaves the menu standing, as a choice that changes what the list holds does; in a sheet the list comes back in its place. */
   stays?: boolean | undefined;
+}
+
+/** The acts on a listed row's own thing, opened beside it as a submenu whose rows are presses, not choices. */
+export interface RowActions {
+  /** What the row is, as a sentence opens with it: "Sound" names its ⋯ and the acts "Sound actions". */
+  thing: string;
+  rows: readonly MenuRow[];
+  onPick: (id: string) => void;
+}
+
+/** A row's acts as the submenu they stand in, with nothing chosen. */
+function actionsSubmenu(actions: RowActions): Submenu {
+  return {
+    label: moreLabel(actions.thing),
+    rows: actions.rows,
+    value: undefined,
+    onPick: actions.onPick,
+  };
+}
+
+/** What a listed row opens beside itself: its submenu, or its acts. */
+function besideOf(row: MenuRow | undefined): Submenu | undefined {
+  if (row?.submenu !== undefined) return row.submenu;
+  return row?.actions === undefined ? undefined : actionsSubmenu(row.actions);
 }
 
 /** A row pinned under the list: a press of its own, a switch, or a submenu beside it. */
@@ -485,11 +516,12 @@ function optionGroups(
   checked: ReadonlySet<string> | undefined,
   query: string,
   unmasked: boolean,
+  more: { expanded: number | undefined; onPress: (index: number) => void },
 ): ComboboxGroup[] {
   return sectionsOf(rows).map((section) => ({
     label: section.heading,
     replayUnmasked: unmasked,
-    options: section.rows.map(({ row }) => ({
+    options: section.rows.map(({ row, index }) => ({
       id: row.id,
       label: rowWords(row, unmasked, markedLabel(row, query)),
       words: row.label,
@@ -508,6 +540,14 @@ function optionGroups(
           ? undefined
           : row.id === value || checked?.has(row.id) === true,
       card: row.card,
+      more:
+        row.actions === undefined
+          ? undefined
+          : {
+              thing: row.actions.thing,
+              expanded: more.expanded === index,
+              onPress: () => more.onPress(index),
+            },
     })),
   }));
 }
@@ -781,7 +821,7 @@ export function SearchableMenu(
     blocked,
   });
   const footAt = at - matches.length;
-  const branch = footAt >= 0 ? foot[footAt]?.submenu : matches[at]?.submenu;
+  const branch = footAt >= 0 ? foot[footAt]?.submenu : besideOf(matches[at]);
   // The submenu open beside the highlighted row, listed or pinned, and the highlight inside it.
   const [submenu, setSubmenu] = useState<{ moved: number | undefined } | undefined>(undefined);
   const [place, setPlace] = useState<SubmenuPlace>(SUBMENU_FIRST_PLACE);
@@ -802,7 +842,9 @@ export function SearchableMenu(
   const paged =
     page === undefined
       ? undefined
-      : (page.pinned ? foot : rows).find((row) => row.id === page.id)?.submenu;
+      : page.pinned
+        ? foot.find((row) => row.id === page.id)?.submenu
+        : besideOf(rows.find((row) => row.id === page.id));
   const open = sheet ? paged : branch !== undefined && submenu !== undefined ? branch : undefined;
   const subChosen = open?.rows.findIndex((row) => row.id === open.value) ?? -1;
   const subAt = highlightOver({
@@ -912,6 +954,12 @@ export function SearchableMenu(
     if (row.submenu === undefined) return onPick(row.id);
     setHighlight(index);
     openSubmenu(index);
+  };
+  /** A listed row's ⋯ pressed: its acts opened beside it, or closed where they already stand. */
+  const pressMore = (index: number) => {
+    setHighlight(index);
+    if (openAt === index) closeSubmenu();
+    else openSubmenu(index);
   };
   const pressFoot = (row: FootRow, index: number) => {
     if (row.disabled !== undefined) return;
@@ -1106,7 +1154,10 @@ export function SearchableMenu(
       ref={list}
       id={listId}
       label={props.label}
-      groups={optionGroups(matches, value, props.checked, answered ? "" : query, unmasked)}
+      groups={optionGroups(matches, value, props.checked, answered ? "" : query, unmasked, {
+        expanded: listedAt,
+        onPress: pressMore,
+      })}
       active={at}
       onActiveChange={(index) => aim(() => hoverRow(index))}
       onChoose={(index) => {

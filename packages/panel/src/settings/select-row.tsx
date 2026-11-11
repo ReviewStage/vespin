@@ -1,5 +1,5 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { ChipWidth, FootRow, SettingsRowDensity } from "@repo/ui";
+import type { ChipWidth, FootRow, RowActions, SettingsRowDensity } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { refusalShown } from "../failure-report.js";
 import { PickerRow } from "./picker-row.js";
@@ -52,6 +52,8 @@ export function SelectRow<Value extends string | number>({
     section?: string | undefined;
     /** Whether its words are a person's own, as a sound they named, kept masked in a screen recording. */
     masked?: boolean | undefined;
+    /** Acts on the option's own thing, which its ⋯ opens in the menu, as a sound's Rename and Remove. */
+    actions?: RowActions | undefined;
   }[];
   parse: (raw: string) => Value | undefined;
   /** The empty search field's words, for a set long enough that its menu searches; none reads it whole. */
@@ -101,6 +103,7 @@ export function SelectRow<Value extends string | number>({
         disabled: option.disabled,
         section: option.section,
         replayMasked: option.masked,
+        actions: option.actions,
       }))}
       foot={foot}
       placeholder={placeholder}
