@@ -2,7 +2,8 @@ import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import { Fragment, type Node as PmNode, Slice } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
-import type { PictureNode, PictureTaken, DescriptionEditorPictures } from "./contract.js";
+import { imageFiles } from "../picture-files.js";
+import type { DescriptionEditorPictures, PictureNode, PictureTaken } from "./contract.js";
 
 /**
  * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
@@ -58,11 +59,6 @@ function uploadName(): string {
 function altOf(file: File): string {
   const stem = file.name.replace(/\.[^.]*$/u, "").trim();
   return stem === "" || stem === "image" ? PASTED_ALT : stem;
-}
-
-/** The image files among a paste's or a drop's, in their order. */
-function imageFiles(list: FileList | null | undefined): File[] {
-  return [...(list ?? [])].filter((file) => file.type.startsWith("image/"));
 }
 
 /**

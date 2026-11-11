@@ -628,6 +628,15 @@ export const MAC_RESOURCES_ACT_KIND = {
 } as const;
 
 /**
+ * A photo Chromium cannot decode, HEIC off an iPhone, written again as a
+ * JPEG by the desktop's main with macOS's own `sips` (`mac-photos.ts`),
+ * which a panel asks before it decodes a picked or pasted HEIC.
+ */
+export const MAC_PHOTO_ACT_KIND = {
+  MAC_PHOTO_TO_JPEG: "macPhoto.toJpeg",
+} as const;
+
+/**
  * A shell on this Mac (`mac-shells.ts`): the developer's login shell opened
  * in a folder for the asking panel, attached, and closed, answered by the
  * desktop's main, which holds it. What it prints travels on the port an
@@ -857,6 +866,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_COMMAND_ACT_KIND,
+  ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
@@ -1055,6 +1065,8 @@ export const PORT_ACT_USE = {
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
 
+  MAC_PHOTO_TO_JPEG: ACT_USE.FETCH,
+
   MAC_RESOURCES_READ: ACT_USE.FETCH,
 
   MAC_SHELL_MIRROR: ACT_USE.WRITE,
@@ -1202,6 +1214,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
