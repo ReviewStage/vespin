@@ -1163,7 +1163,12 @@ export interface InboxMessageMedia {
 /** One message of a thread as a client without the panel's directory draws it: its writer, when, its words, and the files drawn after them. */
 export interface InboxThreadMessage {
   readonly id: string;
-  readonly writer: { readonly name: string; readonly agent: boolean };
+  /** Who wrote it: the agent, or a member by their name and, where their account still stands, their id, which their picture is found by. */
+  readonly writer: {
+    readonly name: string;
+    readonly agent: boolean;
+    readonly userId?: string | undefined;
+  };
   readonly at: number;
   readonly words: string;
   /** Whether a member typed it, whose line breaks are kept as typed. */
@@ -1231,7 +1236,11 @@ export function inboxThreadMessages(
       answers === undefined ? undefined : item.thread?.find(({ id }) => id === answers.ask);
     return {
       id: message.id,
-      writer: { name: agent ? agentName : inboxMemberName(message.member, readerId), agent },
+      writer: {
+        name: agent ? agentName : inboxMemberName(message.member, readerId),
+        agent,
+        userId: agent ? undefined : message.member?.userId,
+      },
       at: message.createdAt,
       words: message.text,
       typed: !agent,

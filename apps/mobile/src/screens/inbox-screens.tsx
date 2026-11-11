@@ -80,6 +80,7 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -201,6 +202,7 @@ export function InboxRow({
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const title = cardTitle(item.title);
+  const pictureOf = useMemberPictures();
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
@@ -212,8 +214,9 @@ export function InboxRow({
           agentName,
           readerId,
         ),
+        pictureOf,
       ),
-    [item, agentName, readerId],
+    [item, agentName, readerId, pictureOf],
   );
   const resolve =
     item.status === INBOX_STATUS.OPEN
@@ -238,7 +241,11 @@ export function InboxRow({
       summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
       unread={unread}
       done={isDone(item)}
-      face={waitsOn === undefined || waitsOn.userId === readerId ? undefined : waitsOn.name}
+      face={
+        waitsOn === undefined || waitsOn.userId === readerId
+          ? undefined
+          : { name: waitsOn.name, picture: pictureOf(waitsOn.userId) }
+      }
       at={item.updatedAt}
       due={item.remindAt}
       trailingActions={[
@@ -377,6 +384,7 @@ function ThreadDetail({
   const openLink = useOpenLink();
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const pictureOf = useMemberPictures();
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
@@ -437,6 +445,10 @@ function ThreadDetail({
   const menu = threadMenu(item, answer, () => openRemind(item));
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
+    writer: {
+      ...message.writer,
+      picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+    },
     stamp:
       message.stamp === undefined
         ? undefined

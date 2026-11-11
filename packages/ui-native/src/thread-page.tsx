@@ -30,7 +30,7 @@ import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { useDockRoom } from "./glass-bar.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
-import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
+import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -76,8 +76,8 @@ export type ThreadMedia =
 /** One message of a thread, as its comment draws it. */
 export type ThreadMessage = {
   readonly id: string;
-  /** Who wrote it: a member by their face, or the agent by its tile. */
-  readonly writer: { readonly name: string; readonly agent: boolean };
+  /** Who wrote it: a member by their face, their picture where one is known, or the agent by its tile. */
+  readonly writer: Face & { readonly agent: boolean };
   /** When it was written, in epoch milliseconds. */
   readonly at: number;
   readonly words: string;
@@ -240,7 +240,7 @@ function MessageView({
         {writer.agent ? (
           <AgentTile name={writer.name} size={MARK_SIZE.WRITER} />
         ) : (
-          <Avatar name={writer.name} size={MARK_SIZE.WRITER} />
+          <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
         )}
         <Text
           modifiers={[

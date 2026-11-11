@@ -36,7 +36,14 @@ import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
-import { AgentTile, FailedMark, TaskStatusMark, ToneGlyph, WorkingMark } from "./marks.js";
+import {
+  AgentTile,
+  type Face,
+  FailedMark,
+  TaskStatusMark,
+  ToneGlyph,
+  WorkingMark,
+} from "./marks.js";
 import { PageHeader } from "./page-header.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
@@ -112,7 +119,7 @@ type TaskHeadProps = {
   /** Its priority's name. */
   readonly priority: string | undefined;
   /** Who it is assigned to, or the words for no one. */
-  readonly assignee: { readonly name: string; readonly nobody: boolean };
+  readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
 };
