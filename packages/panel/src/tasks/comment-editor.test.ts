@@ -14,6 +14,7 @@ import { FAKE_ANSWER } from "../testing/app-bridge.js";
 import { editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { CommentEditor } from "./comment-editor.js";
+import { REPLY_VARIANT } from "./comment-variant.js";
 
 /**
  * comment-editor.test.ts -- the box a member writes GitHub Markdown in, on
@@ -85,6 +86,7 @@ function Owner({
 }): React.JSX.Element {
   const [body, setBody] = useState(start);
   return createElement(CommentEditor, {
+    variant: REPLY_VARIANT.REPLY,
     label: "Comment",
     placeholder: "Leave a comment",
     value: body,
@@ -97,6 +99,7 @@ function Owner({
     onSubmit: answers.submit ? () => heard.submitted.push(body) : undefined,
     onCancel: answers.cancel ? () => heard.cancels.push(heard.cancels.length) : undefined,
     suggestion,
+    send: { label: "Comment", empty: body.trim() === "", held: false, onSend: () => {} },
   });
 }
 

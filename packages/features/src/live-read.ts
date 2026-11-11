@@ -37,7 +37,7 @@
 
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
-import { Schema } from "effect";
+import { Option, Schema, SchemaTransformation } from "effect";
 import { ANY_PROCEDURE_REFUSALS, declaredProcedure, refuses } from "./contract/base.js";
 import type { HOSTED_ERRORS } from "./contract/errors.js";
 import { LIVE_POLL, sealedLiveQuerySchema } from "./live-wire.js";
@@ -105,11 +105,14 @@ type ModeAsked<Mode extends LiveMode> = Mode extends typeof LIVE_MODE.CURSOR
 /** A path the hosted service answers at. */
 type HostedServicePath = (typeof HOSTED_SERVICE_PATH)[keyof typeof HOSTED_SERVICE_PATH];
 
+/** A row's schema: one decoded and encoded on no service, as a struct read off a statement is. */
+type LiveRowSchema = Schema.Codec<unknown, unknown>;
+
 /** One field of a row and which way the rows stand by it. */
-type LiveOrderBy<Row extends Schema.Top> = readonly [keyof Row["Encoded"] & string, Order];
+type LiveOrderBy<Row extends LiveRowSchema> = readonly [keyof Row["Encoded"] & string, Order];
 
 /** One part's rows: their schema, a struct read on the encoded side Postgres answers, the field that keys each, the order they stand in, and whether a service before the part answers none. */
-export interface LiveRows<Row extends Schema.Top, Optional extends boolean = false> {
+export interface LiveRows<Row extends LiveRowSchema, Optional extends boolean = false> {
   readonly row: Row;
   readonly key: keyof Row["Encoded"] & string;
   readonly order: readonly LiveOrderBy<Row>[];
@@ -119,7 +122,7 @@ export interface LiveRows<Row extends Schema.Top, Optional extends boolean = fal
 
 /** Any part's rows, whatever their fields. */
 export interface AnyLiveRows {
-  readonly row: Schema.Top;
+  readonly row: LiveRowSchema;
   readonly key: string;
   readonly order: readonly (readonly [string, Order])[];
   readonly optional?: boolean;
@@ -164,9 +167,9 @@ type AnswerFields<Parts extends LiveParts, Beside extends Schema.Struct.Fields> 
   }>;
 } & Beside;
 
-/** Each part's rows as its statement delivers them. */
+/** Each part's rows as its statement delivers them, each kept where it reads (`rowsReading`). */
 type RowsFields<Parts extends LiveParts> = {
-  readonly [Part in keyof Parts]: PartField<Parts[Part], Schema.$Array<Parts[Part]["row"]>>;
+  readonly [Part in keyof Parts]: PartField<Parts[Part], RowsReading<Parts[Part]["row"]>>;
 };
 
 /** The refusals any procedure may answer, as the one map declares them. */
@@ -291,7 +294,7 @@ function mapped<Key extends string, From, To>(
 }
 
 /** One part's rows declared: their schema, their key, their order, and whether a service before them answers none. */
-export function liveRows<Row extends Schema.Top, const Optional extends boolean = false>(
+export function liveRows<Row extends LiveRowSchema, const Optional extends boolean = false>(
   rows: LiveRows<Row, Optional>,
 ): LiveRows<Row, Optional> {
   return rows;
@@ -301,6 +304,29 @@ export function liveRows<Row extends Schema.Top, const Optional extends boolean 
 function partField(rows: AnyLiveRows, field: Schema.Top): Schema.Top {
   return rows.optional === true ? Schema.optionalKey(field) : field;
 }
+
+/**
+ * A part's rows as a reader keeps them: each decoded under `row`, and one
+ * that does not read left out, so a row a newer service writes in a shape
+ * this build does not know never fails the rows beside it. A write encodes
+ * each row the same way, leaving out one that does not.
+ */
+function rowsReading<Row extends LiveRowSchema>(row: Row) {
+  const decodeRow = Schema.decodeUnknownOption(row);
+  const encodeRow = Schema.encodeUnknownOption(row);
+  return Schema.Array(Schema.Unknown).pipe(
+    Schema.decodeTo(
+      Schema.toType(Schema.Array(row)),
+      SchemaTransformation.transform({
+        decode: (rows): readonly Row["Type"][] =>
+          rows.flatMap((one) => Option.toArray(decodeRow(one))),
+        encode: (rows): readonly unknown[] => rows.flatMap((one) => Option.toArray(encodeRow(one))),
+      }),
+    ),
+  );
+}
+
+type RowsReading<Row extends LiveRowSchema> = ReturnType<typeof rowsReading<Row>>;
 
 /**
  * Declares a live read, deriving its query, its answer, and its rows from
@@ -357,7 +383,7 @@ export function liveRead<
     }) as unknown as Schema.Struct<AnswerFields<Parts, Beside>>,
     rows: Schema.Struct(
       mapped<string, AnyLiveRows, Schema.Top>(spec.parts, (rows) =>
-        partField(rows, Schema.Array(rows.row)),
+        partField(rows, rowsReading(rows.row)),
       ),
     ) as unknown as Schema.Struct<RowsFields<Parts>>,
   };

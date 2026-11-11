@@ -379,6 +379,13 @@ it.effect(
           "the launch keeps the agent in the device's record of the agents it made",
         );
         const runner = spawned.find((each) => each.program === RUNNER);
+        // Note that the next daemon's start ends the group a record names, so one that outlived a daemon killed outright runs no longer.
+        const group = `${STATE_ROOT}/runner-groups/${AGENT_ID}`;
+        yield* until(() => files.has(group));
+        assert.equal(
+          JSON.parse(files.get(group) ?? "{}").group,
+          spawned.findIndex((each) => each.program === RUNNER) + 1,
+        );
         assert.equal(runner?.env?.APP_RUNNER_TOKEN, SECRET_ENV.APP_RUNNER_TOKEN);
         // Note that gh prefers a token in its environment to its config, so one there would never be renewed.
         assert.equal(runner?.env?.GH_TOKEN, undefined, "the runner's gh reads its config alone");
@@ -400,6 +407,7 @@ it.effect(
         yield* until(() => runner?.ended === "exited");
         // Note that a turn's end lets go of the token, which no turn reads any more.
         yield* until(() => !files.has(GH_HOSTS));
+        assert.ok(!files.has(group), "an ended runner's group is no longer kept");
       }),
     ),
 );

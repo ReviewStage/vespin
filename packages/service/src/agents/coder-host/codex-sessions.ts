@@ -96,6 +96,7 @@ import {
 import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
 import { codexCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
+import { launchPermissionMode } from "./permission-mode.js";
 import {
   type HarnessLaunch,
   type RunnerHarness,
@@ -313,6 +314,11 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
       if (layout.codexExecutable === undefined) {
         return yield* new LaunchRefused({ reason: "no codex" });
       }
+      // Note that a device whose runner reads no mode would run one that asks with full access, so it is refused rather than run unasked.
+      const mode = launchPermissionMode(agent);
+      if (mode !== undefined && !layout.permissionModes) {
+        return yield* new LaunchRefused({ reason: "permission mode", modesUnsupported: true });
+      }
       const effort = effortOf(agent.effort);
       const speed = speedKeysOf(agent);
       const written: CodexConfig = {
@@ -332,6 +338,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
         integrations: yield* options.integrations(agent),
         tokenUrl,
         installedSkills: layout.installedSkills,
+        ...mode,
       };
       return written;
     });

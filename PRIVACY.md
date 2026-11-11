@@ -236,6 +236,16 @@ settings, outside Vespin. Showing one sends nothing to us or anyone else. It is 
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
 
+If you add your own sounds in Settings › Account › Sounds, to play when an
+agent finishes or something needs you, we keep **each sound's audio and the
+name you give it** with your account: its bytes, its audio type, a
+fingerprint of them (SHA-256) that tells your other signed-in apps when it
+changed, so they fetch it again, and which sound each of yours plays. We
+never keep the file's own name, which the app only offers as the name to
+start from, and a sound is sent only to apps signed in to your account.
+You can rename or remove each one in the same place, and all of them are
+deleted with your account.
+
 If you sign in to the Vespin iOS app and allow notifications, the app
 registers your iPhone's Apple push token with the Service, with which of
 Apple's gateways the token belongs to and the app it was issued to, and we
@@ -393,9 +403,9 @@ repository snapshot made before default-branch drives expires thirty days after
 its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, integration records, your phones' push tokens, when you were
-  last active at a client, and the notifications held for you) is deleted
-  at once.
+  preferences, your sounds, integration records, your phones' push
+  tokens, when you were last active at a client, and the notifications held
+  for you) is deleted at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
   but for the tasks in workspaces with other members (below), and we ask
   Vercel to delete your agents' sandboxes and the drives holding their

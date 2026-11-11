@@ -38,6 +38,7 @@ export {
 } from "./json.js";
 export { keepIdentity } from "./keep-identity.js";
 export { LEGACY_APP_WORD, literalsReadingLegacy } from "./legacy-app-word.js";
+export { literalsReadingUnknown } from "./literals-reading-unknown.js";
 export {
   EXCESS_KEYS,
   type ExcessKeys,

@@ -98,8 +98,8 @@ export default function SettingsScreen() {
           title: "Settings",
           headerTintColor: colors.ACCENT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
-          headerStyle: { backgroundColor: colors.SIDEBAR },
           headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.SIDEBAR },
         }}
       />
       <Stack.Toolbar placement="right">

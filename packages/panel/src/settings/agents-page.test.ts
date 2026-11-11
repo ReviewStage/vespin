@@ -164,7 +164,12 @@ const modelsHeld = () => (refuseModels ? { failed: true as const } : { rows: { m
 
 /** The account's row as the host holds it from what the test's service stores. */
 const preferencesHeld = () => ({
-  rows: { agent: stored, chaptersModel: CHAPTERS_MODEL.HAIKU, slackNotifications: true },
+  rows: {
+    agent: stored,
+    chaptersModel: CHAPTERS_MODEL.HAIKU,
+    slackNotifications: true,
+    sounds: { list: [], choices: { finish: undefined, ask: undefined } },
+  },
 });
 
 /** The account's keys, models, and row as they stand, laid where the host holds them. */

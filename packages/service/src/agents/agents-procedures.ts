@@ -505,7 +505,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       }
       if ("permissionMode" in body) {
         const { permissionMode } = body;
-        // Only who steers the agent sets how its calls are asked, and only Claude Code asks.
+        // Only who steers the agent sets how its calls are asked, and only a harness that asks takes a mode that does.
         if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
         const route = Option.getOrUndefined(
           yield* hostedStoreOrUnavailable(nativeRouteOfReached(agent.conversationId)),

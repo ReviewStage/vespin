@@ -1,8 +1,8 @@
 // video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its message's width.
 
-import { useVideoPlayer, VideoView } from "expo-video";
+import { useVideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -24,6 +24,7 @@ const styles = StyleSheet.create({
     padding: SPACE.ROW,
     gap: SPACE.TIGHT,
   },
+  spinner: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
 });
 
 type VideoProps = {
@@ -40,19 +41,21 @@ type VideoProps = {
  * Picture in Picture the system's, standing paused until it is played, as a
  * message's video stands. Note that one the player cannot read, such as the
  * WebM an agent's browser records, says so in its place and offers where it
- * plays, rather than standing as a player that never starts.
+ * plays, rather than standing as a player that never starts; and one whose
+ * bytes are on their way, or that the player still reads, stands the
+ * system's spinner in its well, as Photos does, so it never reads as an
+ * empty box.
  */
 export function Video({ source, label, onOpenElsewhere }: VideoProps) {
   const colors = useColors();
   const player = useVideoPlayer(source ?? null);
-  const [failed, setFailed] = useState(false);
+  const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
   useEffect(() => {
-    setFailed(false);
-    const listening = player.addListener("statusChange", ({ status }) => {
-      setFailed(status === "error");
-    });
+    setStatus(player.status);
+    const listening = player.addListener("statusChange", ({ status: next }) => setStatus(next));
     return () => listening.remove();
   }, [player]);
+  const failed = status === "error";
   if (source === undefined || failed) {
     // Note that a well offering Open in Safari stands as two elements to VoiceOver, its words and its link, since one element would hide the link.
     const offers = failed && onOpenElsewhere !== undefined;
@@ -62,6 +65,7 @@ export function Video({ source, label, onOpenElsewhere }: VideoProps) {
         accessible={!offers}
         accessibilityLabel={offers ? undefined : failed ? `${label}. ${CANNOT_PLAY}` : label}
       >
+        {failed ? null : <ActivityIndicator color={colors.TEXT_MUTED} />}
         {failed ? (
           <Text
             style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
@@ -83,15 +87,22 @@ export function Video({ source, label, onOpenElsewhere }: VideoProps) {
     );
   }
   return (
-    <VideoView
-      player={player}
-      nativeControls
-      contentFit="contain"
-      fullscreenOptions={{ enable: true }}
-      allowsPictureInPicture
-      accessibilityLabel={label}
-      testID={VIDEO_PLAYER_ID}
-      style={[styles.frame, { backgroundColor: colors.WELL }]}
-    />
+    <View style={styles.frame}>
+      <VideoView
+        player={player}
+        nativeControls
+        contentFit="contain"
+        fullscreenOptions={{ enable: true }}
+        allowsPictureInPicture
+        accessibilityLabel={label}
+        testID={VIDEO_PLAYER_ID}
+        style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
+      />
+      {status === "readyToPlay" ? null : (
+        <View style={styles.spinner} pointerEvents="none">
+          <ActivityIndicator color={colors.TEXT_MUTED} />
+        </View>
+      )}
+    </View>
   );
 }

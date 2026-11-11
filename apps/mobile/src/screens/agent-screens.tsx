@@ -271,6 +271,7 @@ export function AgentScreen() {
           empty={{
             title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
             symbol: failed ? "exclamationmark.triangle" : "text.bubble",
+            loading: !failed,
           }}
           repository={agent?.repository}
           onOpenLink={openLink}
@@ -329,6 +330,7 @@ export function AgentPageScreen() {
           <EmptyState
             title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
             symbol={"failed" in read ? "exclamationmark.triangle" : "macwindow"}
+            loading={!("failed" in read)}
           />
         </Screen>
       )}

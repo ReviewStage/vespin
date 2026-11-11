@@ -626,6 +626,22 @@ export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
 export type AgentWarmAnswerView = typeof agentWarmAnswerViewSchema.Type;
 
+/** One of an agent's repository's run actions, as the window names it: the agent, and the action by its id. */
+export const agentRunActionParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  actionId: EffectSchema.NonEmptyString,
+});
+
+/** A run action run, as the window hears it: the shell that runs it, or why it did not run. */
+export const agentRunActionAnswerViewSchema = answerView(agentsContract.runAction);
+
+export type AgentRunActionAnswerView = typeof agentRunActionAnswerViewSchema.Type;
+
+/** A run action's shell interrupted, as the window hears it: the agent's shells as they then stand, or why it was not. */
+export const agentRunActionStopAnswerViewSchema = answerView(agentsContract.stopRunAction);
+
+export type AgentRunActionStopAnswerView = typeof agentRunActionStopAnswerViewSchema.Type;
+
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */
 export const agentMessagesParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,

@@ -5,8 +5,10 @@ import {
   Button,
   COMPOSER_ELEMENT,
   COMPOSER_LOOK,
+  COMPOSER_SEND_TONE,
   ComposerBody,
   ComposerFoot,
+  ComposerFootNote,
   ComposerFootSkeleton,
   ComposerFrame,
   type ComposerLook,
@@ -119,6 +121,11 @@ function ComposerFoots(): React.JSX.Element {
                 refuses: { onRefused: ignore, words: "Fill in Invites a member may send a day." },
               }}
             />
+            {/* A send that turns something away, in words and in the danger ink: a denial's note. */}
+            <Box
+              words="Not on the production database."
+              send={{ label: "Deny", empty: false, inWords: true, tone: COMPOSER_SEND_TONE.DANGER }}
+            />
             <Box
               words="Here are the two screens."
               files={
@@ -184,6 +191,13 @@ function ComposerFoots(): React.JSX.Element {
                     Continue in new agent
                   </Button>
                 ),
+              }}
+            />
+            {/* A field-only box has no foot, so its note stands alone under the field. */}
+            <ComposerFootNote
+              note={{
+                words: "Only the first 8,000 characters were pasted.",
+                failure: UNREPORTED.INPUT,
               }}
             />
           </Stack>

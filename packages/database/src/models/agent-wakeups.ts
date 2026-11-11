@@ -1,29 +1,24 @@
 /**
- * agent-wakeups.ts -- the wakeup a coding agent booked, kept until the scheduled sweep delivers it.
+ * agent-wakeups.ts -- the wakeup a coding agent booked, kept until its delayed queue message delivers it.
  *
  * An agent books one wakeup at a time: a booking replaces the one standing,
- * since the agent asked to be woken once, at the newer time with the newer
- * prompt, and a cancel deletes it, on the agent's own `stop`, on a Stop,
- * which ends a harness's own wakeups with it, and on a rewind, whose work
- * the booking belongs to (`../schemas/agent-wakeup.ts`).
+ * under a row of its own id, since the agent asked to be woken once, at the
+ * newer time with the newer prompt, and a cancel deletes it, on the agent's
+ * own `stop`, on a Stop, which ends a harness's own wakeups with it, and on
+ * a rewind, whose work the booking belongs to (`../schemas/agent-wakeup.ts`).
  *
- * A claim takes the wakeups due, the longest due first and at most a batch,
- * under row locks a concurrent claim skips rather than waits on, and moves
- * each one's next delivery on before the locks go: Vercel may call the
- * minute's sweep twice, and the second claim must find nothing left. The
- * claim's move is the delivery's lease: a delivery asks just before it sends
- * whether its wakeup still stands, so one a cancel or a newer booking
- * replaced since the claim is not sent, and deletes it once the send landed.
- * One whose send failed, or whose sweep ended mid-send, stands to be claimed
- * again at its next delivery, its line sent under the same key so a send
- * that did land is told once (`@repo/service`'s `maintenance/wakeup-sweep.ts`),
- * until `attempts` reaches the bound the claim is handed, when the claim
- * deletes it instead. An archived agent takes no wakeup, so the claim
- * deletes its booking too.
+ * The row is what a delivery reads, never the queue's message alone: each
+ * booking is published as a message naming its row's id, delayed until it
+ * comes due (`@repo/service`'s `agents/coder-host/agent-wakeups.ts`), and
+ * the message's consumer reads the row just before it sends, so a message
+ * whose booking was canceled or replaced since finds nothing and sends
+ * nothing. An archived agent takes no wakeup, so its booking reads as gone.
+ * The consumer deletes the row once the send landed; one whose send failed
+ * stands, for the queue to deliver its message again.
  */
 
-import { asc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
-import { Effect, Schema } from "effect";
+import { and, eq, isNull } from "drizzle-orm";
+import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
@@ -37,13 +32,12 @@ export interface AgentWakeup {
   readonly prompt: string;
 }
 
-/** One wakeup a claim took: its row, the agent it is for and that agent's starter, and the prompt to deliver. */
-export interface ClaimedAgentWakeup {
+/** One wakeup that still stands, as its delivery reads it: its row, the agent it is for and that agent's starter, and the prompt to deliver. */
+export interface StandingAgentWakeup {
   readonly id: string;
   readonly agentId: string;
   readonly userId: string;
   readonly prompt: string;
-  readonly dueAt: Date;
 }
 
 const deleteOfAgent = SqlSchema.void({
@@ -52,43 +46,29 @@ const deleteOfAgent = SqlSchema.void({
     Database.use((db) => db.delete(agentWakeupTable).where(eq(agentWakeupTable.agentId, agentId))),
 });
 
-const insertWakeup = SqlSchema.void({
+const insertWakeup = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String, at: Schema.Date, prompt: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
   execute: ({ agentId, at, prompt }) =>
-    Database.use((db) => db.insert(agentWakeupTable).values({ agentId, prompt, dueAt: at })),
-});
-
-/** The rows no claim delivers again: given up past the bound, or of an archived agent. */
-const deleteSpent = SqlSchema.void({
-  Request: Schema.Struct({ maxAttempts: Schema.Int }),
-  execute: ({ maxAttempts }) =>
     Database.use((db) =>
       db
-        .delete(agentWakeupTable)
-        .where(
-          sql`${gte(agentWakeupTable.attempts, maxAttempts)} or ${inArray(
-            agentWakeupTable.agentId,
-            db
-              .select({ id: agentTable.id })
-              .from(agentTable)
-              .where(isNotNull(agentTable.archivedAt)),
-          )}`,
-        ),
+        .insert(agentWakeupTable)
+        .values({ agentId, prompt, dueAt: at })
+        .returning({ id: agentWakeupTable.id }),
     ),
 });
 
-const ClaimedRowSchema = Schema.Struct({
+const StandingRowSchema = Schema.Struct({
   id: Schema.String,
   agentId: Schema.String,
   userId: Schema.String,
   prompt: Schema.String,
-  dueAt: Schema.Date,
 });
 
-const lockDue = SqlSchema.findAll({
-  Request: Schema.Struct({ now: Schema.Date, limit: Schema.Int }),
-  Result: ClaimedRowSchema,
-  execute: ({ now, limit }) =>
+const readStanding = SqlSchema.findOneOption({
+  Request: Schema.Struct({ id: Schema.String }),
+  Result: StandingRowSchema,
+  execute: ({ id }) =>
     Database.use((db) =>
       db
         .select({
@@ -96,37 +76,10 @@ const lockDue = SqlSchema.findAll({
           agentId: agentWakeupTable.agentId,
           userId: agentTable.userId,
           prompt: agentWakeupTable.prompt,
-          dueAt: agentWakeupTable.dueAt,
         })
         .from(agentWakeupTable)
         .innerJoin(agentTable, eq(agentTable.id, agentWakeupTable.agentId))
-        .where(lte(agentWakeupTable.dueAt, now))
-        .orderBy(asc(agentWakeupTable.dueAt), asc(agentWakeupTable.id))
-        .limit(limit)
-        .for("update", { of: agentWakeupTable, skipLocked: true }),
-    ),
-});
-
-const writeNextDelivery = SqlSchema.void({
-  Request: Schema.Struct({ ids: Schema.Array(Schema.String), next: Schema.Date }),
-  execute: ({ ids, next }) =>
-    Database.use((db) =>
-      db
-        .update(agentWakeupTable)
-        .set({ dueAt: next, attempts: sql`${agentWakeupTable.attempts} + 1` })
-        .where(inArray(agentWakeupTable.id, ids)),
-    ),
-});
-
-const standsOne = SqlSchema.findAll({
-  Request: Schema.Struct({ id: Schema.String }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ id }) =>
-    Database.use((db) =>
-      db
-        .select({ id: agentWakeupTable.id })
-        .from(agentWakeupTable)
-        .where(eq(agentWakeupTable.id, id)),
+        .where(and(eq(agentWakeupTable.id, id), isNull(agentTable.archivedAt))),
     ),
 });
 
@@ -136,13 +89,15 @@ const deleteOne = SqlSchema.void({
     Database.use((db) => db.delete(agentWakeupTable).where(eq(agentWakeupTable.id, id))),
 });
 
-/** The agent's wakeup booked, in place of any it held. */
-export function bookAgentWakeup(agentId: string, wakeup: AgentWakeup): WakeupEffect<void> {
+/** The agent's wakeup booked, in place of any it held, answering the new row's id, which its delivery names. */
+export function bookAgentWakeup(agentId: string, wakeup: AgentWakeup): WakeupEffect<string> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         yield* deleteOfAgent({ agentId });
-        yield* insertWakeup({ agentId, ...wakeup });
+        const inserted = yield* insertWakeup({ agentId, ...wakeup });
+        // Note that an insert with no conflict target always answers its row, so none here is a defect.
+        return Option.getOrThrow(inserted).id;
       }),
     ),
   );
@@ -153,35 +108,12 @@ export function cancelAgentWakeup(agentId: string): WakeupEffect<void> {
   return deleteOfAgent({ agentId });
 }
 
-/**
- * Claims at most `limit` of the wakeups due at `now`, each next delivered at
- * `next` should this delivery fail, after deleting those claimed
- * `maxAttempts` times already and an archived agent's.
- */
-export function claimDueAgentWakeups(
-  now: Date,
-  next: Date,
-  limit: number,
-  maxAttempts: number,
-): WakeupEffect<readonly ClaimedAgentWakeup[]> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    client.withTransaction(
-      Effect.gen(function* () {
-        yield* deleteSpent({ maxAttempts });
-        const due = yield* lockDue({ now, limit });
-        if (due.length > 0) yield* writeNextDelivery({ ids: due.map((row) => row.id), next });
-        return due;
-      }),
-    ),
-  );
+/** The wakeup under the id, as a delivery reads it just before it sends; none where a cancel or a newer booking replaced it, or its agent is archived. */
+export function standingAgentWakeup(id: string): WakeupEffect<Option.Option<StandingAgentWakeup>> {
+  return readStanding({ id });
 }
 
-/** Whether the wakeup still stands, as a delivery asks just before it sends: a cancel or a newer booking since its claim replaced it. */
-export function agentWakeupStands(id: string): WakeupEffect<boolean> {
-  return Effect.map(standsOne({ id }), (rows) => rows.length > 0);
-}
-
-/** The wakeup delivered, so no claim takes it again. */
+/** The wakeup delivered, or found no one's to deliver, so no delivery reads it again. */
 export function deleteAgentWakeup(id: string): WakeupEffect<void> {
   return deleteOne({ id });
 }

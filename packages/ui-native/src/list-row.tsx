@@ -5,12 +5,15 @@ import {
   ContextMenu,
   HStack,
   Image,
+  Menu,
   Spacer,
   SwipeActions,
   Text,
+  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
   accessibilityLabel,
   alignmentGuide,
   buttonStyle,
@@ -27,9 +30,10 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { InboxLineKind } from "@repo/features/inbox-list-model";
+import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { sinceText } from "@repo/features/time-format";
+import { dueText, sinceText } from "@repo/features/time-format";
 import { type ReactElement, type ReactNode, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -79,12 +83,27 @@ export type RowAction = {
   readonly onPress: () => void;
 };
 
-/** The acts a row carries: a swipe from either edge, and the same acts in its long press menu. */
+/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them. */
+export type RowSubmenu = {
+  readonly label: string;
+  readonly symbol: SfSymbol;
+  readonly choices: readonly {
+    readonly label: string;
+    readonly on: boolean;
+    readonly onPress: () => void;
+  }[];
+};
+
+/** The acts a row carries: a swipe from either edge, the same acts in its long press menu, and what that menu holds alone. */
 type RowActs = {
   /** The acts a swipe from the trailing edge reveals, the first of them on a full swipe. */
   readonly trailingActions?: readonly RowAction[] | undefined;
   /** The acts a swipe from the leading edge reveals. */
   readonly leadingActions?: readonly RowAction[] | undefined;
+  /** Menus the long press menu holds after the swipes' acts, such as a task's Status. */
+  readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
+  /** Acts the long press menu alone holds, last, such as Pin or Open in browser. */
+  readonly menuActions?: readonly RowAction[] | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -108,6 +127,8 @@ type ListRowProps = RowActs & {
   readonly at?: number | undefined;
   /** What `at` counts from; now where none is given. */
   readonly now?: number | undefined;
+  /** When a reminder the reader set on the thread comes back, in epoch milliseconds, said in the time's place as the panel's row says it: "3:04 PM", "Mon 9:00 AM". */
+  readonly due?: number | undefined;
 };
 
 type TaskRowProps = RowActs & {
@@ -145,6 +166,22 @@ function actionButton(action: RowAction, colors: BrandColors) {
   );
 }
 
+/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks. */
+function rowSubmenu(submenu: RowSubmenu) {
+  return (
+    <Menu key={submenu.label} label={submenu.label} systemImage={submenu.symbol}>
+      {submenu.choices.map((choice) => (
+        <Toggle
+          key={choice.label}
+          label={choice.label}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+    </Menu>
+  );
+}
+
 /** A row's time, 12 pt in the muted ink and tabular figures, as the panel's rows end. */
 export function RowTime({ at, now }: { readonly at: number; readonly now: number | undefined }) {
   const colors = useColors();
@@ -158,6 +195,32 @@ export function RowTime({ at, now }: { readonly at: number; readonly now: number
     >
       {sinceText(at, now ?? Date.now())}
     </Text>
+  );
+}
+
+/** When a reminder comes back, in the time's place: the clock in the accent ink and its time as a row says a moment to come, heard as a reminder. */
+function RowDue({ due, now }: { readonly due: number; readonly now: number | undefined }) {
+  const colors = useColors();
+  const words = dueText(due, now ?? Date.now());
+  return (
+    <HStack spacing={SPACE.TIGHT}>
+      <Image
+        systemName="clock"
+        size={MARK_SIZE.GLYPH - 4}
+        color={colors.ACCENT_TEXT}
+        modifiers={[accessibilityHidden(true)]}
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.TIME }),
+          monospacedDigit(),
+          foregroundStyle(colors.ACCENT_TEXT),
+          accessibilityLabel(`${REMIND_WORDS.DUE} ${words}`),
+        ]}
+      >
+        {words}
+      </Text>
+    </HStack>
   );
 }
 
@@ -182,29 +245,41 @@ export function rowPlacement(colors: BrandColors) {
  * dot in the margin, and its hairline, which starts under the words rather
  * than the mark. Its acts stand twice, as the system's own rows carry them:
  * behind a swipe from either edge, and in the menu a long press opens, the
- * trailing ones first, so a person who never swipes still finds them.
+ * trailing ones first, so a person who never swipes still finds them; that
+ * menu then holds its submenus and the acts only it offers.
  */
 export function RowFrame({
   id,
   row,
   trailingActions = [],
   leadingActions = [],
+  menuSubmenus = [],
+  menuActions = [],
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
 }) {
   const colors = useColors();
-  const actions = [...trailingActions, ...leadingActions];
+  const swiped = [...trailingActions, ...leadingActions];
   const frameModifiers = [tag(id), ...rowPlacement(colors)];
-  if (actions.length === 0) return <HStack modifiers={frameModifiers}>{row}</HStack>;
+  if (swiped.length + menuSubmenus.length + menuActions.length === 0) {
+    return <HStack modifiers={frameModifiers}>{row}</HStack>;
+  }
+  const menu = (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {swiped.map((action) => actionButton(action, colors))}
+        {menuSubmenus.map(rowSubmenu)}
+        {menuActions.map((action) => actionButton(action, colors))}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
+    </ContextMenu>
+  );
+  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
+  if (swiped.length === 0) return <HStack modifiers={frameModifiers}>{menu}</HStack>;
   return (
     <SwipeActions modifiers={frameModifiers}>
-      <ContextMenu>
-        <ContextMenu.Items>
-          {actions.map((action) => actionButton(action, colors))}
-        </ContextMenu.Items>
-        <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
-      </ContextMenu>
+      {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing">
           {trailingActions.map((action) => actionButton(action, colors))}
@@ -322,10 +397,11 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
  * what it asks), its title in 15 pt with the time at the line's end, and
  * under it the glyph and words of what it asks, then the task's name, in a
  * 13 pt muted line. A teammate's face stands before the time on a thread
- * that waits on them.
+ * that waits on them, and a thread put away until a reminder says when it
+ * comes back in its time's place, as the panel's row does.
  */
 export function ListRow(props: ListRowProps) {
-  const { id, title, task, line, unread = false, done = false, face, at, now } = props;
+  const { id, title, task, line, unread = false, done = false, face, at, now, due } = props;
   const colors = useColors();
   const ring = task?.status === undefined ? undefined : <TaskStatusMark status={task.status} />;
   const row: ReactElement = (
@@ -339,7 +415,11 @@ export function ListRow(props: ListRowProps) {
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
             {face === undefined ? null : <Avatar name={face} size={MARK_SIZE.FACE} />}
-            {at === undefined ? null : <RowTime at={at} now={now} />}
+            {due !== undefined ? (
+              <RowDue due={due} now={now} />
+            ) : at === undefined ? null : (
+              <RowTime at={at} now={now} />
+            )}
           </HStack>
         }
       />

@@ -20,11 +20,19 @@ import {
   ApprovalActions,
   AskFirstIcon,
   AutoApproveIcon,
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
+  COMPOSER_LOOK,
+  COMPOSER_SEND_TONE,
+  DENY_NOTE_WORDS,
+  type DenyNoteDoors,
   FullAccessIcon,
   type MenuRow,
   STATUS_TONE,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {
   createContext,
   type ReactNode,
@@ -37,6 +45,7 @@ import {
 import type { AgentActAnswer, Unreached } from "../act.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
+import { MessageBox, useMessageBox } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
 
 /**
@@ -56,9 +65,10 @@ import type { HeldCall } from "./transcript-blocks.js";
  * started with. Off Full access the model chip wears the mode's glyph
  * before the model's name, so a mode that asks is seen at rest. The host
  * draws a change on the agent's row at once and takes it back where the
- * service refused it, which the composer says under its bar. Only a Claude
- * Code agent asks, so no other is offered a mode: a Codex agent runs with
- * full access for now.
+ * service refused it, which the composer says under its bar. Claude Code
+ * and Codex agents each ask in their own harness's terms, which these words
+ * and hints, Codex's own, fit both; an agent on neither asks nothing, so no
+ * other is offered a mode.
  *
  * A call the agent holds waits on a member's answer (`pendingApprovals`),
  * which the call's own row says, found by the call's id (`toolUseId`): its
@@ -177,7 +187,7 @@ export interface AgentModeControl {
 
 /**
  * The mode chip of an agent: none for an agent that never asks, which is
- * every agent but a Claude Code one. Note that the mode is read off the
+ * every agent on neither Claude Code nor Codex. Note that the mode is read off the
  * agent's row, which the host draws a change on at once, as the model
  * chip's is.
  */
@@ -190,7 +200,12 @@ export function useAgentPermissionMode(input: {
   const latest = useRef(input);
   latest.current = input;
   const writes = useRef(0);
-  if (agent === undefined || agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE) return undefined;
+  if (
+    agent === undefined ||
+    (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
+  ) {
+    return undefined;
+  }
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
     writes.current += 1;
@@ -452,6 +467,59 @@ function aboutOf(approval: AgentPendingApproval): string | undefined {
   return words.length === 0 ? undefined : words.join(" ");
 }
 
+/**
+ * The words that tell the agent why its call was denied, written in the
+ * composer's own box (`MessageBox`) as every message to it is, its `@` list
+ * the task's: under them a quiet Cancel, which offers the answers again, as
+ * Esc does, and Deny in the danger ink, which Enter presses too, with the
+ * words or without them, since they are optional.
+ */
+function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): React.JSX.Element {
+  const [words, setWords] = useState("");
+  const deny = () => {
+    if (busy) return;
+    const message = words.trim();
+    onDeny(message === "" ? undefined : message);
+  };
+  const box = useMessageBox({
+    draft: words,
+    setDraft: setWords,
+    placeholder: DENY_NOTE_WORDS.PLACEHOLDER,
+    label: DENY_NOTE_WORDS.LABEL,
+    maxLength: maxLength ?? APPROVAL_BOUNDS.MAX_MESSAGE_CHARS,
+    onSubmit: deny,
+    onLeave: busy ? undefined : onCancel,
+    held: busy,
+    takesFiles: false,
+    focus: true,
+  });
+  return (
+    <MessageBox
+      box={box}
+      look={COMPOSER_LOOK.CARD}
+      className="comment-field approval-deny-note"
+      beforeSend={
+        <Button
+          variant={BUTTON_VARIANT.QUIET}
+          size={BUTTON_SIZE.COMPACT}
+          disabled={busy}
+          onClick={onCancel}
+        >
+          <ReplayUnmask>{DENY_NOTE_WORDS.CANCEL}</ReplayUnmask>
+        </Button>
+      }
+      send={{
+        label: DENY_NOTE_WORDS.DENY,
+        inWords: true,
+        tone: COMPOSER_SEND_TONE.DANGER,
+        empty: false,
+        busy,
+        busyLabel: DENY_NOTE_WORDS.DENYING,
+      }}
+    />
+  );
+}
+
 /** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
 export function heldCallOf(ask: ApprovalView): HeldCall {
   return {
@@ -464,6 +532,7 @@ export function heldCallOf(ask: ApprovalView): HeldCall {
           answering={ask.answering}
           error={ask.error}
           noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
+          note={(doors) => <DenyNoteBox {...doors} />}
           onAnswer={ask.onAnswer}
         />
       ) : undefined,

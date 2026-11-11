@@ -181,6 +181,30 @@ it.effect(
 );
 
 it.effect(
+  "a 426 says this build needs an update on the reach, until the next answer of another status",
+  () =>
+    Effect.gen(function* () {
+      const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
+      let asked = 0;
+      const { call, client } = callOn(NO_CREDENTIAL, () => {
+        asked += 1;
+        return asked === 1
+          ? jsonResponse({ error: "host-upgrade-needed" }, HTTP_STATUS.UPGRADE_REQUIRED)
+          : jsonResponse({ ok: true });
+      });
+      const send = Effect.provideService(
+        Effect.provide(call.send({ method: HTTP_METHOD.GET, path: PATH }), client),
+        ServiceReach,
+        reach,
+      );
+      yield* send;
+      assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, true);
+      yield* send;
+      assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, undefined);
+    }),
+);
+
+it.effect(
   "a call that runs out its deadline within 45 seconds of the last answer leaves the service reachable",
   () =>
     Effect.gen(function* () {

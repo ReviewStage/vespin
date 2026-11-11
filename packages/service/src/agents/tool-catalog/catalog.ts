@@ -32,8 +32,8 @@
  * subagents, skills, and web reads: the retired runtime's `connection_search` and
  * `connection_execute`, since each integration the agent is handed is an
  * MCP server of its own beside ours (`../workspace-mcp/app.ts`). Waiting
- * is ours on every harness: `schedule_wakeup` books it, and the scheduled
- * sweep delivers it (`../../maintenance/wakeup-sweep.ts`), so a waiting
+ * is ours on every harness: `schedule_wakeup` books it, and a delayed queue
+ * message delivers it (`../coder-host/agent-wakeups.ts`), so a waiting
  * agent's sandbox stops as any idle one does; Claude Code's own
  * `ScheduleWakeup` is denied its CLI (`@repo/agent-runner`'s
  * `CLAUDE_CODE_TOOLS`).

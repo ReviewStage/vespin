@@ -50,9 +50,9 @@ import {
 } from "@repo/features/inbox-writes";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
+import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -161,11 +161,6 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
   }
 }
 
-/** Buzzes the phone as the system does for an outcome: a send taken, a send refused, or one that lacks something. */
-function buzz(type: NotificationFeedbackType): void {
-  notificationAsync(type).catch((error: unknown) => console.error("The buzz did not go.", error));
-}
-
 /** Holds a notification's action for its thread's box to send once it stands, in place of any held before it. */
 export function pressFromNotification(press: InboxPushPress): void {
   hold(press.itemId, (was) => ({ ...was, pressed: press }));
@@ -249,14 +244,14 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       const typed = was.draft.note.trim() === "" ? sent : was.draft;
       return { draft: typed, sending, note: words };
     });
-    buzz(NotificationFeedbackType.Error);
+    buzz(BUZZ.ERROR);
   };
   const send = (pressed?: InboxDraft) => {
     const sending = pressed ?? draft;
     const unreadable = unreadableNumber(thread, sending);
     if (unreadable !== undefined) {
       hold(itemId, (was) => ({ ...was, note: unreadableWords(unreadable) }));
-      buzz(NotificationFeedbackType.Warning);
+      buzz(BUZZ.WARNING);
       return;
     }
     const sent = inboxThreadSend(thread, sending);
@@ -266,7 +261,7 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
         ...was,
         note: missing === undefined ? undefined : missingWords(missing),
       }));
-      buzz(NotificationFeedbackType.Warning);
+      buzz(BUZZ.WARNING);
       return;
     }
     const key = randomUUID();
@@ -292,7 +287,7 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
     })
       .then((answer) => {
         if ("failure" in answer) throw new SendRefused(refusedWords(answer.failure));
-        buzz(NotificationFeedbackType.Success);
+        buzz(BUZZ.SUCCESS);
       })
       .catch((error: unknown) => {
         if (!(error instanceof SendRefused)) console.error("The reply did not go.", error);
@@ -320,7 +315,7 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       .then((answer) => {
         if ("failure" in answer) throw new SendRefused(refusedWords(answer.failure));
         if (!answer.taken) throw new SendRefused(NOT_RESOLVED[answer.item.status]);
-        buzz(NotificationFeedbackType.Success);
+        buzz(BUZZ.SUCCESS);
       })
       .catch((error: unknown) => {
         if (!(error instanceof SendRefused)) console.error("The resolve did not go.", error);

@@ -196,7 +196,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     taskId,
     repository: chosenTask?.repository ?? null,
     listedAgents: tasks.liveAgents,
-    list: { read: tasks.listRead, failed: tasks.listFailed, onRetry: tasks.onRetryList },
+    list: { failed: tasks.listFailed, onRetry: tasks.onRetryList },
     listedPullRequests: tasks.listedPullRequests,
     // The Inbox draws no agent's composer, so nothing here opens Settings.
     onOpenIntegrations: () => undefined,
@@ -279,10 +279,10 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     standing.some(({ items }) => items.length > 0);
   // Note that a chosen item whose task is listed but not read yet keeps its place, because
   // it may be listed once the read lands; one whose task left the list, deleted elsewhere, gives way.
-  // A task whose agents' read answered none, or that it is not there, holds no Inbox to read;
-  // one whose agents are not read yet may still hold the item, until its Inbox's own read answers.
-  const holderEmpty = agents.listMissing || agents.heldIds?.length === 0;
-  const agentsUnread = agents.heldIds === undefined && !agents.listFailed && !agents.listMissing;
+  // A task whose agents' read answered none holds no Inbox to read; one whose agents are not
+  // read yet may still hold the item, until its Inbox's own read answers.
+  const holderEmpty = agents.heldIds?.length === 0;
+  const agentsUnread = agents.heldIds === undefined;
   // Note that a plan's items read before main's latest word of it may lack the item asked for, so only a current read settles it.
   const chosenWaits =
     taskId !== undefined &&
@@ -301,11 +301,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     asked?.opened === true && chosen === undefined && !chosenWaits && holderRead && !listUnread;
   // An item opened whose holder's own read failed says so, with a way to read it again, rather than waiting on it for good,
   // since nothing reads a failed holder again by itself.
-  const chosenFailed =
-    asked?.opened === true &&
-    chosen === undefined &&
-    !missing &&
-    (live.failed || (agents.listFailed && agents.heldIds === undefined));
+  const chosenFailed = asked?.opened === true && chosen === undefined && !missing && live.failed;
   const { onRetry: retryLive } = live;
   const { onRetryList: retryAgents } = agents;
   const onRetryChosen = useCallback(() => {

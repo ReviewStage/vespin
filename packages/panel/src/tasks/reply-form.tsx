@@ -1,13 +1,16 @@
-import { Button, ComposerFoot } from "@repo/ui";
+import { BUTTON_SIZE, BUTTON_VARIANT, Button } from "@repo/ui";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useState } from "react";
 import { CommentEditor, overCommentBound } from "./comment-editor.js";
+import { REPLY_VARIANT } from "./comment-variant.js";
 
 /**
  * reply-form.tsx -- the words of a member's pending GitHub comment written again, with their Cancel and their save.
  *
- * An edit's form, as a description comment's edit is one: the Markdown field
- * (`CommentEditor`) and, under its words inside its frame, the shared foot
- * (`ComposerFoot`) holding Cancel and the send, which reads in words. Enter
+ * An edit's form, standing as a description comment's edit does: the
+ * Markdown field (`CommentEditor`) bare in the comment it edits, its words
+ * where they were read, and under them the shared foot holding a quiet
+ * Cancel before the round save. Enter
  * sends, Shift+Enter adds a line, Esc lets the form go keeping its
  * words, and Cancel lets them go too. The owner holds the words, through
  * `onWrite`, so what Esc closed is there when the form opens again; it
@@ -62,6 +65,7 @@ export function ReplyForm({
   };
   return (
     <CommentEditor
+      variant={REPLY_VARIANT.EDIT}
       label={words.field}
       placeholder={words.placeholder}
       value={body}
@@ -75,24 +79,24 @@ export function ReplyForm({
       onCancel={() => {
         if (!busy) onLeave();
       }}
-      foot={
-        <ComposerFoot
-          actions={
-            <Button disabled={busy} onClick={onDiscard}>
-              {words.cancel}
-            </Button>
-          }
-          send={{
-            label: words.send,
-            inWords: true,
-            empty: blank,
-            held: busy && !sending,
-            onSend: send,
-            busy: sending,
-            busyLabel: words.sending,
-          }}
-        />
+      actions={
+        <Button
+          variant={BUTTON_VARIANT.QUIET}
+          size={BUTTON_SIZE.COMPACT}
+          disabled={busy}
+          onClick={onDiscard}
+        >
+          <ReplayUnmask>{words.cancel}</ReplayUnmask>
+        </Button>
       }
+      send={{
+        label: words.send,
+        empty: blank,
+        held: busy && !sending,
+        onSend: send,
+        busy: sending,
+        busyLabel: words.sending,
+      }}
     />
   );
 }

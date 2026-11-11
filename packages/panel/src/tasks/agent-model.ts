@@ -9,12 +9,14 @@ import {
   AGENT_PART,
   type AgentPart,
   agentParts,
+  endTurnOf,
   endTurnSummary,
   messageWords,
 } from "@repo/features/agent-parts";
 import {
   ACTION,
   credentialMissingWords,
+  deviceAwayWords,
   extraRepositoryRefusalWords,
   HOST_REMOVED,
   keyUnreadableWords,
@@ -593,7 +595,7 @@ export function turnUnderWay(agent: Pick<AgentSummary, "status" | "stoppable">):
   return agent.status === AGENT_STATUS.RUNNING && agent.stoppable !== false;
 }
 
-/** Why a Start cannot run where neither a task nor an agent is open, which no draft is drawn without. */
+/** Why a Start cannot run where no task is open, which no draft is drawn without. */
 export const START_NEEDS_TASK = "Open a task to start an agent";
 
 /** What a message no answer came back for says while the app does not reach the service, in place of `NOT_HEARD_BACK`: in the composer, whose Retry stands again once the app does (`RetryOffered`), and alone where only the words are drawn, as an Inbox answer's are. */
@@ -1159,14 +1161,12 @@ export function messageFailureNote(
   // Note that the box's note stands beside Continue in new agent, so it tells no one to continue.
   if (refused.failure === AGENT_CALL_FAILURE.AGENT_RETIRED) return callFailure(BOX_RETIRED);
   if (refused.failure === AGENT_CALL_FAILURE.DEVICE_REMOVED) return callFailure(HOST_REMOVED);
-  // Note that a device away refuses a message in the words it refuses a Start in.
+  // Note that a device that refuses a message for another reason says it in the words it refuses a Start in.
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
-    return callFailure(
-      localAgentRefusalWords(
-        refused.localAgentRefusal ?? LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        refused.refusedDevice,
-      ),
-    );
+    const refusal = refused.localAgentRefusal ?? LOCAL_AGENT_REFUSAL.MAC_AWAY;
+    return refusal === LOCAL_AGENT_REFUSAL.MAC_AWAY
+      ? { reason: FAILURE_REASON.CONTINUE_IN_CLOUD, text: deviceAwayWords(refused.refusedDevice) }
+      : callFailure(localAgentRefusalWords(refusal, refused.refusedDevice));
   }
   const theirs = starter === undefined ? undefined : starterKeyWords(refused.failure, starter);
   if (theirs !== undefined) return callFailure(theirs);
@@ -2056,6 +2056,22 @@ export function finishedReplyLead(
   const lead =
     cut.length <= REPLY_LEAD_WORDS ? sentence : `${cut.slice(0, REPLY_LEAD_WORDS).join(" ")}…`;
   return { messageId: reply.id, lead };
+}
+
+/**
+ * The follow-ups of the newest turn, where it ended with an `end_turn` that
+ * was taken: the turn's message, which ticks are kept against so a later
+ * turn starts with none ticked, and what it offered; none where the newest
+ * turn ended another way.
+ */
+export function lastTurnEnding(
+  messages: readonly AgentTranscriptMessage[],
+): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
+  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next.
+  const last = messages.findLast((message) => message.arrivedIn === undefined);
+  if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
+  const ending = endTurnOf(agentParts(last));
+  return ending === undefined ? undefined : { messageId: last.id, followUps: ending.followUps };
 }
 
 /** Where a line the developer sent stands, before the service's row for it lands. */
