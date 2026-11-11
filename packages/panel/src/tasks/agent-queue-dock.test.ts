@@ -4,24 +4,28 @@ import assert from "node:assert/strict";
 import type { QueuedMessage } from "@repo/features/agent-queue-wire";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
+import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { Effect } from "effect";
-import { act, createElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
+import { fakeAppBridge } from "../testing/app-bridge.js";
+import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
+import { peopleRead, withPeopleRead } from "../testing/people-read.js";
 import { AgentPicturesProvider } from "./agent-pictures.js";
 import { AgentQueueDock } from "./agent-queue-dock.js";
 
 /**
  * The queue's presses as a reader finds them: a message offers Steer, Edit,
- * and Delete, one being edited Cancel alone, in any of the starter's
- * windows, and a reader who did not start the agent finds none at all,
- * Resume among them, since the service lets its starter alone change the
- * queue. A row's words are drawn
+ * and Delete, one being edited Cancel alone, in any window that may change
+ * the queue, and a reader who may not message the agent finds none at all,
+ * Resume among them, since the service refuses them every change. A row's words are drawn
  * as a sent message's are, a mention as its chip, and its files as a sent
  * message's, an image as its thumbnail, read through the agent's pictures.
+ * A message someone other than the reader queued names them by their face.
  */
 
 const ignore = () => undefined;
@@ -59,8 +63,12 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The dock drawn over `messages` for a reader who `controls` the queue or not; answers its presses by name, and its words, row by row. */
-function drawn(controls: boolean, messages: readonly QueuedMessage[] = TWO) {
+/** The dock drawn over `messages` for a reader who `controls` the queue or not, inside `under` where given; answers its presses by name, and its words, row by row. */
+function drawn(
+  controls: boolean,
+  messages: readonly QueuedMessage[] = TWO,
+  under: (dock: ReactElement) => ReactElement = (dock) => dock,
+) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -68,21 +76,23 @@ function drawn(controls: boolean, messages: readonly QueuedMessage[] = TWO) {
   act(() =>
     root.render(
       withQueryClient(
-        createElement(
-          AgentPicturesProvider,
-          { value: PICTURES },
-          createElement(AgentQueueDock, {
-            messages,
-            controls,
-            paused: { because: QUEUE_PAUSE.STOPPED },
-            editing: undefined,
-            onMove: ignore,
-            onSteer: ignore,
-            onEdit: ignore,
-            onCancelEdit: ignore,
-            onDelete: () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED }),
-            onResume: ignore,
-          }),
+        under(
+          createElement(
+            AgentPicturesProvider,
+            { value: PICTURES },
+            createElement(AgentQueueDock, {
+              messages,
+              controls,
+              paused: { because: QUEUE_PAUSE.STOPPED },
+              editing: undefined,
+              onMove: ignore,
+              onSteer: ignore,
+              onEdit: ignore,
+              onCancelEdit: ignore,
+              onDelete: () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED }),
+              onResume: ignore,
+            }),
+          ),
         ),
       ),
     ),
@@ -113,6 +123,9 @@ function drawn(controls: boolean, messages: readonly QueuedMessage[] = TWO) {
         chip.querySelector(".ui-inline-ref-label")?.textContent,
       ]),
     all: () => presses(container),
+    /** Who the row names as having queued it, as a screen reader hears their face; none where it names nobody. */
+    queuer: (index: number) =>
+      rows[index]?.querySelector("[data-actor-ref] .ui-visually-hidden")?.textContent ?? undefined,
   };
 }
 
@@ -125,7 +138,7 @@ test("a message offers Steer, Edit, and Delete, and one an edit left standing in
   assert.deepEqual(dock.row(1), ["Cancel"]);
 });
 
-test("a reader who did not start the agent finds no press on the queue, Resume among them", () => {
+test("a reader who may not message the agent finds no press on the queue, Resume among them", () => {
   const dock = drawn(false);
 
   assert.deepEqual(dock.all(), []);
@@ -163,4 +176,33 @@ test("a queued image is drawn on its row as a sent message's is, its thumbnail r
     assert.deepEqual(dock.images(0), [`data:${AGENT_ATTACHMENT_TYPE.PNG};base64,${SHOT.base64}`]),
   );
   assert.ok(dock.filesReached(0), "a reader reaches the files, which open as a sent message's do");
+});
+
+test("a message a teammate queued names them by their face, and one the reader queued names nobody", async () => {
+  fakeAppBridge({});
+  const member = { email: "", role: WORKSPACE_ROLE.MEMBER };
+  handMembers(() => ({
+    rows: {
+      members: [
+        { ...member, userId: "user-ada", name: "Ada Park" },
+        { ...member, userId: "user-charles", name: "Charles Pan" },
+      ],
+    },
+  }));
+  const dock = drawn(
+    true,
+    [
+      { id: "m1", text: "Run the tests", queuedBy: "user-ada" },
+      { id: "m2", text: "Check the staging deploy", queuedBy: "user-charles" },
+    ],
+    (inner) =>
+      withPeopleRead(
+        { workspace: { id: "workspace-acme", memberCount: 2 }, readerId: "user-ada" },
+        inner,
+      ),
+  );
+  await act(peopleRead);
+
+  assert.equal(dock.queuer(0), undefined);
+  assert.equal(dock.queuer(1), "Charles Pan");
 });

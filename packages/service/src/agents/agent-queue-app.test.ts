@@ -76,7 +76,8 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * member's change (add, edit, hold, reorder, delete, steer, resume) moves the
  * queue's revision and is answered with the queue; Stop and every other
  * cancel pause it; a refused hand-off keeps the message and pauses with why;
- * and only the agent's starter may change it. Over the harness the agents
+ * and any member who may message the agent may change it, every message in
+ * it whoever queued it. Over the harness the agents
  * routes' tests share (`testing/agents-app.ts`). Synthetic accounts, tasks,
  * and words throughout.
  */
@@ -973,41 +974,54 @@ it.layer(SUITE)("an agent's queue", (it) => {
   );
 
   it.effect(
-    "only the agent's starter changes its queue: a teammate who may message the agent reads its queue and changes none of it",
+    "a teammate who may message the agent queues behind its turn and edits its starter's message, which stays the starter's, until the agent runs on its starter's own Mac",
     () =>
       Effect.gen(function* () {
         const opened = yield* messagedAgent(fakeAgentSessions(), { running: true });
         yield* joinWorkspace(opened.task.workspaceId, opened.other);
         const { agent, ask, owner, other } = opened;
-        yield* queueChanged(ask, owner, agent.id, {
+        /** One change as the teammate asks it from their browser, and how it was answered. */
+        const teammateAsks = (change: WireBoundaryInput) =>
+          ask(
+            request(AGENT_QUEUE, undefined, {
+              method: "POST",
+              id: agent.id,
+              cookie: sessionCookieOf(other),
+              body: change,
+            }),
+          );
+        const [starters] = (yield* queueChanged(ask, owner, agent.id, {
           change: QUEUE_CHANGE.ADD,
           text: "Open the pull request.",
           id: randomUUID(),
-        });
+        })).messages;
+        assert.ok(starters !== undefined);
 
-        const changed = yield* ask(
-          request(AGENT_QUEUE, undefined, {
-            method: "POST",
-            id: agent.id,
-            cookie: sessionCookieOf(other),
-            body: { change: QUEUE_CHANGE.ADD, text: "Also the docs.", id: randomUUID() },
-          }),
-        );
-
-        assert.equal(changed.status, HOSTED_HTTP_STATUS.FORBIDDEN);
-
-        const read = readAnswer(
-          agentMessagesAnswerSchema,
+        yield* teammateAsks({ change: QUEUE_CHANGE.ADD, text: "Also the docs.", id: randomUUID() });
+        const edited = readAnswer(
+          agentQueueAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
-          yield* ask(
-            request(AGENT_MESSAGES, undefined, { id: agent.id, cookie: sessionCookieOf(other) }),
-          ),
-        );
+          yield* teammateAsks({
+            change: QUEUE_CHANGE.EDIT,
+            messageId: starters.id,
+            text: "Open the pull request as a draft.",
+          }),
+        ).queue;
 
         assert.deepEqual(
-          read.queue?.messages.map((message) => message.text),
-          ["Open the pull request."],
+          edited.messages.map(({ text, queuedBy }) => [text, queuedBy]),
+          [
+            ["Open the pull request as a draft.", owner],
+            ["Also the docs.", other],
+          ],
         );
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`update agent set machine = 'device' where id = ${agent.id}`;
+        const refused = yield* teammateAsks({
+          change: QUEUE_CHANGE.DELETE,
+          messageId: starters.id,
+        });
+        assert.equal(refused.status, HOSTED_HTTP_STATUS.FORBIDDEN);
       }),
   );
 
