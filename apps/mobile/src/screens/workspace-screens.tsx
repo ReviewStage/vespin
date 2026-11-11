@@ -27,6 +27,9 @@ const WORDS = {
   CREATE: "Create",
   CREATING: "Creating",
   CANCEL: "Cancel",
+  CLOSE: "Close",
+  /** What the sheet says once the workspace is made, while the account's list has yet to hold it. */
+  MADE: "Workspace created. It opens here as soon as your workspaces refresh.",
 } as const;
 
 /** What a flow finds the name field by. */
@@ -41,7 +44,9 @@ const NAME_FIELD_ID = "new-workspace-name";
  * list, because the act answers before the workspaces' follow carries the new
  * one, and the choice falls back to the first workspace until it does; and
  * that Create stays dimmed while it waits, so a second press makes no second
- * workspace. A refusal says why under the name and keeps the sheet. Its
+ * workspace, and the sheet says the workspace was made with Close in Cancel's
+ * place, so a list slow to refresh never leaves it saying nothing. A refusal
+ * says why under the name and keeps the sheet. Its
  * teammates are invited from Workspace settings, as the panel's cards
  * invite them after the name.
  */
@@ -83,7 +88,9 @@ export function NewWorkspaceScreen() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={() => router.back()}>
+          {made === undefined ? WORDS.CANCEL : WORDS.CLOSE}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
@@ -97,7 +104,10 @@ export function NewWorkspaceScreen() {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection title={WORDS.WORKSPACE} footer={create.refusal}>
+          <ListSection
+            title={WORDS.WORKSPACE}
+            footer={create.refusal ?? (made === undefined ? undefined : WORDS.MADE)}
+          >
             <WordsField
               placeholder={WORDS.TEAM_NAME}
               onWords={setName}
