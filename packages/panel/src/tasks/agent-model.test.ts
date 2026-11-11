@@ -149,7 +149,7 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
   ]);
 });
 
-test("a finished turn that ended with end_turn replies in its summary, folding the words it wrote on the way with its work, while a turn still moving keeps its words", () => {
+test("a finished turn that ended with end_turn replies in its summary, keeping the words it wrote before the call and folding those after it, which the summary stands in for, while a turn still moving keeps its words", () => {
   const summary = "- Fixed the failing check.\n- Pushed to #214.";
 
   const turn: AgentTranscriptMessage = {
@@ -173,7 +173,7 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
       row.kind === TURN_ROW.BLOCK && row.block.kind === AGENT_PART.TEXT ? [row.block.text] : [],
     );
 
-  assert.deepEqual(words(false), [summary]);
+  assert.deepEqual(words(false), ["Reading the check's log.", summary]);
   assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
   assert.equal(messageWords(turn), summary);
   assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
