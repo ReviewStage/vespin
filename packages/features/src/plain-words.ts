@@ -1,7 +1,7 @@
 // plain-words.ts -- markdown as the plain words of a line too short to draw it: a card's title, and a preview's whole words on one line.
 
 import { INLINE_SPAN, readInline } from "./composer-markdown.js";
-import { linkLabels } from "./mention-link.js";
+import { insideCode, linkLabels } from "./mention-link.js";
 
 /** The marks a markdown line opens on: a heading's, a quote's, or a list item's, which a description's or a task's first line may carry. */
 const LINE_MARKS = /^(?:#{1,6}|>|[-*+]|\d+[.)])\s+/u;
@@ -32,8 +32,11 @@ export function cardTitle(text: string): string {
 }
 
 function plainLine(line: string): string {
-  // A link is said by its name, as its chip names it, never its destination (`linkLabels`), and a picture by its alt words, without the mark that makes it one.
-  const words = linkLabels(line.trim().replace(LINE_MARKS, "").replace(PICTURE_OPEN, "["));
+  // A link is said by its name, as its chip names it, never its destination (`linkLabels`), and a picture by its alt words, without the mark that makes it one where it is no code's.
+  const marked = line.trim().replace(LINE_MARKS, "");
+  const words = linkLabels(
+    marked.replace(PICTURE_OPEN, (open, at: number) => (insideCode(marked, at) ? open : "[")),
+  );
   // Note that the marks are read as a message box reads them (`composer-markdown.ts`), so a preview says what the box showed: each mark's words without its delimiters or the escapes in them, a code span's words as they are, and words wearing none as typed but for a stray mark.
   return readInline(words, [])
     .map((span) => {

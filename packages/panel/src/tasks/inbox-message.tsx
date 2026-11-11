@@ -1,5 +1,9 @@
 import type { FileChip } from "@repo/features/attachment-model";
-import { inboxCommentFiles, inboxLineFiles } from "@repo/features/inbox-list-model";
+import {
+  inboxCommentFiles,
+  inboxLineFiles,
+  inboxPreviewPieces,
+} from "@repo/features/inbox-list-model";
 import {
   INBOX_MESSAGE_AUTHOR,
   type InboxItem,
@@ -183,13 +187,17 @@ function readUrls(reads: ReadonlyMap<string, InboxFileRead>): ReadonlyMap<string
 }
 
 /**
- * The files an item's row's line names (`inboxLineFiles`), as chips its
- * words draw (`LineWords`): each picture's bytes where the window already
- * holds them, read by its thread, and its glyph where not. Note that a row
- * reads no picture of its own, because a long Inbox would read every
- * picture of every latest message just to list them.
+ * An item's row's second line as its pieces (`inboxPreviewPieces`), each
+ * file it places as the chip its words draw (`LineWords`): a picture's bytes
+ * where the window already holds them, read by its thread, and its glyph
+ * where not. Note that a row reads no picture of its own, because a long
+ * Inbox would read every picture of every latest message just to list them.
  */
-export function useInboxLineChips(item: InboxItem): readonly FileChip[] {
+export function useInboxLinePieces(
+  item: InboxItem,
+  nameOf: Parameters<typeof inboxPreviewPieces>[1],
+  ticked: readonly number[],
+): readonly (string | FileChip)[] {
   const files = inboxLineFiles(item);
   const queries = useQueries({
     queries: files.map((file) => pictureQuery(item.id, file.attachmentId)),
@@ -200,7 +208,9 @@ export function useInboxLineChips(item: InboxItem): readonly FileChip[] {
       return read?.kind === PICTURE_STATE.READY ? [[file.attachmentId, read.url] as const] : [];
     }),
   );
-  return inboxFileChips(files, urls);
+  return inboxPreviewPieces(item, nameOf, ticked).map((piece) =>
+    typeof piece === "string" ? piece : (inboxFileChips([piece], urls)[0] ?? piece.name),
+  );
 }
 
 /**

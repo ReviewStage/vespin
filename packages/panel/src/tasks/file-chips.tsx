@@ -1,5 +1,5 @@
 import { chipBase64, type FileChip } from "@repo/features/attachment-model";
-import { fileMarkers, isPictureName, writtenMarkers } from "@repo/features/file-marker";
+import { fileMarkers, isPictureName } from "@repo/features/file-marker";
 import { AttachmentRef } from "@repo/ui";
 import { createContext, Fragment, type ReactNode, useState } from "react";
 import { AttachmentViewer } from "./attachment-viewer.js";
@@ -61,35 +61,21 @@ export function WordFileChip({
 }
 
 /**
- * One line of a message's words as plain words, a row's preview, with each
- * marker naming one of `files` drawn as its pill, where the thread draws the
- * same message's: a picture's thumbnail where its bytes are here, else its
- * glyph, and its name. Note that the pill presses nothing and hangs no
- * card, because the row it stands in is the press and hangs its own, and
- * that every marker is read, since plain words keep no code to tell apart.
+ * One line of a message's words as plain words, a row's preview, in pieces:
+ * its words, and each file its words name drawn where its marker stood as
+ * its pill, as the thread draws the same message's: a picture's thumbnail
+ * where its bytes are here, else its glyph, and its name. Note that the pill
+ * presses nothing and hangs no card, because the row it stands in is the
+ * press and hangs its own.
  */
-export function LineWords({
-  words,
-  files,
-}: {
-  words: string;
-  files: readonly FileChip[];
-}): ReactNode {
-  if (files.length === 0) return words;
-  const parts: ReactNode[] = [];
-  let at = 0;
-  for (const marker of writtenMarkers(words)) {
-    const file = files.find((each) => namedBy(each, marker.name));
-    if (file === undefined) continue;
-    parts.push(
-      <Fragment key={marker.start}>
-        {words.slice(at, marker.start)}
-        <WordFileChip name={marker.name} file={file} />
-      </Fragment>,
-    );
-    at = marker.end;
-  }
-  return parts.length === 0 ? words : [...parts, words.slice(at)];
+export function LineWords({ pieces }: { pieces: readonly (string | FileChip)[] }): ReactNode {
+  return pieces.map((piece, at) =>
+    typeof piece === "string" ? (
+      <Fragment key={at}>{piece}</Fragment>
+    ) : (
+      <WordFileChip key={at} name={piece.name} file={piece} />
+    ),
+  );
 }
 
 /** The viewer a message's files open in: open one by its name, walking `files` from it, and the viewer while one is open. */

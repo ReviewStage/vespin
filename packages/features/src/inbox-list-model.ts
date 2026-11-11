@@ -15,7 +15,7 @@
 
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
-import { fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
+import { fileMarker, fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
 import {
   INBOX_PICTURE_IN_WORDS,
@@ -382,12 +382,21 @@ interface ItemLine {
   readonly byAgent: boolean;
   /** The member who said the latest message, where the agent did not. */
   readonly member: InboxMember | undefined;
-  /** The files of the latest message its words name by their markers, which the row draws as chips where the words name them. */
-  readonly files: readonly InboxMessageFile[];
+  /** The same words with each file a member's message names by its marker outside code placed where it stands, for the row to draw as its chip. */
+  readonly pieces: readonly InboxLinePiece[];
 }
 
-/** No files, one array so every line naming none hands down the same one. */
-const NO_LINE_FILES: readonly InboxMessageFile[] = [];
+/** A run of a row's second line: words, or a file its words name where its marker stood. */
+export type InboxLinePiece = string | InboxMessageFile;
+
+/** What stands around a file's place in a line's words while they are read as plain words: characters of Unicode's private use, which no message's words keep (`chipMarked`). */
+const CHIP_PLACE = { OPEN: "\uE000", CLOSE: "\uE001" } as const;
+
+/** A file's place in a line's words, by its index among the message's files. */
+const CHIP_PLACED = /\uE000(\d+)\uE001/gu;
+
+/** The characters a place is written in, taken out of a message's own words first. */
+const CHIP_PLACE_CHARACTERS = /[\uE000\uE001]/gu;
 
 /** Each item's line as `itemLine` last read it, kept for as long as the item stands. */
 const itemLines = new WeakMap<InboxItem, ItemLine>();
@@ -421,7 +430,7 @@ function itemLine(item: InboxItem): ItemLine {
         heard: INBOX_SETTLED_STANDING.RESOLVED,
         byAgent: true,
         member: undefined,
-        files: NO_LINE_FILES,
+        pieces: [INBOX_SETTLED_STANDING.RESOLVED],
       }
     : asking !== undefined && knownAsk(asking.ask)
       ? {
@@ -431,17 +440,16 @@ function itemLine(item: InboxItem): ItemLine {
           heard: askLine(asking.ask, []),
           byAgent: true,
           member: undefined,
-          files: NO_LINE_FILES,
+          pieces: [askLine(asking.ask, [])],
         }
       : {
           kind: last?.answers === undefined ? INBOX_LINE.SAID : INBOX_LINE.SETTLED,
           ask: undefined,
-          words: last === undefined ? "" : lastWords(thread, last, plainWords),
+          ...(last === undefined ? { words: "", pieces: [""] } : placedLine(thread, last)),
           // Note that a reader hears each file the words name by its name, where the eye sees its chip.
           heard: last === undefined ? "" : lastWords(thread, last, heardWords),
           byAgent: last === undefined || last.author === INBOX_MESSAGE_AUTHOR.AGENT,
           member: last?.member,
-          files: last === undefined ? NO_LINE_FILES : filesNamed(last),
         };
   itemLines.set(item, line);
   return line;
@@ -453,27 +461,78 @@ export function inboxLineAsk(item: InboxItem): InboxKnownAsk | undefined {
 }
 
 /**
- * The files of an item's row's second line its words name, each by the
- * marker a member's message wrote where it stood (`file-marker.ts`), so the
- * row draws each marker as the file's chip, as the thread does; none where
- * the line says an ask or a resolve, or the agent's words, which write no
- * markers. Note that a marker names a picture only where the file is one,
- * as the thread reads it (`file-chips.tsx`).
+ * An item's row's second line as `inboxPreview` says it, with each file a
+ * member's message names by its marker outside code placed where the marker
+ * stands, so the row draws it as the file's chip, as the thread does: none
+ * where the line says an ask or a resolve, or the agent's words, which write
+ * no markers. Note that a marker in code stays words, though the same file
+ * is named outside it, since plain words keep no code to tell it apart by.
  */
-export function inboxLineFiles(item: InboxItem): readonly InboxMessageFile[] {
-  return itemLine(item).files;
+export function inboxPreviewPieces(
+  item: InboxItem,
+  nameOf: (member: InboxMember | undefined) => string,
+  ticked?: readonly number[],
+): readonly InboxLinePiece[] {
+  const line = itemLine(item);
+  if (line.ask !== undefined) return [previewOf(line, nameOf, ticked, line.words)];
+  return line.byAgent ? line.pieces : [`${nameOf(line.member)}: `, ...line.pieces];
 }
 
-/** A member's message's files its words name outside code. */
-function filesNamed(message: InboxMessage): readonly InboxMessageFile[] {
-  const files = message.files ?? [];
-  if (message.author === INBOX_MESSAGE_AUTHOR.AGENT || files.length === 0) return NO_LINE_FILES;
-  const names = new Set(fileMarkers(message.text).map((marker) => marker.name));
-  const named = files.filter(
-    (file) =>
-      names.has(file.name) && (!isPictureName(file.name) || file.mediaType.startsWith("image/")),
-  );
-  return named.length === 0 ? NO_LINE_FILES : named;
+/** The files an item's row's second line places (`inboxPreviewPieces`), each once. */
+export function inboxLineFiles(item: InboxItem): readonly InboxMessageFile[] {
+  const files = itemLine(item).pieces.filter((piece) => typeof piece !== "string");
+  return [...new Set(files)];
+}
+
+/**
+ * The latest message's words as its row says them, as plain words and as
+ * pieces with each file a member's marker names outside code in its place.
+ * Note that the place is written into the words before they are read as
+ * plain words, because reading them drops the code a marker stood in.
+ */
+function placedLine(
+  thread: readonly InboxMessage[],
+  last: InboxMessage,
+): { readonly words: string; readonly pieces: readonly InboxLinePiece[] } {
+  const files = last.author === INBOX_MESSAGE_AUTHOR.AGENT ? [] : (last.files ?? []);
+  if (files.length === 0) {
+    const words = lastWords(thread, last, plainWords);
+    return { words, pieces: [words] };
+  }
+  const placed = lastWords(thread, last, (text) => plainWords(chipMarked(text, files)));
+  const pieces: InboxLinePiece[] = [];
+  let at = 0;
+  for (const match of placed.matchAll(CHIP_PLACED)) {
+    const file = files[Number(match[1])];
+    if (file === undefined) continue;
+    const before = placed.slice(at, match.index);
+    pieces.push(...(before === "" ? [] : [before]), file);
+    at = match.index + match[0].length;
+  }
+  const after = placed.slice(at);
+  if (after !== "" || pieces.length === 0) pieces.push(after);
+  const words = pieces
+    .map((piece) => (typeof piece === "string" ? piece : fileMarker(piece.name)))
+    .join("");
+  return { words, pieces };
+}
+
+/** A message's words with each marker outside code that names one of `files` written as its place, a marker naming a picture only where the file is one, as the thread reads it (`file-chips.tsx`). */
+function chipMarked(text: string, files: readonly InboxMessageFile[]): string {
+  const words = text.replace(CHIP_PLACE_CHARACTERS, "");
+  let marked = "";
+  let at = 0;
+  for (const marker of fileMarkers(words)) {
+    const index = files.findIndex(
+      (file) =>
+        file.name === marker.name &&
+        (!isPictureName(file.name) || file.mediaType.startsWith("image/")),
+    );
+    if (index === -1) continue;
+    marked += `${words.slice(at, marker.start)}${CHIP_PLACE.OPEN}${String(index)}${CHIP_PLACE.CLOSE}`;
+    at = marker.end;
+  }
+  return marked + words.slice(at);
 }
 
 /** An item's second line from its line's `words`: the ask, as the draft ticks it, or the message's words after who said them where the agent did not. */
