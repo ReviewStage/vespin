@@ -2,7 +2,6 @@
 
 import {
   Divider,
-  Group,
   Menu,
   NavigationSplitView,
   Button as SwiftUIButton,
@@ -13,7 +12,6 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
-  accessibilityHidden,
   navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
   navigationTitle,
@@ -76,11 +74,9 @@ export type BarPath = {
 
 /**
  * What a column's bar holds: its title, small and inline as every screen's
- * stands, which the back button and the reader name it by; the account's
- * photo at its leading edge with what heads it after the photo (a SwiftUI
- * view such as the workspace switcher, in place of the drawn title, which
- * the column keeps for the back button and the reader), a page's path in
- * its middle, its menu and its act at its trailing edge, a search field
+ * stands, which the back button and the reader name it by; the account's photo at its leading edge, what
+ * heads it in its middle (a SwiftUI view such as the workspace switcher, or
+ * a page's path), its menu and its act at its trailing edge, a search field
  * over its list, and the acts at its foot, as an iPad's sidebar stands
  * Settings in its bottom bar.
  */
@@ -200,14 +196,8 @@ function Column({
             <AccountBarItem {...bar.account} />
           </ToolbarItem>
         )}
-        {/* Note that the header stands after the photo rather than as the principal item, because a principal item centers over the whole bar and drew over the photo in a sidebar's narrow column; an empty principal item then hides the drawn title. */}
         {bar.header === undefined ? null : (
-          <ToolbarItem placement="topBarLeading">{bar.header}</ToolbarItem>
-        )}
-        {bar.header === undefined || bar.path !== undefined ? null : (
-          <ToolbarItem placement="principal">
-            <Group modifiers={[accessibilityHidden()]}>{null}</Group>
-          </ToolbarItem>
+          <ToolbarItem placement="principal">{bar.header}</ToolbarItem>
         )}
         {bar.path === undefined ? null : (
           <ToolbarItem placement="principal">
