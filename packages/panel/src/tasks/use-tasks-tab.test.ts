@@ -745,6 +745,23 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   assert.equal(home.control().newTask.homeAsks, 1);
 });
 
+test("New task pressed on Settings, which it leaves for Home, asks Home's own composer for the caret rather than opening the dialog over it", () => {
+  const settings = mount({
+    shown: false,
+    loadedAt: "/app/settings",
+    tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces },
+  });
+  // Note that the chord brings the Tasks tab forward, which lands on Home, and then presses New task as Settings drew it.
+  const { onOpen } = settings.control().newTask;
+  act(() => {
+    settings.arrive("/app");
+    settings.stand({ shown: true });
+    onOpen();
+  });
+  assert.equal(settings.control().newTask.open, false, "no dialog over Home");
+  assert.equal(settings.control().newTask.homeAsks, 1, "Home's composer is asked for the caret");
+});
+
 test("an agent's start pressed on Home's own composer and refused opens no dialog over Home, handing the composer the card it pressed with and why, which a page opened since lets go", async () => {
   const tab = mount(
     { shown: true, tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces } },

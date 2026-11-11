@@ -407,6 +407,8 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   >(undefined);
   // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
   const [homeNewTasks, setHomeNewTasks] = useState(0);
+  // A plain New task pressed while the tab was not shown, read once the window stands where the press brought the tab.
+  const [newTaskAway, setNewTaskAway] = useState(false);
   // New task's own page: an agent's start under way, or a start Home's own composer refused while Home stood.
   const [page, setPage] = useState<NewTaskPage | undefined>(undefined);
   // How many starts Home's own composer had refused, each a new opening it draws afresh.
@@ -647,16 +649,26 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   const newTaskWith = (preset: NewTaskPreset | undefined) =>
     setNewTaskAsk((standing) => standing ?? { preset });
   // Home opens on New task's composer, so a plain New task there takes its
-  // caret rather than drawing the same card again in a dialog over it. Note
-  // that the tab need not be shown, because every New task press brings it
-  // forward first.
-  const newTask = () => {
+  // caret rather than drawing the same card again in a dialog over it.
+  const newTaskHere = () => {
     if (place.atHome() && signedIn && newTaskAsk === undefined) setHomeNewTasks((n) => n + 1);
     else newTaskWith(undefined);
   };
+  // Note that a press while Settings holds the window brings the tab forward
+  // first, and the window stands Home only once that lands, so the press is
+  // read in the render that draws where it landed rather than where it was made.
+  const newTask = () => {
+    if (shown) newTaskHere();
+    else setNewTaskAway(true);
+  };
   // The dialog is the Tasks tab's, so Settings taking the window puts it
-  // away rather than leaving it to stand again on the way back.
+  // away rather than leaving it to stand again on the way back, and a press
+  // whose move left the tab unshown, as one kept at a page's ask, opens nothing.
   if (!shown && newTaskAsk !== undefined) setNewTaskAsk(undefined);
+  if (newTaskAway) {
+    setNewTaskAway(false);
+    if (shown) newTaskHere();
+  }
 
   // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
