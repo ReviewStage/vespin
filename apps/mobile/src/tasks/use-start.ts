@@ -198,7 +198,7 @@ export interface RepositoryPick {
  * stands, and the one a task starts in: the pick, else the newest the
  * account's tasks were about that the workspace reaches, else the first it
  * lists, as Home's chip starts. A draft's repository (`drafted`) stands as
- * the first pick.
+ * the first pick while the workspace reaches it, and gives way otherwise.
  */
 export function useRepositoryPick(
   workspace: Workspace | undefined,
@@ -221,9 +221,11 @@ export function useRepositoryPick(
     workspaceReaches(workspace, repository) &&
     (read?.rows === undefined || listed.includes(repository));
   const starting = recent.find(reached) ?? listed[0];
+  // Note that a draft's repository may be one the workspace it opens in no longer reaches, so it stands only while it does.
+  const kept = picked !== undefined && picked === drafted && !reached(picked) ? undefined : picked;
   return {
     options: listed.map((repository) => ({ id: repository, label: repository })),
-    picked: picked ?? starting,
+    picked: kept ?? starting,
     pick: setPicked,
   };
 }

@@ -60,7 +60,7 @@ function GuardedScreens() {
   useSystemActivity(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
-  useShareSheet();
+  useShareSheet(updateNeeded);
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const sheetPresentation =
     useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? "formSheet" : "modal";

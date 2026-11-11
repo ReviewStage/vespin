@@ -5,7 +5,7 @@
  * from the snapshot the app writes (`@repo/features/ios-share-wire`)
  * whenever what it holds changes, and keeps what the member wrote as a draft
  * the app opens New task on, prefilled, each time it comes forward with an
- * account signed in. A draft kept under another account is dropped. A
+ * account signed in and no update holding the app; until then it stays. A draft kept under another account is dropped. A
  * sign-out removes both files, so nothing of the account stays where the
  * extension reads.
  */
@@ -82,12 +82,13 @@ function useOpenDraft(accountId: string | undefined): void {
 
 /**
  * Keeps the share sheet's snapshot current while an account is signed in,
- * opens New task on a draft it kept, and removes both once the account
+ * opens New task on a draft it kept, unless the update screen holds the app
+ * (`updateNeeded`), where New task cannot open, and removes both once the account
  * signs out. Note that the files are removed on the change from signed in to
  * out, never on a launch's first read before the account is restored, which
  * would drop a draft kept while the app was closed.
  */
-export function useShareSheet(): void {
+export function useShareSheet(updateNeeded: boolean): void {
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const accountId = signedInAccountId(account);
   const snapshot = useSnapshotJson(accountId);
@@ -102,5 +103,5 @@ export function useShareSheet(): void {
     }
     signedInBefore.current = accountId;
   }, [accountId]);
-  useOpenDraft(accountId);
+  useOpenDraft(updateNeeded ? undefined : accountId);
 }

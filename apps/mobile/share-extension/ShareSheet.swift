@@ -37,6 +37,8 @@ final class ShareSheetModel: ObservableObject {
     didSet { if workspaceId != oldValue { repository = workspace?.repositories.first } }
   }
   @Published var repository: String?
+  /// True until what was shared is read into the words, while the field and Start wait on it.
+  @Published var reading = true
   @Published private(set) var standing = Standing.drafting
 
   init(snapshot: ShareSnapshot?) {
@@ -91,8 +93,8 @@ struct ShareSheet: View {
     }
     .tint(Color("AccentColor"))
     .task {
-      let shared = await SharedItems.words(of: items)
-      if model.prompt.isEmpty { model.prompt = shared }
+      model.prompt = await SharedItems.words(of: items)
+      model.reading = false
     }
   }
 
@@ -100,7 +102,7 @@ struct ShareSheet: View {
     Section {
       TextField(Words.placeholder, text: $model.prompt, axis: .vertical)
         .lineLimit(4...12)
-        .disabled(model.standing == .kept)
+        .disabled(model.reading || model.standing == .kept)
     } footer: {
       switch model.standing {
       case .drafting: EmptyView()
@@ -136,7 +138,7 @@ struct ShareSheet: View {
       }
       ToolbarItem(placement: .confirmationAction) {
         Button(Words.start, action: model.start)
-          .disabled(model.snapshot == nil || model.words.isEmpty)
+          .disabled(model.snapshot == nil || model.reading || model.words.isEmpty)
       }
     } else {
       ToolbarItem(placement: .confirmationAction) {

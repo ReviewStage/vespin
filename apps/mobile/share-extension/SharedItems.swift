@@ -1,8 +1,9 @@
 // SharedItems.swift -- what another app shared, read as the words a task starts from: its text, then its web link on a line of its own.
 //
 // An item may carry its words as the item's own content text, as a plain
-// text attachment, or both, and its link as a URL attachment; each is read
-// once, in that order, and the same words or link twice are kept once. A
+// text attachment, or both, and its link as a URL attachment, one provider
+// offering both a link and its caption; each is read, in that order, and the
+// same words or link twice are kept once. A
 // file URL is not a web link, so it is left out.
 
 import Foundation
@@ -20,7 +21,8 @@ enum SharedItems {
           let url = await load(URL.self, from: provider, as: .url), !url.isFileURL
         {
           links.append(url.absoluteString)
-        } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
+        }
+        if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
           let text = await load(String.self, from: provider, as: .plainText)
         {
           texts.append(text)
