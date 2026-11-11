@@ -8,9 +8,8 @@ import { PICTURE_STATE } from "../../picture-read.js";
 import { AppWindowStack } from "./app-window-stack.js";
 
 /**
- * app-window-stack.test.ts -- the stack names the app on top and how many
- * others stand behind it; its window opens and its Stop stops, and a reader
- * who may not stop the agent finds no Stop.
+ * app-window-stack.test.ts -- the window on top opens when pressed, named
+ * for its app, and a stack of no apps draws nothing.
  */
 
 const roots: Root[] = [];
@@ -26,13 +25,6 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-/** The button named `name`, by its words or its label, or none. */
-function button(name: string): HTMLButtonElement | undefined {
-  return [...document.querySelectorAll("button")].find(
-    (each) => each.getAttribute("aria-label") === name || each.textContent === name,
-  );
-}
-
 function draw(props: Parameters<typeof AppWindowStack>[0]): void {
   const host = document.body.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -40,38 +32,33 @@ function draw(props: Parameters<typeof AppWindowStack>[0]): void {
   act(() => root.render(createElement(AppWindowStack, props)));
 }
 
-const APPS = [
-  {
-    name: "Simulator",
-    window: {
-      state: { kind: PICTURE_STATE.READY, url: "data:image/png;base64,AA==" } as const,
-      width: 1180,
-      height: 2556,
-    },
-  },
-  { name: "Xcode" },
-  { name: "Safari" },
-];
-
-test("the app on top is named with how many others stand behind it, its window opens, and Stop stops", () => {
-  const pressed: string[] = [];
+test("the window on top opens when pressed, named for its app", () => {
+  const opened: string[] = [];
   draw({
     label: "Apps in use",
-    apps: APPS,
-    using: true,
-    onOpen: () => pressed.push("open"),
-    onStop: () => pressed.push("stop"),
+    apps: [
+      {
+        name: "Simulator",
+        window: {
+          state: { kind: PICTURE_STATE.READY, url: "data:image/png;base64,AA==" },
+          width: 1180,
+          height: 2556,
+        },
+      },
+      { name: "Xcode" },
+    ],
+    onOpen: () => opened.push("open"),
   });
 
-  const stack = document.querySelector('section[aria-label="Apps in use"]');
-  assert.match(stack?.textContent ?? "", /Simulator.*\+2 apps/);
-  act(() => button("Enlarge Simulator")?.click());
-  act(() => button("Stop")?.click());
-  assert.deepEqual(pressed, ["open", "stop"]);
+  const press = [...document.querySelectorAll("button")].find(
+    (each) => each.getAttribute("aria-label") === "Enlarge Simulator",
+  );
+  act(() => press?.click());
+  assert.deepEqual(opened, ["open"]);
 });
 
-test("a reader who may not stop the agent finds no Stop", () => {
-  draw({ label: "Apps in use", apps: APPS.slice(0, 1), using: false, onOpen: () => undefined });
+test("a stack of no apps draws nothing", () => {
+  draw({ label: "Apps in use", apps: [], onOpen: () => undefined });
 
-  assert.equal(button("Stop"), undefined);
+  assert.equal(document.querySelector('section[aria-label="Apps in use"]'), null);
 });

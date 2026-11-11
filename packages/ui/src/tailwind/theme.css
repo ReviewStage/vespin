@@ -902,10 +902,11 @@
   --spacing-icon-20: var(--ui-icon-20);
   --spacing-icon-40: var(--ui-icon-40);
   /* An app's window floating over an agent's box (`app-window-stack/`): at
-     most this tall and this wide at its own shape, and each window under it
-     peeking out by this much. */
+     most this tall and this wide at its own shape, on a ground at least this
+     wide, and each window under it peeking out by this much. */
   --spacing-app-window-tall: 144px; /* off-scale: a window small enough to float */
   --spacing-app-window-wide: 240px; /* off-scale: as wide again as it is tall, and some */
+  --spacing-app-window-least: 192px; /* off-scale: a phone's window stands on a ground this wide */
   --spacing-app-window-peek: var(--ui-space-8);
   --spacing-app-window-peek-twice: var(--ui-space-16);
   --color-veil: var(--ui-color-veil);

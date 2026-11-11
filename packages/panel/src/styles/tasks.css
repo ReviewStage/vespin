@@ -2928,14 +2928,13 @@ blockquote.comment-quote {
   margin-bottom: var(--ui-control-gap);
 }
 
-/* The apps an agent is using float at the top right of what docks over its
-   box, over the transcript's foot, as a picture in a picture does
-   (`computer-dock.tsx`); the foot is what places them, and is measured for
-   whether there is room to. A foot too narrow to float them beside the
-   transcript's words stands them in the docks' column instead, at its end. */
+/* The apps' windows an agent is using float over the end of what docks
+   over its box, above every dock's row, over the transcript's foot, as a
+   picture in a picture does (`computer-dock.tsx`), and while they do the
+   transcript's end makes room for the tallest stack of them, so its newest
+   line stands clear of them. */
 .agent-tab-foot {
   position: relative;
-  container: agent-tab-foot / inline-size;
 }
 .agent-computer-float {
   position: absolute;
@@ -2944,10 +2943,12 @@ blockquote.comment-quote {
   inset-inline-end: var(--ui-space-16);
   margin-block-end: var(--ui-space-8);
 }
-@container agent-tab-foot (width < 480px) {
-  .agent-computer-float {
-    position: static;
-    margin-block: 0 var(--ui-space-8);
-    margin-inline: auto var(--ui-space-16);
-  }
+.agent-tab:has(.agent-computer-float) .agent-log-over-composer {
+  padding-bottom: calc(
+    var(--ui-scroll-fade) +
+    var(--ui-space-4) +
+    var(--spacing-app-window-tall) +
+    var(--spacing-app-window-peek-twice) +
+    var(--ui-space-8)
+  );
 }

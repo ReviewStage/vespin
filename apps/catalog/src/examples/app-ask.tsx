@@ -20,9 +20,10 @@ import { CatalogSection } from "../section";
  * by a screen's glyph where there is none to draw; and the ask that lets an
  * agent use an app, opened from its button and put away by any of its
  * answers, Escape, or a press on the dimmed window, for an app with its icon
- * and bundle id and for one with neither; and the apps an agent is using, as
- * the stack that floats over its box, for one app whose window is a phone's,
- * several apps, and an app whose window is still being read.
+ * and bundle id and for one with neither; and the windows of the apps an
+ * agent is using, as the stack that floats over its box, for one app whose
+ * window is a phone's, several apps, and an app whose window is still being
+ * read.
  */
 
 /** A synthetic app's icon, a rounded square with a phone in it, as a Mac's app sends one. */
@@ -40,23 +41,13 @@ const EDITOR = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 320 200"><rect width="320" height="200" fill="#1f2125"/><rect width="320" height="20" fill="#2b2e33"/><circle cx="12" cy="10" r="4" fill="#ff5f57"/><circle cx="24" cy="10" r="4" fill="#febc2e"/><circle cx="36" cy="10" r="4" fill="#28c840"/><rect y="20" width="70" height="180" fill="#26292e"/><rect x="80" y="34" width="150" height="6" rx="3" fill="#7aa2f7"/><rect x="80" y="48" width="200" height="6" rx="3" fill="#9ece6a"/><rect x="80" y="62" width="120" height="6" rx="3" fill="#bb9af7"/></svg>',
 )}`;
 
-/** The apps an agent is using as the stack floating over its box draws them, its Stop and window presses doing nothing here. */
+/** The apps' windows an agent is using as the stack floating over its box draws them, its press doing nothing here. */
 function Stack({
   apps,
-  using,
 }: {
   apps: Parameters<typeof AppWindowStack>[0]["apps"];
-  using: boolean;
 }): React.JSX.Element {
-  return (
-    <AppWindowStack
-      label="Apps in use"
-      apps={apps}
-      using={using}
-      onOpen={() => undefined}
-      onStop={() => undefined}
-    />
-  );
+  return <AppWindowStack label="Apps in use" apps={apps} onOpen={() => undefined} />;
 }
 
 /** A button that puts the ask about `app` to the developer, whose answers put it away. */
@@ -108,7 +99,6 @@ function AppAsks(): React.JSX.Element {
                 },
               },
             ]}
-            using
           />
           <Stack
             apps={[
@@ -123,7 +113,6 @@ function AppAsks(): React.JSX.Element {
               { name: "Simulator", iconSrc: ICON },
               { name: "Safari" },
             ]}
-            using={false}
           />
           <Stack
             apps={[
@@ -133,7 +122,6 @@ function AppAsks(): React.JSX.Element {
                 window: { state: { kind: PICTURE_STATE.READING }, width: 236, height: 512 },
               },
             ]}
-            using
           />
         </Inline>
       </CatalogSection>

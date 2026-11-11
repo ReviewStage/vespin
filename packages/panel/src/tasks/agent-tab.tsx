@@ -3573,6 +3573,7 @@ function AgentTabView({
         />
         <AgentPicturesProvider value={pictures}>
           <ComputerDock
+            agentId={agent.id}
             messages={lines}
             working={standing.working}
             onStop={offersStop(agent) ? onStop : undefined}

@@ -1,36 +1,62 @@
+import { AGENT_PART, agentParts } from "@repo/features/agent-parts";
 import { calledPicturesOf } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import type { KeptPicture } from "@repo/features/conversation-picture-wire";
-import { AppWindowStack } from "@repo/ui";
-import { PICTURE_STATE } from "@repo/ui/picture-read";
+import { computerAppIcon, computerAppName } from "@repo/features/tool-call-model";
+import {
+  APP_ICON_SIZE,
+  AppIcon,
+  AppWindowStack,
+  CollapseIcon,
+  ExpandIcon,
+  GAP,
+  IconButton,
+  Inline,
+  LIST_VARIANT,
+  List,
+  ListRow,
+  StopIcon,
+  WorkingMark,
+} from "@repo/ui";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { MESSAGE_ROLE } from "@repo/wire";
-import { type ReactNode, useMemo } from "react";
-import { useBusyPress } from "../settings/busy-press.js";
-import { AGENT_PART, agentParts } from "./agent-model.js";
-import { useKeptPicture, useKeptPictureViewer } from "./agent-pictures.js";
-import { computerAppIcon, computerAppName } from "./tool-call-model.js";
+import { type ReactNode, useMemo, useState } from "react";
+import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
+import { KeptAppIcon, useKeptPicture, useKeptPictureViewer } from "./agent-pictures.js";
 
 /**
- * computer-dock.tsx -- the apps an agent is using on the developer's Mac, floating over the top of its message box while it works in them.
+ * computer-dock.tsx -- the apps an agent is using on the developer's Mac, as a dock's row over its message box with their windows floating above it, while it works in them.
  *
- * While the agent works and has used an app this turn (`computer`), a small
- * stack of the apps' windows floats at the box's top right, over the
- * transcript's foot: the app it used last on top, its newest window at its
- * own shape, its icon and name, the working mark while its newest call is
- * still on that app, and Stop, which stops the turn as the box's own Stop
- * does; every other app it used this turn stands behind as a card's edge
- * (`AppWindowStack`). A press on the window opens the viewer on it, which
- * walks every app's newest window. The stack goes as the turn ends, the
- * transcript's rows being where what it did is read from then on. Where the
- * tab is too narrow to float it, it stands in the docks' column instead
- * (`tasks.css`).
+ * While the agent works and has used an app this turn (`computer`), a row
+ * docks over the box as the pull request's and the Inbox's do: the app it
+ * used last by its icon, "Using" and its name while its newest call is still
+ * on that app, the working mark, how many other apps it used, a press that
+ * hides or shows their windows, and Stop, which stops the turn as the box's
+ * own Stop does. Over the row's end float the apps' windows
+ * (`AppWindowStack`): the app used last on top at its own shape, every other
+ * app behind it as a card's edge; a press on the window opens the viewer,
+ * which walks every app's newest window. While they float the transcript's
+ * end makes room for them (`tasks.css`), so its newest lines stand clear.
+ * Put away, they stay down for that agent this window's session. The row
+ * goes as the turn ends, the transcript's rows being where what it did is
+ * read from then on.
  */
 
 /** What the stack says. */
 const WORDS = {
   LABEL: "Apps in use",
+  USING: "Using",
+  SHOW: "Show the apps' windows",
+  HIDE: "Hide the apps' windows",
+  STOP: "Stop",
+  STOPPING: "Stopping",
 } as const;
+
+/** How many other apps the agent used this turn, in words. */
+function othersWords(count: number): string {
+  return count === 1 ? "+1 app" : `+${String(count)} apps`;
+}
 
 /** An app the agent used this turn: its name, its icon as a call kept it, and the newest window it read of it. */
 export interface UsedApp {
@@ -104,12 +130,17 @@ export function appsInUse(
   return { apps, using };
 }
 
-/** The stack, floating over the box's top right; nothing while the agent uses no app. */
+/** Every agent whose windows the reader put away this window's session, so its stack stays down as the tab comes back. */
+const WINDOWS_HIDDEN = new Set<string>();
+
+/** The apps in use as a dock's row, their windows floating over it; nothing while the agent uses no app. */
 export function ComputerDock({
+  agentId,
   messages,
   working,
   onStop,
 }: {
+  agentId: string;
   messages: readonly AgentTranscriptMessage[];
   working: boolean;
   /** Stops the agent's turn, answering whether the service took it; none where the reader may not stop it. */
@@ -118,39 +149,80 @@ export function ComputerDock({
   const inUse = useMemo(() => appsInUse(messages, working), [messages, working]);
   const top = inUse?.apps[0];
   const window = useKeptPicture(top?.window?.id);
-  const icon = useKeptPicture(top?.icon);
   const { open, viewer } = useKeptPictureViewer();
-  const stop = useBusyPress(() => onStop?.());
+  const stop = useAsyncAction(rejectionWords);
+  const [hidden, setHidden] = useState(() => WINDOWS_HIDDEN.has(agentId));
   if (inUse === undefined || top === undefined) return null;
   const windows = inUse.apps.flatMap((each) =>
     each.window === undefined ? [] : [{ picture: each.window, words: each.app }],
   );
   const shown = top.window;
+  const others = inUse.apps.length - 1;
+  const toggle = () => {
+    if (hidden) WINDOWS_HIDDEN.delete(agentId);
+    else WINDOWS_HIDDEN.add(agentId);
+    setHidden(!hidden);
+  };
   return (
-    <>
-      <AppWindowStack
-        label={WORDS.LABEL}
-        className="agent-computer-float"
-        apps={inUse.apps.map((each, index) =>
-          index === 0
-            ? {
-                name: each.app,
-                iconSrc: icon.kind === PICTURE_STATE.READY ? icon.url : undefined,
-                window:
-                  shown === undefined
-                    ? undefined
-                    : { state: window, width: shown.width, height: shown.height },
-              }
-            : { name: each.app },
-        )}
-        using={inUse.using}
-        onOpen={() => {
-          if (shown !== undefined) open(windows, shown.id);
-        }}
-        onStop={onStop === undefined ? undefined : stop.onPress}
-        stopping={stop.busy}
-      />
+    <div className={`agent-computer-dock ${COMPOSER_DOCK_CLASS}`}>
+      {hidden ? null : (
+        <AppWindowStack
+          label={WORDS.LABEL}
+          className="agent-computer-float"
+          apps={inUse.apps.map((each, index) =>
+            index === 0 && shown !== undefined
+              ? {
+                  name: each.app,
+                  window: { state: window, width: shown.width, height: shown.height },
+                }
+              : { name: each.app },
+          )}
+          onOpen={() => {
+            if (shown !== undefined) open(windows, shown.id);
+          }}
+        />
+      )}
+      <List label={WORDS.LABEL} variant={LIST_VARIANT.CARD} fingerTall>
+        <ListRow
+          leading={
+            top.icon === undefined ? (
+              <AppIcon size={APP_ICON_SIZE.LEAD} />
+            ) : (
+              <KeptAppIcon id={top.icon} size={APP_ICON_SIZE.LEAD} />
+            )
+          }
+          title={inUse.using ? `${WORDS.USING} ${top.app}` : top.app}
+          meta={
+            <Inline gap={GAP.TIGHT} wrap={false}>
+              {inUse.using ? <WorkingMark /> : null}
+              {others === 0 ? null : othersWords(others)}
+            </Inline>
+          }
+          actions={
+            <>
+              <IconButton
+                icon={hidden ? <ExpandIcon /> : <CollapseIcon />}
+                label={hidden ? WORDS.SHOW : WORDS.HIDE}
+                onClick={toggle}
+              />
+              {onStop === undefined ? null : (
+                <IconButton
+                  icon={<StopIcon />}
+                  label={WORDS.STOP}
+                  busy={stop.running}
+                  busyLabel={WORDS.STOPPING}
+                  onClick={() =>
+                    void stop.run(async () => {
+                      await onStop();
+                    })
+                  }
+                />
+              )}
+            </>
+          }
+        />
+      </List>
       {viewer}
-    </>
+    </div>
   );
 }
