@@ -197,16 +197,20 @@ export interface RepositoryPick {
  * The repositories the workspace's GitHub reaches, followed while the sheet
  * stands, and the one a task starts in: the pick, else the newest the
  * account's tasks were about that the workspace reaches, else the first it
- * lists, as Home's chip starts.
+ * lists, as Home's chip starts. A draft's repository (`drafted`) stands as
+ * the first pick while the workspace reaches it, and gives way otherwise.
  */
-export function useRepositoryPick(workspace: Workspace | undefined): RepositoryPick {
+export function useRepositoryPick(
+  workspace: Workspace | undefined,
+  drafted?: string | undefined,
+): RepositoryPick {
   const acts = useHostActs();
   const workspaceId = workspace?.id;
   useLiveFollow(workspaceId, (id) => acts[ACT_KIND.TASKS_REPOSITORIES_FOLLOW]({ workspaceId: id }));
   const select = useMemo(() => selectRepositoryList(workspaceId ?? ""), [workspaceId]);
   const { data: read } = useQuery({ ...appStateQuery, select });
   const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
-  const [picked, setPicked] = useState<string | undefined>(undefined);
+  const [picked, setPicked] = useState<string | undefined>(drafted);
   const listed = useMemo(
     () => (read?.rows?.repositories ?? []).map(({ fullName }) => fullName),
     [read],
@@ -217,9 +221,11 @@ export function useRepositoryPick(workspace: Workspace | undefined): RepositoryP
     workspaceReaches(workspace, repository) &&
     (read?.rows === undefined || listed.includes(repository));
   const starting = recent.find(reached) ?? listed[0];
+  // Note that a draft's repository may be one the workspace it opens in no longer reaches, so it stands only while it does.
+  const kept = picked !== undefined && picked === drafted && !reached(picked) ? undefined : picked;
   return {
     options: listed.map((repository) => ({ id: repository, label: repository })),
-    picked: picked ?? starting,
+    picked: kept ?? starting,
     pick: setPicked,
   };
 }

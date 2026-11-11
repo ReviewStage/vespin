@@ -16,6 +16,7 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useShareSheet } from "../share-sheet.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useOfflineNotice } from "../use-write.js";
@@ -41,7 +42,8 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * tasks and threads stand in Spotlight, and a Spotlight item tapped or a
  * screen handed over from another device opens (`system-activity/`). The
  * iPad's menu bar acts on whatever stands in front, its account's commands
- * enabled while one is signed in (`menu-commands/`).
+ * enabled while one is signed in (`menu-commands/`), and the share sheet's
+ * snapshot is kept current and its draft opens New task (`share-sheet.ts`).
  * Over every screen stands the one notice of a write that did not go
  * (`use-write.ts`), which lets its offline word go once the service answers.
  */
@@ -61,6 +63,7 @@ function GuardedScreens() {
   useSystemActivity(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
+  useShareSheet(updateNeeded);
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const sheetPresentation =
     useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? "formSheet" : "modal";
