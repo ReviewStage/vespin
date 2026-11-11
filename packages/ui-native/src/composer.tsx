@@ -28,7 +28,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { BAR_EDGE, BAR_HEAD_INSET, BAR_RADIUS, BAR_ROW_SPACING, GlassBar } from "./glass-bar.js";
+import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
 import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
@@ -365,9 +365,7 @@ export function ComposerFoot(props: ComposerProps) {
   }
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
-      <VStack alignment="leading" modifiers={[padding(BAR_HEAD_INSET)]}>
-        {props.head}
-      </VStack>
+      <BarHead>{props.head}</BarHead>
       <HStack spacing={BAR_ROW_SPACING}>
         <ComposerPieces {...props} />
       </HStack>
