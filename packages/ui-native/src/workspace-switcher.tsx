@@ -24,7 +24,7 @@ import {
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { identityLetter, WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { useState } from "react";
-import { PixelRatio, useColorScheme } from "react-native";
+import { PixelRatio, useColorScheme, View } from "react-native";
 import { AvatarPhoto, TILE_ROUNDING } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -214,6 +214,18 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
       <WorkspaceSwitcherMenu {...props} />
     </Host>
   );
+}
+
+/**
+ * The stack bar's title where the switcher names the workspace at the bar's
+ * leading edge: an empty title view, which hides the drawn title while the
+ * screen keeps its own for the back button's history and the reader. Note
+ * that it is a view rather than nothing, because a header title that
+ * renders nothing leaves the stack no title view, and iOS then draws the
+ * screen's title beside the bar's leading items.
+ */
+export function NoBarTitle() {
+  return <View accessible={false} importantForAccessibility="no-hide-descendants" />;
 }
 
 /** The menu's act that makes a workspace, as the panel words it. */

@@ -238,6 +238,7 @@ export type AgentClient = Pick<
   | "warm"
   | "runAction"
   | "stopRunAction"
+  | "boot"
   | "delete"
   | "agent"
   | "pullRequest"
@@ -1019,7 +1020,10 @@ function composed(
         // Note that a send answers at once rather than once its row reaches the followed transcript,
         // because the window draws the line under the row's id until that row lands, so no page from
         // before the write can take it away, and the next send waits on this answer.
-        "agent" in answer ? { agent: answer.agent } : answer,
+        // A message the agent's first launch holds waits in its queue, which its next page carries.
+        "agent" in answer
+          ? { agent: answer.agent, ...(answer.queued === undefined ? undefined : { queued: true }) }
+          : answer,
       ),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
@@ -1041,6 +1045,7 @@ function composed(
     AGENTS_REWIND: ({ agentId, messageId, restoreFiles }) =>
       asked(client.rewind(agentId, messageId, restoreFiles === true)),
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
+    AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),

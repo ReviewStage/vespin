@@ -2093,9 +2093,9 @@ function sentLineMessage(line: SentLine): AgentTranscriptMessage {
 }
 
 /**
- * The line an agent New task started is drawn on before its transcript is
- * read: the developer's words as they went, under the id their start's key
- * names, on their way.
+ * The words an agent New task started on, as its tab draws them before the
+ * service has made it: the developer's words as they went, under the id
+ * their start's key names, which that tab draws as its queue's row.
  */
 export function openingLineOf(words: {
   readonly key: string;
@@ -2113,20 +2113,6 @@ export function openingLineOf(words: {
     sentAt: words.sentAt ?? Date.now(),
     state: SENT_LINE_STATE.PENDING,
   };
-}
-
-/**
- * The line an agent was started on, while its transcript reads back no line
- * of the developer's. Note that the service writes that first row under a
- * key of its own, or the retired runtime under none, so the line is let go by any row of
- * theirs rather than by its id, and the first is always that one.
- */
-export function unreadOpeningLine(
-  opening: SentLine | undefined,
-  messages: readonly AgentTranscriptMessage[],
-): SentLine | undefined {
-  if (opening === undefined) return undefined;
-  return messages.some((message) => message.role === MESSAGE_ROLE.USER) ? undefined : opening;
 }
 
 /** The transcript's rows, with the lines sent and not yet read back at its end, in the order they went. */
