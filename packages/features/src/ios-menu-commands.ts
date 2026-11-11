@@ -54,12 +54,17 @@ export type MenuFocus =
 
 const NOTHING: MenuFocus = { kind: MENU_SUBJECT.NONE };
 
-/** A route's segments, each decoded as expo-router encoded it. */
+/** The app's route segments the focus is read from: its two tabs that open things, and the places under Tasks that are not a task. */
+const MENU_ROUTE = {
+  INBOX: "inbox",
+  TASKS: "tasks",
+  AGENT: "agent",
+  PAGE: "page",
+} as const;
+
+/** A route's segments as expo-router hands them, already decoded, so an id holding `%` is read as itself rather than decoded again. */
 function segmentsOf(pathname: string): readonly string[] {
-  return pathname
-    .split("/")
-    .filter((segment) => segment !== "")
-    .map((segment) => decodeURIComponent(segment));
+  return pathname.split("/").filter((segment) => segment !== "");
 }
 
 /**
@@ -72,15 +77,15 @@ function segmentsOf(pathname: string): readonly string[] {
 export function menuFocusOf(pathname: string, selected: string | undefined): MenuFocus {
   const [tab, first, second] = segmentsOf(pathname);
   const chosen = selected === undefined || selected === "" ? undefined : selected;
-  if (tab === "inbox") {
+  if (tab === MENU_ROUTE.INBOX) {
     const id = first ?? chosen;
     return id === undefined ? NOTHING : { kind: MENU_SUBJECT.THREAD, id };
   }
-  if (tab !== "tasks") return NOTHING;
-  if (first === "agent") {
+  if (tab !== MENU_ROUTE.TASKS) return NOTHING;
+  if (first === MENU_ROUTE.AGENT) {
     return second === undefined ? NOTHING : { kind: MENU_SUBJECT.AGENT, id: second };
   }
-  if (first === "page") return NOTHING;
+  if (first === MENU_ROUTE.PAGE) return NOTHING;
   const id = first ?? chosen;
   return id === undefined ? NOTHING : { kind: MENU_SUBJECT.TASK, id };
 }
