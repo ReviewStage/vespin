@@ -483,10 +483,6 @@ export const providerKeysQuery = (accountId: string | undefined) =>
 export const githubTokenQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.GITHUB_TOKEN, accountIds(accountId));
 
-/** The account's devices' beats, by the account. */
-export const devicePresenceQuery = (accountId: string | undefined) =>
-  liveReadQuery(LIVE_READ.DEVICE_PRESENCE, accountIds(accountId));
-
 /** The account's hosts, by the account. */
 export const hostsQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.HOSTS, accountIds(accountId));
@@ -678,9 +674,6 @@ export const providerKeysRetryMutation = () => actMutation(ACT_KIND.PROVIDER_KEY
 
 /** Try again on the GitHub token. */
 export const githubTokenRetryMutation = () => actMutation(ACT_KIND.GITHUB_TOKEN_RETRY);
-
-/** Ask the beats again, which the window does as it comes back online (`device-presence.ts`), never on a press. */
-export const devicePresenceRefreshMutation = () => actMutation(ACT_KIND.HOSTS_PRESENCE_REFRESH);
 
 /** Try again on the hosts. */
 export const hostsRetryMutation = () => actMutation(ACT_KIND.HOSTS_RETRY);
