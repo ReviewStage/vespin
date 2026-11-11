@@ -2,6 +2,7 @@ import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -807,7 +808,12 @@ function DescriptionDocument({
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
-    return posted.length === 0
+    // Note that with Done and follow-ups on the bar stands with nothing posted, since an agent done with nothing to ask still offers its Archive.
+    const others = (agents.agents ?? []).flatMap((each) => {
+      const count = each.id === tabAgent ? 0 : (waitingOf.get(each.id)?.length ?? 0);
+      return count === 0 ? [] : [{ agentId: each.id, name: agentName(each), waiting: count }];
+    });
+    return posted.length === 0 && !turnEndOn
       ? undefined
       : {
           waiting,
@@ -816,6 +822,8 @@ function DescriptionDocument({
           turnEnd: turnEndOn,
           onChoose: chooseAnswer,
           sending: inboxSending,
+          others,
+          onOpenAgent: openAgent,
         };
   }, [
     tabAgent,
@@ -826,6 +834,8 @@ function DescriptionDocument({
     turnEndOn,
     chooseAnswer,
     inboxSending,
+    agents.agents,
+    openAgent,
   ]);
   const reader = useMemo(() => ({ readerId: tasks.me }), [tasks.me]);
   const editAgents = useMemo(() => ({ control: agents, onOpen: openAgent }), [agents, openAgent]);

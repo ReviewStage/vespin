@@ -292,6 +292,10 @@ export function useAgentComposer(input: {
   shown?: boolean | undefined;
   /** Opens the agent's tab, which that toast offers; none offers nothing. */
   onOpen?: (() => void) | undefined;
+  /** Words a send carries under the box's own, such as the follow-ups ticked in the bar over it, which a send with the box empty still sends; none where nothing is held. */
+  lead?: string | undefined;
+  /** Told once a send has carried the lead, so its holder lets it go. */
+  onLeadSent?: (() => void) | undefined;
 }): HeldComposer {
   const { agentId, messages } = input;
   const kept = useDraft({ kind: DRAFT_PLACE.AGENT, planId: input.taskId, agentId });
@@ -499,11 +503,15 @@ export function useAgentComposer(input: {
   };
 
   const sendDraft = (clientKey: string = crypto.randomUUID()) => {
-    const text = kept.draft.text.trim();
+    const { lead, onLeadSent } = latest.current;
+    const text = [kept.draft.text.trim(), lead?.trim() ?? ""]
+      .filter((each) => each !== "")
+      .join("\n\n");
     const { attachments } = kept.draft;
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
     update(() => EMPTY_DRAFT);
     sendLine(text, attachments, clientKey);
+    if (lead !== undefined) onLeadSent?.();
   };
 
   /** Sends the words and files in place of the line named, the messages from it on hidden at once; the box is left as it is. */
