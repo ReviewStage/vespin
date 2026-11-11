@@ -2,8 +2,8 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "device";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "device";
 --> statement-breakpoint
-ALTER TABLE "device" ADD COLUMN "temp_folder" text;--> statement-breakpoint
-ALTER TABLE "device" ADD COLUMN "attachments_folder" text;
+ALTER TABLE "device" ADD COLUMN IF NOT EXISTS "temp_folder" text;--> statement-breakpoint
+ALTER TABLE "device" ADD COLUMN IF NOT EXISTS "attachments_folder" text;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_device"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE
