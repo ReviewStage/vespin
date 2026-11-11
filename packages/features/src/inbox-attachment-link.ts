@@ -59,6 +59,14 @@ const MAX_ADDRESS_CHARS = 1_024;
 export const INBOX_PICTURE_IN_WORDS =
   /(?<!\\)!\[((?:\\.|[^[\]\\\n]){0,1000})\]\([ \t]*(<[^<>\n]{1,1024}>|[^\s()<>]{1,1024})/gu;
 
+/**
+ * What closes a picture after its destination: its caption in double or
+ * single quotes, if any, and its closing parenthesis; bounded as the
+ * opening is.
+ */
+const PICTURE_CLOSE =
+  /[ \t]*(?:"(?:\\.|[^"\\\n]){0,1000}"[ \t]*|'(?:\\.|[^'\\\n]){0,1000}'[ \t]*)?\)/uy;
+
 /** A destination that names a scheme, `https:`, `data:`, or our own, and so no file in the agent's sandbox. */
 const SCHEMED = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
 
@@ -133,4 +141,28 @@ export function inboxSandboxPicturePaths(text: string): readonly string[] {
     if (path !== "" && !SCHEMED.test(path) && !insideCode(text, match.index)) paths.add(path);
   }
   return [...paths];
+}
+
+/**
+ * The words with every picture drawn from a sandbox path the predicate
+ * takes cut out whole, its alt, caption, and parentheses with it: a PDF a
+ * post names as it draws a picture, which its message keeps as a file
+ * rather than drawing. A picture in code, and one not closed as a picture
+ * is, are left as written.
+ */
+export function withoutSandboxPictures(text: string, cut: (path: string) => boolean): string {
+  let kept = "";
+  let at = 0;
+  for (const match of text.matchAll(INBOX_PICTURE_IN_WORDS)) {
+    const path = inboxPictureDestination(match[2] ?? "");
+    const opened = match.index + match[0].length;
+    PICTURE_CLOSE.lastIndex = opened;
+    const close = PICTURE_CLOSE.exec(text);
+    if (SCHEMED.test(path) || insideCode(text, match.index) || close === null || !cut(path)) {
+      continue;
+    }
+    kept += text.slice(at, match.index);
+    at = opened + close[0].length;
+  }
+  return kept + text.slice(at);
 }

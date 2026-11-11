@@ -2241,8 +2241,23 @@ export interface PostPicture extends InboxNamedImage {
   readonly id: string;
 }
 
-/** One picture the agent's words name by its path in the agent's sandbox, as the caller read it there: the path as written, its file's own name, its type, and its bytes. */
-export interface InboxBodyPicture extends InboxNamedImage {
+/** One file a post keeps as a file of its message, a picture or a PDF: the id it is kept under, its file's own name, its type, its bytes, and a recording's MP4 copy. */
+interface PostFile {
+  readonly id: string;
+  readonly name: string;
+  readonly contentType: InboxFileType;
+  readonly bytes: Uint8Array;
+  readonly mp4Bytes?: Uint8Array | undefined;
+}
+
+/**
+ * One file the agent's words name by its path in the agent's sandbox, as
+ * the caller read it there: the path as written, its file's own name, its
+ * type, and its bytes. A picture is drawn where the words name it; a PDF
+ * the caller has cut out of the words, so its path names nothing there,
+ * and it is kept as a file of the message alone.
+ */
+export interface InboxBodyPicture extends Omit<PostFile, "id"> {
   readonly path: string;
 }
 
@@ -2253,8 +2268,8 @@ interface PostWrite {
   /** The message's words, its pictures written by the addresses the item gives them. */
   readonly body: (addressOf: PictureAddress) => string;
   readonly ask: InboxAsk | undefined;
-  /** The message's files: the pictures its words name, then those its ask's options carry. */
-  readonly pictures: readonly PostPicture[];
+  /** The message's files: the files its words name, then those its ask's options carry. */
+  readonly pictures: readonly PostFile[];
   readonly addresseeId: string | null;
 }
 
@@ -2281,7 +2296,7 @@ function pictureAddressOf(
 
 /** Pictures handed in by the paths the agent's words name them by, as a post keeps them: each under an id minted for it, and the id of the first each path names. */
 interface PicturesByPath {
-  readonly kept: readonly PostPicture[];
+  readonly kept: readonly PostFile[];
   readonly idOf: (path: string) => string | undefined;
 }
 
