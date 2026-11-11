@@ -383,6 +383,29 @@ skeleton's own, laying its blocks out, names itself one (`…-skeleton…`); no
 other class goes on an intrinsic element inside a skeleton, and `Skeleton` or
 `SkeletonRegion` is never drawn outside one.
 
+### Renaming a name
+
+Every name a reader can rename is renamed in one of two ways, by what a
+press on its row already does:
+
+- **The row's press does nothing else** (a settings row: a run action, the
+  workspace, a subscription or an API key, an integration's account): the
+  name is drawn with `RenamableName`, and pressing it opens the field in its
+  place, bare in the name's own type with no box. A wash and a text caret
+  under the pointer say it can be typed over; Return or the focus leaving
+  keeps what was typed, Escape the old name, and an edit a key ended hands
+  focus back to the name. The row's ⋯ keeps Rename as the keyboard's other
+  way in, opening the same field. There is no Rename button beside it.
+- **The row's press opens what it names** (a task, an agent, a tab): the
+  name is renamed from the row's ⋯ or context menu, which turns it into the
+  same bare field through `InlineEdit` in its place.
+
+Either way the caller holds whether it is open with `useInlineRename`, which
+keeps a refused name standing in the reopened field. `InlineEdit` has no
+boxed look, so a settings row's name never stands in one; an `InlineEdit`
+drawn as a `SettingsRow`'s or a `MenuRow`'s name outside `@repo/ui` is
+refused in review, and drawn with `RenamableName` instead.
+
 ### The style rules
 
 No stylesheet or Tailwind class string (in `@apply`, and in the modules under

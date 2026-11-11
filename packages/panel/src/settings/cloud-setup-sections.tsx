@@ -1025,11 +1025,14 @@ function RunActionRow({
                 value={action === undefined ? label : (rename.asked ?? label)}
                 label="Run action name"
                 editing={action === undefined ? renaming : rename.editing}
+                // Note that the name stays a press while a save is out, so a rename Return ended hands focus back to it; it opens nothing meanwhile.
                 onBegin={
-                  manages && !busy
-                    ? action === undefined
-                      ? () => setRenaming(true)
-                      : rename.begin
+                  manages
+                    ? () => {
+                        if (busy) return;
+                        if (action === undefined) setRenaming(true);
+                        else rename.begin();
+                      }
                     : undefined
                 }
                 onEnd={({ value }) => endRename(value)}
