@@ -1,7 +1,7 @@
 /**
  * mobile-runtime.ts -- the app's one runtime edge: the host composed and started on one runtime, which every act runs on, and drained as that runtime is disposed.
  *
- * This module is a runtime edge (`tools/anti-slop/effect-edges.json`), as
+ * This module is a runtime edge, as
  * the web's `web-root.tsx` is: it builds the app's one runtime over the
  * host's layer (`compose-mobile.ts`) and hands the root what stands.
  * Nothing else in the app runs an Effect.
