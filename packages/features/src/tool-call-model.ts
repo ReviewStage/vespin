@@ -94,6 +94,14 @@ export interface ToolCallView {
   readonly server?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
   readonly connection?: string;
+  /** For a command run on a Mac, the member whose Mac its answer says it went to; none before it answered, or where an answer from before answers named them says nothing. */
+  readonly macOwner?: MacOwnerNamed;
+}
+
+/** A member as a Mac command's answer names whose Mac it went to. */
+export interface MacOwnerNamed {
+  readonly userId: string;
+  readonly name: string;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -256,6 +264,13 @@ function browserOutput(output: WireValue): ToolBlock {
   return stringAt(output, "status") === BROWSER_NOT_RUN
     ? textBlock(stringAt(output, "reason") ?? "")
     : jsonBlock(output);
+}
+
+/** The member a Mac command's answer says it went to; none where it names nobody. */
+function macOwnerNamed(output: WireValue | undefined): MacOwnerNamed | undefined {
+  const owner = isRecord(output) ? output.macOwner : undefined;
+  const userId = stringAt(owner, "userId");
+  return userId === undefined ? undefined : { userId, name: stringAt(owner, "name") ?? "" };
 }
 
 /** A command the Mac ran: as a terminal would have shown it, its timeout said where it was killed; or why it was not run. */
@@ -1078,10 +1093,12 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.RUN_ON_MAC]: ({ input, output }) => {
     const command = stringAt(input, "command") ?? "";
     const description = commandDescription(stringAt(input, "description"));
+    const macOwner = macOwnerNamed(output);
     return {
       kind: CALL_KIND.MAC_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
+      ...(macOwner === undefined ? undefined : { macOwner }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : macCommandOutput(output),
     };

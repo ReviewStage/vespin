@@ -320,19 +320,21 @@ export function teammateRef(
 }
 
 /**
- * Whose Mac an agent's Mac commands ran on, as their row names it: its
- * starter, the reader's own among them; none where the service names
- * nobody or the reader's id is not known, when the row says the reader's
- * own as it always has, for the reason `teammateStarter` gives.
+ * Whose Mac an agent's Mac commands go to, as a row whose answer names no
+ * one names it: the member the service says they go to now
+ * (`workspaceTools`), its task's assignee or else its starter, or its
+ * starter while that is not read; the reader's own among them; none where
+ * the reader's id is not known, when the row says the reader's own as it
+ * always has, for the reason `teammateStarter` gives.
  */
 export function macOwnerOf(
-  startedBy: DescriptionEditor | undefined,
+  owner: { readonly userId: string; readonly name: string } | undefined,
   members: readonly WorkspaceMember[] | undefined,
   readerId: string | undefined,
   former?: readonly FormerMember[] | undefined,
 ): Actor | undefined {
-  if (startedBy === undefined || readerId === undefined) return undefined;
-  return personActor(startedBy, members, readerId, former);
+  if (owner === undefined || readerId === undefined) return undefined;
+  return personActor(owner, members, readerId, former);
 }
 
 /** Where an actor's work stands, as a tab's glyph state says it. */

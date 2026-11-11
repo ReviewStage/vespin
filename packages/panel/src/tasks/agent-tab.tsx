@@ -183,7 +183,7 @@ import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
-import { agentOriginQuery } from "../live-reads.js";
+import { agentOriginQuery, workspaceToolsQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectListedTasks } from "../use-app-state.js";
@@ -713,6 +713,7 @@ function ToolCallView({
         description={view.description}
         files={view.files}
         page={view.page}
+        macOwner={view.macOwner}
         agent={calledAgentActor(part, cards, known)}
         agentCard={agentCard}
         made={made}
@@ -3122,7 +3123,13 @@ function AgentTabView({
     continuedNote === undefined &&
     composer.closed === undefined &&
     !composer.sending;
-  const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
+  // Whose Mac the agent's commands go to now, as the service says it, its starter's while that is not read.
+  const macGoesTo = useQuery(workspaceToolsQuery(agent.id)).data?.runOnMac?.owner;
+  const macNow = useKept(
+    macOwnerOf(macGoesTo ?? agent.startedBy, members, readerId, former),
+    sameFields,
+  );
+  const macOwner = useKept({ now: macNow, readerId }, sameFields);
   const disabledServers = servers.disabled;
   const mentioned = useMemo(
     () => ({ disabled: disabledServers, steering }),
@@ -3853,14 +3860,19 @@ export function AgentSubagentTab({
     onStatus: (_agentId, next) => onStatus(next.status),
   });
   const { messages, pageStatus, runStartedAt, pageTitle } = transcript;
-  // A worker runs as its agent does, so a command it ran on a Mac ran on its agent's starter's.
+  // A worker runs as its agent does, so a command it ran on a Mac went where its agent's go.
   const owner =
     control.agents?.find((each) => each.id === agentId) ??
     control.archived?.find((each) => each.id === agentId);
+  const macGoesTo = useQuery(workspaceToolsQuery(owner?.id)).data?.runOnMac?.owner;
   const pictures = useAgentPictureDoor(agentId, callId);
   const wholeParts = useWholePartDoor(agentId, callId);
   const { members, former } = useMemberDirectory();
-  const macOwner = useKept(macOwnerOf(owner?.startedBy, members, control.me, former), sameFields);
+  const macNow = useKept(
+    macOwnerOf(macGoesTo ?? owner?.startedBy, members, control.me, former),
+    sameFields,
+  );
+  const macOwner = useKept({ now: macNow, readerId: control.me }, sameFields);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
   const models = control.models;

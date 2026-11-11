@@ -12,6 +12,7 @@ import {
   withdrawMacCommand,
 } from "@repo/database/models/mac-command-store";
 import type { TaskStoreEffect } from "@repo/database/models/task-store";
+import { readAccountNames } from "@repo/database/models/workspace-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
@@ -118,11 +119,19 @@ const MAC_COMMAND_KIND_REFUSAL = {
   { readonly NO_MAC: string; readonly UNREADABLE: string }
 >;
 
-/** What a call answers: what a shell command did, or why nothing ran. */
+/** The member whose Mac a call went to, as its answer names them. */
+type MacOwner = { readonly userId: string; readonly name: string };
+
+/**
+ * What a call answers: what a shell command did, or why nothing ran; and,
+ * once the call knew whose Mac it went to, that member, so the model can
+ * say whose Mac it was and the call's row names it as it stood then.
+ */
 // A type rather than an interface, so a result is a `WireRecord` the model is handed as it stands.
-export type MacCommandAnswer =
+export type MacCommandAnswer = (
   | ({ readonly status: typeof MAC_COMMAND_STATUS.RAN } & MacShellResult)
-  | { readonly status: typeof MAC_COMMAND_STATUS.NOT_RUN; readonly reason: string };
+  | { readonly status: typeof MAC_COMMAND_STATUS.NOT_RUN; readonly reason: string }
+) & { readonly macOwner?: MacOwner };
 
 /**
  * What a call asks of the Mac: a command of one kind, what that kind
@@ -177,7 +186,8 @@ export const RUN_ON_MAC_TOOL = {
     `for input fails. It is killed after ${MAC_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS} seconds ` +
     "unless `timeout_seconds` says otherwise. Answers the exit code, stdout, and stderr, each " +
     `cut to ${MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS} characters, or \`not-run\` and why, such as ` +
-    `${PRODUCT_NAME} not running on the Mac.`,
+    `${PRODUCT_NAME} not running on the Mac; and in \`macOwner\` the member whose Mac it went ` +
+    "to, whose Mac to name where a teammate other than them asked for the command.",
   inputSchema: RUN_ON_MAC_INPUT,
 } as const;
 
@@ -261,7 +271,8 @@ export function askMac(
 /**
  * One `run_on_mac` call made in the conversation, whichever agent made it:
  * its input read against the tool's schema, then run on the Mac of its
- * task's assignee (`macOwnerOf`) as `askMac` runs it. The one door every agent's tool goes through, so each
+ * task's assignee (`macOwnerOf`) as `askMac` runs it, its answer naming
+ * that member. The one door every agent's tool goes through, so each
  * root's tool is a line.
  */
 export function runOnMacTool(
@@ -281,7 +292,11 @@ export function runOnMacTool(
     const owner = yield* Effect.result(macOwnerOf(target));
     // Note that a read that fails refuses, because a command run on a guess could land on the wrong Mac.
     if (Result.isFailure(owner)) return macCommandNotRun(MAC_COMMAND_REFUSAL.UNAVAILABLE);
-    return yield* askMac(owner.success, ask);
+    const userId = owner.success;
+    const answer = yield* askMac(userId, ask);
+    // Note that a name that cannot be read still names the member, because the row reads them by their id.
+    const names = yield* Effect.orElseSucceed(readAccountNames([userId]), () => new Map());
+    return { ...answer, macOwner: { userId, name: names.get(userId) ?? "" } };
   });
 }
 

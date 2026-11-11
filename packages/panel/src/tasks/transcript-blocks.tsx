@@ -19,7 +19,7 @@ import {
   type ToolBlock,
   type ToolState,
 } from "@repo/features/tool-call-block";
-import { type SentWords, todosCount } from "@repo/features/tool-call-model";
+import { type MacOwnerNamed, type SentWords, todosCount } from "@repo/features/tool-call-model";
 import {
   agentCallLine,
   CALL_KIND,
@@ -77,7 +77,7 @@ import {
   useDisclosurePreviewShown,
   useDisclosureState,
 } from "@repo/ui";
-import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName } from "@repo/ui/actor-model";
+import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName, personActor } from "@repo/ui/actor-model";
 import {
   githubShapes,
   INLINE_PICTURE,
@@ -176,6 +176,7 @@ import {
 import { useDrawnDark } from "../drawn-dark.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
+import { useMemberDirectory } from "../member-directory.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -1286,8 +1287,18 @@ function calledChip(
   return first === undefined ? undefined : fileChip(first, doors);
 }
 
-/** Whose Mac a transcript's Mac commands ran on, its agent's starter, the reader's own among them (`macOwnerOf`); none where the window cannot tell, whose ran on the reader's own as far as it knows. */
-const MacOwnerContext = createContext<Actor | undefined>(undefined);
+/**
+ * Whose Mac a transcript's Mac commands go to: `now`, for a row whose
+ * answer names no one (`macOwnerOf`), none where the window cannot tell,
+ * whose ran on the reader's own as far as it knows; and the reader, whose
+ * own Mac a row whose answer names them says it ran on.
+ */
+interface MacOwners {
+  readonly now: Actor | undefined;
+  readonly readerId: string | undefined;
+}
+
+const MacOwnerContext = createContext<MacOwners>({ now: undefined, readerId: undefined });
 
 /** Names whose Mac the transcript under it ran its Mac commands on. */
 export const MacOwnerProvider = MacOwnerContext.Provider;
@@ -1311,6 +1322,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     files?: readonly string[] | undefined;
     /** For a read of a web page, its whole address, which the row names by its website chip. */
     page?: string | undefined;
+    /** For a command run on a Mac, the member whose Mac its answer says it went to, which the row names over the transcript's (`MacOwnerProvider`). */
+    macOwner?: MacOwnerNamed | undefined;
     input: ToolBlock;
     /** Nothing while the call has not answered. */
     output: ToolBlock | undefined;
@@ -1372,6 +1385,7 @@ export function TranscriptTool({
   made,
   files,
   page,
+  macOwner: named,
   input,
   output,
   errorText,
@@ -1388,7 +1402,13 @@ export function TranscriptTool({
         ? chippedLine(kind, subject, description, agent, undefined, agentCard)
         : { line: { ...callLine(kind, moreFiles(files), undefined), code: false }, chip: called };
   const command = isCommandKind(kind);
-  const macOwner = useContext(MacOwnerContext);
+  // Note that a call's answer names the Mac it went to as it stood then, so a task handed on since leaves its row as it ran.
+  const owners = useContext(MacOwnerContext);
+  const { members, former, readerId } = useMemberDirectory();
+  const macOwner =
+    named === undefined
+      ? owners.now
+      : personActor(named, members, owners.readerId ?? readerId, former);
   const opened = useHeldOpen(held?.waiting === true);
   const row = (
     <Tool {...props} {...(held === undefined ? undefined : opened)}>

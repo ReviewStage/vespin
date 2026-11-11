@@ -366,7 +366,7 @@ async function macPlace(
   });
   const view = await drawn(
     createElement(MacOwnerProvider, {
-      value: macOwnerOf(startedBy, MEMBERS, readerId),
+      value: { now: macOwnerOf(startedBy, MEMBERS, readerId), readerId },
       children: row,
     }),
     readerId,
