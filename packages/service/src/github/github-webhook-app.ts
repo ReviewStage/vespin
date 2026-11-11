@@ -159,10 +159,21 @@ const INSTALLATION_ACTION_STATUS: ReadonlyMap<string, GitHubInstallationStatus> 
   ["unsuspend", GITHUB_INSTALLATION_STATUS.ACTIVE],
 ]);
 
+/** The installation actions after which it may grant repositories that have no base drive yet, as GitHub spells them. */
+const GRANTING_ACTION = {
+  CREATED: "created",
+  UNSUSPEND: "unsuspend",
+  /** An `installation_repositories` delivery's: repositories given to the installation. */
+  ADDED: "added",
+} as const;
+
 /** The actions, by event, after which an installation may grant repositories that have no base drive yet. */
 const DRIVES_WANTED_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  [WEBHOOK_EVENT.INSTALLATION, new Set(["created", "unsuspend"])],
-  [WEBHOOK_EVENT.INSTALLATION_REPOSITORIES, new Set(["added"])],
+  [
+    WEBHOOK_EVENT.INSTALLATION,
+    new Set<string>([GRANTING_ACTION.CREATED, GRANTING_ACTION.UNSUSPEND]),
+  ],
+  [WEBHOOK_EVENT.INSTALLATION_REPOSITORIES, new Set<string>([GRANTING_ACTION.ADDED])],
 ]);
 
 /** A pull request's actions that change what a task's row says of it: where it stands, its merge queue among it, its title, or its size. */
