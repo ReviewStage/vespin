@@ -118,7 +118,7 @@ interface PictureTool {
 }
 
 /** The image types Insert image offers to choose. */
-const CHOSEN_TYPES = "image/png,image/jpeg,image/webp,image/gif,image/heic";
+const CHOSEN_TYPES = "image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.heic,.heif";
 
 /** Where an upload stands: sending, or failed with why, each with the Mac's own bytes once it has them. */
 const UPLOAD = { SENDING: "sending", FAILED: "failed" } as const;
@@ -153,10 +153,13 @@ function dataUrlOf(mediaType: string, base64: string): string {
   return `data:${mediaType};base64,${base64}`;
 }
 
-/** The picture a file is, re-encoded within the bound, as a `data:` URL; nothing for a file that is no picture. */
-async function encodedUrl(file: File): Promise<string | undefined> {
-  const encoded = await encodeImage(file, PICTURE_BOUNDS.MAX_BYTES);
-  return encoded === undefined ? undefined : dataUrlOf(encoded.mediaType, encoded.base64);
+/** The picture a file is, re-encoded within the bound, as a `data:` URL; or why it cannot be one. */
+async function encodedUrl(
+  file: File,
+): Promise<{ readonly url: string } | { readonly reason: string }> {
+  const read = await encodeImage(file, PICTURE_BOUNDS.MAX_BYTES);
+  if ("unreadable" in read) return { reason: read.unreadable ?? UPLOAD_WORDS.NOT_A_PICTURE };
+  return { url: dataUrlOf(read.image.mediaType, read.image.base64) };
 }
 
 /** A picture waiting on its upload: the Mac's bytes at half strength, and the wait or its failure where its caption will stand. */
@@ -452,15 +455,11 @@ export function useEditorPictures(
     async (taken: PictureTaken) => {
       settled(taken.upload, { kind: UPLOAD.SENDING });
       if ("file" in taken) {
-        const url = await encodedUrl(taken.file);
-        if (url === undefined) {
-          return settled(taken.upload, {
-            kind: UPLOAD.FAILED,
-            reason: UPLOAD_WORDS.NOT_A_PICTURE,
-            taken,
-          });
+        const encoded = await encodedUrl(taken.file);
+        if ("reason" in encoded) {
+          return settled(taken.upload, { kind: UPLOAD.FAILED, reason: encoded.reason, taken });
         }
-        return keep(taken, url);
+        return keep(taken, encoded.url);
       }
       const named = descriptionAttachmentOf(taken.from);
       // Note that a picture the window holds already is copied as it stands, since a picture's query never goes stale.
