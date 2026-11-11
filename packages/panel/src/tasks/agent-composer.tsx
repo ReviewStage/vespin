@@ -666,12 +666,13 @@ export function AgentComposer({
         }
         if (name === SLASH_COMMAND.COMPACT || onSide === undefined || words === "") return;
         editor.current?.clear();
-        onSide(words).then(
-          (took) => {
-            if (!took) editor.current?.replace(`/${name} ${words}`);
-          },
-          () => editor.current?.replace(`/${name} ${words}`),
-        );
+        // Note that a question that did not start comes back only into a box still empty, so nothing written meanwhile is lost.
+        const takeBack = () => {
+          if (latest.current.draft.trim() === "") editor.current?.replace(`/${name} ${words}`);
+        };
+        onSide(words).then((took) => {
+          if (!took) takeBack();
+        }, takeBack);
         return;
       }
       case SLASH_COMMAND.MODEL:
@@ -729,9 +730,12 @@ export function AgentComposer({
     if (queuesNow) return sentBy(queueing.onQueue);
     steer();
   };
-  /** The other way than a send that queues where `pressQueues` says, which ⌘↩ and a touch held on Send take: an edit steered, or the message steered or queued. */
+  /** The other way than a send that queues where `pressQueues` says, which ⌘↩ and a touch held on Send take: an edit steered, one of the box's commands typed run, or the message steered or queued. */
   const sendOtherWay = (pressQueues: boolean) => {
     if (editingQueued) return sentBy(queueing.onSteer);
+    // A command typed runs whichever way it is sent, so `/btw` never queues behind the turn nor steers it.
+    const command = typedCommand();
+    if (command !== undefined) return runCommand(command, false);
     if (pressQueues) return steer();
     if (queueing !== undefined) sentBy(queueing.onQueue);
   };

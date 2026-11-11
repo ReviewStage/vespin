@@ -1418,19 +1418,33 @@ export function useAgents(input: {
   };
 
   // Note that a side chat goes at once rather than through a draft, so a refusal is said in a toast.
+  const sideUnanswered = useRef<{ agentId: string; question: string; key: string } | undefined>(
+    undefined,
+  );
   const startSide = async (
     fork: AgentFork,
     question: string,
   ): Promise<AgentSummary | undefined> => {
     if (taskId === undefined) return undefined;
     const source = standing?.find((agent) => agent.id === fork.agentId);
+    // Note that the same question asked again of the same agent after the service never answered
+    // goes under the key it went under, so the service answers the side chat it may have started.
+    const held = sideUnanswered.current;
+    const key =
+      held !== undefined && held.agentId === fork.agentId && held.question === question
+        ? held.key
+        : mintKey();
     const asked = sideChatStart({
-      key: mintKey(),
+      key,
       fork,
       question,
       disabledServers: source?.disabledServers ?? [],
     });
     const answer = await askStart(taskId, asked);
+    sideUnanswered.current =
+      "failure" in answer && answer.failure === AGENT_CALL_FAILURE.UNANSWERED
+        ? { agentId: fork.agentId, question, key }
+        : undefined;
     if (!("failure" in answer)) return answer.agent;
     failed(startFailureNote(answer, taskId).text, {
       surface: FAILURE_SURFACE.AGENT_START,

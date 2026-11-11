@@ -117,7 +117,7 @@ const ARCHIVE_QUESTION: DialogQuestion = {
 };
 
 /** A press that archives or unarchives without a dialog, its refusal said in a toast. */
-function useArchivePress(agents: AgentsControl) {
+export function useArchivePress(agents: AgentsControl) {
   const toast = useToast();
   return (agentId: string, archived: boolean) =>
     agents.onArchive(agentId, archived).then((result: ActionResult) => {

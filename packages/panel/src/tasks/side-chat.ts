@@ -42,7 +42,9 @@ export function sideChatFork(
   messages: readonly Pick<AgentTranscriptMessage, "id" | "role" | "parts">[],
   writing: boolean,
 ): AgentFork {
-  const open = openReply(messages, writing);
+  // Note that a reply is still being written only where it is the newest line, so a turn that has written none yet leaves the last turn's reply settled.
+  const open =
+    messages.at(-1)?.role === MESSAGE_ROLE.ASSISTANT ? openReply(messages, writing) : undefined;
   const replies = messages.filter((message) => message.role === MESSAGE_ROLE.ASSISTANT);
   const settled = replies.findLast((message) => message.id !== open);
   if (settled !== undefined) return { agentId, messageId: settled.id, opening: "" };

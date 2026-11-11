@@ -115,7 +115,7 @@ import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
-import { ArchivedAgents } from "./agent-archive.js";
+import { ArchivedAgents, useArchivePress } from "./agent-archive.js";
 import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
 import {
@@ -754,18 +754,24 @@ function DescriptionDocument({
   // A side chat (`/btw`, `side-chat.ts`) opens beside the agent it was asked of, as a tab of the
   // side panel in that agent's strip, and never as a tab of this column, so the agents there stay
   // the task's own work; closing it archives it once it has answered, which offers Undo.
+  // Note that the tab opens only where the reader still stands on the task asked from, since one
+  // who moved on while the start was out must not have the panel open over where they went.
+  const openTaskNow = useRef(taskId);
+  openTaskNow.current = taskId;
   const sideDoor = useSteadyDoor(async (fork: AgentFork, question: string): Promise<boolean> => {
+    const askedOn = taskId;
     const started = await agents.startSide(fork, question);
     if (started === undefined) return false;
     mainTabs.onClose(agentTab(started.id));
-    openPanelTab(transcriptTab(started.id));
+    if (openTaskNow.current === askedOn) openPanelTab(transcriptTab(started.id));
     return true;
   });
+  const archivePress = useArchivePress(agents);
   const closeSideChat = useSteadyDoor((agentId: string) => {
     const standing = agents.agents?.find((each) => each.id === agentId);
     // Note that one still answering is left at work, since archiving it would stop it unasked.
     if (standing === undefined || agentStillWriting(standing.status)) return;
-    void agents.onArchive(agentId, true);
+    void archivePress(agentId, true);
   });
   const openSideChatInTask = useSteadyDoor(openAgentColumn);
   const sideChatDoors = useMemo<TranscriptDoors>(
