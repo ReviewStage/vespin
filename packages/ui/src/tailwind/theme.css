@@ -575,6 +575,7 @@
   --spacing-data-table-narrow: 520px;
   --spacing-data-table-medium: 640px;
   --spacing-data-table-wide: 760px;
+  --spacing-data-table-prose: 280px; /* off-scale: the narrowest a column of wrapping words gets before the table scrolls */
 
   /* Banner, ScrollArea, and Pagination. */
   --color-attention: var(--ui-color-attention);

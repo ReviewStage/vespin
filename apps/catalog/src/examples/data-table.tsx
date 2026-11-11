@@ -14,8 +14,9 @@ import { CatalogSection } from "../section";
 
 /**
  * data-table.tsx -- a table sorted by its headings with rows that open, one
- * that sorts nothing, one with no rows, and a wide table scrolling sideways
- * in a narrow column.
+ * that sorts nothing, one with a column of prose that wraps and a menu on
+ * each row, one with no rows, and a wide table scrolling sideways in a
+ * narrow column.
  */
 
 interface Run {
@@ -110,6 +111,55 @@ const STATIC_COLUMNS = column.columns([
   }),
 ]);
 
+/** A run's note, prose that wraps at its column's width. */
+const NOTES: Readonly<Record<string, string>> = {
+  nightly:
+    "Reviews every pull request opened since the last run and leaves one comment per file it would change, never more.",
+  release: "Drafts the release notes from merged pull requests.",
+  triage:
+    "Labels new issues by area and asks for a reproduction where none is given, closing duplicates it is sure of.",
+};
+
+/** A table whose note column wraps, each row offering its run's acts from its ⋯ and a right-click. */
+const NOTED_COLUMNS = column.columns([
+  column.display({
+    id: "note",
+    header: "Note",
+    meta: { kind: DATA_TABLE_COLUMN_KIND.PROSE },
+    cell: ({ row: { original: run } }) => NOTES[run.id],
+  }),
+  column.display({ id: "name", header: "Run", cell: ({ row: { original: run } }) => run.name }),
+  column.display({
+    id: "minutes",
+    header: "Minutes",
+    meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
+    cell: ({ row: { original: run } }) => formatCount(run.minutes),
+  }),
+]);
+
+function NotedRuns(): React.JSX.Element {
+  const [acted, setActed] = useState<string>("none yet");
+  return (
+    <Stack gap={GAP.CONTROL}>
+      <DataTable
+        label="Runs"
+        columns={NOTED_COLUMNS}
+        rows={RUNS}
+        getRowId={(run) => run.id}
+        empty=""
+        rowMenu={(run) => ({
+          thing: "Run",
+          groups: [
+            [{ label: "Run now", onSelect: () => setActed(`Run now: ${run.name}`) }],
+            [{ label: "Delete", danger: true, onSelect: () => setActed(`Delete: ${run.name}`) }],
+          ],
+        })}
+      />
+      <Text tone={TEXT_TONE.MUTED}>Acted: {acted}</Text>
+    </Stack>
+  );
+}
+
 /** The longest runs first. */
 const LONGEST_FIRST: SortingState = [{ id: "minutes", desc: true }];
 
@@ -146,6 +196,9 @@ function DataTables(): React.JSX.Element {
           getRowId={(run) => run.id}
           empty=""
         />
+      </CatalogSection>
+      <CatalogSection id="data-table-prose" title="Prose that wraps, and a menu on each row">
+        <NotedRuns />
       </CatalogSection>
       <CatalogSection id="data-table-empty" title="No rows">
         <DataTable
