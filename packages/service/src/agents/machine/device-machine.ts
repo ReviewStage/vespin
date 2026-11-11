@@ -82,6 +82,7 @@ import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_MACHINE, MAC_PRESENCE } from "@repo/features/agent-wire";
+import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_BOUNDS,
@@ -91,6 +92,7 @@ import {
   type DeviceAgentAnswer,
   type DeviceAgentLaunchPayload,
   type DeviceAgentObject,
+  type DeviceCapability,
   deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
   deviceAgentLaunchSecretsSchema,
@@ -125,6 +127,7 @@ import { agentCommitIdentity, type CheckoutServices } from "../coder-host/checko
 import {
   type AgentMachineService,
   CHECKOUT_DIFF_OUTCOME,
+  type CheckoutDiffOutcome,
   type DeliveredCredentials,
   type FoundPlace,
   LaunchRefused,
@@ -431,25 +434,21 @@ function deviceMachineOver(
   /** The runner's exit as its launch line was settled, as `exitOfLine` reads it. */
   const exitOf = (pin: DeviceAgentPin, handle: RunnerHandle) => exitOfLine(pin, handle.command);
 
-  /** Whether the agent's Mac registered that it takes a restore line (`DEVICE_CAPABILITY.RESTORE_CHECKOUT`). */
-  const restoresCheckout = (pin: DeviceAgentPin) =>
+  /** Whether the agent's Mac registered the capability (`DEVICE_CAPABILITY`); a Mac removed registered none. */
+  const registered = (pin: DeviceAgentPin, capability: DeviceCapability) =>
     pin.deviceId === null
       ? Effect.succeed(false)
       : Effect.map(stored(deviceLayout(pin.userId, pin.deviceId)), (standing) =>
-          Option.exists(standing, (device) =>
-            device.capabilities.includes(DEVICE_CAPABILITY.RESTORE_CHECKOUT),
-          ),
+          Option.exists(standing, (device) => device.capabilities.includes(capability)),
         );
+
+  /** Whether the agent's Mac registered that it takes a restore line (`DEVICE_CAPABILITY.RESTORE_CHECKOUT`). */
+  const restoresCheckout = (pin: DeviceAgentPin) =>
+    registered(pin, DEVICE_CAPABILITY.RESTORE_CHECKOUT);
 
   /** Whether the agent's Mac registered that it launches every agent in a repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   const signsInOwnGithub = (pin: DeviceAgentPin) =>
-    pin.deviceId === null
-      ? Effect.succeed(false)
-      : Effect.map(stored(deviceLayout(pin.userId, pin.deviceId)), (standing) =>
-          Option.exists(standing, (device) =>
-            device.capabilities.includes(DEVICE_CAPABILITY.GITHUB_SIGN_IN),
-          ),
-        );
+    registered(pin, DEVICE_CAPABILITY.GITHUB_SIGN_IN);
 
   /** The deployment's key ring, which a launch's secrets are sealed under; refused where it has none. */
   const keyRing = Effect.gen(function* () {
@@ -725,8 +724,34 @@ function deviceMachineOver(
         return RESTORE_OUTCOME.FAILED;
       }),
 
-    // A Mac's host takes no diff request yet, so a turn's changes are read on a sandbox alone.
-    diffCheckout: () => Effect.succeed({ outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED }),
+    // A diff request the Mac's host answers with the script's exit and what it printed; a Mac whose host
+    // takes no such request diffs nothing, and one away is refused as every request to it is.
+    diffCheckout: (session, range) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+        const missing: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.MISSING };
+        if (Option.isNone(pin)) return missing;
+        yield* refuseAway(pin.value);
+        if (!(yield* registered(pin.value, DEVICE_CAPABILITY.DIFF_CHECKOUT))) {
+          const unsupported: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED };
+          return unsupported;
+        }
+        const answer = yield* asked(session, DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, {
+          from: range.from,
+          to: range.to,
+        });
+        if (answer.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return missing;
+        if (answer.exit === 0) {
+          const diffed: CheckoutDiffOutcome = {
+            outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
+            diff: answer.diff,
+          };
+          return diffed;
+        }
+        if (answer.exit === CHECKOUT_DIFF_EXIT.MISSING) return missing;
+        const failed: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
+        return failed;
+      }),
 
     // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
     phoneVideo: () => Effect.succeed(undefined),

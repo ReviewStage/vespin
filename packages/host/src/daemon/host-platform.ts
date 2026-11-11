@@ -84,11 +84,12 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
     deviceName: options.os.deviceName(),
     deviceMachine: options.os.machine(),
     devicePlatform: options.os.platform,
-    // Note that a host lets go of an archived agent's folder (`discard`), runs an agent in the mode its launch names, puts a worktree back on a rewind (`restore-checkout`), and runs every agent on its own GitHub sign-in, an agent on its starter's own token among them.
+    // Note that a host lets go of an archived agent's folder (`discard`), runs an agent in the mode its launch names, puts a worktree back on a rewind (`restore-checkout`), diffs one between a turn's checkouts (`diff-checkout`), and runs every agent on its own GitHub sign-in, an agent on its starter's own token among them.
     deviceCapabilities: [
       DEVICE_CAPABILITY.DISCARD,
       DEVICE_CAPABILITY.PERMISSION_MODES,
       DEVICE_CAPABILITY.RESTORE_CHECKOUT,
+      DEVICE_CAPABILITY.DIFF_CHECKOUT,
       DEVICE_CAPABILITY.GITHUB_SIGN_IN,
     ],
     deviceArch: options.arch,

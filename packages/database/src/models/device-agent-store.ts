@@ -134,6 +134,28 @@ const AnswerRowSchema = Schema.Struct({
 
 const decodeAnswer = Schema.decodeUnknownEffect(deviceAgentAnswerSchema);
 
+/**
+ * An answer as the request's one bytes column keeps it: a read's bytes as
+ * they are, and a diff's exit on a first line of its own ahead of what it
+ * printed, so the column takes both and no column is added for the exit.
+ */
+function answerBytes(answer: DeviceAgentAnswer): Uint8Array | null {
+  if (answer.kind === DEVICE_AGENT_REQUEST_KIND.READ_FILE) return answer.bytes;
+  return new TextEncoder().encode(`${answer.exit}\n${answer.diff}`);
+}
+
+/** An answer read back off the column, as `answerBytes` kept it. */
+function answerOf(row: typeof AnswerRowSchema.Type): unknown {
+  if (row.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return row;
+  const kept = new TextDecoder().decode(row.bytes ?? new Uint8Array());
+  const line = kept.indexOf("\n");
+  return {
+    kind: row.kind,
+    exit: Number(line === -1 ? kept : kept.slice(0, line)),
+    diff: line === -1 ? "" : kept.slice(line + 1),
+  };
+}
+
 /** The line as it stood before its claim, read beside the update for the secrets the update clears. */
 const lineBefore = alias(deviceAgentLine, "line_before");
 
@@ -733,7 +755,7 @@ const writeAnswer = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(deviceAgentRequest)
-        .set({ settledAt: now, bytes: answer.bytes })
+        .set({ settledAt: now, bytes: answerBytes(answer) })
         .where(
           and(
             eq(deviceAgentRequest.id, id),
@@ -1264,8 +1286,7 @@ export function deviceAgentRequestAnswer(
   return Effect.flatMap(findAnswer({ userId, id }), (row) =>
     Option.match(row, {
       onNone: () => Effect.succeed(Option.none()),
-      onSome: (answer) =>
-        Effect.map(decodeAnswer({ kind: answer.kind, bytes: answer.bytes }), Option.some),
+      onSome: (answer) => Effect.map(decodeAnswer(answerOf(answer)), Option.some),
     }),
   );
 }
