@@ -34,8 +34,11 @@ import type { PageLeave } from "./page-leave";
 /** What Vite's preload helper dispatches on the window where a chunk, or a stylesheet it brings, failed to load. */
 export const PRELOAD_ERROR = "vite:preloadError";
 
-/** What the toast says; a deploy or a dropped connection alike. */
-const PART_DID_NOT_LOAD = `Part of ${PRODUCT_NAME} could not load`;
+/** What the toast says of a chunk that failed to load; a deploy or a dropped connection alike. */
+export const PART_DID_NOT_LOAD = `Part of ${PRODUCT_NAME} could not load`;
+
+/** What the toast says of a build the service refused as older than it serves. */
+export const BUILD_TOO_OLD = `This ${PRODUCT_NAME} is older than the one now live`;
 
 /** What the reload needs of the tab, which a test stands in for. */
 export interface StaleBuildTab {
@@ -74,15 +77,15 @@ export function failedChunkAnswer(tab: StaleBuildTab): () => Effect.Effect<void>
     });
 }
 
-/** This tab, over its own window and way out. */
-export function staleBuildTab(leave: StaleBuildTab["leave"]): StaleBuildTab {
+/** This tab, over its own window and way out, its toast saying `words`. */
+export function staleBuildTab(leave: StaleBuildTab["leave"], words: string): StaleBuildTab {
   return {
     online: () => navigator.onLine !== false,
     leave,
     reload: () => location.reload(),
     askReload: (reload, dismissed) =>
       showToast({
-        words: PART_DID_NOT_LOAD,
+        words,
         tone: STATUS_TONE.ATTENTION,
         action: { label: "Reload", onPress: reload },
         persists: true,
