@@ -22,7 +22,7 @@ export {
   Chip,
   FieldChip,
   type Scope,
-  ScopePills,
+  ScopePicker,
   StatusChip,
 } from "./button.js";
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";

@@ -1,13 +1,6 @@
 // button.tsx -- the app's buttons, chips, and pills: the system's own buttons in the brand's accent, and the small capsules a person picks among or reads a task's fields on.
 
-import {
-  HStack,
-  Image,
-  ScrollView,
-  Button as SwiftUIButton,
-  Text,
-  VStack,
-} from "@expo/ui/swift-ui";
+import { HStack, Image, Picker, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   accessibilityElement,
@@ -18,13 +11,15 @@ import {
   contentShape,
   controlSize,
   disabled as disabledModifier,
-  fixedSize,
   font,
   foregroundStyle,
+  labelsHidden,
   monospacedDigit,
   padding,
+  pickerStyle,
   shapes,
   strokeBorder,
+  tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -211,7 +206,7 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
   );
 }
 
-/** One scope a `ScopePills` row offers. */
+/** One scope a `ScopePicker` offers. */
 export type Scope = {
   readonly label: string;
   /** How many it lists, where the count is worth reading. */
@@ -220,44 +215,46 @@ export type Scope = {
   readonly onPress: () => void;
 };
 
+/** A scope as its segment names it: its label, and its count after it where it has one. */
+function segmentWords(scope: Scope): string {
+  return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
+}
+
 /**
- * A list's scopes as a row of small capsules under the screen's title, the
- * chosen one filled with the ink, scrolling sideways where they outrun the
- * screen, over the list they scope. They stand over it rather than in it,
- * so they stay when the scope chosen lists nothing.
+ * A list's scopes as the system's segmented control under the screen's
+ * title, as Mail and the App Store switch between a list's views, over the
+ * list they scope. It stands over the list rather than in it, so it stays
+ * when the scope chosen lists nothing. Note that the system draws it, in
+ * its own glass and its own selection, so it reads as iOS's rather than a
+ * row of capsules of our own.
  */
-export function ScopePills({
+export function ScopePicker({
   scopes,
   children,
 }: {
   readonly scopes: readonly Scope[];
-  /** The list the pills scope, or what stands in its place while it lists nothing. */
+  /** The list the control scopes, or what stands in its place while it lists nothing. */
   readonly children: ReactNode;
 }) {
+  const chosen = scopes.find((scope) => scope.selected);
   return (
     <VStack spacing={0}>
-      <ScrollView
-        axes="horizontal"
-        showsIndicators={false}
-        modifiers={[fixedSize({ horizontal: false, vertical: true })]}
+      <Picker<string>
+        label=""
+        selection={chosen?.label ?? ""}
+        onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
+        modifiers={[
+          pickerStyle("segmented"),
+          labelsHidden(),
+          padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
+        ]}
       >
-        <HStack
-          spacing={SPACE.TIGHT + 2}
-          modifiers={[
-            padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
-          ]}
-        >
-          {scopes.map((scope) => (
-            <Chip
-              key={scope.label}
-              label={scope.label}
-              count={scope.count}
-              selected={scope.selected}
-              onPress={scope.onPress}
-            />
-          ))}
-        </HStack>
-      </ScrollView>
+        {scopes.map((scope) => (
+          <Text key={scope.label} modifiers={[tag(scope.label)]}>
+            {segmentWords(scope)}
+          </Text>
+        ))}
+      </Picker>
       {children}
     </VStack>
   );

@@ -60,7 +60,7 @@ import {
   ROW_ACTION_TONE,
   RowList,
   type Scope,
-  ScopePills,
+  ScopePicker,
   Screen,
   SplitView,
   THREAD_MEDIA,
@@ -625,7 +625,7 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
   return { show, search, setSearch, listing, acts, scopes, menu, remind };
 }
 
-// A compact window: the list under the scope pills, the account's photo
+// A compact window: the list under its scopes' segmented control, the account's photo
 // opening Settings and the workspace switcher beside it at the bar's leading
 // edge, and its search and its ⋯ menu as round
 // glass buttons at its trailing one, each row pushing its thread as the Stack's
@@ -663,7 +663,7 @@ function InboxStackList(words: InboxSearch) {
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
       <Screen>
-        <ScopePills scopes={scopes}>
+        <ScopePicker scopes={scopes}>
           {listing.listed.length === 0 ? (
             <InboxEmpty
               show={show}
@@ -683,7 +683,7 @@ function InboxStackList(words: InboxSearch) {
               onResolve={acts.resolve}
             />
           )}
-        </ScopePills>
+        </ScopePicker>
       </Screen>
       {remind.sheet}
     </>
@@ -691,7 +691,7 @@ function InboxStackList(words: InboxSearch) {
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
-// under its scope pills with its search and ⋯ menu in its bar and the
+// under its scopes' segmented control with its search and ⋯ menu in its bar and the
 // selected thread beside it, and, where the window is wide enough for three
 // columns, the app sidebar before them, as Mail stands its mailboxes, a
 // mailbox's mail, and a message. The Stack's header steps aside, since the
@@ -718,7 +718,7 @@ function InboxSplitScreen({
         <SplitView
           {...sidebar.columns({
             view: (
-              <ScopePills scopes={scopes}>
+              <ScopePicker scopes={scopes}>
                 {listing.listed.length === 0 ? (
                   <InboxEmpty
                     show={show}
@@ -739,7 +739,7 @@ function InboxSplitScreen({
                     onResolve={acts.resolve}
                   />
                 )}
-              </ScopePills>
+              </ScopePicker>
             ),
             bar: {
               title: INBOX_TITLE,

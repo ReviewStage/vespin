@@ -22,7 +22,7 @@ builds a control of its own.
   such as the workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
-  `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
+  `ScopePicker` (a list's scopes as the system's segmented control), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
@@ -149,9 +149,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   you: the unread dot, an ask's glyph and words, the selected tab and the
   Inbox count, a picked option, and a primary `Button`. Status tones stand
   on the status marks alone: a task's ring, and a pull request's state.
-- **Capsules.** `ScopePills` are a list's scopes in a row under its title,
-  the chosen one filled with the ink, and `Chip` one of them; `FieldChip`
-  and `StatusChip` read a task's status, priority and assignee. Each stands
+- **Scopes and capsules.** A list's scopes are `ScopePicker`, the system's
+  segmented control under its title, as Mail and the App Store switch a
+  list's views. `Chip` is a capsule an act or a choice stands in, such as a
+  pull request card's acts; `FieldChip` and `StatusChip` read a task's
+  status, priority and assignee. Each stands
   on `SURFACE` inside a hairline.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a toggle per step,

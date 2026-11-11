@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list under its scopes' segmented control, the account's photo in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -24,7 +24,7 @@ appId: dev.vespin.ios
 - tapOn:
     point: "50%, 90%"
 - waitForAnimationToEnd
-# The scope pills over the list, Open chosen: All lists the settled threads
+# The scopes' segmented control over the list, Open chosen: All lists the settled threads
 # too.
 - tapOn: "All"
 - scrollUntilVisible:
