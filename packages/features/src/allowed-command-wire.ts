@@ -1,0 +1,67 @@
+import { CommandPrefixSchema } from "@repo/wire";
+import { Schema as EffectSchema } from "effect";
+import { countedNumber, wireUuidSchema } from "./service-wire.js";
+
+/**
+ * allowed-command-wire.ts -- the shell commands a member always allows their coding agents to run unasked, by their first words, as Settings › Agents lists, adds, and removes them.
+ *
+ * A member's Always allow on a command's ask lasts past the agent's session
+ * where the harness proposed the command's prefix (`CommandPrefixSchema`,
+ * `["pnpm","test"]`, shown as `pnpm test *`): the prefix is kept on the
+ * member's list, which names the agent it came from, and every later launch
+ * of the member's agents, in any repository and on either harness, is
+ * handed the list, so a command it covers asks no more. Everything else an
+ * Always allow covers, a file edit, a web fetch, an MCP tool, or a command
+ * with no proposed prefix, stays the agent's session's alone. The list
+ * matters only in a mode that asks; full access asks nothing.
+ *
+ * `/api/account/allowed-commands` answers the member's list in the order
+ * it was added (GET), adds a prefix by hand, naming no agent (POST), and
+ * removes one by its id in the query (DELETE). A prefix already kept is
+ * answered as it stands, and one past the list's bound is refused
+ * (`allowed-commands-full`). A removal stops applying at an agent's next
+ * launch; a runner already running holds the rules it launched with. Every
+ * answer carries the list as it then stands. A list is its member's alone:
+ * no one else reads, adds to, or removes from it.
+ */
+
+/** The bounds of a member's list. */
+export const ALLOWED_COMMAND_BOUNDS = {
+  /** The most prefixes a member keeps; an Always allow past it stays the session's. */
+  MAX_COMMANDS: 200,
+} as const;
+
+/** The removal's query key, since a `DELETE` carries no body. */
+export const ALLOWED_COMMAND_QUERY = {
+  ID: "id",
+} as const;
+
+export const allowedCommandIdSchema = wireUuidSchema;
+
+/**
+ * One command the member always allows: its id, which a removal names; its
+ * first words; the agent whose ask it came from, null for one added by
+ * hand or whose agent is gone; and when it was added, in epoch milliseconds.
+ */
+export const allowedCommandSchema = EffectSchema.Struct({
+  id: allowedCommandIdSchema,
+  prefix: EffectSchema.Array(EffectSchema.String),
+  agentId: EffectSchema.NullOr(wireUuidSchema),
+  addedAt: countedNumber,
+});
+
+export type AllowedCommand = typeof allowedCommandSchema.Type;
+
+/** The member's list as it stands, the earliest added first. */
+export const allowedCommandsAnswerSchema = EffectSchema.Struct({
+  commands: EffectSchema.Array(allowedCommandSchema),
+});
+
+export type AllowedCommandsAnswer = typeof allowedCommandsAnswerSchema.Type;
+
+/** A prefix added by hand (POST). */
+export const allowedCommandAddRequestSchema = EffectSchema.Struct({
+  prefix: CommandPrefixSchema,
+});
+
+export type AllowedCommandAddRequest = typeof allowedCommandAddRequestSchema.Type;

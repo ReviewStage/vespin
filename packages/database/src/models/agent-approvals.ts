@@ -33,6 +33,7 @@ import {
   type ApprovalStatus,
   agentPendingApprovalSchema,
 } from "@repo/features/agent-approval-wire";
+import type { CommandPrefix } from "@repo/wire";
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -77,7 +78,22 @@ export interface ApprovalAsked {
   readonly title: string;
   readonly description: string | null;
   readonly input: AgentPendingApproval["input"];
+  /** The command's first words the harness proposed a rule for, which an Always allow keeps on the member's list; null where it proposed none. */
+  readonly commandPrefix: CommandPrefix | null;
   readonly at: Date;
+}
+
+/**
+ * An ask as its runner's word settled it: the agent it is of, the member
+ * whose answer decided it, none where no one's did, the prefix its harness
+ * proposed, and whether this word was the runner's first of it, which a
+ * batch posted again is not.
+ */
+export interface RunnerSettledAsk {
+  readonly agentId: string;
+  readonly decidedByUserId: string | null;
+  readonly commandPrefix: readonly string[] | undefined;
+  readonly first: boolean;
 }
 
 const approvalColumns = {
@@ -143,7 +159,12 @@ const settleByRunner = SqlSchema.findAll({
     settledBy: Schema.Literals(SETTLED_BY),
     at: Schema.Date,
   }),
-  Result: IdSchema,
+  Result: Schema.Struct({
+    agentId: Schema.String,
+    ask: agentPendingApprovalSchema,
+    decidedByUserId: Schema.NullOr(Schema.String),
+    confirmedAt: InstantColumnSchema,
+  }),
   execute: ({ conversationId, requestId, status, settledBy, at }) =>
     Database.use((db) =>
       db
@@ -164,7 +185,12 @@ const settleByRunner = SqlSchema.findAll({
             or(pending, eq(agentApproval.settledBy, APPROVAL_SETTLED_BY.MEMBER)),
           ),
         )
-        .returning({ id: agentApproval.id }),
+        .returning({
+          agentId: agentApproval.agentId,
+          ask: agentApproval.ask,
+          decidedByUserId: agentApproval.decidedByUserId,
+          confirmedAt: agentApproval.confirmedAt,
+        }),
     ),
 });
 
@@ -350,6 +376,7 @@ export function recordApprovalAsked(asked: ApprovalAsked): ApprovalEffect<boolea
         ...(asked.description === null ? undefined : { description: asked.description }),
         input: asked.input,
         askedAt: asked.at.getTime(),
+        ...(asked.commandPrefix === null ? undefined : { commandPrefix: asked.commandPrefix }),
       },
       at: asked.at,
     });
@@ -360,7 +387,10 @@ export function recordApprovalAsked(asked: ApprovalAsked): ApprovalEffect<boolea
 /**
  * Settles the ask the CLI's id names as its runner said it was: pending, or
  * answered by a member, whose answer the runner's word stands over; one
- * settled any other way stands. Answers whether this call wrote it.
+ * settled any other way stands. Answers the ask as this call wrote it, or
+ * none where it wrote nothing. Note that the first word of it stamps its
+ * confirmation at this call's instant, which a word posted again keeps, so
+ * an instant that is this call's is the first word.
  */
 export function settleApprovalByRunner(settled: {
   readonly conversationId: string;
@@ -368,8 +398,15 @@ export function settleApprovalByRunner(settled: {
   readonly status: ApprovalStatus;
   readonly settledBy: ApprovalSettledBy;
   readonly at: Date;
-}): ApprovalEffect<boolean> {
-  return Effect.map(settleByRunner(settled), (written) => written.length > 0);
+}): ApprovalEffect<Option.Option<RunnerSettledAsk>> {
+  return Effect.map(settleByRunner(settled), (written) =>
+    Option.map(Option.fromNullishOr(written[0]), (row) => ({
+      agentId: row.agentId,
+      decidedByUserId: row.decidedByUserId,
+      commandPrefix: row.ask.commandPrefix,
+      first: row.confirmedAt.getTime() === settled.at.getTime(),
+    })),
+  );
 }
 
 /** Expires every ask the turn named left pending, as it ends; answers how many. */

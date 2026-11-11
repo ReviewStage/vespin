@@ -107,6 +107,7 @@ const asked = (conversationId: string, turnId: string, requestId: string) =>
       title: "Run pnpm test?",
       description: null,
       input: { command: "pnpm test" },
+      commandPrefix: null,
       at: new Date(yield* Clock.currentTimeMillis),
     });
   });
