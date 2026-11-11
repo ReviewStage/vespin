@@ -45,7 +45,7 @@ import {
   UNREAD,
 } from "@repo/host/app-state";
 import { TASKS_ACT_KIND } from "@repo/host/contract";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, type ExperimentChoices } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { agentTab, changesTab, draftTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
@@ -251,31 +251,43 @@ function markupOf(element: ReactElement): string {
   return markup;
 }
 
-test("a listed task draws its name and the column's tab from its row while its description is still read, which alone waits", () => {
-  const page = document.createElement("div");
-  page.innerHTML = markupOf(
-    windowRouter().provide(
-      withQueryClient(
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
-            tasks: [TASK],
-            activeTaskId: TASK.id,
-            region: { kind: DOCUMENT_REGION.READING },
-            workspaces: [
-              { id: TASK.workspaceId, name: "Personal", role: WORKSPACE_ROLE.OWNER, github: null },
-            ],
+test("a listed task draws its name, its status, and the column's tab from its row while its description is still read, which alone waits, and stands nowhere with Descriptions off", () => {
+  const listed = { ...TASK, status: TASK_STATUS.IN_PROGRESS, priority: TASK_PRIORITY.HIGH };
+  const drawn = (experiments: ExperimentChoices) => {
+    const page = document.createElement("div");
+    page.innerHTML = markupOf(
+      windowRouter().provide(
+        withExperiments(
+          experiments,
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: tasksControl({
+              page: TASKS_PAGE.DOCUMENT,
+              tasks: [listed],
+              activeTaskId: TASK.id,
+              region: { kind: DOCUMENT_REGION.READING },
+              workspaces: [
+                {
+                  id: TASK.workspaceId,
+                  name: "Personal",
+                  role: WORKSPACE_ROLE.OWNER,
+                  github: null,
+                },
+              ],
+            }),
           }),
-        }),
+        ),
       ),
-    ),
-  );
-  const reading = [...page.querySelectorAll('[role="status"]')].map((each) => each.textContent);
+    );
+    const reading = [...page.querySelectorAll('[role="status"]')].map((each) => each.textContent);
+    return { page, reading };
+  };
+  const { page, reading } = drawn(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   assert.ok(
     [...page.querySelectorAll("h1, h2")].some((each) => each.textContent === TASK.name),
     "the task's title is drawn from its row",
   );
+  assert.ok(page.textContent?.includes("In progress"), "its status chip is drawn from its row");
   assert.ok(page.querySelector('[role="tablist"]'), "the column's tabs stand");
   assert.deepEqual(
     reading.filter((words) => words?.includes("task")),
@@ -285,6 +297,11 @@ test("a listed task draws its name and the column's tab from its row while its d
   assert.ok(
     reading.some((words) => words?.includes("description")),
     "the description alone says it is read",
+  );
+  assert.deepEqual(
+    drawn({}).reading.filter((words) => words?.includes("description")),
+    [],
+    "with Descriptions off no description is said to be read",
   );
 });
 

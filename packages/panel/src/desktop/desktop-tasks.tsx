@@ -1263,7 +1263,7 @@ function DescriptionDocument({
       {/* The way back to the agents stays pinned at the card's top left, over the details as they scroll. */}
       {detailsWide ? <div className="task-details-back">{detailsLead}</div> : null}
       {read === undefined ? (
-        <DescriptionBodySkeleton name={task.name} head={descriptionHead} />
+        <DescriptionBodySkeleton task={task} standing={standing} head={descriptionHead} />
       ) : (
         <DescriptionBody
           task={read}

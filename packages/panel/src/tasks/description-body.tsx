@@ -12,6 +12,7 @@ import {
   type DescriptionLastEdit,
   type DescriptionSectionEdit,
   type Task,
+  type TaskSummary,
 } from "@repo/features/task-wire";
 import { agoText, dateOfText, momentText, sinceText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
@@ -1056,33 +1057,49 @@ function DescriptionBodyColumn({
 }
 
 /**
- * A task's description while it is read: its title as the list names it, and
- * what the page draws at its head, its agents and its pages, which stand at
- * once since none of them waits on the description, over its text's lines
- * held, so the description lands in place under them.
+ * A task's description while it is read, drawn from its row in the list: its
+ * path, its title and its standing chips, and what the page draws at its head,
+ * its agents and its pages, which stand at once since none of them waits on
+ * the description, over its text's lines held, so the description lands in
+ * place under them. Note that the add menu hangs nowhere yet, because the row
+ * names none of the task's blocks, and that with its workspace's Descriptions
+ * off the head stands alone, as `DescriptionBody`'s does.
  */
 export function DescriptionBodySkeleton({
-  name,
+  task,
+  standing,
   head,
 }: {
-  name: string;
+  /** The task as the list holds it. */
+  task: TaskSummary;
+  /** As `DescriptionBody`'s `standing`. */
+  standing?: TaskStandingDoor | undefined;
   /** What the task's own page draws at the head of its text, as `DescriptionBody`'s `head`. */
   head?: ((room: DescriptionRoom) => React.ReactNode) | undefined;
 }): React.JSX.Element {
   const scroller = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const room = useMemo((): DescriptionRoom => ({ scroller, column: body }), []);
+  const documented = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
   return (
     <DocumentScroll ref={scroller}>
       <DescriptionBodyColumn ref={body}>
-        <TaskTitle name={name} />
+        {standing === undefined ? null : <TaskPath task={task} door={standing} />}
+        <TaskTitle name={task.name} />
+        {standing === undefined ? null : (
+          <TaskStandingChips task={task} onSet={standing.onSet} inSight={standing.inSight} />
+        )}
         <Fragment key={HEAD_KEY}>{head?.(room)}</Fragment>
-        <DocumentRule />
-        <SkeletonRegion label={DESCRIPTION_LOADING_LABEL}>
-          {TEXT_LINE_WIDTHS.map((width) => (
-            <Skeleton key={width} width={width} />
-          ))}
-        </SkeletonRegion>
+        {documented ? (
+          <>
+            <DocumentRule />
+            <SkeletonRegion label={DESCRIPTION_LOADING_LABEL}>
+              {TEXT_LINE_WIDTHS.map((width) => (
+                <Skeleton key={width} width={width} />
+              ))}
+            </SkeletonRegion>
+          </>
+        ) : null}
       </DescriptionBodyColumn>
     </DocumentScroll>
   );
