@@ -99,6 +99,8 @@ function scriptedSandbox(state: SandboxState) {
       }),
     rename: () => Effect.succeed(Result.succeed(undefined)),
     kill: () => Effect.succeed(Result.succeed(undefined)),
+    run: () => Effect.die("no test runs a run action here"),
+    interrupt: () => Effect.die("no test stops a run action here"),
     resume: (sessionId) =>
       Effect.sync(() => {
         asked.push({ what: "resume", sessionId });

@@ -48,6 +48,8 @@ const terminalSummarySchema = EffectSchema.Struct({
   command: EffectSchema.String,
   cwd: EffectSchema.String,
   running: EffectSchema.Boolean,
+  /** The run action the shell was started for (`workspace-sandbox-setup-wire.ts`), by its id; none for a shell a developer opened. */
+  runAction: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type TerminalSummary = typeof terminalSummarySchema.Type;

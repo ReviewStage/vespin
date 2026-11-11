@@ -56,6 +56,7 @@ import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
   AGENT_LIST_ARCHIVED,
+  AGENT_MACHINE,
   type AgentPullRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
@@ -108,6 +109,7 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
+import { workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
@@ -125,6 +127,7 @@ import {
 import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-host/stop.js";
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
+import { runActionOf } from "./run-actions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox, SHELL_REFUSAL, type ShellRefusal } from "./terminal/agent-sandbox.js";
@@ -648,6 +651,50 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           const sandbox = yield* AgentSandbox;
           const renamed = yield* sandboxOrUpstream(sandbox.rename(sessionId, terminalId, title));
           if (Result.isFailure(renamed)) return yield* Effect.fail(shellRefusal(renamed.failure));
+          return yield* listedShells(sessionId);
+        }),
+      );
+    }),
+    /**
+     * One of the agent's repository's run actions run in its running sandbox
+     * (`run-actions.ts`), with the workspace's variables, answering its
+     * shell; the press is the only thing that runs one, and a stopped
+     * sandbox is refused rather than woken.
+     */
+    runAction: signedIn.runAction.effect(function* ({ input, context }) {
+      const actionId = yield* pathUuid(input.action);
+      const { sessionId, agent } = yield* reachedAgentSession(context.userId, input.id);
+      const action = yield* runActionOf(agent, actionId);
+      if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+      const environment = yield* workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL);
+      return yield* inSandbox(
+        Effect.gen(function* () {
+          const sandbox = yield* AgentSandbox;
+          const ran = yield* sandboxOrUpstream(
+            // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
+            sandbox.run(sessionId, action.id, {
+              actionId: action.id,
+              label: action.label,
+              command: action.command,
+              environment,
+            }),
+          );
+          if (Result.isFailure(ran)) return yield* Effect.fail(shellRefusal(ran.failure));
+          return { terminal: ran.success };
+        }),
+      );
+    }),
+    /** What one run action's shell runs interrupted, answering the shells as they stand after. */
+    stopRunAction: signedIn.stopRunAction.effect(function* ({ input, context }) {
+      const actionId = yield* pathUuid(input.action);
+      const { sessionId, agent } = yield* reachedAgentSession(context.userId, input.id);
+      yield* runActionOf(agent, actionId);
+      if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      return yield* inSandbox(
+        Effect.gen(function* () {
+          const sandbox = yield* AgentSandbox;
+          const stopped = yield* sandboxOrUpstream(sandbox.interrupt(sessionId, actionId));
+          if (Result.isFailure(stopped)) return yield* Effect.fail(shellRefusal(stopped.failure));
           return yield* listedShells(sessionId);
         }),
       );

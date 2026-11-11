@@ -73,6 +73,8 @@ function agents() {
     start: unused,
     rename: unused,
     kill: unused,
+    run: unused,
+    interrupt: unused,
     resume: unused,
     attach: unused,
     open: unused,
