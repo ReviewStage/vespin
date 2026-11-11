@@ -10,14 +10,14 @@ export function markedNote(unread: boolean, landed: number, refused: number): st
   return refused === 0 ? kept : `${kept}, ${refused} could not be`;
 }
 
-/** What one toast says of a Got it on several notices the service refused some of: how many it took, and how many not. */
+/** What one toast says of a Got it on several notices the service did not confirm some of: how many it took, and how many it refused or never answered, which may still have landed. */
 export function acknowledgedNote(landed: number, refused: number): string {
-  if (landed === 0) return `Could not acknowledge ${countWords(refused, TERM.INBOX_ITEM)}`;
-  return `${countWords(landed, TERM.INBOX_ITEM)} acknowledged, ${refused} could not be`;
+  if (landed === 0) return `Could not confirm Got it for ${countWords(refused, TERM.INBOX_ITEM)}`;
+  return `Got it: ${countWords(landed, TERM.INBOX_ITEM)}, ${refused} not confirmed`;
 }
 
-/** What a toast says of a reminder set, or canceled, that the service did not take. */
+/** What a toast says of a reminder set, or cleared, that the service did not take, in the words of the act that asked (`REMIND_WORDS`). */
 export const REMIND_REFUSED = {
   SET: "Could not set the reminder",
-  CANCEL: "Could not cancel the reminder",
+  CLEAR: "Could not clear the reminder",
 } as const;

@@ -101,7 +101,7 @@ export function useCopyLink(): ((place: LinkDestination) => void) | undefined {
 }
 
 /** A place's link under the workspace the surface hands down, by the task's number where the window lists one; none where it hands down none. */
-function usePlaceLink(): (place: LinkDestination) => string | undefined {
+export function usePlaceLink(): (place: LinkDestination) => string | undefined {
   const workspace = useContext(LinkWorkspaceContext);
   const numbered = useNumberedPlace();
   return (place) =>

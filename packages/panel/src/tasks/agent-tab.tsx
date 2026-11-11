@@ -1,4 +1,5 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
+import { bootHolds } from "@repo/features/agent-boot";
 import {
   AGENT_PART,
   type AgentPart,
@@ -190,17 +191,17 @@ import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import {
   type AgentApprovalsControl,
-  type AgentModeControl,
   ApprovalsProvider,
   heldCallPart,
   looseApprovals,
   transcriptCallIds,
   useAgentApprovals,
-  useAgentPermissionMode,
   useCallHeld,
 } from "./agent-approvals.js";
+import { AgentBootLine, BOOT_LINE, bootLineOf } from "./agent-boot-line.js";
+import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
-import { ForwardChip, useForwardToast } from "./agent-forward.js";
+import { useForwardToast } from "./agent-forward.js";
 import {
   agentLines,
   agentMessageOf,
@@ -239,8 +240,6 @@ import {
   teammateStarter,
   threadLineOf,
   transcriptRowKey,
-  turnUnderWay,
-  unreadOpeningLine,
   usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
@@ -259,11 +258,9 @@ import {
   ShownPictures,
   useAgentPictureDoor,
 } from "./agent-pictures.js";
-import { AgentPlace } from "./agent-place.js";
 import { PublishedBar, type PublishedDoors } from "./agent-published.js";
 import { AgentQueueDock } from "./agent-queue-dock.js";
 import { SendingAgent } from "./agent-ref.js";
-import type { AgentServersControl } from "./agent-servers.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import {
@@ -301,7 +298,7 @@ import {
   MessagePlaceProvider,
   useMessageReveal,
 } from "./message-links.js";
-import { type MoveCarry, type PlaceMove, useMovePlace, useMoveToCloud } from "./move-agent.js";
+import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
@@ -345,10 +342,8 @@ import {
   type MessageSender as MessageWriter,
   useAgentComposer,
 } from "./use-agent-composer.js";
-import { type AgentModelControl, useAgentModel } from "./use-agent-model.js";
 import { useAgentPullRequest } from "./use-agent-pull-request.js";
 import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
-import { useAgentServers } from "./use-agent-servers.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useKnownNames, useTaskStatus } from "./use-known-names.js";
@@ -2448,8 +2443,11 @@ function AgentTranscriptView({
   signIn,
   bringIn,
   holding = false,
+  boot,
 }: {
   messages: readonly AgentTranscriptMessage[];
+  /** What the empty transcript says in its starting line's place while the agent's first launch stands (`AgentBootLine`); none otherwise. */
+  boot?: ReactNode;
   /** Whether the log waits to draw for what stands around it, saying it is loading meanwhile. */
   holding?: boolean;
   /** Where the transcript hands the door that brings a message whose row is not drawn into view, which a link to the message asks through; none where nothing asks. */
@@ -2821,7 +2819,7 @@ function AgentTranscriptView({
       {
         <>
           {ended === undefined ? (
-            <Text tone={TEXT_TONE.MUTED}>{lead.startingLine}</Text>
+            (boot ?? <Text tone={TEXT_TONE.MUTED}>{lead.startingLine}</Text>)
           ) : signInCard !== undefined ? (
             signInCard
           ) : (
@@ -2850,14 +2848,9 @@ function AgentTranscriptView({
  */
 function AgentTabView({
   agent,
-  models,
-  modelsFailed,
-  readModels,
+  box,
   transcript,
   composer,
-  model,
-  servers,
-  mode,
   approvals,
   published,
   threads,
@@ -2866,7 +2859,6 @@ function AgentTabView({
   counts,
   delegationStarts,
   onStop,
-  onClear,
   onRetry,
   onUnarchive,
   onOpenSubagent,
@@ -2887,7 +2879,6 @@ function AgentTabView({
   continuedNote,
   continuable = false,
   onMoveToCloud,
-  placeMove,
   bringIn,
   holding = false,
 }: {
@@ -2900,15 +2891,10 @@ function AgentTabView({
   replay?: ReplayPlace | undefined;
   /** The automation's run that started the agent, as its tab reads it; none for an agent started by hand, and before the run is read. */
   run?: AgentOrigin | undefined;
-  models: readonly CatalogModel[] | undefined;
-  modelsFailed: boolean;
-  readModels: () => void;
+  /** What the agent's box reads off the agent, as an Inbox thread's box reads it too (`agent-box.tsx`). */
+  box: AgentBox;
   transcript: AgentTranscriptControl;
   composer: HeldComposer;
-  model: AgentModelControl | undefined;
-  servers: AgentServersControl;
-  /** The agent's permission mode and its chip's change; none for an agent that never asks. */
-  mode: AgentModeControl | undefined;
   /** The agent's asks, drawn on their calls and counted on the working line. */
   approvals: AgentApprovalsControl;
   /** What the agent published, once the service has said; nothing before. */
@@ -2923,8 +2909,6 @@ function AgentTabView({
   /** When each of its running workers began, as their rows count from it; none while the tab is off screen. */
   delegationStarts: ReadonlyMap<string, number> | undefined;
   onStop: () => Promise<boolean>;
-  /** Starts the agent's harness on a fresh session (`/clear`). */
-  onClear: () => Promise<boolean>;
   /** A failed launch's Retry on the GitHub sign-in card: sends again the lines it lost, answering whether the service took it. */
   onRetry: () => Promise<boolean>;
   /** Brings the agent back from the archive; present exactly while it is archived, when no message is sent. */
@@ -2960,9 +2944,8 @@ function AgentTabView({
   continuable?: boolean;
   /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers, and the box's note of its Mac gone offline, carrying the message the Mac did not take; none where Move to would not. */
   onMoveToCloud?: ((carry?: MoveCarry) => void) | undefined;
-  /** The move the box's place chip offers (`useMovePlace`); none where the chip takes no press. */
-  placeMove?: PlaceMove | undefined;
 }): React.JSX.Element {
+  const { models, servers, mode } = box;
   // Note that the messages a rewind drops are hidden at once, until the transcript reads back without them.
   const { cut } = composer;
   const kept = useMemo(
@@ -3035,7 +3018,9 @@ function AgentTabView({
   );
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
-  // A side chat (`/btw`) forks the transcript as it stands at the press, offered where `/clear` is.
+  // Note that a first launch still booting says so in the empty transcript's centered line (`AgentBootLine`), so no working line or end line stands under it.
+  const booting = bootHolds(transcript.boot?.phase);
+  const bootLine = bootLineOf(transcript.boot);
   // A side chat is offered only once the agent has begun a reply to ask about, and never in a side chat itself.
   const sideDoor = useSideDoor();
   const sideFork =
@@ -3206,7 +3191,15 @@ function AgentTabView({
                             holding={holding}
                             failed={transcript.failed}
                             failedWith={transcript.failedWith}
-                            working={standing.working}
+                            working={standing.working && !booting}
+                            boot={
+                              bootLine === undefined ? undefined : (
+                                <AgentBootLine
+                                  line={bootLine}
+                                  retry={controlsQueue ? agent.id : undefined}
+                                />
+                              )
+                            }
                             phase={standing.phase}
                             waitsUntil={standing.waitsUntil}
                             turnId={standing.turnId ?? agent.turnId}
@@ -3220,7 +3213,7 @@ function AgentTabView({
                             }
                             ended={
                               // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
-                              transcript.pages === 0 || standing.working
+                              transcript.pages === 0 || standing.working || booting
                                 ? undefined
                                 : endLineParts(
                                     standing.status,
@@ -3280,8 +3273,10 @@ function AgentTabView({
             paused={queue.paused}
             editing={queueEditing.editing}
             onMove={queue.move}
-            onSteer={(message) =>
-              queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
+            onSteer={
+              booting
+                ? undefined
+                : (message) => queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
             }
             onEdit={queueEditing.edit}
             onCancelEdit={queueEditing.cancelRow}
@@ -3298,33 +3293,16 @@ function AgentTabView({
           continuedNote
         ) : (
           <AgentComposer
-            agentId={agent.id}
-            status={agent.status}
-            stoppable={offersStop(agent)}
-            steers={turnUnderWay(agent)}
+            {...box}
             composer={composer}
-            model={model}
-            models={models}
-            modelsFailed={modelsFailed}
-            readModels={readModels}
             usage={transcript.usage}
             payer={transcript.payer}
             payerSubscriptionId={transcript.payerSubscriptionId}
-            owner={starter === undefined ? undefined : starterActor}
-            servers={servers}
-            mode={mode}
+            // Note that the tab counts the asks its own cards hold, which drop the moment one is answered here, before the row says so.
             approvalsWaiting={approvals.waiting}
             context={transcript.context}
             brief={agent.brief}
-            tools={(narrow) => (
-              <>
-                <AgentPlace agent={agent} move={placeMove} narrow={narrow} />
-                <ForwardChip agent={agent} />
-              </>
-            )}
             onStop={onStop}
-            // Note that only an agent on a harness has a session to clear, and only one the reader controls.
-            onClear={agent.runtime === undefined || !controlsQueue ? undefined : onClear}
             onSide={onSide}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
@@ -3390,15 +3368,21 @@ const NO_RETRY = () => undefined;
 
 /** No follow-up ticked. */
 const NO_TICKS: readonly number[] = [];
+/** A queue's controls on a tab whose agent is not made yet, which take nothing. */
+const NO_QUEUE_PRESS = () => undefined;
+const NO_QUEUE_DELETE = () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED } as const);
+/** The transcript of an agent not made yet, which has no line. */
+const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
 
 /**
  * The tab of an agent New task or a Start is still starting, before the
- * service has made it: the developer's words as its first line, where it was
- * started on some, as the agent's own transcript will draw them, and its
- * working line saying it is starting, over the composer's card, which the
- * agent's own tab takes the place of once the start answers, its first line
- * drawn in the same place, and its model's chip where the start named the
- * model. One started on no words is briefed on the description.
+ * service has made it, drawn as its own tab draws its first launch: its
+ * empty transcript's centered line saying it is starting, counting from the
+ * press, and the developer's words, where it was started on some, as its
+ * queue's row over the composer's card, which nothing on the row acts on yet, and
+ * its model's chip where the start named the model. The agent's own tab
+ * takes its place once the start answers, its words still queued until its
+ * first launch hands them off.
  */
 export function StartingAgentTab({
   line,
@@ -3408,22 +3392,53 @@ export function StartingAgentTab({
   /** The model the start named, which the composer's chip draws; none where the start takes the default. */
   model?: ComposerModel | undefined;
 }): React.JSX.Element {
-  const messages = useMemo(() => (line === undefined ? [] : agentLines([], [line])), [line]);
+  // Note that a start on no words counts from when its tab first drew, which stands for the press.
+  const [drawnAt] = useState(Date.now);
+  const since = line?.sentAt ?? drawnAt;
+  const queued = useMemo(
+    () =>
+      line === undefined
+        ? []
+        : [
+            {
+              id: line.id,
+              text: line.text,
+              // Note that no row of the queue names who queued it, so the starter's id is not owed here.
+              queuedBy: "",
+              ...(line.attachments.length === 0
+                ? undefined
+                : {
+                    files: line.attachments.map(({ name, mediaType }) => ({ name, mediaType })),
+                  }),
+            },
+          ],
+    [line],
+  );
   return (
     <AgentTabFrame>
       <AgentTranscriptView
-        messages={messages}
+        messages={NO_MESSAGES}
         brief={line === undefined ? AGENT_BRIEF.DESCRIPTION : AGENT_BRIEF.PROMPT}
         reading={false}
         failed={false}
-        working
-        phase={WORKING_PHASE.STARTING}
-        // Note that the line counts from the press, as the agent's own tab goes on counting once the start answers.
-        startedAt={line?.sentAt}
+        working={false}
+        boot={<AgentBootLine line={{ kind: BOOT_LINE.STARTING, since }} retry={undefined} />}
         onRetry={NO_RETRY}
         overComposer
       />
       <AgentTabFoot>
+        <AgentQueueDock
+          messages={queued}
+          controls={false}
+          paused={undefined}
+          editing={undefined}
+          onMove={NO_QUEUE_PRESS}
+          onSteer={undefined}
+          onEdit={NO_QUEUE_PRESS}
+          onCancelEdit={NO_QUEUE_PRESS}
+          onDelete={NO_QUEUE_DELETE}
+          onResume={NO_QUEUE_PRESS}
+        />
         <ComposerSkeleton model={model} />
       </AgentTabFoot>
     </AgentTabFrame>
@@ -3559,38 +3574,19 @@ function AgentTabBody({
         ? undefined
         : () => onOpenTarget({ kind: TOOL_TARGET.AGENT, agent: agent.id }),
   });
-  const model = useAgentModel({ agent, choose: control.onChoose });
-  const mode = useAgentPermissionMode({ agent, write: control.onPermissionMode });
-  const servers = useAgentServers({
-    agent,
-    write: control.onSwitchServers,
-    onOpenSettings: control.onOpenIntegrations,
-  });
+  const box = useAgentBox({ agentId: agent.id, agent, agents: control });
   const { published } = useAgentPullRequest({
     agentId: agent.id,
     shown,
     known: control.pullRequests.get(agent.id),
   });
   const moveToCloud = useMoveToCloud(agent, control);
-  const placeMove = useMovePlace(agent, control);
   useForwardToast(agent);
   // Note that the log never waits on the pull request's dock over the box, because its read asks GitHub and would hold every tab's first draw for a second or more.
   // Note that nothing counts as landed before the first page.
   const surroundsLanded = messages.length > 0;
-  // An agent New task just started draws the words it was started on as its
-  // first line until its transcript reads one back (`unreadOpeningLine`).
-  const opening = unreadOpeningLine(
-    control.opening?.agentId === agent.id ? control.opening.line : undefined,
-    messages,
-  );
-  const sent = useMemo(
-    () => (opening === undefined ? composer.sent : [opening, ...composer.sent]),
-    [opening, composer.sent],
-  );
   const opened = useRef(false);
-  // Note that a log already drawn on its opening line is never held back again, because
-  // an agent just started has published nothing and been called by no one, so nothing would move it.
-  if (surroundsLanded || opening !== undefined) opened.current = true;
+  if (surroundsLanded) opened.current = true;
   const holding = messages.length > 0 && !opened.current;
   const copyWithToast = useCopyToast();
   const openGitHub = (url: string) => appPlatform().openGitHub(url);
@@ -3713,14 +3709,9 @@ function AgentTabBody({
         agent={agent}
         bringIn={bringIn}
         holding={holding}
-        models={control.models}
-        modelsFailed={control.modelsFailed}
-        readModels={control.readModels}
+        box={box}
         transcript={transcript}
-        composer={sent === composer.sent ? composer : { ...composer, sent }}
-        model={model}
-        servers={servers}
-        mode={mode}
+        composer={composer}
         approvals={approvals}
         published={published}
         threads={doneThreads}
@@ -3735,7 +3726,6 @@ function AgentTabBody({
         counts={shown}
         delegationStarts={shown ? transcript.delegations : undefined}
         onStop={() => control.onStop(agent.id)}
-        onClear={() => control.onClear(agent.id)}
         onRetry={() => control.onRetry(agent.id, RETRY_LINE)}
         onUnarchive={unarchive}
         onOpenSubagent={onOpenSubagent}
@@ -3782,7 +3772,6 @@ function AgentTabBody({
         }
         continuable={continued.length > 0 || control.continueAgent !== undefined}
         onMoveToCloud={moveToCloud}
-        placeMove={placeMove}
         endTrail={
           // Note that the box's note names them while it stands, so the transcript names them only where an archive took the box.
           continued.length === 0 || unarchive === undefined ? undefined : (

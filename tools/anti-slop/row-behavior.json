@@ -11,11 +11,16 @@
     "AgentListRow": {
       "from": "agent-list-row.js",
       "behavior": ["menu", "editor", "note"]
+    },
+    "PageListRow": {
+      "from": "page-list-row.js",
+      "behavior": ["menu"]
     }
   },
   "drawers": {
     "packages/panel/src/desktop/task-list-row.tsx": "TaskListRow: the task row every list of tasks draws, its menu, rename, selection, and muted and unread states built here.",
     "packages/panel/src/desktop/agent-list-row.tsx": "AgentListRow: the agent row every list of agents draws.",
+    "packages/panel/src/desktop/page-list-row.tsx": "PageListRow: the page row every list of a task's pages draws, its menu and selection built here.",
     "packages/panel/src/tasks/new-task-relation.tsx": "The composer's dock of related tasks, the one list of its kind: a bare row whose press opens its relation's menu.",
     "apps/catalog/src/examples/task-rows.tsx": "The catalog shows TaskRow's every state, menu, rename and selection among them, with sample data and no page behind it."
   }

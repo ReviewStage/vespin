@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
-import { GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
+import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
 
@@ -17,6 +17,18 @@ import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugi
 export const BUNDLE_IDENTIFIER = "dev.vespin.ios";
 export const URL_SCHEME = "vespin";
 const ASSOCIATED_DOMAIN = "vespin.dev";
+
+/**
+ * The App Group the app and its extensions share files through, and the
+ * Info.plist key every target that shares it names it under, so Swift reads
+ * the group from its bundle rather than spelling it again. The Apple
+ * Developer account registers the group once, and the app's JavaScript finds
+ * its container through the app's own entitlement.
+ */
+export const APP_GROUP = "group.dev.vespin.ios";
+const APP_GROUP_PLIST_KEY = "VespinAppGroup";
+const APP_GROUPS_ENTITLEMENT = "com.apple.security.application-groups";
+const APP_GROUP_ENTITLEMENTS = { [APP_GROUPS_ENTITLEMENT]: [APP_GROUP] } as const;
 
 const ACCENT_COLOR_NAME = "AccentColor";
 
@@ -38,7 +50,9 @@ const PNG_COLOR_TYPE_RGB = 2;
 // the brand's own copper SVG in each appearance, and the marks its
 // `ProviderButton` reads (`PROVIDER_MARK_ASSET`), the web's sign-in buttons'
 // marks from the brand's paths: GitHub's a template SwiftUI draws in the ink
-// of the words beside it, Google's in its own four colors.
+// of the words beside it, Google's in its own four colors; and the harness
+// marks `AgentTile` draws (`HARNESS_MARK_ASSET`), Claude Code's Clawd in its
+// own clay, centered on a square canvas so it never stretches.
 const IMAGE_SETS = [
   {
     NAME: "BrandMark",
@@ -62,17 +76,58 @@ const IMAGE_SETS = [
     },
     TEMPLATE: false,
   },
+  {
+    NAME: "ClawdMark",
+    LIGHT: {
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -4.5 47 47"><path fill="#D97757" d="${CLAWD_PATH}"/></svg>`,
+    },
+    TEMPLATE: false,
+  },
 ] as const;
 
-/** A Swift file an app extension builds, copied into its folder beside the app's from the app's directory. */
-type ExtensionFile = { readonly FROM: string; readonly NAME: string };
+// The pictures `AgentTile` draws that have no vector: Codex's, OpenAI's own
+// picture in its own colors, from the files the panel serves, at one, two,
+// and three device pixels to the point, so it is sharp up to 16 points, as
+// a row's tile draws it (an agent preview's larger tile scales it a little).
+const PICTURE_SETS = [
+  {
+    NAME: "CodexMark",
+    SCALES: [
+      { FILE: "../../packages/panel/marks/codex-16.png", SCALE: "1x" },
+      { FILE: "../../packages/panel/marks/codex-32.png", SCALE: "2x" },
+      { FILE: "../../packages/panel/marks/codex-48.png", SCALE: "3x" },
+    ],
+  },
+] as const;
+
+/**
+ * A Swift file an app extension builds, copied into its folder beside the
+ * app's from the app's directory, under a name of its own (`AS`) where
+ * another extension builds the same file. Note that the xcode library's
+ * addPbxGroup reuses a file reference of the same path, so two extensions
+ * copying one file under one name would share a reference and a build file.
+ */
+type ExtensionFile = { readonly FROM: string; readonly NAME: string; readonly AS?: string };
+
+// The name an extension's copy of a file is built under.
+const copiedName = ({ NAME, AS }: ExtensionFile) => AS ?? NAME;
+
+/** A value an extension's Info.plist or entitlements hold. */
+type PlistValue =
+  | string
+  | boolean
+  | number
+  | readonly string[]
+  | { readonly [key: string]: PlistValue };
 
 /**
  * An app extension the app embeds: its target, the bundle id automatic
  * signing registers beside the app's, its Swift (the app's native code),
- * its extension point and, where the point names one, its principal class,
- * and the brand's colors its asset catalog holds, by the name its Swift
- * reads each by.
+ * its extension point and, where the point names them, its principal class
+ * and attributes, the brand's colors its asset catalog holds, by the name
+ * its Swift reads each by, Lucide's glyphs it holds as symbols, the
+ * entitlements it is signed with, and any other keys its Info.plist carries
+ * over the rest.
  */
 type AppExtension = {
   readonly TARGET: string;
@@ -80,26 +135,44 @@ type AppExtension = {
   readonly SOURCES: readonly ExtensionFile[];
   readonly EXTENSION_POINT: string;
   readonly PRINCIPAL_CLASS?: string;
+  readonly ATTRIBUTES?: Readonly<Record<string, PlistValue>>;
   readonly COLORS?: Readonly<Record<string, keyof typeof BRAND_PALETTE.LIGHT>>;
+  readonly SYMBOLS?: readonly string[];
+  readonly ENTITLEMENTS?: Readonly<Record<string, PlistValue>>;
+  readonly INFO?: Readonly<Record<string, PlistValue>>;
 };
 
-const EXTENSION_ASSET_CATALOG = "Assets.xcassets";
 const EXTENSION_SWIFT_VERSION = "5.0";
 // What an asset catalog's own Contents.json says, as Xcode writes it.
 const ASSET_CATALOG_INFO = { info: { author: "xcode", version: 1 } };
 
-// Note that each extension's Info.plist is named for its target, because the
-// xcode library's addPbxGroup reuses a file reference of the same path, so a
-// second extension's `Info.plist` would join the first's reference.
+// Note that each extension's Info.plist, entitlements, and asset catalog are
+// named for its target, because the xcode library's addPbxGroup reuses a
+// file reference of the same path, so a second extension's `Info.plist` or
+// `Assets.xcassets` would join the first's reference.
 const extensionPlistName = (extension: AppExtension) => `${extension.TARGET}-Info.plist`;
+const extensionEntitlementsName = (extension: AppExtension) => `${extension.TARGET}.entitlements`;
+const extensionCatalogName = (extension: AppExtension) => `${extension.TARGET}.xcassets`;
 
-// The Notification Service Extension, which sets a decide push's buttons.
+// The Inbox widget's snapshot as the app keeps it in the App Group: the
+// widget reads it, and the Notification Service Extension moves it on a push.
+const INBOX_WIDGET_SNAPSHOT: ExtensionFile = {
+  FROM: "live-activity",
+  NAME: "InboxWidgetSnapshot.swift",
+};
+
+// The Notification Service Extension, which sets a decide push's buttons and
+// moves the Inbox widget's snapshot by each post that waits on the member.
 const NOTIFICATION_SERVICE: AppExtension = {
   TARGET: "NotificationService",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.NotificationService`,
-  SOURCES: [{ FROM: "notification-service", NAME: "NotificationService.swift" }],
+  SOURCES: [
+    { FROM: "notification-service", NAME: "NotificationService.swift" },
+    { ...INBOX_WIDGET_SNAPSHOT, AS: "NotificationServiceInboxWidgetSnapshot.swift" },
+  ],
   EXTENSION_POINT: "com.apple.usernotifications.service",
   PRINCIPAL_CLASS: "NotificationService",
+  ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
 // The Stop button's intent, which iOS runs in the app's process, so the app
@@ -107,8 +180,10 @@ const NOTIFICATION_SERVICE: AppExtension = {
 const STOP_AGENT_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "StopAgentIntent.swift" };
 
 // The widget extension that draws the member's running agents as a Live
-// Activity. Its attributes are the app's module's own file, since ActivityKit
-// matches the app's activity to the widget's by the type's name.
+// Activity, and the Inbox widget from the snapshot the app keeps in the App
+// Group. Its attributes are the app's module's own file, since ActivityKit
+// matches the app's activity to the widget's by the type's name. The Inbox
+// widget leads a decide with Lucide's Split, as the app's Inbox row does.
 const LIVE_ACTIVITY: AppExtension = {
   TARGET: "AgentsLiveActivity",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.AgentsLiveActivity`,
@@ -116,9 +191,45 @@ const LIVE_ACTIVITY: AppExtension = {
     { FROM: "live-activity", NAME: "AgentsLiveActivity.swift" },
     STOP_AGENT_INTENT,
     { FROM: "modules/live-activity/ios", NAME: "AgentsActivityAttributes.swift" },
+    { FROM: "live-activity", NAME: "InboxWidget.swift" },
+    INBOX_WIDGET_SNAPSHOT,
   ],
   EXTENSION_POINT: "com.apple.widgetkit-extension",
-  COLORS: { Working: "WORKING", Attention: "ATTENTION", Complete: "COMPLETE" },
+  COLORS: {
+    Working: "WORKING",
+    Attention: "ATTENTION",
+    Complete: "COMPLETE",
+    Ground: "GROUND",
+    Text: "TEXT",
+    TextMuted: "TEXT_MUTED",
+  },
+  SYMBOLS: ["Split"],
+  ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
+};
+
+// The share extension: the system's share sheet offers the app for text and
+// a web link, and its sheet keeps what was shared as New task's draft
+// (`share-extension/`), named in the share sheet as the app is.
+const SHARE_EXTENSION: AppExtension = {
+  TARGET: "ShareExtension",
+  BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.ShareExtension`,
+  SOURCES: [
+    { FROM: "share-extension", NAME: "ShareViewController.swift" },
+    { FROM: "share-extension", NAME: "ShareSheet.swift" },
+    { FROM: "share-extension", NAME: "SharedItems.swift" },
+    { FROM: "share-extension", NAME: "AppGroupFiles.swift" },
+  ],
+  EXTENSION_POINT: "com.apple.share-services",
+  PRINCIPAL_CLASS: "ShareViewController",
+  ATTRIBUTES: {
+    NSExtensionActivationRule: {
+      NSExtensionActivationSupportsText: true,
+      NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+    },
+  },
+  COLORS: { AccentColor: "ACCENT" },
+  ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
+  INFO: { CFBundleDisplayName: "Vespin" },
 };
 
 // The build number TestFlight orders uploads by: release-ios.yml names its
@@ -241,70 +352,116 @@ const withMarketingIcon = (config: ExpoConfig): ExpoConfig =>
     },
   ]);
 
-// An extension's Info.plist: its extension point and, where it has one, its
-// principal class, and the app's version and build, which App Store Connect
-// refuses an extension to differ from.
-const extensionPlist = (extension: AppExtension, version: string, build: string) =>
+// A symbol set of an asset catalog: a custom SF Symbol from one of the
+// brand's outlined Lucide templates, which sizes and weighs as SF Symbols do.
+const writeSymbolSet = (catalog: string, name: string, svg: string) => {
+  const symbolSet = join(catalog, `${name}.symbolset`);
+  mkdirSync(symbolSet, { recursive: true });
+  writeFileSync(join(symbolSet, `${name}.svg`), svg);
+  const contents = {
+    info: { author: "xcode", version: 1 },
+    symbols: [{ filename: `${name}.svg`, idiom: "universal" }],
+  };
+  writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+};
+
+// A string as plist XML's text.
+const plistText = (text: string) =>
+  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+// A plist value as XML, indented by `depth` tabs.
+const plistXml = (value: PlistValue, depth: number): string => {
+  const indent = "\t".repeat(depth);
+  if (typeof value === "string") return `${indent}<string>${plistText(value)}</string>`;
+  if (typeof value === "boolean") return `${indent}<${value}/>`;
+  if (typeof value === "number") return `${indent}<integer>${value}</integer>`;
+  if (Array.isArray(value))
+    return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
+  return `${indent}<dict>\n${plistEntries(value as Record<string, PlistValue>, depth + 1)}\n${indent}</dict>`;
+};
+
+// A dictionary's keys and values as XML, each key at `depth` tabs.
+const plistEntries = (entries: Readonly<Record<string, PlistValue>>, depth: number): string =>
+  Object.entries(entries)
+    .map(
+      ([key, value]) =>
+        `${"\t".repeat(depth)}<key>${plistText(key)}</key>\n${plistXml(value, depth)}`,
+    )
+    .join("\n");
+
+// A whole plist document of one dictionary.
+const plistDocument = (entries: Readonly<Record<string, PlistValue>>) =>
   `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>${extension.TARGET}</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundlePackageType</key>
-	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
-	<key>CFBundleShortVersionString</key>
-	<string>${version}</string>
-	<key>CFBundleVersion</key>
-	<string>${build}</string>
-	<key>NSExtension</key>
-	<dict>
-		<key>NSExtensionPointIdentifier</key>
-		<string>${extension.EXTENSION_POINT}</string>${
-      extension.PRINCIPAL_CLASS === undefined
-        ? ""
-        : `
-		<key>NSExtensionPrincipalClass</key>
-		<string>$(PRODUCT_MODULE_NAME).${extension.PRINCIPAL_CLASS}</string>`
-    }
-	</dict>
-</dict>
+${plistXml(entries, 0)}
 </plist>
 `;
 
+// An extension's Info.plist: its extension point and, where it has them, its
+// principal class and attributes, the app's version and build, which App
+// Store Connect refuses an extension to differ from, the App Group where it
+// shares it, and its own keys over the rest.
+const extensionPlist = (extension: AppExtension, version: string, build: string) =>
+  plistDocument({
+    CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
+    CFBundleDisplayName: extension.TARGET,
+    CFBundleExecutable: "$(EXECUTABLE_NAME)",
+    CFBundleIdentifier: "$(PRODUCT_BUNDLE_IDENTIFIER)",
+    CFBundleInfoDictionaryVersion: "6.0",
+    CFBundleName: "$(PRODUCT_NAME)",
+    CFBundlePackageType: "$(PRODUCT_BUNDLE_PACKAGE_TYPE)",
+    CFBundleShortVersionString: version,
+    CFBundleVersion: build,
+    NSExtension: {
+      NSExtensionPointIdentifier: extension.EXTENSION_POINT,
+      ...(extension.PRINCIPAL_CLASS === undefined
+        ? undefined
+        : { NSExtensionPrincipalClass: `$(PRODUCT_MODULE_NAME).${extension.PRINCIPAL_CLASS}` }),
+      ...(extension.ATTRIBUTES === undefined
+        ? undefined
+        : { NSExtensionAttributes: extension.ATTRIBUTES }),
+    },
+    ...(extension.ENTITLEMENTS?.[APP_GROUPS_ENTITLEMENT] === undefined
+      ? undefined
+      : { [APP_GROUP_PLIST_KEY]: APP_GROUP }),
+    ...extension.INFO,
+  });
+
 // Note that Expo has no setting for an app extension, so each extension's
 // folder is written beside the app's, its Swift copied from the app's
-// directory and its colors written as its asset catalog, and its target
-// added to the project Expo generates, embedded in the app, built for the
-// app's deployment target, and signed as the app is. A project that holds
-// the target already, as a prebuild over an existing `ios/` does, is left as
-// it stands.
+// directory and its colors and symbols written as its asset catalog, and its
+// target added to the project Expo generates, embedded in the app, built for
+// the app's deployment target, and signed as the app is. A project that holds
+// the target already, as a prebuild over an existing `ios/` does, keeps it:
+// its build settings are written again, and a source added since joins it,
+// so a setting or a file added since, such as its entitlements, still
+// reaches it.
 const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConfig => {
   const colors = Object.entries(extension.COLORS ?? {});
+  const symbols = LUCIDE_SYMBOL_TEMPLATES.filter(({ name }) =>
+    (extension.SYMBOLS ?? []).includes(name),
+  );
+  const catalogued = colors.length > 0 || symbols.length > 0;
   const written = withDangerousMod(config, [
     "ios",
     (modConfig) => {
       const { projectRoot, platformProjectRoot } = modConfig.modRequest;
       const folder = join(platformProjectRoot, extension.TARGET);
       mkdirSync(folder, { recursive: true });
-      for (const { FROM, NAME } of extension.SOURCES)
-        copyFileSync(join(projectRoot, FROM, NAME), join(folder, NAME));
+      for (const file of extension.SOURCES)
+        copyFileSync(join(projectRoot, file.FROM, file.NAME), join(folder, copiedName(file)));
       writeFileSync(
         join(folder, extensionPlistName(extension)),
         extensionPlist(extension, modConfig.version ?? "1.0", modConfig.ios?.buildNumber ?? "1"),
       );
-      if (colors.length > 0) {
-        const catalog = join(folder, EXTENSION_ASSET_CATALOG);
+      if (extension.ENTITLEMENTS !== undefined)
+        writeFileSync(
+          join(folder, extensionEntitlementsName(extension)),
+          plistDocument(extension.ENTITLEMENTS),
+        );
+      if (catalogued) {
+        const catalog = join(folder, extensionCatalogName(extension));
         mkdirSync(catalog, { recursive: true });
         writeFileSync(
           join(catalog, "Contents.json"),
@@ -312,37 +469,48 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         );
       }
       for (const [name, role] of colors) {
-        const set = join(folder, EXTENSION_ASSET_CATALOG, `${name}.colorset`);
+        const set = join(folder, extensionCatalogName(extension), `${name}.colorset`);
         mkdirSync(set, { recursive: true });
         writeFileSync(join(set, "Contents.json"), `${JSON.stringify(colorSet(role), null, 2)}\n`);
       }
+      for (const { name, svg } of symbols)
+        writeSymbolSet(join(folder, extensionCatalogName(extension)), name, svg);
       return modConfig;
     },
   ]);
   return withXcodeProject(written, (modConfig) => {
     const project = modConfig.modResults;
-    if (project.pbxTargetByName(extension.TARGET)) return modConfig;
-    const sources = extension.SOURCES.map(({ NAME }) => NAME);
-    const resources = colors.length > 0 ? [EXTENSION_ASSET_CATALOG] : [];
-    const group = project.addPbxGroup(
-      [...sources, ...resources, extensionPlistName(extension)],
-      extension.TARGET,
-      extension.TARGET,
-    );
-    project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
-    // Note that the xcode library's addTarget writes into these sections without making them, and a fresh Expo project has neither.
-    const objects = project.hash.project.objects;
-    objects.PBXTargetDependency ??= {};
-    objects.PBXContainerItemProxy ??= {};
-    const target = project.addTarget(
-      extension.TARGET,
-      "app_extension",
-      extension.TARGET,
-      extension.BUNDLE_IDENTIFIER,
-    );
-    project.addBuildPhase(sources, "PBXSourcesBuildPhase", "Sources", target.uuid);
-    project.addBuildPhase(resources, "PBXResourcesBuildPhase", "Resources", target.uuid);
-    project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
+    const sources = extension.SOURCES.map(copiedName);
+    const resources = catalogued ? [extensionCatalogName(extension)] : [];
+    const entitlements =
+      extension.ENTITLEMENTS === undefined ? [] : [extensionEntitlementsName(extension)];
+    if (!project.pbxTargetByName(extension.TARGET)) {
+      const group = project.addPbxGroup(
+        [...sources, ...resources, extensionPlistName(extension), ...entitlements],
+        extension.TARGET,
+        extension.TARGET,
+      );
+      project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
+      // Note that the xcode library's addTarget writes into these sections without making them, and a fresh Expo project has neither.
+      const objects = project.hash.project.objects;
+      objects.PBXTargetDependency ??= {};
+      objects.PBXContainerItemProxy ??= {};
+      const target = project.addTarget(
+        extension.TARGET,
+        "app_extension",
+        extension.TARGET,
+        extension.BUNDLE_IDENTIFIER,
+      );
+      project.addBuildPhase(sources, "PBXSourcesBuildPhase", "Sources", target.uuid);
+      project.addBuildPhase(resources, "PBXResourcesBuildPhase", "Resources", target.uuid);
+      project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
+    } else {
+      // A target made before a source joined it builds that source too, in its group as a new target's are.
+      const target = project.findTargetKey(extension.TARGET);
+      const group = project.findPBXGroupKey({ name: extension.TARGET });
+      for (const source of sources)
+        if (!project.hasFile(source)) project.addSourceFile(source, { target }, group);
+    }
     for (const settings of Object.values(
       project.pbxXCBuildConfigurationSection() as Record<string, unknown>,
     )) {
@@ -359,6 +527,9 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: '"$(inherited) APP_EXTENSION"',
         SWIFT_VERSION: EXTENSION_SWIFT_VERSION,
         TARGETED_DEVICE_FAMILY: '"1,2"',
+        ...(entitlements.length === 0
+          ? undefined
+          : { CODE_SIGN_ENTITLEMENTS: `${extension.TARGET}/${entitlements[0]}` }),
       });
     }
     return modConfig;
@@ -398,7 +569,8 @@ const withStopAgentIntent = (config: ExpoConfig): ExpoConfig => {
 type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
-// appearance beside its light one where it has one, and each of Lucide's
+// appearance beside its light one where it has one, each of `PICTURE_SETS`
+// as an image set of its files at their scales, and each of Lucide's
 // glyphs `@repo/ui-native` draws (`LUCIDE_SYMBOL`) as a symbol set, a custom
 // SF Symbol from the brand's outlined template, so it sizes with Dynamic
 // Type, weighs with its text, and sits on its baseline as SF Symbols do.
@@ -435,16 +607,23 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         };
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
-      for (const { name, svg } of LUCIDE_SYMBOL_TEMPLATES) {
-        const symbolSet = join(catalog, `${name}.symbolset`);
-        mkdirSync(symbolSet, { recursive: true });
-        writeFileSync(join(symbolSet, `${name}.svg`), svg);
+      for (const set of PICTURE_SETS) {
+        const imageSet = join(catalog, `${set.NAME}.imageset`);
+        mkdirSync(imageSet, { recursive: true });
+        for (const { FILE } of set.SCALES)
+          copyFileSync(join(projectRoot, FILE), join(imageSet, basename(FILE)));
         const contents = {
+          images: set.SCALES.map(({ FILE, SCALE }) => ({
+            filename: basename(FILE),
+            idiom: "universal",
+            scale: SCALE,
+          })),
           info: { author: "xcode", version: 1 },
-          symbols: [{ filename: `${name}.svg`, idiom: "universal" }],
+          properties: { "template-rendering-intent": "original" },
         };
-        writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+        writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
+      for (const { name, svg } of LUCIDE_SYMBOL_TEMPLATES) writeSymbolSet(catalog, name, svg);
       return modConfig;
     },
   ]);
@@ -476,7 +655,8 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // The TestFlight build takes its pushes from production APNs, which
       // the distribution profile release-ios.yml exports it with allows; a
       // simulator build is unsigned and carries no entitlement at all.
-      entitlements: { "aps-environment": "production" },
+      // The App Group it shares files with its extensions through.
+      entitlements: { "aps-environment": "production", ...APP_GROUP_ENTITLEMENTS },
       // Declared exempt from US export rules, so App Store Connect stops
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
@@ -495,6 +675,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         // `@repo/features/ios-system-activity`'s header, since this file
         // reaches no module that loads Effect.
         NSUserActivityTypes: ["dev.vespin.viewing"],
+        [APP_GROUP_PLIST_KEY]: APP_GROUP,
       },
     },
     plugins: [
@@ -541,16 +722,13 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
   });
 
 // The images the screens draw and the flat app icon, written into the asset
-// catalog over the rest, and the Notification Service Extension and the Live
-// Activity's widget extension beside the app, with the Stop intent the
-// widget draws built into the app as well.
+// catalog over the rest, and the Notification Service Extension, the Live
+// Activity's widget extension, and the share extension beside the app, with
+// the Stop intent the widget draws built into the app as well.
 const config = (context?: ConfigContext): ExpoConfig =>
-  withAppExtension(
-    withAppExtension(
-      withStopAgentIntent(withMarketingIcon(withImageSets(baseConfig(context)))),
-      NOTIFICATION_SERVICE,
-    ),
-    LIVE_ACTIVITY,
+  [NOTIFICATION_SERVICE, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
+    withAppExtension,
+    withStopAgentIntent(withMarketingIcon(withImageSets(baseConfig(context)))),
   );
 
 export default config;

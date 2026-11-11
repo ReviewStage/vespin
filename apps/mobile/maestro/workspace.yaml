@@ -21,14 +21,16 @@ appId: dev.vespin.ios
 - takeScreenshot: workspace-inbox
 - tapOn:
     id: "workspace-switcher"
-- assertVisible: "Relay"
+# Note that a menu row is heard as its name and who shares it together, so a
+# workspace is found by both.
+- assertVisible: "Relay, 6 members"
 - assertVisible: "New workspace"
 - assertVisible: "Workspace settings"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-menu
 # Relay holds no threads, so the Inbox empties once it is chosen, and Tasks
 # follows the same choice.
-- tapOn: "Relay"
+- tapOn: "Relay, 6 members"
 - assertNotVisible: "Recorded the invite flow"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-switched
@@ -52,5 +54,5 @@ appId: dev.vespin.ios
 # Back to the account's own workspace, whose threads stand again.
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Ada Lovelace"
+- tapOn: "Ada Lovelace, Personal workspace"
 - assertVisible: "Recorded the invite flow"

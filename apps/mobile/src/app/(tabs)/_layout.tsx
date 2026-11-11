@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { Platform } from "react-native";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
+import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 
@@ -45,6 +46,8 @@ export default function TabsLayout() {
   const colors = useColors();
   const router = useRouter();
   const waiting = useInboxBadge();
+  // The members of the workspace the phone works in, whose pictures every face reads, followed once for every tab.
+  useMemberPicturesFollow();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const appSidebar = useThreeColumns();
   return (

@@ -27,6 +27,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -36,7 +37,14 @@ import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
-import { AgentTile, FailedMark, TaskStatusMark, ToneGlyph, WorkingMark } from "./marks.js";
+import {
+  AgentTile,
+  type Face,
+  FailedMark,
+  TaskStatusMark,
+  ToneGlyph,
+  WorkingMark,
+} from "./marks.js";
 import { PageHeader } from "./page-header.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
@@ -52,9 +60,8 @@ const OPENS_PULL_REQUEST = "Opens the pull request";
 /** What an agent's line says of its state, as the panel's agent mark is heard. */
 const AGENT_STATE_WORDS = { WORKING: "Working", FAILED: "Failed" } as const;
 
-/** How a press-through row's words read: the accent for an act, the attention ink for what waits on you, or the body's ink for a place. */
+/** How a press-through row's words read: the attention ink for what waits on you, or the body's ink for a place or an act, as the panel's quiet New agent and New sub-task stand. */
 export const LINK_ROW_TONE = {
-  ACCENT: "accent",
   PLAIN: "plain",
   ATTENTION: "attention",
 } as const;
@@ -63,7 +70,6 @@ export type LinkRowTone = (typeof LINK_ROW_TONE)[keyof typeof LINK_ROW_TONE];
 
 /** The ink a press-through row's words and glyph stand in. */
 function linkInk(colors: BrandColors, tone: LinkRowTone): string {
-  if (tone === LINK_ROW_TONE.ACCENT) return colors.ACCENT_TEXT;
   if (tone === LINK_ROW_TONE.ATTENTION) return colors.ATTENTION;
   return colors.TEXT_BODY;
 }
@@ -112,7 +118,7 @@ type TaskHeadProps = {
   /** Its priority's name. */
   readonly priority: string | undefined;
   /** Who it is assigned to, or the words for no one. */
-  readonly assignee: { readonly name: string; readonly nobody: boolean };
+  readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
 };
@@ -157,6 +163,8 @@ type AgentRowProps = {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
   readonly name: string;
+  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
   readonly runsOn: string;
@@ -235,7 +243,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
  * want you.
  */
 export function AgentRow(props: AgentRowProps) {
-  const { id, name, state, runsOn, waiting, pullRequest } = props;
+  const { id, name, harness, state, runsOn, waiting, pullRequest } = props;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
@@ -244,7 +252,7 @@ export function AgentRow(props: AgentRowProps) {
       <RowHead
         unread={false}
         faded={false}
-        lead={<AgentTile name={name} size={MARK_SIZE.LEAD} />}
+        lead={<AgentTile name={name} harness={harness} size={MARK_SIZE.LEAD} />}
         title={name}
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}
@@ -278,12 +286,10 @@ type RelationRowProps = {
   readonly status: TaskStatus | undefined;
   /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks". */
   readonly relation: string;
-  /** Whether the relation holds the task up, a blocker not yet finished, which reads in the attention ink. */
-  readonly holding?: boolean | undefined;
 };
 
 /** A task related to the one shown: its status ring and name, and at the line's end how it stands to this one. */
-export function RelationRow({ id, name, status, relation, holding = false }: RelationRowProps) {
+export function RelationRow({ id, name, status, relation }: RelationRowProps) {
   const colors = useColors();
   const row: ReactElement = (
     <RowHead
@@ -298,7 +304,7 @@ export function RelationRow({ id, name, status, relation, holding = false }: Rel
       }
       title={name}
       ink={colors.TEXT_BODY}
-      end={<EndWords words={relation} ink={holding ? colors.ATTENTION : undefined} />}
+      end={<EndWords words={relation} />}
     />
   );
   return (

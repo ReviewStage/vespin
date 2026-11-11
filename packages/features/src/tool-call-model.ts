@@ -1063,6 +1063,10 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.LIST_MODELS, input, output, undefined),
   [AGENT_TOOL.SAVE_MEMORY]: SAVE_MEMORY_CALL,
   [AGENT_TOOL.SEARCH_MEMORY]: SEARCH_MEMORY_CALL,
+  [AGENT_TOOL.LIST_MEMORIES]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_MEMORIES, input, output, undefined),
+  [AGENT_TOOL.FORGET_MEMORY]: ({ input, output }) =>
+    namedCall(CALL_KIND.FORGET_MEMORY, input, output, undefined),
   [AGENT_TOOL.WEB_SEARCH]: READ_WEB_SEARCH,
   [AGENT_TOOL.READ_WEB_PAGE]: ({ input, output }) => ({
     kind: CALL_KIND.WEB_PAGE,

@@ -92,7 +92,7 @@ export function NewWorkspaceScreen() {
         options={{
           headerShown: true,
           title: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE,
-          headerTintColor: colors.ACCENT,
+          headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },

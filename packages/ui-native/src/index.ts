@@ -68,6 +68,7 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  type Face,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -184,6 +185,7 @@ export {
 } from "./use-async-action.js";
 export { Video } from "./video.js";
 export {
+  NoBarTitle,
   newWorkspaceAction,
   type SwitcherAction,
   type SwitcherWorkspace,

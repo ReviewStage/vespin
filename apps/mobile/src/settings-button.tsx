@@ -1,11 +1,12 @@
-// settings-button.tsx -- the one way Settings opens, and the signed-in account's photo at the leading edge of each tab's root bar, the button that opens it.
+// settings-button.tsx -- the one way Settings opens, and the signed-in account's photo at the leading edge of each tab's root bar, the button that opens it, with the workspace switcher beside it where the tab names its workspace.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { selectAccount } from "@repo/host/app-state-reads";
-import { AccountButton, type BarAccount } from "@repo/ui-native";
+import { AccountButton, type BarAccount, WorkspaceSwitcher } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import { appStateQuery } from "./host/app-state-query.js";
+import type { SwitcherProps } from "./workspace-switcher.js";
 
 /** What the photo is heard as: where it goes, as the gear it replaced was. */
 const SETTINGS = "Settings";
@@ -48,17 +49,27 @@ export function useSettingsAccount(): BarAccount | undefined {
 /**
  * The photo at the leading edge of a tab's root bar, in a stack's own
  * header: a compact window's, and a regular one's where the tab stands no
- * split view. A split view stands it in the app sidebar's bar instead
- * (`screens/app-sidebar.tsx`).
+ * split view, and after it the workspace switcher where the tab names its
+ * workspace (the Inbox and Tasks). A split view stands both in the app
+ * sidebar's bar instead (`screens/app-sidebar.tsx`). Note that the two stand
+ * in one toolbar, because each `Stack.Toolbar` of a placement takes the
+ * whole side of the bar.
  */
-export function SettingsBarButton() {
+export function SettingsBarButton({ switcher }: { readonly switcher?: SwitcherProps | undefined }) {
   const account = useSettingsAccount();
-  if (account === undefined) return null;
+  if (account === undefined && switcher === undefined) return null;
   return (
     <Stack.Toolbar placement="left">
-      <Stack.Toolbar.View>
-        <AccountButton {...account} />
-      </Stack.Toolbar.View>
+      {account === undefined ? null : (
+        <Stack.Toolbar.View>
+          <AccountButton {...account} />
+        </Stack.Toolbar.View>
+      )}
+      {switcher === undefined ? null : (
+        <Stack.Toolbar.View>
+          <WorkspaceSwitcher {...switcher} />
+        </Stack.Toolbar.View>
+      )}
     </Stack.Toolbar>
   );
 }

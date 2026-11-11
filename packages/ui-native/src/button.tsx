@@ -1,4 +1,4 @@
-// button.tsx -- the app's buttons, chips, and pills: the system's own buttons in the brand's accent, and the small capsules a person picks among or reads a task's fields on.
+// button.tsx -- the app's buttons, chips, and pills: the system's own buttons, a filled one in the brand's accent and the rest in the ink, and the small capsules a person picks among or reads a task's fields on.
 
 import {
   HStack,
@@ -32,7 +32,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import type { Glyph } from "./glyph.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
-import { Avatar, TaskStatusMark, ToneGlyph } from "./marks.js";
+import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -82,7 +82,8 @@ const FILLED_LOOKS: ReadonlySet<ButtonLook> = new Set([
 
 /**
  * A button, filled in the accent unless it says otherwise: a primary act is
- * one of the few things drawn in copper. Note that a filled button's words
+ * one of the few things drawn in copper, so a bordered or plain one stands
+ * in the ink, as the panel's quiet buttons do. Note that a filled button's words
  * stand in the brand's ink on the accent rather than the system's white,
  * since white on the dark theme's lighter copper reads at under 3:1, where
  * the brand's dark ink holds WCAG's 4.5:1.
@@ -101,7 +102,7 @@ export function Button(props: ButtonProps) {
       modifiers={[
         buttonStyle(look),
         controlSize(size),
-        ...(accent ? [tint(colors.ACCENT)] : []),
+        ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
         ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
       ]}
@@ -268,8 +269,8 @@ type FieldChipProps = {
   readonly label: string;
   /** A task's status, whose ring leads the chip. */
   readonly status?: TaskStatus | undefined;
-  /** A person, whose face leads the chip. */
-  readonly face?: string | undefined;
+  /** A person, whose face leads the chip, their picture where one is known. */
+  readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
   readonly symbol?: SfSymbol | undefined;
   /** A mark leading the chip in its tone where none of the above does, such as a pull request's state. */
@@ -279,7 +280,9 @@ type FieldChipProps = {
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
 function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
-  if (props.face !== undefined) return <Avatar name={props.face} size={MARK_SIZE.FACE} />;
+  if (props.face !== undefined) {
+    return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
+  }
   if (props.symbol !== undefined) {
     return <Image systemName={props.symbol} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />;
   }

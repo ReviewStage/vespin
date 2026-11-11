@@ -165,6 +165,23 @@ hands the app's JavaScript the tokens, an activity's end, and each Stop
 `-liveActivity true` beside `-fixture inbox` starts an activity of the
 fixture's own, which `maestro/live-activity.yaml` shoots.
 
+## The Inbox widget
+
+The same widget extension draws the Inbox widget (`live-activity/InboxWidget.swift`)
+on the Home Screen (small, medium) and the Lock Screen (circular,
+rectangular, inline): how many threads wait on the member in the chosen
+workspace, and the newest three. It has no account and no network, so it
+draws a snapshot the app keeps in the App Group (`APP_GROUP` in
+`app.config.ts`, read through `src/app-group.ts`): what goes into it is
+`@repo/features/inbox-widget-model`'s, the app writes it as its Inbox moves
+and removes it on a sign-out (`src/inbox-widget/`), and asks WidgetKit to draw
+again through the Live Activity module's `reloadInboxWidget`. While the app
+is closed, the Notification Service Extension moves it by each alert, and
+the background task by each settled thread's push; a push's badge counts the
+whole account, so it is taken as the count only where the account has one
+workspace. Xcode's canvas draws each size's preview; on a simulator, add the
+widget by hand from the Home Screen's edit mode.
+
 ## Handoff and Spotlight
 
 Each thread, task, agent, and pull request screen advertises an
@@ -195,6 +212,21 @@ an agent's composer or a sheet that starts work are kept as JPEGs and
 attached. A view handed a modifier the build does not register draws as it
 would without it. No Maestro flow can drag or hover, so these are checked by
 hand on an iPad with a trackpad.
+
+## The share extension
+
+Vespin stands in the system's share sheet for text and a web link: a share
+extension `app.config.ts` adds beside the other two, whose Swift is under
+`share-extension/`. An extension runs with no React Native and no host, so
+its sheet is plain SwiftUI, drawn from a snapshot the app keeps in their
+App Group (`src/share-sheet.ts`, `@repo/features/ios-share-wire`): the
+workspace the phone works in, each workspace, and the repositories each
+reaches. Start keeps the words and picks as a draft in the group, and the
+app opens New task on it, prefilled, the next time it comes forward, since
+no public API lets an extension bring its app forward. Every file the app
+and its extensions share goes through `src/app-group.ts`, flat JSON at the
+group's root, and each Swift target reads the group from its Info.plist's
+`VespinAppGroup`.
 
 ## Tests
 

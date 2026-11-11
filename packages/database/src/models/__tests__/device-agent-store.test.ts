@@ -265,7 +265,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           id: string,
           step: DeviceLaunchStep = DEVICE_LAUNCH_STEP.PREPARING,
           mac = deviceId,
-        ) => stepDeviceAgentLaunch(userId, mac, id, step);
+        ) => Effect.map(stepDeviceAgentLaunch(userId, mac, id, step), Option.isSome);
 
         const waiting = yield* stepped(queued.id);
         yield* claimDeviceAgentLine(userId, deviceId, queued.id);
@@ -422,17 +422,21 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         yield* claimDeviceAgentLine(owner.userId, owner.deviceId, line.id);
         yield* claimDeviceAgentRequest(owner.userId, owner.deviceId, requestId);
         const steppedByOther = [
-          yield* stepDeviceAgentLaunch(
-            other.userId,
-            owner.deviceId,
-            line.id,
-            DEVICE_LAUNCH_STEP.STARTING,
+          Option.isSome(
+            yield* stepDeviceAgentLaunch(
+              other.userId,
+              owner.deviceId,
+              line.id,
+              DEVICE_LAUNCH_STEP.STARTING,
+            ),
           ),
-          yield* stepDeviceAgentLaunch(
-            other.userId,
-            other.deviceId,
-            line.id,
-            DEVICE_LAUNCH_STEP.STARTING,
+          Option.isSome(
+            yield* stepDeviceAgentLaunch(
+              other.userId,
+              other.deviceId,
+              line.id,
+              DEVICE_LAUNCH_STEP.STARTING,
+            ),
           ),
         ];
         const settledByOther = yield* settleDeviceAgentLine(

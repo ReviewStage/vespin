@@ -15,14 +15,14 @@
  *   STARTING    -> HANDING_OFF  agentBootRunnerUp, its queue holding a
  *                               message; READY where none
  *   HANDING_OFF -> READY        agentBootHandedOff
- *   STARTING    -> FAILED       failAgentBoot, its queue paused
+ *   STARTING | HANDING_OFF -> FAILED  failAgentBoot, its queue paused
  *   FAILED      -> STARTING     rebootAgent, the pause lifted
  *   READY       -> (none)       endAgentBoot, once the first turn settles
  *
- * A failure may name the attempt it was begun under, so a delivery or a
- * sweep of a boot Retry has since replaced moves nothing; the runner coming
- * up names none, as its caller reads the machine as it stands. Nothing here reads the clock: each
- * write is handed its instant.
+ * The runner coming up names the attempt its machine was begun under, and a
+ * failure may, so a delivery or a sweep of a boot Retry has since replaced
+ * moves nothing. Nothing here reads the clock: each write is handed its
+ * instant.
  */
 
 import {
@@ -53,6 +53,14 @@ type AgentBootEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 const PHASES: readonly BootPhase[] = Object.values(BOOT_PHASE);
 const FAILURES: readonly BootFailure[] = Object.values(BOOT_FAILURE);
+
+/**
+ * The phases a boot can fail from and lapse in: under way, or handing its
+ * first message off, so a hand-off whose queue read failed, and which
+ * nothing would move on again, is failed by the minute sweep past its
+ * deadline and booted again by Retry rather than standing for good.
+ */
+const UNSETTLED_PHASES: readonly BootPhase[] = [...BOOTING_PHASES, BOOT_PHASE.HANDING_OFF];
 
 /** An agent's first launch as its row keeps it. */
 export interface AgentBootRow {
@@ -176,7 +184,7 @@ const findLapsed = SqlSchema.findAll({
         .select(BOOT_COLUMNS)
         .from(agentBootTable)
         .where(
-          and(inArray(agentBootTable.phase, BOOTING_PHASES), lte(agentBootTable.deadlineAt, now)),
+          and(inArray(agentBootTable.phase, UNSETTLED_PHASES), lte(agentBootTable.deadlineAt, now)),
         )
         .orderBy(asc(agentBootTable.deadlineAt))
         .limit(limit),
@@ -261,19 +269,23 @@ export function beginAgentBoot(
 }
 
 /**
- * The agent's runner up (STARTING -> HANDING_OFF), so its queue's head goes
- * next; straight to READY where nothing stands queued. Answers the boot
- * where it moved, none where it stood elsewhere: an earlier poll moved it.
+ * The agent's runner up (STARTING -> HANDING_OFF) under `attempt`, so its
+ * queue's head goes next; straight to READY where nothing stands queued.
+ * Answers the boot where it moved, none where it stood elsewhere or under
+ * another attempt: an earlier poll moved it, or Retry replaced the machine
+ * that came up.
  */
 export function agentBootRunnerUp(
   agentId: string,
   at: Date,
+  attempt: number,
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       const holds = yield* queueHoldsInLock(agentId);
       return yield* moved(agentId, {
+        attempt,
         from: BOOTING_PHASES,
         to: holds ? BOOT_PHASE.HANDING_OFF : BOOT_PHASE.READY,
         at,
@@ -295,7 +307,7 @@ export function agentBootHandedOff(agentId: string, at: Date): AgentBootEffect<v
 }
 
 /**
- * The agent's first launch failed (STARTING -> FAILED) for `failure`,
+ * The agent's first launch failed (STARTING | HANDING_OFF -> FAILED) for `failure`,
  * under `attempt` where one is named, and its queue paused in
  * the same transaction, its messages kept for Retry. Answers whether it
  * moved.
@@ -312,7 +324,7 @@ export function failAgentBoot(
     Effect.gen(function* () {
       const failed = yield* moved(agentId, {
         attempt,
-        from: BOOTING_PHASES,
+        from: UNSETTLED_PHASES,
         to: BOOT_PHASE.FAILED,
         at,
         failure,
@@ -351,7 +363,7 @@ export function rebootAgent(
   );
 }
 
-/** The boots still under way past their deadline at `now`, the longest past first. */
+/** The boots still under way or handing off past their deadline at `now`, the longest past first. */
 export function lapsedAgentBoots(
   now: Date,
   limit: number,

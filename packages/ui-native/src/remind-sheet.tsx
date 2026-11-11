@@ -94,13 +94,17 @@ function PickFace({
         range={{ start: new Date(pick.earliest) }}
         displayedComponents={["date", "hourAndMinute"]}
         onDateChange={setPicked}
-        modifiers={[datePickerStyle("graphical"), listRowBackground(colors.SURFACE)]}
+        modifiers={[
+          datePickerStyle("graphical"),
+          tint(colors.ACCENT),
+          listRowBackground(colors.SURFACE),
+        ]}
       />
       <SwiftUIButton
         label={REMIND_WORDS.REMIND_ME}
         systemImage="clock"
         onPress={() => onPick(picked.getTime())}
-        modifiers={[listRowBackground(colors.SURFACE)]}
+        modifiers={[tint(colors.ACCENT), listRowBackground(colors.SURFACE)]}
       />
     </Section>
   );
@@ -146,7 +150,7 @@ export function RemindSheet({
             modifiers={[
               scrollContentBackground("hidden"),
               background(colors.SIDEBAR),
-              tint(colors.ACCENT),
+              tint(colors.TEXT),
               font({ textStyle: TYPE_ROLE.ROW_TITLE }),
             ]}
           >

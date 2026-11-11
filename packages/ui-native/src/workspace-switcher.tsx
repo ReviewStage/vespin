@@ -24,7 +24,7 @@ import {
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { identityLetter, WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { useState } from "react";
-import { PixelRatio, useColorScheme } from "react-native";
+import { PixelRatio, useColorScheme, View } from "react-native";
 import { AvatarPhoto, TILE_ROUNDING } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -39,7 +39,10 @@ const LETTER_SCALE = 0.5;
 /** The tile in a bar, beside the workspace's name. */
 const BAR_TILE_SIZE = 22;
 
-/** The chevron after the name, which says the name opens a menu. */
+/** The widest the name stands in a bar, so a long one is cut short rather than pushing the bar's other buttons off it. */
+const NAME_MAX_WIDTH = 180;
+
+/** The chevron after the name, which says the name opens a menu, in the body's ink, since the muted ink faded into a dark bar's glass. */
 const CHEVRON_SIZE = 10;
 
 /** What a flow finds the switcher by. */
@@ -158,6 +161,7 @@ export function WorkspaceSwitcherMenu({
               font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
               foregroundStyle(colors.TEXT),
               lineLimit(1),
+              frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
             ]}
           >
             {chosen.name}
@@ -165,7 +169,7 @@ export function WorkspaceSwitcherMenu({
           <Image
             systemName="chevron.down"
             size={CHEVRON_SIZE}
-            color={colors.TEXT_MUTED}
+            color={colors.TEXT_BODY}
             modifiers={[accessibilityHidden()]}
           />
         </HStack>
@@ -199,8 +203,10 @@ export function WorkspaceSwitcherMenu({
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
  * holds React Native views: the same menu in a SwiftUI host the size of its
- * label, standing as the bar's title, as Notion's iPhone app names its
- * workspace where a plain title would stand.
+ * label, standing as a bar item at the bar's leading edge, as Notion's and
+ * Linear's iPhone apps name their workspace there. Note that it stands as a
+ * bar item rather than the bar's title view, because a host sized to its
+ * contents drew at no size at all in the native stack's title on iOS 27.
  */
 export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   return (
@@ -208,6 +214,18 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
       <WorkspaceSwitcherMenu {...props} />
     </Host>
   );
+}
+
+/**
+ * The stack bar's title where the switcher names the workspace at the bar's
+ * leading edge: an empty title view, which hides the drawn title while the
+ * screen keeps its own for the back button's history and the reader. Note
+ * that it is a view rather than nothing, because a header title that
+ * renders nothing leaves the stack no title view, and iOS then draws the
+ * screen's title beside the bar's leading items.
+ */
+export function NoBarTitle() {
+  return <View accessible={false} importantForAccessibility="no-hide-descendants" />;
 }
 
 /** The menu's act that makes a workspace, as the panel words it. */

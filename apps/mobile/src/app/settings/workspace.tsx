@@ -177,7 +177,11 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
       <Screen>
         <SettingsForm>
           <ListSection footer={rename.refusal}>
-            <AccountRow name={workspace.name} email={WORKSPACE_ROLE_WORDS[workspace.role]} />
+            <AccountRow
+              name={workspace.name}
+              email={WORKSPACE_ROLE_WORDS[workspace.role]}
+              picture={workspace.photoVersion === undefined ? workspace.pictureUrl : undefined}
+            />
             {manages && !personal ? (
               <ActionRow
                 label={RENAME_WORDS.ROW}

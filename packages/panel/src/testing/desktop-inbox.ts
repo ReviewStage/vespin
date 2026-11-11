@@ -1044,7 +1044,8 @@ export function sendHeld(pane: HTMLElement): boolean {
 
 /**
  * What the open item's box says outside its controls, its files, its note
- * line, and the agent's own presses (its model chip, which names the model),
+ * line, and the agent's own presses (its model chip, which names the model,
+ * and the chips after the + that name where it runs and what it forwards),
  * Send's words among it: nothing but a notice's Got it, or what an
  * unfinished answer lacks once a send of it was refused, since the box
  * carries no helper text, its Send held until it holds something to send.
@@ -1054,7 +1055,7 @@ export function footWords(pane: HTMLElement): string {
   const copy = box.cloneNode(true);
   assert.ok(copy instanceof Element);
   for (const part of copy.querySelectorAll(
-    ":scope > :is([data-inbox-draft-ask], .agent-composer-field), .attached-files, .ui-composer-foot-note, .message-box-actions",
+    ":scope > :is([data-inbox-draft-ask], .agent-composer-field), .attached-files, .ui-composer-foot-note, .ui-composer-foot-tools, .message-box-actions",
   )) {
     part.remove();
   }

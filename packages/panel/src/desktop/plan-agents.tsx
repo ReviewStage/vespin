@@ -1,5 +1,4 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
-import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
@@ -8,6 +7,7 @@ import {
   BUTTON_SIZE,
   GROUP_ACTIONS,
   GROUP_HEADING,
+  GROUP_LOOK,
   GroupAction,
   GroupHeader,
   IconButton,
@@ -20,16 +20,18 @@ import {
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
+import { Schema } from "effect";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useMemberDirectory } from "../member-directory.js";
-import { agentSubject } from "../tasks/agent-ref.js";
+import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
+import { keptKey, useKept } from "../use-kept.js";
 import type { MenuAction } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
+import { type CountNoun, foldedCount } from "./sidebar-fold.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 import type { ChosenRows } from "./tasks-selection.js";
 
@@ -79,16 +81,19 @@ import type { ChosenRows } from "./tasks-selection.js";
  * On a phone, Overview is the task's one page, with no strip, summary, or
  * Inbox tab beside it (`task-pane-switcher.tsx`), so the group holds the rest
  * of what those offer: the agents' read again where it never landed, the
- * archived agents folded under them as the summary folds them
- * (`ArchivedAgents`), and, after the group, the task's Inbox counting what
+ * archived agents folded under them behind Archived, each the same row as a
+ * listed agent's, settled, chosen together as the listed agents are, and
+ * offering Unarchive in Archive's place, starting folded and then standing
+ * as the reader left it, kept on this device, and, after the group, the
+ * task's Inbox counting what
  * waits on the developer that no listed agent's row marks already, such as
  * an archived agent's thread, only while something does.
  */
 
 /** A phone's additions to the group; see the module's head. */
 interface PlanAgentsPhone {
-  /** The archived agents' fold (`ArchivedAgents`), which draws nothing while none is archived. */
-  readonly archived: React.ReactNode;
+  /** Opens an archived agent's tab, where its transcript is read and it is brought back. */
+  readonly onOpenArchived: (agentId: string) => void;
   /** Opens the window's Inbox narrowed to the task. */
   readonly onOpenInbox: () => void;
 }
@@ -98,6 +103,17 @@ const AGENTS_LIST = "Agents";
 
 /** What the group's count counts, said to a reader beside the figure. */
 const AGENTS_NOUN = { one: "agent", many: "agents" } as const;
+
+/** What the archived agents' fold says, and its list for a reader moving between lists. */
+const ARCHIVED = { LABEL: "Archived", LIST: "Archived agents" } as const;
+
+/** What the archived fold's count is read as while folded. */
+const ARCHIVED_NOUN: CountNoun = { one: "archived agent", many: "archived agents" };
+
+/** Whether the reader left Archived open, one choice for every task's Overview, kept on this device. */
+const KEPT = {
+  UNFOLDED: keptKey("app.taskArchivedUnfolded", Schema.fromJsonString(Schema.Boolean)),
+} as const;
 
 /** New agent as the group's +, standing at rest on its head, its chord in its tooltip as the strip's "+" says it, and why it is unavailable where it is. */
 function NewAgentAction({ start }: { start: MenuAction }): React.JSX.Element {
@@ -163,6 +179,70 @@ function PlanAgentRow({
       onPress={entry.onPick}
       onOpenPullRequest={onOpenPullRequest}
     />
+  );
+}
+
+/** The task's archived agents, folded under Archived at the foot of a phone's agents, each a listed agent's row, settled; nothing while none is archived. */
+function PlanArchivedAgents({
+  agents,
+  shown,
+  more,
+  onOpen,
+  onOpenPullRequest,
+}: {
+  agents: AgentsControl;
+  /** Whether the task's page is on screen, which each row's menu asks on. */
+  shown: boolean;
+  /** Whether its rows draw their ⋯. */
+  more: boolean;
+  onOpen: (agentId: string) => void;
+  onOpenPullRequest: (agentId: string) => void;
+}): React.JSX.Element | null {
+  const [unfolded, setUnfolded] = useKept(KEPT.UNFOLDED, false);
+  const archived = agents.archived ?? [];
+  const selection = useAgentsSelection(agents, archived, shown);
+  if (archived.length === 0) return null;
+  return (
+    <div className="plan-agents-archived mt-list-gap">
+      <GroupHeader
+        heading={GROUP_HEADING.NONE}
+        look={GROUP_LOOK.SECTION}
+        label={ARCHIVED.LABEL}
+        fold={{ open: unfolded, onOpenChange: setUnfolded }}
+        count={foldedCount(!unfolded, archived.length, ARCHIVED_NOUN)}
+      >
+        <TaskRows
+          id={selection.regionId}
+          label={ARCHIVED.LIST}
+          cells={AGENT_ROW_CELLS}
+          more={more}
+          selection={{ selected: selection.selected, onChange: selection.onChange }}
+          moves
+        >
+          {archived.map((agent) => {
+            const subject = agentSubject(agents, agent.id, NOTHING_HELD, false);
+            return (
+              <AgentListRow
+                key={agent.id}
+                agent={agent}
+                agents={agents}
+                shown={shown}
+                subject={subject}
+                at={agentLastMovedAt(agent)}
+                card={<AgentCard subject={subject} models={agents.models} />}
+                pullRequest={agents.pullRequests.get(agent.id)}
+                more={more}
+                chosen={selection.chosenOf(agent.id)}
+                settled
+                onPress={() => onOpen(agent.id)}
+                onOpenPullRequest={() => onOpenPullRequest(agent.id)}
+              />
+            );
+          })}
+        </TaskRows>
+      </GroupHeader>
+      {selection.dialog}
+    </div>
   );
 }
 
@@ -253,7 +333,7 @@ export function PlanAgents({
             key={holds ? "holds" : "empty"}
             heading={GROUP_HEADING.NONE}
             label={AGENTS_LIST}
-            glyph={<EntityGlyph kind={ENTITY_KIND.AGENT} />}
+            look={GROUP_LOOK.SECTION}
             actions={newAgent === undefined ? undefined : <NewAgentAction start={newAgent} />}
             actionsShown={GROUP_ACTIONS.AT_REST}
             // Note that a group over no agent, standing for its read again or its archived agents, counts none.
@@ -293,7 +373,15 @@ export function PlanAgents({
                 ))}
               </TaskRows>
             )}
-            {phone?.archived}
+            {phone === undefined ? null : (
+              <PlanArchivedAgents
+                agents={agents}
+                shown={shown}
+                more={more}
+                onOpen={phone.onOpenArchived}
+                onOpenPullRequest={onOpenPullRequest}
+              />
+            )}
           </GroupHeader>
         </ReplayUnmask>
       ) : null}

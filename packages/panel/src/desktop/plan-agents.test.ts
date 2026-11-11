@@ -151,7 +151,7 @@ function mount(
             phone: !phone
               ? undefined
               : {
-                  archived: null,
+                  onOpenArchived: (agentId) => opened.agents.push(agentId),
                   onOpenInbox: () => opened.phone.push("inbox"),
                 },
           }),
