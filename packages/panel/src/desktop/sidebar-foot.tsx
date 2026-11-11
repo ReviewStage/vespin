@@ -223,8 +223,6 @@ export function AccountHeading({
  */
 function accountMenuGroups(
   signedIn: boolean,
-  /** Whether the window is an installed app's, whose menu bar's chords the Keyboard shortcuts page lists. */
-  desktopApp: boolean,
   acts: {
     /** Opens the reader's own page; none outside the window, or before the account's id is known. */
     onProfile: (() => void) | undefined;
@@ -242,16 +240,12 @@ function accountMenuGroups(
     ...(profile.length === 0 ? [] : [profile]),
     [
       { label: "Changelog", icon: <NewspaperIcon />, onSelect: acts.onOpenChangelog },
-      ...(desktopApp
-        ? [
-            {
-              label: "Keyboard shortcuts",
-              icon: <KeyboardIcon />,
-              command: APP_COMMAND.KEYBOARD_SHORTCUTS,
-              onSelect: () => runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS),
-            },
-          ]
-        : []),
+      {
+        label: "Keyboard shortcuts",
+        icon: <KeyboardIcon />,
+        command: APP_COMMAND.KEYBOARD_SHORTCUTS,
+        onSelect: () => runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS),
+      },
       {
         label: "Contact us",
         icon: <LifeBuoyIcon />,
@@ -285,10 +279,7 @@ export function useAccountMenuGroups(
   const { mutate: sendEmail } = useMutation(pressMutation(ACT_KIND.CONTACT_EMAIL));
   const openPerson = useOpenPerson();
   const accountId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
-  const desktopApp =
-    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
-    true;
-  return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, desktopApp, {
+  return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, {
     onProfile:
       openPerson === undefined || accountId === undefined ? undefined : () => openPerson(accountId),
     onOpenChangelog: () => openChangelog(),

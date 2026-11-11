@@ -51,8 +51,8 @@ const PAGE_CAPABILITY = {
   [SETTINGS_VIEW.THIS_MAC]: HOST_CAPABILITY.MAC_COMMANDS,
   [SETTINGS_VIEW.EXPERIMENTAL]: null,
   [SETTINGS_VIEW.ABOUT]: null,
-  // The menu bar's chords, which a browser keeps many of for its own tabs.
-  [SETTINGS_VIEW.SHORTCUTS]: HOST_CAPABILITY.DESKTOP_APP,
+  // Each platform's own chords: a browser's tab lists its own for the ones its browser keeps, and none of the Mac app's alone.
+  [SETTINGS_VIEW.SHORTCUTS]: null,
 } as const satisfies Record<SettingsView, HostCapability | null>;
 
 /**

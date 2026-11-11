@@ -12,15 +12,15 @@ import { shownSettingsView } from "./settings-rows.js";
  * and a page an experiment holds only while the account has it on.
  */
 
-test("a link to the Keyboard shortcuts page shows it on the desktop and Profile on a platform without the desktop app", () => {
-  const browser = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP);
+test("a link to the This Mac page shows it where the platform runs commands on the Mac, and Profile on a platform without", () => {
+  const without = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MAC_COMMANDS);
 
   assert.equal(
-    shownSettingsView(SETTINGS_VIEW.SHORTCUTS, DESKTOP_CAPABILITIES, NO_EXPERIMENTS),
-    SETTINGS_VIEW.SHORTCUTS,
+    shownSettingsView(SETTINGS_VIEW.THIS_MAC, DESKTOP_CAPABILITIES, NO_EXPERIMENTS),
+    SETTINGS_VIEW.THIS_MAC,
   );
   assert.equal(
-    shownSettingsView(SETTINGS_VIEW.SHORTCUTS, browser, NO_EXPERIMENTS),
+    shownSettingsView(SETTINGS_VIEW.THIS_MAC, without, NO_EXPERIMENTS),
     SETTINGS_VIEW.ACCOUNT,
   );
   assert.equal(

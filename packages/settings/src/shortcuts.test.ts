@@ -16,6 +16,7 @@ import {
   filesChangedKeyFor,
   IN_CONTEXT_KEY,
   IN_CONTEXT_SHORTCUTS,
+  installBrowserChords,
   installCommandKey,
   isAppCommand,
   KEYED_COMMANDS,
@@ -33,9 +34,14 @@ import {
 /** What puts back the command key a test installed. */
 let restoreCommandKey: (() => void) | undefined;
 
+/** What puts back the browser chords a test installed. */
+let restoreBrowserChords: (() => void) | undefined;
+
 afterEach(() => {
   restoreCommandKey?.();
   restoreCommandKey = undefined;
+  restoreBrowserChords?.();
+  restoreBrowserChords = undefined;
 });
 
 /** Makes Ctrl the window's command key, as a browser on Windows or Linux does, for the rest of the test. */
@@ -263,4 +269,48 @@ test("on a Mac, a chord is drawn in the menu bar's glyphs and spelled for a read
 
   assert.deepEqual(shortcutGlyphs(shortcutAccelerator(palette)), ["⌘", "K"]);
   assert.equal(shortcutAria(palette), "Meta+K");
+});
+
+test("in a browser's tab, no command it offers is pressed with a chord the browser keeps, and each moved chord runs its command alone", () => {
+  restoreBrowserChords = installBrowserChords(true);
+  const offered = KEYED_COMMANDS.filter((command) => shortcutShown(command, {}, []));
+  // The chords a browser reserves and never hands the page: new window, new tab, close tab, reopen tab, close window, quit.
+  const kept = [
+    { key: "n", code: "KeyN", shiftKey: false },
+    { key: "n", code: "KeyN", shiftKey: true },
+    { key: "t", code: "KeyT", shiftKey: false },
+    { key: "t", code: "KeyT", shiftKey: true },
+    { key: "w", code: "KeyW", shiftKey: false },
+    { key: "w", code: "KeyW", shiftKey: true },
+    { key: "q", code: "KeyQ", shiftKey: false },
+  ];
+  for (const press of kept) {
+    const held = { ...press, metaKey: true, ctrlKey: false, altKey: false };
+    assert.equal(commandForKey(offered, held), undefined, `⌘${press.key} is the browser's`);
+  }
+
+  const optionCommand = (key: string, code: string, shiftKey: boolean) => ({
+    key,
+    code,
+    shiftKey,
+    metaKey: true,
+    ctrlKey: false,
+    altKey: true,
+  });
+  assert.equal(commandForKey(offered, optionCommand("˜", "KeyN", false)), APP_COMMAND.NEW_TASK);
+  assert.equal(commandForKey(offered, optionCommand("†", "KeyT", false)), APP_COMMAND.NEW_TAB);
+  assert.equal(commandForKey(offered, optionCommand("∑", "KeyW", false)), APP_COMMAND.CLOSE_TAB);
+  assert.equal(
+    commandForKey(offered, optionCommand("„", "KeyW", true)),
+    APP_COMMAND.CLOSE_OTHER_TABS,
+  );
+  assert.equal(
+    commandForKey(offered, optionCommand("ˇ", "KeyT", true)),
+    APP_COMMAND.REOPEN_CLOSED_TAB,
+  );
+  assert.deepEqual(
+    shortcutGlyphs(shortcutAccelerator(APP_SHORTCUTS[APP_COMMAND.NEW_TASK].chord)),
+    ["⌥", "⌘", "N"],
+    "the hover and the page draw the chord that runs it",
+  );
 });
