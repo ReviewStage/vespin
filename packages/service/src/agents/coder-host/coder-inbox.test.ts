@@ -439,7 +439,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version shown, and a page of another task is refused",
+    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version the agent was shown, and a page of another task is refused",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -450,13 +450,20 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           { title: "Done card directions", html: "<p>Directions</p>" },
           shown,
         ).pipe(Effect.map(Option.getOrThrow));
+        // A later version stands by the time the agent posts the one it was shown.
+        yield* writePage(
+          agent.userId,
+          taskPageOwner(agent.taskId),
+          { pageId: page.id, title: "Done card directions", html: "<p>Later</p>" },
+          shown,
+        );
         const sandbox = sandboxWith({ "shots/body.png": PNG, "shots/card.png": PNG });
         const options = [
           {
             label: "A card",
             media: [
               { path: "shots/card.png", caption: "The card on a desktop" },
-              { page: page.id },
+              { page: page.id, version: 1 },
               { url: "https://preview.example.com/card", label: "Preview" },
             ],
           },
