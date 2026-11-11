@@ -163,7 +163,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   asks first asking in `ConfirmAsk`.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
-  New task; a regular window's sidebar keeps its labels. A window wide enough
+  New task; a regular window's bar keeps its labels. A window wide enough
   for three columns hides it and stands the app sidebar instead, whose
   `GroupRow`s carry the places' names.
 
