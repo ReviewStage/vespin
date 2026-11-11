@@ -16,7 +16,8 @@ import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositorie
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
+import { providerOf } from "@repo/features/model-label";
+import type { ModelChoice, ModelProvider, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HOST_LIVE } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
@@ -414,6 +415,18 @@ export const selectAgentTitles = memoizedSelect(
       (tasks.taskAgents ?? []).flatMap(({ id, title }) =>
         title === null ? [] : [[id, title] as const],
       ),
+    ),
+);
+
+/** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as the list moves. */
+export const selectAgentHarnesses = memoizedSelect(
+  (state: AppStateSnapshot) => [state.tasks],
+  (tasks): ReadonlyMap<string, ModelProvider> =>
+    new Map(
+      (tasks.taskAgents ?? []).flatMap(({ id, model }) => {
+        const harness = providerOf(model);
+        return harness === undefined ? [] : [[id, harness] as const];
+      }),
     ),
 );
 

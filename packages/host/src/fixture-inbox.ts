@@ -203,6 +203,9 @@ const AGENT = {
 
 const MODEL = "anthropic/claude-opus-5.5";
 
+/** The model the digest's agent runs on, Codex's, from the fixture's catalog. */
+const CODEX_MODEL = "openai/gpt-6.1-sol";
+
 /** The fixture's workspace by the name its addresses spell it with, as the panel's tasks fixture names it. */
 const FIXTURE_WORKSPACE_SLUG = "personal";
 
@@ -746,9 +749,20 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       pendingApprovals: [INVITES_HELD],
     },
   ],
+  // Note that the digest's agent runs on Codex, so the agents' marks show both harnesses.
   [
     TASK.DIGEST,
-    agentOn(AGENT.DIGEST, TASK.DIGEST, "Send the weekly digest", AGENT_STATUS.RUNNING, 4 * HOUR),
+    {
+      ...agentOn(
+        AGENT.DIGEST,
+        TASK.DIGEST,
+        "Send the weekly digest",
+        AGENT_STATUS.RUNNING,
+        4 * HOUR,
+      ),
+      model: CODEX_MODEL,
+      runtime: AGENT_RUNTIME.CODEX,
+    },
   ],
   [
     TASK.ROUNDING,
@@ -1383,7 +1397,7 @@ const MODELS: ModelsAnswer = {
       efforts: ["low", "medium", "high"],
     },
     {
-      id: "openai/gpt-6.1-sol",
+      id: CODEX_MODEL,
       name: "GPT-6.1 Sol",
       provider: MODEL_PROVIDER.OPENAI,
       efforts: ["low", "medium", "high", "xhigh"],

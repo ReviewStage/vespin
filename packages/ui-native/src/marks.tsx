@@ -17,10 +17,12 @@ import {
   foregroundStyle,
   frame,
   opacity,
+  resizable,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
+import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
@@ -204,24 +206,52 @@ export const TILE_ROUNDING = 0.28;
 const TILE_GLYPH_SCALE = 0.5;
 
 /**
- * An agent's tile, as the panel's messages lead an agent's words with it: a
- * rounded square on the brand's well, the agent's glyph on it in the ink,
- * heard as the agent's name, so an agent never reads as a person.
+ * The image sets each harness's mark is drawn from, which the app's config
+ * writes into its asset catalog (`apps/mobile/app.config.ts`): Claude Code's
+ * Clawd from the brand's path in its own clay, and Codex's picture from the
+ * files the panel serves, each as the panel's `HarnessMark` draws it.
  */
-export function AgentTile({ name, size = MARK_SIZE.AVATAR }: AvatarProps) {
+const HARNESS_MARK_ASSET = {
+  [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
+  [MODEL_PROVIDER.OPENAI]: "CodexMark",
+} as const satisfies Record<ModelProvider, string>;
+
+/**
+ * An agent's tile, as the panel's messages lead an agent's words with it: a
+ * rounded square on the brand's well, the mark of the harness the agent runs
+ * in on it (Claude Code's Clawd, Codex's picture), or the ink's sparkles where
+ * the harness is not known, heard as the agent's name, so an agent never
+ * reads as a person.
+ */
+export function AgentTile({
+  name,
+  harness,
+  size = MARK_SIZE.AVATAR,
+}: AvatarProps & {
+  /** The provider whose harness the agent runs in (`providerOf` its model); none where it is not known. */
+  readonly harness?: ModelProvider | undefined;
+}) {
   const colors = useColors();
+  const glyph = size * TILE_GLYPH_SCALE;
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
       <RoundedRectangle
         cornerRadius={size * TILE_ROUNDING}
         modifiers={[foregroundStyle(colors.WELL)]}
       />
-      <Image
-        systemName="sparkles"
-        size={size * TILE_GLYPH_SCALE}
-        color={colors.TEXT}
-        modifiers={[accessibilityHidden()]}
-      />
+      {harness === undefined ? (
+        <Image
+          systemName="sparkles"
+          size={glyph}
+          color={colors.TEXT}
+          modifiers={[accessibilityHidden()]}
+        />
+      ) : (
+        <Image
+          assetName={HARNESS_MARK_ASSET[harness]}
+          modifiers={[resizable(), frame({ width: glyph, height: glyph }), accessibilityHidden()]}
+        />
+      )}
     </ZStack>
   );
 }

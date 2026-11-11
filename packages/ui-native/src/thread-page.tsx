@@ -23,6 +23,7 @@ import {
   padding,
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
@@ -77,7 +78,11 @@ export type ThreadMedia =
 export type ThreadMessage = {
   readonly id: string;
   /** Who wrote it: a member by their face, their picture where one is known, or the agent by its tile. */
-  readonly writer: Face & { readonly agent: boolean };
+  /** Who wrote it: a member's face, or the agent, whose tile wears its harness's mark where it is known. */
+  readonly writer: Face & {
+    readonly agent: boolean;
+    readonly harness?: ModelProvider | undefined;
+  };
   /** When it was written, in epoch milliseconds. */
   readonly at: number;
   readonly words: string;
@@ -238,7 +243,7 @@ function MessageView({
         ]}
       >
         {writer.agent ? (
-          <AgentTile name={writer.name} size={MARK_SIZE.WRITER} />
+          <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
         ) : (
           <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
         )}

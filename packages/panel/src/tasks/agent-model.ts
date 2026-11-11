@@ -66,7 +66,12 @@ import {
 } from "@repo/features/failure-remedy";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import { contextWindowsOf, effortLabel, SPEED_WORD, windowOf } from "@repo/features/model-effort";
-import { agentName, CATALOG_ID_SEPARATOR, modelLabel } from "@repo/features/model-label";
+import {
+  agentName,
+  CATALOG_ID_SEPARATOR,
+  modelLabel,
+  providerOf,
+} from "@repo/features/model-label";
 import {
   type CatalogModel,
   type ContextWindows,
@@ -1182,18 +1187,7 @@ export function closesComposer(failure: AgentCallFailure): boolean {
  * process's notifications so neither is ever named two ways
  * (`@repo/features/model-label`).
  */
-export { agentName, modelLabel };
-
-/**
- * The provider whose harness runs a model, read from its catalog id, whose
- * prefix is the provider's word (`models-wire.ts`), so a tab wears its
- * harness's mark before the catalog itself is read; none for a provider
- * we run no agent on.
- */
-export function providerOf(modelId: string): ModelProvider | undefined {
-  const prefix = modelId.slice(0, Math.max(0, modelId.indexOf(CATALOG_ID_SEPARATOR)));
-  return Object.values(MODEL_PROVIDER).find((provider) => provider === prefix);
-}
+export { agentName, modelLabel, providerOf };
 
 /** The first run of digits and points in a model's own name, which is its version: `claude-opus-5.5` is 5.5, `gpt-6-astra` is 6. */
 const MODEL_VERSION = /\d+(?:\.\d+)*/u;

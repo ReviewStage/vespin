@@ -1,6 +1,7 @@
 // row-preview-model.ts -- what a row's long press preview says: a thread's newest messages as plain words, and an agent's latest step read off the transcript the app already holds.
 
 import type { InboxThreadMessage } from "@repo/features/inbox-list-model";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { plainWords } from "@repo/features/plain-words";
 import { TRANSCRIPT_ITEM, type TranscriptItem } from "./transcript-model.js";
 
@@ -18,6 +19,8 @@ export interface PreviewMessage {
   readonly agent: boolean;
   /** A member writer's sign-in picture, where one is known. */
   readonly picture?: string | undefined;
+  /** The provider whose harness the agent writer runs in, whose mark its tile wears; none for a member, or where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly at: number;
   readonly words: string;
 }
@@ -31,6 +34,7 @@ export interface PreviewMessage {
 export function previewMessages(
   messages: readonly InboxThreadMessage[],
   pictureOf: (userId: string | undefined) => string | undefined = () => undefined,
+  harness?: ModelProvider | undefined,
 ): readonly PreviewMessage[] {
   return messages
     .map((message) => ({
@@ -38,6 +42,7 @@ export function previewMessages(
       writer: message.writer.name,
       agent: message.writer.agent,
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+      harness: message.writer.agent ? harness : undefined,
       at: message.at,
       words: [message.stamp?.words, plainWords(message.words)]
         .filter((part) => part !== undefined && part !== "")
