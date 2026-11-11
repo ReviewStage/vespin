@@ -485,9 +485,6 @@ test("a text file opened over the window is drawn as every code is, numbered fro
   await wholeFileDrawn(document.body);
 
   assert.deepEqual(wholeFileLines(document.body), ["1 const a = 1;", "2 const b = 2;"]);
-  assert.ok(
-    document.querySelector(".attachment-viewer-lines .whole-file")?.closest(".ph-no-capture"),
-  );
 });
 
 test("a text file opened over a tab leaves the tab's find its own, the file's words found by none", async () => {

@@ -193,10 +193,6 @@ test("a cloud Browser tab's pane spins while it waits for the page, draws it onc
     pageHeight: 800,
   });
   assert.equal(status(), undefined);
-  assert.ok(
-    document.querySelector("canvas")?.closest(".ph-no-capture"),
-    "the live view is left out of the recording",
-  );
 
   await press("Take over");
   await say({

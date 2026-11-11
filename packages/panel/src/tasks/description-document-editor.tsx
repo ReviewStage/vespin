@@ -628,7 +628,7 @@ export function EditableTitle({
   }, []);
   return (
     // Note that the unit's class lets the ⋯ show as the pointer or the keyboard comes onto the title, as a section's does.
-    <div className={`task-title ${UNIT_ATTRIBUTED_CLASS} ph-no-capture`}>
+    <div className={`task-title ${UNIT_ATTRIBUTED_CLASS}`}>
       <EditableBlock
         ref={block}
         label="Title"

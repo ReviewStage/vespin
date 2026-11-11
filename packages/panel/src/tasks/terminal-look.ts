@@ -15,4 +15,4 @@ export const TERMINAL_BODY_CLASS = "terminal-tab-body relative bg-terminal-groun
 export const TERMINAL_HOST_CLASS = "terminal-tab-host flex min-w-0 flex-1 flex-col";
 
 /** The box the terminal's screen is shown in, which the screen fills. */
-export const TERMINAL_SCREEN_CLASS = "terminal-tab-screen ph-no-capture relative min-h-0 flex-1";
+export const TERMINAL_SCREEN_CLASS = "terminal-tab-screen relative min-h-0 flex-1";

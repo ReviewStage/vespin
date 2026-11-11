@@ -28,7 +28,7 @@ import { AccountSection } from "./account-section.js";
  * a bridge answering as the host would, the token held on app state and each
  * write's answer laid there: the row offers Add with no token and
  * Manage with one, drawn as its hint, login, and expiry; a pasted token is
- * sent once from an unrecorded password field; Disconnect asks first; a refused
+ * sent once from a password field; Disconnect asks first; a refused
  * save says why in a short label. Synthetic tokens.
  */
 
@@ -178,14 +178,13 @@ async function paste(token: string): Promise<void> {
   await settle();
 }
 
-test("with no token the row offers Add, and a token pasted into the unrecorded field is sent once and drawn as the service's facts on the row", async () => {
+test("with no token the row offers Add, and a token pasted into the field is sent once and drawn as the service's facts on the row", async () => {
   await mountAndOpen();
   assert.equal(dialog().querySelector("h2")?.textContent, "Personal access token");
   assert.match(dialog().textContent ?? "", /Create a classic token with repo tickedOpen GitHub/u);
 
   const input = tokenField() ?? assert.fail("no token field");
   assert.equal(input.type, "password");
-  assert.ok(input.closest(".ph-no-capture"), "the field is kept out of the recording");
   await paste(PASTED);
 
   assert.deepEqual(

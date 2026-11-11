@@ -1680,9 +1680,7 @@ const NEW_SECRET_REFUSAL_WORDS = {
 /**
  * A webhook's secret, shown the one time the write that minted it answers:
  * read-only, with Copy and Done, and said never to be shown again. Note that
- * it is left out of the screen recording whole (`ph-no-capture`), beside the
- * masking every input already has, because it is a credential; and that it
- * is keyed by the secret, so a Copied said of one is never said of the next.
+ * it is keyed by the secret, so a Copied said of one is never said of the next.
  */
 function ShownSecretRow({
   secret,
@@ -1692,19 +1690,17 @@ function ShownSecretRow({
   onDone: () => void;
 }): React.JSX.Element {
   return (
-    <div className="ph-no-capture">
-      <SettingsRow
-        label="Secret"
-        description="You won't be able to see this again. Copy it into your sender now."
-      >
-        {() => (
-          <>
-            <CopyField label="Secret" value={secret} what="secret" copy={copyThroughShell} />
-            <Button onClick={onDone}>Done</Button>
-          </>
-        )}
-      </SettingsRow>
-    </div>
+    <SettingsRow
+      label="Secret"
+      description="You won't be able to see this again. Copy it into your sender now."
+    >
+      {() => (
+        <>
+          <CopyField label="Secret" value={secret} what="secret" copy={copyThroughShell} />
+          <Button onClick={onDone}>Done</Button>
+        </>
+      )}
+    </SettingsRow>
   );
 }
 

@@ -532,7 +532,7 @@ test("a picture of an item opens a viewer the arrow keys walk across every pictu
   assert.deepEqual(viewer(), ["The pull request tab.png", "1 of 3"]);
 });
 
-test("a recording an agent's words draw plays where it stands, left out of the replay, and its Expand opens the viewer a picture does, which plays it and walks on to the picture drawn with it", async () => {
+test("a recording an agent's words draw plays where it stands, and its Expand opens the viewer a picture does, which plays it and walks on to the picture drawn with it", async () => {
   const [still, video] = [
     "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c90",
     "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c91",
@@ -593,7 +593,6 @@ test("a recording an agent's words draw plays where it stands, left out of the r
     );
     assert.equal(inline.hasAttribute("controls"), false, "and not the browser's");
     assert.equal(inline.getAttribute("aria-label"), "Video: Inviting a member");
-    assert.ok(inline.closest(".ph-no-capture"), "the player is left out of the replay");
     assert.equal(pane.querySelectorAll("video").length, 1, "the recording stands once");
     assert.deepEqual(
       [...pane.querySelectorAll('[aria-label="Attached files"] > *')].map(
@@ -627,7 +626,6 @@ test("a recording an agent's words draw plays where it stands, left out of the r
     assert.equal(player.hasAttribute("controls"), false, "and not the browser's");
     assert.equal(player.getAttribute("aria-label"), "Video: Inviting a member.webm");
     assert.equal(player.getAttribute("src"), "blob:video-2");
-    assert.ok(player.closest(".ph-no-capture"), "the player is left out of the replay");
     assert.equal(
       card?.querySelector('[aria-label="Inviting a member.webm"] video')?.getAttribute("src"),
       "blob:video-3",

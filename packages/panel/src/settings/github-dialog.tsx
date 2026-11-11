@@ -53,12 +53,7 @@ import { useAnnounceShown } from "../use-announce-shown.js";
  *
  * The token stands in the open field alone, is sent once as it is pasted or on Enter, and is
  * cleared as soon as the service keeps it; the service never answers one.
- * The dialog is kept out of the screen recording, which masks a field's
- * characters but not their count, as Settings › Agents' keys are.
  */
-
-/** The class PostHog's recorder leaves out of a recording, element and children alike. */
-const NO_CAPTURE = "ph-no-capture";
 
 /** What the token's paste says: its steps, its field, and the check while a save is out. */
 const PASTE_WORDS = {
@@ -316,13 +311,11 @@ export function GitHubTokenDialog({
       onExited={onExited}
       actions={<DialogActions onDone={onClose} />}
     >
-      <div className={NO_CAPTURE}>
-        {token === null ? (
-          <GitHubTokenPaste field={field} onSave={save} />
-        ) : (
-          <SavedToken token={token} />
-        )}
-      </div>
+      {token === null ? (
+        <GitHubTokenPaste field={field} onSave={save} />
+      ) : (
+        <SavedToken token={token} />
+      )}
     </Dialog>
   );
 }

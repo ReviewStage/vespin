@@ -258,7 +258,7 @@ test("a call draws every picture it answered in its order, so a kept one after s
   assert.ok(document.querySelector('[role="dialog"] img'), "the viewer opens on the kept picture");
 });
 
-test("a browser call's screenshots are thumbnails in a strip under its row, masked from the replay, and a press opens the window's viewer walking them", async () => {
+test("a browser call's screenshots are thumbnails in a strip under its row, and a press opens the window's viewer walking them", async () => {
   const [first, second] = [picture(1280, 800), picture(1280, 800)];
   assert.ok(first && second);
   const screenshot = (kept: ReturnType<typeof picture>) => ({
@@ -298,7 +298,6 @@ test("a browser call's screenshots are thumbnails in a strip under its row, mask
   const strip = container.querySelector('ul[aria-label="Pictures the call answered"]');
   const thumbnails = [...(strip?.querySelectorAll("li img") ?? [])];
 
-  assert.ok(strip?.closest(".ph-no-capture"), "the strip is left out of the replay");
   assert.deepEqual(
     thumbnails.map((image) => [image.getAttribute("alt"), image.getAttribute("src")]),
     [
@@ -628,7 +627,6 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
     );
     assert.equal(inline.hasAttribute("controls"), false, "and not the browser's");
     assert.equal(inline.getAttribute("aria-label"), "Video: Inviting a member");
-    assert.ok(inline.closest(".ph-no-capture"), "the player is left out of the replay");
     assert.deepEqual(
       [...container.querySelectorAll("img")].map((image) => image.getAttribute("src")),
       ["data:image/png;base64,iVBORw=="],
@@ -806,7 +804,6 @@ test("a recording a finished browser call kept plays under its row, out of the t
       "under Vespin's own bar, with an Expand into the viewer",
     );
     assert.equal(inline.hasAttribute("controls"), false, "and not the browser's");
-    assert.ok(inline.closest(".ph-no-capture"));
     assert.equal(
       inline.closest(".picture-block")?.querySelector(".picture-caption")?.textContent,
       "Inviting a member",

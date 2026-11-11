@@ -30,9 +30,7 @@ import type { FileReadPlace } from "./use-side-panel.js";
  * File tab at the commit from either, and the lines read from GitHub at
  * that commit through the File tab's own read, with a few around them, the
  * named ones lit (`code-snippet.tsx`). Lines the task cannot read, another repository's or a
- * range past the bound, say why and open nothing. The card shows the
- * repository's lines, so it is out of the session recording, which
- * `CodeCard` sees to (`ph-no-capture`).
+ * range past the bound, say why and open nothing.
  */
 
 /** What the code of an item no place reads its file through comes to: unread, there being no repository to read it through. */

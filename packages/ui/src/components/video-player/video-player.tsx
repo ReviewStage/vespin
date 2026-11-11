@@ -75,8 +75,8 @@ import { Tooltip } from "../tooltip/hint.js";
  * reads hold (`picture-read.ts`, the inbox's own), and play
  * from a `blob:` address made of them here and let go of as the player goes,
  * because neither window's content policy lets media load from a `data:`
- * address, where both allow `blob:`. What holds the player keeps it out of
- * the screen recording, as it keeps a picture (`ph-no-capture`).
+ * address, where both allow `blob:`. The screen recording masks
+ * the player's address, as it masks a picture's, so it draws empty there.
  *
  * It is drawn in Tailwind utilities over the theme, its inline frame a
  * `Card` (shadcn/ui's) and its controls `@repo/ui`'s own; shadcn/ui has no

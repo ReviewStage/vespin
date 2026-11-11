@@ -88,9 +88,10 @@ const IGNORED_INPUT = "ph-ignore-input";
 
 /**
  * The recorder's fixed class for what it leaves out whole: drawn as an empty
- * box of its size, and none of its changes read. Note that a decoration that
- * moves by rewriting its own attributes wears it too, because the recorder
- * would otherwise serialize, mask, and send every step.
+ * box of its size, and none of its changes read. It is kept for what no one
+ * sees and the masking cannot reach, a file input's value and a diagram's
+ * layout while it is drawn, because on anything seen it stands as a gray box
+ * in every recording.
  */
 export const REPLAY_LEFT_OUT = "ph-no-capture";
 

@@ -37,7 +37,7 @@
  * picture of that part of the window (`window.capture`). A still is a picture
  * of the window's words, so it is kept in this window's memory alone, a few
  * at a time, never written, traced, or counted, and the session recording
- * leaves it out (`ph-no-capture`). Until a screen has one, its card shows its
+ * masks its address, so it draws empty there. Until a screen has one, its card shows its
  * glyph.
  */
 

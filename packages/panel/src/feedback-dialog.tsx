@@ -25,11 +25,7 @@
  * title names one (opened from that experiment's row in Settings ›
  * Experimental), and — only while "Include my name and email" is
  * ticked — the signed-in account's name and address, the line under the
- * box reads out. Nothing else rides along, a credential least of all. The
- * screenshots are left out of the screen recording (`ph-no-capture`),
- * because a screenshot is a picture of the person's screen and could carry
- * another app's words, and so is the note's field, whose masked value would
- * still record the rhythm of the typing.
+ * box reads out. Nothing else rides along, a credential least of all.
  */
 
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
@@ -223,7 +219,7 @@ function FeedbackImageRow({
       gap={GAP.CONTROL}
       align={ALIGN.STRETCH}
       ref={row}
-      className="feedback-dialog-images ph-no-capture"
+      className="feedback-dialog-images"
       aria-label="Screenshots"
       moves
     >
@@ -506,7 +502,7 @@ export function FeedbackDialog({
             }
           >
             {/* Note that the bare field stands at the card's inset, as the files over it and the foot under it do. */}
-            <div className="feedback-dialog-field ph-no-capture px-ui-12 pt-ui-12">
+            <div className="feedback-dialog-field px-ui-12 pt-ui-12">
               <TextArea
                 ref={field}
                 label={FEEDBACK_COPY[shown.kind].field}

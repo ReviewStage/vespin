@@ -101,9 +101,7 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * by its address alone, as an account's photo on its provider's host, is
  * shown and zoomed all the same, but says no size and offers no Copy or
  * Download, since the window holds none of its bytes to count, copy, or
- * save. A message's files are its
- * developer's own, so everything the card holds is left out of the screen
- * recording (`ph-no-capture`) as a second line behind the masking.
+ * save.
  *
  * On a phone the header is a phone's (`phone-head.tsx`): Close alone at its
  * start, the file's name centered over its size and note, and one ⋯ at its
@@ -580,7 +578,7 @@ export function AttachmentViewer({
     >
       <div
         ref={viewer}
-        className="attachment-viewer ph-no-capture flex size-full min-h-0 flex-col gap-ui-16"
+        className="attachment-viewer flex size-full min-h-0 flex-col gap-ui-16"
         data-view={view}
         data-opening={opening}
         data-hug={hug}

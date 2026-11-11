@@ -128,7 +128,6 @@ test("Help's item opens the feedback dialog, with the field taking the keyboard,
   assert.equal(feedback.querySelector("h2")?.textContent, "Send feedback");
   assert.equal(document.activeElement, field());
   assert.equal(field().placeholder, "What happened, and what did you expect?");
-  assert.ok(field().closest(".ph-no-capture"), "the note is left out of the screen recording");
 
   act(() => button("Prompt").click());
   assert.equal(dialog()?.querySelector("h2")?.textContent, "Send feedback");
