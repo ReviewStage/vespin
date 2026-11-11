@@ -200,6 +200,16 @@ it was started, and durations, never your messages, the agent's work, or its
 environment; it sends no error reports. An agent running on your own machine
 sends Sentry nothing.
 
+A machine you run Vespin's host on, This Mac or one you installed it on,
+sends Sentry the host's own lines about its setup and running: that it
+connected, fetched the tools its agents run on, became ready, or could not,
+in Vespin's own words, with the host's version and operating system. A line
+saying something failed is sent as an error report. These never carry your
+agents' messages, their work, what a tool or a terminal printed, or a
+credential. The Mac app sends the same of setting up This Mac's host. The
+host on This Mac also keeps these lines in `~/Library/Logs/Vespin Host/` on
+your Mac.
+
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
 the next time you open the app), and reports of a screen that could not be
 drawn. It uses Sentry's default data collection, so reports may include error
