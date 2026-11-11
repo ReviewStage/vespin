@@ -1,8 +1,7 @@
 import type { GitHubRepository } from "@repo/features";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { NO_REPOSITORY, repositoryParts } from "@repo/features/task-list-model";
+import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { repositoryFailureNote } from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { countWords, orList, readingWords } from "@repo/features/words";
@@ -80,18 +79,7 @@ import { useOpenSettings } from "../open-settings.js";
  * whom to ask to configure them. The list is held by the host while the chip stands, drawn at once from its
  * last answer, and asked again whenever a window comes forward, so a
  * developer back from connecting GitHub in the browser sees the change on
- * the next opening; nothing polls. Where the opener picks several, as New
- * task does for an agent in the cloud, a press checks or unchecks a row and
- * the menu stands open: the first pick is the primary, marked Primary once
- * another is picked beside it, where
- * the agent starts and its pull requests open by default, and unchecking it
- * makes the next pick the primary, unless the opener holds it, as a
- * sub-task's card holds its parent's, its row then checked and disabled
- * saying why; the chip names the picks, the first two
- * and then the rest counted, under the first's owner picture; and once a
- * primary is picked, each row the service would refuse beside it
- * (`start.ts`'s `extraRepositoriesOf`) is dimmed, saying why, so it is
- * known before the Start rather than refused by it. The menu
+ * the next opening; nothing polls. The menu
  * is placed as a Settings picker's is, below the chip or above it where the
  * window leaves more room there, its list capped to that room. A one-pick
  * menu closes on a choice, and every menu on Escape and on focus leaving
@@ -144,23 +132,6 @@ export const CHOOSE_LABEL = "Choose a repository";
 
 /** The chip's words while what its default is read from, the tasks or the repositories, is still being read, which ask nothing yet. */
 const READING_LABEL = "Repository";
-
-/** How many repositories a chip naming several names before it counts the rest. */
-const NAMED_PICKS = 2;
-
-/**
- * Why a row cannot stand beside the primary, as the service would refuse
- * it, in the few words the dimmed row ends with: reached only on the
- * member's own token, the primary itself reached so, on another
- * installation of the App than the primary's, or past the bound a Start
- * holds its extras to.
- */
-const EXTRA_REFUSED = {
-  TOKEN: "Token only",
-  PRIMARY_TOKEN: "Primary on token",
-  OTHER_INSTALLATION: "Another installation",
-  FULL: "Limit reached",
-} as const;
 
 /** The id of the row pinned under the list that chooses no repository. */
 const NONE_ROW = "none";
@@ -267,7 +238,6 @@ function repositoryRows(
   recent: readonly string[],
   reached: readonly GitHubRepository[] | undefined,
   pictures: boolean,
-  primary: string | undefined,
 ): MenuRow[] {
   const names =
     reached === undefined ? [...recent] : recent.filter((each) => listedIn(reached, each));
@@ -280,62 +250,13 @@ function repositoryRows(
       .map((each) => each.fullName),
   );
   return names.map((fullName) =>
-    repositoryMenuRow(fullName, pictures, {
-      token: onToken.has(fullName),
-      primary: primary !== undefined && sameName(fullName, primary),
-    }),
+    repositoryMenuRow(fullName, pictures, { token: onToken.has(fullName) }),
   );
 }
 
 /** Whether two `owner/name`s name one repository, as GitHub spells it or not. */
 function sameName(one: string, other: string): boolean {
   return one.toLowerCase() === other.toLowerCase();
-}
-
-/**
- * Why a repository the listing names could not stand beside the primary,
- * where the listing can tell: none where it cannot. Note that an App
- * installation is on one account and reaches only that account's
- * repositories, so one owned by another account than the primary's is on
- * another installation, which `repositorySetReach` refuses.
- */
-function extraRefusal(
-  row: GitHubRepository | undefined,
-  primary: GitHubRepository | undefined,
-  extras: number,
-): string | undefined {
-  if (extras >= AGENT_BOUNDS.MAX_ALSO_REPOSITORIES) return EXTRA_REFUSED.FULL;
-  if (row?.access === GITHUB_ACCESS.TOKEN) return EXTRA_REFUSED.TOKEN;
-  if (primary?.access === GITHUB_ACCESS.TOKEN) return EXTRA_REFUSED.PRIMARY_TOKEN;
-  if (row !== undefined && primary !== undefined && !sameName(row.owner, primary.owner)) {
-    return EXTRA_REFUSED.OTHER_INSTALLATION;
-  }
-  return undefined;
-}
-
-/**
- * The words a chip names the repositories picked with, in pick order: one
- * by its whole `owner/name`, as a chip setting one repository names it, and
- * several by their names, the first two and then the rest counted
- * ("vespin, meerkat +1").
- */
-function pickedRepositoriesWords(picked: readonly string[]): string {
-  if (picked.length === 1) return picked[0] ?? "";
-  const named = picked.slice(0, NAMED_PICKS).map((each) => repositoryParts(each).name);
-  const more = picked.length - named.length;
-  return more > 0 ? `${named.join(", ")} +${more}` : named.join(", ");
-}
-
-/** The repositories a chip picks several of beside its one, and the press that checks or unchecks one. */
-interface SeveralPicks {
-  /** The repositories picked after `value`, in pick order. */
-  readonly also: readonly string[];
-  /** Hears a press on a row, which checks it where it stands unchecked and unchecks it where it stands checked. */
-  readonly onToggle: (repository: string) => void;
-  /** Why the primary is held, its row drawn checked and disabled with these words, so it is neither unchecked nor replaced; none where it may be. */
-  readonly held?: string | undefined;
-  /** Whether `value` is the opener's own choice, standing in until the first pick replaces it, so no row is yet refused beside it. */
-  readonly standIn?: boolean | undefined;
 }
 
 /** Where a repository's menu stands, whatever it lists; closing hands focus back to its opener, as a native menu returns it to its trigger. */
@@ -416,7 +337,7 @@ function checkedAmong(rows: readonly MenuRow[], picked: readonly string[]): Read
   );
 }
 
-/** The owner's picture of the first of the repositories picked, at a chip's glyph size. */
+/** The owner's picture of the repository picked, at a chip's glyph size. */
 function firstPicture(repository: string, pictures: boolean): React.JSX.Element {
   return <RepositoryPicture repository={repository} pictures={pictures} size={AVATAR_SIZE.GLYPH} />;
 }
@@ -443,10 +364,6 @@ interface RepositoryMenuProps {
   align?: PopoverAlign | undefined;
   /** The repositories the menu leaves out, in any case, as an opener that adds one leaves out those it holds; none where left out. */
   omit?: readonly string[] | undefined;
-  /** Whether the menu offers only what the workspace's GitHub App reaches, leaving out what the developer's own token alone reaches, as a repository added to a running agent must be; every reached one where left out. */
-  appOnly?: boolean | undefined;
-  /** Several picks rather than one, `value` the primary and these after it, each row checked and a press leaving the menu open; one pick, which closes it, where left out. */
-  several?: SeveralPicks | undefined;
 }
 
 /**
@@ -459,13 +376,13 @@ interface RepositoryMenuProps {
 export interface RepositoryMenu {
   readonly open: boolean;
   readonly menuId: string;
-  /** The opener's words: the repository, the repositories picked, or the pick it waits on. */
+  /** The opener's words: the repository, or the pick it waits on. */
   readonly label: string;
-  /** What the opener's hint names: every repository picked, whole; none while none is. */
+  /** What the opener's hint names: the repository, whole; none while none is. */
   readonly hint: string | undefined;
   /** The owner's picture, or the repository's glyph while none is named. */
   readonly glyph: React.JSX.Element;
-  /** The repository's card, none while none is named, several are, or the menu stands open. */
+  /** The repository's card, none while none is named or the menu stands open. */
   readonly card: React.ReactNode;
   readonly press: (opener: HTMLElement) => void;
   readonly room: React.RefObject<HTMLDivElement | null>;
@@ -513,44 +430,14 @@ function useRepositoryListing(
     ...(chooser.scope === undefined ? undefined : { workspaceId: chooser.scope }),
   };
   const omitted = new Set((props.omit ?? []).map((each) => each.toLowerCase()));
-  const reached =
-    props.appOnly === true
-      ? listed?.repositories.filter((each) => each.access === GITHUB_ACCESS.APP)
-      : listed?.repositories;
-  // Note that an App-only menu offers no recent repository before the read says how each is reached.
-  const recent = props.appOnly === true && reached === undefined ? [] : chooser.recent;
-  const { several } = props;
-  const picked = value === null ? [] : [value, ...(several?.also ?? [])];
-  const isPicked = (name: string) => picked.some((each) => sameName(each, name));
-  const listing = (name: string) => reached?.find((each) => sameName(each.fullName, name));
-  const primary = several === undefined || value === null ? undefined : value;
-  // Note that a stand-in is replaced by the first pick, so nothing is refused beside it.
-  const judgedBeside = several?.standIn === true ? undefined : primary;
-  // Note that the primary is marked only beside another pick, since a lone pick is simply the task's.
-  const rows = repositoryRows(
-    recent,
-    reached,
-    chooser.pictures,
-    picked.length > 1 ? primary : undefined,
-  )
-    .filter((row) => !omitted.has(row.id.toLowerCase()))
-    .map((row) => {
-      // Once a primary is picked, a row the service would refuse beside it says why before the pick.
-      const why =
-        judgedBeside === undefined
-          ? undefined
-          : sameName(row.id, judgedBeside)
-            ? several?.held
-            : isPicked(row.id)
-              ? undefined
-              : extraRefusal(listing(row.id), listing(judgedBeside), picked.length - 1);
-      return why === undefined ? row : { ...row, disabled: why };
-    });
+  const rows = repositoryRows(chooser.recent, listed?.repositories, chooser.pictures).filter(
+    (row) => !omitted.has(row.id.toLowerCase()),
+  );
   // Note that no repository is a choice of its own where the opener lets one go, so it is not said as a pick still owed.
   const nothingReached = rows.length === 0 && listed !== undefined;
   const none = nothingReached || (onClear !== undefined && props.pending !== true);
   const label =
-    (value === null ? undefined : pickedRepositoriesWords(picked)) ??
+    value ??
     (none
       ? NO_REPOSITORY
       : chooser.reading === true || props.pending === true
@@ -600,7 +487,7 @@ function useRepositoryListing(
 
   return {
     label,
-    hint: value === null ? undefined : picked.join(", "),
+    hint: value ?? undefined,
     glyph:
       value === null ? (
         none ? (
@@ -613,13 +500,9 @@ function useRepositoryListing(
       ),
     menu: {
       rows,
-      value: several === undefined ? (value ?? undefined) : undefined,
-      checked: several === undefined ? undefined : checkedAmong(rows, picked),
+      value: value ?? undefined,
       note,
-      onPick: (repository) =>
-        several === undefined
-          ? choose(() => props.onChoose(repository))
-          : several.onToggle(repository),
+      onPick: (repository) => choose(() => props.onChoose(repository)),
       foot: [
         ...(onClear === undefined
           ? []
@@ -651,7 +534,7 @@ function useRepositoryListing(
 
 /** The repository's menu, read and placed as the chip's always was, for whatever opener draws it (`RepositoryMenu`). */
 export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
-  const { openRequest, onAsked, value, several } = props;
+  const { openRequest, onAsked, value } = props;
   const place = useMenuPlace();
   // Each ask from elsewhere, ⌘K's Change repository, opens the menu once, and is answered.
   const answered = useRef<number | undefined>(undefined);
@@ -665,14 +548,13 @@ export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
     place.close();
     pick();
   });
-  const many = (several?.also.length ?? 0) > 0;
   return {
     ...place,
     label: listing.label,
     hint: listing.hint,
     glyph: listing.glyph,
     card:
-      value === null || many || place.open ? undefined : (
+      value === null || place.open ? undefined : (
         <RepositoryCard repository={value} pictures={props.chooser.pictures} />
       ),
     menu: repositoryMenu(place, { ...listing.menu, align: props.align ?? POPOVER_ALIGN.END }),

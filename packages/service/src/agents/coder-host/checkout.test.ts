@@ -45,11 +45,9 @@ import {
   type AgentRepositoryRead,
   agentAuthorship,
   agentCheckoutPlan,
-  agentExtraReads,
   agentRepositoryRead,
   CheckoutRefused,
   COMMIT_BY,
-  cloneAgentExtras,
   cloneAgentRepository,
   finishCheckoutWith,
   repositoryCredentialOf,
@@ -531,54 +529,6 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         assert.equal(yield* authorOf(target.userId, agent), AGENT_AUTHOR.TOKEN);
         for (const run of sandbox.runs) {
           assert.equal(JSON.stringify(run).includes(GITHUB_FIXTURE_MEMBER.TOKEN), false);
-        }
-      }),
-  );
-
-  it.effect(
-    "an agent in several repositories clones each beside its own checkout, in a folder of its name unless the workspace holds one, at its branch or its default, and is minted one write token for them all, set at the firewall as one repository's is",
-    () =>
-      Effect.gen(function* () {
-        const web = { owner: RELAY.owner, name: "Web" } as const;
-        const named = { owner: RELAY.owner, name: "Repository" } as const;
-        const installation = { ...installationOf(21), repositories: [RELAY, web, named] };
-        const { agent, target } = yield* openAgent(installation, {
-          extraRepositories: [
-            { repository: `${web.owner}/${web.name}` },
-            { repository: `${named.owner}/${named.name}`, baseBranch: "next" },
-          ],
-        });
-        const github = githubReaching([installation], undefined, {}, developerReach(false));
-        const sandbox = sandboxDouble(() => undefined);
-
-        const standing = yield* Effect.gen(function* () {
-          const read = yield* checkOut(target, agent, sandbox);
-          yield* cloneAgentExtras(sandbox, yield* agentExtraReads(target, agent));
-          yield* finish(target, agent, sandbox, read);
-          return sandbox.policies.at(-1);
-        }).pipe(Effect.provide(github.layer));
-
-        assert.equal(sandbox.checkedOut, RELAY_FULL_NAME);
-        assert.deepEqual(sandbox.extraClones, [
-          { folder: "Web", branch: "main", url: "https://github.com/Acme/Web.git" },
-          {
-            folder: "Acme-Repository",
-            branch: "next",
-            url: "https://github.com/Acme/Repository.git",
-          },
-        ]);
-        assert.deepEqual(standing, APP_CREDENTIAL);
-        assert.deepEqual(
-          repositoryMints(github.sent).filter((mint) => mint.permissions.contents === "write"),
-          [
-            {
-              repositories: [RELAY.name, web.name, named.name],
-              permissions: { contents: "write", pull_requests: "write" },
-            },
-          ],
-        );
-        for (const run of sandbox.runs) {
-          assert.equal(carriesToken(JSON.stringify(run)), false);
         }
       }),
   );

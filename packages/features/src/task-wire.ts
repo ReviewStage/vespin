@@ -8,7 +8,6 @@ import {
   agentStatusSchema,
   agentSummarySchema,
   CHECK_SUMMARY,
-  extraRepositoryRefusalSchema,
   localAgentRefusalSchema,
   PULL_REQUEST_STATE,
   startBrief,
@@ -257,7 +256,6 @@ const taskAgentStartSchema = EffectSchema.Struct({
   attachments: agentStartRequestFields.attachments,
   disabledServers: agentStartRequestFields.disabledServers,
   runsOn: agentStartRequestFields.runsOn,
-  alsoRepositories: agentStartRequestFields.alsoRepositories,
   branch: agentStartRequestFields.branch,
   title: agentStartRequestFields.title,
   permissionMode: agentStartRequestFields.permissionMode,
@@ -1081,9 +1079,6 @@ const taskAgentRefusalSchema = EffectSchema.Struct({
   provider: EffectSchema.optionalKey(modelProviderSchema),
   /** Why the task's device would not take the agent, where that is why. */
   localAgentRefusal: EffectSchema.optionalKey(localAgentRefusalSchema),
-  /** Why the repositories named beside the agent's own were refused, where that is why, and the repository where one is. */
-  extraRepositoryRefusal: EffectSchema.optionalKey(extraRepositoryRefusalSchema),
-  refusedRepository: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type TaskAgentRefusal = typeof taskAgentRefusalSchema.Type;

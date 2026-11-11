@@ -353,8 +353,6 @@ export interface RunnerLaunch<A, E, R, EL, RL, ES = never, RS = never> {
   readonly userId: string;
   /** The agent the runner is launched for, whose place's record names it. */
   readonly agentId: string;
-  /** Where the repositories the agent works in beside its own are checked out (`extraCheckoutPaths`), which a sandbox's launch marks as it marks the agent's own checkout; none for an agent in one repository or none. */
-  readonly extraCheckouts?: readonly string[] | undefined;
   /** The place's lifecycle name, which the runner is recorded under. */
   readonly name: MachineName;
   /**
@@ -453,20 +451,14 @@ export interface AgentMachineService {
     files: readonly SandboxFile[],
   ) => Effect.Effect<void, SandboxError | LaunchRefused>;
   /**
-   * What the running place does not hold yet of the agent's repositories
-   * cloned: before a relaunch (not `shared`), its own checkout where the
-   * place holds none; then the repositories it works in beside its own,
-   * into their folders, on the token minted for each, the ones it holds
-   * left as they stand; where the runner already runs (`shared`), each
-   * folder is then shared with the runner's user as a launch shares it,
-   * which a launch to come does itself. Nothing on a machine that clones
-   * nothing for a launch, a device's, nor for an agent with no repository.
+   * The agent's own checkout cloned before a relaunch where the running
+   * place holds none. Nothing on a machine that clones nothing for a
+   * launch, a device's, nor for an agent with no repository.
    */
   readonly checkOutMissing: (
     place: MachinePlace,
     target: ConversationTarget,
     agent: Agent,
-    shared: boolean,
   ) => Effect.Effect<void, CheckoutRefused | SandboxError, CheckoutServices>;
   /** The runner launched in the place once `started` is done, recorded, and handed its first lines once `ready` is; ended again where they were not taken, or where `ready` failed. */
   readonly launchRunner: <A, E, R, EL, RL, ES = never, RS = never>(

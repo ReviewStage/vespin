@@ -222,7 +222,6 @@ import {
 } from "../agents/agent-lifecycle.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
 import {
-  ADDED_REPOSITORY_INPUT,
   AGENT_CALLER,
   AGENT_TOOL_REFUSAL,
   type AgentCall,
@@ -2033,16 +2032,6 @@ const UpdateAgentInputSchema = Schema.Struct({
         "name, such as its pull request having merged; only with archived true.",
     ),
   ),
-  addRepository: Schema.optionalKey(
-    describeWire(
-      ADDED_REPOSITORY_INPUT,
-      "A repository the agent works in beside its own from now on, added after the others and " +
-        "checked out in a folder of its own, which its token then reaches and it is told of; " +
-        "named alone, with no other change. Only for an agent the member started, in the cloud, " +
-        "in a repository of its own, its repositories all reached through one GitHub App " +
-        "installation. Nothing removes one.",
-    ),
-  ),
 });
 
 const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
@@ -2053,7 +2042,7 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     `and effort, and context window, from its next step, as ${MEMBER_MCP_TOOL.LIST_MODELS} ` +
     "lists them, pin or unpin it in the member's sidebar, replace the list of MCP servers " +
     "switched off for it, archive it or bring it back, the archive recorded as the " +
-    "member's own, or add a repository it works in beside its own, alone. Name at least one " +
+    "member's own. Name at least one " +
     "change, a model only with its effort, a contextWindow only with them, and a reason only " +
     "with archived true; an archive is checked first, and " +
     "the rest land together or not at all. One still working is stopped first, as the Stop " +

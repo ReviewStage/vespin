@@ -16,7 +16,6 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
-  extraRepositoryRefusalWords,
   localAgentRefusalWords,
   type RefusedCall,
   startFailureWords,
@@ -83,9 +82,6 @@ export type StartAnswer =
 function startRefusalWords(refused: RefusedCall): string {
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     return localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice);
-  }
-  if (refused.failure === AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED) {
-    return extraRepositoryRefusalWords(refused.extraRepositoryRefusal, refused.refusedRepository);
   }
   return startFailureWords(refused.failure);
 }

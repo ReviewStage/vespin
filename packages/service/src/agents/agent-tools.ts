@@ -49,12 +49,10 @@ import {
 } from "@repo/features/agent-runtime-models";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
-  ADDED_REPOSITORY_CHECKOUT,
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
   AGENT_MACHINE,
   AGENT_STATUS,
-  type AgentAlsoRepository,
   type AgentFailure,
   type AgentPullRequestAnswer,
   type AgentRunsOnRequest,
@@ -63,8 +61,6 @@ import {
   agentRunsOnRequestSchema,
   contextWindowSchema,
   disabledServersSchema,
-  EXTRA_REPOSITORY_REFUSAL,
-  type ExtraRepositoryRefusal,
   LOCAL_AGENT_REFUSAL,
   type LocalAgentRefusal,
   MAC_PRESENCE,
@@ -121,7 +117,6 @@ import { archivedAgent, changedAgent } from "./agent-change.js";
 import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
-import { addAgentRepository, addedRepositoryLine } from "./coder-host/agent-repository-add.js";
 import {
   forwardedImageRefusalWords,
   forwardedImages,
@@ -380,9 +375,7 @@ export const START_AGENT_REFUSAL = {
     "Not started: give a prompt as text of at most " +
     `${AGENT_BOUNDS.MAX_START_WORDS_CHARS} characters, or none to start on the description, a note ` +
     `bounded the same or none, a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} ` +
-    "characters or none, a branch as one git branch name or none, alsoRepositories as at most " +
-    `${AGENT_BOUNDS.MAX_ALSO_REPOSITORIES} repositories as owner/name, each with a branch or ` +
-    "none, or none, a model with its effort, " +
+    "characters or none, a branch as one git branch name or none, a model with its effort, " +
     "both or neither, a taskId or none, a repository as owner/name, null, or none, runsOn as " +
     `${IN_THE_CLOUD_WORDS}, a device of the member's by its name or its id, or none, and images as ` +
     `at most ${AGENT_BOUNDS.MAX_ATTACHMENTS} attachment ids or none.`,
@@ -426,9 +419,6 @@ export const START_AGENT_REFUSAL = {
   CREDENTIAL_MISSING: `Not started: no subscription or API key of its starter's pays for that model, and ${PRODUCT_NAME}'s key pays for no agent; its starter connects one in Settings › Agents, or start it on a model whose provider is connected.`,
   API_KEY_UNREADABLE:
     "Not started: the API key that would pay for it is saved but cannot be read here; its starter saves it again in Settings › Agents.",
-  ALSO_NO_REPOSITORY:
-    "Not started: the agent works in no repository of its own for alsoRepositories to stand " +
-    "beside; name its repository, or leave alsoRepositories out.",
   DEVICE_REMOVED: `Not started: the machine it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the machine again.`,
   NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a machine in Settings › Machines.`,
   NO_SOURCE:
@@ -492,61 +482,6 @@ const LOCAL_AGENT_REFUSAL_WORDS = {
   Exclude<LocalAgentRefusal, typeof LOCAL_AGENT_REFUSAL.NOT_OWNER>,
   string
 >;
-
-/** Why a repository beside an agent's own is refused, in the words a start and an added repository share: the agent on a device, and the repository named reached on the member's token or another installation. */
-const EXTRA_REPOSITORY_WHY = {
-  device: "an agent in several repositories runs only in the cloud.",
-  token: (named: string) =>
-    `${named} is reached only on the member's own GitHub token, and an agent's repositories are all reached through the GitHub App.`,
-  otherInstallation: (named: string) =>
-    `${named} is on another GitHub account's installation of the App than the agent's own repository, and one agent's repositories share one.`,
-} as const;
-
-/** Why a start naming repositories beside its agent's own refused it, in words the calling model can act on, naming the repository where one is why. A start is never refused for what only an added repository is refused for, which reads as the request refused. */
-function extraRepositoryWords(
-  refusal: ExtraRepositoryRefusal,
-  repository: string | undefined,
-): string {
-  const named = repository ?? "One of the repositories";
-  switch (refusal) {
-    case EXTRA_REPOSITORY_REFUSAL.NO_REPOSITORY:
-      return START_AGENT_REFUSAL.ALSO_NO_REPOSITORY;
-    case EXTRA_REPOSITORY_REFUSAL.DEVICE:
-      return `Not started: ${EXTRA_REPOSITORY_WHY.device} Start it with runsOn ${IN_THE_CLOUD_WORDS}, or leave alsoRepositories out.`;
-    case EXTRA_REPOSITORY_REFUSAL.TOKEN:
-      return `Not started: ${EXTRA_REPOSITORY_WHY.token(named)} Leave it out, or ask the member to give the workspace's GitHub App access to it.`;
-    case EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION:
-      return `Not started: ${EXTRA_REPOSITORY_WHY.otherInstallation(named)} Leave it out, or start a separate agent for it.`;
-    case EXTRA_REPOSITORY_REFUSAL.ALREADY:
-    case EXTRA_REPOSITORY_REFUSAL.FULL:
-    case EXTRA_REPOSITORY_REFUSAL.HEARD_ANOTHER_ACCOUNT:
-      return START_AGENT_REFUSAL.UNREADABLE;
-  }
-}
-
-/** Why a repository added to an agent was refused, in words the calling model can act on, naming the repository where one is why; the shared reasons in a start's words (`EXTRA_REPOSITORY_WHY`). */
-function addedRepositoryWords(
-  refusal: ExtraRepositoryRefusal,
-  repository: string | undefined,
-): string {
-  const named = repository ?? "That repository";
-  switch (refusal) {
-    case EXTRA_REPOSITORY_REFUSAL.NO_REPOSITORY:
-      return `${ADD_REPOSITORY_LEAD}: that agent works in no repository of its own for another to stand beside. Start a new agent in the repository instead.`;
-    case EXTRA_REPOSITORY_REFUSAL.DEVICE:
-      return `${ADD_REPOSITORY_LEAD}: ${EXTRA_REPOSITORY_WHY.device} That agent runs on a device; start an agent in the cloud for it instead.`;
-    case EXTRA_REPOSITORY_REFUSAL.TOKEN:
-      return `${ADD_REPOSITORY_LEAD}: ${EXTRA_REPOSITORY_WHY.token(named)} Ask the member to give the workspace's GitHub App access to it.`;
-    case EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION:
-      return `${ADD_REPOSITORY_LEAD}: ${EXTRA_REPOSITORY_WHY.otherInstallation(named)} Start a separate agent for it.`;
-    case EXTRA_REPOSITORY_REFUSAL.ALREADY:
-      return `${ADD_REPOSITORY_LEAD}: ${named} is already among that agent's repositories, so nothing changed.`;
-    case EXTRA_REPOSITORY_REFUSAL.FULL:
-      return `${ADD_REPOSITORY_LEAD}: that agent already works in ${AGENT_BOUNDS.MAX_ALSO_REPOSITORIES} repositories beside its own, the most it may. Start a separate agent for it.`;
-    case EXTRA_REPOSITORY_REFUSAL.HEARD_ANOTHER_ACCOUNT:
-      return `${ADD_REPOSITORY_LEAD}: your conversation holds words from another account than the member's, so you may not widen what any agent's token reaches. Ask the developer to add it from the agent's menu.`;
-  }
-}
 
 /** Why a start on another member's device refused it, naming the device and its owner where the refusal did. */
 function notOwnerWords(device: RefusedDevice | undefined): string {
@@ -817,29 +752,6 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
         "The branch of the task's repository to clone the agent's checkout at and cut its own " +
           "branch from, such as the head branch of a pull request it builds on; it must already be " +
           "on GitHub. Leave it out for the repository's default branch.",
-      ),
-    ),
-    alsoRepositories: Schema.optionalKey(
-      describeWire(
-        Schema.Array(
-          Schema.Struct({
-            repository: describeWire(
-              githubRepositoryFullNameSchema,
-              "The repository, as owner/name.",
-            ),
-            branch: Schema.optionalKey(
-              describeWire(
-                START_BRANCH,
-                "The branch to clone its checkout at, which must already be on GitHub; leave it " +
-                  "out for its default branch.",
-              ),
-            ),
-          }),
-        ).check(Schema.isMinLength(1), Schema.isMaxLength(AGENT_BOUNDS.MAX_ALSO_REPOSITORIES)),
-        "Other repositories the agent works in beside its own, each checked out in a folder of " +
-          "its own beside its checkout, which its instructions name: each reached through the " +
-          "GitHub App installation its own repository is on, and the agent in the cloud. Leave it " +
-          "out for one repository.",
       ),
     ),
     model: Schema.optionalKey(
@@ -1201,11 +1113,8 @@ export const UPDATE_AGENT_REFUSAL = {
     `Not changed: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered and at least one ` +
     `change: a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} characters (empty clears ` +
     "it), a model with its effort, both or neither, a contextWindow only with them, pinned, or " +
-    "disabledServers as connection names, or archived, with a reason only where it is true; or " +
-    "addRepository alone, as a repository as owner/name with a branch or none.",
+    "disabledServers as connection names, or archived, with a reason only where it is true.",
   UNAVAILABLE: "Not changed: the models could not be read just now. The call may be made again.",
-  UNAVAILABLE_ADD:
-    "Not added: the service could not be reached just now. The call may be made again.",
   SELF: "Not archived: that id is your own, and an agent does not archive itself; say you are done, and the developer archives you.",
   STILL_WORKING:
     "Not archived: that agent is still working. Wait until its turn ends and call again, or stop " +
@@ -1224,25 +1133,6 @@ export const UPDATE_AGENT_REFUSAL = {
 /** The lead a refused choice of a change is said under. */
 const UPDATE_CHOICE_LEAD = "Not changed";
 
-/** The lead a refused repository added to an agent is said under. */
-const ADD_REPOSITORY_LEAD = "Not added";
-
-/** An added repository's refusal's sentence for each hosted refusal its GitHub reads may answer, as a start says it (`START_REFUSAL_WORDS`); any other is the service down. */
-const ADD_REPOSITORY_REFUSAL_WORDS: ReadonlyMap<string, string> = new Map([
-  [
-    HOSTED_API_ERROR.BRANCH_NOT_FOUND,
-    `${ADD_REPOSITORY_LEAD}: GitHub has no such branch in that repository. Name a branch it holds, or none for its default branch.`,
-  ],
-  [
-    HOSTED_API_ERROR.GITHUB_UNANSWERED,
-    `${ADD_REPOSITORY_LEAD}: GitHub could not be asked just now. The call may be made again.`,
-  ],
-  [
-    HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
-    `${ADD_REPOSITORY_LEAD}: that repository is not reachable through the GitHub App installation connected to the agent's workspace. Ask the member to give the App access to it.`,
-  ],
-]);
-
 /** Whether a change names anything to change, and a model only with its effort and a window only with them. */
 function updateNamesAChange(update: {
   readonly title?: string;
@@ -1253,36 +1143,20 @@ function updateNamesAChange(update: {
   readonly disabledServers?: readonly string[];
   readonly archived?: boolean;
   readonly reason?: string;
-  readonly addRepository?: AgentAlsoRepository;
 }): boolean {
   const { title, model, effort, contextWindow, pinned, disabledServers, archived, reason } = update;
   const changes = [title, model, pinned, disabledServers, archived];
-  // Note that a repository is added alone, since its GitHub reads and its checkout land outside any transaction.
-  if (update.addRepository !== undefined) return changes.every((field) => field === undefined);
   if ((model === undefined) !== (effort === undefined)) return false;
   if (contextWindow !== undefined && model === undefined) return false;
   if (reason !== undefined && archived !== true) return false;
   return changes.some((field) => field !== undefined);
 }
 
-/** A repository added to an agent: `owner/name`, and the branch its checkout is cloned at, none for its default branch. */
-export const ADDED_REPOSITORY_INPUT = Schema.Struct({
-  repository: describeWire(githubRepositoryFullNameSchema, "The repository, as owner/name."),
-  branch: Schema.optionalKey(
-    describeWire(
-      START_BRANCH,
-      "The branch to clone its checkout at, which must already be on GitHub; leave it out for " +
-        "its default branch.",
-    ),
-  ),
-});
-
 /**
  * A change names the agent and at least one of: a title, the model with its
  * effort and, at most, its context window, which the catalog then checks,
  * whether the member pins it, and the MCP servers switched off for it, the
- * whole list; or, alone, a repository added beside the ones it works in.
- * Each is the change a member makes from the agent's own menu, model chip,
+ * whole list. Each is the change a member makes from the agent's own menu, model chip,
  * or composer.
  */
 const UPDATE_AGENT_INPUT = Schema.Struct({
@@ -1345,17 +1219,6 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
         "beside your name, such as its pull request having merged; only with archived true.",
     ),
   ),
-  addRepository: Schema.optionalKey(
-    describeWire(
-      ADDED_REPOSITORY_INPUT,
-      "A repository the agent works in beside its own from now on, added after the others and " +
-        "checked out in a folder of its own, which its token then reaches and it is told of; " +
-        "named alone, with no other change. Only for an agent the developer you work for started, " +
-        "in the cloud, in a repository of its own, its repositories all reached through one " +
-        "GitHub App installation. Never once your conversation holds words from another " +
-        "account. Nothing removes one.",
-    ),
-  ),
 }).check(Schema.makeFilter(updateNamesAChange));
 
 const readUpdateAsked = Schema.decodeUnknownResult(UPDATE_AGENT_INPUT);
@@ -1368,7 +1231,7 @@ export const UPDATE_AGENT_TOOL = {
     "title), move it to another model and effort, and context window, from its next step, as " +
     `${AGENT_TOOL.LIST_MODELS} lists them, pin or unpin it in that ` +
     "developer's sidebar, replace the list of MCP servers switched off for it, archive it " +
-    "or bring it back, or add a repository it works in beside its own, alone. Name at least " +
+    "or bring it back. Name at least " +
     "one change; an archive is checked first, and the rest land together or not at all. Archive an idle helper agent whose work is done, such as one " +
     "whose pull request merged, or one the developer asked you to clean up, with a short reason " +
     "its archived banner shows beside your name; one still working is refused until its turn " +
@@ -1666,9 +1529,6 @@ function startRefusalWords(refusal: HostedRefusal): string {
   }
   if (refusal.localAgentRefusal !== undefined) {
     return LOCAL_AGENT_REFUSAL_WORDS[refusal.localAgentRefusal];
-  }
-  if (refusal.extraRepositoryRefusal !== undefined) {
-    return extraRepositoryWords(refusal.extraRepositoryRefusal, refusal.refusedRepository);
   }
   return withReset(
     START_REFUSAL_WORDS.get(refusal.error) ?? START_AGENT_REFUSAL.UNAVAILABLE,
@@ -2422,7 +2282,6 @@ export function runStartAgent(
         attachments: images.success,
         title: asked.success.title,
         branch: asked.success.branch,
-        alsoRepositories: asked.success.alsoRepositories,
         from,
         runsOn: runsOn.success,
         summaryModel: call.summaryModel,
@@ -2892,9 +2751,8 @@ export function runUpdateAgent(
     return Effect.succeed(agentToolRejected(UPDATE_AGENT_REFUSAL.UNREADABLE));
   }
   const { agentId, title, model, effort, contextWindow, pinned, disabledServers } = asked.success;
-  const { archived, reason, addRepository } = asked.success;
+  const { archived, reason } = asked.success;
   const { caller } = call;
-  if (addRepository !== undefined) return addedRepository(call, agentId, addRepository);
   if (archived === true && agentId === callerAgent(caller)?.id) {
     return Effect.succeed(agentToolRejected(UPDATE_AGENT_REFUSAL.SELF));
   }
@@ -2983,72 +2841,6 @@ export function runUpdateAgent(
           archived: agent.archivedAt !== null,
           ...(pinned === undefined ? undefined : { pinned }),
         },
-      };
-    }),
-  );
-}
-
-/** What an added repository's answer says where no place of the agent's ran to take it now. */
-const ADDED_AT_NEXT_TURN =
-  "It is checked out at that agent's next turn, whose instructions name it; the agent was told nothing now, so an idle one was not woken.";
-
-/** An added repository's refusal in the model's words, naming the agent's starter where only they may add one. */
-const addRefusalWords = (refusal: HostedRefusal, agent: Agent) =>
-  Effect.gen(function* () {
-    if (refusal.extraRepositoryRefusal !== undefined) {
-      return addedRepositoryWords(refusal.extraRepositoryRefusal, refusal.refusedRepository);
-    }
-    if (refusal.error === HOSTED_API_ERROR.NOT_PERMITTED) {
-      return `${ADD_REPOSITORY_LEAD}: only ${yield* agentStarterName(agent)} and their agents add a repository to that agent, since its token is minted for them.`;
-    }
-    return ADD_REPOSITORY_REFUSAL_WORDS.get(refusal.error) ?? UPDATE_AGENT_REFUSAL.UNAVAILABLE_ADD;
-  });
-
-/**
- * `update_agent`'s `addRepository`: a repository added to an agent of the
- * caller's workspace beside the ones it works in, as its ⋯ menu adds one
- * (`agent-repository-add.ts`), answered with where it is checked out, or
- * why not. An agent adding to itself reads the line it is told as this
- * answer, since the call already stands in its conversation.
- */
-function addedRepository(
-  call: AgentCall,
-  agentId: string,
-  asked: AgentAlsoRepository,
-): Effect.Effect<WireRecord, never, AgentToolServices> {
-  const { caller } = call;
-  const userId = callerUserId(caller);
-  return orStoreRefusal(
-    Effect.gen(function* () {
-      const found = yield* workspaceAgentOf(caller, agentId);
-      if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { agent, task } = found.value;
-      const calling = callerAgent(caller);
-      const added = yield* Effect.result(
-        addAgentRepository({ userId, agent: calling }, agent, asked, {
-          agentSessions: call.agentSessions,
-          writer: call.writer,
-          clientKey: call.clientKey,
-        }),
-      );
-      if (Result.isFailure(added)) {
-        return agentToolRejected(yield* addRefusalWords(added.failure, agent));
-      }
-      const { repository, path, checkout } = added.success;
-      const now = checkout === ADDED_REPOSITORY_CHECKOUT.NOW;
-      return {
-        status: ACTION_RESULT_STATUS.ACCEPTED,
-        agent: {
-          id: agent.id,
-          title: agent.title ?? agent.model,
-          task: task.task === null ? null : { ...task.task },
-          onYourTask: task.onYourTask,
-        },
-        added: { repository, path, checkout },
-        ...(now && calling?.id === agent.id
-          ? { told: addedRepositoryLine({ repository, path }) }
-          : undefined),
-        ...(now ? undefined : { note: ADDED_AT_NEXT_TURN }),
       };
     }),
   );

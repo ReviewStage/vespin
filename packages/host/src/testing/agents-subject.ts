@@ -577,11 +577,6 @@ function fakeService() {
         asked.push(`answerApproval:${agentId}:${approvalId}:${request.answer}`);
         return { approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[request.answer] } };
       }),
-    addRepository: (agentId, request) =>
-      Effect.map(changeGate, () => {
-        asked.push(`addRepository:${agentId}:${request.addRepository.repository}`);
-        return { agent: AGENT };
-      }),
     changeQueue: (agentId, change) =>
       Effect.andThen(
         Effect.suspend(() => queueGate),

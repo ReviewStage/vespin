@@ -89,7 +89,6 @@ import {
   NativeAgentSessions,
   type NativeSessions,
   RUNNER_ANSWER,
-  RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   routedSessions,
   runnerChoiceApplied,
@@ -189,7 +188,6 @@ function recording(sessionPrefix: string) {
         messages.push(message);
         return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
       }),
-    checkOut: () => Effect.succeed(RUNNER_CHECKOUT.NOT_LIVE),
     open: (message) =>
       Effect.sync(() => {
         calls.push(`open:${message.conversationId}`);

@@ -683,48 +683,6 @@ function buildWords(
   };
 }
 
-/** A repository an agent works in beside its own, as its instructions name it: `owner/name`, where it is checked out, and the branch its checkout is cloned at, null for its default branch. */
-export interface ExtraCheckout {
-  readonly repository: string;
-  readonly path: string;
-  readonly branch: string | null;
-}
-
-/**
- * What an agent that works in other repositories beside its own is told of
- * them, after its own checkout: each by name, where it stands, and its
- * branch, read as its own repository is, and for an agent that builds, how
- * it opens a pull request in each, naming the repository, which is tracked
- * as its own is; nothing for an agent in one repository, whose words are
- * then the text they always were, which the prompt cache depends on.
- */
-function extraCheckoutsWords(extras: readonly ExtraCheckout[], builds: boolean): string {
-  if (extras.length === 0) return "";
-  const listed = extras
-    .map(
-      (extra) =>
-        `- \`${extra.repository}\` at \`${extra.path}\`, ${extra.branch === null ? "on its default branch" : `on \`${extra.branch}\``}`,
-    )
-    .join("\n");
-  const reading =
-    "Read each one's `AGENTS.md` and `CLAUDE.md` before you change it, and run its own checks.";
-  const publishing = builds
-    ? ` Commit in each on a branch of your own cut from the branch it is checked out on, push it from that repository's folder, and open its pull request with \`${AGENT_TOOL.OPEN_PULL_REQUEST}\` naming that repository as \`repository\`; it merges into the branch the repository is checked out on unless you name another \`base\`. Its reviews, comments, and checks reach you as your own pull request's do, and the task waits on every pull request you open. Name each pull request in the others' descriptions and in your final message.`
-    : "";
-  return `
-
-You work in other repositories beside it too, each checked out whole in a folder of its own and reached by the same credential:
-${listed}
-
-${reading}${publishing}`;
-}
-
-/** What the step that opens a pull request adds for an agent that works in other repositories beside its own: to name the repository on every call; nothing for an agent in one, whose step is then the text it always was. */
-function extrasPublishWords(extras: readonly ExtraCheckout[], repository: string): string {
-  if (extras.length === 0) return "";
-  return ` You work in several repositories, so every \`${AGENT_TOOL.OPEN_PULL_REQUEST}\` call names the one it opens in as \`repository\`, \`${repository}\` for this checkout's.`;
-}
-
 /** Where an agent with a repository works: its checkout, its branch, its commits, its pull request, and its checks. */
 function repositoryWords(
   tools: ToolWords,
@@ -734,7 +692,6 @@ function repositoryWords(
   startBranch: string | null,
   machine: CoderMachine,
   standing: AgentStanding,
-  extras: readonly ExtraCheckout[],
 ): WorkWords {
   const branch = branchWords(startBranch);
   return {
@@ -742,7 +699,7 @@ function repositoryWords(
 
 ## The checkout
 
-The repository is checked out at \`${machine.checkoutPath}\`, ${branch.checkout}. Work there. ${tools.checkout} ${checkoutReachWords(machine, standing)}${extraCheckoutsWords(extras, true)}
+The repository is checked out at \`${machine.checkoutPath}\`, ${branch.checkout}. Work there. ${tools.checkout} ${checkoutReachWords(machine, standing)}
 
 ## How to work
 
@@ -752,7 +709,7 @@ The repository is checked out at \`${machine.checkoutPath}\`, ${branch.checkout}
 4. ${build.authorship}
 5. ${build.change}
 6. ${build.check}
-7. ${build.publish}${extrasPublishWords(extras, repository)} Once it is ready for the developer to review, post it in a thread, as the threads section below says.
+7. ${build.publish} Once it is ready for the developer to review, post it in a thread, as the threads section below says.
    ${build.writeUp}
 8. ${build.ci}
 
@@ -897,7 +854,7 @@ End every turn by calling \`${AGENT_TOOL.END_TURN}\` last, and write nothing aft
  * a task's link or `read_task` hands it or what it names
  * (`PLANLESS_TASK_PLACE_WORDS`, `namingWords`). The repository and the
  * machine still word what is no tool's: the checkout, its CI, the commits,
- * the other checkouts, and a local agent's folders.
+ * and a local agent's folders.
  */
 export function coderInstructions(
   repository: string | null,
@@ -909,7 +866,6 @@ export function coderInstructions(
   memberToken = false,
   harness: CoderHarness = CODER_HARNESS.CLAUDE_CODE,
   machine: CoderMachine = SANDBOX_MACHINE,
-  extras: readonly ExtraCheckout[] = [],
   workspace: string = EXAMPLE_WORKSPACE,
 ): string {
   const words = BRIEF_WORDS[brief];
@@ -926,7 +882,7 @@ export function coderInstructions(
   const agent =
     repository === null || build === null
       ? sandboxWords(tools, words, brief, planTask, machine, standing)
-      : repositoryWords(tools, repository, words, build, startBranch, machine, standing, extras);
+      : repositoryWords(tools, repository, words, build, startBranch, machine, standing);
   const place = { ...task, ...agent };
   const editing = describes
     ? editDescriptionTold(
@@ -990,8 +946,6 @@ export interface AgentInstructionsContext {
   /** Where it stands against the gates of our tools (`../tool-catalog/gates.ts`), which decide the tools' words it is told. */
   readonly standing: AgentStanding;
   readonly harness: CoderHarness;
-  /** The repositories it works in beside its own, where each is checked out; none for an agent in one repository or none. */
-  readonly extraRepositories?: readonly ExtraCheckout[] | undefined;
   /** Where the agent's machine keeps its checkout and the files the service reads back; where every sandbox keeps them, where unsaid. */
   readonly place?:
     | {
@@ -1032,7 +986,6 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       checkoutPath: context.place?.checkoutPath ?? SANDBOX_MACHINE.checkoutPath,
       sharedFiles: context.place?.sharedFiles ?? SANDBOX_MACHINE.sharedFiles,
     },
-    context.extraRepositories,
     context.workspace,
   );
 }

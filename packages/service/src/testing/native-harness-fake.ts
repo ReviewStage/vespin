@@ -21,9 +21,7 @@ import {
   type NativeAgentSessionsService,
   type NativeSessions,
   RUNNER_ANSWER,
-  RUNNER_CHECKOUT,
   RUNNER_CHOICE,
-  type RunnerCheckout,
   TURN_HANDOVER,
 } from "../agents/coder-host/runtime-sessions.js";
 import {
@@ -89,10 +87,9 @@ export function harnessFor(account: string): string {
   return `harness for ${account}`;
 }
 
-/** The native harnesses, every one answered by the script acting for the account each is asked for, as above, an added repository's checkout answered as `checkout` says, not live unless named. */
+/** The native harnesses, every one answered by the script acting for the account each is asked for, as above. */
 export function scriptedHarness(
   script: (account: string) => ScriptedSessions,
-  checkout: RunnerCheckout = RUNNER_CHECKOUT.NOT_LIVE,
 ): NativeAgentSessionsService {
   // Note that a script with no boot of its own takes a first launch's first message by its open (`openedOnBoot`),
   // whichever of the harness's sessions the boot and the queue's hand-off each reached.
@@ -132,7 +129,6 @@ export function scriptedHarness(
           ...scripted,
           retry: (sessionId, message) => scripted.send(sessionId, message),
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
-          checkOut: () => Effect.succeed(checkout),
           halt: () => Effect.succeed(true),
           deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
           warm: () => Effect.void,

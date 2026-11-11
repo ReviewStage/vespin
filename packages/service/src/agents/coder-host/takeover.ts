@@ -24,7 +24,6 @@ import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   AGENT_MACHINE,
-  type AgentAlsoRepository,
   type AgentAttachment,
   type AgentMachineKind,
   type AgentPullRequest,
@@ -133,7 +132,6 @@ export type TakeoverAsk = StartWhere & {
   readonly serverWords?: string | undefined;
   readonly title?: string | undefined;
   readonly startedBy?: Agent | undefined;
-  readonly alsoRepositories?: readonly AgentAlsoRepository[] | undefined;
   readonly summaryModel?: SummaryModelOf | undefined;
   readonly runsOn?: AgentRunsOnRequest | undefined;
 };
@@ -172,8 +170,6 @@ export interface TakeoverRules {
   readonly stopsSource: boolean;
   /** The branch the source was started on, which the new agent is cloned at where GitHub still holds it and the ask names none. */
   readonly branch: string | null;
-  /** Whether the new agent works in the repositories its source worked in beside its own: one from another agent whose ask names none. */
-  readonly carriesExtras: boolean;
   /** The Start as it is counted. */
   readonly startKind: ServerAgentStartKind;
   /** What the first line says it is where it names a source; none for a fresh Start's, which says its brief. */
@@ -304,7 +300,6 @@ export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): Ta
       title: ask.title,
       stopsSource: false,
       branch: null,
-      carriesExtras: false,
       startKind: START_KIND_OF[TAKEOVER.FRESH],
       startLine: undefined,
       mentionWords: (handed) => {
@@ -329,7 +324,6 @@ export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): Ta
     title: ask.title ?? (continued ? continuedTitle(source.title) : undefined),
     stopsSource: continued,
     branch: source.startBranch,
-    carriesExtras: ask.alsoRepositories === undefined,
     startKind: START_KIND_OF[kind],
     startLine: {
       brief: continued ? START_LINE_BRIEF.CONTINUE : START_LINE_BRIEF.FORK,
@@ -771,38 +765,13 @@ function carryingTranscript(from: StartFrom, carried: CarriedSession): StartFrom
 }
 
 /**
- * The repositories the source of a start from another agent works in beside
- * its own (`readAgentRepositories`), each at the branch its checkout was
- * cloned at, and with no pull request, which stays the source's; none where
- * it works in one, or where the new agent works in no repository of its own
- * for them to stand beside. One that is the new agent's own is left out.
- */
-const carriedExtrasOf = Effect.fnUntraced(function* (
-  userId: string,
-  source: Agent,
-  own: string | null,
-): Effect.fn.Return<readonly AgentAlsoRepository[] | undefined, HostedRefusal, DatabaseServices> {
-  if (own === null) return undefined;
-  const [, ...extras] = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, source.id));
-  const carried = extras
-    .filter((each) => each.repository.toLowerCase() !== own.toLowerCase())
-    .map((each) =>
-      each.baseBranch === null
-        ? { repository: each.repository }
-        : { repository: each.repository, branch: each.baseBranch },
-    );
-  return carried.length === 0 ? undefined : carried;
-});
-
-/**
  * A Start's accepted choice and its landing, with what it inherits fitted
  * to them: a fresh Start's landing does not wait on its choice, so the two
  * are read together; one from another agent is first held to its source's
  * plan's policy where it stops that source, then fits that agent's replay to the
  * choice's window, its transcript carried whole in place of its replayed
  * steps where the service keeps it on the harness `runtimeOf` decides, so
- * its landing waits on it, and once landed carries the repositories its
- * source worked in beside the landing's own where the ask names none.
+ * its landing waits on it.
  */
 export const landedInheriting = <
   A extends AcceptedRead,
@@ -822,11 +791,7 @@ export const landedInheriting = <
     noteFiles: NoteFiles | undefined,
   ) => Effect.Effect<L, E2, R2>,
 ): Effect.Effect<
-  {
-    readonly read: A;
-    readonly landing: L;
-    readonly carried: readonly AgentAlsoRepository[] | undefined;
-  },
+  { readonly read: A; readonly landing: L },
   E1 | E2 | HostedRefusal,
   R1 | R2 | DatabaseServices | ModelCatalog
 > => {
@@ -835,7 +800,6 @@ export const landedInheriting = <
     return Effect.map(bothInOrder(accepted, land(undefined, undefined)), ([read, landing]) => ({
       read,
       landing,
-      carried: undefined,
     }));
   }
   return Effect.gen(function* () {
@@ -852,10 +816,7 @@ export const landedInheriting = <
     );
     // The note's files go after the source's in each group the harness is handed, so the marker counts them by group.
     const landing = yield* land(fitter, noteFilesOf(ask.attachments ?? []));
-    const carried = rules.carriesExtras
-      ? yield* carriedExtrasOf(userId, from.source, landing.repository)
-      : undefined;
-    return { read, landing, carried };
+    return { read, landing };
   });
 };
 
