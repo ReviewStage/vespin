@@ -401,6 +401,8 @@ const AGENT_TOOLS = [
   "run_automation",
   "save_memory",
   "search_memory",
+  "list_memories",
+  "forget_memory",
   "schedule_wakeup",
   "end_turn",
 ] as const;
@@ -726,6 +728,8 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           ...withheld,
           "save_memory",
           "search_memory",
+          "list_memories",
+          "forget_memory",
           "edit_description",
           "look_at_picture",
           "end_turn",

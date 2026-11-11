@@ -37,7 +37,7 @@ import {
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppWorkspaceIntegrations, NO_KEYS_HELD } from "@repo/host/app-state";
-import type { Experiment } from "@repo/settings";
+import { EXPERIMENT, type Experiment } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { PROFILE } from "@repo/ui";
 import { createMemoryHistory, useRouter } from "@tanstack/react-router";
@@ -177,15 +177,31 @@ function onLedger(agent: AgentSummary): ListedAgent {
 
 /** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents. */
 function tasksView(): TasksView {
-  const listed: TasksView = agentListRefused
-    ? { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.FAILED }
-    : {
+  const read: TasksView = remembering
+    ? {
         ...IDLE_TASKS_VIEW,
+        workspaces: [
+          {
+            ...WORKSPACE,
+            experiments: [
+              { experiment: EXPERIMENT.MEMORY, on: true, changedBy: null, changedAt: 1 },
+            ],
+          },
+        ],
+      }
+    : IDLE_TASKS_VIEW;
+  const listed: TasksView = agentListRefused
+    ? { ...read, listStatus: TASKS_READ.FAILED }
+    : {
+        ...read,
         listStatus: TASKS_READ.READY,
         taskAgents: workspaceAgents,
       };
   return workspacesRefused ? { ...listed, workspacesStatus: TASKS_READ.FAILED } : listed;
 }
+
+/** Whether the workspace stands listed with Memory on, as its admin turned it on. */
+let remembering = false;
 
 let root: Root | undefined;
 /** The service's automations, as a read of the list answers them and a change changes them. */
@@ -355,6 +371,7 @@ beforeEach(() => {
   copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   feedbackAbout = [];
+  remembering = false;
   standing = [DIGEST, SWEEP, FAILING];
   listRefusals = 0;
   listHeld = false;
@@ -2047,6 +2064,80 @@ test("a schedule repeated weekly is saved on Monday at nine, as its day and time
     cron: "0 9 * * 1",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
+});
+
+/** Lists the workspace with Memory on, as its admin turned it on. */
+function memoryOn(): void {
+  remembering = true;
+  deliverTasks(tasksView());
+}
+
+/** The button of the suggestion named under the list, none where it is not suggested. */
+function suggestion(page: HTMLElement, name: string): HTMLButtonElement | undefined {
+  return [...page.querySelectorAll<HTMLButtonElement>("[aria-label='Suggested'] button")].find(
+    (each) => each.textContent?.startsWith(name),
+  );
+}
+
+test("Memory digest is suggested under the list, and under an empty one, only while the workspace has Memory on", async () => {
+  const off = mount();
+  await settle();
+  assert.equal(suggestion(off, "Memory digest"), undefined);
+  act(() => root?.unmount());
+  document.body.innerHTML = "";
+
+  memoryOn();
+  const full = mount();
+  await settle();
+  assert.equal(automationRows(full).length, 3);
+  assert.ok(suggestion(full, "Memory digest"));
+  act(() => root?.unmount());
+  document.body.innerHTML = "";
+
+  standing = [];
+  const empty = mount();
+  await settle();
+  assert.match(empty.textContent ?? "", /No automations yet\./u);
+  assert.ok(suggestion(empty, "Memory digest"));
+});
+
+test("a new automation started from Memory digest is made every Monday at nine in the member's zone, in no repository, archiving its finished runs", async () => {
+  memoryOn();
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
+  await settle();
+
+  act(() => suggestion(page, "Memory digest")?.click());
+  await settle();
+  assert.equal(
+    page.querySelector<HTMLInputElement>("input[aria-label='Automation name']")?.value,
+    "Memory digest",
+  );
+  act(() => button("Create automation").click());
+  await settle();
+
+  const made = creates[0];
+  assert.ok(made, "the automation is made");
+  assert.deepEqual(
+    {
+      name: made.name,
+      trigger: made.trigger,
+      repositories: made.repositories,
+      archiveSuccessful: made.archiveSuccessful,
+      target: made.target,
+    },
+    {
+      name: "Memory digest",
+      trigger: {
+        kind: AUTOMATION_TRIGGER.SCHEDULE,
+        cron: "0 9 * * 1",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      repositories: [],
+      archiveSuccessful: true,
+      target: { kind: AUTOMATION_TARGET.NEW_AGENT },
+    },
+  );
+  assert.match(made.action.prompt, /forget_memory/u);
 });
 
 /** The Nightly sweep's page, standing on a schedule of Wednesdays at 07:30 Tokyo time. */

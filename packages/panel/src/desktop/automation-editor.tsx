@@ -14,6 +14,7 @@ import {
   filterAdmitted,
   filterValuesOf,
   type GitHubTriggerSettings,
+  presetDraft,
   repositoryHeld,
   SCHEDULE_KIND,
   type ScheduleDraft,
@@ -25,6 +26,7 @@ import {
   withRepository,
 } from "@repo/features/automation-draft-model";
 import { automationTriggerText, parseAutomationClock } from "@repo/features/automation-list-model";
+import { type AutomationPresetName, automationPreset } from "@repo/features/automation-presets";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_CALL_FAILURE,
@@ -2651,7 +2653,8 @@ const EDITOR_SCREENS: NarrowColumns = {
 
 /**
  * One automation's page, or a new one's where none is given. A new one,
- * once made, is handed to `onCreated`, which stands its own page where
+ * opened from a suggestion on the list, starts filled in from its preset;
+ * once made, it is handed to `onCreated`, which stands its own page where
  * this one stood. A deleted one is handed to `onDeleted`, which goes back
  * to the list.
  *
@@ -2665,6 +2668,7 @@ const EDITOR_SCREENS: NarrowColumns = {
  */
 export function AutomationEditor({
   automation,
+  preset,
   workspace,
   offersOwner,
   repositories,
@@ -2682,6 +2686,8 @@ export function AutomationEditor({
   slackBot,
 }: {
   automation: AutomationSummary | undefined;
+  /** The preset a new automation starts filled in from, as the list's suggestion it was opened from names it; none for a blank one. */
+  preset?: AutomationPresetName | undefined;
   workspace: Workspace | undefined;
   /** Whether the workspace is shared, so an automation in it may be the workspace's rather than its maker's. */
   offersOwner: boolean;
@@ -2718,12 +2724,16 @@ export function AutomationEditor({
     timezone: readerZone(),
     owner: AUTOMATION_SCOPE.PERSONAL,
   }));
-  // A new automation starts in the repository the workspace's plans were about lately, as a new plan does.
-  const [start] = useState(() =>
-    automation !== undefined
-      ? automationDraft(automation, defaults)
-      : { ...automationDraft(undefined, defaults), repository: repositories.recent[0] ?? null },
-  );
+  // A new automation starts in the repository the workspace's plans were about lately, as a new plan does,
+  // filled in from the preset of the suggestion it was opened from.
+  const [start] = useState(() => {
+    if (automation !== undefined) return automationDraft(automation, defaults);
+    const blank = {
+      ...automationDraft(undefined, defaults),
+      repository: repositories.recent[0] ?? null,
+    };
+    return preset === undefined ? blank : presetDraft(blank, automationPreset(preset));
+  });
   const [draft, setDraft] = useState(start);
   const [shownProblems, setShownProblems] = useState(false);
   // Note that Save and Run now each hold their own stage, so one's refusal neither hides nor lets go of the other's.

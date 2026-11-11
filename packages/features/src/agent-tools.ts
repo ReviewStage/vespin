@@ -46,6 +46,9 @@ export const AGENT_TOOL = {
   // The workspace's shared memory, which a coding agent keeps and searches.
   SAVE_MEMORY: "save_memory",
   SEARCH_MEMORY: "search_memory",
+  // A coding agent's listing of the memories kept since a time, and its forgetting of one a member asked it to.
+  LIST_MEMORIES: "list_memories",
+  FORGET_MEMORY: "forget_memory",
   // The public reads, every role's: the retired runtime's provider-run search on the agent's own model call, and the page read.
   WEB_SEARCH: "web_search",
   READ_WEB_PAGE: "read_web_page",

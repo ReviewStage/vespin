@@ -8,6 +8,7 @@ import { createTask } from "@repo/database/models/task-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import type { StoredAutomationOrigin } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
+import { memory } from "@repo/database/schemas/memory";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
@@ -26,10 +27,10 @@ import {
 import { recordingSessions } from "../testing/recording-sessions.js";
 import { AGENT_CALLER, type AgentCall } from "./agent-tools.js";
 import { MEMORY_PROVENANCE_REFUSAL } from "./memory-provenance.js";
-import { runAgentRemember } from "./memory-tools.js";
+import { runAgentForget, runAgentRemember } from "./memory-tools.js";
 
 /**
- * memory-provenance.test.ts -- a coding agent's `save_memory` refused on a turn whose words are no member's.
+ * memory-provenance.test.ts -- a coding agent's `save_memory` refused on a turn whose words are no member's, and its `forget_memory` not.
  *
  * Through `runAgentRemember`, over a real dialect, with the turn under way
  * written as the relay writes it: a turn an automation's run opened keeps
@@ -37,7 +38,8 @@ import { runAgentRemember } from "./memory-tools.js";
  * included, whose first line its relay wrote with no sender, nor a
  * turn whose journal already holds a web read, the retired runtime's or Claude Code's; a
  * turn a member's own line opened, which read nothing of the web, keeps the
- * memory, as from the agent and that line; and a turn that settled refuses nothing. Synthetic accounts,
+ * memory, as from the agent and that line; a turn that settled refuses nothing; and a forget is
+ * refused nothing on a turn an automation opened, as the Memory digest's runs forget. Synthetic accounts,
  * workspaces, and words throughout.
  */
 
@@ -136,18 +138,20 @@ const writeTurn = (
     return line.id;
   });
 
-/** A `remember` from the agent, as its tool door calls it. */
-const remember = (agent: Agent) => {
+/** A memory call from the agent, as its tool door hands it. */
+function agentCall(agent: Agent): AgentCall {
   const { sessions } = recordingSessions();
-  const call: AgentCall = {
+  return {
     caller: { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false },
     agentSessions: sessions,
     agentSessionsAs: () => sessions,
     writer: Effect.die(new Error("a memory call writes no line")),
     clientKey: randomUUID(),
   };
-  return runAgentRemember(call, { text: FACT });
-};
+}
+
+/** A `remember` from the agent, as its tool door calls it. */
+const remember = (agent: Agent) => runAgentRemember(agentCall(agent), { text: FACT });
 
 it.layer(getTestDB())("a remember's provenance", (it) => {
   it.effect("a turn an automation's run opened keeps nothing", () =>
@@ -228,6 +232,30 @@ it.layer(getTestDB())("a remember's provenance", (it) => {
       );
 
       assert.equal((yield* remember(agent)).outcome, MEMORY_OUTCOME.KEPT);
+    }),
+  );
+
+  it.effect("a turn an automation's run opened still forgets a memory its starter may forget", () =>
+    Effect.gen(function* () {
+      const { agent, workspaceId } = yield* openAgent();
+      const db = yield* Database;
+      const [kept] = yield* db
+        .insert(memory)
+        .values({
+          organizationId: workspaceId,
+          userId: agent.userId,
+          text: FACT,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning({ id: memory.id });
+      assert.ok(kept !== undefined);
+      yield* writeTurn(agent, { sender: MESSAGE_SENDER.AUTOMATION, name: "Memory digest" }, []);
+
+      const answer = yield* runAgentForget(agentCall(agent), { memoryId: kept.id });
+
+      assert.equal(answer.status, ACTION_RESULT_STATUS.ACCEPTED);
+      assert.deepEqual(yield* listMemories(workspaceId), []);
     }),
   );
 });
