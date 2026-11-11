@@ -1,0 +1,39 @@
+# spotlight.yaml -- the account's tasks found in Spotlight: a launch indexes its workspace's tasks and threads, a search from the Home Screen finds a task by its name with its status and workspace under it, and tapping the result opens the task's Overview in the app.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+# Spotlight's own words are the system's, not the app's, so each wait on them
+# is optional; the Overview the tap opens is the app's, and is what the flow
+# checks. Handoff has no part a simulator shows, so it waits for a device.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose workspace holds the account's
+# "Weekly digest email" (`@repo/host/fixture-inbox`); the app indexes it once
+# the lists are read (`src/system-activity/`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+- pressKey: Home
+- waitForAnimationToEnd
+# A swipe down from the Home Screen's middle opens Spotlight's search.
+- swipe:
+    start: "50%,40%"
+    end: "50%,70%"
+- inputText: "Weekly digest"
+- extendedWaitUntil:
+    visible: ".*Weekly digest email.*"
+    timeout: 15000
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: spotlight-results
+# Note that the result is tapped by its title and anything Spotlight reads
+# beside it, its summary "In progress · Ada Lovelace" among it.
+- tapOn: ".*Weekly digest email.*"
+- extendedWaitUntil:
+    visible: "Created by .*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: spotlight-opened

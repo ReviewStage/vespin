@@ -110,7 +110,6 @@ const NATIVE_ROLES = [
   "SIDEBAR_INK",
   "WELL",
   "CHIP_EDGE",
-  "CHIP_EDGE_STRONG",
   "TEXT",
   "TEXT_BODY",
   "TEXT_MUTED",

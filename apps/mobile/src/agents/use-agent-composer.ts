@@ -11,7 +11,14 @@
  * one refused hands its words and pictures back to the field, the refusal
  * said over it in the panel's words, and the phone buzzes as a refusal does.
  * Stop is offered while the agent may still write (`agentStillWriting`),
- * starting or awaiting its turn included, as the panel offers it.
+ * starting or awaiting its turn included, as the panel offers it. A `/`
+ * starting the word the field ends with offers the skills of the agent's
+ * task's repository (`TASKS_SKILLS`), read the first time one is typed and
+ * kept for the task, narrowed as the name is typed (`matchingSkills`); a
+ * press writes the skill's `/name` in the word's place, which the agent
+ * loads before it acts, as the panel's chip reads out. Note that the field
+ * hands no caret, so the word is the one the words end with, which is where
+ * the caret stands as a `/` is typed.
  */
 
 import {
@@ -26,6 +33,15 @@ import {
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import { type AgentQueueChange, type AgentStatus, QUEUE_CHANGE } from "@repo/features/agent-wire";
+import {
+  matchingSkills,
+  mentionAt,
+  SKILL_LIST_NOTE,
+  SKILLS_UNANSWERED,
+  type SkillsRead,
+  skillsReadOf,
+} from "@repo/features/skill-mention";
+import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";
@@ -35,16 +51,49 @@ import {
   selectInboxReader,
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
-import { type AttachedPicture, BUZZ, buzz, type QueuedLine } from "@repo/ui-native";
+import {
+  type AttachedPicture,
+  BUZZ,
+  buzz,
+  type QueuedLine,
+  type SkillSuggestion,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
 
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
+
+/** How long a read of a task's skills stands before a `/` reads them again, as the panel's list reads them again behind. */
+const SKILLS_FRESH_MS = 60_000;
+
+/** The skills a `/` being typed offers, and what stands in their place where none is offered. */
+interface SkillsOffered {
+  readonly skills: readonly SkillSuggestion[];
+  readonly empty: string | undefined;
+  /** Writes the skill's `/name` in the `/` word's place. */
+  readonly pick: (name: string) => void;
+}
+
+/** The skills offered for the `/` word the words end with, from the read as it stands. */
+function offeredSkills(read: SkillsRead | undefined, query: string): Omit<SkillsOffered, "pick"> {
+  if (read === undefined) return { skills: [], empty: SKILL_LIST_NOTE.READING };
+  if ("unread" in read) return { skills: [], empty: read.unread };
+  if (read.skills.length === 0) return { skills: [], empty: SKILL_LIST_NOTE.NONE };
+  const found = matchingSkills(read.skills, query);
+  return {
+    skills: found.map((skill) => ({
+      name: skill.name,
+      word: skillWord(skill.name),
+      detail: skill.description,
+    })),
+    empty: found.length === 0 ? SKILL_LIST_NOTE.NO_MATCH : undefined,
+  };
+}
 
 /** A send out on the act port, not yet answered: what it carries, so a refusal hands it back. */
 interface Sending {
@@ -84,6 +133,8 @@ export interface AgentComposer {
   readonly remove: ((id: string) => void) | undefined;
   /** What the last send, pick, Stop, or queue change that did not go said. */
   readonly note: string | undefined;
+  /** The skills a `/` being typed offers; none while no `/` word ends the words. */
+  readonly skills: SkillsOffered | undefined;
 }
 
 /**
@@ -118,6 +169,18 @@ export function useAgentComposer(
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
   const sendQueues = writing && enterQueues && controlsQueue;
+  const mention = useMemo(() => mentionAt(words, words.length), [words]);
+  const planId = agent?.planId;
+  const { data: skillsRead } = useQuery({
+    queryKey: ["agent-composer-skills", planId],
+    enabled: mention !== undefined && planId !== undefined,
+    staleTime: SKILLS_FRESH_MS,
+    queryFn: (): Promise<SkillsRead> =>
+      acts[ACT_KIND.TASKS_SKILLS]({ planId: planId ?? "" }).then(skillsReadOf, (error: unknown) => {
+        console.error("The task's skills were not read.", error);
+        return { unread: SKILLS_UNANSWERED };
+      }),
+  });
   // A Stop stands pressed until the agent stops writing.
   useEffect(() => {
     if (!writing) setStopping(false);
@@ -253,5 +316,15 @@ export function useAgentComposer(
       ? (messageId) => change({ change: QUEUE_CHANGE.DELETE, messageId })
       : undefined,
     note,
+    skills:
+      mention === undefined
+        ? undefined
+        : {
+            ...offeredSkills(skillsRead, mention.query),
+            pick: (name) => {
+              setWords(`${words.slice(0, mention.start)}${skillWord(name)} `);
+              buzz(BUZZ.SELECTION);
+            },
+          },
   };
 }

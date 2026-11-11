@@ -1,6 +1,16 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
-import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
+import {
+  choiceOn,
+  contextWindowsOf,
+  effortFor,
+  effortLabel,
+  effortsOf,
+  FAST_WORD,
+  SPEED_LABEL,
+  SPEED_WORD,
+  windowOf,
+} from "@repo/features/model-effort";
 import {
   type CatalogModel,
   MODEL_SPEED,
@@ -37,10 +47,7 @@ import {
   CONTEXT_WORD,
   type ConnectFailure,
   choiceModelId,
-  choiceOn,
   choiceWords,
-  contextWindowsOf,
-  FAST_WORD,
   fastRestingNote,
   longWindowNote,
   MODELS_READ_FAILED,
@@ -50,13 +57,10 @@ import {
   modelLabel,
   offeredModels,
   readModelChoice,
-  SPEED_LABEL,
-  SPEED_WORD,
   speedsOf,
   unrunnableChoice,
   unsearchedModels,
   windowLabel,
-  windowOf,
 } from "./agent-model.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 

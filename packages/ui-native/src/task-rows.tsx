@@ -11,6 +11,7 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   accessibilityHint,
+  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
   buttonStyle,
@@ -32,7 +33,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { type RowAction, RowFrame, RowHead, rowPlacement } from "./list-row.js";
+import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { AgentTile, FailedMark, TaskStatusMark, ToneGlyph, WorkingMark } from "./marks.js";
 import { PageHeader } from "./page-header.js";
@@ -46,9 +47,6 @@ const LINE_PART = "· ";
 
 /** What a pull request's number in an agent's line is heard to do. */
 const OPENS_PULL_REQUEST = "Opens the pull request";
-
-/** What a group of tasks' count is heard as. */
-const TASKS_WORDS = { one: "task", many: "tasks" } as const;
 
 /** What an agent's line says of its state, as the panel's agent mark is heard. */
 const AGENT_STATE_WORDS = { WORKING: "Working", FAILED: "Failed" } as const;
@@ -171,7 +169,10 @@ type AgentRowProps = {
         readonly onPress: () => void;
       }
     | undefined;
-  readonly trailingActions?: readonly RowAction[] | undefined;
+  /** What a swipe from the trailing edge reveals, such as Stop or Archive, the first of it on a full swipe. */
+  readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** What its long press lifts over its menu (`AgentPreview`). */
+  readonly preview?: ReactElement | undefined;
 };
 
 /** An agent's pull request in its line: its state's glyph and its number, pressed to open it. */
@@ -264,7 +265,9 @@ export function AgentRow(props: AgentRowProps) {
       )}
     </VStack>
   );
-  return <RowFrame id={id} row={row} trailingActions={props.trailingActions} />;
+  return (
+    <RowFrame id={id} row={row} trailingActions={props.trailingActions} preview={props.preview} />
+  );
 }
 
 type RelationRowProps = {
@@ -357,12 +360,14 @@ type GroupRowProps = {
   readonly id: string;
   readonly title: string;
   readonly symbol: SfSymbol;
-  /** How many tasks the group holds. */
-  readonly count: number;
+  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given. */
+  readonly count?: number | undefined;
+  /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
+  readonly testId?: string | undefined;
 };
 
-/** A group of tasks a wide window's first column picks: its glyph, its name, and how many tasks it holds. */
-export function GroupRow({ id, title, symbol, count }: GroupRowProps) {
+/** A place a wide window's sidebar picks, such as the Inbox or Tasks: its glyph, its name, and how many it holds. */
+export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
   const colors = useColors();
   const row: ReactElement = (
     <RowHead
@@ -371,17 +376,16 @@ export function GroupRow({ id, title, symbol, count }: GroupRowProps) {
       lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} />}
       title={title}
       ink={colors.TEXT_BODY}
-      end={<EndWords words={String(count)} />}
+      end={count === undefined ? undefined : <EndWords words={String(count)} />}
     />
   );
+  const heard = { label: title, value: count === undefined ? [] : [String(count)] };
+  if (testId === undefined) return <RowFrame id={id} row={row} heard={heard} />;
   return (
     <RowFrame
       id={id}
-      row={row}
-      heard={{
-        label: title,
-        value: [`${count} ${count === 1 ? TASKS_WORDS.one : TASKS_WORDS.many}`],
-      }}
+      row={<HStack modifiers={[accessibilityIdentifier(testId)]}>{row}</HStack>}
+      heard={heard}
     />
   );
 }

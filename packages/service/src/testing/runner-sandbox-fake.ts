@@ -247,10 +247,11 @@ export function runnerSandboxApi() {
   const stopsAt: { call?: ((rest: string) => boolean) | undefined } = {};
   /** How many resumes the API refuses next with 422 `sandbox_snapshotting`, as Vercel answers one while the last stop's snapshot is still being taken. */
   const snapshotting = { remaining: 0 };
-  /** What a test does the moment a detached command has started, before the API answers; the exit a waited run ends on, 0 unless it says; and what it does as a waited run arrives, before it ends. */
+  /** What a test does the moment a detached command has started, before the API answers; the exit a waited run ends on, 0 unless it says, and what it prints, nothing unless it says; and what it does as a waited run arrives, before it ends. */
   const hooks: {
     onStart?: ((command: FakeCommand) => Promise<void>) | undefined;
     runExit?: ((args: readonly string[]) => number) | undefined;
+    runStdout?: ((args: readonly string[]) => string | undefined) | undefined;
     onRun?:
       | ((
           env: Readonly<Record<string, string>>,
@@ -473,7 +474,9 @@ export function runnerSandboxApi() {
         });
         const exitCode = hooks.runExit?.(asked.args) ?? 0;
         const stdout =
-          asked.args[1] === DEFAULT_USER_READ ? `${DEFAULT_USER}\n${DEFAULT_USER}\n` : "";
+          asked.args[1] === DEFAULT_USER_READ
+            ? `${DEFAULT_USER}\n${DEFAULT_USER}\n`
+            : (hooks.runStdout?.(asked.args) ?? "");
         return commandRunStreamed({ id: id("cmd"), sessionId }, { exitCode, stdout, stderr: "" });
       }
       assert.equal(asked.attachStdin, true);

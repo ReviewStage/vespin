@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press menu, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it and its status changed from its ⋯, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it and its status changed from its ⋯, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -65,14 +65,31 @@ onFlowComplete:
       - tapOn: "Mark done"
 - assertNotVisible: "Usage alerts"
 - takeScreenshot: tasks-marked-done
-# A long press on a task offers the panel's row menu: Mark done, Status,
-# Mark as unread, Unpin on a pinned task, and Open in browser. The pinned
-# Weekly digest email's agent is at work.
+# A long press on a task lifts its preview, its Overview at a glance: its
+# status, key and repository, its name, and its agents, the pinned Weekly
+# digest email's at work. Under it stands the panel's row menu: Open, Mark
+# done, Status, Unpin on a pinned task, Mark as unread, and Open in browser.
 - scrollUntilVisible:
     element: "Weekly digest email"
     direction: UP
 - waitForAnimationToEnd
+# A swipe from the leading edge reveals Unpin, which a full swipe would
+# press at once, so the flow swipes partway across the first row, under
+# Pinned's header, and a tap on the Tasks tab closes it unpressed. Note that
+# a regular window, whose swipes read as taps, is left out.
+- runFlow:
+    when:
+      notVisible: "Select a task"
+    commands:
+      - swipe:
+          start: "8%, 21%"
+          end: "38%, 21%"
+          duration: 900
+      - takeScreenshot: tasks-swipe-leading
+      - tapOn: "Tasks"
+      - waitForAnimationToEnd
 - longPressOn: "Weekly digest email"
+- assertVisible: "Open"
 - assertVisible: "Status"
 - assertVisible: "Mark as unread"
 - assertVisible: "Unpin"
@@ -111,6 +128,30 @@ onFlowComplete:
 - assertVisible: "Agents"
 - waitForAnimationToEnd
 - takeScreenshot: task-overview
+# A long press on an agent lifts its preview: its tile and name, where it
+# stands with its model and where it runs, its latest step where the app
+# holds its transcript, and its pull request, over Open and Stop, which a
+# swipe from its trailing edge reveals too while it works. A tap off the
+# preview closes it.
+- longPressOn: "Build teammate invitations"
+- assertVisible: "Open"
+- waitForAnimationToEnd
+- takeScreenshot: task-agent-preview
+- tapOn:
+    point: "50%, 5%"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Select a task"
+    commands:
+      - swipe:
+          from: "Build teammate invitations"
+          direction: LEFT
+          duration: 900
+      - takeScreenshot: task-agent-swipe
+      - tapOn:
+          point: "50%, 5%"
+      - waitForAnimationToEnd
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Goal"
@@ -152,8 +193,8 @@ onFlowComplete:
     direction: UP
 - assertVisible: "Todo"
 - takeScreenshot: task-status-set
-# Back on the list, a landscape window stands it as a split view: two
-# columns, or on an iPad three, its groups beside the group's tasks.
+# Back on the list, a landscape window stands it as a split view: on an iPad
+# the app sidebar, the list, and the task side by side.
 - tapOn: "Tasks"
 - setOrientation: LANDSCAPE_LEFT
 - waitForAnimationToEnd

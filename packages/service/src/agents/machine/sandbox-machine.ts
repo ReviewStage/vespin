@@ -98,6 +98,10 @@ import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { sandboxVcpus } from "@repo/features/sandbox-size";
 import {
+  CLOUD_SETUP_SCRIPT,
+  type CloudSetupScript,
+} from "@repo/features/workspace-sandbox-setup-wire";
+import {
   type ListedSandbox,
   type OpenedSandbox,
   SANDBOX_STATUS,
@@ -111,6 +115,7 @@ import {
 import {
   Brand,
   Context,
+  DateTime,
   Duration,
   Effect,
   Exit,
@@ -189,6 +194,7 @@ import {
   recordedSandboxDiscarded,
   recordedSandboxOpen,
 } from "../sandbox-use.js";
+import { scriptRanIn } from "../script-runs.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -391,17 +397,36 @@ const SETUP_FILE = {
  * root from the workspace folder, then, where it succeeded, the repository's
  * setup script from the checkout, its writes the group's as the clone's are
  * (`GROUP_WRITES`), each failing on its first failed command. What they print,
- * and how they exited, goes to `SETUP_LOG`, which every user reads.
+ * and how they exited, goes to `SETUP_LOG`, which every user reads; the run's
+ * own stdout says only which ran and how each exited, a `<script> <exit>`
+ * line apiece (`setupExits`), which is all the service keeps of it.
  */
 const SETUP_RUN_SCRIPT = [
   GROUP_WRITES,
   `: > ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
   "status=0",
-  `if [ -f ${SETUP_FILE.INSTALL} ]; then echo "--- install script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; (cd ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE} && sudo -n bash -e -o pipefail ${SETUP_FILE.INSTALL}) >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; fi`,
-  `if [ "$status" -eq 0 ] && [ -f ${SETUP_FILE.REPOSITORY} ]; then echo "--- setup script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; bash -e -o pipefail ${SETUP_FILE.REPOSITORY} >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; fi`,
+  `if [ -f ${SETUP_FILE.INSTALL} ]; then echo "--- install script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; (cd ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE} && sudo -n bash -e -o pipefail ${SETUP_FILE.INSTALL}) >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${CLOUD_SETUP_SCRIPT.INSTALL} $status"; fi`,
+  `if [ "$status" -eq 0 ] && [ -f ${SETUP_FILE.REPOSITORY} ]; then echo "--- setup script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; bash -e -o pipefail ${SETUP_FILE.REPOSITORY} >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${CLOUD_SETUP_SCRIPT.SETUP} $status"; fi`,
   `echo "--- exit $status" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
   'exit "$status"',
 ].join("\n");
+
+/** A line of the setup run's stdout saying how one of its scripts exited (`SETUP_RUN_SCRIPT`). */
+const SETUP_EXIT_LINE = new RegExp(
+  `^(${CLOUD_SETUP_SCRIPT.INSTALL}|${CLOUD_SETUP_SCRIPT.SETUP}) (\\d+)$`,
+  "gmu",
+);
+
+/** Which of the setup run's scripts ran and how each exited, as its stdout says; a line it does not say so in is passed by. */
+function setupExits(
+  stdout: string,
+): readonly { readonly script: CloudSetupScript; readonly exitCode: number }[] {
+  return [...stdout.matchAll(SETUP_EXIT_LINE)].flatMap(([, script, exit]) =>
+    script === CLOUD_SETUP_SCRIPT.INSTALL || script === CLOUD_SETUP_SCRIPT.SETUP
+      ? [{ script, exitCode: Number(exit) }]
+      : [],
+  );
+}
 
 /** Why the sandbox could not be readied for the agent's runner. */
 const NOT_READIED = "the sandbox could not be readied for the agent's runner";
@@ -939,17 +964,21 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * The workspace's cloud setup scripts run in the sandbox just created
    * (`SETUP_RUN_SCRIPT`), each written to its file first so no script is
    * spliced into shell text, the setup script with the workspace's variables;
-   * nothing where none is saved. A setup that failed, or could not run, is
-   * logged and leaves the launch to go on, since the agent reads its log and
-   * says what failed.
+   * nothing where none is saved. How each script that ran exited is recorded
+   * as its last run, for Settings › Cloud setup (`../script-runs.ts`). A setup
+   * that failed, or could not run, is logged and leaves the launch to go on,
+   * since the agent reads its log and says what failed.
    */
   const setUp = (
+    context: Context.Context<DatabaseServices>,
+    agent: Agent,
     sandbox: RepositorySandbox,
     opened: SandboxRunning,
     setup: SandboxSetup | undefined,
   ) =>
     Effect.gen(function* () {
       if (setup === undefined) return;
+      const ranAt = yield* DateTime.nowAsDate;
       const encoder = new TextEncoder();
       const files = [
         { path: SETUP_FILE.INSTALL, script: setup.install },
@@ -966,6 +995,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           env: setup.environment,
         },
         REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+      );
+      yield* Effect.forEach(setupExits(ran.stdout), ({ script, exitCode }) =>
+        scriptRanIn(agent, script, exitCode, ranAt).pipe(Effect.provide(context)),
       );
       if (ran.exitCode !== 0) {
         yield* Effect.logWarning(`A sandbox's cloud setup exited ${ran.exitCode}`);
@@ -1008,7 +1040,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         () => cloneAgentExtras(sandbox, checkout.extras),
       );
       // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
-      if (from !== CREATED_FROM.SOURCE) yield* setUp(sandbox, opened, yield* checkout.setup);
+      if (from !== CREATED_FROM.SOURCE) {
+        yield* setUp(context, checkout.agent, sandbox, opened, yield* checkout.setup);
+      }
       return refill;
     });
 
