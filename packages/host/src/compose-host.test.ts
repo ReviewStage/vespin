@@ -123,6 +123,9 @@ describe("the host's platform concerns", () => {
               registeredHere: Effect.succeed(false),
               register: Effect.succeed(Result.fail("no agent in a fixture")),
               unregister: Effect.succeed(Result.fail("no agent in a fixture")),
+              loaded: Effect.succeed(false),
+              install: () => Effect.succeed(Result.fail("no install in a fixture")),
+              uninstall: () => Effect.succeed(Result.fail("no install in a fixture")),
               machine: Effect.succeed({
                 name: "Studio",
                 platform: DEVICE_PLATFORM.DARWIN,

@@ -108,10 +108,8 @@ import { MenuRow } from "./menu-row.js";
  * off removes, after asking, since that takes the host and its agents'
  * folders off this Mac. While on it says the host's standing, and offline
  * until the service lists it. A Mac removed from anywhere else reads off,
- * since nothing enrolls it again unasked. A build that only reads This
- * Mac's host (`AppThisMacHost.releasedOnly`) draws the switch disabled, its
- * line saying only the released app runs it, and one whose host is another account's
- * says so where turning it on or off is refused. A browser tab has no This
+ * since nothing enrolls it again unasked. A Mac whose host is another
+ * account's says so where turning it on or off is refused. A browser tab has no This
  * Mac, so it draws none.
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
@@ -257,7 +255,6 @@ const THIS_MAC_WORDS = {
   SWITCH: "Run agents on this Mac",
   OFF: "Run your agents on this Mac instead of the cloud.",
   TURN_ON_FAILED: "Could not turn on this Mac. Try again.",
-  RELEASED_ONLY: "Only the released app runs This Mac's host",
   NEEDS_APPROVAL: `macOS won't run agents on this Mac until you allow ${PRODUCT_NAME} in System Settings › General › Login Items.`,
   OPEN_LOGIN_ITEMS: "Open Login Items",
   STILL_LISTED: `This Mac is off, but ${PRODUCT_NAME} couldn't remove it from your machines. Remove it from the list below.`,
@@ -341,7 +338,6 @@ function ThisMacRow({
   book,
   on,
   needsApproval,
-  releasedOnly,
   onChange,
 }: {
   /** This Mac as the service lists it; none before it does. */
@@ -350,14 +346,10 @@ function ThisMacRow({
   on: boolean;
   /** Whether macOS holds its host until the member allows the app in Login Items. */
   needsApproval: boolean;
-  /** Whether this build leaves This Mac's host as it stands, since only the released app runs it. */
-  releasedOnly: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
-  const description = releasedOnly ? (
-    THIS_MAC_WORDS.RELEASED_ONLY
-  ) : !on ? (
+  const description = !on ? (
     THIS_MAC_WORDS.OFF
   ) : host === undefined ? (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
@@ -380,7 +372,6 @@ function ThisMacRow({
             checked={on}
             label={THIS_MAC_WORDS.SWITCH}
             describedBy={control["aria-describedby"]}
-            disabled={releasedOnly}
             onChange={(next) => onChange(next)}
           />
         )}
@@ -648,7 +639,6 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
               book={book}
               on={thisMacOn}
               needsApproval={thisMac.needsApproval === true}
-              releasedOnly={thisMac.releasedOnly === true}
               onChange={switchThisMac}
             />
           )}
