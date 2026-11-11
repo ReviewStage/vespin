@@ -27,10 +27,12 @@ import { wireUuidSchema } from "./service-wire.js";
  * secrets over once (`deviceAgentLaunchSecretsSchema`): the service opens them
  * from the row's seal and clears the row's copy in the same claim.
  *
- * Every path the service hands out is absolute, under the agent's own
- * folder in the Mac's home (`deviceAgentLayout`): its worktree, the files a
- * message carries, and the skills its member installed into the app, never
- * the user's own `~/.claude`.
+ * Every path the service hands out is absolute, under one of the folders
+ * the Mac registered for its agents (`deviceAgentLayoutIn`): its worktree
+ * under the agent's own folder; the files a message carries under the
+ * host's state, so they outlive the OS's clean-up of its temp folder; and
+ * what the agent saves for us to read back under the machine's own temp
+ * folder.
  */
 
 export const DEVICE_AGENT_BOUNDS = {
@@ -309,47 +311,79 @@ export const deviceAgentAnswerSchema = EffectSchema.Union([
 
 export type DeviceAgentAnswer = typeof deviceAgentAnswerSchema.Type;
 
-/** The folders under a Mac's home its local agents' things stand in (`deviceAgentLayout`). */
+/** The folders under a Mac's home its local agents' things stand in (`deviceAgentLayoutIn`). */
 const DEVICE_AGENT_FOLDER = {
   /** Every local agent's folder, one per agent under its id. */
   ROOT: ".vespin/agents",
   /** The agent's worktree, which the Mac makes as it takes the launch line. */
   REPOSITORY: "repository",
-  /** The files a message carries, one folder per line, made `0700`. */
+} as const;
+
+/** The folders a Mac keeps its local agents' other things in, each under a folder of the machine's own, one per agent under its id. */
+const DEVICE_AGENT_ROOT = {
+  /** Under the machine's own temp folder: what an agent saves for us to read back, made `0700`. */
+  SHARED_FILES: "vespin",
+  /** Under the host's state: the files a message carries, one folder per line, made `0700`. */
   ATTACHMENTS: "attachments",
-  /** The agent's temp folder (`TMPDIR`), made `0700`, which its runner and its commands write to, and where it saves what we read back. */
-  TEMP: "tmp",
 } as const;
 
 /** Where a local agent's things stand on a Mac, every path absolute. */
 export interface DeviceAgentLayout {
+  /** The agent's own folder, which holds its worktree alone. */
   readonly folder: string;
   readonly checkoutPath: string;
+  /** The files a message carries, under the host's state. */
   readonly attachments: string;
-  readonly temp: string;
+  /** What the agent saves for us to read back, under the machine's own temp folder. */
+  readonly sharedFiles: string;
+}
+
+/** The folders a Mac registers its agents' things under (`deviceAgentRegisterRequestSchema`), every one absolute. */
+export interface DeviceAgentRoots {
+  /** Every agent's own folder stands in it (`deviceAgentsFolder`). */
+  readonly agentsFolder: string;
+  /** Every agent's shared files stand in it (`deviceAgentTempFolder`). */
+  readonly tempFolder: string;
+  /** Every agent's attachments stand in it (`deviceAgentAttachmentsFolder`). */
+  readonly attachmentsFolder: string;
+}
+
+/** The path given under the folder given, the folder's trailing slashes taken off. */
+function under(parent: string, child: string): string {
+  let end = parent.length;
+  // Note that the trailing slashes are counted off by hand, because a regular expression anchored at the end runs in quadratic time on a path of many slashes.
+  while (end > 1 && parent[end - 1] === "/") end -= 1;
+  return [parent.slice(0, end), child].join("/");
 }
 
 /** The folder every local agent's folder stands in, under the Mac's home folder given, which its host registers (`agentsFolder`). */
 export function deviceAgentsFolder(home: string): string {
-  let end = home.length;
-  // Note that the trailing slashes are counted off by hand, because a regular expression anchored at the end runs in quadratic time on a home of many slashes.
-  while (end > 1 && home[end - 1] === "/") end -= 1;
-  return [home.slice(0, end), DEVICE_AGENT_FOLDER.ROOT].join("/");
+  return under(home, DEVICE_AGENT_FOLDER.ROOT);
 }
 
-/** The agent's folder and what stands in it, under the Mac's home folder given. */
-export function deviceAgentLayout(home: string, agentId: string): DeviceAgentLayout {
-  return deviceAgentLayoutIn(deviceAgentsFolder(home), agentId);
+/** The folder every local agent's shared files stand in, under the machine's own temp folder given (`os.tmpdir()` as the host sees it), which its host registers (`tempFolder`). */
+export function deviceAgentTempFolder(machineTemp: string): string {
+  return under(machineTemp, DEVICE_AGENT_ROOT.SHARED_FILES);
 }
 
-/** The agent's folder and what stands in it, under the folder of the Mac's local agents given (`deviceAgentsFolder`). */
-export function deviceAgentLayoutIn(agentsFolder: string, agentId: string): DeviceAgentLayout {
-  const folder = [agentsFolder, agentId].join("/");
+/** The folder every local agent's attachments stand in, under the host's state folder given, which its host registers (`attachmentsFolder`). */
+export function deviceAgentAttachmentsFolder(stateRoot: string): string {
+  return under(stateRoot, DEVICE_AGENT_ROOT.ATTACHMENTS);
+}
+
+/** The agent's worktree, under the Mac's home folder given. */
+export function deviceAgentCheckoutPath(home: string, agentId: string): string {
+  return [deviceAgentsFolder(home), agentId, DEVICE_AGENT_FOLDER.REPOSITORY].join("/");
+}
+
+/** The agent's folder and its other things, under the folders the Mac registered (`DeviceAgentRoots`). */
+export function deviceAgentLayoutIn(roots: DeviceAgentRoots, agentId: string): DeviceAgentLayout {
+  const folder = [roots.agentsFolder, agentId].join("/");
   return {
     folder,
     checkoutPath: [folder, DEVICE_AGENT_FOLDER.REPOSITORY].join("/"),
-    attachments: [folder, DEVICE_AGENT_FOLDER.ATTACHMENTS].join("/"),
-    temp: [folder, DEVICE_AGENT_FOLDER.TEMP].join("/"),
+    attachments: [roots.attachmentsFolder, agentId].join("/"),
+    sharedFiles: [roots.tempFolder, agentId].join("/"),
   };
 }
 
@@ -488,7 +522,12 @@ const deviceField = { deviceId: wireUuidSchema };
  * from before the field names none, and its agents are laid out under its
  * home as this build's root puts them. Note that a device names it on every
  * register, default or not, because only the device knows its own root; so
- * a host build with it ships only after every service takes it.
+ * a host build with it ships only after every service takes it. It names
+ * the folder its agents' shared files stand in, under the machine's own temp
+ * folder (`deviceAgentTempFolder`), and the one their attachments stand in,
+ * under its state (`deviceAgentAttachmentsFolder`), neither of which the
+ * service could derive from its home; a device from before them is refused
+ * until its host is upgraded.
  */
 export const deviceAgentRegisterRequestSchema = EffectSchema.Struct({
   ...deviceField,
@@ -498,6 +537,8 @@ export const deviceAgentRegisterRequestSchema = EffectSchema.Struct({
   ...deviceMachineFields,
   home: macPath,
   agentsFolder: EffectSchema.optionalKey(macPath),
+  tempFolder: macPath,
+  attachmentsFolder: macPath,
   claudeExecutable: macPath,
   codexExecutable: EffectSchema.optionalKey(macPath),
   capabilities: EffectSchema.optionalKey(

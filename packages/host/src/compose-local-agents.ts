@@ -23,14 +23,17 @@ import {
   type DeviceAgentLine,
   type DeviceAgentRelease,
   type DeviceAgentRequest,
+  type DeviceAgentRoots,
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
+  deviceAgentAttachmentsFolder,
   deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
-  deviceAgentLayout,
+  deviceAgentLayoutIn,
   deviceAgentRestorePayloadSchema,
   deviceAgentStdinPayloadSchema,
   deviceAgentsFolder,
+  deviceAgentTempFolder,
 } from "@repo/features/device-agent-wire";
 import { cappedExponential } from "@repo/wire/effect";
 import {
@@ -60,13 +63,12 @@ import { Environment, LocalAgentPlatform, Reporter } from "./effect/seams.js";
 import type { HostKernel } from "./host-kernel.js";
 import { agentOnBox } from "./local-agent-box.js";
 import { LAUNCH_NOTE, notedFirstLines, sessionResumed } from "./local-agent-first-lines.js";
-import { answeredLocalAgentRequest } from "./local-agent-requests.js";
+import { agentPlaces, answeredLocalAgentRequest } from "./local-agent-requests.js";
 import {
   forgetOwnedAgent,
   forgetRunnerGroup,
   keepOwnedAgent,
   keepRunnerGroup,
-  ownedAgents,
 } from "./local-agent-state.js";
 
 /**
@@ -102,7 +104,7 @@ import {
  * same claim, before the next read, and the line is delivered once; a launch
  * whose claim was asked again had its secrets taken by the answer lost, so
  * it is settled as a runner gone. A launch makes the agent's worktree of the
- * box's shared clone under its folder (`deviceAgentLayout`) where it has
+ * box's shared clone under its folder (`deviceAgentLayoutIn`) where it has
  * none, through the platform's script, sets in the clone's config who the
  * agent's commits are by where the line says, as a cloud checkout sets it
  * (`@repo/features/checkout-identity`), and starts the runner (`LocalAgentPlatformSeam.launch`), with the claim's
@@ -116,11 +118,11 @@ import {
  * folders and Git are set up for the runner, each on a fiber of its own, so
  * the launch never waits on it. A
  * message or retune line is written to the running runner's stdin; a files
- * line writes its files under the agent's folder; a stop line ends the
+ * line writes its files under the agent's own folders; a stop line ends the
  * runner; a discard line ends it, saves the work in its worktree as a
  * snapshot in the shared clone, and removes the agent's folder with
- * everything in it, whatever it holds, keeping the folder where the
- * snapshot could not be saved; a line of a kind it does not know is
+ * everything in it, whatever it holds, and its attachments and shared files
+ * with it, keeping all three where the snapshot could not be saved; a line of a kind it does not know is
  * settled untouched. A launch whose repository
  * could not be made is settled as not started, and the runner never
  * starts. A launch or files line keeps the agent as one whose folder this
@@ -136,11 +138,15 @@ import {
  * nothing of the host's or of any other agent's is stopped with it. The
  * group is kept in the machine's state while it runs (`keepRunnerGroup`),
  * so one that outlived a daemon killed outright is ended as the next
- * daemon starts (`daemon/host-runners-left.ts`). Its
- * folder lives as long as the agent: a turn's end empties its `tmp`, and
- * the next turn's runner goes on from the rest, its repository, and its
- * harness's session in the box user's own home, until the agent's discard
- * line removes it, and nothing else does. An agent whose discard
+ * daemon starts (`daemon/host-runners-left.ts`). It
+ * writes its temp files to the machine's own temp folder, its `TMPDIR`
+ * handed on unchanged, which the OS clears itself, and what it saves for us
+ * to read back to its folder beneath it (`deviceAgentTempFolder`). Its
+ * folder, which holds its worktree alone, its attachments under the host's
+ * state, and its shared files live as long as the agent: the next turn's
+ * runner goes on from them, its repository, and its harness's session in the
+ * box user's own home, until the agent's discard line removes them, and
+ * nothing else does. An agent whose discard
  * line never reached the device, as one archived while the device was away
  * for longer than its line waits, keeps its folder until it is removed by
  * hand. A launch that finds none of the agent's work in its folder, as an
@@ -161,9 +167,7 @@ import {
  * worktree already stands is not checked again.
  *
  * A runner ends with the host, or with the gate, so none runs as the gate
- * opens, and every agent this machine made (`ownedAgents`) has its turn let
- * go of as any turn's end is, whatever a run that died left in its folder.
- * An agent this machine did not make is never touched. A launch the run
+ * opens. An agent this machine did not make is never touched. A launch the run
  * before left is still listed by the service, and the first answered beat
  * settles it as a runner gone, with no exit code: the agent's turn in
  * flight is settled lost, and its next message relaunches the runner on the
@@ -196,7 +200,7 @@ import {
  * for the daemon started on the new release.
  *
  * Requests are each answered on a fiber of their own, inside the agent's
- * folder alone (`local-agent-requests.ts`). The service refusing the
+ * own folders alone (`local-agent-requests.ts`). The service refusing the
  * host's version shuts the gate: the reads end, and every runner is
  * stopped, as the quit stops them.
  *
@@ -235,6 +239,7 @@ const SIGN_IN_CHECK_DEADLINE = Duration.minutes(2);
 
 const VARIABLE = {
   HOME: "HOME",
+  TMPDIR: "TMPDIR",
   SHELL: "SHELL",
   USER: "USER",
   LOGNAME: "LOGNAME",
@@ -243,8 +248,15 @@ const VARIABLE = {
   SSH_AUTH_SOCK: "SSH_AUTH_SOCK",
 } as const;
 
-/** The variables of the host's user a runner and a command are started with, read from the host's environment; nothing else of the host's is handed on. */
-const HANDED_ON = [VARIABLE.HOME, VARIABLE.SHELL, VARIABLE.USER, VARIABLE.LOGNAME, VARIABLE.LANG];
+/** The variables of the host's user a runner and a command are started with, read from the host's environment, the machine's own temp folder among them; nothing else of the host's is handed on. */
+const HANDED_ON = [
+  VARIABLE.HOME,
+  VARIABLE.SHELL,
+  VARIABLE.USER,
+  VARIABLE.LOGNAME,
+  VARIABLE.LANG,
+  VARIABLE.TMPDIR,
+];
 
 /** Where a device's setup stands as it registers: nothing once it is ready, else preparing, or failed and why. */
 type DeviceSetupRegister = Pick<DeviceAgentDevice, "setup" | "setupFailure">;
@@ -361,27 +373,15 @@ export function composeLocalAgents(
     );
     const { kernel, deviceId, switchedOn, client } = dependencies;
 
-    // -- a turn's end ------------------------------------------------------------
+    /** The folders this device registers its agents' things under, for the home folder given: their own folders under it, their shared files under the machine's own temp folder, and their attachments under the host's state. */
+    const rootsOf = (home: string): DeviceAgentRoots => ({
+      agentsFolder: deviceAgentsFolder(home),
+      tempFolder: deviceAgentTempFolder(platform.tempFolder),
+      attachmentsFolder: deviceAgentAttachmentsFolder(kernel.stateRoot),
+    });
 
-    /**
-     * The agent's `tmp` emptied, where its folder stands: taken away whole
-     * and made again rather than emptied entry by entry, since a link the
-     * agent left there would lead a walk out of its folder, and a removal
-     * takes a link away without following it.
-     */
-    const tempEmptied = (layout: DeviceAgentLayout) =>
-      Effect.gen(function* () {
-        if (!(yield* fileSystem.exists(layout.folder))) return;
-        yield* fileSystem.remove(layout.temp, { recursive: true, force: true });
-        yield* fileSystem.makeDirectory(layout.temp, { recursive: true, mode: 0o700 });
-      }).pipe(Effect.ignore);
-
-    /**
-     * The end of one of the agent's turns, whatever ended it, a run that
-     * died with the host or the gate among it: its `tmp` emptied; the rest
-     * of its folder, its repository among it, stays for its next turn.
-     */
-    const turnLetGo = tempEmptied;
+    /** Where the agent's things stand on this device, for the home folder given (`rootsOf`). */
+    const layoutIn = (home: string, agentId: string) => deviceAgentLayoutIn(rootsOf(home), agentId);
 
     // -- the gate --------------------------------------------------------------
 
@@ -712,7 +712,7 @@ export function composeLocalAgents(
           agentScope: Scope.Scope,
         ) =>
           Effect.gen(function* () {
-            const layout = deviceAgentLayout(folder, agentId);
+            const layout = layoutIn(folder, agentId);
             const payload = decodeLaunch(line.payload);
             // Note that a launch naming a worktree outside the agent's own folder is never made.
             if (
@@ -748,14 +748,10 @@ export function composeLocalAgents(
             if (!made) return yield* notStarted(line.id);
             // Note that starting is said before the agent's folders and Git are set up, so a launch that stops there is worded as starting rather than by the step before.
             yield* stepReported(agentScope, line.id, DEVICE_LAUNCH_STEP.STARTING);
-            const temp = layout.temp;
-            yield* Effect.ignore(fileSystem.makeDirectory(temp, { recursive: true, mode: 0o700 }));
-            const runnerScope = yield* Scope.fork(agentScope);
-            // Note that the turn is let go of last as the runner's scope closes, once the runner has ended.
-            yield* Scope.addFinalizer(
-              runnerScope,
-              Effect.provideContext(turnLetGo(layout), services),
+            yield* Effect.ignore(
+              fileSystem.makeDirectory(layout.sharedFiles, { recursive: true, mode: 0o700 }),
             );
+            const runnerScope = yield* Scope.fork(agentScope);
             if (
               withRepository &&
               identity !== undefined &&
@@ -781,7 +777,6 @@ export function composeLocalAgents(
               env: {
                 ...shellVariables,
                 ...sshAgent,
-                TMPDIR: temp,
                 ...platform.runnerEnv,
                 ...secrets.env,
               },
@@ -813,7 +808,7 @@ export function composeLocalAgents(
             const exited = yield* Effect.gen(function* () {
               const code = yield* Effect.option(handle.exitCode);
               runners.delete(agentId);
-              // Note that the launch is starting again until its settle is answered, so no beat settles it as a runner gone before its turn is let go of and its exit code sent.
+              // Note that the launch is starting again until its settle is answered, so no beat settles it as a runner gone before its runner's scope closes and its exit code is sent.
               starting.add(line.id);
               // Note that whether any runner works is told once the turn is let go of and settled, so a Mac kept awake for it does not sleep while it is.
               yield* Scope.close(runnerScope, Exit.void).pipe(
@@ -834,8 +829,7 @@ export function composeLocalAgents(
          * The runner given stopped and its exit waited for, so its line is
          * settled first. Its process group alone is asked to end (SIGTERM)
          * and killed once `KILL_GRACE` has passed, so nothing of the host's or
-         * of another agent's is stopped with it. Its turn is let go of once it
-         * has ended.
+         * of another agent's is stopped with it.
          */
         const ended = (runner: Runner) =>
           Effect.gen(function* () {
@@ -852,7 +846,7 @@ export function composeLocalAgents(
           });
 
         /**
-         * The agent's folder removed with everything in it, then the entry its
+         * The agent's own places removed with everything in them (`agentPlaces`), then the entry its
          * worktree held in the shared clone pruned (`git worktree prune`), so
          * the clone lists no worktree that stands no more. The clone is read
          * from the link the worktree's `.git` file holds, before the folder
@@ -866,7 +860,9 @@ export function composeLocalAgents(
             const link = yield* Effect.option(
               fileSystem.readFileString(path.join(layout.checkoutPath, ".git")),
             );
-            yield* fileSystem.remove(layout.folder, { recursive: true, force: true });
+            for (const place of agentPlaces(layout)) {
+              yield* fileSystem.remove(place, { recursive: true, force: true });
+            }
             const linked = Option.flatMap(link, (text) =>
               Option.fromNullishOr(/^gitdir: (.+)$/mu.exec(text)?.[1]),
             );
@@ -923,17 +919,18 @@ export function composeLocalAgents(
          * work saved as a snapshot its next launch on this box rebuilds from
          * (`snapshotSaved`), and its folder removed with everything in it,
          * whatever it holds, its worktree and what its runner and commands
-         * wrote there, and its worktree's entry pruned from the shared clone,
-         * which stays (`folderRemoved`); then the agent is no longer this
-         * machine's. A snapshot that could not be saved keeps the folder,
-         * reported, rather than lose the agent's unsaved work. A step that
+         * wrote there, its attachments and shared files with it, and its
+         * worktree's entry pruned from the shared clone, which stays
+         * (`folderRemoved`); then the agent is no longer this machine's. A
+         * snapshot that could not be saved keeps them all, reported, rather
+         * than lose the agent's unsaved work. A step that
          * fails is reported, and the agent stays this machine's, so an
          * uninstall still finds what is left of its folder.
          */
         const discarded = (agentId: string) =>
           Effect.gen(function* () {
             yield* stopped(agentId);
-            const layout = deviceAgentLayout(folder, agentId);
+            const layout = layoutIn(folder, agentId);
             if (!(yield* snapshotSaved(agentId, layout))) {
               report(`a local agent's work could not be saved, so its folder was kept: ${agentId}`);
               return;
@@ -946,16 +943,16 @@ export function composeLocalAgents(
             ),
           );
 
-        /** A files line's files written under the agent's folder, each at its mode; one whose path names a place outside the folder is never written. */
+        /** A files line's files written under the agent's own places (`agentPlaces`), each at its mode; one whose path names a place outside them is never written. */
         const wroteFiles = (agentId: string, payload: unknown) =>
           Effect.gen(function* () {
             const files = decodeFiles(payload);
             if (Option.isNone(files)) return;
             yield* keepOwnedAgent(kernel.stateRoot, agentId);
-            const layout = deviceAgentLayout(folder, agentId);
+            const layout = layoutIn(folder, agentId);
             for (const file of files.value.files) {
               const target = path.normalize(file.path);
-              if (!target.startsWith(`${layout.folder}/`)) continue;
+              if (!agentPlaces(layout).some((place) => target.startsWith(`${place}/`))) continue;
               yield* fileSystem.makeDirectory(path.dirname(target), {
                 recursive: true,
                 mode: 0o700,
@@ -985,7 +982,7 @@ export function composeLocalAgents(
             const snapshot = decodeRestore(payload);
             if (Option.isNone(snapshot)) return 1;
             yield* stopped(agentId);
-            const layout = deviceAgentLayout(folder, agentId);
+            const layout = layoutIn(folder, agentId);
             const run = agentOnBox(
               {
                 command: "/bin/bash",
@@ -1167,7 +1164,7 @@ export function composeLocalAgents(
             if (paused) return;
             const claimed = yield* asked(client.claimRequest(deviceId, request.id));
             if (claimed === undefined || !("agentId" in claimed)) return;
-            const layout = deviceAgentLayout(folder, claimed.agentId);
+            const layout = layoutIn(folder, claimed.agentId);
             const answer = yield* answeredLocalAgentRequest(
               layout,
               { env: shellVariables, gh: platform.clis.paths.gh },
@@ -1318,7 +1315,7 @@ export function composeLocalAgents(
         yield* Effect.raceFirst(presence(told), Effect.provideContext(reconciling, services));
       });
 
-    /** An open gate's turn, from its home folder: the device readied and registered, the turns the run before left let go of, and its agents followed; false where its register was not taken. */
+    /** An open gate's turn, from its home folder: the device readied and registered, and its agents followed; false where its register was not taken. */
     const openTurn = (folder: string) =>
       Effect.gen(function* () {
         const { tools } = platform;
@@ -1329,7 +1326,7 @@ export function composeLocalAgents(
             arch: platform.deviceArch,
             ...platform.deviceMachine,
             home: folder,
-            agentsFolder: deviceAgentsFolder(folder),
+            ...rootsOf(folder),
             claudeExecutable: tools.claude,
             codexExecutable: tools.codex,
             capabilities: platform.deviceCapabilities,
@@ -1339,24 +1336,13 @@ export function composeLocalAgents(
         if (!(yield* readyForOpening(registered))) return true;
         const shellVariables = yield* shellEnvironment;
         if (!(yield* asked(registered({})))) return false;
-        // Note that the device beats from its register on while it lets go of what the run before left, so a restart on a busy box never reads as away; the follow's own beats take over as it starts.
-        yield* Effect.scoped(
-          Effect.gen(function* () {
-            yield* Effect.forkScoped(presence());
-            // Note that no runner runs yet, so whatever a run cut off left in the folder of any agent this machine made is let go of; an agent this machine did not make is never named here.
-            for (const agentId of yield* ownedAgents(kernel.stateRoot)) {
-              yield* turnLetGo(deviceAgentLayout(folder, agentId));
-            }
-          }),
-        );
         yield* Effect.scoped(follow(folder, shellVariables));
         return true;
       });
 
     /**
      * One turn of the loop: a wait for the gate to open; then the device
-     * registered, the turn of every agent this machine made let go of, and
-     * its agents followed until the gate shuts, when the follow's scope
+     * registered, and its agents followed until the gate shuts, when the follow's scope
      * closes and every runner it started is stopped with its group. It
      * answers whether it went as it should: false where the service did not
      * take its register. A device that names no home folder never opens.

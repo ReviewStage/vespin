@@ -23,7 +23,10 @@ import {
   DEVICE_LAUNCH_STEP,
   DEVICE_PLATFORM,
   type DeviceAgentLine,
-  deviceAgentLayout,
+  deviceAgentAttachmentsFolder,
+  deviceAgentLayoutIn,
+  deviceAgentsFolder,
+  deviceAgentTempFolder,
 } from "@repo/features/device-agent-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
@@ -71,8 +74,19 @@ const json = (body: unknown) =>
 /** A fetch that never answers, as a held read the service holds past the test. */
 const held = () => new Promise<Response>(() => {});
 
+/** The agent's layout on a device whose home, temp, and state folders stand under the root given, as the follower lays it out there. */
+const layoutUnder = (root: string) =>
+  deviceAgentLayoutIn(
+    {
+      agentsFolder: deviceAgentsFolder(path.join(root, "home")),
+      tempFolder: deviceAgentTempFolder(path.join(root, "tmp")),
+      attachmentsFolder: deviceAgentAttachmentsFolder(path.join(root, "state")),
+    },
+    AGENT_ID,
+  );
+
 /** The platform the follower runs on: This Mac, whose agents run straight on it. */
-const directMac = () => ({
+const directMac = (tempFolder: string) => ({
   launch: ({
     node,
     env,
@@ -92,6 +106,7 @@ const directMac = () => ({
   clis: fakeClis(),
   runnerBundle: "/opt/agent/agent-runner/agent-runner.mjs",
   runnerEnv: {},
+  tempFolder,
   deviceName: "Studio",
   deviceMachine: {},
   devicePlatform: DEVICE_PLATFORM.DARWIN,
@@ -114,7 +129,7 @@ const following = (lines: readonly DeviceAgentLine[]) =>
     const root = yield* temporaryDirectoryScoped("agent-lines-");
     const home = path.join(root, "home");
     const fileSystem = yield* FileSystem.FileSystem;
-    const folder = deviceAgentLayout(home, AGENT_ID).folder;
+    const folder = layoutUnder(root).folder;
     yield* fileSystem.makeDirectory(path.join(folder, "repository"), { recursive: true });
     yield* fileSystem.writeFileString(path.join(folder, "repository", "notes.md"), "unpushed\n");
     const owned = path.join(root, "state", "owned-agents", AGENT_ID);
@@ -157,7 +172,7 @@ const following = (lines: readonly DeviceAgentLine[]) =>
       fakeHttpClientLayer(fetchLike),
       Layer.succeed(Environment, ConfigProvider.fromEnvRecord({ HOME: home, SHELL: "/bin/bash" })),
       Layer.succeed(Reporter, { report: () => {} }),
-      Layer.succeed(LocalAgentPlatform, directMac()),
+      Layer.succeed(LocalAgentPlatform, directMac(path.join(root, "tmp"))),
     );
     const composer = yield* composeLocalAgents({
       kernel: { stateRoot: path.join(root, "state"), createId: () => DEVICE_ID },
@@ -245,7 +260,7 @@ const launching = (workStands: boolean, repositoryHangs = false) =>
   Effect.gen(function* () {
     const root = yield* temporaryDirectoryScoped("agent-launch-");
     const home = path.join(root, "home");
-    const layout = deviceAgentLayout(home, AGENT_ID);
+    const layout = layoutUnder(root);
     if (workStands) mkdirSync(path.join(layout.checkoutPath, ".git"), { recursive: true });
     const launchSettled = Deferred.makeUnsafe<void>();
     const starting = Deferred.makeUnsafe<void>();
@@ -305,7 +320,7 @@ const launching = (workStands: boolean, repositoryHangs = false) =>
       if (program === "/bin/bash") return { exitCode: 0 };
       return program === RUNNER ? { exitCode: 0 } : undefined;
     });
-    const platform = directMac();
+    const platform = directMac(path.join(root, "tmp"));
     const services = Layer.mergeAll(
       spawner.layer,
       NodePath.layer,
