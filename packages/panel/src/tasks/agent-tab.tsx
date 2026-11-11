@@ -263,12 +263,7 @@ import { AgentQueueDock } from "./agent-queue-dock.js";
 import { SendingAgent } from "./agent-ref.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
-import {
-  AgentTabSkeleton,
-  type ComposerModel,
-  ComposerSkeleton,
-  TranscriptSkeleton,
-} from "./agent-tab-skeleton.js";
+import { type ComposerModel, ComposerSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "./agent-todos.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
@@ -2441,14 +2436,11 @@ function AgentTranscriptView({
   endTrail,
   signIn,
   bringIn,
-  holding = false,
   boot,
 }: {
   messages: readonly AgentTranscriptMessage[];
   /** What the empty transcript says in its starting line's place while the agent's first launch stands (`AgentBootLine`); none otherwise. */
   boot?: ReactNode;
-  /** Whether the log waits to draw for what stands around it, saying it is loading meanwhile. */
-  holding?: boolean;
   /** Where the transcript hands the door that brings a message whose row is not drawn into view, which a link to the message asks through; none where nothing asks. */
   bringIn?: RefObject<MessageBringer | undefined> | undefined;
   /** What the agent was handed first: the description, drawn as the description's card, a prompt, drawn as the developer's message, or nothing, for one started blank, whose first line is drawn as any other; unsaid reads as the description. */
@@ -2603,7 +2595,7 @@ function AgentTranscriptView({
       return entry !== undefined && rowsHandle.current?.bringIn(entry.key, then) === true;
     };
   });
-  if (!holding && messages.length > 0) {
+  if (messages.length > 0) {
     const { todos, first, opening, placed, open } = placing;
     // The description is the first of the developer's messages, unless the agent
     // was handed a prompt in its place, which is the developer's message as
@@ -2805,8 +2797,8 @@ function AgentTranscriptView({
       </ErrorState>
     );
   }
-  // The log's first page, and what stands around it, wait in the tab's own placeholder, which it opened on (`AgentTab`).
-  if (holding || (reading && ended === undefined)) return <TranscriptSkeleton />;
+  // The log's first page waits in the tab's own placeholder, which it opened on (`AgentTab`).
+  if (reading && ended === undefined) return <TranscriptSkeleton />;
   // Note that the centered column is wider than the empty state's own, so a one-line failure stays one line.
   return (
     <ConversationEmptyState wide>
@@ -2874,11 +2866,8 @@ function AgentTabView({
   continuable = false,
   onMoveToCloud,
   bringIn,
-  holding = false,
 }: {
   agent: AgentSummary;
-  /** Whether the log waits to draw for what stands around it, while it says it is loading. */
-  holding?: boolean;
   /** Where the transcript hands the door that brings a message whose row is not drawn into view. */
   bringIn?: RefObject<MessageBringer | undefined> | undefined;
   /** Where a replay the agent opens on is drawn (`replay-card.tsx`); none where none is read. */
@@ -3171,8 +3160,7 @@ function AgentTabView({
                               cards,
                               standings: transcript.subagents,
                             }}
-                            reading={transcript.reading || holding}
-                            holding={holding}
+                            reading={transcript.reading}
                             failed={transcript.failed}
                             failedWith={transcript.failedWith}
                             working={standing.working && !booting}
@@ -3465,11 +3453,11 @@ function TryAgainPress({ onPress }: { onPress: () => Promise<boolean> }): React.
  * An agent's tab, by the agent's id alone: its transcript is followed from
  * the moment the tab stands, while the agent itself may still be on its way with the task's list of agents. What needs
  * the agent, its composer, its model, its pull request, and how its log is
- * headed, waits for it, the tab standing in its own shape meanwhile
- * (`AgentTabSkeleton`): the log's placeholder lines, which stand on until
- * the first page lands, over the composer's card, which the composer then
- * takes the place of. So a task opened on an agent reads its transcript
- * beside the list rather than after it, and nothing moves as either lands.
+ * headed, waits for it, the log drawn meanwhile from what its id read
+ * (`ListlessAgentTab`), its placeholder lines standing on until the first
+ * page lands, over the composer's card, which the composer then takes the
+ * place of. So a task opened on an agent reads its transcript beside the
+ * list rather than after it, and nothing moves as either lands.
  */
 export function AgentTab(props: AgentTabProps): React.JSX.Element {
   const { agent, control, shown, onHeld, agentId: _agentId, ...rest } = props;
@@ -3487,10 +3475,54 @@ export function AgentTab(props: AgentTabProps): React.JSX.Element {
     const status = pageStatus;
     onHeld(agentId, { messages, status, runStartedAt, title: undefined, subagentTitles });
   }, [onHeld, agentId, messages, pageStatus, runStartedAt, subagentTitles]);
-  // The tab stands in its own shape until the agent is here; its log stands the same lines until its first page is (`TranscriptSkeleton`).
-  if (agent === undefined) return <AgentTabSkeleton />;
+  // Until the agent is here its log draws what its id read, over the composer's card (`ListlessAgentTab`).
+  if (agent === undefined)
+    return <ListlessAgentTab agentId={agentId} transcript={transcript} shown={shown} />;
   return (
     <AgentTabBody {...rest} agent={agent} control={control} shown={shown} transcript={transcript} />
+  );
+}
+
+/**
+ * An agent's tab while the task's list of agents, which carries the agent,
+ * is still on its way: the transcript its id already read, drawn as a
+ * starting agent's is with no agent (`StartingAgentTab`), and the list it
+ * is working through, over the composer's card, which the composer takes
+ * the place of once the agent lands. Where it stands is what its pages
+ * say, so a running agent's log ends on its working line meanwhile, and
+ * its placeholder lines stand on until a page holds a message.
+ */
+function ListlessAgentTab({
+  agentId,
+  transcript,
+  shown,
+}: {
+  agentId: string;
+  transcript: AgentTranscriptControl;
+  shown: boolean;
+}): React.JSX.Element {
+  const { messages, pageStatus } = transcript;
+  const working = pageStatus !== undefined && agentStillWriting(pageStatus);
+  return (
+    <AgentTabFrame>
+      <AgentTranscriptView
+        messages={messages}
+        agentId={agentId}
+        reading={transcript.reading || messages.length === 0}
+        failed={transcript.failed}
+        failedWith={transcript.failedWith}
+        working={working}
+        startedAt={shown ? (agentWorkingSince(messages) ?? transcript.runStartedAt) : undefined}
+        onRetry={transcript.onRetry}
+        onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
+        olderFailed={transcript.olderFailed}
+        overComposer
+      />
+      <AgentTabFoot>
+        <TodosDock messages={messages} working={working} />
+        <ComposerSkeleton />
+      </AgentTabFoot>
+    </AgentTabFrame>
   );
 }
 
@@ -3566,11 +3598,6 @@ function AgentTabBody({
   const moveToCloud = useMoveToCloud(agent, control);
   useForwardToast(agent);
   // Note that the log never waits on the pull request's dock over the box, because its read asks GitHub and would hold every tab's first draw for a second or more.
-  // Note that nothing counts as landed before the first page.
-  const surroundsLanded = messages.length > 0;
-  const opened = useRef(false);
-  if (surroundsLanded) opened.current = true;
-  const holding = messages.length > 0 && !opened.current;
   const copyWithToast = useCopyToast();
   const openGitHub = (url: string) => appPlatform().openGitHub(url);
   // A link to one of its messages is answered once the transcript has landed, here or by saying it is gone.
@@ -3691,7 +3718,6 @@ function AgentTabBody({
       <AgentTabView
         agent={agent}
         bringIn={bringIn}
-        holding={holding}
         box={box}
         transcript={transcript}
         composer={composer}

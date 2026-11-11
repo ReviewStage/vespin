@@ -363,3 +363,34 @@ test("a page that adds a call to a running turn draws that call alone, the calls
   await settleQueries();
   assert.deepEqual(asked, ["agent-5"]);
 });
+
+test("an agent's tab draws the transcript its id read while the task's list of agents, which carries the agent, is still on its way", async () => {
+  // Note that this catches the tab standing in its placeholder over a transcript it already holds.
+  fakeAppBridge({});
+  const telling = tellingTranscripts();
+  telling.tell(TRANSCRIPT, page([DESCRIPTION, EARLIER], AGENT_STATUS.COMPLETED, "1:1"));
+  const container = document.body.appendChild(document.createElement("div"));
+  root = createRoot(container);
+
+  act(() =>
+    root?.render(
+      withQueryClient(
+        createElement(AgentTab, {
+          agent: undefined,
+          agentId: AGENT_ID,
+          control: agentsControl({ agents: [] }),
+          shown: true,
+          onOpenSubagent: () => undefined,
+          onOpenTarget: () => undefined,
+          onHeld: () => undefined,
+        }),
+      ),
+    ),
+  );
+  await act(async () => {
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+  await settleQueries();
+
+  assert.match(container.textContent ?? "", /Handed off\./u);
+});
