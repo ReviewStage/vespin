@@ -48,10 +48,12 @@ const DeviceSchema = Schema.Struct({
 
 export type Device = typeof DeviceSchema.Type;
 
-/** Where a Mac keeps what its local agents need: its home folder, the folder its agents stand in where its host named one, the CLI it bundles, and the Codex it checked, none where it has none. */
+/** Where a Mac keeps what its local agents need: its home folder, the folder its agents stand in where its host named one, the folders their shared files and attachments stand in, the CLI it bundles, and the Codex it checked, none where it has none. */
 const DeviceLayoutSchema = Schema.Struct({
   home: Schema.String,
   agentsFolder: Schema.NullOr(Schema.String),
+  tempFolder: Schema.String,
+  attachmentsFolder: Schema.String,
   claudeExecutable: Schema.String,
   codexExecutable: Schema.NullOr(Schema.String),
 });
@@ -128,6 +130,8 @@ const upsertDevice = SqlSchema.findAll({
     model,
     home,
     agentsFolder,
+    tempFolder,
+    attachmentsFolder,
     claudeExecutable,
     codexExecutable,
     capabilities,
@@ -147,6 +151,8 @@ const upsertDevice = SqlSchema.findAll({
           ...machineColumns({ machineId, model }),
           home,
           agentsFolder,
+          tempFolder,
+          attachmentsFolder,
           claudeExecutable,
           codexExecutable,
           capabilities: [...capabilities],
@@ -163,6 +169,8 @@ const upsertDevice = SqlSchema.findAll({
             ...machineColumns({ machineId, model }),
             home,
             agentsFolder,
+            tempFolder,
+            attachmentsFolder,
             claudeExecutable,
             codexExecutable,
             capabilities: [...capabilities],
@@ -227,8 +235,10 @@ const findSeen = SqlSchema.findAll({
           and(
             eq(device.userId, userId),
             gte(device.lastSeenAt, since),
-            // Note that a host that has not registered yet, or was removed, takes no agent.
+            // Note that a host that has not registered yet, or registered no temp or attachments folder, or was removed, takes no agent.
             isNotNull(device.home),
+            isNotNull(device.tempFolder),
+            isNotNull(device.attachmentsFolder),
             isNull(device.removedAt),
           ),
         )
@@ -268,6 +278,8 @@ const findLayout = SqlSchema.findOneOption({
         .select({
           home: device.home,
           agentsFolder: device.agentsFolder,
+          tempFolder: device.tempFolder,
+          attachmentsFolder: device.attachmentsFolder,
           claudeExecutable: device.claudeExecutable,
           codexExecutable: device.codexExecutable,
           capabilities: device.capabilities,
@@ -280,6 +292,9 @@ const findLayout = SqlSchema.findOneOption({
             eq(device.userId, userId),
             isNotNull(device.home),
             isNotNull(device.claudeExecutable),
+            // Note that a host from before its temp and attachments folders lays no agent out until it registers them.
+            isNotNull(device.tempFolder),
+            isNotNull(device.attachmentsFolder),
             isNull(device.removedAt),
           ),
         ),

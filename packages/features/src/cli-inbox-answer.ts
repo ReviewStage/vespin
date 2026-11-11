@@ -20,6 +20,7 @@ import {
   type InboxFormValue,
   inboxAnswersRefusal,
   knownAsk,
+  NONE_OF_THESE,
 } from "./inbox-wire.js";
 
 /** The words a `do` ask is answered with on the command line. */
@@ -75,6 +76,18 @@ function answerOf(ask: InboxAsk, id: string, given: CliAnswerInput): CliAnswer {
       const labels = ask.options.map((option) => option.label);
       const choices = given.words.map((word) => labelOf(labels, word));
       const unknown = choices.find((choice) => !labels.includes(choice));
+      // None of these is a pick of no option, which a choice whose options carry media offers; an option labeled so is that option.
+      const [only, ...more] = given.words;
+      if (
+        unknown !== undefined &&
+        more.length === 0 &&
+        only?.trim().toLowerCase() === NONE_OF_THESE.toLowerCase()
+      ) {
+        return {
+          text: given.input ?? "",
+          answers: { ask: id, reply: INBOX_REPLY.CHOSE, choices: [] },
+        };
+      }
       if (unknown !== undefined) {
         return { refusal: `${unknown} is not an option. The options: ${labels.join(", ")}.` };
       }

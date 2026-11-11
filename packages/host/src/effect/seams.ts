@@ -185,7 +185,7 @@ export class SignInConsent extends Context.Service<SignInConsent, SignInConsentS
  */
 export interface LocalAgentRunner {
   readonly agentId: string;
-  /** The agent's own folder (`deviceAgentLayout`), which holds its worktree and its temp folder. */
+  /** The agent's own folder (`deviceAgentLayoutIn`), which holds its worktree. */
   readonly folder: string;
   readonly checkout: string;
   readonly node: string;
@@ -251,6 +251,8 @@ export interface LocalAgentPlatformSeam {
   readonly tools: { readonly node: string; readonly claude: string; readonly codex: string };
   readonly runnerBundle: string;
   readonly runnerEnv: Readonly<Record<string, string>>;
+  /** The machine's own temp folder as the daemon's user sees it (`os.tmpdir()`), under which its agents' shared files stand (`deviceAgentTempFolder`). */
+  readonly tempFolder: string;
   readonly deviceName: string;
   /** Which machine the device runs on, as it registers (`DeviceMachine`), each part absent where it could not be read. */
   readonly deviceMachine: DeviceMachine;

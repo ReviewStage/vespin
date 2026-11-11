@@ -66,6 +66,10 @@ export const device = pgTable(
     home: text("home"),
     /** The folder the device's own layout puts its local agents under, absolute, as it last registered (`deviceAgentsFolder`); null for a device whose host names none, whose agents are laid out under `home`. */
     agentsFolder: text("agents_folder"),
+    /** The folder the device's local agents' shared files stand in, under the machine's own temp folder, absolute, as it last registered (`deviceAgentTempFolder`); null for a host that has not registered it, which takes no agent. */
+    tempFolder: text("temp_folder"),
+    /** The folder the device's local agents' attachments stand in, under its host's state, absolute, as it last registered (`deviceAgentAttachmentsFolder`); null for a host that has not registered it, which takes no agent. */
+    attachmentsFolder: text("attachments_folder"),
     /** The Claude Code CLI the host keeps, by its absolute path, which a local agent's launch names; null for a host that has not registered yet. */
     claudeExecutable: text("claude_executable"),
     /**

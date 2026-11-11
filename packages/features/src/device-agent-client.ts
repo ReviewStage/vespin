@@ -85,6 +85,10 @@ export interface DeviceAgentDevice extends DeviceMachine {
   readonly home: string;
   /** The folder its own layout puts its agents under (`deviceAgentsFolder`), absolute. */
   readonly agentsFolder: string;
+  /** The folder its agents' shared files stand in, under the machine's own temp folder (`deviceAgentTempFolder`), absolute. */
+  readonly tempFolder: string;
+  /** The folder its agents' attachments stand in, under its state (`deviceAgentAttachmentsFolder`), absolute. */
+  readonly attachmentsFolder: string;
   readonly claudeExecutable: string;
   readonly codexExecutable?: string | undefined;
   readonly capabilities: readonly DeviceCapability[];

@@ -27,7 +27,12 @@ import {
   RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
+import {
+  INBOX_FILE_TYPE,
+  INBOX_STATUS,
+  type InboxItem,
+  inboxWaitsOn,
+} from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
@@ -78,7 +83,7 @@ import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js"
 import { useSurfaceOpen } from "../surface-open.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
-import { OpenAskCard, ThreadComposer, threadMenu } from "./inbox-ask.js";
+import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
@@ -321,10 +326,10 @@ function ThreadDetail({
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
   );
-  // Note that a file its words draw is read beside the files drawn after them, since its bytes come the same way.
+  // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
   const media = useMemo(
-    () =>
-      messages.flatMap((message) => [
+    () => [
+      ...messages.flatMap((message) => [
         ...message.media,
         ...message.drawn.map(({ kind, attachmentId }) => ({
           kind,
@@ -333,7 +338,14 @@ function ThreadDetail({
           mediaType: "",
         })),
       ]),
-    [messages],
+      ...openAskFiles(item).map((file) => ({
+        kind: file.mediaType === INBOX_FILE_TYPE.WEBM ? INBOX_MEDIA.VIDEO : INBOX_MEDIA.PICTURE,
+        attachmentId: file.attachmentId,
+        name: "",
+        mediaType: file.mediaType,
+      })),
+    ],
+    [messages, item],
   );
   // The videos the words draw in place, by attachment.
   const drawnVideos = useMemo(
@@ -421,7 +433,28 @@ function ThreadDetail({
       pictureSource={pictureSource}
       videoAt={videoAt}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
-      ask={<OpenAskCard item={item} answer={answer} />}
+      ask={
+        <OpenAskCard
+          item={item}
+          answer={answer}
+          doors={{
+            source: (attachmentId) => sources.get(attachmentId),
+            openPage: (page) =>
+              openLink(
+                linkOf(
+                  {
+                    kind: LINK_DESTINATION.PAGE,
+                    planId: page.place.taskId,
+                    pageId: page.pageId,
+                  },
+                  workspace?.slug ?? workspace?.id ?? workspaceId ?? "",
+                ),
+              ),
+            openLink,
+            openVideoElsewhere: openOnWeb,
+          }}
+        />
+      }
       {...(inStack
         ? { footRoom: DOCK_ROOM }
         : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}

@@ -5,7 +5,7 @@
  * own settings silence; the app has no switch of its own.
  */
 
-import { openSettings } from "expo-linking";
+import { openSettings, openURL } from "expo-linking";
 import {
   getPermissionsAsync,
   type NotificationPermissionsStatus,
@@ -13,6 +13,21 @@ import {
 } from "expo-notifications";
 import { useCallback, useEffect, useState } from "react";
 import { AppState } from "react-native";
+
+/** iOS's own page of the app's notification settings, as `UIApplication.openNotificationSettingsURLString` names it (iOS 16 and later). */
+const NOTIFICATION_SETTINGS_URL = "app-settings:notifications";
+
+/**
+ * Opens iOS's own notification settings for the app, where its alerts,
+ * sounds, badges, and Focus are switched, rather than copying those
+ * switches into the app; the app's whole page in iOS's Settings where that
+ * address does not open.
+ */
+export function openNotificationSettings(): void {
+  openURL(NOTIFICATION_SETTINGS_URL)
+    .catch(() => openSettings())
+    .catch((error: unknown) => console.error("iOS's Settings did not open.", error));
+}
 
 /** Where the permission stands, as Settings words it. */
 export const NOTIFICATION_STANDING = {
@@ -53,9 +68,7 @@ export function useNotificationPermission(): {
   }, [read]);
   const allow = () => {
     if (standing === NOTIFICATION_STANDING.REFUSED) {
-      openSettings().catch((error: unknown) =>
-        console.error("iOS's Settings did not open.", error),
-      );
+      openNotificationSettings();
       return;
     }
     requestPermissionsAsync().then(

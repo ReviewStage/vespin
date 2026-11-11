@@ -47,6 +47,7 @@ export {
   selectStoredExperimentChoices,
   selectTasks,
   selectWorkspaces,
+  supportAccessStanding,
 } from "@repo/host/app-state-reads";
 
 /** The bridge refused the one read, so this window has no document to draw. */

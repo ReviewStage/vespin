@@ -8,11 +8,12 @@
  * (`../device-agents-procedures.ts`). Nothing here reaches the Mac directly:
  * every call is a row, and the Mac's word is a row it settled or answered.
  *
- * `layout` and `open` answer at once, from the agent and the agents folder
- * its Mac registered, or its home folder where it named none, with no round
- * trip: the agent's folder there holds
- * its worktree, which the Mac makes as it takes the launch line, and the
- * files a message carries (`deviceAgentLayout`). A Mac whose release bundles a runner that keeps the
+ * `layout` and `open` answer at once, from the agent and the folders its
+ * Mac registered, with no round trip: the agent's folder in its agents
+ * folder, or under its home folder where it named none, holds its worktree,
+ * which the Mac makes as it takes the launch line; the files a message carries stand under the
+ * attachments folder it registered, and what the agent saves for us to read
+ * back under its temp folder (`deviceAgentLayoutIn`). A Mac whose release bundles a runner that keeps the
  * CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`), by the
  * host version it last called with, has it kept there, as a sandbox's is,
  * its runner mirroring Codex's threads from their default under the
@@ -200,13 +201,25 @@ function keepsTranscripts(version: string | null): boolean {
   return version !== null && hostVersionMeets(version, MAC_MACHINE.TRANSCRIPTS_SINCE);
 }
 
-/** The agent's things on the Mac its layout was read off, under the agents folder that Mac registered, or its home folder where it named none. */
+/** The agent's things on the Mac its layout was read off, under the folders that Mac registered, its agents folder under its home where it named none. */
 function macFolders(
-  device: { readonly home: string; readonly agentsFolder: string | null },
+  device: {
+    readonly home: string;
+    readonly agentsFolder: string | null;
+    readonly tempFolder: string;
+    readonly attachmentsFolder: string;
+  },
   agentId: string,
 ) {
   // Note that a Mac's own word for its agents folder is taken over this build's root, so a release that moves the root on either side still lays a launch out where its Mac looks.
-  return deviceAgentLayoutIn(device.agentsFolder ?? deviceAgentsFolder(device.home), agentId);
+  return deviceAgentLayoutIn(
+    {
+      agentsFolder: device.agentsFolder ?? deviceAgentsFolder(device.home),
+      tempFolder: device.tempFolder,
+      attachmentsFolder: device.attachmentsFolder,
+    },
+    agentId,
+  );
 }
 
 /**
@@ -331,8 +344,8 @@ function deviceMachineOver(
         installedSkills: undefined,
         skillsUpload: undefined,
         attachments: folders.attachments,
-        // Note that the Mac answers reads inside the agent's folder alone, so what we read back is saved in its temp folder, never `/tmp`.
-        sharedFiles: folders.temp,
+        // Note that the Mac answers reads inside the agent's own folders alone, so what we read back is saved in its folder under the machine's temp folder, never `/tmp` itself.
+        sharedFiles: folders.sharedFiles,
         claudeExecutable: device.value.claudeExecutable,
         codexExecutable: device.value.codexExecutable ?? undefined,
         // Note that a Mac's Codex keeps its threads and its login at its own default under the machine's

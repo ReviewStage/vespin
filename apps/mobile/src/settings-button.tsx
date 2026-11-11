@@ -1,4 +1,4 @@
-// settings-button.tsx -- the signed-in account's photo at the leading edge of each tab's root bar, the button that opens Settings.
+// settings-button.tsx -- the one way Settings opens, and the signed-in account's photo at the leading edge of each tab's root bar, the button that opens it.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { selectAccount } from "@repo/host/app-state-reads";
@@ -10,16 +10,28 @@ import { appStateQuery } from "./host/app-state-query.js";
 /** What the photo is heard as: where it goes, as the gear it replaced was. */
 const SETTINGS = "Settings";
 
+/** Settings' route: a sheet over the tabs, a form sheet in a regular window. */
+const SETTINGS_ROUTE = "/settings";
+
+/**
+ * The one way to open Settings, from the account's photo, the iPad's menu
+ * bar's ⌘, (`modules/menu-commands/`), or anywhere else that offers it.
+ */
+export function useOpenSettings(): () => void {
+  const router = useRouter();
+  return () => router.push(SETTINGS_ROUTE);
+}
+
 /** The signed-in account as its photo button, opening Settings as a sheet over the tabs; none while nobody is signed in. */
 export function useSettingsAccount(): BarAccount | undefined {
-  const router = useRouter();
+  const open = useOpenSettings();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return undefined;
   return {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
     label: SETTINGS,
-    onPress: () => router.push("/settings"),
+    onPress: open,
   };
 }
 
