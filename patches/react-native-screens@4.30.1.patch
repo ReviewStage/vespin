@@ -1,0 +1,13 @@
+diff --git a/ios/tabs/RNSTabBarAppearanceCoordinator.mm b/ios/tabs/RNSTabBarAppearanceCoordinator.mm
+index b3bc98dd720850ed88344368162360493957f0b9..9ecfee3d991e4fa29020bef83d1df6d855d8910f 100644
+--- a/ios/tabs/RNSTabBarAppearanceCoordinator.mm
++++ b/ios/tabs/RNSTabBarAppearanceCoordinator.mm
+@@ -65,6 +65,8 @@ static UIImage *_Nullable RNSImageWithSymbolRenderingMode(UIImage *_Nullable ima
+ 
+   tabBarItem.standardAppearance = tabScreenCtrl.tabScreenComponentView.standardAppearance;
+   tabBarItem.scrollEdgeAppearance = tabScreenCtrl.tabScreenComponentView.scrollEdgeAppearance;
++  // The iPad's floating top tab bar draws no UITabBarAppearance, so its badge stays system red unless the item itself carries the badge's color.
++  tabBarItem.badgeColor = tabBarItem.standardAppearance.stackedLayoutAppearance.normal.badgeBackgroundColor;
+ 
+   [self setIconsForTabBarItem:tabBarItem
+                fromScreenView:tabScreenCtrl.tabScreenComponentView

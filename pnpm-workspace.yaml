@@ -137,6 +137,13 @@ patchedDependencies:
 # check upstream's 11.11.0 makes: a root span that is not recording is passed
 # over. Delete it when `@sentry/electron` moves to a browser SDK that has it.
   "@sentry/browser@11.8.0": patches/@sentry__browser@11.8.0.patch
+#
+# `react-native-screens` 4.30.1 colors a tab's badge only through the tab bar's
+# appearance, which the iPad's floating top tab bar never draws, so the Inbox's
+# count stood system red there while the iPhone drew it in copper. The patch
+# hands the appearance's badge color to the item itself (`badgeColor`) as well.
+# Delete it when an upstream release colors the iPad's badge on its own.
+  react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
 
 # A dependency is keyed by its peers' names alone, not by the peers' own peer
 # graphs, so one `vitest` serves every workspace. Keyed in full, a peer's own
