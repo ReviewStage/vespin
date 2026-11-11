@@ -1,5 +1,6 @@
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { SERVER_HANDED } from "@repo/features/agent-servers-model";
+import { startMockGoal } from "./goal-mockup.js";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -474,8 +475,9 @@ export function AgentComposer({
     self: agentId,
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
+    // MOCKUP: the list stands for the fixture's agent too, which has no session to clear.
     commands:
-      onClear === undefined || editingQueued
+      editingQueued
         ? undefined
         : { onRun: (name) => runCommand(name, true) },
     keywords,
@@ -652,6 +654,9 @@ export function AgentComposer({
         editor.current?.clear();
         setModelAsk((was) => was + 1);
         return;
+      case SLASH_COMMAND.GOAL:
+        if (chosen) editor.current?.replace(`/${SLASH_COMMAND.GOAL} `);
+        return;
       case SLASH_COMMAND.CLEAR:
       case SLASH_COMMAND.NEW:
         editor.current?.clear();
@@ -683,6 +688,7 @@ export function AgentComposer({
       case SLASH_COMMAND.MODEL:
         return typed.name;
       case SLASH_COMMAND.COMPACT:
+      case SLASH_COMMAND.GOAL:
         return undefined;
       case SLASH_COMMAND.CLEAR:
       case SLASH_COMMAND.NEW:
@@ -693,6 +699,13 @@ export function AgentComposer({
   };
   /** Send as it stands: an edit saved, the message queued where a send queues now, or sent; one of the box's commands typed runs instead. */
   const submit = () => {
+    // MOCKUP: `/goal <condition>` sets the goal on the mock store rather than sending.
+    const goal = leadingCommand(composer.draft);
+    if (goal?.name === SLASH_COMMAND.GOAL && goal.words !== "") {
+      startMockGoal(goal.words);
+      editor.current?.clear();
+      return;
+    }
     const command = typedCommand();
     if (command !== undefined) return runCommand(command, false);
     if (editingQueued) return sentBy(queueing.onSave);

@@ -1,5 +1,6 @@
 import {
   Activity,
+  Target,
   AppWindow,
   BookBookmark,
   BookOpen,
@@ -194,6 +195,8 @@ export const GLYPH = {
   FEEDBACK: lucideGlyph(MessageSquareHeart),
   // A message waiting behind an agent's running turn, to open the next one.
   QUEUED: lucideGlyph(ListEnd),
+  // A goal an agent works toward across turns until it holds.
+  GOAL: lucideGlyph(Target),
 
   // States.
   DONE: MarkDoneIcon,

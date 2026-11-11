@@ -17,6 +17,8 @@ export const SLASH_COMMAND = {
   COMPACT: "compact",
   CLEAR: "clear",
   NEW: "new",
+  /** MOCKUP: keep the agent working until a condition holds. */
+  GOAL: "goal",
 } as const;
 export type SlashCommand = (typeof SLASH_COMMAND)[keyof typeof SLASH_COMMAND];
 

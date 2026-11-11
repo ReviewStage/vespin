@@ -263,6 +263,7 @@ import {
 import { AgentPlace } from "./agent-place.js";
 import { PublishedBar, type PublishedDoors } from "./agent-published.js";
 import { AgentQueueDock } from "./agent-queue-dock.js";
+import { GoalDock, GoalLines } from "./goal-mockup.js";
 import { SendingAgent } from "./agent-ref.js";
 import type { AgentServersControl } from "./agent-servers.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
@@ -2624,7 +2625,9 @@ function AgentTranscriptView({
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
     // Note that an ask no drawn call holds stands at the foot after the turn too, settled there as it settled.
     const loose = approvals === undefined ? [] : looseApprovals(approvals.asks, callIds);
+    // MOCKUP: the goal's cards stand at the foot whether or not anything else does.
     const trailing =
+      false &&
       !working &&
       loose.length === 0 &&
       ended === undefined &&
@@ -2639,6 +2642,7 @@ function AgentTranscriptView({
               ))}
             </div>
           )}
+          <GoalLines />
           {working && !waitingNotice ? (
             <WorkingLine
               startedAt={startedAt}
@@ -3271,6 +3275,7 @@ function AgentTabView({
           doors={doors}
         />
         <ThreadsDock threads={threads} />
+        <GoalDock />
         <AgentPicturesProvider value={pictures}>
           <AgentQueueDock
             messages={queue.messages}

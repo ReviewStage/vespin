@@ -36,6 +36,7 @@ export const LISTED_COMMANDS = [
   SLASH_COMMAND.MODEL,
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,
+  SLASH_COMMAND.GOAL,
 ] as const satisfies readonly SlashCommand[];
 
 const COMMANDS = {
@@ -50,6 +51,7 @@ const COMMANDS = {
     alias: SLASH_COMMAND.NEW,
   },
   [SLASH_COMMAND.NEW]: { glyph: () => <GLYPH.NEW_SESSION />, detail: "Start a fresh session" },
+  [SLASH_COMMAND.GOAL]: { glyph: () => <GLYPH.GOAL />, detail: "Keep working until a condition holds" },
 } as const satisfies Record<SlashCommand, CommandEntry>;
 
 /** Every name a command chip stands for in the box, its alias among them; `/model` opens its menu as it is chosen, so it never stands there as a chip. */
@@ -57,6 +59,7 @@ export const COMMAND_NAMES: ReadonlySet<string> = new Set([
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,
   SLASH_COMMAND.NEW,
+  SLASH_COMMAND.GOAL,
 ]);
 
 /** The commands a sent message carries as its first word, which its bubble draws as their chip: the others run in the box and never go. */
