@@ -133,6 +133,10 @@ const CHECKS_WAIT = {
 } as const;
 
 /** The harnesses whose instructions differ in the tools they name: Claude Code and Codex, which each run their own. */
+/** How Codex reads an attached PDF or HEIC photo, since it has no Read tool: it goes with every Codex agent's checkout or sandbox words. */
+const CODEX_DOCUMENT_WORDS =
+  " To read an attached PDF, run `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; to look at a HEIC photo, convert it with `heif-dec <file> <out>.jpg`, then `view_image`.";
+
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
   CODEX: CONVERSATION_RUNTIME.CODEX,
@@ -260,13 +264,12 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     integrations: NATIVE_INTEGRATION_WORDS,
   },
   [CODER_HARNESS.CODEX]: {
-    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.`,
-    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.`,
+    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.${CODEX_DOCUMENT_WORDS}`,
+    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.${CODEX_DOCUMENT_WORDS}`,
     serve:
       "Start the app from your shell in the background (with `&` and its output sent to a file), which keeps a server running until you stop it",
     started: STOP_BEFORE_TURN_END,
-    readFile:
-      "your shell (`cat`, or `sed -n` for a range), or Codex's `view_image` for a picture; for a PDF, `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; for a HEIC photo, `heif-dec <file> <out>.jpg`, then `view_image`",
+    readFile: "your shell (`cat`, or `sed -n` for a range), or Codex's `view_image` for a picture",
     glob: "your shell (`rg --files`, or `ls`)",
     searchWeb: "Search the public web with Codex's own web search",
     skills: `A word like \`/name\` in the developer's message names one of your skills, which Codex finds under the checkout's \`.agents/skills\`, or, for one your developer installed into ${PRODUCT_NAME}, under \`${NATIVE_SKILLS_PATH.INSTALLED}/${INSTALLED_SKILLS.SKILLS}\`: read that skill's \`SKILL.md\` before anything else, and follow what it says. Where neither has such a skill, read \`.agents/skills/<name>/SKILL.md\` or \`.claude/skills/<name>/SKILL.md\` on the default branch, and follow that instead.`,
