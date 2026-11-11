@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
 import { type ReactNode, type RefObject, useEffect, useReducer, useRef, useState } from "react";
 import { appPlatform } from "../app-platform.js";
+import { readKept, writeKept } from "../kept-storage.js";
 import { pagesQuery } from "../live-reads.js";
 
 import { PAGE_SANDBOX, useFrameLinks } from "./page-pane.js";
@@ -55,17 +56,79 @@ import { pressPlace, ReplyPress, roomAround, useReplyDoor } from "./reply-to-sel
 
 const readSize = Schema.decodeUnknownOption(pageSizeSchema);
 
+/** How many page versions' fits the window keeps across launches, the newest fitted kept. */
+const KEPT_FITS = 500;
+
+/** A page version's fit as the window keeps it: never pending, since only a fit heard is kept. */
+const keptFitSchema = Schema.Struct({
+  page: Schema.String,
+  version: Schema.Number,
+  fit: Schema.Union([
+    Schema.Struct({ kind: Schema.Literal(PAGE_FIT.CONTENT), height: Schema.Number }),
+    Schema.Struct({ kind: Schema.Literal(PAGE_FIT.FILLS) }),
+  ]),
+});
+
+/** The fits kept, oldest fitted first, under one key (`kept-storage.ts`). */
+const KEPT = {
+  name: "app.shownPageFits",
+  schema: Schema.fromJsonString(Schema.Array(keptFitSchema)),
+} as const;
+
 /**
- * How each page's versions were last fitted in this window, by page then
- * version, so a frame drawn again stands at the height it last stood at.
- * Note that a transcript draws only the rows near the view, so a row holding
- * a page is let go and drawn again as the reader scrolls past it: started
- * over at the stand-in's height, the page would shrink by its whole height
- * and grow back once its frame loaded again, and the log, which moves the
- * scroll by as much as a row above the view grows or shrinks, would jump
- * twice.
+ * How each page's versions were last fitted, by page then version, oldest
+ * fitted first, so a frame drawn again stands at the height it last stood at;
+ * read from the window's storage as it is first asked, so a page fitted
+ * before the app last closed opens at its height too. Note that a transcript
+ * draws only the rows near the view, so a row holding a page is let go and
+ * drawn again as the reader scrolls past it: started at the stand-in's
+ * height, the page grows once its frame loads, and TanStack Virtual, which
+ * leaves the scroll where it stands as a row at the view's top resizes while
+ * the reader scrolls up, as it chooses to, draws that growth as a jump. A row
+ * drawn at its real height gives it nothing to move.
  */
-const FITTED = new Map<string, Map<number, PageFit>>();
+let fitted: Map<string, Map<number, PageFit>> | undefined;
+
+/** The fits known, read from storage the first time they are asked for. */
+function fittedNow(): Map<string, Map<number, PageFit>> {
+  if (fitted !== undefined) return fitted;
+  const known = new Map<string, Map<number, PageFit>>();
+  for (const kept of readKept(KEPT.name, KEPT.schema, [])) {
+    const versions = known.get(kept.page) ?? new Map<number, PageFit>();
+    versions.set(kept.version, kept.fit);
+    known.set(kept.page, versions);
+  }
+  fitted = known;
+  return known;
+}
+
+/** Notes a page version's fit, newest last, and keeps the newest `KEPT_FITS` of them; one already noted as it is keeps nothing. */
+function noteFit(
+  pageId: string,
+  version: number,
+  fit: Exclude<PageFit, { kind: typeof PAGE_FIT.PENDING }>,
+): void {
+  const known = fittedNow();
+  const was = known.get(pageId)?.get(version);
+  if (
+    was !== undefined &&
+    was.kind === fit.kind &&
+    (was.kind !== PAGE_FIT.CONTENT || fit.kind !== PAGE_FIT.CONTENT || was.height === fit.height)
+  )
+    return;
+  // Note that a page fitted again moves to the end, so the oldest fitted is the first let go.
+  const versions = known.get(pageId) ?? new Map<number, PageFit>();
+  versions.delete(version);
+  versions.set(version, fit);
+  known.delete(pageId);
+  known.set(pageId, versions);
+  const entries = [...known].flatMap(([page, kept]) =>
+    [...kept].flatMap(([at, each]) =>
+      each.kind === PAGE_FIT.PENDING ? [] : [{ page, version: at, fit: each }],
+    ),
+  );
+  writeKept(KEPT.name, KEPT.schema, entries.slice(-KEPT_FITS));
+}
 
 /** Reads a message a frame posted as the words selected in it, nothing for anything else a page posts. */
 const readPick = Schema.decodeUnknownOption(pagePickAnswerSchema);
@@ -77,20 +140,17 @@ function embedHeight(fit: PageFit): PageEmbedHeight {
   return { kind: PAGE_EMBED_HEIGHT.STAND_IN };
 }
 
-/** How the page in `frame` is fitted, from the heights it reports against the frame's own; as it was last fitted in this window, or pending, until it has. */
+/** How the page in `frame` is fitted, from the heights it reports against the frame's own; as it was last fitted, or pending, until it has. */
 function useFrameFit(
   frame: RefObject<HTMLIFrameElement | null>,
   pageId: string,
   version: number,
 ): PageFit {
   const [fit, setFit] = useState<PageFit>(
-    () => FITTED.get(pageId)?.get(version) ?? PAGE_FIT_PENDING,
+    () => fittedNow().get(pageId)?.get(version) ?? PAGE_FIT_PENDING,
   );
   useEffect(() => {
-    if (fit.kind === PAGE_FIT.PENDING) return;
-    const versions = FITTED.get(pageId) ?? new Map<number, PageFit>();
-    versions.set(version, fit);
-    FITTED.set(pageId, versions);
+    if (fit.kind !== PAGE_FIT.PENDING) noteFit(pageId, version, fit);
   }, [fit, pageId, version]);
   useEffect(() => {
     const hear = (event: MessageEvent) => {
