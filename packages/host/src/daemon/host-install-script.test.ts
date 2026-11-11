@@ -261,7 +261,10 @@ const box = (
       'case "$1" in',
       '  bootstrap) touch "$FAKE_ROOT/loaded" ;;',
       '  bootout) rm -f "$FAKE_ROOT/loaded" ;;',
-      '  print) case "$2" in */*/*) [ -e "$FAKE_ROOT/loaded" ] ;; esac ;;',
+      '  print) case "$2" in',
+      '    */dev.vespin.host) [ -e "$FAKE_ROOT/app-loaded" ] ;;',
+      '    */*/*) [ -e "$FAKE_ROOT/loaded" ] ;;',
+      "  esac ;;",
       "esac",
     ].join("\n"),
   });
@@ -280,6 +283,7 @@ const box = (
     spawnSync("sh", [...args], { cwd: folder(), env: { ...env, ...extra }, encoding: "utf8" });
   return {
     home,
+    root,
     releases: join(home, ".local/share/vespin-host"),
     link: join(home, ".local/bin/vespin-host"),
     state: join(home, ".local/state/vespin-host"),
@@ -500,6 +504,18 @@ describe("the host's install script", () => {
     expect(computer.asked().slice(before)).toContain(
       "systemctl --user restart vespin-host.service",
     );
+  });
+
+  it("installs nothing on a Mac where the app's host is loaded, and points to the app", () => {
+    const computer = box(OS.DARWIN);
+    writeFileSync(join(computer.root, "app-loaded"), "");
+
+    const answer = computer.install("0.3.0");
+
+    expect(answer.status, answer.stderr).toBe(0);
+    expect(answer.stdout).toContain("The Vespin app runs this Mac's host.");
+    expect(stands(computer.releases)).toBe(false);
+    expect(stands(computer.service)).toBe(false);
   });
 
   it("refuses to swap a release for the same version's while its service will not stop, leaving the release it runs as it stands", () => {
