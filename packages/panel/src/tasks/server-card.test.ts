@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { SERVER_MENTION_NOTE } from "@repo/features/agent-servers-model";
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
@@ -17,7 +18,6 @@ import {
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
 import { MENTION_KIND, type MentionPlace, mentionMarkdown } from "@repo/features/mention-link";
-import { SERVER_MENTION_NOTE } from "@repo/ui/agent-servers-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode } from "react";

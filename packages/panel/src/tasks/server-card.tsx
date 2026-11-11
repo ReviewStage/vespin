@@ -1,12 +1,12 @@
-import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { HoverCard, HoverCardHead, HoverCardNote, ProviderMark } from "@repo/ui";
 import {
   SERVER_HANDED,
   SERVER_ROW,
   type ServerHanded,
   type ServerRow,
   serverMentionNote,
-} from "@repo/ui/agent-servers-model";
+} from "@repo/features/agent-servers-model";
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { HoverCard, HoverCardHead, HoverCardNote, ProviderMark } from "@repo/ui";
 import { createContext, type ReactNode, useContext } from "react";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { useServerRows } from "./agent-servers.js";

@@ -53,7 +53,7 @@ function GuardedScreens() {
         <Stack.Screen name="settings" options={{ presentation: "modal", title: "Settings" }} />
         <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
         <Stack.Screen name="start-agent" options={{ presentation: "modal", title: "New agent" }} />
-        <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Model" }} />
+        <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Options" }} />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn && !updateNeeded}>
         <Stack.Screen name="sign-in" />

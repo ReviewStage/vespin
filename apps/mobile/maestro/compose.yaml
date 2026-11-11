@@ -1,4 +1,4 @@
-# compose.yaml -- an agent's composer: the message queued behind its turn listed over the field with Steer and Delete, a follow-up typed and sent, a photo's + offered, and the turn stopped.
+# compose.yaml -- an agent's composer: the message queued behind its turn listed over the field with Steer and Delete, a follow-up typed and sent, the + menu's Photos, Options, permission mode, and Fast, a `/` offering the task's skills, and the turn stopped.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -46,6 +46,45 @@ appId: dev.vespin.ios
 - tapOn: "Steer"
 - assertNotVisible:
     id: "ask-note"
+# The + opens a menu, nearest it Photos and Options, then the agent's
+# permission mode, a menu of the three with the one it runs on checked, and
+# Fast, a switch, since Opus 5.5 has a fast version.
+- tapOn: "Add"
+- assertVisible: "Photos"
+- assertVisible: "Options"
+- assertVisible: "Permissions"
+- assertVisible: "Fast"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-add-menu
+- tapOn: "Permissions"
+- assertVisible: "Full access"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-permissions
+- tapOn: "Approve for me"
+- assertNotVisible:
+    id: "ask-note"
+# A `/` typed offers the task's skills over the field, narrowed as the name
+# is typed, and a press writes the skill's word into the message.
+- tapOn:
+    id: "composer-field"
+- inputText: "/"
+- assertVisible: "/release-notes"
+- assertVisible: "/migrate"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-skills
+- inputText: "rev"
+- assertVisible: "/review"
+- assertNotVisible: "/migrate"
+- tapOn: "/review"
+- assertNotVisible: "/release-notes"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-skill-picked
+- eraseText: 20
+- hideKeyboard
 # Stop, with nothing typed, stands as the system's spinner until the agent stops.
 - tapOn: "Stop"
 - assertVisible: "Stopping"

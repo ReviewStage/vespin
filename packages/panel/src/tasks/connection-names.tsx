@@ -1,6 +1,6 @@
+import { serverName } from "@repo/features/agent-servers-model";
 import { INTEGRATION_PROVIDER, integrationConnectionOf } from "@repo/features/integration-wire";
 import type { ToolCallView } from "@repo/features/tool-call-model";
-import { serverName } from "@repo/ui/agent-servers-model";
 import { createContext, type ReactNode, useCallback, useContext } from "react";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 

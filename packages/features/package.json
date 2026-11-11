@@ -267,7 +267,10 @@
     "./turn-files": "./src/turn-files.js",
     "./agent-parts": "./src/agent-parts.js",
     "./glyph-state": "./src/glyph-state.js",
-    "./sealed-page": "./src/sealed-page.js"
+    "./sealed-page": "./src/sealed-page.js",
+    "./agent-servers-model": "./src/agent-servers-model.js",
+    "./integration-search": "./src/integration-search.js",
+    "./skill-mention": "./src/skill-mention.js"
   },
   "types": "./src/index.ts",
   "scripts": {

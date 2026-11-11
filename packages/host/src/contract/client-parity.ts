@@ -10,8 +10,10 @@
  * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, and read
  * mark, and a task's description and pages followed; an agent's page: a message sent or
- * queued, its queue steered, its turn stopped, and its model and effort
- * changed; New agent on a task and
+ * queued, its queue steered, its turn stopped, its model, effort, Fast,
+ * permission mode, and MCP servers changed, the account's integrations
+ * followed for those servers, its task's skills read for a `/`, and the
+ * agent renamed, pinned, and archived; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
  * and the phone's own push registration,
  * which no other client has a place for. Nothing else says which share, so
@@ -92,6 +94,7 @@ const IOS = {
     "iOS's New task and New agent sheets offer no Try again, skills, or warm-keeping yet",
   ),
   COPY: notYet("iOS v1 has nothing to copy or save yet"),
+  PASTEBOARD: byDesign("iOS copies to the system's pasteboard itself (expo-clipboard)"),
   DESKTOP_ONLY: byDesign("A desktop-only platform concern, refused by the iOS host"),
   DESK_TOOLS: byDesign("iOS v1 leaves the terminal and the live view to the desktop and the web"),
   DICTATION: byDesign("iOS uses the keyboard's own dictation"),
@@ -205,9 +208,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHOOSE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_RENAME]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_SERVERS]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_PERMISSION_MODE]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_RENAME]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_SERVERS]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_PERMISSION_MODE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_ADD_REPOSITORY]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_QUEUE]: EVERYWHERE,
@@ -221,8 +224,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PORT_UNSHARE]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_RUN_ACTION]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_ARCHIVE]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_PIN]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_ARCHIVE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DELETE]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_SEEN]: panel(IOS.AGENTS),
@@ -281,7 +284,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: panel(IOS.SETTINGS),
 
-  [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.INTEGRATIONS_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.INTEGRATIONS_CONNECT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.INTEGRATIONS_CANCEL]: panel(IOS.SETTINGS),
@@ -340,7 +343,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_SET_STANDING]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_FILE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_TREE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SKILLS]: panel(IOS.COMPOSER),
+  [PORT_ACT_KIND.TASKS_SKILLS]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_LINK_STANDING_FOLLOW]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_LINK_PREVIEW]: panel(IOS.HOVER),
   [PORT_ACT_KIND.TASKS_BROWSER_TAB_OPEN]: panel(IOS.DESK_TOOLS),
@@ -391,7 +394,7 @@ export const CLIENT_PARITY = {
   ),
   [PORT_ACT_KIND.CONTACT_EMAIL]: panel(IOS.FEEDBACK),
   [PORT_ACT_KIND.WINDOW_FOCUS_PANEL]: panel(IOS.ONE_SCREEN),
-  [PORT_ACT_KIND.WINDOW_COPY_TEXT]: panel(IOS.COPY),
+  [PORT_ACT_KIND.WINDOW_COPY_TEXT]: panel(IOS.PASTEBOARD),
   [PORT_ACT_KIND.WINDOW_COPY_IMAGE]: panel(IOS.COPY),
   [PORT_ACT_KIND.WINDOW_COPY_RICH]: panel(IOS.COPY),
   [PORT_ACT_KIND.WINDOW_SAVE_FILE]: panel(IOS.COPY),
