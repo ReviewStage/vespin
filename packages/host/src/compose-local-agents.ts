@@ -944,12 +944,17 @@ export function composeLocalAgents(
             const exited = yield* Effect.gen(function* () {
               const code = yield* Effect.option(handle.exitCode);
               runners.delete(agentId);
-              yield* workingTold;
               // Note that the launch is starting again until its settle is answered, so no beat settles it as a runner gone before its turn is let go of and its exit code sent.
               starting.add(line.id);
+              // Note that whether any runner works is told once the turn is let go of and settled, so a Mac kept awake for it does not sleep while it is.
               yield* Scope.close(runnerScope, Exit.void).pipe(
                 Effect.andThen(settle(line.id, Option.getOrUndefined(Option.map(code, Number)))),
-                Effect.ensuring(Effect.sync(() => starting.delete(line.id))),
+                Effect.ensuring(
+                  Effect.andThen(
+                    Effect.sync(() => starting.delete(line.id)),
+                    workingTold,
+                  ),
+                ),
               );
             }).pipe(Effect.forkIn(agentScope));
             runners.set(agentId, { lineId: line.id, stdin, handle, exited });
