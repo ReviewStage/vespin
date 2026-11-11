@@ -91,7 +91,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
-import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
@@ -637,7 +637,7 @@ function InboxStackList(words: InboxSearch) {
   const field = useRefilledSearchField(search);
   return (
     <>
-      <Stack.Screen options={{ title: INBOX_TITLE, ...switcherTitle(switcher) }}>
+      <Stack.Screen options={{ title: INBOX_TITLE }}>
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_INBOX}

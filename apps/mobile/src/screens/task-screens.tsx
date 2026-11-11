@@ -101,7 +101,7 @@ import {
 } from "../tasks/use-tasks.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
-import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
@@ -982,7 +982,7 @@ function TasksStackList(words: TasksSearch) {
   const field = useRefilledSearchField(search);
   return (
     <>
-      <Stack.Screen options={{ title: TASKS_TITLE, ...switcherTitle(switcher) }}>
+      <Stack.Screen options={{ title: TASKS_TITLE }}>
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_TASKS}
