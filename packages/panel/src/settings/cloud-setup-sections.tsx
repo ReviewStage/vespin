@@ -809,7 +809,7 @@ function RunActionRow({
   // The command a save sent, which closes the editor once what is saved agrees with it.
   const [sent, setSent] = useState<string | undefined>(undefined);
   // Note that the editor closes once the read draws the save, not when the save answers, so the old command never shows for a frame between (`ScriptRow`).
-  if (sent !== undefined && sent === savedCommand && !busy) {
+  if (sent !== undefined && sent === savedCommand && command === sent && !busy) {
     setSent(undefined);
     setCommand(undefined);
   }
@@ -831,10 +831,14 @@ function RunActionRow({
         ? [...standing(), { id: undefined, isDefault: false, ...typed }]
         : standing().map((each) => (each.id === action.id ? { ...each, ...typed } : each));
     if (action !== undefined) setSent(typed.command);
-    saving.mutate({ repository, actions: next }, { onSuccess: () => added?.onCancel() });
+    saving.mutate(
+      { repository, actions: next },
+      { onSuccess: () => added?.onCancel(), onError: () => setSent(undefined) },
+    );
   };
   const cancel = () => {
     saving.reset();
+    setSent(undefined);
     if (added !== undefined) added.onCancel();
     else setCommand(undefined);
   };
@@ -867,7 +871,16 @@ function RunActionRow({
   const menu = !manages
     ? []
     : action === undefined
-      ? [[{ label: "Rename", icon: <GLYPH.RENAME />, onSelect: () => setRenaming(true) }]]
+      ? [
+          [
+            {
+              label: "Rename",
+              icon: <GLYPH.RENAME />,
+              disabled: busy,
+              onSelect: () => setRenaming(true),
+            },
+          ],
+        ]
       : [
           [
             {
@@ -1164,7 +1177,10 @@ function RunActionsOfRepository({
   onLetGo: (key: number) => void;
 }): React.JSX.Element {
   const order = useRunActionOrder(saving, repository, actions);
-  const drag = useRowDrag(order.move, { handle: SETTINGS_ORDER_HANDLE });
+  // Note that the move itself is let go while a save is out, so a drag already under way drops nothing over the save, since each move saves the whole list as it reads it now.
+  const drag = useRowDrag(manages && !saving.isPending ? order.move : undefined, {
+    handle: SETTINGS_ORDER_HANDLE,
+  });
   // Why the last save of this repository's list was refused, said under its row, whichever control sent it.
   const refused = saving.variables?.repository === repository ? saving.error : null;
   return (
@@ -1203,8 +1219,7 @@ function RunActionsOfRepository({
       {order.ordered.length === 0 ? null : (
         <SettingsOrderedRows
           label={RUN_ACTIONS_LIST}
-          // Note that a drag waits while a save is out, since it saves the whole list as it reads it now.
-          onPointerDown={manages && !saving.isPending ? drag : undefined}
+          onPointerDown={drag}
           gutter={manages}
           rows={order.ordered.map((action, index) => ({
             key: action.id,
