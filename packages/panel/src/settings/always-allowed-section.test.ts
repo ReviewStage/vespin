@@ -176,3 +176,23 @@ test("Remove takes a command off at once, and its toast's Undo adds it again", a
   assert.deepEqual(sent, [{ remove: ["git", "status"] }, { add: ["git", "status"] }]);
   assert.deepEqual(listed(), ["git status *"]);
 });
+
+test("a removal that never reaches the host leaves the command standing and says so", async () => {
+  fakeActPort({
+    [ACT_KIND.ALLOWED_COMMANDS_WRITE]: () => Promise.reject(new Error("the port closed")),
+  });
+  await mount([GIT_STATUS]);
+  const ellipsis =
+    document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
+    assert.fail("no ⋯");
+  act(() => ellipsis.click());
+  const remove =
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (each) => each.textContent === "Remove",
+    ) ?? assert.fail("no Remove");
+  act(() => remove.click());
+  await settle();
+
+  assert.deepEqual(listed(), ["git status *"]);
+  assert.equal(newestToastSays()?.includes("Couldn't change your always-allowed commands"), true);
+});

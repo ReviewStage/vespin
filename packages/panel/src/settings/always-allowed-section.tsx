@@ -88,10 +88,11 @@ const ADD_REFUSED = {
     "Type the start of one command: up to 8 plain words, with no quotes, pipes, globs, or other shell syntax.",
 } as const satisfies Record<TypedCommandRefusal, string>;
 
-/** Why the service added nothing, as the field says it. */
-const ADD_FAILED = {
+/** Why the service changed nothing, as the field or a removal's toast says it. */
+const WRITE_FAILED = {
   FULL: "You allow as many commands as you can. Remove one to add another.",
-  UNANSWERED: "Couldn't add the command. Try again.",
+  ADD: "Couldn't add the command. Try again.",
+  CHANGE: "Couldn't change your always-allowed commands. Try again.",
 } as const;
 
 /** The add row's shape, then one command's, as the loaded section draws them. */
@@ -120,13 +121,21 @@ function holds(rows: CommandRows, prefix: readonly string[]): boolean {
   return rows.some((each) => samePrefix(each.prefix, prefix));
 }
 
-/** Why a write's answer changed nothing, in the field's words; none where the service kept it. */
-function writeRefusal(answer: AllowedCommandsWriteAnswerView): string | undefined {
+/** Why a write's answer changed nothing, `otherwise` where the list was not full; none where the service kept it. */
+function writeRefusal(
+  answer: AllowedCommandsWriteAnswerView,
+  otherwise: string,
+): string | undefined {
   if (!("failure" in answer)) return undefined;
   return answer.failure === ALLOWED_COMMANDS_WRITE_FAILURE.ALLOWED_COMMANDS_FULL
-    ? ADD_FAILED.FULL
-    : ADD_FAILED.UNANSWERED;
+    ? WRITE_FAILED.FULL
+    : otherwise;
 }
+
+/** No answer, as a send that never reached the host reads. */
+const UNANSWERED: AllowedCommandsWriteAnswerView = {
+  failure: ALLOWED_COMMANDS_WRITE_FAILURE.UNANSWERED,
+};
 
 /**
  * A command removed, which ⌘Z and its toast's Undo add again while it is
@@ -145,7 +154,7 @@ const REMOVE_UNDO = {
   undo: (send, { prefix }) => send({ add: [...prefix] }),
   holds: (rows, { prefix }) => !holds(rows, prefix),
   undone: (rows, { prefix }) => holds(rows, prefix),
-  refused: writeRefusal,
+  refused: (answer) => writeRefusal(answer, WRITE_FAILED.CHANGE),
   surface: FAILURE_SURFACE.ALLOWED_COMMANDS_WRITE,
 } satisfies UndoWrite<
   CommandRows,
@@ -253,9 +262,10 @@ function CommandRows({ commands }: { commands: CommandRows }): React.JSX.Element
   // Note that an Undo reads the commands as they stand when it is pressed, since it lands renders after the removal.
   const latest = useRef(commands);
   latest.current = commands;
+  // Note that a send that never reached the host answers unanswered, so a removal or its Undo says why in its toast rather than leaving its row hidden.
   const doors: RowDoors<CommandRows, typeof ACT_KIND.ALLOWED_COMMANDS_WRITE> = {
     rows: () => latest.current,
-    send,
+    send: (write) => send(write).catch(() => UNANSWERED),
   };
   const add = (value: string) => {
     const typedPrefix = typedCommandPrefix(value);
@@ -265,22 +275,20 @@ function CommandRows({ commands }: { commands: CommandRows }): React.JSX.Element
     }
     setAdding(true);
     setProblem(undefined);
-    void send({ add: [...typedPrefix.prefix] })
-      .catch(() => ({ failure: ALLOWED_COMMANDS_WRITE_FAILURE.UNANSWERED }))
-      .then((answer) => {
-        setAdding(false);
-        const refusal = writeRefusal(answer);
-        if (refusal !== undefined) {
-          setProblem(refusedShown(refusal, FAILURE_SURFACE.ALLOWED_COMMANDS_WRITE));
-          return;
-        }
-        setTyped("");
-        setLanded(typedPrefix.prefix);
-      });
+    void doors.send({ add: [...typedPrefix.prefix] }).then((answer) => {
+      setAdding(false);
+      const refusal = writeRefusal(answer, WRITE_FAILED.ADD);
+      if (refusal !== undefined) {
+        setProblem(refusedShown(refusal, FAILURE_SURFACE.ALLOWED_COMMANDS_WRITE));
+        return;
+      }
+      setTyped("");
+      setLanded(typedPrefix.prefix);
+    });
   };
   const remove = (command: AllowedCommand) => {
     setRemoving((was) => new Set(was).add(command.id));
-    void pressWrite(REMOVE_UNDO, doors, command).then(() =>
+    void pressWrite(REMOVE_UNDO, doors, command).finally(() =>
       setRemoving((was) => {
         const left = new Set(was);
         left.delete(command.id);

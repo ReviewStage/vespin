@@ -19,11 +19,11 @@ import { TextField } from "../text-field/text-field.js";
  * or, where the owner names the command it keeps (`command`), every command
  * starting with those words for every agent of the member's, the command
  * drawn monospace in the press or on a muted line under the presses as
- * `commandPlace` chooses;
- * Deny, quiet, opens one field in their place for the words that tell the
- * agent why, optional and held to the bound its owner names, with Deny to
- * send it and Cancel to close it again, Enter denying and Escape
- * canceling. An owner that writes to its agent in a box of its own draws
+ * `commandPlace` chooses; Deny, outlined as Always allow is, so the presses
+ * read as one set however they wrap, opens one field in their place for the
+ * words that tell the agent why, optional and held to the bound its owner
+ * names, with Deny to send it and Cancel to close it again, Enter denying
+ * and Escape canceling. An owner that writes to its agent in a box of its own draws
  * that field itself (`note`), so the words to the agent are written as
  * every other message to it is; a plain text field stands where it does
  * not. They ask nothing of their place, so a dock over a composer can draw
@@ -204,7 +204,7 @@ export function ApprovalActions({
               </>
             )}
           </Button>
-          <Button variant={BUTTON_VARIANT.QUIET} disabled={out} onClick={() => setDenying(true)}>
+          <Button variant={BUTTON_VARIANT.OUTLINE} disabled={out} onClick={() => setDenying(true)}>
             {WORDS.DENY}
           </Button>
         </Inline>

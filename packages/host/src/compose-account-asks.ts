@@ -35,7 +35,7 @@ import type { LIVE_READ } from "@repo/features/live-wire";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { CHATGPT_DEVICE_LOGIN, type ProviderKeysAnswer } from "@repo/features/provider-key-wire";
 import { declaredWrite, type EntityPool } from "@repo/sync";
-import { Clock, Duration, Effect, Option, Schedule, type Scope } from "effect";
+import { Clock, Duration, Effect, Option, Schedule, type Scope, Semaphore } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { type AccountGateDependencies, type Asked, askedOf, gateOf } from "./account-gate.js";
 import {
@@ -424,6 +424,7 @@ function actsOf(
   asked: Asked,
   { memories, hosts, hostsHold }: LiveFollows,
   fetched: FetchedReads,
+  commandsInTurn: <A>(write: Effect.Effect<A>) => Effect.Effect<A>,
 ): AccountAsksActs {
   const { client, pool } = dependencies;
   const { keysWritten, deviceAnswered, tokenWritten, commandsWritten } = writesAnswered(
@@ -454,8 +455,9 @@ function actsOf(
       Effect.flatMap(asked(client.cancelChatGptDeviceLogin(login)), deviceAnswered),
     GITHUB_TOKEN_SAVE: (save) => Effect.flatMap(asked(client.saveGitHubToken(save)), tokenWritten),
     GITHUB_TOKEN_REMOVE: () => Effect.flatMap(asked(client.removeGitHubToken()), tokenWritten),
+    // Note that the commands' writes run one at a time, each laying its answer before the next is sent, because a write's answer is the whole list and one landing late would lay an older list over a newer.
     ALLOWED_COMMANDS_WRITE: (write) =>
-      Effect.flatMap(allowedCommandWrite(client, asked, write), commandsWritten),
+      commandsInTurn(Effect.flatMap(allowedCommandWrite(client, asked, write), commandsWritten)),
     MEMORIES_FORGET: declaredWrite(
       pool,
       memoryForget((forget) => asked(client.forgetMemory(forget))),
@@ -537,7 +539,13 @@ export function composeAccountAsks(
       fetched;
     return {
       methods: {},
-      acts: actsOf(dependencies, asked, follows, fetched),
+      acts: actsOf(
+        dependencies,
+        asked,
+        follows,
+        fetched,
+        (yield* Semaphore.make(1)).withPermits(1),
+      ),
       lifetime: Effect.void,
       // Note that the beats, the hosts, the keys, and the token are held anew under whoever signed in, in place of the hold before, rather than followed again under the account they were held for.
       open: Effect.gen(function* () {

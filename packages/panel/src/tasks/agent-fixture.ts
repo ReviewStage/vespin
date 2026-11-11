@@ -25,6 +25,7 @@
 import {
   AGENT_PERMISSION_MODE,
   type AgentPendingApproval,
+  APPROVAL_STATUS_OF_ANSWER,
 } from "@repo/features/agent-approval-wire";
 import {
   AGENT_CALL_FAILURE,
@@ -1072,6 +1073,10 @@ type StagedAnswer<Kind extends PortActKind> = (
 const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_LIST]: ({ taskId }, stage) => ({
     agents: [agentSummary(taskId, longRun(stage), holdsCall(stage))],
+  }),
+  // The held call's answer, kept as the service keeps one, so its row says how it came out.
+  [ACT_KIND.AGENTS_ANSWER_APPROVAL]: ({ approvalId, answer }) => ({
+    approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[answer] },
   }),
   [ACT_KIND.AGENTS_TRANSCRIPT]: () => longRunHold(),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({
