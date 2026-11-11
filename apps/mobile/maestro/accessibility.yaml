@@ -61,7 +61,9 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: accessibility-task-agents
 # An agent's page: its calls' lines wrapping rather than cut, and the held
-# call's banner over the composer reading what it asks whole.
+# call's banner over the composer, which scrolls in place once it would
+# stand taller than a share of the window, so the transcript stays in sight
+# above it.
 - launchApp:
     arguments:
       fixture: inbox
@@ -73,14 +75,6 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-agent
-# The composer's head stands no taller than a share of the window, scrolling
-# in place past it, so the transcript stays in reach above it: its first
-# message is reached by scrolling the transcript up from its newest row.
-- scrollUntilVisible:
-    element: "Add a way to resend an invite that expired."
-    direction: UP
-    timeout: 20000
-- takeScreenshot: accessibility-agent-start
 # New task, the sheet the tab bar's round + opens.
 - launchApp:
     arguments:
