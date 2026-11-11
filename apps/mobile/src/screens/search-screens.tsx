@@ -13,9 +13,9 @@ import {
 import { EmptyState, LIST_LOOK, ListSection, RowList, Screen, SplitView } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SearchBarCommands } from "react-native-screens";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
+import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns } from "../use-window-size-class.js";
@@ -53,6 +53,9 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
     ...found.agents.map(({ agent }) => [agent.id, iosAgentRoute(agent.id)] as const),
   ]);
 }
+
+/** The query and how to change it, held by the tab's root screen above its two layouts. */
+type SearchWords = { readonly query: string; readonly setQuery: (query: string) => void };
 
 /** What the query found, a section per kind that found any: Tasks, Inbox, then Agents, each row as its own list draws it, and a pull that reads the Inbox and the task list again. */
 function FoundList({
@@ -121,9 +124,8 @@ function FoundList({
  * tasks, each kind best first, and what opens a row found, each in its own
  * tab; the questions and sheets a found row's acts raise stand beside it.
  */
-function useSearchScreen() {
+function useSearchScreen({ query, setQuery }: SearchWords) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents.
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
@@ -161,9 +163,9 @@ function useSearchScreen() {
  * Search tab does, so a query is typed at once; one left typed stands with
  * its results instead.
  */
-function SearchStackScreen() {
-  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen();
-  const field = useRef<SearchBarCommands>(null);
+function SearchStackScreen(words: SearchWords) {
+  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
+  const field = useRefilledSearchField(query);
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
   useEffect(() => {
@@ -199,8 +201,8 @@ function SearchStackScreen() {
  * under the system's field in the column's bar, as the iPad's Mail searches
  * beside its mailboxes. A row found opens in its own tab, beside its list.
  */
-function SearchSplitScreen() {
-  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen();
+function SearchSplitScreen(words: SearchWords) {
+  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
   const sidebar = useAppSidebar(SIDEBAR_PLACE.SEARCH, useSidebarTasks());
   return (
     <>
@@ -224,7 +226,12 @@ function SearchSplitScreen() {
   );
 }
 
-/** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise. */
+/** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise, the query held here so a rotation across the line keeps it. */
 export function SearchScreen() {
-  return useThreeColumns() ? <SearchSplitScreen /> : <SearchStackScreen />;
+  const [query, setQuery] = useState("");
+  return useThreeColumns() ? (
+    <SearchSplitScreen query={query} setQuery={setQuery} />
+  ) : (
+    <SearchStackScreen query={query} setQuery={setQuery} />
+  );
 }
