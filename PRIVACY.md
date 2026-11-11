@@ -478,9 +478,10 @@ its last use. When you delete your account:
   agents already did at those services stays there.
 - **Google and GitHub sign-in:** we ask Google and GitHub to revoke the tokens
   your sign-in left with us, so our GitHub App can no longer act as you; if
-  one cannot be reached in a few seconds, your account is deleted anyway and
-  that token stays valid until it expires (about eight hours for GitHub's, an
-  hour for Google's).
+  one cannot be reached in a few seconds, your account is deleted anyway, we
+  keep no copy of the token, and it stays valid at the provider until it
+  expires: about eight hours for a GitHub access token and an hour for a
+  Google access token, or longer for a Google refresh token.
 
 ## 8\. Your rights and choices
 
