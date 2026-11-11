@@ -1,6 +1,6 @@
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
-import type { TerminalSummary } from "@repo/features/terminal-wire";
+import { SANDBOX_STATE, type TerminalSummary } from "@repo/features/terminal-wire";
 import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -204,7 +204,7 @@ export function useRunActions(
       shell.running && shell.runAction !== undefined ? [shell.runAction] : [],
     ),
   );
-  const stopped = listed !== undefined && listed.sandbox !== "running";
+  const stopped = listed !== undefined && listed.sandbox !== SANDBOX_STATE.RUNNING;
   const offer = (action: RunAction): OfferedAction => {
     const runs = running.has(action.id);
     const onPress = () => {
