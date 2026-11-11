@@ -159,6 +159,9 @@ function sandboxWith(files: Readonly<Record<string, Uint8Array>>): InboxSandboxD
 /** The first bytes of a PNG, as a screenshot's file starts. */
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
 
+/** The first bytes of a PDF, as a report's file starts. */
+const PDF = new TextEncoder().encode("%PDF-1.7\n%\u00e2\u00e3\n1 0 obj\n");
+
 /** A post run as the tool runs one, over the sandbox given. */
 const post = (agent: ThreadPoster, value: WireBoundaryInput, sandbox = noSandbox) =>
   postToInbox(agent, input(value), sandbox);
@@ -600,6 +603,58 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
+    "a PDF a body names as it draws a picture is kept as a file of its message, on a post that asks and a reply under it, and cut out of its words",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+        const sandbox = sandboxWith({ "/tmp/report.pdf": PDF, "shots/after.png": PNG });
+
+        const asked = yield* post(
+          agent,
+          {
+            ...QUEUE,
+            body: 'The report: ![report](/tmp/report.pdf "Q3 report")\n\n![After](shots/after.png)',
+          },
+          sandbox,
+        );
+        yield* TestClock.adjust(Duration.seconds(1));
+        const replied = yield* post(
+          agent,
+          { key: QUEUE.key, body: "Again: ![report](/tmp/report.pdf)" },
+          sandbox,
+        );
+
+        assert.equal(asked.status, ACTION_RESULT_STATUS.ACCEPTED);
+        assert.equal(replied.status, ACTION_RESULT_STATUS.ACCEPTED);
+        const item = yield* onlyItem(agent);
+        const [first, reply] = item.thread ?? [];
+        assert.deepEqual(
+          [first, reply].map((message) =>
+            message?.files?.map((file) => [file.name, file.mediaType]),
+          ),
+          [
+            [
+              ["report.pdf", INBOX_FILE_TYPE.PDF],
+              ["after.png", INBOX_IMAGE_TYPE.PNG],
+            ],
+            [["report.pdf", INBOX_FILE_TYPE.PDF]],
+          ],
+        );
+        assert.match(first?.text ?? "", /^The report: \n\n!\[After\]\(https:/u);
+        assert.equal(reply?.text, "Again: ");
+        const kept = yield* readInboxAttachment(
+          agent.userId,
+          item.id,
+          reply?.files?.[0]?.attachmentId ?? "",
+        );
+        assert.deepEqual(
+          Option.map(kept, (file) => [file.contentType, new Uint8Array(file.bytes)]),
+          Option.some([INBOX_FILE_TYPE.PDF, PDF]),
+        );
+      }),
+  );
+
+  it.effect(
     "a recording a body draws is kept as a WebM past a picture's and a file's bound and read back as one, and a desktop before version 5 is shown no image block for it",
     () =>
       Effect.gen(function* () {
@@ -634,7 +689,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "a picture past a picture's bound, a recording past a video's, and one that states no size are refused with the path named",
+    "a picture past a picture's bound, a recording past a video's, a PDF past a PDF's, and one that states no size are refused with the path named",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -642,15 +697,17 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           "shots/huge.png": paddedTo(PNG, INBOX_BOUNDS.MAX_IMAGE_BYTES + 1),
           "/tmp/video/long.webm": paddedTo(webmBytes(1280, 800), INBOX_BOUNDS.MAX_VIDEO_BYTES + 1),
           "/tmp/video/flow.mkv": webmBytes(640, 480, "matroska"),
+          "/tmp/report.pdf": paddedTo(PDF, AGENT_BOUNDS.MAX_PDF_BYTES + 1),
         });
         const tooLarge =
-          "Not posted: a picture names a file larger than 1.5 MB, or a video larger than 4.0 MB; render it smaller, or record a shorter flow:";
+          "Not posted: a picture names a file larger than 1.5 MB, a video larger than 4.0 MB, or a PDF larger than 3.0 MB; render it smaller, or record a shorter flow:";
         const refusals = [
           ["shots/huge.png", `${tooLarge} shots/huge.png`],
           ["/tmp/video/long.webm", `${tooLarge} /tmp/video/long.webm`],
+          ["/tmp/report.pdf", `${tooLarge} /tmp/report.pdf`],
           [
             "/tmp/video/flow.mkv",
-            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, or a WebM video that states its size: /tmp/video/flow.mkv",
+            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF: /tmp/video/flow.mkv",
           ],
         ] as const;
         for (const [path, reason] of refusals) {
@@ -681,7 +738,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ],
           [
             drawing("notes.txt"),
-            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, or a WebM video that states its size: notes.txt",
+            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF: notes.txt",
           ],
           [
             drawing(...Array.from({ length: 9 }, (_none, at) => `shots/${at}.png`)),

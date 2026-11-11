@@ -3,13 +3,18 @@ import { posix } from "node:path";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readPageById } from "@repo/database/models/task-pages";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { inboxSandboxPicturePaths } from "@repo/features/inbox-attachment-link";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import {
+  inboxSandboxPicturePaths,
+  withoutSandboxPictures,
+} from "@repo/features/inbox-attachment-link";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
   INBOX_BOUNDS,
   INBOX_CLOSE_LEAD,
   INBOX_FIELD,
+  INBOX_FILE_TYPE,
   INBOX_MESSAGE_AUTHOR,
   INBOX_OPTION_MEDIA,
   INBOX_STATUS,
@@ -60,6 +65,7 @@ import { placeholderLinksWords } from "../link-rule.js";
 import { CODER } from "./bounds.js";
 import {
   type InboxSandboxDoor,
+  readSandboxBodyFile,
   readSandboxMedia,
   type SandboxImageRefusals,
 } from "./inbox-image.js";
@@ -84,9 +90,11 @@ import {
  * replacing the one open. A picture is drawn in the body by the path of
  * its file in the agent's sandbox, a screenshot of what it rendered, which
  * a post reads there first (`inbox-image.ts`) and the store keeps as a file
- * of the message, writing its address in the path's place; a file that is
- * not there, not an image, or past the bound refuses the whole post with
- * the path named. A post that asks nothing is a note, or the agent's reply
+ * of the message, writing its address in the path's place; a PDF named
+ * the same way is kept as a file of the message too, cut out of its words,
+ * since it is opened from its chip rather than drawn. A file that is
+ * not there, not an image or a PDF, or past its bound refuses the whole
+ * post with the path named. A post that asks nothing is a note, or the agent's reply
  * on the thread, since replying never answers: a member's message on the
  * thread reaches the agent as one of the developer's messages, and so does
  * an answer it waits on. No call holds the turn, since a coder session
@@ -104,6 +112,9 @@ const MAX_PICTURE_MB = (INBOX_BOUNDS.MAX_IMAGE_BYTES / 1_000_000).toFixed(1);
 /** The inbox's video bound in megabytes, as the words the model reads say it. */
 const MAX_VIDEO_MB = (INBOX_BOUNDS.MAX_VIDEO_BYTES / 1_000_000).toFixed(1);
 
+/** A PDF's bound in megabytes, as the words the model reads say it. */
+const MAX_PDF_MB = (AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1);
+
 const POST_THREAD_WORDS =
   "Post a message on a thread in the inbox, apart from your transcript. " +
   "Each post is one message on a thread under key, your own short lowercase slug such as branch-protection. " +
@@ -118,7 +129,8 @@ const POST_THREAD_WORDS =
   `ending #L<start>-L<end>, at most ${INBOX_BOUNDS.MAX_CODE_LINES} lines, which they see as GitHub holds them at that commit. ` +
   "Each link alone on its line is a card of its own, so give a thing one: its mention alone on its line is its card, never followed by its bare address. " +
   `Draw a picture where it belongs, such as a screenshot of a UI you rendered, as ![alt](<path> "caption"): path is the file's path in your sandbox, ` +
-  `relative to the checkout or absolute, a PNG, JPEG, or WebP of at most ${MAX_PICTURE_MB} MB, or a WebM video of at most ${MAX_VIDEO_MB} MB, such as a recording of a flow, which plays there, ` +
+  `relative to the checkout or absolute, a PNG, JPEG, or WebP of at most ${MAX_PICTURE_MB} MB, a WebM video of at most ${MAX_VIDEO_MB} MB, such as a recording of a flow, which plays there, ` +
+  `or a PDF of at most ${MAX_PDF_MB} MB, which stands as a file of the message, ` +
   `at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} a message; ` +
   "alt says in a sentence what it shows, and pictures written next to each other stand side by side. " +
   "A picture the message is about is drawn in it, never pointed at in a transcript, yours or another agent's, which the thread's reader does not see. " +
@@ -283,8 +295,8 @@ const readRead = readEither(inboxReadInputSchema);
 const PICTURE_REFUSALS: SandboxImageRefusals = {
   NO_FILE: "Not posted: a picture names no file in your sandbox:",
   NOT_IMAGE:
-    "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, or a WebM video that states its size:",
-  TOO_LARGE: `Not posted: a picture names a file larger than ${MAX_PICTURE_MB} MB, or a video larger than ${MAX_VIDEO_MB} MB; render it smaller, or record a shorter flow:`,
+    "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF:",
+  TOO_LARGE: `Not posted: a picture names a file larger than ${MAX_PICTURE_MB} MB, a video larger than ${MAX_VIDEO_MB} MB, or a PDF larger than ${MAX_PDF_MB} MB; render it smaller, or record a shorter flow:`,
   UNREADABLE: "Not posted: a picture's file could not be read from your sandbox:",
 };
 
@@ -503,17 +515,24 @@ function storeRefusal(refusal: InboxPostRefusal): string {
   }
 }
 
+/** The files a body names from the sandbox as the store takes them, and the body with the PDFs among them cut out of its words. */
+interface BodyFiles {
+  readonly body: string;
+  readonly files: readonly InboxBodyPicture[];
+}
+
 /**
- * The pictures the body draws from the sandbox, each read there under the
- * path it is written by and named by its file's own name, or the first
- * refusal among them. Each path is read once, in the order first drawn,
- * and the first path refused ends the reading, so a post with a picture to
- * mend reads no further file for it.
+ * The files the body names from the sandbox, each read there under the
+ * path it is written by and named by its file's own name, and the body
+ * with each PDF among them cut out, since its message keeps it as a file
+ * it does not draw; or the first refusal among them. Each path is read
+ * once, in the order first named, and the first path refused ends the
+ * reading, so a post with a file to mend reads no further file for it.
  */
-function bodyPictures(
+function bodyFiles(
   body: string,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<readonly InboxBodyPicture[], string>> {
+): Effect.Effect<Result.Result<BodyFiles, string>> {
   const paths = inboxSandboxPicturePaths(body);
   if (paths.length > INBOX_BOUNDS.MAX_MESSAGE_PICTURES) {
     return Effect.succeed(Result.fail(INBOX_REFUSAL.TOO_MANY_PICTURES));
@@ -521,11 +540,15 @@ function bodyPictures(
   return Effect.gen(function* () {
     const read: InboxBodyPicture[] = [];
     for (const path of paths) {
-      const image = yield* readSandboxMedia(sandbox, CODER.CHECKOUT_PATH, path, PICTURE_REFUSALS);
-      if (Result.isFailure(image)) return Result.fail(image.failure);
-      read.push({ ...image.success, path, name: posix.basename(path) || path });
+      const file = yield* readSandboxBodyFile(sandbox, CODER.CHECKOUT_PATH, path, PICTURE_REFUSALS);
+      if (Result.isFailure(file)) return Result.fail(file.failure);
+      read.push({ ...file.success, path, name: posix.basename(path) || path });
     }
-    return Result.succeed(read);
+    const pdfs = new Set(
+      read.filter((file) => file.contentType === INBOX_FILE_TYPE.PDF).map((file) => file.path),
+    );
+    const words = pdfs.size === 0 ? body : withoutSandboxPictures(body, (path) => pdfs.has(path));
+    return Result.succeed({ body: words, files: read });
   });
 }
 
@@ -679,7 +702,7 @@ function placeOf(post: InboxThreadPostInput): Result.Result<ThreadPlace, string>
     : Result.succeed({ addresseeId });
 }
 
-/** Runs one post: whom it waits on, its pictures read from the sandbox, the message written on the thread under its key, and the agent's threads answered, or why not. */
+/** Runs one post: whom it waits on, its pictures and PDFs read from the sandbox, the message written on the thread under its key, and the agent's threads answered, or why not. */
 export function postToInbox(
   agent: ThreadPoster,
   input: UnparsedWireValue,
@@ -699,13 +722,14 @@ export function postToInbox(
   const place = placeOf(post);
   if (Result.isFailure(place)) return Effect.succeed(inboxRejected(place.failure));
   return Effect.gen(function* () {
-    const pictures = yield* bodyPictures(post.body, sandbox);
-    if (Result.isFailure(pictures)) return inboxRejected(pictures.failure);
-    const options = yield* optionMedia(agent, post.ask, pictures.success.length, sandbox);
+    const named = yield* bodyFiles(post.body, sandbox);
+    if (Result.isFailure(named)) return inboxRejected(named.failure);
+    const { body, files } = named.success;
+    const options = yield* optionMedia(agent, post.ask, files.length, sandbox);
     if (Result.isFailure(options)) return inboxRejected(options.failure);
-    const thread = threadPost(post, place.success, options.success);
+    const thread = threadPost({ ...post, body }, place.success, options.success);
     const wasOpen = yield* threadStandsOpen(agent, thread.key);
-    const posted = yield* postInboxThread(agent, thread, pictures.success, options.success.files);
+    const posted = yield* postInboxThread(agent, thread, files, options.success.files);
     if (Result.isFailure(posted)) return inboxRejected(storeRefusal(posted.failure));
     const { organizationId } = agent;
     yield* afterResponse(

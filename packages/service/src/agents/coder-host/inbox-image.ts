@@ -1,8 +1,14 @@
 import { posix } from "node:path";
-import { type ConversationMediaType, isVideoType } from "@repo/features/conversation-picture-wire";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { CONVERSATION_MEDIA_TYPE, isVideoType } from "@repo/features/conversation-picture-wire";
 import { SIGNATURE_BYTES } from "@repo/features/image-signature";
-import { INBOX_BOUNDS, type InboxImageType } from "@repo/features/inbox-wire";
-import { mediaDimensions, sniffMediaType } from "@repo/features/media-signature";
+import { INBOX_BOUNDS, INBOX_FILE_TYPE, type InboxImageType } from "@repo/features/inbox-wire";
+import {
+  mediaDimensions,
+  type PostedFileType,
+  sniffMediaType,
+  sniffPostedFileType,
+} from "@repo/features/media-signature";
 import { Effect, Result } from "effect";
 import type { InboxImage } from "../../inbox/inbox-store.js";
 
@@ -21,7 +27,10 @@ import type { InboxImage } from "../../inbox/inbox-store.js";
  * bound, neither read whole into the function's memory. A path is resolved
  * from the checkout as the file tools resolve one, so the agent spells it
  * as it spelled it to them. Each refusal is one sentence the model reads,
- * naming the path, so the agent mends the block rather than the item.
+ * naming the path, so the agent mends the block rather than the item. A
+ * post's body may name a PDF the same way (`readSandboxBodyFile`), sniffed
+ * by its `%PDF-` and held to a PDF's bound, which the post keeps as a file
+ * of its message rather than drawing it.
  */
 
 /**
@@ -166,7 +175,7 @@ export function readSandboxImage<Type extends string>(
 /**
  * The MP4 a phone plays of the recording at the path, made in the sandbox
  * beside the WebM read from it, resolved from the checkout as the read
- * was; nothing where the media is no recording, the door makes none, or
+ * was; nothing where the file is no recording, the door makes none, or
  * making it failed, since a recording is kept whole without its copy and
  * the reads answer its WebM.
  */
@@ -174,9 +183,9 @@ export function phoneVideoOfSandbox(
   door: InboxSandboxDoor,
   checkout: string,
   path: string,
-  contentType: ConversationMediaType,
+  contentType: PostedFileType,
 ): Effect.Effect<Uint8Array | undefined> {
-  if (!isVideoType(contentType)) return Effect.succeed(undefined);
+  if (contentType !== CONVERSATION_MEDIA_TYPE.WEBM) return Effect.succeed(undefined);
   const resolved = posix.resolve(checkout, path);
   return Effect.tryPromise(async () => {
     const sandbox = await door();
@@ -184,20 +193,64 @@ export function phoneVideoOfSandbox(
   }).pipe(Effect.catch(() => Effect.succeed(undefined)));
 }
 
-/** The most bytes a posted file of the type may be: a still's bound, or a recording's. */
-function postedBytesOf(type: ConversationMediaType): number {
+/** The most bytes a posted file of the type may be: a still's bound, a recording's, or a PDF's. */
+function postedBytesOf(type: PostedFileType): number {
+  if (type === INBOX_FILE_TYPE.PDF) return AGENT_BOUNDS.MAX_PDF_BYTES;
   return isVideoType(type) ? INBOX_BOUNDS.MAX_VIDEO_BYTES : INBOX_BOUNDS.MAX_IMAGE_BYTES;
+}
+
+/** A file a post keeps, as read from the sandbox: the type its bytes were sniffed to be, the bytes, and a recording's MP4 copy. */
+export interface SandboxPostedFile<Type extends PostedFileType> extends SandboxImage<Type> {
+  readonly mp4Bytes?: Uint8Array | undefined;
+}
+
+/**
+ * A file a post keeps, at the path, of the types the sniff takes, a
+ * recording with the MP4 its sandbox makes of it, or the one sentence
+ * refusing it in the refusals' words: each held to its type's bound, and a
+ * recording refused where it states no size, as `show_image` refuses one
+ * (`@repo/features/media-signature`). Note that the stream is read to the
+ * largest bound and each type is held to its own once it is known, because
+ * the type is sniffed from bytes the bound has already let in.
+ */
+function readSandboxPosted<Type extends PostedFileType>(
+  door: InboxSandboxDoor,
+  checkout: string,
+  path: string,
+  refusals: SandboxImageRefusals,
+  sniff: (head: Uint8Array) => Type | undefined,
+): Effect.Effect<Result.Result<SandboxPostedFile<Type>, string>> {
+  const terms = { maxBytes: INBOX_BOUNDS.MAX_VIDEO_BYTES, refusals, sniff };
+  const read = Effect.map(
+    readSandboxImage(door, checkout, path, terms),
+    Result.flatMap((file) => {
+      if (file.bytes.byteLength > postedBytesOf(file.contentType)) {
+        return refused<Type>(refusals.TOO_LARGE, path);
+      }
+      if (
+        file.contentType === CONVERSATION_MEDIA_TYPE.WEBM &&
+        mediaDimensions(file.bytes, file.contentType) === undefined
+      ) {
+        return refused<Type>(refusals.NOT_IMAGE, path);
+      }
+      return Result.succeed(file);
+    }),
+  );
+  return Effect.flatMap(read, (file) =>
+    Result.isFailure(file)
+      ? Effect.succeed<Result.Result<SandboxPostedFile<Type>, string>>(file)
+      : Effect.map(
+          phoneVideoOfSandbox(door, checkout, path, file.success.contentType),
+          (mp4Bytes) => Result.succeed({ ...file.success, mp4Bytes }),
+        ),
+  );
 }
 
 /**
  * A picture or a WebM recording a post draws, at the path, a recording with
- * the MP4 its sandbox makes of it, or the one
- * sentence refusing it in the refusals' words: a still held to the picture
- * bound, and a recording to the video bound and refused where it states no
- * size, as `show_image` refuses one (`@repo/features/media-signature`).
- * Note that the stream is read to the larger bound and a still is held to
- * its own once its type is known, because the type is sniffed from bytes
- * the bound has already let in.
+ * the MP4 its sandbox makes of it, or the one sentence refusing it in the
+ * refusals' words: a still held to the picture bound, and a recording to the
+ * video bound and refused where it states no size.
  */
 export function readSandboxMedia(
   door: InboxSandboxDoor,
@@ -205,28 +258,20 @@ export function readSandboxMedia(
   path: string,
   refusals: SandboxImageRefusals,
 ): Effect.Effect<Result.Result<InboxImage, string>> {
-  const terms = { maxBytes: INBOX_BOUNDS.MAX_VIDEO_BYTES, refusals, sniff: sniffMediaType };
-  const read = Effect.map(
-    readSandboxImage(door, checkout, path, terms),
-    Result.flatMap((media) => {
-      if (media.bytes.byteLength > postedBytesOf(media.contentType)) {
-        return refused<ConversationMediaType>(refusals.TOO_LARGE, path);
-      }
-      if (
-        isVideoType(media.contentType) &&
-        mediaDimensions(media.bytes, media.contentType) === undefined
-      ) {
-        return refused<ConversationMediaType>(refusals.NOT_IMAGE, path);
-      }
-      return Result.succeed(media);
-    }),
-  );
-  return Effect.flatMap(read, (media) =>
-    Result.isFailure(media)
-      ? Effect.succeed<Result.Result<InboxImage, string>>(media)
-      : Effect.map(
-          phoneVideoOfSandbox(door, checkout, path, media.success.contentType),
-          (mp4Bytes) => Result.succeed({ ...media.success, mp4Bytes }),
-        ),
-  );
+  return readSandboxPosted(door, checkout, path, refusals, sniffMediaType);
+}
+
+/**
+ * A file a post's body names, at the path: a picture or a recording as
+ * `readSandboxMedia` reads one, or a PDF held to a PDF's bound, which the
+ * post keeps as a file of its message rather than drawing it; or the one
+ * sentence refusing it in the refusals' words.
+ */
+export function readSandboxBodyFile(
+  door: InboxSandboxDoor,
+  checkout: string,
+  path: string,
+  refusals: SandboxImageRefusals,
+): Effect.Effect<Result.Result<SandboxPostedFile<PostedFileType>, string>> {
+  return readSandboxPosted(door, checkout, path, refusals, sniffPostedFileType);
 }
