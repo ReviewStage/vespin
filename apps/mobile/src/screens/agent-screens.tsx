@@ -3,6 +3,7 @@
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
@@ -59,6 +60,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where the list holds no title for it yet. */
@@ -257,6 +259,19 @@ export function AgentScreen() {
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
   const title = cardTitle(agent?.title ?? transcript?.word?.title ?? UNTITLED_AGENT);
+  useScreenActivity((workspaces) =>
+    agent === undefined
+      ? undefined
+      : agentActivity(
+          {
+            id,
+            title,
+            workspaceId: agent.workspaceId,
+            taskId: agent.planId,
+          },
+          workspaces,
+        ),
+  );
   const failed = held?.failed === true || transcript?.failure !== undefined;
   const changeModel =
     agent === undefined

@@ -485,10 +485,14 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // clears its notification (`src/notification-task.ts`).
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
+      // A screen handed over from another of the member's devices arrives as
+      // our own activity type (`@repo/features/ios-system-activity`,
+      // `modules/system-activity/`).
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification"],
         NSSupportsLiveActivities: true,
+        NSUserActivityTypes: ["dev.vespin.viewing"],
       },
     },
     plugins: [

@@ -163,6 +163,23 @@ hands the app's JavaScript the tokens, an activity's end, and each Stop
 `-liveActivity true` beside `-fixture inbox` starts an activity of the
 fixture's own, which `maestro/live-activity.yaml` shoots.
 
+## Handoff and Spotlight
+
+Each thread, task, agent, and pull request screen advertises an
+`NSUserActivity` of the app's own type (`dev.vespin.viewing`, declared in
+`app.config.ts`'s `NSUserActivityTypes`) while it is the one in front, with
+its title and its vespin.dev page, so Handoff offers it on the member's other
+devices (`useScreenActivity`, `src/system-activity/`). While an account is
+signed in, the chosen workspace's tasks and Inbox threads stand in the app's
+own Core Spotlight index, each named by its vespin.dev link, emptied on
+sign-out. What is built from the document, the activities, the items, and the
+route a continued activity or a tapped item opens, is
+`@repo/features/ios-system-activity`; the app's native module, autolinked
+from `modules/system-activity/`, sets the activity, writes the index, and
+hands a continued activity or a tapped item to JavaScript, which opens it
+through the routing a link takes. `maestro/spotlight.yaml` finds a task from
+the Home Screen's search; Handoff shows only between real devices.
+
 ## Tests
 
 Logic is tested with vitest, under `src/**/*.test.ts`, as root `AGENTS.md`'s
