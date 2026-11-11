@@ -49,10 +49,10 @@ export function useSettingsAccount(): BarAccount | undefined {
 /**
  * The one item at the leading edge of a tab's root bar, in a stack's own
  * header: a compact window's, and a regular one's where the tab stands no
- * split view. Where the tab names its workspace (the Inbox and Tasks) it is
- * the workspace switcher, whose menu holds the account and opens Settings,
- * as Notion's one workspace button does; elsewhere, or before the account's
- * workspaces are read, the account's photo, opening Settings. A split view
+ * split view: the workspace switcher, whose menu holds the account and
+ * opens Settings, as Notion's one workspace button does, on every tab, since
+ * each acts on the chosen workspace; the account's photo, opening Settings,
+ * only before the account's workspaces are read. A split view
  * stands the switcher in its own bar or the app sidebar's list instead
  * (`screens/app-sidebar.tsx`).
  */

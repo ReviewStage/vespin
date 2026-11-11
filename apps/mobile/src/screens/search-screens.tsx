@@ -20,6 +20,7 @@ import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns } from "../use-window-size-class.js";
+import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
@@ -169,6 +170,7 @@ function useSearchScreen({ query, setQuery }: SearchWords) {
 function SearchStackScreen(words: SearchWords) {
   const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
   const field = useRefilledSearchField(query);
+  const switcher = useWorkspaceSwitcher();
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
   useEffect(() => {
@@ -181,7 +183,7 @@ function SearchStackScreen(words: SearchWords) {
   );
   return (
     <>
-      <Stack.Screen options={{ title: SEARCH_TITLE }}>
+      <Stack.Screen options={{ title: SEARCH_TITLE, ...switcherTitle(switcher) }}>
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_EVERYTHING}
@@ -189,7 +191,7 @@ function SearchStackScreen(words: SearchWords) {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
