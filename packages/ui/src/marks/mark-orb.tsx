@@ -48,7 +48,8 @@ const CELLS_ACROSS = 420;
 /** The mark's texture edge, in pixels, and the blur that turns it into the bevel's height. */
 const MASK = { SIZE: 1024, BEVEL_BLUR: "blur(14px)" } as const;
 
-const VERTEX = "#version 300 es\nin vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+const VERTEX =
+  "#version 300 es\nlayout(location = 0) in vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
 
 const FRAGMENT = `#version 300 es
 precision highp float;
@@ -62,9 +63,9 @@ vec3 tone(float v, float d){ int k = int(clamp(floor(clamp(v,0.,1.)*4. + d), 0.,
 float studio(vec3 rd, float t, vec2 m, float near){
   float a = t*.12 + m.x*.5*near; float c = cos(a), s = sin(a);
   rd = vec3(c*rd.x + s*rd.z, rd.y, -s*rd.x + c*rd.z);
-  float top = smoothstep(.45, .75, rd.y) * smoothstep(.95, .6, abs(rd.x));
-  float strip = smoothstep(.55, .8, rd.x) * smoothstep(.55, .25, abs(rd.y));
-  float rim = smoothstep(.2, .6, -rd.z) * smoothstep(.5, .1, abs(rd.y + .1)) * .7;
+  float top = smoothstep(.45, .75, rd.y) * (1. - smoothstep(.6, .95, abs(rd.x)));
+  float strip = smoothstep(.55, .8, rd.x) * (1. - smoothstep(.25, .55, abs(rd.y)));
+  float rim = smoothstep(.2, .6, -rd.z) * (1. - smoothstep(.1, .5, abs(rd.y + .1))) * .7;
   return clamp(.06 + top*.95 + strip*.8 + rim, 0., 1.);
 }
 void main(){
