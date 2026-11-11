@@ -3,12 +3,12 @@ import type { ReactNode } from "react";
 import { lineRuns } from "./code-card.js";
 
 /**
- * code-preview.tsx -- a few lines of code standing for the whole, as a run action's row shows its command: its first lines, each in the host's colors and cut at the edge, the last fading out where more lines follow.
+ * code-preview.tsx -- a few lines of code standing for the whole, as a run action's row shows its command: its first lines, each in the host's colors and fading out where the edge cuts it, the last fading out downward where more lines follow.
  *
  * A row that holds a script but has no room for it shows its opening this
  * way, so a script of several lines reads as several lines at a glance and
  * a one-liner as one, rather than as a count. Each line keeps to one line
- * of its own, cut where the row ends rather than wrapping, and the lines
+ * of its own, fading out where the row ends rather than wrapping, and the lines
  * keep the code's ground and type at the caption's size: mono, the reading
  * leading, tabs two wide. Where more lines follow than it shows, its last
  * line fades out downward, so what is cut reads as cut. It colors nothing
@@ -25,8 +25,9 @@ export const CODE_PREVIEW_LINES = 3;
 const PREVIEW =
   "ui-code-preview ph-no-capture m-0 block min-w-0 font-mono text-caption leading-reading text-code [tab-size:2] [&_span]:text-code-run data-[more=true]:[mask-image:linear-gradient(to_bottom,black_calc(100%-1lh),transparent)]";
 
-/** One line, kept to a line of its own and cut where the preview ends. */
-const PREVIEW_LINE = "ui-code-preview-line block overflow-hidden text-ellipsis whitespace-pre";
+/** One line, kept to a line of its own and fading out where the preview's edge cuts it, as a row's cut name does. */
+const PREVIEW_LINE =
+  "ui-code-preview-line block overflow-hidden whitespace-pre [mask-image:linear-gradient(to_left,transparent,#000_var(--ui-label-fade))]";
 
 /** One line as drawn: in its colors where they spell it, plain where they do not. */
 function drawnLine(text: string, tokens: CodeLines[number] | undefined): ReactNode {
