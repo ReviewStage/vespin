@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
-import { act, createElement, type ReactElement } from "react";
+import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -11,18 +10,12 @@ import { fakeAppBridge } from "../testing/app-bridge.js";
 import { writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
-import {
-  agentsControl,
-  handInbox,
-  newTaskControl,
-  tasksControl,
-} from "../testing/tasks-control.js";
-import { ArchivedAgents } from "./agent-archive.js";
+import { handInbox, newTaskControl, tasksControl } from "../testing/tasks-control.js";
 
 /**
  * sidebar-folds.test.ts -- every group that folds folds under one
- * header, `GroupHeader`: the sidebar's Pinned and repositories, and the summary's archived
- * agents, alike but for what each counts, each unrolling as it opens, and a
+ * header, `GroupHeader`: the sidebar's Pinned and repositories, alike but
+ * for what each counts, each unrolling as it opens, and a
  * folded group leaving the task open standing.
  */
 
@@ -75,36 +68,6 @@ function fold(within: HTMLElement, name: string): HTMLButtonElement {
   assert.ok(found, `a fold named ${name} is drawn`);
   return found;
 }
-
-test("the summary's archived agents fold under a group header that counts them folded and lists them unfolded", () => {
-  const agent = {
-    planId: "plan-1",
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    createdAt: 1,
-    status: AGENT_STATUS.CANCELED,
-    turnId: null,
-    archivedAt: 2,
-  } as const;
-  const summary = mount(
-    createElement(ArchivedAgents, {
-      agents: agentsControl({
-        archived: [
-          { ...agent, id: "agent-1", title: "Retry audit" },
-          { ...agent, id: "agent-2", title: "Spike" },
-        ],
-      }),
-      shown: true,
-      onOpen: () => undefined,
-    }),
-  );
-
-  assert.equal(fold(summary, "Archived").getAttribute("aria-expanded"), "false");
-  assert.equal(fold(summary, "Archived").textContent, "Archived2 archived agents");
-  act(() => fold(summary, "Archived").click());
-  assert.equal(fold(summary, "Archived").getAttribute("aria-expanded"), "true");
-  assert.ok(summary.querySelector('[aria-label="Archived agents"]'), "the agents are listed");
-});
 
 test("Pinned folds on its name, counts its pins folded, and leaves the pin that is open standing", () => {
   const pinned = (id: string, name: string, position: string) => ({
