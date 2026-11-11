@@ -1012,6 +1012,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const byAgent = yield* readThreads(agent, input({ agentId: teammate.agentId }));
         const byTask = yield* readThreads(agent, input({ taskId: teammate.taskId }));
         const outside = yield* readThreads(agent, input({ agentId: elsewhere.agentId }));
+        const misspelled = yield* readThreads(agent, input({ agentID: teammate.agentId }));
 
         const teammateThread = [
           {
@@ -1031,6 +1032,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.deepEqual(summary(byAgent), teammateThread);
         assert.deepEqual(summary(byTask), teammateThread);
         assert.deepEqual(outside, { status: ACTION_RESULT_STATUS.ACCEPTED, inbox: [] });
+        assert.equal(refusalOf(misspelled), INBOX_REFUSAL.UNREADABLE_READ);
       }),
   );
 

@@ -276,7 +276,8 @@ const SETTLED_MESSAGES_TOLD = 3;
 
 const readPost = readEither(inboxThreadPostInputSchema, { excess: EXCESS_KEYS.DROP });
 const readWithdraw = readEither(inboxWithdrawInputSchema, { excess: EXCESS_KEYS.DROP });
-const readRead = readEither(inboxReadInputSchema, { excess: EXCESS_KEYS.DROP });
+// Note that a read refuses a key it did not name, because a misspelled agentId dropped would answer the agent's own threads as though they were the other's.
+const readRead = readEither(inboxReadInputSchema);
 
 /** Why a post's picture was not read from the sandbox, in a post's own words; each is followed by the path. */
 const PICTURE_REFUSALS: SandboxImageRefusals = {
