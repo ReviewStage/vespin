@@ -12,7 +12,8 @@ import { VIDEO_PLAYER_PLACE, VideoPlayer } from "../../index.js";
  * comma and period, like the bar's frame buttons, pause it and step one
  * frame of the length its header states, none of them reaching the place
  * around it, whose arrows may walk files; a button's own Space is left to
- * the button. In the viewer it starts at
+ * the button. Until its size is read it says it is loading, with no bar.
+ * In the viewer it starts at
  * once, unless motion is held still. The browser's media element is
  * the boundary, so a stand-in plays, pauses, seeks, and opens Safari's own
  * player as one does, telling its events, and the player is read by what its
@@ -131,6 +132,22 @@ function mountPlayer(onExpand?: () => void, dataUrl = WEBM_URL) {
   };
   return { container, video, press, pressButton, toggleLabel, seekAt, playhead, reached };
 }
+
+test("until the video's size is read its frame says it is loading and draws no bar, which stands once it is read", () => {
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:recording");
+  vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(createElement(VideoPlayer, { dataUrl: WEBM_URL, label: "" })));
+  const status = () => container.querySelector('[role="status"]')?.textContent;
+  expect(status()).toBe("Loading the video");
+  expect(container.querySelector('button[aria-label="Play"]')).toBeNull();
+  act(() => container.querySelector("video")?.dispatchEvent(new Event("loadedmetadata")));
+  expect(status()).toBeUndefined();
+  expect(container.querySelector('button[aria-label="Play"]')).not.toBeNull();
+});
 
 test("Space and K play and pause the video while focus is in its player, and neither reaches the place around it", () => {
   const { press, toggleLabel, reached } = mountPlayer();

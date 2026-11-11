@@ -590,6 +590,8 @@ test("a recording an agent's words draw plays where it stands, left out of the r
     const inline = pane.querySelector("video");
     assert.ok(inline, "the recording plays where its words draw it");
     assert.equal(inline.getAttribute("src"), "blob:video-1");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => inline.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(inline.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),
@@ -623,6 +625,8 @@ test("a recording an agent's words draw plays where it stands, left out of the r
     const card = document.querySelector('[role="dialog"]');
     const player = card?.querySelector("video");
     assert.ok(player, "the viewer plays the recording");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => player.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(player.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),
