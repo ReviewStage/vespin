@@ -1,6 +1,6 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
-import { DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
@@ -140,7 +140,7 @@ const WORDS = {
   ONLINE: "Online",
   OFFLINE: "Offline",
   SETTING_UP: "Setting up…",
-  UPDATING: "Updating…",
+  FAILED: "Failed",
   INSTALL_LABEL: "Run this on a Mac or Linux server",
   APPROVE: "Open the link it prints, and approve its code",
   LOGGED_IN: "A Mac runs your agents only while its user is logged in.",
@@ -182,31 +182,31 @@ function machineOf(host: HostLine): ListedMachine {
   return { deviceId: host.id, name: host.name, machineId: host.machineId, model: host.model };
 }
 
+/** What each standing a host's line says leads with, and its tint: online after the finished session's dot, setting up plain, offline and failed tinted. */
+const STANDING_LINE = {
+  [DEVICE_STANDING.ONLINE]: { words: WORDS.ONLINE, state: SETTINGS_ROW_STATE.CONNECTED },
+  [DEVICE_STANDING.OFFLINE]: { words: WORDS.OFFLINE, state: SETTINGS_ROW_STATE.ATTENTION },
+  [DEVICE_STANDING.SETTING_UP]: { words: WORDS.SETTING_UP, state: SETTINGS_ROW_STATE.PLAIN },
+  [DEVICE_STANDING.FAILED]: { words: WORDS.FAILED, state: SETTINGS_ROW_STATE.ATTENTION },
+} as const;
+
 /**
- * What a host's line leads with, and its tint: updating plain while the host
- * says it is, whatever its beat, because it restarts on purpose to update and
- * is quiet meanwhile; online after the finished session's dot; setting up
- * plain for a host that just joined and has not beaten yet; offline tinted;
- * and none while its standing cannot be told.
+ * What a host's line leads with, and its tint, as every surface reads the
+ * host (`presenceStanding`): setting up for a host that just joined and is
+ * not read yet, offline for one the read does not name, though it is the
+ * account's own, and none while its standing cannot be told.
  */
 function standingOf(
   host: HostLine,
   book: PresenceBook,
   joined: boolean,
 ): { readonly words: string; readonly state: SettingsRowState } | undefined {
-  if (host.update === HOST_UPDATE.UPDATING) {
-    return { words: WORDS.UPDATING, state: SETTINGS_ROW_STATE.PLAIN };
-  }
-  const beat = presenceStanding(book, host.id);
-  if (beat === undefined && joined)
-    return { words: WORDS.SETTING_UP, state: SETTINGS_ROW_STATE.PLAIN };
-  // Note that a host the read does not name, though it is the account's own, is gone.
-  const standing = beat ?? DEVICE_STANDING.OFFLINE;
-  if (standing === DEVICE_STANDING.OFFLINE) {
-    return { words: WORDS.OFFLINE, state: SETTINGS_ROW_STATE.ATTENTION };
-  }
-  if (standing !== DEVICE_STANDING.ONLINE) return undefined;
-  return { words: WORDS.ONLINE, state: SETTINGS_ROW_STATE.CONNECTED };
+  const standing =
+    presenceStanding(book, host.id) ??
+    (joined ? DEVICE_STANDING.SETTING_UP : DEVICE_STANDING.OFFLINE);
+  return standing === DEVICE_STANDING.UNKNOWN || standing === DEVICE_STANDING.CHECKING
+    ? undefined
+    : STANDING_LINE[standing];
 }
 
 /**
@@ -328,8 +328,9 @@ function HostRow({
 
 /**
  * This Mac's row in the desktop app: Run agents on this Mac, on while its
- * host stands, what its host says while on, offline until the service lists
- * it, and what it does while off. Note that the row's words are This Mac,
+ * host stands, what its host says while on, setting up until the service
+ * lists it, failed while the app cannot start its host, and what it does
+ * while off. Note that the row's words are This Mac,
  * as every list of machines calls it, and the switch's own name says what
  * it sets.
  */
@@ -338,6 +339,7 @@ function ThisMacRow({
   book,
   on,
   needsApproval,
+  setupFailed,
   onChange,
 }: {
   /** This Mac as the service lists it; none before it does. */
@@ -346,17 +348,19 @@ function ThisMacRow({
   on: boolean;
   /** Whether macOS holds its host until the member allows the app in Login Items. */
   needsApproval: boolean;
+  /** Whether the app could not start its host, and is trying again. */
+  setupFailed: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
   const description = !on ? (
     THIS_MAC_WORDS.OFF
+  ) : setupFailed ? (
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>{WORDS.FAILED}</SettingsRowStateLine>
   ) : host === undefined ? (
-    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
-      {WORDS.OFFLINE}
-    </SettingsRowStateLine>
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>{WORDS.SETTING_UP}</SettingsRowStateLine>
   ) : (
-    <StandingLine host={host} book={book} joined={false} />
+    <StandingLine host={host} book={book} joined={true} />
   );
   return (
     <>
@@ -639,6 +643,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
               book={book}
               on={thisMacOn}
               needsApproval={thisMac.needsApproval === true}
+              setupFailed={thisMac.setupFailed === true}
               onChange={switchThisMac}
             />
           )}

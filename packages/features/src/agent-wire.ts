@@ -395,6 +395,10 @@ export const DEVICE_STANDING = {
   UNKNOWN: "unknown",
   /** The first read of the beats is still out. */
   CHECKING: "checking",
+  /** Joined, connecting, fetching its agents' tools, or updating: it takes no agent yet. */
+  SETTING_UP: "setting_up",
+  /** Its setup failed, or it never called in after joining: it takes no agent. */
+  FAILED: "failed",
 } as const;
 
 export type DeviceStanding = (typeof DEVICE_STANDING)[keyof typeof DEVICE_STANDING];

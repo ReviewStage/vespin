@@ -503,6 +503,8 @@ export interface AppThisMacHost {
   agentFolders?: number;
   /** Whether macOS holds its host until the member allows the app in System Settings › Login Items; absent reads as not. */
   needsApproval?: boolean;
+  /** Whether the app could not start its host as asked, and is trying again; absent reads as not. */
+  setupFailed?: boolean;
 }
 
 /** This Mac as the host last read it, by the account signed in: the one key the host holds, none while nobody is signed in. */

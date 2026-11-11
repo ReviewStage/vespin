@@ -79,13 +79,19 @@ import {
 /** What a reader hears before the name, which the glyph says to the eye. */
 const RUNS_ON = "Runs on: ";
 
+/** What a device the label names is said to be, where it is not simply there. */
+const STANDING_WORDS = {
+  [DEVICE_STANDING.OFFLINE]: RUNS_ON_WORDS.OFFLINE,
+  [DEVICE_STANDING.UNKNOWN]: RUNS_ON_WORDS.UNKNOWN,
+  [DEVICE_STANDING.SETTING_UP]: RUNS_ON_WORDS.SETTING_UP,
+  [DEVICE_STANDING.FAILED]: RUNS_ON_WORDS.FAILED,
+} as const;
+
 /** The label's words, by where the device stands. */
 function macWords(name: string, standing: DeviceStanding | undefined): string {
   if (standing === undefined || standing === DEVICE_STANDING.ONLINE) return name;
   if (standing === DEVICE_STANDING.CHECKING) return name;
-  return standing === DEVICE_STANDING.OFFLINE
-    ? `${name} · Offline`
-    : `${name} · Can't check status`;
+  return `${name} · ${STANDING_WORDS[standing]}`;
 }
 
 /** What the card says under its head of an agent on a device. */

@@ -456,7 +456,8 @@ export function composeLocalAgents(
      * begins (`preparing`) the device registers as preparing and beats, so
      * the menus list it as getting ready rather than not at all; a try that
      * failed registers why and beats while it waits for the next, so it is
-     * listed as not set up rather than away. `registered` registers the
+     * listed as not set up rather than away, and the tries after it register
+     * as failed still, until one lands. `registered` registers the
      * device with where its setup stands.
      */
     const readyForOpening = (
@@ -465,11 +466,17 @@ export function composeLocalAgents(
       ) => Effect.Effect<boolean, never, HttpClient.HttpClient>,
     ) =>
       Effect.gen(function* () {
+        // Note that a device whose last try failed says so through the next, so it reads failed rather than flickering back to setting up.
+        let failure: string | undefined;
         for (;;) {
           const ready = yield* Effect.scoped(
             Effect.gen(function* () {
               const scope = yield* Effect.scope;
-              const preparing = asked(registered({ setup: DEVICE_SETUP.PREPARING })).pipe(
+              const standing: DeviceSetupRegister =
+                failure === undefined
+                  ? { setup: DEVICE_SETUP.PREPARING }
+                  : { setup: DEVICE_SETUP.FAILED, setupFailure: failure };
+              const preparing = asked(registered(standing)).pipe(
                 Effect.andThen(Effect.forkIn(presence(), scope)),
                 Effect.asVoid,
               );
@@ -478,9 +485,8 @@ export function composeLocalAgents(
           );
           if (Result.isSuccess(ready)) return true;
           report(`the local agents' setup failed: ${ready.failure.detail}`);
-          yield* asked(
-            registered({ setup: DEVICE_SETUP.FAILED, setupFailure: ready.failure.detail }),
-          );
+          failure = ready.failure.detail;
+          yield* asked(registered({ setup: DEVICE_SETUP.FAILED, setupFailure: failure }));
           // Note that the device stays listed with why while it waits, and the wait ends early as the gate shuts.
           const waited = yield* Effect.race(
             Effect.as(presence(), false),

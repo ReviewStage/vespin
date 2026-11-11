@@ -279,7 +279,7 @@ test("This Mac stands first on the row of the machine it is, its switch on, with
   );
 });
 
-test("a host's row says Updating… while its update runs, though the restart has left its beat past fresh", async () => {
+test("a host's row says Setting up… while its update runs, though the restart has left its beat past fresh", async () => {
   const hosts: readonly HostLine[] = [
     { id: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14", name: "ams-01", update: HOST_UPDATE.WAITING },
     { id: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", name: "ord-01", update: HOST_UPDATE.UPDATING },
@@ -291,7 +291,7 @@ test("a host's row says Updating… while its update runs, though the restart ha
   const text = document.body.textContent ?? "";
 
   assert.ok(text.includes("ams-01Online · Linux server"), text);
-  assert.ok(text.includes("ord-01Updating… · Linux server"), text);
+  assert.ok(text.includes("ord-01Setting up… · Linux server"), text);
 });
 
 test("each host draws its Remove on its own row, which asks about that host first", async () => {
@@ -342,14 +342,14 @@ test("a host the service still lists for this Mac while it is off stands as any 
   assert.ok(asked.includes("Remove Studio?"), asked);
 });
 
-test("a Mac turned on whose host the service does not list yet reads offline on This Mac's row", async () => {
+test("a Mac turned on whose host the service does not list yet reads setting up on This Mac's row", async () => {
   await machinesWithThisMac([], {
     deviceId: "2d4f6a8c-0e1b-4c3d-9e5f-7a9b1c3d5e60",
     enrolled: true,
   });
   const row = document.body.textContent ?? "";
 
-  assert.ok(row.includes("This MacOffline"), row);
+  assert.ok(row.includes("This MacSetting up…"), row);
 });
 
 test("a Mac turned on whose host macOS holds for approval says so, and opens Login Items to allow it", async () => {
