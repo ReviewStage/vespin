@@ -59,7 +59,7 @@ import {
   TrashIcon,
   useConfirmDialog,
 } from "@repo/ui";
-import { GLYPH, SquareTerminalIcon, StarIcon, StarOffIcon } from "@repo/ui/icons";
+import { GLYPH, StarIcon, StarOffIcon } from "@repo/ui/icons";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
@@ -797,28 +797,30 @@ function useRunActionOrder(
   return { ordered, move };
 }
 
-/** What a closed row says of its command: the line count where it runs over several, then its lines joined by ⏎, which the row cuts at its edge. */
+/** What a row says of its command under its label: its first line with words in it, and an ellipsis where more lines follow, which the row cuts at its edge. */
 function commandSummary(command: string): string {
-  const lines = command.split("\n");
-  const said = lines.map((line) => line.trim()).filter((line) => line !== "");
-  const joined = said.join("  ⏎  ");
-  return lines.length > 1 ? `${lines.length} lines · ${joined}` : joined;
+  const said = command
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  return said.length > 1 ? `${said[0]} …` : (said[0] ?? "");
 }
 
 /**
  * One run action's row, as compact as a subscription's: its icon in the
  * row's mark column, its label, renamed in place, a Default badge on the
- * repository's default, and its command under the label as one muted line.
- * An owner or admin picks an icon from the well, saved as soon as it is
- * picked, as a section's is; renames it from its ⋯, saved as the rename
- * ends, as a subscription's name is; and opens Edit command from its ⋯,
- * which draws the command's numbered editor under the row with Cancel and
- * Save, ⌘S or ⌘↩ in it pressing Save and Escape Cancel. The ⋯ also moves it
- * up or down, which a keyboard reaches where the grip's drag does not,
- * makes it the default or lets the default go, and removes it, a removal
- * asking first. An action just added stands with its label being typed and
- * its editor open, Cancel letting it go, until it is saved, when the saved
- * list draws it in its place. A member reads each, its command under it.
+ * repository's default, and its command's first line under the label. Its
+ * chevron folds the whole command open under the row, on the label's edge,
+ * in the numbered, Bash-colored editor a setup script stands in, to read; an owner or admin edits it there as a script is
+ * edited, Discard and Save standing at the row's end once it differs from
+ * what is saved, ⌘S or ⌘↩ in it pressing Save and Escape Discard. An icon
+ * picked from the well is saved as soon as it is picked, as a section's is,
+ * and a rename from the ⋯ as it ends, as a subscription's name is. The ⋯
+ * also moves it up or down, which a keyboard reaches where the grip's drag
+ * does not, makes it the default or lets the default go, and removes it, a
+ * removal asking first. An action just added stands open, its label being
+ * typed, Cancel letting it go, until it is saved, when the saved list draws
+ * it in its place. A member reads each, its command folded open read-only.
  */
 function RunActionRow({
   saving,
@@ -851,18 +853,17 @@ function RunActionRow({
   // A new action's label and icon, held until its first save; a saved one's are saved as they change.
   const [newLabel, setNewLabel] = useState("");
   const [newIcon, setNewIcon] = useState<TaskSectionIcon | undefined>(undefined);
-  // The command being edited, while Edit command stands open; a new action's stands open from the start.
-  const [command, setCommand] = useState<string | undefined>(added === undefined ? undefined : "");
+  // The command as typed, held apart from what is saved until a save agrees with it.
+  const [edited, setEdited] = useState<string | undefined>(undefined);
   const label = action === undefined ? newLabel : savedLabel;
   const icon = action === undefined ? newIcon : savedIcon;
-  const editing = command !== undefined;
-  // The command a save sent, which closes the editor once what is saved agrees with it.
-  const [sent, setSent] = useState<string | undefined>(undefined);
-  // Note that the editor closes once the read draws the save, not when the save answers, so the old command never shows for a frame between (`ScriptRow`).
-  if (sent !== undefined && sent === savedCommand && command === sent && !busy) {
-    setSent(undefined);
-    setCommand(undefined);
+  // An edit the saved command now agrees with, its own save's or another's, is let go, as a script's is (`ScriptRow`).
+  if (edited !== undefined && action !== undefined && edited === savedCommand && !busy) {
+    setEdited(undefined);
   }
+  const command = edited ?? savedCommand;
+  const changed = action !== undefined && edited !== undefined && edited !== savedCommand;
+  const editing = changed || added !== undefined;
   const standing = () => actions.map(writtenOf);
   const saveChange = (change: Partial<RunActionWritten>) => {
     if (action === undefined) return;
@@ -871,26 +872,19 @@ function RunActionRow({
       actions: standing().map((each) => (each.id === action.id ? { ...each, ...change } : each)),
     });
   };
-  const draft = { label, command: command ?? savedCommand, icon };
-  const canSave =
-    editing && runActionSavable(draft) && (action === undefined || command !== savedCommand);
+  const canSave = editing && runActionSavable({ label, command, icon });
   const save = () => {
-    const typed = { label: label.trim(), command: command ?? savedCommand, icon };
+    const typed = { label: label.trim(), command, icon };
     const next =
       action === undefined
         ? [...standing(), { id: undefined, isDefault: false, ...typed }]
         : standing().map((each) => (each.id === action.id ? { ...each, ...typed } : each));
-    if (action !== undefined) setSent(typed.command);
-    saving.mutate(
-      { repository, actions: next },
-      { onSuccess: () => added?.onCancel(), onError: () => setSent(undefined) },
-    );
+    saving.mutate({ repository, actions: next }, { onSuccess: () => added?.onCancel() });
   };
-  const cancel = () => {
+  const discard = () => {
     saving.reset();
-    setSent(undefined);
     if (added !== undefined) added.onCancel();
-    else setCommand(undefined);
+    else setEdited(undefined);
   };
   // Note that ⌘S and ⌘↩ answer only what the row's Save would: an edit that may be saved, with no save already out.
   const saveKey = canSave && !busy ? save : undefined;
@@ -933,12 +927,6 @@ function RunActionRow({
         ]
       : [
           [
-            {
-              label: "Edit command",
-              icon: <SquareTerminalIcon />,
-              disabled: busy || editing,
-              onSelect: () => setCommand(savedCommand),
-            },
             {
               label: "Rename",
               icon: <GLYPH.RENAME />,
@@ -1000,6 +988,7 @@ function RunActionRow({
         thing={label === "" ? "New run action" : label}
         actions={menu}
         row={{
+          // Note that the icon leads the row in its mark column, as a subscription's mark does, so the label, the command under it, and the editor its chevron folds open stand on one edge.
           leading: (
             <SettingsRowMark>
               {manages ? (
@@ -1044,45 +1033,49 @@ function RunActionRow({
             </ReplayMask>
           ),
           adornment: isDefault ? <Badge>Default</Badge> : undefined,
-          description: editing ? undefined : (
-            <ReplayMask>
-              <OneLine words={commandSummary(savedCommand)}>
-                <Text
-                  as={TEXT_ELEMENT.SPAN}
-                  variant={TEXT_VARIANT.INHERIT}
-                  font={TEXT_FONT.MONO}
-                  tone={TEXT_TONE.MUTED}
-                >
-                  {commandSummary(savedCommand)}
-                </Text>
-              </OneLine>
-            </ReplayMask>
-          ),
-          // Note that Cancel and Save stay beside the label at any width, the label giving way, since dropping under it would move the editor at a phone's width.
+          description:
+            savedCommand === "" ? undefined : (
+              <ReplayMask>
+                <OneLine words={commandSummary(savedCommand)}>
+                  <Text
+                    as={TEXT_ELEMENT.SPAN}
+                    variant={TEXT_VARIANT.INHERIT}
+                    font={TEXT_FONT.MONO}
+                    tone={TEXT_TONE.MUTED}
+                  >
+                    {commandSummary(savedCommand)}
+                  </Text>
+                </OneLine>
+              </ReplayMask>
+            ),
+          // Note that Discard and Save stay beside the label at any width, the label giving way, since dropping under it would move the editor at a phone's width.
           controls: SETTINGS_ROW_CONTROLS.BESIDE,
           control: editing ? (
             <EditActions
-              leave="Cancel"
+              leave={added === undefined ? "Discard" : "Cancel"}
               saving={busy}
               canSave={canSave}
-              onLeave={cancel}
+              onLeave={discard}
               onSave={save}
             />
           ) : undefined,
-          below: editing ? (
-            <ScriptEditor
-              label="Command"
-              value={command}
-              onChange={setCommand}
-              placeholder="pnpm dev"
-              editable={manages}
-              busy={busy}
-              autoFocus={added === undefined}
-              changed={action !== undefined && command !== savedCommand}
-              onSave={saveKey}
-              onLeave={busy ? undefined : cancel}
-            />
-          ) : undefined,
+          fold: {
+            label: label === "" ? "Command" : `${label}'s command`,
+            defaultOpen: added !== undefined,
+            body: (
+              <ScriptEditor
+                label="Command"
+                value={command}
+                onChange={setEdited}
+                placeholder="pnpm dev"
+                editable={manages}
+                busy={busy}
+                changed={changed}
+                onSave={saveKey}
+                onLeave={editing && !busy ? discard : undefined}
+              />
+            ),
+          },
         }}
       />
       {manages && action !== undefined ? (
