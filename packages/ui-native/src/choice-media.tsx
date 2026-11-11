@@ -21,7 +21,6 @@ export type ChoiceMediaKind = (typeof CHOICE_MEDIA)[keyof typeof CHOICE_MEDIA];
 
 /** One piece of an option's media: what it is, its caption, the file it is drawn from where it is one, and what opens it where it is a page or an address. */
 export type ChoiceMedia = {
-  readonly key: string;
   readonly kind: ChoiceMediaKind;
   /** Its caption, a page's title, or an address's words, under its tile. */
   readonly title: string;
@@ -121,8 +120,9 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
 export function ChoiceMediaTiles({ media }: { readonly media: readonly ChoiceMedia[] }) {
   return (
     <View style={styles.tiles}>
-      {media.map((piece) => (
-        <ChoiceMediaTile key={piece.key} piece={piece} />
+      {/* Note that a tile is keyed by its place, because an option may carry the same page or address twice and its list never reorders. */}
+      {media.map((piece, index) => (
+        <ChoiceMediaTile key={index} piece={piece} />
       ))}
     </View>
   );

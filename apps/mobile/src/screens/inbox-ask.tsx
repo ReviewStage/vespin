@@ -95,7 +95,6 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
     case INBOX_OPTION_MEDIA.FILE: {
       const recording = piece.mediaType === INBOX_FILE_TYPE.WEBM;
       return {
-        key: piece.attachmentId,
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
         title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
         source: doors.source(piece.attachmentId),
@@ -104,14 +103,12 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
     }
     case INBOX_OPTION_MEDIA.PAGE:
       return {
-        key: piece.pageId,
         kind: CHOICE_MEDIA.PAGE,
         title: piece.title,
         onOpen: () => doors.openPage(piece),
       };
     case INBOX_OPTION_MEDIA.LINK:
       return {
-        key: piece.url,
         kind: CHOICE_MEDIA.LINK,
         title: piece.label ?? piece.url,
         onOpen: () => doors.openLink(piece.url),
