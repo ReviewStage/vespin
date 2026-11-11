@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { CALL_FAULT } from "@repo/features";
 import type { AccountInboxEntry } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
+import { APPROVAL_STATUS_OF_ANSWER } from "@repo/features/agent-approval-wire";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
@@ -31,16 +32,12 @@ import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
-import {
-  ACCOUNT_INBOX_READ,
-  AGENT_INBOX_READ,
-  INBOX_ITEMS_READ,
-  TASK_INBOX_READ,
-} from "@repo/features/inbox-live";
+import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import {
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
@@ -96,10 +93,9 @@ export const AGENT: AgentSummary = {
   turnId: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
 };
 
-/** The agent as its own page reads it, with no task, as an automation's run leaves one. */
+/** The agent as its own page reads it, with the automation whose run started it. */
 export const PAGE: AgentPage = {
   ...AGENT,
-  planId: null,
   automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
   workspaceId: "workspace-1",
   repository: "acme/relay",
@@ -157,6 +153,12 @@ export const CHANGES = {
     truncated: false,
   },
 };
+
+/** The files one of the agent's turns changed, as the service answers them: the pull request's first file, as the turn's. */
+export const TURN_CHANGES = {
+  files: CHANGES.pullRequest === null ? [] : CHANGES.pullRequest.files.slice(0, 1),
+  truncated: false,
+} as const;
 
 /** That pull request itself, its checks, and its conversation, as its Pull request tab's overview reads them. */
 /** What the reviewer and label pickers offer, as the service answers it. */
@@ -287,8 +289,12 @@ function fakeService() {
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     hosts: polledLive(["hosts"]),
-    // Note that the account stored no preferences until a test sets a row, as a new account has none.
-    preferences: polledLive(["preferences"], () => ({ preferences: [] })),
+    // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
+    preferences: polledLive(["preferences", "sounds", "soundChoices"], () => ({
+      preferences: [],
+      sounds: [],
+      soundChoices: [],
+    })),
   };
   /** The models the account is offered, as the service answers them; the one Claude model from the start. */
   let offeredModels: readonly CatalogModel[] = MODELS;
@@ -307,8 +313,6 @@ function fakeService() {
   let committedIn: { readonly txid?: string } = {};
   /** The item as the agent changed it first, which a close is answered not taken with; none takes every close. */
   let changedFirst: InboxItem | undefined;
-  /** What each close waits on once asked, before it is answered. */
-  let closesWait: Effect.Effect<void> = Effect.void;
   /** The transaction the service says wrote a sent message's row; none says none was written. */
   let sentTxid: string | undefined;
   /** What a rename, an archive, a change of model, or a switch of servers waits on before the service answers it; nothing from the start. */
@@ -331,7 +335,7 @@ function fakeService() {
   let presence: Effect.Effect<DevicePresenceAnswerView> = Effect.succeed({
     failure: AGENT_CALL_FAILURE.UNANSWERED,
   });
-  /** A plan's or an agent's inbox as its live read answers it: polled from the one script, or the refusal standing. */
+  /** A plan's inbox as its live read answers it: polled from the one script, or the refusal standing. */
   const scopeLive = (poll: boolean | undefined, after: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
       if (scope === undefined) return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
@@ -438,9 +442,6 @@ function fakeService() {
             return transcriptLive(params.id, params.call, poll !== undefined, poll?.after);
           case TASK_INBOX_READ.name:
             if (poll === undefined) asked.push(`description-inbox-live:${params.id}`);
-            return scopeLive(poll !== undefined, poll?.after);
-          case AGENT_INBOX_READ.name:
-            if (poll === undefined) asked.push(`agent-inbox-live:${params.id}`);
             return scopeLive(poll !== undefined, poll?.after);
           case ACCOUNT_INBOX_READ.name:
             return accountInboxLive(params.userId, poll !== undefined, poll?.after);
@@ -553,6 +554,16 @@ function fakeService() {
         asked.push(`servers:${agentId}:${request.disabledServers.join(",")}`);
         return { agent: { ...AGENT, disabledServers: request.disabledServers } };
       }),
+    choosePermissionMode: (agentId, request) =>
+      Effect.map(changeGate, () => {
+        asked.push(`permissionMode:${agentId}:${request.permissionMode}`);
+        return { agent: { ...AGENT, permissionMode: request.permissionMode } };
+      }),
+    answerApproval: (agentId, approvalId, request) =>
+      Effect.map(changeGate, () => {
+        asked.push(`answerApproval:${agentId}:${approvalId}:${request.answer}`);
+        return { approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[request.answer] } };
+      }),
     addRepository: (agentId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`addRepository:${agentId}:${request.addRepository.repository}`);
@@ -576,7 +587,14 @@ function fakeService() {
         asked.push(`rewind:${agentId}:${messageId}`);
         return { agent: AGENT };
       }),
+    clear: (agentId) =>
+      Effect.sync(() => {
+        asked.push(`clear:${agentId}`);
+        return { agent: AGENT };
+      }),
     warm: () => Effect.succeed({ warm: true as const }),
+    runAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    stopRunAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
@@ -590,11 +608,6 @@ function fakeService() {
     pin: (agentId, request) =>
       Effect.sync(() => {
         asked.push(`pin:${agentId}:${String(request.pinned)}`);
-        return { agent: AGENT };
-      }),
-    markRead: (agentId, request) =>
-      Effect.sync(() => {
-        asked.push(`mark-read:${agentId}:${request.readMark}`);
         return { agent: AGENT };
       }),
     agent: (agentId) =>
@@ -611,6 +624,11 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`changes:${agentId}${number === undefined ? "" : `#${number}`}`);
         return CHANGES;
+      }),
+    turnChanges: (agentId, messageId) =>
+      Effect.sync(() => {
+        asked.push(`turn-changes:${agentId}:${messageId}`);
+        return TURN_CHANGES;
       }),
     generateChapters: (agentId, number) =>
       Effect.sync(() => {
@@ -675,6 +693,16 @@ function fakeService() {
         asked.push(`forAgents:${change.kind}:${String(change.forAgents)}`);
         return { keys: [] };
       }),
+    renameSubscription: (rename) =>
+      Effect.sync(() => {
+        asked.push(`rename:${rename.subscriptionId}`);
+        return { keys: [] };
+      }),
+    reorderSubscriptions: (order) =>
+      Effect.sync(() => {
+        asked.push(`reorder:${order.subscriptionIds.join(",")}`);
+        return { keys: [] };
+      }),
     startChatGptDeviceLogin: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     pollChatGptDeviceLogin: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     cancelChatGptDeviceLogin: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
@@ -704,6 +732,19 @@ function fakeService() {
           Effect.sync(() => forgetAnswer),
         ),
       ),
+    readSound: () => Effect.succeed({ clip: null }),
+    addSound: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    renameSound: () => Effect.succeed({ sound: null }),
+    removeSound: () => Effect.succeed({ sound: null }),
+    chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
+    markActive: () => Effect.sync(() => void asked.push("active")),
+    registerPushDevice: () => Effect.succeed({ done: true as const }),
+    unregisterPushDevice: () => Effect.succeed({ done: true as const }),
+    pushDeviceStatus: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+    setPushDeviceNotify: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+    registerLiveActivityStartToken: () => Effect.succeed({ done: true as const }),
+    registerLiveActivityToken: () => Effect.succeed({ done: true as const }),
+    endLiveActivity: () => Effect.succeed({ done: true as const }),
     transcribeDictation: (clip) =>
       Effect.sync(() => {
         asked.push(`transcribe:${clip.audio}:${clip.keywords.join(",")}`);
@@ -739,7 +780,7 @@ function fakeService() {
     inboxItemHome: (itemId) =>
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
-        return { agentId: ITEM.agentId, planId: null, workspaceId: "workspace-1" };
+        return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {
@@ -808,7 +849,6 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`close:${itemId}:${request.revision}:${request.clientKey}`);
       }).pipe(
-        Effect.andThen(Effect.suspend(() => closesWait)),
         Effect.map(() => {
           if (changedFirst !== undefined) return { item: changedFirst, taken: false };
           return {
@@ -826,6 +866,11 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`answer:${itemId}:${request.revision}:${request.reply}:${request.clientKey}`);
         return { item: { ...ITEM, revision: 3, status: INBOX_STATUS.ANSWERED }, taken: true };
+      }),
+    takeBackInbox: (itemId, request) =>
+      Effect.sync(() => {
+        asked.push(`take-back:${itemId}:${request.clientKey}`);
+        return { item: { ...ITEM, status: INBOX_STATUS.OPEN }, outcome: INBOX_TAKE_BACK.TAKEN };
       }),
   };
   return {
@@ -872,7 +917,7 @@ function fakeService() {
       queueAnswer = answer;
       queueGate = gate;
     },
-    /** Whether the service answers a plan's or an agent's inbox's live read, or that the account reaches none; none answers unanswered. */
+    /** Whether the service answers a plan's inbox's live read, or that the account reaches none; none answers unanswered. */
     sealScope: (next: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined) => {
       scope = next;
     },
@@ -899,10 +944,6 @@ function fakeService() {
     /** The transaction a Start answers it committed in; none answers none. */
     startCommits: (txid: string | undefined) => {
       startTxid = txid;
-    },
-    /** What each close from now on waits on once asked, before it is answered. */
-    answerClosesAfter: (wait: Effect.Effect<void>) => {
-      closesWait = wait;
     },
     /** Whether each Start from now on goes unanswered, as one sent offline does. */
     leaveStartsUnanswered: (unanswered: boolean) => {
@@ -954,7 +995,7 @@ export const GATE_CLOSED_SIGNED_OUT = {
   cause: { _tag: FAILURE_FACT.GATE_CLOSED, code: GATE_CLOSED_BY.NO_ACCOUNT },
 };
 
-/** The parts of a transcript's live read, of a plan's or an agent's inbox's, and of the account inbox's. */
+/** The parts of a transcript's live read, of a plan's inbox's, and of the account inbox's. */
 const TRANSCRIPT_PARTS = [
   "messages",
   "turns",
@@ -1124,6 +1165,13 @@ export function subject(
       kept: yield* keptContent(KEPT_CONTENT_CHARACTERS),
       focus,
       client: service.client,
+      // Note that no test here asks an agent's ports, so their service is a sandbox that is not running.
+      ports: {
+        list: () => Effect.succeed({ running: false, ports: [] }),
+        shared: () => Effect.succeed({ shared: null }),
+        share: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+        unshare: () => Effect.succeed({ shared: null }),
+      },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       pool,
     }).pipe(Effect.provide(noNetwork));
@@ -1178,9 +1226,6 @@ export function subject(
       acts: { ...composer.acts, ...accountAsks.acts },
       /** The composer's row writes that may wait, as a relaunch lays its queue back by. */
       queueable: composer.queueable,
-      flushHeldCloses: composer.flushHeldCloses,
-      letGoHeldCloses: composer.letGoHeldCloses,
-      answerClosesAfter: service.answerClosesAfter,
       transcripts,
       /** Each of `transcript`'s rows the host laid, in order. */
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>

@@ -1,8 +1,12 @@
 import {
+  Activity,
   AppWindow,
   BookBookmark,
   BookOpen,
   Bot,
+  BrainCircuit,
+  Building2,
+  Calendar,
   CircleArrowOutUpLeft,
   CircleDashed,
   CircleDot,
@@ -12,6 +16,8 @@ import {
   Clock,
   Cloud,
   CornerDownRight,
+  Cpu,
+  Eraser,
   Eye,
   EyeOff,
   File,
@@ -21,18 +27,23 @@ import {
   FolderGit,
   FolderInput,
   FolderKanban,
+  FoldVertical,
   GitBranch,
   GitPullRequest,
   Globe,
   GripVertical,
   Hash,
+  Heading,
   History,
+  House,
+  KeyRound,
   Layers,
   ListChecks,
   ListEnd,
   ListTodo,
   ListTree,
   Lock,
+  MemoryStick,
   MessageSquareHeart,
   MessagesSquare,
   PhoneOff,
@@ -40,6 +51,7 @@ import {
   PinOff,
   RotateCcw,
   Server,
+  ShieldUser,
   Split,
   Unplug,
   Users,
@@ -129,6 +141,8 @@ export const GLYPH = {
   SECTION: lucideGlyph(FolderKanban),
   REPOSITORY: lucideGlyph(FolderGit),
   PAGE: lucideGlyph(AppWindow),
+  // A heading of a task's description, the section a heading opens, as its chip and its row name it.
+  HEADING: lucideGlyph(Heading),
   // A page of the web, outside the app, as a website chip names it.
   WEBSITE: lucideGlyph(Globe),
   DESCRIPTION: DocumentIcon,
@@ -144,6 +158,8 @@ export const GLYPH = {
   CHANNEL: lucideGlyph(Hash),
   // A channel only its members see, as Slack marks a private one.
   PRIVATE_CHANNEL: lucideGlyph(Lock),
+  // A provider's API key, pasted from its console, beside a plan that signs in.
+  API_KEY: lucideGlyph(KeyRound),
   // A thread, the Inbox's item, where no ask of its own says more.
   THREAD: lucideGlyph(MessagesSquare),
   TERMINAL: TerminalIcon,
@@ -152,10 +168,22 @@ export const GLYPH = {
   CALL: WaveformIcon,
   SETTINGS: GearIcon,
   TIME: lucideGlyph(Clock),
+  // A day, as a date's chip and its picker name it; a time of day is TIME's.
+  DATE: lucideGlyph(Calendar),
+  // The workspace's Home, the page with no task open.
+  HOME: lucideGlyph(House),
+  // The Admin pages, the service's own view of its accounts and workspaces.
+  ADMIN: lucideGlyph(ShieldUser),
+  // A workspace, where no tile of its own is drawn.
+  WORKSPACE: lucideGlyph(Building2),
   // Where a task's coding agents run: the cloud, a member's Mac running the app, or a host they added.
   CLOUD: lucideGlyph(Cloud),
   DESKTOP: LaptopIcon,
   HOST: lucideGlyph(Server),
+  // A cloud sandbox's state, its processors, and its memory, as its Cloud chip's popover lists them.
+  SANDBOX_STATE: lucideGlyph(Activity),
+  CPU: lucideGlyph(Cpu),
+  RAM: lucideGlyph(MemoryStick),
   // A task's or an item's status as a field: what a filter or a grouping is by.
   STATUS: lucideGlyph(CircleDotDashed),
   // An agent's to-do list, the same ticked list a description's to-do block wears.
@@ -206,6 +234,12 @@ export const GLYPH = {
   DISCONNECT: lucideGlyph(Unplug),
   // A queued message sent into the turn under way now, rather than waiting for it to end.
   STEER: lucideGlyph(CornerDownRight),
+  // The model an agent runs on, which `/model` changes.
+  MODEL: lucideGlyph(BrainCircuit),
+  // A harness's session folded into a summary of itself to free up its context (`/compact`).
+  COMPACT: lucideGlyph(FoldVertical),
+  // A harness's session let go, the next message opening a fresh one in the same agent (`/clear`).
+  NEW_SESSION: lucideGlyph(Eraser),
   // What a row is dragged by to put it in another place.
   DRAG_HANDLE: lucideGlyph(GripVertical),
   OPEN_EXTERNALLY: ExternalIcon,

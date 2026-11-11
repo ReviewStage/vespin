@@ -11,8 +11,8 @@ import {
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   PULL_REQUEST_THREAD_VIEW,
   type PullRequestThreadView,
   type ReadLink,
@@ -22,6 +22,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { DESCRIPTION_ACTOR, TASK_CREATE_RELATION_KIND, type Task } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
   TASK_CALL_FAILURE,
@@ -51,7 +52,6 @@ import {
   STRIP_TAB_KIND,
   subagentTab,
 } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
@@ -71,7 +71,7 @@ import {
   PANEL_SPAN_ATTRIBUTE,
   type PanelSpan,
 } from "../panel-spans.js";
-import { useLinkPlaceLandings } from "../places/link-landings.js";
+import { useLinkDestinationLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
 import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
@@ -242,6 +242,7 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
   ACT_KIND.AGENTS_START,
   ACT_KIND.AGENTS_STOP,
   ACT_KIND.AGENTS_REWIND,
+  ACT_KIND.AGENTS_CLEAR,
   ACT_KIND.AGENTS_MESSAGE,
   ACT_KIND.AGENTS_CHOOSE,
   ACT_KIND.AGENTS_SERVERS,
@@ -464,7 +465,7 @@ function mount(
     const adminView = useAdminView();
     adminStanding = here.place === ROUTED_PLACE.ADMIN ? adminView : undefined;
     // A link place the router lands on is read by its route and opened as its link is, as the window's root has it.
-    useLinkPlaceLandings(openLanded);
+    useLinkDestinationLandings(openLanded);
     // The place standing and the task bound follow each other, as the window's root keeps them.
     const tasks = control;
     usePlaceBinding({
@@ -768,6 +769,20 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
     repository: refused?.card.repository,
     says: refused?.note.text.length !== 0,
   };
+  // A start from the dialog over Home, refused in turn, lets its page go to the refusal it stood over.
+  act(() => tab.control().newTask.onOpenIn("acme/web"));
+  const second = handedStart();
+  await act(async () => {
+    await tab.control().newTask.start("", "acme/web", undefined, {
+      handed: second,
+      card: {
+        ...card,
+        repository: "acme/web",
+        press: { key: second.idempotencyKey, ask: { ...ask, repository: "acme/web" } },
+      },
+    });
+  });
+  const keptUnder = tab.control().newTask.homeRefused?.refused.card.repository;
   act(() => inboxDoorNow().open());
   act(() => tab.control().onGoHome());
 
@@ -777,6 +792,7 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
     repository: "acme/api",
     says: true,
   });
+  assert.equal(keptUnder, "acme/api", "a dialog's refused start leaves Home's refusal standing");
   assert.equal(
     tab.control().newTask.homeRefused,
     undefined,
@@ -1264,7 +1280,9 @@ test("a Vespin link naming a task by its number opens the task the service finds
   );
   const open = (planId: string) =>
     act(() =>
-      tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_PLACE.TASK, planId } }),
+      tab
+        .control()
+        .onOpenLink({ workspace: "acme", place: { kind: LINK_DESTINATION.TASK, planId } }),
     );
 
   open("42");
@@ -1286,9 +1304,6 @@ test("a Vespin link naming a task by its number opens the task the service finds
 
 /** The workspace the listing names, by its id, as its address step is written where it has no slug. */
 const LISTED_STEP = TASK.workspaceId;
-
-/** An agent on no task, whose own page a link to one of its pages opens. */
-const TASKLESS_AGENT_ID = "5e2d8c1b-7a4f-4b3e-9c6d-2f1a0b9e8d7c";
 
 /** A link as the window is handed it, by its address, in any spelling a link or a mention was written in. */
 function linkAt(href: string): ReadLink {
@@ -1380,32 +1395,23 @@ test.each([
 );
 
 test.each([
-  ["a page's link", `${LINK_ORIGIN}/${LISTED_STEP}/task/${TASK.id}/page/page-1`, undefined],
+  ["a page's link", `${LINK_ORIGIN}/${LISTED_STEP}/task/${TASK.id}/page/page-1`],
   [
     "a page's link written under /plan/",
     `${LINK_ORIGIN}/${LISTED_STEP}/plan/${TASK.id}/page/page-1`,
-    undefined,
   ],
+  ["a page's link by the task's key", `${LINK_ORIGIN}/${LISTED_STEP}/task/VSP-7/page/page-1`],
   [
-    "a page's link by the task's key",
-    `${LINK_ORIGIN}/${LISTED_STEP}/task/VSP-7/page/page-1`,
-    undefined,
+    "an older link to a page an agent showed on itself, by the agent, which now stands on its task",
+    `${LINK_ORIGIN}/${LISTED_STEP}/agent/${AGENT_ID}/page/page-1`,
   ],
-  [
-    "a page of an agent on no task",
-    `${LINK_ORIGIN}/${LISTED_STEP}/agent/${TASKLESS_AGENT_ID}/page/page-1`,
-    TASKLESS_AGENT_ID,
-  ],
-])(
-  "%s opens the side panel on the page, matched on the route tree",
-  async (_spelling, href, agent) => {
-    const opened = await openedBy(href, true);
-    assert.deepEqual(
-      { panel: opened.panel, agent: opened.agent },
-      { panel: { open: true, tab: pageTab("page-1") }, agent },
-    );
-  },
-);
+])("%s opens the side panel on the page, matched on the route tree", async (_spelling, href) => {
+  const opened = await openedBy(href, true);
+  assert.deepEqual(
+    { panel: opened.panel, agent: opened.agent },
+    { panel: { open: true, tab: pageTab("page-1") }, agent: undefined },
+  );
+});
 
 test("a link to another task's section opens that task and asks its page to show the section, each ask its own", async () => {
   const tab = mount(
@@ -1449,29 +1455,6 @@ test("a link to a comment thread asks its task's page for the thread, each ask i
   assert.equal(tab.control().commentReveal?.ask, 3, "an ask after one let go is still its own");
 });
 
-test("a link to a page an agent on no task showed opens that agent's page, its panel on the page's tab, the agent's own pages held for it", async () => {
-  const page = { id: "page-1", title: "Flaky funnel", version: 1, at: 1 };
-  fakeActs({
-    act: () => Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." }),
-  });
-  // Note that a panel's pages are held through the window's act port and laid on the document, as the host lays them.
-  const asked = holdPages(handHostReads({}).deliverPages, () => ({ rows: [page] }));
-  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) }, {});
-  await settle();
-
-  act(() =>
-    tab.control().onOpenLink(linkAt(`${LINK_ORIGIN}/acme/agent/${AGENT_ID}/page/${page.id}`)),
-  );
-  await settle();
-
-  assert.equal(tab.control().agentView.agentId, AGENT_ID);
-  // Note that the open task's pages stay held beneath the agent's page.
-  assert.deepEqual(asked, [{ taskId: TASK.id }, { agentId: AGENT_ID }]);
-  // Note that the agent's pages stand once they reach their query.
-  await vi.waitFor(() => assert.deepEqual(tab.control().agentView.pages, [page]));
-  assert.deepEqual(panelOf(tab), { open: true, tab: pageTab(page.id) });
-});
-
 test("in a narrow room a link to another task's page goes straight to the page's address, and no other address stands as the task opens", async () => {
   holdPageOne();
   const tab = mount(
@@ -1508,9 +1491,8 @@ test("a page loaded at a section's own address lands on its route, which opens t
   assert.equal(tab.entries(), entries, "the step takes the loaded entry in place");
 });
 
-test("a Vespin link keyed by the agent alone opens on the agent's task where it has one, else on the agent's page", async () => {
+test("a Vespin link keyed by the agent alone opens on the agent's task, and on the agent's page where the agent cannot be read", async () => {
   const ELSEWHERE = "5e3b6f1d-2a10-4c7a-9a55-7b0f5f3e2c1d";
-  const TASKLESS = "2b7c9e4d-1f3a-4b6e-8d2c-9a1e5f7b3c40";
   const UNREAD = "6d4e2c1b-9a8f-4e7d-b6c5-3a2f1e0d9c8b";
   const SLOW = "1a9b8c7d-6e5f-4a3b-9c2d-1e0f9a8b7c6d";
   const LISTED = "3f2e1d0c-9b8a-4f7e-8d6c-5b4a39281706";
@@ -1519,7 +1501,7 @@ test("a Vespin link keyed by the agent alone opens on the agent's task where it 
     agent: {
       ...RUNNING_AGENT,
       id: String(agentId),
-      planId: agentId === ELSEWHERE ? OTHER_TASK_ID : null,
+      planId: OTHER_TASK_ID,
       automationId: null,
       workspaceId: "acme",
       repository: null,
@@ -1567,11 +1549,6 @@ test("a Vespin link keyed by the agent alone opens on the agent's task where it 
     changesTab(UNREAD),
     "and opens no tab of a panel it may not hold",
   );
-
-  open(`/agent/${TASKLESS}/changes`);
-  await settle();
-  assert.equal(tab.control().agentView.agentId, TASKLESS, "an agent on no task opens on its page");
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(TASKLESS) });
 
   open(`/agent/${ELSEWHERE}`);
   await settle();
@@ -2002,7 +1979,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
   act(() =>
     tab.control().onOpenLink({
       workspace: "renamed-since",
-      place: { kind: LINK_PLACE.INBOX_ITEM, planId: alerts, itemId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, planId: alerts, itemId },
     }),
   );
   const underTask = opened();
@@ -2011,7 +1988,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
   act(() =>
     tab.control().onOpenLink({
       workspace: "renamed-since",
-      place: { kind: LINK_PLACE.INBOX_ITEM, agentId: AGENT_ID, itemId: agentItemId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, agentId: AGENT_ID, itemId: agentItemId },
     }),
   );
   await settle();
@@ -2019,7 +1996,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
   act(() =>
     tab.control().onOpenLink({
       workspace: "personal",
-      place: { kind: LINK_PLACE.AUTOMATION, automationId },
+      place: { kind: LINK_DESTINATION.AUTOMATION, automationId },
     }),
   );
 
@@ -2066,7 +2043,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   act(() =>
     tab.control().onOpenLink({
       workspace: "personal",
-      place: { kind: LINK_PLACE.INBOX_ITEM, itemId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId },
     }),
   );
   await settle();
@@ -2075,7 +2052,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.INBOX_ITEM, itemId: unknownId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: unknownId },
     }),
   );
   await settle();
@@ -2088,7 +2065,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.INBOX_ITEM, itemId: unknownId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: unknownId },
     }),
   );
   await settle();
@@ -2105,13 +2082,13 @@ test.each([
     "an Inbox item named by its id alone",
     ACT_KIND.AGENTS_INBOX_ITEM_HOME,
     { agentId: AGENT_ID, planId: "alerts", workspaceId: ACME.id },
-    { kind: LINK_PLACE.INBOX_ITEM, itemId: "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6" },
+    { kind: LINK_DESTINATION.INBOX_ITEM, itemId: "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6" },
   ],
   [
     "a task named by its number",
     ACT_KIND.TASKS_FIND,
     { taskId: "alerts" },
-    { kind: LINK_PLACE.TASK, planId: "42" },
+    { kind: LINK_DESTINATION.TASK, planId: "42" },
   ],
   [
     "an agent named alone",
@@ -2126,11 +2103,11 @@ test.each([
         repository: null,
       },
     },
-    { kind: LINK_PLACE.AGENT, agentId: OTHER_TASK_ID },
+    { kind: LINK_DESTINATION.AGENT, agentId: OTHER_TASK_ID },
   ],
 ] as const)(
   "a link to %s whose read lands after an Inbox row was chosen leaves the row chosen",
-  async (_read, kind, answer, place: LinkPlace) => {
+  async (_read, kind, answer, place: LinkDestination) => {
     const answers: Array<() => void> = [];
     const tab = mount(
       { shown: true, tasks: TWO_WORKSPACES },
@@ -2218,7 +2195,7 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.INBOX, planId: "alerts" },
+      place: { kind: LINK_DESTINATION.INBOX, planId: "alerts" },
     }),
   );
   const linked = narrowedTo();
@@ -2243,7 +2220,7 @@ test("a Vespin link to a person opens their page in the workspace its slug names
   act(() =>
     tab.control().onOpenLink({
       workspace: "personal",
-      place: { kind: LINK_PLACE.PERSON, userId: "user-charles" },
+      place: { kind: LINK_DESTINATION.PERSON, userId: "user-charles" },
     }),
   );
 
@@ -2260,7 +2237,7 @@ test("a Vespin link whose slug names no workspace of the account's leaves the li
   act(() =>
     tab.control().onOpenLink({
       workspace: "someone-elses",
-      place: { kind: LINK_PLACE.AUTOMATION, automationId: OTHER_TASK_ID },
+      place: { kind: LINK_DESTINATION.AUTOMATION, automationId: OTHER_TASK_ID },
     }),
   );
 
@@ -2289,7 +2266,7 @@ test("a Vespin link to a task's version opens its version history on that versio
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.VERSION, planId: TASK.id, revision: 3 },
+      place: { kind: LINK_DESTINATION.VERSION, planId: TASK.id, revision: 3 },
     }),
   );
   await settle();
@@ -2297,7 +2274,7 @@ test("a Vespin link to a task's version opens its version history on that versio
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.TASK, planId: TASK.id },
+      place: { kind: LINK_DESTINATION.TASK, planId: TASK.id },
     }),
   );
   await settle();
@@ -2325,7 +2302,7 @@ test("a Vespin link to a version of a task the service will not hand the reader 
   act(() =>
     tab.control().onOpenLink({
       workspace: "someone-elses",
-      place: { kind: LINK_PLACE.VERSION, planId: OTHER_TASK_ID, revision: 3 },
+      place: { kind: LINK_DESTINATION.VERSION, planId: OTHER_TASK_ID, revision: 3 },
     }),
   );
   tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
@@ -2488,9 +2465,7 @@ test("a tab its strip no longer draws, its page gone since, is passed over for t
   act(() => panel().onChoose(pageTab(page.id)));
   act(() => panel().onClose(pageTab(page.id)));
   // The page is gone since: the task's pages, read again, hold none.
-  act(() =>
-    reads.deliverPages({ [PAGE_OWNER.TASK]: { [TASK.id]: { rows: [] } }, [PAGE_OWNER.AGENT]: {} }),
-  );
+  act(() => reads.deliverPages({ [PAGE_OWNER.TASK]: { [TASK.id]: { rows: [] } } }));
   await settle();
   await vi.waitFor(() => assert.equal(tab.control().pages?.length, 0));
 
@@ -2643,7 +2618,9 @@ test("the Inbox opens on nothing chosen, from its row and from a link, whatever 
   act(() => inboxDoorNow().open());
   const fromRow = inboxNow().chosen;
   choose();
-  act(() => tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_PLACE.INBOX } }));
+  act(() =>
+    tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_DESTINATION.INBOX } }),
+  );
   const fromLink = inboxNow().chosen;
 
   assert.equal(fromRow, undefined);
@@ -2686,7 +2663,9 @@ test("a start refused that was pressed on the page saying a workspace is not the
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
   await settleQueries();
-  act(() => tab.control().onOpenLink({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  act(() =>
+    tab.control().onOpenLink({ workspace: "ghost", place: { kind: LINK_DESTINATION.HOME } }),
+  );
   const handed = {
     idempotencyKey: AGENT_KEY,
     prompt: "Sweep the tests.",
@@ -3849,7 +3828,7 @@ test("a Plan tab an earlier version pinned to the sidebar becomes the task's own
   await act(async () => undefined);
   assert.deepEqual(asked(refused), [{ taskId: TASK.id, pinned: true }]);
   assert.deepEqual(
-    refused.control().sidePanel.pins.map((pin) => ("task" in pin ? pin.task : pin.agent)),
+    refused.control().sidePanel.pins.map((pin) => pin.task),
     [TASK.id],
     "the refused task's tab stays pinned, the pinned task's goes",
   );
@@ -4158,7 +4137,7 @@ test("New task's agent start refused after its page opened opens the card again 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.VERSION, planId: TASK.id, revision: 3 },
+      place: { kind: LINK_DESTINATION.VERSION, planId: TASK.id, revision: 3 },
     }),
   );
   assert.equal(tab.control().history.open, true);

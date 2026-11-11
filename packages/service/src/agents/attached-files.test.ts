@@ -50,6 +50,66 @@ test("the harness is handed the words, then the text files, then the images and 
   );
 });
 
+/** What a session is handed, each part by what a reader tells it by: its words, a text file's name, or a file's. */
+function handedOrder(handed: ReturnType<typeof turnContent>): string[] {
+  assert.ok(Array.isArray(handed));
+  return handed.map((part) =>
+    part.type === "text"
+      ? (/Attached file: (\S+)/u.exec(part.text)?.[1] ?? part.text)
+      : part.type === "file"
+        ? (part.filename ?? part.mediaType)
+        : part.type,
+  );
+}
+
+test.each([
+  {
+    case: "each picture right after the marker naming it, in the words' order whatever the order attached",
+    words: "this [Picture 2] next to this [Picture 1]",
+    files: ["Picture 1", "Picture 2"],
+    order: ["this [Picture 2]", "Picture 2", " next to this [Picture 1]", "Picture 1"],
+  },
+  {
+    case: "the pictures no marker names ahead of the words, and a PDF after them as ever",
+    words: "like [Picture 1], please",
+    files: ["Picture 1", "screen.png", "spec.pdf"],
+    order: ["screen.png", "like [Picture 1]", "Picture 1", ", please", "spec.pdf"],
+  },
+  {
+    case: "only the first marker naming a picture, and a marker naming no picture left as words",
+    words: "[Picture 1] then [Picture 1] and [Picture 3]",
+    files: ["Picture 1"],
+    order: ["[Picture 1]", "Picture 1", " then [Picture 1] and [Picture 3]"],
+  },
+  {
+    case: "a marker in code left in the code, its picture handed as if no marker named it",
+    words: "Rename `[Picture 1]` here.",
+    files: ["Picture 1"],
+    order: ["Rename `[Picture 1]` here.", "Picture 1"],
+  },
+  {
+    case: "a PDF and a text file right after their markers, and a text file no marker names after the words as ever",
+    words: "read [File: spec.pdf] then [File: notes.txt]",
+    files: ["notes.txt", "spec.pdf", "log.txt"],
+    order: ["read [File: spec.pdf]", "spec.pdf", " then [File: notes.txt]", "notes.txt", "log.txt"],
+  },
+  {
+    case: "words naming none of the pictures handed as they always were",
+    words: "Match these.",
+    files: ["Picture 1", "spec.pdf"],
+    order: ["Match these.", "Picture 1", "spec.pdf"],
+  },
+])("the harness is handed $case", ({ words, files, order }) => {
+  const attachments = files.map((name) =>
+    name.endsWith(".pdf")
+      ? { name, mediaType: AGENT_ATTACHMENT_TYPE.PDF, data: PNG }
+      : name.endsWith(".txt")
+        ? textFile(name)
+        : picture(name),
+  );
+  assert.deepEqual(handedOrder(turnContent(words, attachments)), order);
+});
+
 /** A message as the retired runtime's receipt listed it: each text part as handed, and each file staged, by its name and type with no bytes. */
 function receiptOf(handed: ReturnType<typeof turnContent>): MessageReceivedPart[] {
   assert.ok(Array.isArray(handed));

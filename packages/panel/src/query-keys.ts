@@ -26,9 +26,9 @@ export const QUERY_ROOT = {
   /** The admin screens' reads and writes (`admin/admin-queries.ts`), each next keyed by its procedure. */
   ADMIN: "admin",
   HOST_PAIRING: "host-pairing",
-  /** Settings › Environment: a workspace's variables by name (`settings/environment-page.tsx`). */
+  /** Settings › Cloud environment's Variables: a workspace's variables by name (`settings/environment-variables-section.tsx`). */
   WORKSPACE_ENVIRONMENT: "workspace-environment",
-  /** Settings › Cloud setup: a workspace's install script and each repository's setup script (`settings/cloud-setup-page.tsx`). */
+  /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup and archive scripts (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
@@ -38,6 +38,8 @@ export const QUERY_ROOT = {
   AGENT_PART: "agent-part",
   /** The window's one app-state document (`use-app-state.ts`'s `appStateQuery`), read by no id. */
   APP_STATE: "appState",
+  /** A web page's preview for the card a plain link hangs, by the link's address (`tasks/link-preview-card.tsx`). */
+  LINK_PREVIEW: "link-preview",
   TASK_FILE: "task-file",
   TASK_TREE: "task-tree",
   PAGE_SOURCE: "page-source",
@@ -49,6 +51,14 @@ export const QUERY_ROOT = {
   AGENT_MESSAGES: "agent-messages",
   REPOSITORY_SKILLS: "repository-skills",
   AGENT_CHANGES: "agent-changes",
+  AGENT_TURN_CHANGES: "agent-turn-changes",
+  /** A cloud agent's listening ports and its shared link, as a host that forwards none asks the service for them (`tasks/agent-forward.tsx`). */
+  AGENT_PORTS: "agent-ports",
+  AGENT_SHARED_PORT: "agent-shared-port",
+  /** A cloud agent's shells and where its sandbox stands, as its Run button reads which run actions run (`tasks/run-actions-button.tsx`). */
+  AGENT_SHELLS: "agent-shells",
+  /** What this Mac spends on the app, read every few seconds while the Resources popover stands open (`desktop/mac-resources.tsx`). */
+  MAC_RESOURCES: "mac-resources",
   /** One version of a plan, as its version history draws it (`tasks/use-description-history.ts`). */
   TASK_REVISION: "task-revision",
   /** A picture the window reads (`picture-query.ts`'s `pictureQuery`), by what it belongs to and its id there. */

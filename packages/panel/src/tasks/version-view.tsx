@@ -26,7 +26,7 @@ import type { MenuEntry } from "../desktop/action-menu.js";
 import { PhoneHead, PlaceMore, phoneFindGroups } from "../desktop/phone-head.js";
 import { unreadShown } from "../failure-report.js";
 import { MarkdownMessage } from "../markdown-message.js";
-import { TOAST_HOLD, type ToastNotice, useToast } from "../toast.js";
+import { type ToastNotice, useToast } from "../toast.js";
 import { TOAST_ONLY_UNDO, toastOnlyUndo, type UndoWrite } from "../undo-stack.js";
 import { VERSION_CHANGE, type VersionDiff, versionDiff } from "./description-history-model.js";
 import { DescriptionPictures, useDescriptionPictureDrawer } from "./description-pictures.js";
@@ -62,9 +62,8 @@ import { useOpenLink } from "./use-open-link.js";
  * version marks it, and a version still being read stands as
  * quiet blocks in the page's shape (`skeleton.tsx`). Restoring asks nothing:
  * a restore is itself a version the history keeps, so it happens at once
- * and its toast's Undo restores the one before it. Everything drawn is the description's words, so the root is left
- * out of the screen recording (`ph-no-capture`) as a second line behind the
- * recording's text masking. Standing alone on a phone, the page is headed as
+ * and its toast's Undo restores the one before it. Everything drawn is the description's words, which the
+ * screen recording masks. Standing alone on a phone, the page is headed as
  * a phone heads every page (`../desktop/phone-head.tsx`): the way back to the
  * versions, when the version was saved, and a ⋯ holding its restore.
  */
@@ -305,7 +304,6 @@ export function useVersionRestore(
           replayUnmasked: true,
           words: result.reason,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: VERSION_RESTORE.surface, cause: result },
         });
       }
@@ -328,7 +326,6 @@ export function sayRestored(
       replayUnmasked: true,
       words: VERSION_RESTORE.words,
       tone: STATUS_TONE.COMPLETE,
-      hold: TOAST_HOLD.DONE,
     });
     return;
   }
@@ -342,7 +339,6 @@ export function sayRestored(
           words,
           failure: { surface: VERSION_RESTORE.surface, cause: undone.cause },
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
         });
       });
     }),

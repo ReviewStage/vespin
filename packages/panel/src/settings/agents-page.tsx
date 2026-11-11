@@ -1,7 +1,7 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
+import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import {
-  agentFallbackChoice,
   type CatalogModel,
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -12,11 +12,20 @@ import type { ProviderKeyStatus, ProviderKeySummary } from "@repo/features/provi
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
+import {
+  APP_SETTING_SCHEMA,
+  type AppSettingField,
+  isPermissionMode,
+  SETTINGS_PAGE as SCHEMA_SETTINGS_PAGE,
+  SETTING_SECTION,
+  type SettingsRowsInput,
+} from "@repo/settings";
 import { SETTINGS_SEARCH_ROW, searchAnchorProps } from "@repo/settings/settings-anchors";
 import {
   CHOICE_BAR_LOOK,
   ChoiceBar,
   ErrorState,
+  SavedTick,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsRow,
@@ -37,13 +46,11 @@ import { refusalShown, unreadShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { modelsRetryMutation } from "../live-reads.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
+import { MODE_GLYPH } from "../tasks/agent-approvals.js";
 import {
   choiceModelId,
   choiceOn,
   contextWindowsOf,
-  effortFor,
-  effortLabel,
-  effortsOf,
   FAST_ACCESS_URL,
   FAST_WORD,
   fastRestingNote,
@@ -65,9 +72,10 @@ import {
 import { useRepositoryRemedy } from "../tasks/repository-remedy.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { AgentAuthSection } from "./agent-auth-section.js";
-import { ReadFailed, SettingMarks } from "./marks.js";
+import { ReadFailed } from "./marks.js";
 import { PickerRow } from "./picker-row.js";
 import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
+import { SchemaSettingRows } from "./schema-rows.js";
 import { SwitchRow } from "./switch-row.js";
 
 /**
@@ -76,8 +84,8 @@ import { SwitchRow } from "./switch-row.js";
  * The page opens on one line of what it is for, then the harnesses' rows,
  * each saying how Claude Code or Codex is connected and opening the dialog
  * that connects it with a plan or an API key (`agent-auth-section.tsx`),
- * then this file's Default model, then the page's schema rows. The
- * harnesses and the Default model share the one read of the keys, so a
+ * then this file's New agents section, then the page's schema rows. The
+ * harnesses and the New agents section share the one read of the keys, so a
  * key saved or removed above is what the model row says at once. The default model's one value is the account's, kept
  * on the service beside the settings preferences and written by this page
  * alone; the page draws it, and the models, from what the host holds for
@@ -108,10 +116,14 @@ import { SwitchRow } from "./switch-row.js";
  * the host draws over the account's preferences on the press, so the rows
  * stay live while it is out; the model, Effort, and Context rows each write through
  * a mutation of their own (`row-write.ts`), so each says its own refusal under it and ticks Saved
- * once its write lands, and Modified while it differs from the fallback this
- * account would start on with none stored. Fast is a `SwitchRow` like every other settings switch, so its
+ * once its write lands. Fast is a `SwitchRow` like every other settings switch, so its
  * refusal is said in a toast as the switch flips back. With no account signed in
- * there is no default to show, and the page says so.
+ * there is no default to show, and the page says so. Under the model's
+ * rows, Default permissions, a schema row like every stored setting
+ * (`APP_SETTING_SCHEMA.agentPermissionMode`), picks the mode a new Claude
+ * Code agent starts on, each mode with its glyph and its hint under its
+ * name, as the model menu offers a running agent's
+ * (`agent-approvals.tsx`); it stands while the model's rows are read.
  *
  * The group is `@repo/ui`'s `SettingsSection`, and Speed, Effort, and Context each
  * its `SettingsRow` holding the shared `ChoiceBar`, segmented.
@@ -126,7 +138,7 @@ const PAGE_LINE = {
 } as const;
 
 /**
- * The rows that stand in the Default model group's place while it is read:
+ * The rows that stand in the New agents section's place while it is read:
  * the model's picker over its note, Fast's switch over its own, and effort's
  * segments, which every model draws; context's stands only for a model with a
  * long window, so none stands for it.
@@ -180,8 +192,6 @@ function DefaultRows({
     onSettled: refusalToast(choiceRefused),
   });
   const listed = models?.find((model) => model.id === choice.model);
-  // Modified reads against the default this account would run on with none stored, as its credentials decide it.
-  const fallback = agentFallbackChoice(models ?? []);
   const remedy = useRepositoryRemedy();
   // A default nothing pays for says so under the model row, with the press that connects it.
   const unrunnable = models === undefined ? undefined : unrunnableChoice(models, choice);
@@ -231,10 +241,9 @@ function DefaultRows({
       <PickerRow
         // Note that the models are the service's catalog, the app's own words.
         replayUnmasked
-        label="Default model"
+        label="Model"
         labelReplayUnmasked
         detail={note}
-        changed={read.base !== fallback.model}
         saves={modelWrite.savedAt}
         error={refusalShown(modelWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
         value={read.base}
@@ -283,12 +292,7 @@ function DefaultRows({
       {base?.ultrafast !== undefined ? (
         <SettingsRow
           label={SPEED_LABEL}
-          adornment={
-            <SettingMarks
-              changed={read.speed !== MODEL_SPEED.STANDARD}
-              saves={speedWrite.savedAt}
-            />
-          }
+          adornment={<SavedTick saves={speedWrite.savedAt} />}
           error={refusalShown(speedWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
         >
           {() => (
@@ -350,9 +354,7 @@ function DefaultRows({
       )}
       <SettingsRow
         label="Effort"
-        adornment={
-          <SettingMarks changed={choice.effort !== fallback.effort} saves={effortWrite.savedAt} />
-        }
+        adornment={<SavedTick saves={effortWrite.savedAt} />}
         error={refusalShown(effortWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
       >
         {() => (
@@ -369,9 +371,7 @@ function DefaultRows({
       {windows === undefined ? null : (
         <SettingsRow
           label="Context"
-          adornment={
-            <SettingMarks changed={window !== CONTEXT_WINDOW.LONG} saves={contextWrite.savedAt} />
-          }
+          adornment={<SavedTick saves={contextWrite.savedAt} />}
           description={longWindowNote(windows)}
           error={refusalShown(contextWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
         >
@@ -394,16 +394,28 @@ function DefaultRows({
 }
 
 /**
- * The Default model group: the model, Fast, effort, and context rows, or why
+ * The New agents section: the model, Fast, effort, and context rows, or why
  * they cannot be drawn, over the default and the models the host holds for
  * the account (`account-choices.ts`), which a key saved or removed moves on
  * its own, since the host asks the models again as the keys move.
  */
+/** The glyph a Default permissions option leads with; none for any other choice. */
+function modeGlyph(field: AppSettingField, token: string): React.ReactNode {
+  if (field !== APP_SETTING_SCHEMA.agentPermissionMode.field || !isPermissionMode(token)) {
+    return undefined;
+  }
+  const Glyph = MODE_GLYPH[token];
+  return <Glyph />;
+}
+
 function AgentsSection({
   signedIn,
   ownKeys,
+  view,
 }: {
   signedIn: boolean;
+  /** The settings as the window holds them, which Default permissions reads and writes; none before they are read. */
+  view: SettingsRowsInput | undefined;
   /** How each provider the account holds a key of its own for last answered it, as the API keys group holds them; nothing until they are read. */
   ownKeys: ReadonlyMap<ModelProvider, ProviderKeyStatus> | undefined;
 }): React.JSX.Element {
@@ -416,7 +428,7 @@ function AgentsSection({
   const onRetryModels = useCallback(() => retryModels(), [retryModels]);
 
   return (
-    <SettingsSection title="Default model">
+    <SettingsSection title="New agents">
       {!signedIn ? (
         <SettingsLine>{PAGE_LINE.SIGNED_OUT}</SettingsLine>
       ) : drawn.choice !== undefined && (models !== undefined || modelsFailed) ? (
@@ -436,17 +448,32 @@ function AgentsSection({
       ) : (
         <SettingsRowsSkeleton label={readingWords("your default")} rows={DEFAULT_SKELETON} />
       )}
+      {signedIn && view !== undefined ? (
+        <SchemaSettingRows
+          page={SCHEMA_SETTINGS_PAGE.AGENTS}
+          section={SETTING_SECTION.NEW_AGENTS}
+          view={view}
+          icons={modeGlyph}
+        />
+      ) : null}
     </SettingsSection>
   );
 }
 
 /**
- * The harnesses and the Default model group, over the keys the harnesses'
+ * The harnesses and the New agents section, over the keys the harnesses'
  * rows hold: Fast's link to ask Anthropic for fast mode stands on the account's
  * own key, so it reads them from the rows that change them rather than from
  * a read of its own that a save there would leave behind.
  */
-export function AgentsPage({ signedIn }: { signedIn: boolean }): React.JSX.Element {
+export function AgentsPage({
+  signedIn,
+  view,
+}: {
+  signedIn: boolean;
+  /** The settings as the window holds them; none before they are read. */
+  view?: SettingsRowsInput | undefined;
+}): React.JSX.Element {
   const [ownKeys, setOwnKeys] = useState<ReadonlyMap<ModelProvider, ProviderKeyStatus>>();
   const onKeys = useCallback((keys: readonly ProviderKeySummary[]) => {
     setOwnKeys(new Map(keys.map((key) => [key.provider, key.status])));
@@ -454,7 +481,7 @@ export function AgentsPage({ signedIn }: { signedIn: boolean }): React.JSX.Eleme
   return (
     <>
       <AgentAuthSection signedIn={signedIn} onKeys={onKeys} />
-      <AgentsSection signedIn={signedIn} ownKeys={ownKeys} />
+      <AgentsSection signedIn={signedIn} ownKeys={ownKeys} view={view} />
     </>
   );
 }

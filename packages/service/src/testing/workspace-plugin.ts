@@ -1,4 +1,4 @@
-import { memberSeams, workspaceSeams } from "@repo/database/models/workspace-seams";
+import { workspaceSeams } from "@repo/database/models/workspace-seams";
 import {
   openMigratedPglite,
   sqlClientOverPglite,
@@ -9,7 +9,7 @@ import { makeSignature } from "better-auth/crypto";
 import { admin, bearer, organization as organizationPlugin } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/pglite";
 import { Effect, Layer, Option } from "effect";
-import { workspaceDeleteCall, workspaceDeletionSteps } from "../accounts/deletion-hooks.js";
+import { workspaceDeletionSteps } from "../accounts/deletion-hooks.js";
 import { authDatabaseAdapter } from "../auth/auth-database.js";
 import {
   ADMIN_OPTIONS,
@@ -27,10 +27,8 @@ import { supportAccess } from "../auth/support-access.js";
  * The plugin writes through its own adapter and the store reads through
  * `database`, the same PGlite, so a test sees the plugin's real rows: the
  * organization and owner a create makes, and the member an add makes, and a
- * session answers its user's `role` as the deployment's does. A workspace's
- * delete runs the deployment's own deletion hooks, on the services of the
- * fiber that asks it (`deleteWorkspace`). A
- * member write is the plugin's own call under a session, which
+ * session answers its user's `role` as the deployment's does. A plugin call
+ * that takes a session, an invitation's accept among them, is made under one
  * `sessionBearerOf` mints for an account and signs as the bearer plugin
  * hands one out, so the plugin reads it back exactly as it reads the Mac's.
  * `sessionCookieOf` mints one as the cookie a signed-in browser carries,
@@ -86,8 +84,6 @@ export const openWorkspacePlugin = Effect.gen(function* () {
   return {
     api: plugin.api,
     seams: workspaceSeams(plugin.api),
-    members: memberSeams(plugin.api),
-    deleteWorkspace: workspaceDeleteCall(plugin.api),
     resolveSessionUserId,
     sessionBearerOf,
     sessionCookieOf,

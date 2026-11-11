@@ -35,10 +35,11 @@ export const SHARED_FILES_DIRECTORY = "/tmp/shared";
  * cache of the user who built the image, whose home the cloud's `agent`
  * does not read. Each Playwright looks in
  * its own package for its browsers only where `PLAYWRIGHT_BROWSERS_PATH` is
- * `0`, so the runner hands both harnesses' commands that (`SANDBOX_TOOL_ENV`),
- * which also has a repository's own Playwright install its browsers in its
- * own `node_modules`, which the agent writes, rather than in a shared folder
- * it may not. `BROWSERS` is where npm's global install puts them, which the
+ * `0`, so the runner hands both harnesses' commands that in the cloud alone
+ * (`SANDBOX_TOOL_ENV`, `launch.ts`'s `toolEnvOf`), which also has a
+ * repository's own Playwright install its browsers in its own
+ * `node_modules`, which the agent writes, rather than in a shared folder it
+ * may not. A host's agents keep the machine's own Playwright settings. `BROWSERS` is where npm's global install puts them, which the
  * image checks and our own browser reads.
  */
 export const PLAYWRIGHT_PIN = {
@@ -104,8 +105,8 @@ export const RUNNER_UNIT = {
  * sandbox's architecture.
  */
 export const CLAUDE_CODE_PIN = {
-  SDK_VERSION: "0.3.304",
-  VERSION: "2.1.304",
+  SDK_VERSION: "0.3.319",
+  VERSION: "2.1.319",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/claude-agent-sdk`,
   /** The binary, under `DIRECTORY`. */
   BINARY: "node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude",
@@ -122,7 +123,7 @@ export const CLAUDE_EXECUTABLE = `${CLAUDE_CODE_PIN.DIRECTORY}/${CLAUDE_CODE_PIN
  * the threads it keeps there outlive a stop.
  */
 export const CODEX_PIN = {
-  VERSION: "0.163.0",
+  VERSION: "0.167.0",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/codex`,
   /** Where the image links the binary as `codex`. */
   LINK: "/usr/local/bin/codex",
@@ -234,7 +235,7 @@ export const NODE_MAC_PIN: AgentToolPin = {
  * repository check (`tools/anti-slop/guards/agent-pins.ts`) until each
  * pin's address, size, and digests are read off the new release too.
  */
-const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.304", CODEX: "0.163.0", GH: "2.103.3" } as const;
+const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.319", CODEX: "0.167.0", GH: "2.103.3" } as const;
 
 /**
  * Claude Code on a Mac host, This Mac's among them: the macOS arm64 build of
@@ -245,13 +246,13 @@ export const CLAUDE_CODE_MAC_PIN: AgentToolPin = {
   NAME: "claude",
   VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
   ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-darwin-arm64/-/claude-agent-sdk-darwin-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-  SHA256: "cdca064e1bbe6001c5d8bbefd636205379c79b8d05bf41a3a37fc1fde096a93d",
-  BYTES: 120_586_636,
+  SHA256: "0818d84e7295ef43314373d35823afca5b0037e750c183642eb16cf785826f37",
+  BYTES: 146_936_949,
   ROOT: "package",
   MEMBERS: ["claude"],
   BINARY: "claude",
   TEAM: "Q6L2SF6YDW",
-  FILES: { claude: "b9ac5374839f14abf3f1f45610637c332b5daee5ce0d1634726cef87aab78e6a" },
+  FILES: { claude: "1f53587e92dee8e089fa349188a4cda64fa34ace6e7b0ca2ee278ddaa3cc2ebd" },
 };
 
 /**
@@ -264,16 +265,16 @@ export const CODEX_MAC_PIN: AgentToolPin = {
   NAME: "codex",
   VERSION: HOST_CLI_VERSION.CODEX,
   ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-darwin-arm64.tgz`,
-  SHA256: "1193ff4ce72387a5d6c34820b54a9dc57d007c67a958e8acb4715924facd3c31",
-  BYTES: 137_871_195,
+  SHA256: "6989512a93d5fc74cb221dd348c972bf3cd83592e471bfd9557bccb45eb6fffc",
+  BYTES: 148_361_216,
   ROOT: "package/vendor/aarch64-apple-darwin",
   MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
   BINARY: "bin/codex",
   TEAM: "2DC432GLL2",
   FILES: {
-    "bin/codex": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
-    "bin/codex-code-mode-host": "79f123a85dbc61e8f5d0f0c050dfc3f4b81a8305d33a32b41e008b7f6e035698",
-    "codex-path/rg": "27d09e29c478fddbfc750a2cb5fd06965bad0ea223e776f8667160a0de63c6e4",
+    "bin/codex": "030316ecfbb41f4e7946e584b0063ef333b7a36cd312ba349f2f6869e39b62cc",
+    "bin/codex-code-mode-host": "5cc29d144fc05e3563f5f90c36adc95bdc287e2297b48ecf0bf4abdf1892d3ab",
+    "codex-path/rg": "13424ef22134a65a211e490475bc17a4671e4fad3c82ad4c613fe5978f022a6d",
   },
 };
 
@@ -297,23 +298,23 @@ export const CLAUDE_CODE_LINUX_PINS: LinuxToolPins = {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-x64/-/claude-agent-sdk-linux-x64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "214fcde96f46b9b76f4acc9efbd65b843c90ae9a689da224c33f09a77e069395",
-    BYTES: 130_438_422,
+    SHA256: "6f83234a4d88ed061b6b64a64b22a947eb5d9b0de6e2b88158edb29f08bb8f9d",
+    BYTES: 158_448_457,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912" },
+    FILES: { claude: "dabafec82ca1319fa43d8be36a10fc61b1d11821cb98ad5df04ad95e199b8eed" },
   },
   arm64: {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-arm64/-/claude-agent-sdk-linux-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "429cfc8eca03f6e26bc5ca698994b7089c5d1fa345899d5beb96cc88173b544c",
-    BYTES: 130_978_746,
+    SHA256: "d933c8ca3bb270a80008783815a4abd5358bf69bbd46ea10fc94e7e7bda95aef",
+    BYTES: 159_464_110,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "c487117526509ab6d2ee6013e14f181faf68d6d6afe6bb0d4b2b4a9feca5ecb3" },
+    FILES: { claude: "a7e687fd1cb054d651c7588223de3786c99d4c682365e3c3ae1e59ce7f3a591f" },
   },
 };
 
@@ -327,15 +328,15 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-x64.tgz`,
-    SHA256: "30efc97738b975940d78b59a9bea115fa34040b732807d54ec35ae6b7528de94",
-    BYTES: 162_055_867,
+    SHA256: "2dc9aa871abb513c3539d20d025f701faf1974c46ee906bda3a1e1f5026d4434",
+    BYTES: 173_743_288,
     ROOT: "package/vendor/x86_64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "399ff69c431c066e40de318fba45c2b07f45a76b19939d247ee4828fc70c4215",
+      "bin/codex": "cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda",
       "bin/codex-code-mode-host":
-        "8724d73ec190536233ab4628d24a071bfbcf27e5124f08fe35129f26fe48b916",
+        "83f3e174c2da2f1ca8655cce686e302509640d34c0f4407c1155056f64536e0f",
       "codex-path/rg": "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849",
       "codex-resources/bwrap": "77360cb751ccedc5971391444ac86a8a33c15b04d6b4a6fe45f5d25496e62c4c",
     },
@@ -344,17 +345,17 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-arm64.tgz`,
-    SHA256: "dc6e7c4d6de71c23a0f60d05e2577ff7eef615b76f22630d58ad384b84763522",
-    BYTES: 154_715_729,
+    SHA256: "e24d7b6f0af5695a36c04692c3a79672bdadebcac7c44005259cb3cad36ac40e",
+    BYTES: 165_851_263,
     ROOT: "package/vendor/aarch64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "8a96f66d059d653e68bfd5f3c79337e6f1d7d170d80bf705eb7d0249b34c0ece",
+      "bin/codex": "2fe94d848540ff2a6868c7ebcc494126a974aa409711676d14fa0379e49e6143",
       "bin/codex-code-mode-host":
-        "255eccc8a5c1d267dc0acbc815cc83aaa1f50955bd99943b29f00cafcdcab771",
+        "e7b772ff332c16ca2df587e99fe87f217e3ab3432a63846fb1ca1bccbaa24409",
       "codex-path/rg": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b",
-      "codex-resources/bwrap": "c547cbdc762a70ed216789ffaa4c6c0e7d2beabe32245a498f8e365a9fc8dab4",
+      "codex-resources/bwrap": "0f543a7356ab343b4827222f910461d4196778f328b28acd6c126ef18e9557ab",
     },
   },
 };

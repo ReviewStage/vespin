@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import {
-  CODEX_PLAN_BACKEND,
   type CodexConfig,
   INPUT_LINE,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_ENV,
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
@@ -17,9 +17,11 @@ import {
   readAgentRouting,
   recordAgentNativeSession,
   updateAgentChoice,
+  updateAgentPermissionModeCommitted,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { registerDevice } from "@repo/database/models/device-store";
+import { recordHostVersion } from "@repo/database/models/host-store";
 import {
   type KeyRing,
   parseKeyRing,
@@ -39,8 +41,13 @@ import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
-import { deviceAgentLaunchSecretsSchema } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_AGENT_LINE_KIND,
+  DEVICE_CAPABILITY,
+  deviceAgentLaunchSecretsSchema,
+} from "@repo/features/device-agent-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -76,6 +83,7 @@ import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import {
   PLAN_REFUSAL,
+  RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -348,14 +356,13 @@ afterEach(() => {
 
 it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
   it.effect(
-    "a local agent's launch on its Mac runs the Codex the Mac checked in its folder, sealed in its line with no token in it, on the plan naming the token route",
+    "a local agent's launch on its machine runs the Codex the machine checked in its folder, on the machine's own login: no credential of the account's, none saved needed, and its payer recorded as that login",
     () =>
       Effect.gen(function* () {
         const userId = `user-${randomUUID()}`;
         yield* Effect.flatMap(Database, (db) =>
           db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
         );
-        yield* signIn(userId, 60);
         const deviceId = randomUUID();
         const codexExecutable = "/Users/fixture/Library/Application Support/Vespin/codex/bin/codex";
         yield* registerDevice(userId, {
@@ -422,30 +429,76 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             return { stored: JSON.stringify(row), secrets, config };
           });
 
+        // An agent recorded on the plan, as one started before every local agent ran on its machine's login, launches on that login.
         const onPlan = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
         const plan = yield* launched(onPlan);
-        // The runner is told Codex's ChatGPT backend and the workspace, and handed no token.
+        // The runner is handed its bearer alone.
         assert.deepEqual(plan.secrets.env, {
-          [RUNNER_ENV.CODEX_PLAN_BACKEND]: CODEX_PLAN_BACKEND.CHATGPT,
-          [RUNNER_ENV.CHATGPT_ACCOUNT_ID]: WORKSPACE,
           [RUNNER_ENV.BEARER]: plan.secrets.env[RUNNER_ENV.BEARER],
         });
+        assert.equal(
+          Option.getOrThrow(yield* readAgentRouting(userId, onPlan.id)).payer,
+          AGENT_PAYER.MAC_SIGN_IN,
+        );
         assert.equal(plan.config.executable, codexExecutable);
         assert.equal(plan.config.tokenUrl, `${TOKEN_URL}${FIRST_LAUNCH}`);
         const bearer = plan.secrets.env[RUNNER_ENV.BEARER] ?? "";
         // A Mac has no firewall of ours, so its runner is handed the bearer itself.
         const routing = Option.getOrThrow(yield* readAgentRouting(userId, onPlan.id));
         assert.equal(routing.runnerTokenHash, runnerTokenDigest(bearer));
-        // The bearer is sealed in the row, and no token of the plan's is in the row or the launch at all.
-        for (const secret of ["access-0", "refresh-0", "id-token-0", bearer]) {
-          assert.equal(plan.stored.includes(secret), false, "a secret in the row in the clear");
-        }
-        assert.equal(JSON.stringify(plan.secrets).includes("access-0"), false);
+        // The bearer is sealed in the row.
+        assert.equal(plan.stored.includes(bearer), false, "a secret in the row in the clear");
+        // A Mac whose host bundles a runner from before the transcript store keeps its threads on its disk alone.
+        assert.equal(plan.config.transcriptsUrl, undefined);
+        // Nor does a Mac that never said its runner reads a mode run one that asks: it is refused by name rather than run with full access.
+        const asking = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
+        yield* updateAgentPermissionModeCommitted(userId, asking.id, AGENT_PERMISSION_MODE.ASK);
+        const unasked = yield* Effect.gen(function* () {
+          const sessions = yield* sessionsFor(userId).pipe(
+            Effect.provide(machines),
+            Effect.provide(services(runnerSandboxApi())),
+          );
+          return yield* deliveredOpen(sessions, yield* writtenLine(asking, "Fix the invitations."));
+        });
+        assert.deepEqual(unasked, {
+          outcome: SESSION_SEND_OUTCOME.FAILED,
+          status: 422,
+          runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED,
+        });
+        const askingLines = yield* Effect.flatMap(Database, (db) =>
+          db.select().from(deviceAgentLine).where(eq(deviceAgentLine.agentId, asking.id)),
+        );
+        assert.equal(
+          askingLines.some((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH),
+          false,
+          "a launch queued for a runner that would run the mode unasked",
+        );
+
+        // From the host release whose runner mirrors them, they are kept at the service, no Codex home
+        // named, since the runner mirrors them from Codex's own default under the machine's home.
+        // That release's host also says its runner reads a mode.
+        yield* registerDevice(userId, {
+          id: deviceId,
+          name: "Studio",
+          ...DEVICE_LAYOUT,
+          codexExecutable,
+          capabilities: [DEVICE_CAPABILITY.PERMISSION_MODES],
+        });
+        yield* recordHostVersion(deviceId, "0.11.0");
+        const onKept = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
+        yield* updateAgentPermissionModeCommitted(userId, onKept.id, AGENT_PERMISSION_MODE.ASK);
+        const kept = yield* launched(onKept);
+        // Its runner reads the mode, so it is handed one that asks.
+        assert.equal(kept.config.permissionMode, PERMISSION_MODE.ASK);
+        assert.deepEqual(
+          [kept.config.transcriptsUrl, kept.secrets.env.CODEX_HOME],
+          [`${TRANSCRIPTS_URL}${FIRST_LAUNCH}`, undefined],
+        );
       }),
   );
 
   it.effect(
-    "a launch's fingerprint digests the credential its machine handed it as it did before the machine decided: the key itself where it is held at a sandbox's firewall or handed to a Mac, and on the plan no credential at all, which the runner asks our route for",
+    "a launch's fingerprint digests the credential its machine handed it: the key itself where it is held at a sandbox's firewall, and no credential at all on the plan, which the runner asks our route for, or on a machine's own login",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -529,30 +582,39 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             return Option.getOrUndefined(record)?.fingerprint;
           });
 
-        // Each digest but the sandbox plan's is the one a launch recorded before its machine handed its
-        // credential over, so a warm runner launched then is not relaunched for it: the first 32 hex
-        // characters of the SHA-256 of
+        // The plan pays while its sign-in has room, and the key once it is at its limit.
+        const sandboxPlan = yield* fingerprintOf(
+          yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.VERCEL),
+        );
+        const mac = yield* fingerprintOf(
+          yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.DEVICE),
+        );
+        const now = yield* DateTime.nowAsDate;
+        yield* setPlanStatus(
+          userId,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          PROVIDER_KEY_STATUS.LIMIT_REACHED,
+          new Date(now.getTime() + 30 * 60_000),
+          now,
+          now,
+        );
+
+        // Each digest is the first 32 hex characters of the SHA-256 of
         // `{"env":[…sorted entries],"names":["linear"],"held":{"slot":…,"credential":…}}`, worked by
-        // hand, `held` absent on a Mac and on the plan. A sandbox's plan held its slot at the firewall
-        // before it signed in on host-supplied tokens, so its warm runner relaunches once to do so.
+        // hand, `held` absent on the plan and on a machine's login, whose env is empty.
         assert.deepEqual(
           {
             sandboxKey: yield* fingerprintOf(
               yield* agentOn(AGENT_PAYER.API_KEY, AGENT_MACHINE.VERCEL),
             ),
-            sandboxPlan: yield* fingerprintOf(
-              yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.VERCEL),
-            ),
-            macKey: yield* fingerprintOf(yield* agentOn(AGENT_PAYER.API_KEY, AGENT_MACHINE.DEVICE)),
-            macPlan: yield* fingerprintOf(
-              yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.DEVICE),
-            ),
+            sandboxPlan,
+            mac,
           },
           {
             sandboxKey: "6b61996f589fd234bed48d87b442c8b9",
-            sandboxPlan: "e772975c0b503f36d76b5d0fc2cf1ad7",
-            macKey: "3f16ad6f5312b44aa95199a2436df31f",
-            macPlan: "70d33426f2bcfa677ec90b7a985a3e46",
+            sandboxPlan: "d584c8550d0a0266709ed5c49fab2597",
+            mac: "bd55028e0351bd98a7a597177af52640",
           },
         );
       }),
@@ -567,6 +629,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         const openai = openAi();
         const { userId, agent } = yield* openAgent;
         yield* signIn(userId, 60);
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.AUTO);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
         const line = yield* writtenLine(agent, "Fix the invitations.");
         const { lineId } = line;
@@ -586,8 +649,6 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.equal(command.user, "agent");
         assert.equal(command.env.CODEX_HOME, "/home/agent/.codex");
         assert.equal(command.env[RUNNER_ENV.CLAUDE_TOKEN], undefined);
-        assert.equal(command.env[RUNNER_ENV.CODEX_PLAN_BACKEND], CODEX_PLAN_BACKEND.CHATGPT);
-        assert.equal(command.env[RUNNER_ENV.CHATGPT_ACCOUNT_ID], WORKSPACE);
         // The runner holds the placeholder, which the firewall standing as it started swaps on our
         // host for the bearer whose digest the agent's row records.
         const placeholder = command.env[RUNNER_ENV.BEARER];
@@ -603,6 +664,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CODEX,
           cwd: "/workspace/repository",
+          agentId: agent.id,
           executable: "/usr/local/bin/codex",
           model: "gpt-6.1-sol",
           effort: "xhigh",
@@ -615,6 +677,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           integrations: [LINEAR_SERVER],
           tokenUrl: `${TOKEN_URL}${FIRST_LAUNCH}`,
           installedSkills: "/opt/agent/installed-skills",
+          permissionMode: PERMISSION_MODE.AUTO,
           warm: true,
         });
         assert.ok(first.type === INPUT_LINE.MESSAGE);

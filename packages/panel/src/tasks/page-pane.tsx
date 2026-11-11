@@ -2,7 +2,7 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
   PAGE_FIND_ACT,
   PAGE_FIND_KEY,
@@ -20,7 +20,7 @@ import {
   type PagePicked,
   pagePickAnswerSchema,
 } from "@repo/features/page-pick";
-import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
+import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeLines, TasksPageSourceAnswer } from "@repo/features/tasks-view";
 import { readingWords } from "@repo/features/words";
@@ -124,8 +124,8 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * (`@repo/features/page-link`), which opens it as any link of the window
  * opens (`useOpenLink`), a site in the browser and a link of ours in the
  * window. Reload draws the page again. What the page draws is the
- * task's, so the pane is left out of the screen recording (`ph-no-capture`);
- * the recording could not see into the frame in any case.
+ * task's, so the frame is left out of the screen recording (`ph-no-capture`);
+ * the comment pins and cards over it record masked.
  *
  * The bar's code toggle shows the version's HTML in the frame's place, as a
  * File tab draws a file (`file-tab.tsx`): the same numbered, colored lines
@@ -163,7 +163,7 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * dragged wider or narrower by its left edge, one width for every page,
  * and shut by a drag past its least width. The bar's comment controls stand
  * at its end, Comment then that toggle, as the tree's toggle ends a File
- * tab's bar. A page an agent on no task showed has no comments.
+ * tab's bar.
  */
 
 /** What a frame drawing a page lets it do: run its own scripts, and nothing else. */
@@ -465,7 +465,7 @@ function PageFrame({
     <div ref={room} className="page-view-room relative flex min-h-0 flex-1">
       <iframe
         ref={frame}
-        className={cn("block min-h-0 w-full flex-1 border-0", !loaded && "invisible")}
+        className={cn("ph-no-capture block min-h-0 w-full flex-1 border-0", !loaded && "invisible")}
         title={title}
         src={src}
         sandbox={PAGE_SANDBOX}
@@ -676,7 +676,7 @@ function useCommenting(place: DescriptionCommentPlace | undefined) {
     // The draft left on the page with its card closed, where it was started; none while its card is open or it holds nothing of the writer's own.
     drafted:
       pending === undefined && (ownWordsIn(kept.text) || kept.attachments.length > 0)
-        ? { words: kept.text, element: kept.element }
+        ? { words: kept.text, attachments: kept.attachments, element: kept.element }
         : undefined,
     reopen: (box: FrameBox | undefined) => {
       setPicking(false);
@@ -746,7 +746,7 @@ export function PagePane({
   findActive,
   comments,
 }: {
-  /** The plan the page stands on, or the agent on no task that showed it. */
+  /** The task the page stands on. */
   place: PagePlace;
   page: PageLine;
   /** Whether the panel holds the window's keys, so the tab's find answers ⌘F. */
@@ -863,9 +863,7 @@ export function PagePane({
       ? []
       : [
           openPageInBrowserItem(
-            "taskId" in place
-              ? { kind: LINK_PLACE.PAGE, planId: place.taskId, pageId: page.id }
-              : { kind: LINK_PLACE.PAGE, agentId: place.agentId, pageId: page.id },
+            { kind: LINK_DESTINATION.PAGE, planId: place.taskId, pageId: page.id },
             workspace,
           ),
         ];
@@ -908,9 +906,9 @@ export function PagePane({
     <FindScope
       className="page-view-find"
       active={findActive}
-      subject={{ task: pagePlaceId(place), tab: pageTab(page.id) }}
+      subject={{ task: place.taskId, tab: pageTab(page.id) }}
     >
-      <Fill className="page-view file-view ph-no-capture">
+      <Fill className="page-view file-view">
         {phone ? (
           settings.sheet
         ) : (

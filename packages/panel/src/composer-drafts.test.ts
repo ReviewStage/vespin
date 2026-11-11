@@ -13,13 +13,11 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import type { Task } from "@repo/features/task-wire";
-import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
 import { DRAFT_WORD } from "@repo/ui";
 import { agentTab, draftTab, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
-import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Effect, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment } from "react";
@@ -45,7 +43,6 @@ import {
 import type { MainTab } from "./tasks/use-main-tabs.js";
 import { type TaskInboxControl, useTaskInbox } from "./tasks/use-task-inbox.js";
 import { NO_LOOKS } from "./tasks/use-task-looks.js";
-import type { TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads, handInboxItems, writeListedTasks } from "./testing/app-state.js";
@@ -789,100 +786,12 @@ test("a task opened from a tab pinned to the sidebar is open still, so its row w
   assert.equal(away(INVITES.plan.name), true);
 });
 
-/** The workspace New task starts its tasks in. */
-const WORKSPACE = "workspace-personal";
-
-/** New task's words as storage keeps them, in `workspaceId`, and on one of its issues where `issueId` names one, as a build from before the app kept no issues kept them. */
-function newTaskEntry(workspaceId: string, issueId?: string) {
-  return {
-    accountId: null,
-    place: { kind: "newTask", workspaceId, ...(issueId === undefined ? undefined : { issueId }) },
-    text: "Expire invites after a week",
-  };
-}
-
-/** Whether the sidebar's New task row wears the Draft pencil, drawn over `tasks` with the drafts storage holds. */
-async function newTaskDrafted(tasks: TasksControl, at?: string): Promise<boolean> {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-  await act(async () =>
-    root.render(
-      withQueryClient(
-        signedOut(
-          drawnSidebar(
-            sidebarProps(tasks),
-            windowRouter(createMemoryHistory({ initialEntries: [at ?? "/app"] })),
-          ),
-        ),
-      ),
-    ),
-  );
-  await settle();
-  const glyph =
-    container.querySelector('.sidebar-workspace button[aria-label="New task"]') ??
-    assert.fail("the sidebar draws New task");
-  const drafted = glyph.getAttribute("aria-description") === DRAFT_WORD;
-  for (const each of roots.splice(0)) act(() => each.unmount());
-  return drafted;
-}
-
-test("words left in New task's card mark its sidebar glyph with the Draft pencil while neither the card nor Home shows them", async () => {
-  const listed: Workspace = {
-    id: WORKSPACE,
-    name: "Personal",
-    slug: "personal",
-    role: WORKSPACE_ROLE.OWNER,
-    github: null,
-  };
-  const inWorkspace = (overrides: Partial<TasksControl["newTask"]> = {}) =>
-    tasksControl({
-      workspace: listed,
-      workspaces: [listed],
-      page: TASKS_PAGE.DOCUMENT,
-      tasks: [INVITES.plan],
-      activeTaskId: INVITES.plan.id,
-      newTask: { ...tasksControl().newTask, workspaceId: WORKSPACE, ...overrides },
-    });
-  assert.equal(await newTaskDrafted(inWorkspace()), false, "nothing is kept yet");
-
-  window.localStorage.setItem("app.composerDrafts", JSON.stringify([newTaskEntry(WORKSPACE)]));
-  assert.equal(await newTaskDrafted(inWorkspace()), true, "the words wait while a task is open");
-  assert.equal(
-    await newTaskDrafted(inWorkspace({ open: true })),
-    false,
-    "the open card shows them",
-  );
-  const home = { ...inWorkspace(), page: TASKS_PAGE.HOME, activeTaskId: undefined, atHome: true };
-  assert.equal(await newTaskDrafted(home), false, "Home's composer shows them");
-  assert.equal(
-    await newTaskDrafted({ ...home, atHome: false }, "/acme/person/user-sam"),
-    true,
-    "a person's page opened from Home stands in its composer's place",
-  );
-  assert.equal(
-    await newTaskDrafted(inWorkspace({ workspaceId: "workspace-team" })),
-    false,
-    "another workspace's New task starts from nothing of this one's",
-  );
-
-  window.localStorage.setItem(
-    "app.composerDrafts",
-    JSON.stringify([newTaskEntry(WORKSPACE, "issue-invites")]),
-  );
-  assert.equal(
-    await newTaskDrafted(inWorkspace()),
-    false,
-    "words an older build kept on one of the workspace's own issues are no draft of the workspace's",
-  );
-});
-
 /** The key the Teammate invitations task's draft agent starts under. */
 const DRAFT_KEY = "draft-invites";
 
 /** The account's feed holding each plan's items as given, which the window's inboxes draw first. */
 function feedOf(plans: Record<string, readonly InboxItem[]>): AppHostRead<AppInboxItems> {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} } };
+  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
 }
 
 /**
@@ -1043,35 +952,40 @@ function approval(revision: number): InboxItem {
   };
 }
 
-/** One item of an agent's with no plan, open and asking for an approval, at `revision`. */
-function tasklessItem(agentId: string, id: string, revision: number): InboxItem {
-  return { ...approval(revision), id, agentId };
+/** A task of the window's, and the agent its items are posted by. */
+type HeldTask = typeof INVITES;
+
+/** One item of the task's agent's, open and asking for an approval, at `revision`. */
+function itemOn(held: HeldTask, id: string, revision: number): InboxItem {
+  return { ...approval(revision), id, agentId: held.agent.id };
 }
 
-/** An agent's own inbox with no task, followed as the Inbox page follows it, pushed as `items`. */
-async function tasklessInbox(agentId: string, items: readonly InboxItem[]) {
+/** The task's inbox as `useTaskInbox` holds it for the task, its agent among its own. */
+function useTaskInboxOf(held: HeldTask): TaskInboxControl {
+  return useTaskInbox({
+    taskId: held.plan.id,
+    shown: true,
+    waiting: true,
+    readerId: undefined,
+    agents: {
+      heldIds: [held.agent.id],
+      answerInbox: () => new Promise(() => undefined),
+      messageInbox: () => new Promise(() => undefined),
+      readInboxImage: () => new Promise(() => undefined),
+      onRetryList: () => undefined,
+    },
+  });
+}
+
+/** A task's own inbox, followed as the Inbox page follows it, pushed as `items`. */
+async function taskInbox(held: HeldTask, items: readonly InboxItem[]) {
   // Another window opening takes the focus from those before it.
   leaveWindow();
-  handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: {}, [INBOX_SCOPE_KIND.AGENT]: { [agentId]: items } },
-  });
+  handInboxItems(feedOf({ [held.plan.id]: items }));
   let control: TaskInboxControl | undefined;
   function Probe(): null {
     useDraftsOwner(undefined);
-    control = useTaskInbox({
-      taskId: agentId,
-      kind: INBOX_SCOPE_KIND.AGENT,
-      shown: true,
-      waiting: true,
-      readerId: undefined,
-      agents: {
-        heldIds: [agentId],
-        answerInbox: () => new Promise(() => undefined),
-        messageInbox: () => new Promise(() => undefined),
-        readInboxImage: () => new Promise(() => undefined),
-        onRetryList: () => undefined,
-      },
-    });
+    control = useTaskInboxOf(held);
     return null;
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -1081,10 +995,10 @@ async function tasklessInbox(agentId: string, items: readonly InboxItem[]) {
   return control ?? assert.fail("the inbox is held");
 }
 
-test("an agent with no plan carries its own outdated answers' words to the item as it now stands, and never touches another agent's", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
-  const theirs = tasklessItem(BILLING.agent.id, "b1b2c3d4-0000-4000-8000-000000000002", 1);
-  const first = await tasklessInbox(INVITES.agent.id, [mine]);
+test("a task's inbox carries its own outdated answers' words to the item as it now stands, and never touches another task's", async () => {
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const theirs = itemOn(BILLING, "b1b2c3d4-0000-4000-8000-000000000002", 1);
+  const first = await taskInbox(INVITES, [mine]);
   act(() =>
     first.onDraft(mine, {
       choices: ["Approve"],
@@ -1093,19 +1007,19 @@ test("an agent with no plan carries its own outdated answers' words to the item 
       attachments: [],
     }),
   );
-  const other = await tasklessInbox(BILLING.agent.id, [theirs]);
+  const other = await taskInbox(BILLING, [theirs]);
   act(() => other.onDraft(theirs, { choices: [], values: [], note: "Weekly", attachments: [] }));
 
   const reposted = { ...mine, revision: 2 };
-  const reread = await tasklessInbox(INVITES.agent.id, [reposted]);
+  const reread = await taskInbox(INVITES, [reposted]);
   assert.equal(reread.draftOf(reposted).note, "Only teammates", "the words outlast the post");
   assert.deepEqual(reread.draftOf(reposted).choices, [], "the outdated ask's pick is let go");
-  const kept = await tasklessInbox(BILLING.agent.id, [theirs]);
+  const kept = await taskInbox(BILLING, [theirs]);
   assert.equal(kept.draftOf(theirs).note, "Weekly");
 });
 
 test("a pick kept by a build that stored its revision in the place still stands on the item at that revision", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
   window.localStorage.setItem(
     "app.composerDrafts",
     JSON.stringify([
@@ -1113,7 +1027,7 @@ test("a pick kept by a build that stored its revision in the place still stands 
         accountId: null,
         place: {
           kind: "inbox",
-          planId: null,
+          planId: INVITES.plan.id,
           agentId: INVITES.agent.id,
           itemId: mine.id,
           revision: 1,
@@ -1123,59 +1037,39 @@ test("a pick kept by a build that stored its revision in the place still stands 
       },
     ]),
   );
-  const read = await tasklessInbox(INVITES.agent.id, [mine]);
+  const read = await taskInbox(INVITES, [mine]);
   assert.deepEqual(read.draftOf(mine).choices, ["Approve"]);
   assert.equal(read.draftOf(mine).note, "Only teammates");
 });
 
 test("a reader still holding an item's older revision leaves the answer carried to its newer one", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
   const reposted = { ...mine, revision: 2 };
-  const ahead = await tasklessInbox(INVITES.agent.id, [reposted]);
+  const ahead = await taskInbox(INVITES, [reposted]);
   act(() =>
     ahead.onDraft(reposted, { choices: [], values: [], note: "Check guests", attachments: [] }),
   );
 
-  await tasklessInbox(INVITES.agent.id, [mine]);
-  const caughtUp = await tasklessInbox(INVITES.agent.id, [reposted]);
+  await taskInbox(INVITES, [mine]);
+  const caughtUp = await taskInbox(INVITES, [reposted]);
   assert.equal(caughtUp.draftOf(reposted).note, "Check guests");
 });
 
-test("a draft on an item the account's feed leaves out stands while the feed draws first, and goes only once the agent's own read answers without the item", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
-  const older = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000004", 1);
-  const first = await tasklessInbox(INVITES.agent.id, [mine, older]);
+test("a draft on an item the account's feed leaves out stands while the feed draws first, and goes only once the task's own read answers without the item", async () => {
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const older = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000004", 1);
+  const first = await taskInbox(INVITES, [mine, older]);
   act(() =>
     first.onDraft(older, { choices: [], values: [], note: "Reply later", attachments: [] }),
   );
 
-  // The feed holds only the newer item, as it leaves out one settled past its bound; the agent's own read is still out.
+  // The feed holds only the newer item, as it leaves out one settled past its bound; the task's own read is still out.
   leaveWindow();
-  const reads = handHostReads({
-    items: {
-      rows: {
-        [INBOX_SCOPE_KIND.PLAN]: {},
-        [INBOX_SCOPE_KIND.AGENT]: { [INVITES.agent.id]: [mine] },
-      },
-    },
-  });
+  const reads = handHostReads({ items: feedOf({ [INVITES.plan.id]: [mine] }) });
   let control: TaskInboxControl | undefined;
   function Probe(): null {
     useDraftsOwner(undefined);
-    control = useTaskInbox({
-      taskId: INVITES.agent.id,
-      kind: INBOX_SCOPE_KIND.AGENT,
-      shown: true,
-      waiting: true,
-      readerId: undefined,
-      agents: {
-        heldIds: [INVITES.agent.id],
-        answerInbox: () => new Promise(() => undefined),
-        messageInbox: () => new Promise(() => undefined),
-        readInboxImage: () => new Promise(() => undefined),
-        onRetryList: () => undefined,
-      },
-    });
+    control = useTaskInboxOf(INVITES);
     return null;
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -1187,24 +1081,23 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
 
   await act(async () =>
     reads.deliverHolders({
-      [INBOX_SCOPE_KIND.PLAN]: {},
-      [INBOX_SCOPE_KIND.AGENT]: { [INVITES.agent.id]: { rows: [mine] } },
+      [INBOX_SCOPE_KIND.PLAN]: { [INVITES.plan.id]: { rows: [mine] } },
     }),
   );
   await vi.waitFor(() =>
-    assert.equal(control?.draftOf(older).note, "", "the agent's own read says the item is gone"),
+    assert.equal(control?.draftOf(older).note, "", "the task's own read says the item is gone"),
   );
 });
 
 test("another item landing in the inbox leaves the answer being written on one as it was", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
-  const first = await tasklessInbox(INVITES.agent.id, [mine]);
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const first = await taskInbox(INVITES, [mine]);
   act(() =>
     first.onDraft(mine, { choices: [], values: [], note: "Only teammates", attachments: [] }),
   );
 
-  const landed = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000003", 1);
-  const reread = await tasklessInbox(INVITES.agent.id, [landed, mine]);
+  const landed = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000003", 1);
+  const reread = await taskInbox(INVITES, [landed, mine]);
   assert.equal(reread.draftOf(mine).note, "Only teammates");
   assert.equal(reread.draftOf(landed).note, "");
 });

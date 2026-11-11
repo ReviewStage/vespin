@@ -1,11 +1,20 @@
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { TASK_AGENTS_STATUS, taskAgentsStatus } from "@repo/features/task-agents-model";
 import {
+  type ChildTaskCount,
+  repositoryLabel,
+  TASK_ORDER,
+  taskFinished,
+  taskTime,
+} from "@repo/features/task-list-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import {
   TASK_BOUNDS,
   type TaskPullRequestLine,
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { RENAME_FAILED_NOTE } from "@repo/features/tasks-model";
 import { taskKey } from "@repo/features/workspace-key";
 import {
   ANNOUNCE,
@@ -29,14 +38,6 @@ import {
 } from "@repo/ui";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
-import {
-  type ChildTaskCount,
-  repositoryLabel,
-  TASK_ORDER,
-  taskFinished,
-  taskTime,
-} from "@repo/ui/task-list-model";
-import { RENAME_FAILED_NOTE } from "@repo/ui/tasks-model";
 import { statusOf } from "@repo/ui/tasks-page-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
@@ -46,8 +47,9 @@ import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
+import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
-import { TASK_STATUS_WORDS, TaskKey } from "../tasks/task-standing.js";
+import { TaskKey } from "../tasks/task-standing.js";
 import { openerOf } from "../tasks/use-link-standing.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useMarkedUnread } from "../tasks/use-task-looks.js";
@@ -58,7 +60,7 @@ import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { type OpenedTask, type TaskRowTab, useTaskMenuItems } from "./task-actions.js";
 import { TaskRowStatus } from "./task-card.js";
 import { AssigneeChip, PriorityChip, StatusChip, taskSubject } from "./task-row-parts.js";
-import { type ChosenTasks, chosenRowMenu } from "./tasks-selection.js";
+import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
 
 /**
  * task-list-row.tsx -- one task's row as every list of tasks draws it: the Tasks page's List and a task's related tasks alike, so the two never drift.
@@ -179,7 +181,7 @@ export function TaskListRow({
   /** How many of its sub-tasks are finished, of all of them, in the cell that says it; none where it has none. */
   subTasks?: ChildTaskCount | undefined;
   /** The selection it stands in, where it is one of several chosen: how many, and what the bar does to them all. */
-  chosen: ChosenTasks | undefined;
+  chosen: ChosenRows | undefined;
   onOpen: () => void;
   onStanding: (standing: TaskStanding) => void;
   /** How deep it stands nested under other rows: 0, at the top, unless said. */
@@ -343,6 +345,7 @@ export function TaskListRow({
       hint={card === undefined || rename.editing ? undefined : { Hint: RowHint, label: task.name }}
       disabled={actions.deletion.busy}
       onOpen={onOpen}
+      onOpenInTab={openTaskInTab(tasks.workspaces, task)}
       pressRef={press}
       depth={depth}
       nest={nest}

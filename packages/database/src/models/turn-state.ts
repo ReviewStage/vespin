@@ -21,6 +21,13 @@
  * nothing. A turn that ends well with lines it never took queues a turn for
  * them; a turn that fails keeps them, to be resent; and a Stop pulls the
  * turn's deadline in and leaves the lines written before it awaiting nothing.
+ * A running turn its plan's limit cut short, with no other payer to go on
+ * with it but a limit whose reset is known, is held open until that reset
+ * (`turns.waits_until`), its deadline pushed past it, and the minute sweep
+ * releases it once the reset has passed, to go on in a launch then. A queued
+ * turn whose launch the limit refused is held the same way, its pickup
+ * deadline running from the reset, and the sweep republishes it no more
+ * until it is released.
  *
  * A turn still open past its deadline, or past its cap, is lapsed
  * (`@repo/features/turn-deadline`), and only the minute sweep's reconcile
@@ -33,20 +40,56 @@
 
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
-import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin, type TurnStatus } from "@repo/wire";
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  TURN_OPEN,
+  TURN_ORIGIN,
+  TURN_STATUS,
+  type TurnOrigin,
+  type TurnStatus,
+  type TurnTerminalStatus,
+} from "@repo/wire";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { agentRunnerRecord } from "../schemas/agent-runner-record.js";
+import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { messages, turns } from "../schemas/storage.js";
 import { TurnUsageColumnSchema } from "./columns.js";
 
 type TurnStateEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** The statuses of a turn still open: queued for its runner, or running. */
-const OPEN_STATUSES = [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING] as const;
+/**
+ * Whether the rewind may settle the turn it keeps from each status. Note that
+ * every status may be settled, because the kept turn's work is gone whatever
+ * it stood at: a stop the rewind asked may not have landed yet, and a failure
+ * or cancel is of work the cut dropped. Declared per status so a status added
+ * later is decided here rather than settled unread.
+ */
+const REWIND_SETTLES = {
+  [TURN_STATUS.QUEUED]: true,
+  [TURN_STATUS.RUNNING]: true,
+  [TURN_STATUS.SETTLED]: true,
+  [TURN_STATUS.CANCELED]: true,
+  [TURN_STATUS.FAILED]: true,
+} as const satisfies Record<TurnStatus, boolean>;
+
+const REWIND_SETTLES_FROM = Object.values(TURN_STATUS).filter((status) => REWIND_SETTLES[status]);
 
 const TurnOriginSchema = Schema.Literals(Object.values(TURN_ORIGIN));
 
@@ -54,13 +97,26 @@ const TurnStatusSchema = Schema.Literals(Object.values(TURN_STATUS));
 
 const IdSchema = Schema.Struct({ id: Schema.String });
 
+/** The agent's checkout as it stood before a turn, as its runner recorded it (`turns.snapshot_*`). */
+export interface TurnCheckoutSnapshot {
+  readonly commit: string;
+  readonly head: string | null;
+  readonly branch: string | null;
+}
+
+const TurnCheckoutSnapshotSchema = Schema.Struct({
+  commit: Schema.String,
+  head: Schema.NullOr(Schema.String),
+  branch: Schema.NullOr(Schema.String),
+});
+
 /**
  * That a turn still open stands lapsed at the instant given: past the
  * deadline of the state it stands in, or past its cap from its start.
  */
 function lapsedAt(at: Date) {
   return and(
-    inArray(turns.status, [...OPEN_STATUSES]),
+    inArray(turns.status, [...TURN_OPEN]),
     or(
       lt(turns.leaseUntil, at),
       lt(turns.startedAt, new Date(at.getTime() - TURN_DEADLINE.CAP_MS)),
@@ -222,7 +278,7 @@ const endOpen = SqlSchema.findAll({
           and(
             eq(turns.id, row.turnId),
             eq(turns.conversationId, row.conversationId),
-            inArray(turns.status, [...OPEN_STATUSES]),
+            inArray(turns.status, [...TURN_OPEN]),
             eq(turns.attempt, row.attempt),
             row.lapsedAt === null ? undefined : lapsedAt(row.lapsedAt),
           ),
@@ -255,6 +311,25 @@ const pushDeadlines = SqlSchema.findAll({
           ),
         )
         .returning({ id: turns.id }),
+    ),
+});
+
+const writeSnapshot = SqlSchema.void({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    snapshot: TurnCheckoutSnapshotSchema,
+  }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          snapshotCommit: row.snapshot.commit,
+          snapshotHead: row.snapshot.head,
+          snapshotBranch: row.snapshot.branch,
+        })
+        .where(and(eq(turns.id, row.turnId), eq(turns.conversationId, row.conversationId))),
     ),
 });
 
@@ -322,7 +397,13 @@ const settleKept = SqlSchema.void({
           failure: null,
           failureDetail: null,
         })
-        .where(and(eq(turns.conversationId, conversationId), eq(turns.id, turnId))),
+        .where(
+          and(
+            eq(turns.conversationId, conversationId),
+            eq(turns.id, turnId),
+            inArray(turns.status, REWIND_SETTLES_FROM),
+          ),
+        ),
     ),
 });
 
@@ -338,7 +419,7 @@ const findJoinable = SqlSchema.findOneOption({
         .where(
           and(
             eq(turns.conversationId, conversationId),
-            inArray(turns.status, [...OPEN_STATUSES]),
+            inArray(turns.status, [...TURN_OPEN]),
             isNull(turns.cancelRequestedAt),
             // Not lapsed at `at`, as `lapsedAt` reads it: a turn with no deadline, or not started, is not.
             or(isNull(turns.leaseUntil), gte(turns.leaseUntil, at)),
@@ -362,9 +443,7 @@ const findOpen = SqlSchema.findOneOption({
       db
         .select({ id: turns.id })
         .from(turns)
-        .where(
-          and(eq(turns.conversationId, conversationId), inArray(turns.status, [...OPEN_STATUSES])),
-        )
+        .where(and(eq(turns.conversationId, conversationId), inArray(turns.status, [...TURN_OPEN])))
         .limit(1),
     ),
 });
@@ -401,7 +480,7 @@ const AwaitingRunnerSchema = Schema.Struct({
   turnId: Schema.String,
 });
 
-/** A coding agent's turns still queued that were queued before the instant given and stand inside their pickup deadline at the other, oldest first. */
+/** A coding agent's turns still queued that were queued before the instant given and stand inside their pickup deadline at the other, waiting on no limit's reset, oldest first. */
 const findAwaitingRunner = SqlSchema.findAll({
   Request: Schema.Struct({ before: Schema.Date, at: Schema.Date, limit: Schema.Int }),
   Result: AwaitingRunnerSchema,
@@ -420,6 +499,7 @@ const findAwaitingRunner = SqlSchema.findAll({
             eq(turns.status, TURN_STATUS.QUEUED),
             lt(turns.queuedAt, before),
             gte(turns.leaseUntil, at),
+            isNull(turns.waitsUntil),
           ),
         )
         .orderBy(asc(turns.queuedAt), asc(turns.id))
@@ -478,6 +558,126 @@ const pointLines = SqlSchema.void({
         .update(messages)
         .set({ awaitsTurnId: turnId })
         .where(and(eq(messages.conversationId, conversationId), inArray(messages.id, [...ids]))),
+    ),
+});
+
+/** A running turn moved onto the newer attempt named, its progress deadline running from `at`, where it still runs under an older one. */
+const moveRunning = SqlSchema.findAll({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    attempt: Schema.Number,
+    at: Schema.Date,
+  }),
+  Result: IdSchema,
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          attempt: row.attempt,
+          leaseUntil: new Date(row.at.getTime() + TURN_DEADLINE.PROGRESS_MS),
+        })
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.RUNNING),
+            lt(turns.attempt, row.attempt),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
+/** A running turn no Stop was asked of held until the reset given, its progress deadline running from it. */
+const holdRunning = SqlSchema.findAll({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    until: Schema.Date,
+  }),
+  Result: IdSchema,
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          waitsUntil: row.until,
+          leaseUntil: new Date(row.until.getTime() + TURN_DEADLINE.PROGRESS_MS),
+        })
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.RUNNING),
+            isNull(turns.cancelRequestedAt),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
+/** The conversation's queued turns no Stop was asked of held until the reset given, their pickup deadline running from it. */
+const holdQueued = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, until: Schema.Date }),
+  Result: IdSchema,
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          waitsUntil: row.until,
+          leaseUntil: new Date(row.until.getTime() + TURN_DEADLINE.PICKUP_MS),
+        })
+        .where(
+          and(
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.QUEUED),
+            isNull(turns.cancelRequestedAt),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
+const WaitedTurnSchema = Schema.Struct({
+  ...AwaitingRunnerSchema.fields,
+  status: TurnStatusSchema,
+});
+
+/** The running and queued turns no Stop was asked of whose wait has passed at the instant given, their wait cleared, soonest reset first, at most `limit` of them. */
+const releaseWaited = SqlSchema.findAll({
+  Request: Schema.Struct({ at: Schema.Date, limit: Schema.Int }),
+  Result: WaitedTurnSchema,
+  execute: ({ at, limit }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({ waitsUntil: null })
+        .where(
+          inArray(
+            turns.id,
+            db
+              .select({ id: turns.id })
+              .from(turns)
+              .where(
+                and(
+                  inArray(turns.status, [TURN_STATUS.RUNNING, TURN_STATUS.QUEUED]),
+                  isNull(turns.cancelRequestedAt),
+                  lte(turns.waitsUntil, at),
+                ),
+              )
+              .orderBy(asc(turns.waitsUntil), asc(turns.id))
+              .limit(limit),
+          ),
+        )
+        .returning({
+          userId: turns.userId,
+          conversationId: turns.conversationId,
+          turnId: turns.id,
+          status: turns.status,
+        }),
     ),
 });
 
@@ -722,7 +922,7 @@ export interface TurnEnd {
   readonly attempt: number;
   /** Where the end is a reap, the instant the turn was read lapsed at, at which it must still stand lapsed. */
   readonly lapsedAt: Date | null;
-  readonly status: (typeof TURN_STATUS)[keyof typeof TURN_STATUS];
+  readonly status: TurnTerminalStatus;
   readonly settledAt: Date;
   readonly failure: string | null;
   readonly failureDetail: string | null;
@@ -796,6 +996,76 @@ export function dropAwaitingNothing(
       }),
     { discard: true },
   );
+}
+
+/** The snapshot columns cleared, as a turn whose runner recorded none holds them. */
+const NO_SNAPSHOT = { snapshotCommit: null, snapshotHead: null, snapshotBranch: null } as const;
+
+const forgetSnapshotsOfSandbox = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String }),
+  execute: ({ sandboxName }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set(NO_SNAPSHOT)
+        .where(
+          inArray(
+            turns.conversationId,
+            db
+              .select({ conversationId: agentTable.conversationId })
+              .from(agentSandboxTable)
+              .innerJoin(agentTable, eq(agentTable.id, agentSandboxTable.agentId))
+              .where(eq(agentSandboxTable.sandboxName, sandboxName)),
+          ),
+        ),
+    ),
+});
+
+const forgetSnapshotsOfAgent = SqlSchema.void({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set(NO_SNAPSHOT)
+        .where(
+          inArray(
+            turns.conversationId,
+            db
+              .select({ conversationId: agentTable.conversationId })
+              .from(agentTable)
+              .where(eq(agentTable.id, agentId)),
+          ),
+        ),
+    ),
+});
+
+/**
+ * The snapshots the turns of the sandbox's agent hold forgotten, since a
+ * snapshot stands only while the sandbox it was taken in does: written as
+ * the sandbox is released, discarded, or made anew under its name
+ * (`agent-sandboxes.ts`), so no turn claims a checkout no sandbox holds.
+ */
+export function forgetTurnSnapshotsOfSandbox(sandboxName: string): TurnStateEffect<void> {
+  return forgetSnapshotsOfSandbox({ sandboxName });
+}
+
+/** The snapshots the agent's turns hold forgotten, as `forgetTurnSnapshotsOfSandbox` forgets them, for a sandbox the agent opens anew. */
+export function forgetTurnSnapshotsOfAgent(agentId: string): TurnStateEffect<void> {
+  return forgetSnapshotsOfAgent({ agentId });
+}
+
+/**
+ * Records on the turn the checkout as it stood before it, as the runner
+ * reported it with the turn's first line; a later report of the same turn
+ * writes over it, as a line resent to a fresh launch is recorded afresh.
+ */
+export function recordTurnSnapshot(
+  target: TurnTarget,
+  turnId: string,
+  snapshot: TurnCheckoutSnapshot,
+): TurnStateEffect<void> {
+  return writeSnapshot({ turnId, conversationId: target.conversationId, snapshot });
 }
 
 /**
@@ -903,6 +1173,71 @@ export function supersededTurnsOf(
   return Effect.map(findSuperseded({ conversationId, launch }), (rows) =>
     rows.map((row) => row.id),
   );
+}
+
+/**
+ * Moves the running turn named onto the newer launch given at `at`, as a
+ * launch that goes on with a turn its plan's limit cut short takes it up,
+ * its progress deadline running from then; answers whether it moved, a
+ * turn ended or already under that launch or a newer one being left as it
+ * stands.
+ */
+export function carryTurn(
+  target: TurnTarget,
+  carry: { readonly turnId: string; readonly attempt: number; readonly at: Date },
+): TurnStateEffect<boolean> {
+  return Effect.map(
+    moveRunning({ ...carry, conversationId: target.conversationId }),
+    (moved) => moved.length > 0,
+  );
+}
+
+/**
+ * Holds the running turn named, no Stop asked of, open until the usage
+ * limit that cut it short resets at `until`, its progress deadline running
+ * from then, so the sweep reaps it only once a launch past the reset has
+ * had its time; answers whether it was held.
+ */
+export function holdTurn(
+  target: TurnTarget,
+  hold: { readonly turnId: string; readonly until: Date },
+): TurnStateEffect<boolean> {
+  return Effect.map(
+    holdRunning({ ...hold, conversationId: target.conversationId }),
+    (held) => held.length > 0,
+  );
+}
+
+/**
+ * Holds the conversation's queued turns, no Stop asked of, until the usage
+ * limit that refused their launch resets at `until`, their pickup deadline
+ * running from then, so neither the sweep's republish nor its reap reaches
+ * them before a launch past the reset has had its time; answers the turns
+ * held.
+ */
+export function holdQueuedTurns(
+  target: TurnTarget,
+  until: Date,
+): TurnStateEffect<readonly string[]> {
+  return Effect.map(holdQueued({ conversationId: target.conversationId, until }), (held) =>
+    held.map((row) => row.id),
+  );
+}
+
+/** A turn whose wait for a limit's reset the sweep released: the account, the conversation, the turn, and whether it stood running or queued. */
+export type WaitedTurn = typeof WaitedTurnSchema.Type;
+
+/**
+ * The coding agents' running and queued turns, among every account's, no
+ * Stop asked of, whose wait for a limit's reset has passed at `at`, their
+ * wait cleared, soonest reset first, at most `limit` of them: the minute
+ * sweep has each go on in a launch.
+ */
+export function releaseWaitedTurns(
+  at: Date,
+  limit: number,
+): TurnStateEffect<readonly WaitedTurn[]> {
+  return releaseWaited({ at, limit });
 }
 
 /** Settles the turn a rewind keeps as its conversation's first, its work dropped, with no Stop or failure on it. */

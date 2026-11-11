@@ -5,6 +5,7 @@ import type { LoopbackConsentOptions } from "@repo/credentials";
 import { loopbackConsent } from "@repo/credentials/node";
 import type { ServiceReach } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { listenOnLoopbackOverNet, openTerminalSocketOverWs } from "@repo/features/node";
 import type { SecretCipher as SecretCipherSeam } from "@repo/host";
 import { serviceReachLayer } from "@repo/host/client";
 import {
@@ -28,7 +29,7 @@ import {
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
-import { listenOnLoopbackOverNet, mirrorPlatform, openTerminalSocketOverWs } from "@repo/host/node";
+import { armedWatchLayer, mirrorPlatform } from "@repo/host/node";
 import { ConfigProvider, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { net } from "electron";
@@ -69,7 +70,11 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
     // Cloud agents' mirrors stand beside the local agents' clones under the member's own home, `~/.vespin`.
     // Each mirror's attempts are traced on main's Sentry.
     Layer.succeed(MirrorPlatform, { ...mirrorPlatform(os.homedir()), tracer: mainSentryTracer }),
-    thisMacHostLayer(),
+    thisMacHostLayer({
+      stateRoot: config.stateRoot,
+      appVersion: config.appVersion,
+      packaged: config.packaged,
+    }),
     // The account is the OAuth sign-in, its tokens sealed by this Mac's
     // cipher. Its consent is a loopback on this Mac: the browser hands the
     // code back to a `node:http` listener on 127.0.0.1.
@@ -108,7 +113,7 @@ export function hostAssemblyLayerFor(
       Layer.provideMerge(hostKernelLayer, seams),
       Layer.provideMerge(
         NodeChildProcessSpawner.layer,
-        Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
+        Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
       ),
       FetchHttpClient.layer,
     ),

@@ -82,10 +82,8 @@ const SIGN_IN_NOTE = SIGNED_OUT_WORDS;
 /** The words of the page's groups and rows. */
 const WORDS = {
   ACCOUNT_TITLE: "Just for you",
-  ACCOUNT_CAPTION: `These change ${PRODUCT_NAME} only for you, in every workspace you're in.`,
   WORKSPACE_TITLE: "For everyone in ",
-  WORKSPACE_CAPTION_START: `These change ${PRODUCT_NAME} for every member and agent in `,
-  WORKSPACE_CAPTION_END: ". Only admins can change them.",
+  WORKSPACE_CAPTION: "Only admins can change these.",
   LOCKED: "Only an admin can change this",
   SEND_FEEDBACK: "Send feedback",
   NOTHING_DELETED: "Nothing is deleted; turning it back on brings it all back.",
@@ -94,6 +92,18 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.REWIND_FILES]: {
+    on: (workspace: string) =>
+      `Offers everyone in ${workspace} a choice, on Rewind and Edit, to put the agent's files back to how they stood before that message.`,
+    off: (workspace: string) =>
+      `Takes that choice off Rewind and Edit for everyone in ${workspace}; a rewind then takes back the conversation alone.`,
+  },
+  [EXPERIMENT.RUN_ACTIONS]: {
+    on: (workspace: string) =>
+      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over every cloud agent's tabs, with Run rows in ⌘K and a phone's ⋯ menu, that runs one in the agent's sandbox when pressed.`,
+    off: (workspace: string) =>
+      `Hides the Run button, its rows in ⌘K and the ⋯ menu, and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
+  },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>
       `Shows each task's description, its comments and version history to everyone in ${workspace}, and has agents keep descriptions current as they work.`,
@@ -105,6 +115,12 @@ const FLIP_WORDS = {
       `Lets agents in ${workspace} keep settled facts about how your team works and recall them in later work, reviewed in Settings › Memory.`,
     off: (workspace: string) =>
       `Stops agents in ${workspace} from keeping or recalling memories, and hides Settings › Memory for everyone.`,
+  },
+  [EXPERIMENT.TURN_END]: {
+    on: (workspace: string) =>
+      `Has agents in ${workspace} end each turn with a short summary, and shows over each agent's box what it needs from you, or that it's done, with follow-ups to send.`,
+    off: (workspace: string) =>
+      `Stops agents in ${workspace} from ending turns with a summary and follow-ups, and puts the Inbox row back over each agent's box.`,
   },
 } as const satisfies Record<
   WorkspaceExperiment,
@@ -320,13 +336,7 @@ export function ExperimentalPage({
                 <ReplayMask>{workspace.name}</ReplayMask>
               </>
             }
-            caption={
-              <>
-                {WORDS.WORKSPACE_CAPTION_START}
-                <ReplayMask>{workspace.name}</ReplayMask>
-                {WORDS.WORKSPACE_CAPTION_END}
-              </>
-            }
+            caption={WORDS.WORKSPACE_CAPTION}
           >
             {workspaceEntries.map((entry) => (
               <WorkspaceExperimentRow key={entry.key} entry={entry} workspace={workspace} />
@@ -338,7 +348,6 @@ export function ExperimentalPage({
         <SettingsSection
           anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_ACCOUNT}
           title={WORDS.ACCOUNT_TITLE}
-          caption={WORDS.ACCOUNT_CAPTION}
         >
           {accountEntries.map((entry) => (
             <AccountExperimentRow

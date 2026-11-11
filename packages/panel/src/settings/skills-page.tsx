@@ -3,6 +3,10 @@ import type {
   InstalledSkillSummary,
 } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
+import {
+  INSTALLED_SKILL_SCOPE,
+  type InstalledSkillScope,
+} from "@repo/features/installed-skill-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
@@ -24,7 +28,6 @@ import {
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
-  SettingsRow,
   SettingsRowMark,
   type SettingsRowSkeletonShape,
   SettingsRowStateLine,
@@ -93,8 +96,9 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  * a teammate's workspace skill to a member who is not an owner or admin, as
  * the service says by `manageable`, holds View alone in its ⋯. A line at the top says where repository skills
  * come from and that a change reaches only agents started afterwards, which
- * nothing else on the page can say. Add skill opens the dialog
- * (`add-skill-dialog.tsx`), whose install lands in the list as it answers,
+ * nothing else on the page can say. Each group's heading holds its Add
+ * skill, which opens the dialog (`add-skill-dialog.tsx`) installing for
+ * that group's people, whose install lands in the list as it answers,
  * its rows lit once. The page draws the skills as the host holds them,
  * followed live on the service (`LIVE_READ.INSTALLED_SKILLS`), so one a
  * teammate installs or removes draws while the page is open, and the host
@@ -104,7 +108,8 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 /** An installed skill's row while the skills are read: its book, its words over its source, and its ⋯. */
 const SKILL_ROW_SKELETON: SettingsRowSkeletonShape = {
   described: true,
-  controls: [SETTINGS_SKELETON_CONTROL.MORE],
+  controls: [],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
   mark: SETTINGS_ROW_MARK_WIDTH,
 };
 
@@ -115,12 +120,11 @@ const SKILL_GROUP_SKELETON: SettingsSectionSkeletonShape = {
 };
 
 /**
- * The page before the workspaces are read: Add a skill, unheaded, then the
- * workspace's group and the reader's own, since whether the workspace is a
- * personal one, which draws no group of its own, is not yet known.
+ * The page before the workspaces are read: the workspace's group and the
+ * reader's own, since whether the workspace is a personal one, which draws
+ * no group of its own, is not yet known.
  */
 const SKILLS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
-  { headed: false, rows: [{ described: false, controls: [SETTINGS_SKELETON_CONTROL.BUTTON] }] },
   SKILL_GROUP_SKELETON,
   SKILL_GROUP_SKELETON,
 ];
@@ -375,6 +379,8 @@ function ShownSkills({
   const held = useQuery(installedSkillsQuery(workspace.id));
   const retry = useMutation(installedSkillsRetryMutation());
   const [adding, setAdding] = useState(false);
+  // Note that whom the dialog installs for outlives its closing, so its fade shows the choice it was opened on.
+  const [addingFor, setAddingFor] = useState<InstalledSkillScope>(INSTALLED_SKILL_SCOPE.PERSONAL);
   // Note that the card keeps what is typed and previewed while it is drawn, from its opening until its fade has run, so each opening starts afresh.
   const added = useDrawnThroughExit(adding);
   const [landed, setLanded] = useState<ReadonlySet<string>>(new Set());
@@ -404,23 +410,34 @@ function ShownSkills({
       ))
     );
 
+  // A group's Add skill, on its heading, opening the dialog to install for that group's people.
+  const addTo = (scope: InstalledSkillScope) => (
+    <Button
+      variant={BUTTON_VARIANT.OUTLINE}
+      icon={<PlusIcon />}
+      onClick={() => {
+        setAddingFor(scope);
+        setAdding(true);
+      }}
+    >
+      {SKILLS_LINE.ADD_SKILL}
+    </Button>
+  );
+  const workspaceTitle = <ReplayMask>{workspaceGroupTitle(workspace)}</ReplayMask>;
+  // Note that the first group's heading is where a search for Add skill lands, and where a failed read stands under its Add.
+  const first =
+    workspace.personal === true
+      ? { title: SKILLS_LINE.PERSONAL, scope: INSTALLED_SKILL_SCOPE.PERSONAL }
+      : { title: workspaceTitle, scope: INSTALLED_SKILL_SCOPE.WORKSPACE };
+
   return (
     <>
-      <SettingsSection anchor={SETTINGS_SEARCH_ROW.ADD_SKILL}>
-        <SettingsRow label="Add a skill">
-          {() => (
-            <Button
-              variant={BUTTON_VARIANT.OUTLINE}
-              icon={<PlusIcon />}
-              onClick={() => setAdding(true)}
-            >
-              Add skill
-            </Button>
-          )}
-        </SettingsRow>
-      </SettingsSection>
       {skills === undefined && held.isError ? (
-        <SettingsSection>
+        <SettingsSection
+          title={first.title}
+          action={addTo(first.scope)}
+          anchor={SETTINGS_SEARCH_ROW.ADD_SKILL}
+        >
           <ReadFailed
             line={SKILLS_LINE.READ_FAILED}
             surface={FAILURE_SURFACE.SKILLS_READ}
@@ -430,17 +447,28 @@ function ShownSkills({
       ) : (
         <>
           {workspace.personal === true ? null : (
-            <SettingsSection title={<ReplayMask>{workspaceGroupTitle(workspace)}</ReplayMask>}>
+            <SettingsSection
+              title={workspaceTitle}
+              action={addTo(INSTALLED_SKILL_SCOPE.WORKSPACE)}
+              anchor={SETTINGS_SEARCH_ROW.ADD_SKILL}
+            >
               {rows(groups?.workspace)}
             </SettingsSection>
           )}
-          <SettingsSection title={SKILLS_LINE.PERSONAL}>{rows(groups?.personal)}</SettingsSection>
+          <SettingsSection
+            title={SKILLS_LINE.PERSONAL}
+            action={addTo(INSTALLED_SKILL_SCOPE.PERSONAL)}
+            anchor={workspace.personal === true ? SETTINGS_SEARCH_ROW.ADD_SKILL : undefined}
+          >
+            {rows(groups?.personal)}
+          </SettingsSection>
         </>
       )}
       {added.drawn ? (
         <AddSkillDialog
           open={adding}
           workspace={workspace}
+          scope={addingFor}
           onInstalled={installed}
           onClose={() => setAdding(false)}
           onExited={added.onExited}

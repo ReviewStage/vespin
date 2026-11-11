@@ -3,65 +3,34 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent, readAgent } from "@repo/database/models/agent-store";
-import {
-  linkSlackInstallation,
-  recordSlackAgentThread,
-} from "@repo/database/models/slack-installation-store";
-import { readTask, updateTask } from "@repo/database/models/task-store";
+import { updateTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
-import { messages, turns } from "@repo/database/schemas/storage";
-import { CONVERSATION_RUNTIME, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
-import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
-import { AGENT_ARCHIVER, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
+import { turns } from "@repo/database/schemas/storage";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { getTestDB, startTask } from "@repo/database/testing";
+import { AGENT_ARCHIVER } from "@repo/features/agent-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
-import { MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
+import { TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Option, Result } from "effect";
+import { Clock, Effect, Option } from "effect";
+import { doneTaskArchive } from "../agents/agent-change.js";
 import { idleStandingAgents } from "../agents/coder-host/stop.js";
-import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events.js";
-import { answerInboxAsk, INBOX_ASK_ANSWER, postInboxThread } from "../inbox/inbox-store.js";
-import { reopenTaskForWork, settleTaskAfterTurn, settleTaskIfFinished } from "./task-finish.js";
+import { settleTaskAfterTurn } from "./task-finish.js";
 
 /**
- * A task's status following its agents' work, through the one check the
- * turn's end, the merge read, and the inbox answer ask, against a real
- * dialect: an agent still at work, a turn running or a line awaiting one,
- * keeps the task in progress; its turn settled, with its pull request
- * merged, finishes it; a question an agent posted to the inbox holds it
- * until the developer answers; a task a Slack message or `start_agent` made
- * finishes once its agent's turn settles, with no merge asked; and an agent's turn
- * starting on a task done takes it up again.
+ * An agent archived with its task moved to Done, against a real dialect: an
+ * idle one at once, and one still at work, the agent that moved the task
+ * among them, once its turn ends.
  *
  * Synthetic accounts, tasks, and words throughout.
  */
-
-/** What the finishes counted, across the file; a test reads its own account's. */
-const ANALYTICS = recordingProductAnalytics();
-
-const countedFor = (userId: string) =>
-  ANALYTICS.recorded.filter((event) => event.userId === userId);
 
 const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   return userId;
-});
-
-/** The pull request from the agent's branch, as its row keeps it, standing where `state` says. */
-const pullRequestIn = (
-  state: typeof PULL_REQUEST_STATE.OPEN | typeof PULL_REQUEST_STATE.MERGED,
-) => ({
-  number: 42,
-  title: "Fix the refresh",
-  url: "https://github.com/acme/relay/pull/42",
-  state,
-  checks: CHECK_SUMMARY.PASSING,
-  additions: 12,
-  deletions: 3,
-  changedFiles: 2,
 });
 
 /** An agent the account started on the task an hour ago, past the starting grace. */
@@ -121,208 +90,11 @@ const settle = (turnId: string) =>
     ),
   );
 
-/** A line of the developer's to the agent, written now beside the turn it queues, as a send writes both; that turn's id. */
-const awaitingLine = (agent: { readonly userId: string; readonly conversationId: string }) =>
-  Effect.gen(function* () {
-    const now = new Date(yield* Clock.currentTimeMillis);
-    const db = yield* Database;
-    const [queued] = yield* db
-      .insert(turns)
-      .values({
-        userId: agent.userId,
-        conversationId: agent.conversationId,
-        origin: TURN_ORIGIN.TYPED,
-        status: TURN_STATUS.QUEUED,
-        queuedAt: now,
-      })
-      .returning({ id: turns.id });
-    const turnId = queued?.id ?? assert.fail("the turn was not queued");
-    yield* db.insert(messages).values({
-      userId: agent.userId,
-      conversationId: agent.conversationId,
-      seq: 1,
-      clientId: randomUUID(),
-      role: MESSAGE_ROLE.USER,
-      parts: [{ type: "text", text: "Start the next worker." }],
-      placedAt: now,
-      createdAt: now,
-      turnId: null,
-      awaitsTurnId: turnId,
-    });
-    return turnId;
-  });
-
-const statusOf = (userId: string, taskId: string) =>
-  Effect.map(readTask(userId, taskId), (read) => Option.getOrThrow(read).task.status);
-
 /** Whether the agent stands archived. */
 const archived = (userId: string, agentId: string) =>
   Effect.map(readAgent(userId, agentId), (read) => Option.getOrThrow(read).archivedAt !== null);
 
-it.layer(getTestDB())("a task's work finishing", (it) => {
-  it.effect(
-    "an agent at work, its turn running or a line awaiting one, keeps the task; its turn settled with its pull request merged finishes it",
-    () =>
-      Effect.gen(function* () {
-        const userId = yield* openUser;
-        const task = yield* startTask(userId, { name: "Teammate invitations" });
-        const worker = yield* openAgent(userId, task.id);
-        const orchestrator = yield* openAgent(userId, task.id);
-        yield* reopenTaskForWork(userId, task.id);
-        yield* openedPullRequest(userId, worker.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        yield* turnOf(orchestrator, TURN_STATUS.SETTLED);
-        const running = yield* turnOf(worker, TURN_STATUS.RUNNING);
-
-        yield* settleTaskIfFinished(userId, task.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.IN_PROGRESS);
-
-        // The worker's turn ended, but it messaged the orchestrator, whose turn is on its way.
-        yield* settle(running);
-        const next = yield* awaitingLine(orchestrator);
-        yield* settleTaskIfFinished(userId, task.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.IN_PROGRESS);
-
-        // The orchestrator's turn took the line and ended: everyone is idle.
-        yield* settle(next);
-        yield* Database.use((db) =>
-          db
-            .update(messages)
-            .set({ turnId: next })
-            .where(eq(messages.conversationId, orchestrator.conversationId)),
-        );
-        yield* settleTaskIfFinished(userId, task.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
-        // Only the check that moved the task counted, and as the merge's own finish.
-        assert.deepEqual(countedFor(userId), [
-          {
-            name: SERVER_EVENT.TASK_FINISH,
-            userId,
-            workspaceId: task.workspaceId,
-            properties: { status: TASK_STATUS.DONE, by: "merge" },
-          },
-        ]);
-
-        // A turn starting on the task takes it up again.
-        yield* reopenTaskForWork(userId, task.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.IN_PROGRESS);
-      }).pipe(Effect.provide(ANALYTICS.layer)),
-  );
-
-  it.effect(
-    "a task start_agent made for a caller on no task is done once its agent's turn settles well, with no pull request merged",
-    () =>
-      Effect.gen(function* () {
-        const userId = yield* openUser;
-        const task = yield* startTask(userId, {
-          name: "Sweep the stale invitations",
-          madeByStart: true,
-        });
-        const agent = yield* openAgent(userId, task.id);
-        yield* reopenTaskForWork(userId, task.id);
-        yield* turnOf(agent, TURN_STATUS.SETTLED);
-
-        yield* settleTaskAfterTurn(userId, task.id, agent.id);
-
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
-        assert.deepEqual(
-          countedFor(userId).map((event) => event.properties),
-          [{ status: TASK_STATUS.DONE, by: "start" }],
-        );
-      }).pipe(Effect.provide(ANALYTICS.layer)),
-  );
-
-  it.effect(
-    "a task a Slack message made is done once its agent's turn settles well, with no pull request merged; one whose agent an automation's result DM speaks for waits on its merge",
-    () =>
-      Effect.gen(function* () {
-        const userId = yield* openUser;
-        const task = yield* startTask(userId, { name: "Find the flakiest test and fix it" });
-        const agent = yield* openAgent(userId, task.id);
-        const other = yield* startTask(userId, { name: "Teammate invitations" });
-        const reported = yield* openAgent(userId, other.id);
-        yield* linkSlackInstallation({
-          organizationId: task.workspaceId,
-          teamId: `T-${randomUUID()}`,
-          teamName: "Team",
-          userId,
-        });
-        yield* recordSlackAgentThread({
-          organizationId: task.workspaceId,
-          channelId: "C0001",
-          threadTs: "1700000002.000300",
-          agentId: agent.id,
-          userId,
-          origin: SLACK_THREAD_ORIGIN.START,
-        });
-        // A same-agent automation's result DM, kept for an agent no run started.
-        yield* recordSlackAgentThread({
-          organizationId: other.workspaceId,
-          channelId: "D0001",
-          threadTs: "1700000002.000400",
-          agentId: reported.id,
-          userId,
-          origin: SLACK_THREAD_ORIGIN.RUN_RESULT,
-        });
-        yield* reopenTaskForWork(userId, task.id);
-        yield* reopenTaskForWork(userId, other.id);
-        yield* turnOf(agent, TURN_STATUS.SETTLED);
-        yield* turnOf(reported, TURN_STATUS.SETTLED);
-
-        yield* settleTaskAfterTurn(userId, task.id, agent.id);
-        yield* settleTaskAfterTurn(userId, other.id, reported.id);
-
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
-        assert.equal(yield* statusOf(userId, other.id), TASK_STATUS.IN_PROGRESS);
-        assert.deepEqual(
-          countedFor(userId).map((event) => event.properties),
-          [{ status: TASK_STATUS.DONE, by: "slack" }],
-        );
-      }).pipe(Effect.provide(ANALYTICS.layer)),
-  );
-
-  it.effect(
-    "a question an agent posted holds the task until the developer answers it, and a notice holds nothing",
-    () =>
-      Effect.gen(function* () {
-        const userId = yield* openUser;
-        const task = yield* startTask(userId, { name: "Teammate invitations" });
-        const agent = yield* openAgent(userId, task.id);
-        yield* turnOf(agent, TURN_STATUS.SETTLED);
-        yield* openedPullRequest(userId, agent.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        const poster = { userId, taskId: task.id, agentId: agent.id };
-        const posted = yield* postInboxThread(poster, {
-          key: "branch-protection",
-          title: "Require a review on main",
-          body: "Turn on a required review for main in the repository's settings.",
-          ask: { type: INBOX_ASK.DO, steps: [] },
-          needsReply: false,
-        });
-        assert.ok(Result.isSuccess(posted));
-        const notice = {
-          key: "merged",
-          title: "The refresh fix merged",
-          body: "The refresh fix merged into main.",
-        };
-        assert.ok(Result.isSuccess(yield* postInboxThread(poster, notice)));
-
-        yield* settleTaskIfFinished(userId, task.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.TODO);
-
-        const ask = posted.success.thread?.find(
-          (message) => message.ask?.status === INBOX_ASK_STATUS.OPEN,
-        );
-        assert.ok(ask !== undefined);
-        const answered = yield* answerInboxAsk(userId, posted.success.id, {
-          answers: { ask: ask.id, reply: INBOX_REPLY.DONE },
-          text: "",
-          clientKey: randomUUID(),
-        });
-        assert.equal(Option.getOrThrow(answered).outcome, INBOX_ASK_ANSWER.TAKEN);
-        yield* settleTaskIfFinished(userId, task.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
-      }),
-  );
-
+it.layer(getTestDB())("an agent archived with its task's Done", (it) => {
   it.effect(
     "a task moved to Done archives its idle agent at once, and one whose turn still runs, its Stop on the way, only once that turn ends",
     () =>
@@ -355,34 +127,34 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
   );
 
   it.effect(
-    "an agent of a task Vespin finished stands, and still stands once messaged, its turn taking the task up and its reply finishing it again",
+    "a member's Done that confirmed stopping its agents archives the one whose Stop is on the way at once",
     () =>
       Effect.gen(function* () {
         const userId = yield* openUser;
         const task = yield* startTask(userId, { name: "Teammate invitations" });
-        const agent = yield* openAgent(userId, task.id);
-        yield* openedPullRequest(userId, agent.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        yield* turnOf(agent, TURN_STATUS.SETTLED);
+        const stopping = yield* openAgent(userId, task.id);
+        const running = yield* turnOf(stopping, TURN_STATUS.RUNNING);
+        const now = yield* Clock.currentTimeMillis;
+        yield* Database.use((db) =>
+          db
+            .update(turns)
+            .set({ cancelRequestedAt: new Date(now) })
+            .where(eq(turns.id, running)),
+        );
 
-        // Its pull request merged and its turn ended: the service finishes the task and leaves the
-        // agent standing.
-        yield* settleTaskAfterTurn(userId, task.id, agent.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
-        assert.equal(yield* archived(userId, agent.id), false);
-
-        // Messaged, its turn takes the task up, and its reply ends the turn, at whose end the
-        // service finishes it again.
-        yield* reopenTaskForWork(userId, task.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.IN_PROGRESS);
-        yield* turnOf(agent, TURN_STATUS.SETTLED);
-        yield* settleTaskAfterTurn(userId, task.id, agent.id);
-        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
-        assert.equal(yield* archived(userId, agent.id), false);
+        yield* updateTask(
+          userId,
+          task.id,
+          { status: TASK_STATUS.DONE },
+          undefined,
+          doneTaskArchive({ by: AGENT_ARCHIVER.MEMBER, userId }, new Set([stopping.id])),
+        );
+        assert.equal(yield* archived(userId, stopping.id), true);
       }),
   );
 
   it.effect(
-    "an agent moving its own task to Done archives its idle teammate, and stands itself once its turn ends",
+    "an agent moving its own task to Done archives its idle teammate at once, and itself once its turn ends",
     () =>
       Effect.gen(function* () {
         const userId = yield* openUser;
@@ -407,7 +179,7 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
 
         yield* settle(answering);
         yield* settleTaskAfterTurn(userId, task.id, finisher.id);
-        assert.equal(yield* archived(userId, finisher.id), false);
+        assert.equal(yield* archived(userId, finisher.id), true);
       }),
   );
 });

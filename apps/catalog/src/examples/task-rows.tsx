@@ -65,7 +65,7 @@ import { CatalogSection } from "../section";
  * rows' kinds leading and their × at their ends; and a quick add's draft
  * raised as a card over a row, its chips in their cells; the same related
  * tasks drawn only near the view of the scroller they stand in, each row
- * placed out of the list's grid at its columns' widths; tasks as the Tasks
+ * placed out of the list's grid at its columns' widths, a draft after them; tasks as the Tasks
  * page lists them, one counting the threads that need the reader in the
  * attention tone; and a list never chosen still being read, its rows'
  * blocks in their cells. Synthetic tasks.
@@ -299,7 +299,9 @@ const RUN_TASKS = [PARENT, CHILD, RELATED] as const;
 /**
  * The same related tasks in a scroller of their own, drawing only the rows
  * near its view, each row placed out of the list's grid and laying its
- * columns out at the widths every task says there (`taskRowFit`).
+ * columns out at the widths every task says there (`taskRowFit`), a quick
+ * add's draft standing after the run on its columns, as a task's Sub-tasks
+ * add one in place.
  */
 function RelatedTasksRun(): React.JSX.Element {
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -313,6 +315,31 @@ function RelatedTasksRun(): React.JSX.Element {
         scroller={scroller}
         keys={RUN_TASKS.map((task) => task.id)}
         fit={fit}
+        after={{
+          label: "New sub-tasks",
+          lines: (
+            <TaskRowDraft
+              cells={RELATED_TASK_CELLS}
+              content={{
+                [TASK_ROW_CELL.PRIORITY]: (
+                  <MarkChip
+                    mark={<TaskPriorityMark priority={TASK_PRIORITY.NONE} />}
+                    words="none"
+                  />
+                ),
+                [TASK_ROW_CELL.STATUS]: (
+                  <MarkChip mark={<TaskStatusMark status={TASK_STATUS.TODO} />} words="todo" />
+                ),
+                [TASK_ROW_CELL.ASSIGNEE]: <UnassignedAvatar size={AVATAR_SIZE.MARK} />,
+              }}
+              name="Revoke a pending invite"
+              drafting
+              pending={false}
+              placed
+              edges={TASK_ROW_EDGES.LIST}
+            />
+          ),
+        }}
       >
         {(index, place) => {
           const task = RUN_TASKS[index];

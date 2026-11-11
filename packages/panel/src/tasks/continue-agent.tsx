@@ -1,5 +1,11 @@
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
-import type { Failure } from "@repo/features/failure-remedy";
+import {
+  FAILURE_REASON,
+  type Failure,
+  rejectedFailure,
+  remedyLabel,
+} from "@repo/features/failure-remedy";
+import type { ModelChoice } from "@repo/features/models-wire";
 import {
   ANNOUNCE,
   BANNER_LOOK,
@@ -7,8 +13,10 @@ import {
   BUTTON_VARIANT,
   Button,
   ComposerFrame,
+  IconButton,
   NOTE_LINE_LOOK,
   NoteLine,
+  POPOVER_ALIGN,
   riseAboveEnd,
   TEXT_TONE,
   Text,
@@ -16,17 +24,22 @@ import {
   useMenu,
 } from "@repo/ui";
 import { ACTOR_KIND } from "@repo/ui/actor-model";
-import { ArrowRightIcon } from "lucide-react";
-import { useState } from "react";
+import { useAsyncAction } from "@repo/ui/use-async-action";
+import { useDisclosure } from "@repo/ui/use-disclosure";
+import { ArrowRightIcon, ChevronDownIcon } from "lucide-react";
+import { useId, useRef, useState } from "react";
 import { ActorMark } from "../actor-ref.js";
 import { DRAFT_PLACE, type Draft, EMPTY_DRAFT, useDraftWriter } from "../composer-drafts.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { COMPOSER_ROOM_CLASS } from "./agent-composer.js";
-import { CONTINUE_LABEL, CONTINUED_IN } from "./agent-model.js";
+import { CONTINUE_LABEL, CONTINUED_IN, modelLabel } from "./agent-model.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { useContinueDoor } from "./fork-action.js";
+import { ModelMenu, settledChoice } from "./model-menu.js";
+import { refusalOffer } from "./refusal-offer.js";
+import { useRepositoryRemedy } from "./repository-remedy.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**
@@ -44,7 +57,9 @@ import type { AgentsControl } from "./use-agents.js";
  * were changed meanwhile, in another window, when the newer words stay;
  * that press is held busy while it is out, and says beside itself why it
  * did not start. Nothing offers it where no Start could run: on an
- * archived task, or an agent on none.
+ * archived task, or an agent on none. A turn the model refused offers a
+ * continue on another model in its place (`RefusalContinue`), which starts
+ * at once, since its press names the model it runs on.
  *
  * Once any agent continues this one (`continuedByIds`), the agents are
  * named in one place, oldest first, each by its chip, which opens its tab:
@@ -72,6 +87,9 @@ const CONTINUED_COPY = {
   STOP: "Stop",
   STOPPING: "Stopping",
   CONTINUING: "Continuing in new agent",
+  CONTINUE_ON: (model: string) => `Continue on ${model}`,
+  CHOOSE_MODEL: "Choose another model",
+  CONNECT_HINT: "Connect another harness to continue on its models.",
 } as const;
 
 /** What a closed box hands the press: its words and the files attached to them, and the agent's task, under which they are kept. */
@@ -90,6 +108,59 @@ function holdsCarried(draft: Draft, carry: ContinueCarry): boolean {
   );
 }
 
+/**
+ * A continue started at once from the agent's whole transcript, on `choice`
+ * where one is named, with the box's words and files as its note: held busy
+ * while it is out, saying why it did not start, and letting the box's words
+ * go once it landed, unless they were changed meanwhile, in another window.
+ */
+function useContinueStart(
+  agentId: string,
+  control: Pick<AgentsControl, "continueAgent">,
+  carry: ContinueCarry | undefined,
+): {
+  readonly busy: boolean;
+  readonly note: Failure | undefined;
+  readonly start: (choice?: ModelChoice) => void;
+  /** Lets the box's words go where it still holds what the press carried. */
+  readonly letGo: () => void;
+} {
+  const starting = useAsyncAction<Failure>(rejectedFailure);
+  const note = starting.refusal;
+  const writer = useDraftWriter();
+  const { continueAgent } = control;
+  useAnnounceShown(ANNOUNCE.ALERT, note?.text ?? "");
+  const letGo = () => {
+    if (carry === undefined) return;
+    writer.update({ kind: DRAFT_PLACE.AGENT, planId: carry.taskId, agentId }, (now) =>
+      holdsCarried(now, carry) ? EMPTY_DRAFT : now,
+    );
+  };
+  const start = (choice?: ModelChoice) => {
+    if (continueAgent === undefined) return;
+    const words = carry?.words.trim() ?? "";
+    void starting.run(() =>
+      continueAgent(
+        agentId,
+        words === "" ? undefined : words,
+        carry?.attachments ?? [],
+        undefined,
+        choice,
+      ).then((failed) => {
+        // The words went on into the new agent, so the box lets them go, where nothing newer stands.
+        if (failed === undefined) letGo();
+        return failed;
+      }),
+    );
+  };
+  return { busy: starting.running, note, start, letGo };
+}
+
+/** Why a continue did not start, said beside its press. */
+function ContinueNote({ note }: { note: Failure | undefined }): React.JSX.Element | null {
+  return note === undefined ? null : <span className="text-danger">{note.text}</span>;
+}
+
 export function ContinueAgent({
   agentId,
   control,
@@ -103,43 +174,20 @@ export function ContinueAgent({
   /** What the press says: Continue in new agent, or Continue again once another agent continued this one. */
   label?: string;
 }): React.JSX.Element | null {
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<Failure | undefined>(undefined);
-  const writer = useDraftWriter();
-  const { continueAgent } = control;
+  const { busy, note, start, letGo } = useContinueStart(agentId, control, carry);
   const opensDraft = useContinueDoor();
-  useAnnounceShown(ANNOUNCE.ALERT, note?.text ?? "");
 
   const press = () => {
-    if (continueAgent === undefined || busy) return;
     // Where the place opens a draft, the words move into the continue's draft, sent once the developer sends it.
-    if (opensDraft !== undefined) {
+    if (opensDraft !== undefined && control.continueAgent !== undefined) {
       opensDraft(carry?.words ?? "", carry?.attachments ?? []);
-      if (carry !== undefined) {
-        writer.update({ kind: DRAFT_PLACE.AGENT, planId: carry.taskId, agentId }, (now) =>
-          holdsCarried(now, carry) ? EMPTY_DRAFT : now,
-        );
-      }
+      letGo();
       return;
     }
-    const words = carry?.words.trim() ?? "";
-    setBusy(true);
-    setNote(undefined);
-    void continueAgent(agentId, words === "" ? undefined : words, carry?.attachments ?? []).then(
-      (failed) => {
-        setBusy(false);
-        setNote(failed);
-        // The words went on into the new agent, so the closed box lets them go, where nothing newer stands.
-        if (failed === undefined && carry !== undefined) {
-          writer.update({ kind: DRAFT_PLACE.AGENT, planId: carry.taskId, agentId }, (now) =>
-            holdsCarried(now, carry) ? EMPTY_DRAFT : now,
-          );
-        }
-      },
-    );
+    start();
   };
 
-  if (continueAgent === undefined) return null;
+  if (control.continueAgent === undefined) return null;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-control-gap gap-y-tight-gap">
       <Button
@@ -151,7 +199,103 @@ export function ContinueAgent({
       >
         {label}
       </Button>
-      {note === undefined ? null : <span className="text-danger">{note.text}</span>}
+      <ContinueNote note={note} />
+    </span>
+  );
+}
+
+/**
+ * The offer on a turn the model refused (`endLineOffersOtherModel`):
+ * Continue on, naming the model `refusalOffer` picks, the other harness's
+ * where the reader runs it, which starts the continue at once on it, the
+ * box's words and files its note, so nothing switches without its press;
+ * beside it, a chevron opening
+ * the shared model menu (`model-menu.tsx`), whose pick names another model
+ * on the press, starting nothing. Where nothing of the reader's pays for
+ * the other harness, Connect names it, landing on its row in Settings ›
+ * Agents. Nothing is offered before the catalog is read, nor where nothing
+ * starts a continue (`continueAgent`); where the catalog offers no other
+ * model the reader runs, Connect stands alone.
+ */
+export function RefusalContinue({
+  agent,
+  control,
+  carry,
+}: {
+  agent: Pick<AgentSummary, "id" | "model" | "effort">;
+  control: Pick<AgentsControl, "continueAgent" | "models" | "modelsFailed" | "readModels">;
+  /** The box's words and files, which the press carries into the new agent. */
+  carry: ContinueCarry | undefined;
+}): React.JSX.Element | null {
+  const { busy, note, start } = useContinueStart(agent.id, control, carry);
+  const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const drawn = useDisclosure(open);
+  const menuId = useId();
+  const root = useRef<HTMLSpanElement>(null);
+  const remedy = useRepositoryRemedy();
+  const { models } = control;
+  if (control.continueAgent === undefined || models === undefined) return null;
+  const offer = refusalOffer(models, agent);
+  const choice = picked ?? offer.choice;
+  const connect =
+    offer.connect === undefined
+      ? undefined
+      : {
+          reason: FAILURE_REASON.CONNECT_AGENTS,
+          text: CONTINUED_COPY.CONNECT_HINT,
+          provider: offer.connect,
+        };
+  const close = () => setOpen(false);
+  return (
+    <span
+      ref={root}
+      className="relative inline-flex flex-wrap items-center gap-x-control-gap gap-y-tight-gap"
+      data-refusal-offer=""
+    >
+      {choice === undefined ? null : (
+        <span className="inline-flex items-center gap-tight-gap">
+          <Button
+            variant={BUTTON_VARIANT.OUTLINE}
+            icon={<ArrowRightIcon aria-hidden="true" />}
+            busy={busy}
+            busyLabel={CONTINUED_COPY.CONTINUING}
+            onClick={() => start(choice)}
+          >
+            {CONTINUED_COPY.CONTINUE_ON(modelLabel(choice.model, models))}
+          </Button>
+          <IconButton
+            icon={<ChevronDownIcon aria-hidden="true" />}
+            label={CONTINUED_COPY.CHOOSE_MODEL}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            aria-controls={open ? menuId : undefined}
+            onClick={() => setOpen(!open)}
+          />
+        </span>
+      )}
+      {connect === undefined ? null : (
+        <TextButton onClick={() => remedy(connect)?.()}>{remedyLabel(connect)}</TextButton>
+      )}
+      <ContinueNote note={note} />
+      {drawn.mounted ? (
+        <ModelMenu
+          leaving={drawn.leaving}
+          ref={drawn.ref}
+          id={menuId}
+          align={POPOVER_ALIGN.START}
+          models={models}
+          failed={control.modelsFailed}
+          onRetry={control.readModels}
+          chosen={settledChoice(models, choice)}
+          startsNew
+          onChoose={setPicked}
+          onClose={close}
+          onLeave={(left) => {
+            if (!(left instanceof Node && root.current?.contains(left))) close();
+          }}
+        />
+      ) : null}
     </span>
   );
 }

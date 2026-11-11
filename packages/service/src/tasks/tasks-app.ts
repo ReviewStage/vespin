@@ -1,5 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { readDescriptionAttachment } from "@repo/database/models/description-attachments";
+import { readServedDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { readDescriptionCommentFile } from "@repo/database/models/description-comments";
 import { HTTP_METHOD } from "@repo/wire";
 import { Effect, Layer, Option, type Scope } from "effect";
@@ -12,6 +12,7 @@ import {
   hostedNotFoundRoute,
   hostedRefusing,
   hostedStoreOrUnavailable,
+  playableVideoOf,
   resolvedUserId,
   type UserIdResolver,
   uuidOf,
@@ -69,7 +70,7 @@ const attachmentEndpoint = /* @__PURE__ */ Effect.fn("web/descriptionAttachmentE
     const attachmentId = yield* uuidOf(request, ATTACHMENT_QUERY);
     const userId = yield* resolvedUserId(seams, request);
     const picture = yield* hostedStoreOrUnavailable(
-      readDescriptionAttachment(userId, taskId, attachmentId),
+      readServedDescriptionAttachment(userId, taskId, attachmentId, playableVideoOf(request)),
     );
     const found: Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }> =
       Option.isSome(picture)

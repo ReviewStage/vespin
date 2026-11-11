@@ -11,7 +11,6 @@ import {
   CHECK_SUMMARY,
   LOCAL_AGENT_REFUSAL,
   PULL_REQUEST_STATE,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
 import type { Failure } from "@repo/features/failure-remedy";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -21,19 +20,17 @@ import { PULL_REQUEST_CHAPTERS_STATE } from "@repo/features/pull-request-chapter
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload } from "@repo/host/contract";
-import { EXPERIMENT } from "@repo/settings";
-import { experimentsOn } from "@repo/settings/testing";
-import { ACTION_RESULT_STATUS, type WireBoundaryInput } from "@repo/wire";
+import type { WireBoundaryInput } from "@repo/wire";
 import { MutationObserver } from "@tanstack/react-query";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { ActedResult } from "../act.js";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { type FakeActPort, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
-import { handHostReads, handState } from "../testing/app-state.js";
+import { handHostReads } from "../testing/app-state.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { holdFrames, settleFrames } from "../testing/frames.js";
+import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { type AgentsControl, MODELS_READ, useAgents } from "./use-agents.js";
 
@@ -53,11 +50,8 @@ const STARTED: AgentSummary = {
 
 interface Standing {
   taskId: string | undefined;
-  agentId?: string;
   repository: string | null;
   listedAgents?: readonly AgentSummary[];
-  listedPage?: Pick<TasklessAgent, "id" | "workspaceId" | "repository">;
-  list?: { readonly read: boolean; readonly failed: boolean; readonly onRetry: () => void };
 }
 
 /** Any kind the hook asks. */
@@ -74,6 +68,7 @@ const SENT_ON_MUTATIONS: readonly AnyKind[] = [
   ACT_KIND.AGENTS_START,
   ACT_KIND.AGENTS_STOP,
   ACT_KIND.AGENTS_REWIND,
+  ACT_KIND.AGENTS_CLEAR,
   ACT_KIND.AGENTS_MESSAGE,
   ACT_KIND.AGENTS_CHOOSE,
   ACT_KIND.AGENTS_SERVERS,
@@ -157,11 +152,8 @@ function mount(initial: Standing, keyPrefix = "key") {
     restand = setHeld;
     control = useAgents({
       taskId: held.taskId,
-      agentId: held.agentId,
       repository: held.repository,
       listedAgents: held.listedAgents,
-      listedPage: held.listedPage,
-      list: held.list,
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onStarted: (agentId) => started.push(agentId),
@@ -479,100 +471,8 @@ test("a draft of files alone waits while another plan is open, but no relaunch b
   assert.equal(after.control().draft, undefined);
 });
 
-test("with no plan open, the agent the list carries is drawn from its row, on a task as with none, reading nothing of it, and a / reads its own repository's skills through the workspace the list names", async () => {
-  handState(experimentsOn(EXPERIMENT.SKILLS));
-  // An agent on a task works in its own repository, which its task's may have moved on from since it started.
-  const place = { id: AGENT, workspaceId: "workspace-1", repository: "acme/relay-legacy" };
-  const tab = mount({
-    taskId: undefined,
-    agentId: AGENT,
-    repository: null,
-    listedAgents: [STARTED],
-    listedPage: place,
-  });
-  tab.answer(ACT_KIND.TASKS_SKILLS, {
-    skills: { repository: "acme/relay-legacy", branch: "main", skills: [] },
-  });
-  await tab.mount();
-
-  assert.deepEqual(
-    tab.control().agents?.map((agent) => [agent.id, agent.planId]),
-    [[AGENT, TASK]],
-  );
-  await vi.waitFor(() => assert.equal(tab.control().readSkills !== undefined, true));
-  const read = tab.control().readSkills ?? assert.fail("the agent's box offers its skills");
-  await read();
-  assert.deepEqual(tab.asked, [
-    {
-      kind: ACT_KIND.TASKS_SKILLS,
-      payload: { workspaceId: "workspace-1", repository: "acme/relay-legacy" },
-    },
-  ]);
-
-  // The list's row of it moving moves the page's agent too.
-  await tab.stand({
-    taskId: undefined,
-    agentId: AGENT,
-    repository: null,
-    listedAgents: [{ ...STARTED, title: "Sweep the flaky tests" }],
-    listedPage: place,
-  });
-  assert.equal(tab.control().agents?.[0]?.title, "Sweep the flaky tests");
-});
-
-test("on an agent's own page, its agent is continued and forked through the page's draft, each Start naming no task so the service puts it where that agent is, and the agent started opens; a fork let go there lets its draft go", async () => {
-  const taskless = { ...STARTED, planId: null, status: AGENT_STATUS.COMPLETED };
-  const tab = mount({
-    taskId: undefined,
-    agentId: AGENT,
-    repository: null,
-    listedAgents: [taskless],
-    listedPage: { id: AGENT, workspaceId: "workspace-1", repository: "acme/relay" },
-  });
-  const continued = { ...taskless, id: "continued-1", status: AGENT_STATUS.STARTING };
-  const forked = { ...taskless, id: "forked-1", status: AGENT_STATUS.STARTING };
-  tab.answer(ACT_KIND.AGENTS_START, { agent: continued }, { agent: forked });
-  await tab.mount();
-
-  const control = tab.control();
-  assert.ok(control.continueAgent, "the page's agent is continued as a task's is");
-  let failed: Failure | undefined;
-  await act(async () => {
-    failed = await tab.control().continueAgent?.(AGENT, "Carry on with the clock.");
-  });
-  assert.equal(failed, undefined);
-
-  const fork = { agentId: AGENT, messageId: "message-1", opening: "Swept…" };
-  let draft = "";
-  act(() => {
-    draft = tab.control().onForkDraft(fork);
-  });
-  assert.deepEqual(tab.control().draft?.fork, fork, "the page holds the fork's draft");
-  await act(async () => {
-    failed = await tab.control().startFork(draft, fork, "", undefined, [], []);
-  });
-  assert.equal(failed, undefined);
-  assert.equal(tab.control().draft, undefined, "a fork that started lets its draft go");
-
-  assert.deepEqual(startPayloads(tab.asked), [
-    { idempotencyKey: "key-1", from: { agentId: AGENT }, note: "Carry on with the clock." },
-    {
-      idempotencyKey: draft,
-      from: { agentId: AGENT, messageId: "message-1" },
-      disabledServers: [],
-    },
-  ]);
-  assert.deepEqual(tab.started, ["continued-1", "forked-1"]);
-
-  act(() => {
-    tab.control().onForkDraft(fork);
-  });
-  act(() => tab.control().onDropFork());
-  assert.equal(tab.control().draft, undefined, "nothing but a fork starts here, so its draft goes");
-});
-
 test("a pull request's chapters are generated for the agent's own pull request or the one a tab names by its number, and an ask the port refused is heard as unanswered", async () => {
-  const tab = mount({ taskId: undefined, agentId: AGENT, repository: null });
+  const tab = mount({ taskId: TASK, repository: null });
   const generating = {
     pullRequest: {
       number: 41,
@@ -604,7 +504,7 @@ test("a pull request's chapters are generated for the agent's own pull request o
 
 test("a pull request a tab names by its number is the one the host holds under that number, apart from the agent's own and from a read that failed or named none", async () => {
   const { deliverParts } = handHostReads({});
-  const tab = mount({ taskId: undefined, agentId: AGENT, repository: null });
+  const tab = mount({ taskId: TASK, repository: null });
   await tab.mount();
   const opened = (number: number, title: string, url: string) => ({
     number,
@@ -1002,6 +902,46 @@ test("a continue carries the developer's words and files as its note, other word
   );
 });
 
+test("a continue on a model named starts on that model, another model minting a key of its own", async () => {
+  const SOURCE = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
+  tab.answer(
+    ACT_KIND.AGENTS_START,
+    { failure: AGENT_CALL_FAILURE.UNANSWERED },
+    { failure: AGENT_CALL_FAILURE.UNANSWERED },
+  );
+  await tab.mount();
+  const continueAgent = tab.control().continueAgent ?? assert.fail("a Start could run");
+
+  await act(async () => {
+    await continueAgent(SOURCE, undefined, [], undefined, {
+      model: "openai/gpt-6.1-sol",
+      effort: "high",
+    });
+    await continueAgent(SOURCE, undefined, [], undefined, {
+      model: "anthropic/claude-sonnet-5.5",
+      effort: "high",
+    });
+  });
+
+  assert.deepEqual(startPayloads(tab.asked), [
+    {
+      taskId: TASK,
+      idempotencyKey: "key-1",
+      from: { agentId: SOURCE },
+      model: "openai/gpt-6.1-sol",
+      effort: "high",
+    },
+    {
+      taskId: TASK,
+      idempotencyKey: "key-2",
+      from: { agentId: SOURCE },
+      model: "anthropic/claude-sonnet-5.5",
+      effort: "high",
+    },
+  ]);
+});
+
 test("a move is a continue naming its place, another place minting a key of its own, and its refusal is said in a toast though the developer stayed on the task", async () => {
   const SOURCE = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
   const STUDIO = "3f2e1d0c-9b8a-4c7d-8e6f-5a4b3c2d1e0f";
@@ -1138,47 +1078,38 @@ test("a task naming no repository offers its Start and a continue, and its Start
   );
 });
 
-test("an agent's page stands on the list's row of it: a delete reads nothing again, and the agent turns to not found as the list drops it; a list that failed with no row of it says so, and its Retry reads the list again", async () => {
-  const taskless = { ...STARTED, planId: null };
-  const place = { id: AGENT, workspaceId: "workspace-1", repository: null };
-  const retried: string[] = [];
-  const list = { read: true, failed: false, onRetry: () => retried.push("list") };
-  const tab = mount({
-    taskId: undefined,
-    agentId: AGENT,
-    repository: null,
-    listedAgents: [taskless],
-    listedPage: place,
-    list,
-  });
-  tab.answer(ACT_KIND.AGENTS_DELETE, { deleted: true });
+test("several agents archived at once say so in one toast, whose one Undo brings every one back", async () => {
+  const resting = { ...STARTED, status: AGENT_STATUS.COMPLETED };
+  const other = { ...resting, id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b22" };
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [resting, other] });
+  const archived = [
+    { ...resting, archivedAt: 5 },
+    { ...other, archivedAt: 5 },
+  ];
+  tab.answer(ACT_KIND.AGENTS_ARCHIVE, ...archived.map((agent) => ({ agent })));
   await tab.mount();
 
-  let result: ActedResult | undefined;
   await act(async () => {
-    result = await new MutationObserver(testQueryClientNow(), tab.control().deleteAgent).mutate(
-      AGENT,
-    );
+    await new MutationObserver(testQueryClientNow(), tab.control().archiveAgents).mutate({
+      agentIds: [resting.id, other.id],
+      archived: true,
+    });
   });
-  assert.deepEqual(result, { status: ACTION_RESULT_STATUS.ACCEPTED });
-  assert.deepEqual(
-    tab.asked.map((each) => each.kind),
-    [ACT_KIND.AGENTS_DELETE],
+  assert.equal(newestToastSays(), "2 agents archivedUndo");
+
+  // The host draws the archive on the list as it is asked, which the Undo reads to put back.
+  await tab.stand({ listedAgents: archived });
+  tab.answer(ACT_KIND.AGENTS_ARCHIVE, { agent: resting }, { agent: other });
+  act(() => newestToastAction()?.click());
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      tab.asked.filter((each) => each.kind === ACT_KIND.AGENTS_ARCHIVE).map((each) => each.payload),
+      [
+        { agentId: resting.id, archived: true },
+        { agentId: other.id, archived: true },
+        { agentId: resting.id, archived: false },
+        { agentId: other.id, archived: false },
+      ],
+    ),
   );
-  assert.equal(tab.control().listMissing, false, "the list still carries it");
-
-  await tab.stand({ taskId: undefined, agentId: AGENT, repository: null, listedAgents: [], list });
-  assert.equal(tab.control().agents, undefined);
-  assert.equal(tab.control().listMissing, true);
-
-  await tab.stand({
-    taskId: undefined,
-    agentId: AGENT,
-    repository: null,
-    listedAgents: [],
-    list: { ...list, read: false, failed: true },
-  });
-  assert.equal(tab.control().listFailed, true);
-  act(() => tab.control().onRetryList());
-  assert.deepEqual(retried, ["list"]);
 });

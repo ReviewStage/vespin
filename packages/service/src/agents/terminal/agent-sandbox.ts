@@ -18,8 +18,9 @@
  *
  * The ports a server listens on are read the same way, from the kernel's
  * socket tables in the running session (`listening-ports.ts`), and never
- * from a sandbox that is not running. One of them may be shared by a public
- * link, the sandbox's own route straight to that port, opened only on a
+ * from a sandbox that is not running. One of them may be shared, the
+ * sandbox's own route to a relay in front of that port
+ * (`preview-relay.ts`), opened only on a
  * running sandbox and living only while it runs; sharing never keeps the
  * sandbox up. Closing the share closes its route whatever the sandbox
  * stands, and the share is read back from the sandbox's routes alone.
@@ -51,7 +52,7 @@ import {
   type SandboxService,
   SandboxUnavailable,
 } from "@repo/sandbox";
-import { Context, Effect, Layer, Result } from "effect";
+import { Context, Effect, Layer, Option, Result, Schema } from "effect";
 import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
 import {
@@ -61,13 +62,27 @@ import {
 } from "../sandbox-firewall.js";
 import { listeningPortsOf, readSocketTables } from "./listening-ports.js";
 import {
+  FORGET_RECORD,
+  READ_RECORD,
+  recordingRelay,
+  relayable,
+  relayPortOf,
+  restoringRelay,
+  STOP_RELAY,
+  sharedPortOf,
+} from "./preview-relay.js";
+import {
   holdsTerminal,
+  interruptTerminal,
   killTerminal,
   listTerminals,
+  type RunActionStart,
   renameTerminal,
+  startRunAction,
   startTerminal,
   TMUX_EXIT,
   terminalsOf,
+  typeIntoTerminal,
 } from "./tmux.js";
 
 /** A sandbox's statuses, read as the tab reads them; one the provider named none of reads as stopped. */
@@ -106,6 +121,14 @@ export type SandboxOpen =
   | { readonly state: typeof SANDBOX_STATE.RUNNING; readonly shell: InteractiveShell }
   | { readonly state: typeof SANDBOX_STATE.STOPPED | typeof SANDBOX_STATE.STARTING };
 
+/** Where a shared port's preview stands for a visit (`AgentSandboxService.preview`). */
+export const PREVIEW_STANDING = { READY: "ready", WAKING: "waking", NONE: "none" } as const;
+
+export type PreviewStanding =
+  | { readonly kind: typeof PREVIEW_STANDING.READY; readonly url: string; readonly name: string }
+  | { readonly kind: typeof PREVIEW_STANDING.WAKING; readonly state: SandboxState }
+  | { readonly kind: typeof PREVIEW_STANDING.NONE };
+
 export interface AgentSandboxService {
   /** The agent's shells and where its sandbox stands; none while it is not running. */
   readonly terminals: (sessionId: string) => Effect.Effect<TerminalsAnswer, SandboxError>;
@@ -122,12 +145,35 @@ export interface AgentSandboxService {
   readonly shared: (
     sessionId: string,
   ) => Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxError>;
+  /**
+   * The agent's shared port as a preview visit finds it: its link where the
+   * sandbox runs and shares it, waking where it is not running yet, and none
+   * where nothing was shared. A running sandbox whose share a wake closed is
+   * shared again from its record, the port's server started again where
+   * none listens (`preview-relay.ts`); a stopped one is left for the caller
+   * to resume.
+   */
+  readonly preview: (sessionId: string) => Effect.Effect<PreviewStanding, SandboxError>;
   /** A new shell in the agent's running sandbox, under the id given, named where the developer named it. */
   readonly start: (
     sessionId: string,
     terminalId: string,
     title: string | undefined,
   ) => ShellEffect<TerminalSummary>;
+  /**
+   * A run action run in the agent's running sandbox: its shell where one
+   * already runs it, its command typed again into its shell where that shell
+   * stands idle, or a new shell started for it under the id given; so a
+   * second press never starts the action twice. A stopped sandbox is never
+   * woken here.
+   */
+  readonly run: (
+    sessionId: string,
+    terminalId: string,
+    run: RunActionStart,
+  ) => ShellEffect<TerminalSummary>;
+  /** What a run action's shell runs interrupted, the shell and its output left standing; none standing for the action is not found. */
+  readonly interrupt: (sessionId: string, actionId: string) => ShellEffect<void>;
   /** A shell named anew. */
   readonly rename: (sessionId: string, terminalId: string, title: string) => ShellEffect<void>;
   /** A shell ended, with whatever it ran. */
@@ -164,6 +210,14 @@ function stateOf(sandbox: ListedSandbox | undefined): SandboxState {
 }
 
 /** The service over `Sandbox`, the store its firewall's launch is read from, and the agents' image a sandbox is made again from. */
+const PreviewRecordJson = Schema.fromJsonString(Schema.Struct({ port: Schema.Int }));
+
+/** The port a preview's record names, where the sandbox holds one. */
+function recordedPortOf(record: string): number | undefined {
+  const read = Schema.decodeUnknownOption(PreviewRecordJson)(record);
+  return Option.isSome(read) ? read.value.port : undefined;
+}
+
 function agentSandboxOver(
   api: SandboxService,
   context: Context.Context<DatabaseServices>,
@@ -220,18 +274,22 @@ function agentSandboxOver(
     listeningPorts: (sessionId) =>
       Effect.gen(function* () {
         const { running } = yield* standing(sessionId);
-        if (running === undefined) return { running: false, ports: [] };
-        const ports = listeningPortsOf(yield* api.run(running, readSocketTables()));
+        if (running === undefined) return { running: false, ports: [], labels: [] };
+        const listed = listeningPortsOf(yield* api.run(running, readSocketTables()));
         // Tables the kernel could not be read for are an outage, never a sandbox with no servers.
-        if (ports === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
-        return { running: true, ports };
+        if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
+        return { running: true, ...listed };
       }),
     share: (sessionId, port) =>
       Effect.gen(function* () {
         const { sandbox, running } = yield* standing(sessionId);
         if (sandbox === undefined || running === undefined) return undefined;
-        const route = (yield* api.updatePorts(sandbox.name, [port])).find(
-          (each) => each.port === port,
+        // The route serves the port's relay, which hands the port each request as if from its own loopback.
+        const served = relayable(port) ? relayPortOf(port) : port;
+        yield* api.run(running, STOP_RELAY);
+        if (served !== port) yield* api.start(running, recordingRelay(port));
+        const route = (yield* api.updatePorts(sandbox.name, [served])).find(
+          (each) => each.port === served,
         );
         if (route === undefined) {
           return yield* new SandboxUnavailable({ call: SANDBOX_CALL.PORTS, detail: "no route" });
@@ -240,15 +298,36 @@ function agentSandboxOver(
       }),
     unshare: (sessionId) =>
       Effect.gen(function* () {
-        const { sandbox } = yield* standing(sessionId);
+        const { sandbox, running } = yield* standing(sessionId);
+        if (running !== undefined) {
+          yield* api.run(running, STOP_RELAY);
+          yield* api.run(running, FORGET_RECORD);
+        }
         if (sandbox !== undefined) yield* api.updatePorts(sandbox.name, []);
+      }),
+    preview: (sessionId) =>
+      Effect.gen(function* () {
+        const { sandbox, state, running } = yield* standing(sessionId);
+        if (sandbox === undefined) return { kind: PREVIEW_STANDING.NONE };
+        if (running === undefined) return { kind: PREVIEW_STANDING.WAKING, state };
+        const route = (yield* api.get(sandbox.name))?.routes?.[0];
+        if (route !== undefined) {
+          return { kind: PREVIEW_STANDING.READY, url: route.url, name: sandbox.name };
+        }
+        // A resume closes every route, so a share the sandbox stopped under comes back from its record.
+        const port = recordedPortOf((yield* api.run(running, READ_RECORD)).stdout);
+        if (port === undefined || !relayable(port)) return { kind: PREVIEW_STANDING.NONE };
+        yield* api.start(running, restoringRelay());
+        yield* api.updatePorts(sandbox.name, [relayPortOf(port)]);
+        // Note that the relay it just started may not listen yet, so this visit waits and the next one goes through.
+        return { kind: PREVIEW_STANDING.WAKING, state };
       }),
     shared: (sessionId) =>
       Effect.gen(function* () {
         const { sandbox, running } = yield* standing(sessionId);
         if (sandbox === undefined || running === undefined) return null;
         const route = (yield* api.get(sandbox.name))?.routes?.[0];
-        return route === undefined ? null : { port: route.port, url: route.url };
+        return route === undefined ? null : { port: sharedPortOf(route.port), url: route.url };
       }),
     start: (sessionId, terminalId, title) =>
       inRunning(sessionId, (running) =>
@@ -262,6 +341,49 @@ function agentSandboxOver(
           return shell === undefined
             ? Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND })
             : Result.succeed(shell);
+        }),
+      ),
+    run: (sessionId, terminalId, run) =>
+      inRunning(sessionId, (running) =>
+        Effect.gen(function* () {
+          const shells = () =>
+            Effect.flatMap(api.run(running, listTerminals()), (listed) => {
+              const read = terminalsOf(listed);
+              return read === undefined
+                ? Effect.fail(new SandboxUnavailable({}))
+                : Effect.succeed(read);
+            });
+          const standing = (yield* shells()).find((shell) => shell.runAction === run.actionId);
+          if (standing?.running === true) return Result.succeed(standing);
+          const ask =
+            standing === undefined
+              ? startRunAction(terminalId, run)
+              : typeIntoTerminal(standing.id, run.command);
+          const started = yield* api.run(running, ask);
+          if (started.exitCode !== 0) {
+            // Note that a shell is started under its action's id, so a press made at once beside this one starts it first and tmux refuses this one's: that press's shell is the answer.
+            const raced = (yield* shells()).find((shell) => shell.runAction === run.actionId);
+            if (standing === undefined && raced !== undefined) return Result.succeed(raced);
+            // A shell tmux could not start or type into is otherwise an outage: its id is the action's or one tmux just listed.
+            return yield* Effect.fail(new SandboxUnavailable({}));
+          }
+          const shell = (yield* shells()).find((each) => each.id === (standing?.id ?? terminalId));
+          return shell === undefined
+            ? Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND })
+            : Result.succeed(shell);
+        }),
+      ),
+    interrupt: (sessionId, actionId) =>
+      inRunning(sessionId, (running) =>
+        Effect.gen(function* () {
+          const listed = terminalsOf(yield* api.run(running, listTerminals()));
+          if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
+          const shell = listed.find((each) => each.runAction === actionId);
+          if (shell === undefined) return Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
+          const interrupted = yield* api.run(running, interruptTerminal(shell.id));
+          return interrupted.exitCode === 0
+            ? Result.succeed(undefined)
+            : Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
         }),
       ),
     rename: (sessionId, terminalId, title) => onShell(sessionId, renameTerminal(terminalId, title)),

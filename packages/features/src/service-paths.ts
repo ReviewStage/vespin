@@ -24,6 +24,18 @@ export const HOSTED_SERVICE_PATH = {
    * `provider-key-wire.ts` declares every body.
    */
   ACCOUNT_PROVIDER_KEYS: "/api/account/provider-keys",
+  /**
+   * The sounds the account keeps of its own: read one's clip as its bytes in
+   * base64 (GET ?id=), add one under a name (POST), rename one (PATCH), or
+   * remove one (DELETE ?id=). `sound-clip-wire.ts` declares every body.
+   */
+  ACCOUNT_SOUNDS: "/api/account/sounds",
+  /** Which of the account's sounds one of its two sounds plays (PUT). */
+  ACCOUNT_SOUND_CHOICE: "/api/account/sounds/choice",
+  /** One of the account's subscriptions named, or its name cleared (PUT). */
+  ACCOUNT_SUBSCRIPTION_LABEL: "/api/account/provider-keys/label",
+  /** The account's subscriptions of a kind put in a new order (PUT). */
+  ACCOUNT_SUBSCRIPTION_ORDER: "/api/account/provider-keys/order",
   /** A ChatGPT plan's connection through Codex's device-code login begun (POST): the code to enter, and the login to poll. */
   ACCOUNT_CHATGPT_DEVICE: "/api/account/chatgpt/device",
   /** One check of a device-code connection (POST), by its login. */
@@ -49,6 +61,32 @@ export const HOSTED_SERVICE_PATH = {
   ACCOUNT_PUSH_DEVICES: "/api/account/push-devices",
   /** The phone unregistered (POST), by its token and gateway in the body; one the account does not hold is passed over. */
   ACCOUNT_PUSH_DEVICES_UNREGISTER: "/api/account/push-devices/unregister",
+  /**
+   * The phone's own standing (POST), by its token and gateway in the body:
+   * its "Notify me" and how its pushes have fared; one the account does not
+   * hold is answered not found.
+   */
+  ACCOUNT_PUSH_DEVICES_STATUS: "/api/account/push-devices/status",
+  /** The phone's "Notify me" set (POST), by its token and gateway in the body; one the account does not hold is answered not found. */
+  ACCOUNT_PUSH_DEVICES_NOTIFY: "/api/account/push-devices/notify",
+  /**
+   * The push-to-start token ActivityKit handed the phone for its Live
+   * Activity (POST), beside the phone's device token and gateway in the body;
+   * a phone the account does not hold is answered not found.
+   * `live-activity-wire.ts` declares the body.
+   */
+  ACCOUNT_LIVE_ACTIVITIES_START_TOKEN: "/api/account/live-activities/start-token",
+  /** The update token of the Live Activity standing on the phone (POST), as the start token is registered. */
+  ACCOUNT_LIVE_ACTIVITIES_ACTIVITY_TOKEN: "/api/account/live-activities/activity-token",
+  /** The phone's Live Activity ended or was dismissed on the phone (POST), by the phone's device token and gateway; one the account does not hold is passed over. */
+  ACCOUNT_LIVE_ACTIVITIES_ENDED: "/api/account/live-activities/ended",
+  /**
+   * The member used a desktop or web client just now (POST), with an empty
+   * body: the service stamps when the account was last active, which holds
+   * its phone's pushes while it stands inside `PRESENCE.WINDOW_MS`.
+   * `presence-wire.ts` declares it.
+   */
+  ACCOUNT_PRESENCE: "/api/account/presence",
   /**
    * The outside MCP clients the account allowed: read them (GET), or revoke
    * one by its client id in the query (DELETE). `mcp-client-wire.ts`
@@ -125,7 +163,7 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_COMMENTS: "/api/live/task-comments",
   /** One task's Browser tabs under `?id=`, the agent's pointer on each among them, sealed for following over Neon Realtime (GET), or with `?poll=true` their rows inline; or `not-found`. */
   LIVE_TASK_BROWSER_TABS: "/api/live/task-browser-tabs",
-  /** One coding agent's Browser tabs under `?id=`, on a task or on none, on the terms a task's are. */
+  /** One coding agent's Browser tabs under `?id=`, on the terms a task's are. */
   LIVE_AGENT_BROWSER_TABS: "/api/live/agent-browser-tabs",
   /** One agent's transcript under `?id=`, or one of its workers' under `&call=`, sealed for following over Neon Realtime (GET): what its pages are read from, or `not-found` or `unavailable`. */
   LIVE_AGENT_TRANSCRIPT: "/api/live/agent-transcript",
@@ -133,7 +171,7 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_INBOX: "/api/live/task-inbox",
   /** One agent's inbox under `?id=`, sealed for following over Neon Realtime (GET), as a task's is. */
   LIVE_AGENT_INBOX: "/api/live/agent-inbox",
-  /** The task list sealed for following over Neon Realtime (GET): its tasks and every agent of them and with no task, or `unavailable`. `task-list-live.ts` declares the answer. */
+  /** The task list sealed for following over Neon Realtime (GET): its tasks and every agent of them, or `unavailable`. `task-list-live.ts` declares the answer. */
   LIVE_TASKS: "/api/live/tasks",
   /** A workspace's automations under `?workspaceId=`, sealed for following over Neon Realtime (GET), or `unavailable`. `automation-live.ts` declares the answer. */
   LIVE_AUTOMATIONS: "/api/live/automations",
@@ -164,18 +202,14 @@ export const HOSTED_SERVICE_PATH = {
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, sealed for following over Neon Realtime (GET), or its row inline where polled, none for an account that stored nothing. `account-preferences-live.ts` declares the answer. */
   LIVE_ACCOUNT_PREFERENCES: "/api/live/account-preferences",
   /**
-   * A workspace's agents, on a task or with none, newest started first and
+   * A workspace's agents, on any task, newest started first and
    * the archived ones left out unless the query asks for them, narrowed to
    * one repository where the query names one (GET), what an automation's
    * Same agent and an `@` list's agents are chosen from; the plan list's
    * answer (`agent-wire.ts`).
    */
   AGENTS: "/api/agents",
-  /**
-   * A runner's own token (POST): a Codex runner's ChatGPT access token on
-   * its runner's bearer, and, on a host's device secret, a GitHub token for
-   * one of that host's own agents (`host-wire.ts`'s `hostGithubTokenRequestSchema`).
-   */
+  /** A runner's own token (POST): a cloud Codex runner's ChatGPT access token on its runner's bearer. */
   RUNNER_TOKEN: "/api/agents/runner-token",
   /** A local agent's Mac registered under the account, with its name, home folder, and bundled CLI (POST). `device-agent-wire.ts` declares the bodies. */
   DEVICE_AGENT_DEVICES: "/api/device-agents/devices",
@@ -312,6 +346,14 @@ export const HOSTED_SERVICE_PATH = {
    */
   GITHUB_REPOSITORY_ISSUE: "/api/github/repositories/issue",
   /**
+   * What a web page a plain link names says of itself, for the card the
+   * link hangs (POST): its title, description, site name, icon, and
+   * picture, read by the service for the address the body names, which
+   * rides in the body so no request line keeps it.
+   * `link-preview-wire.ts` declares the answer.
+   */
+  LINK_PREVIEW: "/api/link-previews",
+  /**
    * Sends the browser to GitHub to install our GitHub App, or to change
    * which repositories it reaches (GET). GitHub returns the browser to
    * `GITHUB_INSTALLED` afterwards.
@@ -402,6 +444,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SANDBOX_SETUP_INSTALL: "/api/workspaces/sandbox-setup/install",
   /** A repository's setup script saved by an owner or admin (PUT), answering the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_REPOSITORY: "/api/workspaces/sandbox-setup/repository",
+  /** A repository's run actions saved, its whole list in order, by an owner or admin, an empty list removing it (PUT) (`workspace-sandbox-setup-wire.ts`). */
+  WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS: "/api/workspaces/sandbox-setup/run-actions",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */

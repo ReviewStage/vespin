@@ -1,17 +1,20 @@
+import { CHECKOUT_DIFF_SCRIPT, checkoutDiffEnv } from "@repo/features/checkout-diff";
 import {
   DEVICE_AGENT_BOUNDS,
   DEVICE_AGENT_REQUEST_KIND,
   type DeviceAgentAnswer,
   type DeviceAgentLayout,
   type DeviceAgentRequest,
+  deviceAgentDiffArgsSchema,
   deviceAgentReadArgsSchema,
 } from "@repo/features/device-agent-wire";
-import { Effect, Option, Schema } from "effect";
+import { Duration, Effect, Option, Schema, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import { agentFolders } from "./local-agent-box.js";
+import { ChildProcess, type ChildProcessSpawner } from "effect/process";
+import { agentOnBox } from "./local-agent-box.js";
 
 /**
- * local-agent-requests.ts -- what a local agent's tools ask of this Mac, answered only inside the agent's own folder: a file read.
+ * local-agent-requests.ts -- what a local agent's tools and the service ask of this Mac, answered only inside the agent's own folder: a file read, and a diff of its worktree.
  *
  * The service asks for a path it built under the agent's folder
  * (`deviceAgentLayout`), but a path is only words: a `..`, or a symlink the
@@ -22,11 +25,8 @@ import { agentFolders } from "./local-agent-box.js";
  * installed skills all stand beneath it. Anything else is refused as a path
  * that names no file the agent may read, and a read answers no bytes. A
  * path that does not exist resolves to nothing, and is refused the same
- * way. A read inside the agent's own `gh` sign-in, where a host keeps the
- * agent's GitHub token, is refused too, however it is reached, so no token
- * reaches a tool's answer: gh's config in the agent's home, where a host
- * whose agents run on the box writes it (`local-agent-box.ts`), and the
- * folder a host kept it in before (`layout.githubConfig`).
+ * way. No credential stands in the agent's folder: its GitHub sign-in is
+ * the box user's own, in their home.
  *
  * A read answers at most the bytes asked for, and never more than one past
  * `DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES`, so the caller still sees a file
@@ -34,6 +34,18 @@ import { agentFolders } from "./local-agent-box.js";
  */
 
 const decodeReadArgs = Schema.decodeUnknownOption(deviceAgentReadArgsSchema);
+const decodeDiffArgs = Schema.decodeUnknownOption(deviceAgentDiffArgsSchema);
+
+/** The most a diff runs before it is given up on and answered as failed: as long as the service waits on it (`DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS`). */
+const DIFF_DEADLINE = Duration.millis(DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS);
+/** How long a diff past its deadline is given to end before it is killed. */
+const DIFF_KILL_GRACE = Duration.seconds(3);
+
+/** What the box a request is answered on hands a command: the shell's variables, and where its `gh` is. */
+export interface LocalAgentRequestBox {
+  readonly env: Readonly<Record<string, string>>;
+  readonly gh: string;
+}
 
 /** Whether `path`, already real, stands at or under `root`, already real. */
 function within(root: string, path: string): boolean {
@@ -83,11 +95,6 @@ const answeredRead = (layout: DeviceAgentLayout, args: unknown) =>
     if (Option.isNone(read)) return answer(null);
     const path = yield* confinedPath(layout, read.value.path);
     if (Option.isNone(path)) return answer(null);
-    const fileSystem = yield* FileSystem.FileSystem;
-    for (const sealed of [layout.githubConfig, agentFolders(layout.folder).gh]) {
-      const withheld = yield* Effect.option(fileSystem.realPath(sealed));
-      if (Option.isSome(withheld) && within(withheld.value, path.value)) return answer(null);
-    }
     const bound = Math.max(
       0,
       Math.min(read.value.maxBytes, DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
@@ -95,9 +102,70 @@ const answeredRead = (layout: DeviceAgentLayout, args: unknown) =>
     return answer(yield* readBounded(path.value, bound));
   });
 
-/** What one request of a local agent's tools answers, inside the agent's folder given. */
+/**
+ * A diff asked: the one diff script both machines run
+ * (`@repo/features/checkout-diff`), run in the agent's worktree as the
+ * agent on the box with the two sides in its variables, answered with its
+ * exit and what it printed; exit 1 and nothing printed where it could not
+ * run, ran past its deadline, or its arguments could not be read. Note that
+ * the runner is not stopped for it, because a diff writes nothing to the
+ * worktree, only an index copy and the diff beside the git dir.
+ */
+const answeredDiff = (layout: DeviceAgentLayout, box: LocalAgentRequestBox, args: unknown) =>
+  Effect.gen(function* () {
+    const failed: DeviceAgentAnswer = {
+      kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+      exit: 1,
+      diff: "",
+    };
+    const range = decodeDiffArgs(args);
+    if (Option.isNone(range)) return failed;
+    const run = agentOnBox(
+      {
+        command: "/bin/bash",
+        args: ["-c", CHECKOUT_DIFF_SCRIPT],
+        env: { ...box.env, ...checkoutDiffEnv(range.value) },
+      },
+      box.gh,
+    );
+    return yield* Effect.scoped(
+      Effect.gen(function* () {
+        const handle = yield* ChildProcess.make(run.command, [...run.args], {
+          cwd: layout.checkoutPath,
+          env: run.env,
+          extendEnv: false,
+          stdin: "ignore",
+          stderr: "ignore",
+          forceKillAfter: DIFF_KILL_GRACE,
+        });
+        const [diff, exited] = yield* Effect.all(
+          [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
+          { concurrency: "unbounded" },
+        );
+        const answer: DeviceAgentAnswer = {
+          kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+          exit: Number(exited),
+          diff: diff.slice(0, DEVICE_AGENT_BOUNDS.MAX_DIFF_CHARS),
+        };
+        return answer;
+      }),
+    ).pipe(
+      Effect.timeoutOption(DIFF_DEADLINE),
+      Effect.map(Option.getOrElse(() => failed)),
+      Effect.orElseSucceed(() => failed),
+    );
+  });
+
+/** What one request of a local agent answers, inside the agent's folder given: a read of its tools', or a diff of the service's. */
 export const answeredLocalAgentRequest = (
   layout: DeviceAgentLayout,
+  box: LocalAgentRequestBox,
   request: Pick<DeviceAgentRequest, "kind" | "args">,
-): Effect.Effect<DeviceAgentAnswer, never, FileSystem.FileSystem> =>
-  answeredRead(layout, request.args);
+): Effect.Effect<
+  DeviceAgentAnswer,
+  never,
+  FileSystem.FileSystem | ChildProcessSpawner.ChildProcessSpawner
+> =>
+  request.kind === DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT
+    ? answeredDiff(layout, box, request.args)
+    : answeredRead(layout, request.args);

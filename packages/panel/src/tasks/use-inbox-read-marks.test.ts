@@ -7,6 +7,7 @@ import {
   INBOX_ASK_STATUS,
   INBOX_MESSAGE_AUTHOR,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
@@ -20,6 +21,7 @@ import { afterEach, test } from "vitest";
 import { fakeActPort } from "../testing/app-bridge.js";
 import { handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { UNDO_RAN, undoLast } from "../undo-stack.js";
 import { type InboxReadMarks, type MarkSaying, useInboxReadMarks } from "./use-inbox-read-marks.js";
@@ -27,8 +29,10 @@ import { type InboxReadMarks, type MarkSaying, useInboxReadMarks } from "./use-i
 /**
  * use-inbox-read-marks.test.ts -- the Inbox's read marks say a refusal
  * once, unless the caller says it itself, Mark all as read names the
- * unread items it marks, which the host draws read, and ⌘Z puts back the
- * reminder a new one replaced. Synthetic plan and items.
+ * unread items it marks, which the host draws read, and acknowledges the
+ * reader's notices with an Undo that takes them back at the service, and
+ * ⌘Z puts back the reminder a new one replaced.
+ * Synthetic plan and items.
  */
 
 const TASK: TaskSummary = {
@@ -66,8 +70,23 @@ function item(id: string, unread: boolean): InboxItem {
   };
 }
 
+/** The item given as a notice: its message asking nothing, and its agent not waiting to hear back. */
+function notice(asked: InboxItem): InboxItem {
+  const [opening] = asked.thread ?? [];
+  assert.ok(opening !== undefined, "the item opens with a message");
+  const { ask: _ask, ...said } = opening;
+  return { ...asked, needsReply: false, thread: [said] };
+}
+
 const X = "a1b2c3d4-0000-4000-8000-000000000001";
 const Y = "a1b2c3d4-0000-4000-8000-000000000002";
+const Z = "a1b2c3d4-0000-4000-8000-000000000003";
+const W = "a1b2c3d4-0000-4000-8000-000000000004";
+const V = "a1b2c3d4-0000-4000-8000-000000000005";
+const U = "a1b2c3d4-0000-4000-8000-000000000006";
+/** The revision the agent has since moved a notice on from, so the service takes no nod at it and answers the notice still open. */
+const MOVED_ON = 2;
+const READER = "user-reader";
 
 /** One write the hook sent, and how to answer it. */
 interface Sent {
@@ -85,6 +104,10 @@ afterEach(() => {
 /** The hook, every write it sends held until the test answers it. */
 function marks() {
   const sent: Sent[] = [];
+  /** Each held nod's item, by the key it went under. */
+  const keys = new Map<string, string>();
+  /** Each take-back sent, by its item, and whether it named the key its nod went under. */
+  const tookBack: string[] = [];
   /** One write held until the test answers it, with the value it answers when it does not fail. */
   const sending = <Value>(words: string, value: Value) =>
     new Promise<Value | { failure: typeof AGENT_CALL_FAILURE.UNANSWERED }>((resolve) => {
@@ -103,10 +126,21 @@ function marks() {
       sending(`all:${workspaceId}:${itemIds.join(",")}`, { marked: 1 }),
     [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) =>
       sending(`${unread ? "unread" : "read"}:${itemId}`, { id: itemId, unread }),
+    [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId, revision, reply, clientKey }) => {
+      keys.set(clientKey, itemId);
+      return sending(`${reply}:${itemId}@${revision}`, {
+        item: item(itemId, false),
+        taken: revision !== MOVED_ON,
+      });
+    },
+    [ACT_KIND.AGENTS_INBOX_TAKE_BACK]: ({ itemId, clientKey }) => {
+      tookBack.push(`${itemId === keys.get(clientKey) ? "taken back" : "wrong key"}:${itemId}`);
+      return Promise.resolve({ item: item(itemId, false), outcome: INBOX_TAKE_BACK.TAKEN });
+    },
   });
   let control: InboxReadMarks | undefined;
   function Harness() {
-    control = useInboxReadMarks({ workspaceId: TASK.workspaceId });
+    control = useInboxReadMarks({ workspaceId: TASK.workspaceId, readerId: READER });
     return createElement(Fragment, null, createElement(ToastHost));
   }
   root = createRoot(document.createElement("div"));
@@ -114,6 +148,7 @@ function marks() {
   const held = () => control ?? assert.fail("the hook stands");
   return {
     sent,
+    tookBack,
     /** The hook's presses as it stands. */
     get marks() {
       return held();
@@ -123,10 +158,7 @@ function marks() {
         void held().onMark(target, unread, saying);
       }),
     /** What each toast standing says, leaving out those on their way out. */
-    toasts: () =>
-      [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-        (words) => words.textContent ?? "",
-      ),
+    toasts: () => standingToastWords(),
     markAll: (items: readonly InboxItem[]) => act(() => held().onMarkAll(items)),
   };
 }
@@ -154,6 +186,49 @@ test("a mark the service refused says so once, and Mark all as read names the un
   assert.deepEqual(hook.toasts(), ["Could not mark 1 item unread", "Could not mark 1 item read"]);
 });
 
+test("Mark all as read acknowledges the reader's notices, read or not or their reminder come due, leaving a question asking and a notice put away under a reminder still ahead, the nods under one Undo toast, and says a refused nod and a notice changed since as not taken", async () => {
+  const hook = marks();
+  const reminded = { ...notice(item(W, false)), remindAt: Date.UTC(2099, 0, 1) };
+  const due = { ...notice(item(V, false)), remindAt: Date.UTC(2000, 0, 1) };
+  const changed = { ...notice(item(U, false)), revision: MOVED_ON };
+  hook.markAll([
+    item(X, true),
+    notice(item(Y, false)),
+    notice(item(Z, true)),
+    reminded,
+    due,
+    changed,
+  ]);
+  await settle();
+  assert.deepEqual(hook.sent.map((each) => each.words).toSorted(), [
+    `acknowledged:${Y}@1`,
+    `acknowledged:${Z}@1`,
+    `acknowledged:${V}@1`,
+    `acknowledged:${U}@${MOVED_ON}`,
+    `all:${TASK.workspaceId}:${X},${Z}`,
+  ]);
+  assert.deepEqual(hook.toasts(), ["4 items acknowledged"]);
+  const nodOnY = hook.sent.find((each) => each.words === `acknowledged:${Y}@1`);
+  await hook.sent.find((each) => each.words === `acknowledged:${Z}@1`)?.answer();
+  await nodOnY?.answer(true);
+  await hook.sent.find((each) => each.words === `acknowledged:${V}@1`)?.answer();
+  await hook.sent.find((each) => each.words === `acknowledged:${U}@${MOVED_ON}`)?.answer();
+  assert.deepEqual(hook.toasts(), ["4 items acknowledged", "2 items acknowledged, 2 could not be"]);
+});
+
+test("Undo after marking a notice read takes its Got it back at the service by its key, leaving the read mark", async () => {
+  const hook = marks();
+  hook.mark(notice(item(Y, true)), false);
+  await settle();
+  assert.deepEqual(hook.toasts(), ["Acknowledged “Alert at 80%?”"]);
+  await act(() => undoLast());
+  assert.deepEqual(hook.tookBack, [`taken back:${Y}`]);
+  assert.deepEqual(
+    hook.sent.map((each) => each.words),
+    [`acknowledged:${Y}@1`, `read:${Y}`],
+  );
+});
+
 test("a refused mark from a caller that says the refusal itself toasts nothing, and still answers not kept", async () => {
   const hook = marks();
   let answered: boolean | undefined;
@@ -179,7 +254,6 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
         [LIVE_READ.INBOX_ITEMS]: {
           rows: {
             [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [{ ...item(X, false), remindAt }] },
-            [INBOX_SCOPE_KIND.AGENT]: {},
           },
         },
       },
@@ -196,7 +270,7 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
   writeAppState(holding(EARLIER));
   let control: InboxReadMarks | undefined;
   function Harness() {
-    control = useInboxReadMarks({ workspaceId: TASK.workspaceId });
+    control = useInboxReadMarks({ workspaceId: TASK.workspaceId, readerId: READER });
     return createElement(Fragment, null, createElement(ToastHost));
   }
   root = createRoot(document.createElement("div"));

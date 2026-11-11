@@ -9,6 +9,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_ASK,
@@ -23,7 +24,7 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { formatCount } from "@repo/features/number-format";
 import { pageFrameUrl } from "@repo/features/page-frame";
@@ -34,13 +35,15 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
-import { DocumentIcon } from "@repo/ui";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
+import { runAppCommand } from "../app-commands.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -49,9 +52,10 @@ import {
   fakeActs,
   fakeActsAnswer,
 } from "../testing/app-bridge.js";
-import { handState, readExperiments } from "../testing/app-state.js";
+import { handState, readExperiments, writeListedTasks } from "../testing/app-state.js";
 import {
   composerEditor,
+  composerWords,
   editorBundleLanded,
   pasteInComposer,
   pressInComposer,
@@ -68,7 +72,6 @@ import {
   askMarker,
   attachedNames,
   BILLING,
-  BUMP,
   backToList,
   boxParts,
   checkedOptions,
@@ -106,7 +109,6 @@ import {
   repliedOn,
   rowDrafted,
   rowNamed,
-  STRAY_AGENT,
   saying,
   sendHeld,
   sendWords,
@@ -162,7 +164,7 @@ test("a thread leads with its item's title alone as its subject, whether the ite
     ],
   };
   world.inboxes.set(INVITES.id, [WITHDRAWN]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(subjectOf(page), ["Alert at 80%?"]);
   act(() => rowNamed(page, "How is a failed email retried?").click());
@@ -174,7 +176,7 @@ test("a thread leads with its item's title alone as its subject, whether the ite
 });
 
 test("a paste past an item's reply cap and too large for a file is cut to the room left and its note line says so, until the words change, with the counter standing from four fifths of the cap", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const pane = itemPane(page);
   const cap = INBOX_BOUNDS.MAX_MESSAGE_CHARS;
@@ -212,8 +214,8 @@ test("a teammate's open item leads with its title alone, and its box still takes
   );
 });
 
-test("the pane's crumbs lead with their tabs' glyphs, the plan's document and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
-  const { page, asked } = mount([], { chosen: ON_THRESHOLD });
+test("the pane's crumbs lead with their tabs' glyphs, the plan's task glyph and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
+  const { page, asked } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const crumbs = [
     ...page.querySelectorAll<HTMLButtonElement>('.inbox-view-items nav[aria-label="Path"] button'),
@@ -225,8 +227,8 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   const [task, agent] = crumbs;
   assert.equal(
     task?.querySelector('[aria-hidden="true"]')?.innerHTML,
-    renderToStaticMarkup(createElement(DocumentIcon)),
-    "the plan's crumb wears its tab's document glyph",
+    renderToStaticMarkup(createElement(EntityGlyph, { kind: ENTITY_KIND.PLAN })),
+    "the plan's crumb wears a task's glyph while its status is not read, never the description's document",
   );
   assert.ok(
     agent?.querySelector('[aria-hidden="true"] .state-glyph'),
@@ -246,8 +248,8 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
-test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, printing the keys the thread hands its task but U and P, which stay the thread's, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field; ⌘⌫ asks to delete the thread's task", async () => {
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const crumb = (at: number) =>
     page.querySelectorAll<HTMLButtonElement>('.inbox-view-items nav[aria-label="Path"] button')[
@@ -260,11 +262,24 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
       );
     });
   const offered = () => menuItems().map((item) => item.label);
+  const chords = () =>
+    [...document.querySelectorAll('[role="menu"]:not([data-leaving]) .ui-menu-item')].flatMap(
+      (item) => {
+        const keys = item.querySelector(".ui-shortcut")?.textContent;
+        return keys === undefined
+          ? []
+          : [[item.querySelector(".ui-menu-item-label")?.textContent, keys]];
+      },
+    );
 
   rightClick(crumb(0));
   for (const item of ["Copy link", "Rename", "Change repository", "Permanently delete"]) {
     assert.ok(offered().includes(item), `the task's crumb offers ${item}`);
   }
+  assert.deepEqual(chords(), [
+    ["Version history", "⌥⇧⌘H"],
+    ["Permanently delete", "⌘⌫"],
+  ]);
   chooseMenuItem("Rename");
   await settle();
   assert.ok(
@@ -287,6 +302,21 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
   assert.ok(
     page.querySelector('.inbox-view-items nav[aria-label="Path"] input[aria-label="Agent name"]'),
     "the agent's crumb stands as its name field",
+  );
+  act(() =>
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  await settle();
+
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.DELETE), "⌘⌫ is offered");
+  });
+  assert.match(
+    document.querySelector('[role="alertdialog"]')?.textContent ?? "",
+    new RegExp(BILLING.name, "u"),
+    "⌘⌫ asks first, about the thread's task",
   );
 });
 
@@ -331,7 +361,7 @@ function pathWords(page: HTMLElement): (string | null)[] {
 
 test("once the item's heading scrolls out of the thread's view, its title joins the bar's path as its last words, the page the reader stands on, and leaves it again once the heading is back, so it never stands twice", async () => {
   vi.stubGlobal("IntersectionObserver", HeadingObserver);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(pathWords(page), ["Billing usage alerts", "Alerts"], "the heading names it");
 
@@ -358,7 +388,7 @@ test("once the item's heading scrolls out of the thread's view, its title joins 
 
 test("an image that lands before its item's own read does is drawn all the same", async () => {
   const shot = inboxAttachmentAddress(
-    { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+    { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
     "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c71",
     "acme",
   );
@@ -367,7 +397,7 @@ test("an image that lands before its item's own read does is drawn all the same"
   let billingReads = 0;
   world.startRead = (taskId) =>
     taskId === BILLING.id && billingReads++ > 0 ? new Promise(() => undefined) : undefined;
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.ok(
     page.querySelector("[data-inbox-message-text]"),
@@ -385,7 +415,7 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
   const after = "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c73";
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -394,7 +424,7 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
     "https://github.com/acme/relay/pull/42",
   ].join("\n\n");
   world.inboxes.set(BILLING.id, [saying(THRESHOLD, words), RETRY]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   // The pictures land once their item's own read does, which keeps them as the item's.
   await landImageReads(page);
@@ -410,8 +440,6 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
     )?.textContent,
     "#42",
   );
-  // What the item's words draw stands inside the pane's masked region.
-  assert.ok(page.querySelector(".ph-no-capture [data-lone-link]"));
 });
 
 test("a page's link alone on its line, naming its task by the task's number, is the page's row with the page itself drawn under it", async () => {
@@ -436,7 +464,7 @@ test("a page's link alone on its line, naming its task by the task's number, is 
   );
   const link = `https://vespin.dev/stage/task/182/page/${FUNNEL.id}`;
   world.inboxes.set(BILLING.id, [saying(THRESHOLD, `[@${FUNNEL.title}](${link})`), RETRY]);
-  const { page } = mount([], { chosen: ON_THRESHOLD, standing: [numbered, INVITES] });
+  const { page } = mount({ chosen: ON_THRESHOLD, standing: [numbered, INVITES] });
   await settle();
   // Note that the page is drawn once its task's pages reach their query.
   await vi.waitFor(() =>
@@ -447,6 +475,14 @@ test("a page's link alone on its line, naming its task by the task's number, is 
       pageFrameUrl({ taskId: BILLING.id, pageId: FUNNEL.id, version: FUNNEL.version }),
     ),
   );
+  // A task listed anew, as a teammate's or an agent's lands in the window, leaves the page loaded rather than drawing it again.
+  const frame = page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`);
+  act(() => writeListedTasks({ tasks: [numbered, { ...INVITES, number: 183 }] }));
+  await settle();
+  assert.ok(
+    page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`) === frame,
+    "the page's frame is the one first drawn",
+  );
 });
 
 test("a picture of an item opens a viewer the arrow keys walk across every picture of the item, its Markdown's pair and a picture it carried alike, in the order they are drawn", async () => {
@@ -454,7 +490,7 @@ test("a picture of an item opens a viewer the arrow keys walk across every pictu
   const after = "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c75";
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -465,7 +501,7 @@ test("a picture of an item opens a viewer the arrow keys walk across every pictu
     mediaType: INBOX_IMAGE_TYPE.PNG,
   };
   world.inboxes.set(BILLING.id, [saying(THRESHOLD, words, [shot]), RETRY]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   await landImageReads(page);
   const press = page.querySelector<HTMLButtonElement>(
@@ -503,7 +539,7 @@ test("a recording an agent's words draw plays where it stands, left out of the r
   ];
   const address = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -625,7 +661,7 @@ test("a thread draws a comment's files over its words: an agent's pictures stand
   ];
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -733,7 +769,7 @@ function threadRefs(page: HTMLElement): HTMLButtonElement[] {
 }
 
 test("the thread names its agent as one button wherever it does, its message's comment: it hangs the agent's tab's card, which offers no Open agent, and opens the agent's own tab on its task", async () => {
-  const { page, asked } = mount([], { chosen: ON_THRESHOLD });
+  const { page, asked } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const [comment, ...more] = threadRefs(page);
   assert.ok(comment, "the agent's comment names the agent");
@@ -757,7 +793,7 @@ test("the thread names its agent as one button wherever it does, its message's c
 
 test("an archived agent is still named by its name, its card saying it was archived, and an agent the plan does not list goes by Agent, its card saying it is not found; an agent the task does not list opening its tab on its task, which shows the plan where its tab is gone", async () => {
   world.listedAgents = [{ ...AGENT, status: AGENT_STATUS.CANCELED, archivedAt: 4_000 }];
-  let { page, asked } = mount([], { chosen: ON_THRESHOLD });
+  let { page, asked } = mount({ chosen: ON_THRESHOLD });
   await settle();
   let [named] = threadRefs(page);
   assert.ok(named, "the thread names the archived agent");
@@ -773,7 +809,7 @@ test("an archived agent is still named by its name, its card saying it was archi
 
   act(() => world.root?.unmount());
   world.listedAgents = [];
-  ({ page, asked } = mount([], { chosen: ON_THRESHOLD }));
+  ({ page, asked } = mount({ chosen: ON_THRESHOLD }));
   await settle();
   [named] = threadRefs(page);
   assert.ok(named, "the thread names an agent the plan does not list");
@@ -851,7 +887,7 @@ test("an item's card names its task as the window names a task everywhere: the k
       },
     },
   );
-  const { page } = mount([], {
+  const { page } = mount({
     standing: [{ ...BILLING, name: LONG, number: 182, status: TASK_STATUS.IN_PROGRESS }, INVITES],
   });
   await settle();
@@ -888,7 +924,7 @@ test("an item's card names its task as the window names a task everywhere: the k
 });
 
 test("split, K and J move the chosen row and the item beside it, which draws no pager, and a J typed into the item's box is the box's", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const keys = standKeymap();
   assert.equal(pagerOf(page), null, "the list beside the item says where it stands");
@@ -912,7 +948,7 @@ test("split, K and J move the chosen row and the item beside it, which draws no 
 });
 
 test("split, K and J hand the keyboard to the row they choose, so the arrows go on from there", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const keys = standKeymap();
   act(() => rowNamed(page, "Alert at 80%?").focus());
@@ -948,7 +984,7 @@ function rowTabStops(page: HTMLElement): (string | null | undefined)[] {
 }
 
 test("the list's rows are one Tab stop, across its tasks, that ↓ walks and End ends, the walk wrapping and the stop following the row last focused", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(rowTabStops(page), ["Alert at 80%?"], "Tab lands on the open row, one stop");
 
@@ -1000,7 +1036,7 @@ function heldAnswers(): AgentInboxAnswerParams[] {
 }
 
 test("an item's box is the agent's message box: it takes no caret as the item opens, so K and J stay the list's; Enter sends its note, Shift+Enter is a new line, and Escape leaves the box but not the item", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(writtenOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000093"));
   const pane = itemPane(page);
@@ -1022,7 +1058,7 @@ test("an item's box is the agent's message box: it takes no caret as the item op
 });
 
 test("an item whose box holds unsent words wears the Draft pencil on its row while another item is chosen, as a sidebar task's row does, and none while its box stands beside the list; with the list standing alone, the chosen item's row wears it too", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   typeInComposer(itemPane(page), "Use 90% instead");
   await settle();
@@ -1046,7 +1082,7 @@ test("an item whose box holds unsent words wears the Draft pencil on its row whi
 });
 
 test("an item's unsent words outlast a reload of the window, its row marked while another is chosen, though its agent posted on it meanwhile", async () => {
-  const before = mount([], { chosen: ON_THRESHOLD });
+  const before = mount({ chosen: ON_THRESHOLD });
   await settle();
   typeInComposer(itemPane(before.page), "Use 90% instead");
   await settle();
@@ -1057,7 +1093,7 @@ test("an item's unsent words outlast a reload of the window, its row marked whil
     [BILLING.id, [{ ...THRESHOLD, revision: 2 }, RETRY]],
     [INVITES.id, [EXPIRY]],
   ]);
-  const { page } = mount([], { chosen: { taskId: INVITES.id, itemId: EXPIRY.id } });
+  const { page } = mount({ chosen: { taskId: INVITES.id, itemId: EXPIRY.id } });
   await settle();
   assert.equal(rowDrafted(page, "Alert at 80%?"), true, "the reloaded window marks the draft");
   act(() => rowNamed(page, "Alert at 80%?").click());
@@ -1065,8 +1101,8 @@ test("an item's unsent words outlast a reload of the window, its row marked whil
   assert.equal(composerEditor(itemPane(page)).textContent, "Use 90% instead");
 });
 
-test("files picked or dropped in an item's box are drawn as chips and go with its reply, standing for the developer's own words where they wrote none", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+test("files picked or dropped in an item's box are drawn as chips in its words and go with its reply", async () => {
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(writtenOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000094"));
   const pane = itemPane(page);
@@ -1083,7 +1119,7 @@ test("files picked or dropped in an item's box are drawn as chips and go with it
     sent.map(({ text, answers, attachments }) => ({ text, answers, attachments })),
     [
       {
-        text: "",
+        text: "[File: alerts.yml] [File: spec.pdf]",
         answers: undefined,
         attachments: [
           { name: "alerts.yml", mediaType: "text/plain", data: btoa("threshold: 0.9\n") },
@@ -1106,7 +1142,7 @@ function gatedFile(name: string, words: string) {
 }
 
 test("files whose reads land together both stand in the box", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const first = gatedFile("a.txt", "a\n");
   const second = gatedFile("b.txt", "b\n");
@@ -1125,7 +1161,7 @@ test("files still being read as the agent posts on the item again land in its bo
   // Main pushes the chosen task's inbox again as the test says it changed.
   const deliver = (outcome: ReadOutcome) =>
     world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id }, pushedOf(outcome.value));
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const slow = gatedFile("trace.txt", "boom\n");
   await handFiles(page, [slow.file], "pick");
@@ -1179,7 +1215,7 @@ test("a message's file whose read failed says so under the files, and Retry read
       });
     },
   });
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const comment = () =>
     itemPane(page).querySelector('[data-message-id="c1b2c3d4-0000-4000-8000-000000000095"]') ??
@@ -1205,7 +1241,7 @@ test("an item that needs no reply says nothing in its box of whether its answer 
   world.inboxes = new Map([
     [BILLING.id, [{ ...asking(THRESHOLD, { type: INBOX_ASK.DO, steps: [] }), needsReply: false }]],
   ]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const pane = itemPane(page);
   assert.equal(footWords(pane), "");
@@ -1218,7 +1254,7 @@ test("an item that needs no reply says nothing in its box of whether its answer 
 });
 
 test("in the window's Inbox an @ in an item's box offers its plan's repository's files, and the file picked reaches the agent in the reply as its link", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(writtenOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000096"));
   const pane = itemPane(page);
@@ -1274,7 +1310,7 @@ test("in the window's Inbox an @ in the box of a task's item offers that descrip
       return previous(request);
     },
   });
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const pane = itemPane(page);
 
@@ -1309,7 +1345,7 @@ test("what an item's box said of a dictation that failed stays with that item, a
         ? Promise.resolve({ status: FAKE_ANSWER.DONE, value: MICROPHONE_STATUS.DENIED })
         : previous(request),
   });
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const alerts = () =>
     [...itemPane(page).querySelectorAll('.agent-composer [role="alert"]')].map(
@@ -1361,34 +1397,9 @@ test("in the window's Inbox a skill an answer's words name is the chip a sent me
     ...tasksControl().sidePanel,
     onOpenFile: (ref) => files.push(ref.path),
   };
-  const { page } = mount([], { panel });
+  const { page } = mount({ panel });
   await settle();
   act(() => rowNamed(page, "How is a failed email retried?").click());
-  await pressNoteSkill(page, "/release");
-
-  assert.deepEqual(files, [".agents/skills/release/SKILL.md"]);
-  assert.deepEqual(opened, [], "nothing leaves for GitHub");
-});
-
-test("a skill named by a settled item of an agent with no plan that a link reached opens beside the Inbox, in the agent's own repository, which its group names none of", async () => {
-  const settled = answeredBy(BUMP, READER, "Retry once", "Run /release first.", 2_000);
-  handState(experimentsOn(EXPERIMENT.SKILLS));
-  world.agentInboxes = new Map([[STRAY_AGENT, [settled]]]);
-  world.tasklessAgents = new Map([
-    [STRAY_AGENT, { ...AGENT, id: STRAY_AGENT, planId: null, title: "Bump" }],
-  ]);
-  const opened = skillReads();
-  const files: string[] = [];
-  const panel: SidePanelControl = {
-    ...tasksControl().sidePanel,
-    onOpenFile: (ref) => files.push(ref.path),
-  };
-  const { page } = mount([], { panel });
-  await settle();
-  act(() => world.chooseFromOutside({ agentId: STRAY_AGENT, itemId: BUMP.id, opened: true }));
-  await settle();
-  // Note that the agent's own read lands one notify tick later, which the item waits on.
-  await vi.waitFor(() => assert.equal(itemPane(page).getAttribute("aria-label"), BUMP.title));
   await pressNoteSkill(page, "/release");
 
   assert.deepEqual(files, [".agents/skills/release/SKILL.md"]);
@@ -1635,7 +1646,7 @@ test("words selected in an open item's question quote into its box, its reply ca
   act(() => again.click());
   await settle();
   assert.equal(
-    pane.querySelector(".composer-quote-words")?.textContent,
+    pane.querySelector(".composer-editor blockquote")?.textContent,
     "Usage alerts fire at 80% of the plan's quota.",
     "the quote lands in the box behind the reply on its way",
   );
@@ -1650,7 +1661,7 @@ test("words selected in an open item's question quote into its box, its reply ca
   );
 });
 
-test("a message written on a settled item's thread from its box goes as a message, never an answer, and lands on the thread in place, scrolled into view with the draft reply under it, the item still answered and the box emptied", async () => {
+test("a message written on a settled item's thread from its box goes as a message, never an answer, and lands on the thread in place, the thread taken to its end, the item still answered and the box emptied", async () => {
   const { page } = mount();
   await settle();
   act(() => rowNamed(page, "How is a failed email retried?").click());
@@ -1660,14 +1671,10 @@ test("a message written on a settled item's thread from its box goes as a messag
   const pane = itemPane(page);
   const board =
     pane.querySelector<HTMLElement>(".inbox-board")?.parentElement ?? assert.fail("the thread");
-  // The thread is taller than its board, so the new comment lands under its foot, the draft reply under it.
-  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
-    if (this === board) return DOMRect.fromRect({ y: 0, height: 400 });
-    if (this.matches("[data-message-id]")) return DOMRect.fromRect({ y: 900, height: 60 });
-    if (this.matches('[data-inbox-comment="draft"]')) {
-      return DOMRect.fromRect({ y: 960, height: 200 });
-    }
-    return DOMRect.fromRect();
+  // The thread is taller than its board, and the reader has scrolled up it, so the new comment lands under its foot.
+  layScrollerOut(board, 400, 1_400);
+  act(() => {
+    board.scrollTop = 200;
   });
 
   typeInComposer(pane, "Page on-call at night too.");
@@ -1688,11 +1695,7 @@ test("a message written on a settled item's thread from its box goes as a messag
   ]);
   assert.deepEqual(subjectOf(page), ["How is a failed email retried?"]);
   assert.equal(composerEditor(pane).textContent, "", "the box lets its words go");
-  assert.equal(
-    board.scrollTop,
-    760,
-    "the board scrolls its own new comment, and the draft reply's foot under it, into view",
-  );
+  assert.equal(board.scrollTop, 1_000, "the reader's own message takes the thread to its end");
 });
 
 test("a message refused says why under the box, which keeps its words, and leaves nothing on the thread", async () => {
@@ -1831,7 +1834,7 @@ test("an Unarchive that lands after another send was refused lets only the archi
   assert.equal(note(), newer, "the newer refusal stands once the agent is back");
 });
 
-test("files alone make a message: sent from a settled item's box with no words, and drawn on the thread as the files alone", async () => {
+test("a file alone makes a message: sent from a settled item's box as its chip in the words, and drawn on the thread as that chip", async () => {
   const { page } = mount();
   await settle();
   act(() => rowNamed(page, "How is a failed email retried?").click());
@@ -1850,7 +1853,7 @@ test("files alone make a message: sent from a settled item's box with no words, 
     sent.map(({ text, attachments }) => ({ text, attachments })),
     [
       {
-        text: "",
+        text: "[File: trace.txt]",
         attachments: [{ name: "trace.txt", mediaType: "text/plain", data: btoa("boom\n") }],
       },
     ],
@@ -1859,7 +1862,8 @@ test("files alone make a message: sent from a settled item's box with no words, 
     pane.querySelector('[data-message-id="c1b2c3d4-0000-4000-8000-000000000020"]') ??
     assert.fail("the message is drawn");
   assert.deepEqual(attachedNames(message), ["trace.txt"]);
-  assert.equal(message.querySelector("[data-inbox-message-text]"), null, "no empty words");
+  const words = message.querySelector("[data-inbox-message-text]")?.textContent ?? "";
+  assert.equal(words.includes("[File:"), false, "the marker is drawn as its chip");
 });
 
 test("a thread read cut to its latest messages says the earlier ones are in the agent's tab, the agent's name opening that tab on its task", async () => {
@@ -1899,12 +1903,12 @@ test("a thread read cut to its latest messages says the earlier ones are in the 
 test("what an item's box holds unsent, its words and its files, outlasts every message landing on the item: a teammate's answer settling it, then the agent asking on it again", async () => {
   const deliver = (items: readonly InboxItem[], cursor: string) =>
     world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id }, pushedOf({ items, cursor }));
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.equal(readTitle(page), "Alert at 80%?");
   typeInComposer(itemPane(page), "Use 90%");
   await handFiles(page, [new File(["threshold: 0.9\n"], "alerts.yml", { type: "" })], "pick");
-  const box = () => [composerEditor(itemPane(page)).textContent, attachedNames(itemPane(page))];
+  const box = () => [composerWords(itemPane(page)), attachedNames(itemPane(page))];
 
   const answered: InboxItem = {
     ...answeredBy(THRESHOLD, TEAMMATE, "Retry once", "", 3_500),
@@ -1915,7 +1919,11 @@ test("what an item's box holds unsent, its words and its files, outlasts every m
   await vi.waitFor(() =>
     assert.equal(composerEditor(itemPane(page)).getAttribute("aria-label"), "Reply"),
   );
-  assert.deepEqual(box(), ["Use 90%", ["alerts.yml"]], "a teammate's answer takes nothing");
+  assert.deepEqual(
+    box(),
+    ["Use 90% [File: alerts.yml] ", ["alerts.yml"]],
+    "a teammate's answer takes nothing",
+  );
 
   const asked: InboxItem = {
     ...answered,
@@ -1926,7 +1934,11 @@ test("what an item's box holds unsent, its words and its files, outlasts every m
   };
   act(() => deliver([asked, RETRY], "3"));
   await settle();
-  assert.deepEqual(box(), ["Use 90%", ["alerts.yml"]], "nor does the agent asking again");
+  assert.deepEqual(
+    box(),
+    ["Use 90% [File: alerts.yml] ", ["alerts.yml"]],
+    "nor does the agent asking again",
+  );
 });
 
 /** How tall the room is that a thread's board shows, as the tests below lay it out. */
@@ -2067,9 +2079,7 @@ function selectWithin(within: Element, words: string, from: string, to: string):
 /** The quotes the item's box holds, in order. */
 function boxQuotes(pane: HTMLElement): (string | null)[] {
   const box = pane.querySelector(".inbox-answer") ?? assert.fail("the box is drawn");
-  return [...box.querySelectorAll(".composer-editor .composer-quote-words")].map(
-    (quote) => quote.textContent,
-  );
+  return [...box.querySelectorAll(".composer-editor blockquote")].map((quote) => quote.textContent);
 }
 
 test("words selected in what an open ask offers, an option's words, quote into its box as the agent's message's do", async () => {
@@ -2298,13 +2308,14 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
   );
   assert.deepEqual(
     boxParts(pane),
-    ["controls", "line: Add a note", "row: Attach files, Dictate, Send"],
+    [
+      "controls",
+      "line: Add a note",
+      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+    ],
     "under them the note line on its own, and under it the row: +, the microphone, and Send",
   );
   assert.equal(footWords(pane), "", "and no line of help");
-  // What the thread draws stands inside the pane's masked region.
-  assert.ok(pane.querySelector(".ph-no-capture [data-inbox-draft-ask]"));
-  assert.ok(pane.querySelector(".ph-no-capture [data-inbox-message-text]"));
 });
 
 test("a plain reply sends no answer and leaves the ask open, the box's Send held until it holds words and nothing saying the ask stays open", async () => {
@@ -2502,8 +2513,8 @@ test("a reply leaves its box the moment it is sent, the box and the ask standing
     "the ask still takes a pick",
   );
 
-  await handFiles(page, [new File(["# Notes"], "notes.md")], "pick");
   typeInComposer(pane, "And for guests?");
+  await handFiles(page, [new File(["# Notes"], "notes.md")], "pick");
   pressInComposer(pane, "Enter");
   await settle();
   assert.deepEqual(
@@ -2532,7 +2543,7 @@ test("a reply leaves its box the moment it is sent, the box and the ask standing
   await settle();
   assert.deepEqual(
     texts(),
-    ["Does it matter for SSO teams?", "And for guests?"],
+    ["Does it matter for SSO teams?", "And for guests? [File: notes.md]"],
     "the second goes once the first answered",
   );
   assert.notEqual(sent[0]?.clientKey, sent[1]?.clientKey, "each under a key of its own");
@@ -2545,14 +2556,14 @@ test("a reply leaves its box the moment it is sent, the box and the ask standing
 
   assert.deepEqual(
     texts(),
-    ["Does it matter for SSO teams?", "And for guests?"],
+    ["Does it matter for SSO teams?", "And for guests? [File: notes.md]"],
     "the reply behind the one refused never goes",
   );
   assert.deepEqual(sendingMarks(page), [], "both leave the thread");
   assert.equal(
-    composerEditor(pane).textContent,
-    "And for guests?Never mind.",
-    "their words come back into the box, in order, a line each read without its break",
+    composerWords(pane),
+    "And for guests? [File: notes.md] \nNever mind.",
+    "their words come back into the box, in order, a line each",
   );
   assert.deepEqual(attachedNames(pane), ["notes.md"]);
   assert.equal(

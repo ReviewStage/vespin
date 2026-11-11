@@ -36,9 +36,12 @@ import type {
   GitHubRepositoryPullRequestAnswer,
 } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
+import { HOSTED_CALL_FAILURE } from "./hosted-failure.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import { imageBodyOf } from "./image-body.js";
 import { WRITE_UNTAKEN, type WriteUntaken, writeUntakenOf } from "./keyed-write.js";
+import type { LinkPreviewView } from "./link-preview-view.js";
+import { LINK_PREVIEW_QUERY } from "./link-preview-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import type { PagePlace, PageVersion } from "./page-wire.js";
 import {
@@ -569,6 +572,15 @@ export class HostedTaskClient {
     );
   }
 
+  /** What a web page a plain link names says of itself, for the card the link hangs, read by the service (`link-preview-wire.ts`): its answer, or unanswered, a braked ask among it, since the card says the host alone for any of these. */
+  linkPreview(url: string): Effect.Effect<LinkPreviewView, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.linkPreviews.read, { [LINK_PREVIEW_QUERY.URL]: url }),
+      (answer): LinkPreviewView =>
+        "failure" in answer ? { ...answer, failure: HOSTED_CALL_FAILURE.UNANSWERED } : answer,
+    );
+  }
+
   /** One window of a file of a repository the workspace's installation reaches, as `readFile` reads a task's; nothing where the service did not answer, or where the window is not one the wire admits. */
   readRepositoryFile(
     place: RepositoryPlace,
@@ -771,21 +783,15 @@ export class HostedTaskClient {
     );
   }
 
-  /** One version of one page of one plan, or of one coding agent on no task, with its HTML; nothing where the service did not answer it, or holds no such version. */
+  /** One version of one page of one task, with its HTML; nothing where the service did not answer it, or holds no such version. */
   readPageVersion(
     place: PagePlace,
     pageId: string,
     version: number,
   ): Effect.Effect<PageVersion | undefined, never, HttpClient.HttpClient> {
     const named = { page: pageId, version: String(version) };
-    if ("taskId" in place) {
-      return Effect.map(
-        hostedCall(this.#hosted.taskFiles.page, { id: place.taskId, ...named }),
-        (read) => ("failure" in read ? undefined : read.page),
-      );
-    }
     return Effect.map(
-      hostedCall(this.#hosted.agentPages.version, { id: place.agentId, ...named }),
+      hostedCall(this.#hosted.taskFiles.page, { id: place.taskId, ...named }),
       (read) => ("failure" in read ? undefined : read.page),
     );
   }
@@ -835,13 +841,14 @@ export class HostedTaskClient {
 
   /**
    * Sets where one task stands, how much it matters, who it is assigned
-   * to, or any of them, under the idempotency key given where one is,
-   * answering it as changed with its document, or how it went untaken; a
-   * change that names neither never travels.
+   * to, or any of them, a move to Done or Canceled stopping the task's
+   * running agents where `stopAgents` asks, under the idempotency key given
+   * where one is, answering it as changed with its document, or how it went
+   * untaken; a change that names neither never travels.
    */
   setStanding(
     taskId: string,
-    standing: TaskStanding,
+    standing: TaskStanding & Pick<TaskUpdateRequest, "stopAgents">,
     key?: string,
   ): Effect.Effect<TaskCallResult<TaskWritten, WriteUntaken>, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(taskUpdateRequestSchema)(standing));

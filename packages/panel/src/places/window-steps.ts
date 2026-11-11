@@ -3,8 +3,7 @@
  *
  * A step is a place the window stood on (`Place`): the routed place at an
  * address, and, on a task's own place, the task and what its panes showed
- * (`places/task-step.ts`), or the side panel beside an Inbox item or an
- * agent's page. The window saves each in its router history entry's state
+ * (`places/task-step.ts`), or the side panel beside an Inbox item. The window saves each in its router history entry's state
  * beside its address (`SavedStep`), and reads it back from whatever a
  * browser held there, an older build's shapes among it: Home's and a task's
  * from before each was the router's, and tabs saved before they carried
@@ -63,6 +62,9 @@ export const MOUSE_BUTTON = {
   FORWARD: 4,
 } as const;
 
+/** How many steps the window keeps most recent first for ⌃Tab: far more than its cards, so a step it can no longer reach is filled from further back. */
+const RECENT_KEPT = 40;
+
 /** The kind every step is saved under: a place the router says the window stands on, which its route draws and its own history moves (`ROUTED_PLACE`). */
 const ROUTED_KIND = "routed";
 
@@ -83,7 +85,7 @@ export interface Place {
   readonly kind: typeof ROUTED_KIND;
   /** The address the router stood on, which its entry is held at. */
   readonly address: string;
-  /** The side panel beside an Inbox item or an agent's own page standing, as a task's step holds it, saved in the entry's state beside its address; none on any other routed place. */
+  /** The side panel beside an Inbox item standing, as a task's step holds it, saved in the entry's state beside its address; none on any other routed place. */
   readonly side?: SideStep;
   /** What a step on a task's own place holds beside its address; none on any other place. */
   readonly task?: TaskStep | undefined;
@@ -194,7 +196,7 @@ function sameTitle(one: Place, other: Place): boolean {
   return mine?.label === theirs?.label && mine?.detail === theirs?.detail;
 }
 
-/** The task an Inbox item stands on; none for one on an agent with no task, or named by its id alone. */
+/** The task an Inbox item stands on; none for one named by its id alone. */
 function choiceTask(choice: InboxChoice): string | undefined {
   return "taskId" in choice ? choice.taskId : undefined;
 }
@@ -207,7 +209,7 @@ export function samePage(one: Place, other: Place): boolean {
   );
 }
 
-/** What a place shows within its page, which its step holds beside its address: a task's panes, or the side panel beside an Inbox item or an agent's page. */
+/** What a place shows within its page, which its step holds beside its address: a task's panes, or the side panel beside an Inbox item. */
 function shownOf(place: Place): StepShown {
   return place.task ?? { side: place.side };
 }
@@ -215,6 +217,32 @@ function shownOf(place: Place): StepShown {
 /** Whether two places are one step of the history: one page, on one sub-step, since a narrow room's pane opened over another is a step of its own, showing one thing in it, since a tab chosen is a step of its own too (`places/task-step.ts`). */
 export function sameStep(one: Place | undefined, other: Place): boolean {
   return one !== undefined && samePage(one, other) && sameStepShown(shownOf(one), shownOf(other));
+}
+
+/** Whether two places are one screen exactly: one page, showing alike what each shows within it, neither filling in what the other does not yet know. */
+export function sameScreen(one: Place, other: Place): boolean {
+  return samePage(one, other) && stoodAlike(shownOf(one), shownOf(other));
+}
+
+/**
+ * The steps the window stood on, most recent first, once `place` stands:
+ * the step a visit or a move along the history landed on comes first,
+ * taken out of wherever it stood before, and one written in the place of
+ * `replaced`, the step standing before it, takes that step's place, as a
+ * tab the window chose by itself takes the standing step's (`visitWrite`).
+ * Each screen stands once, kept exactly as it stood, so a step the window
+ * wrote while what it shows was not yet known never folds two screens of
+ * one page into one. ⌃Tab steps through them (`desktop/tab-switcher.tsx`).
+ */
+export function recentAfter(
+  recent: readonly Place[],
+  place: Place,
+  replaced: Place | undefined,
+): readonly Place[] {
+  const rest = recent.filter(
+    (each) => !sameScreen(each, place) && (replaced === undefined || !sameScreen(each, replaced)),
+  );
+  return [place, ...rest].slice(0, RECENT_KEPT);
 }
 
 /** Whether two places of one page stand on one sub-step, whatever each shows on it. */

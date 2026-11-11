@@ -2,7 +2,9 @@ import { BROWSER_LIVE } from "@repo/features/browser-live-wire";
 import { LIVE_SOCKET } from "@repo/features/live-wire";
 import { SANDBOX_TUNNEL } from "@repo/features/sandbox-tunnel-wire";
 import { TERMINAL_RELAY } from "@repo/features/terminal-wire";
+import { AGENT_WAKEUP } from "@repo/service/agents/coder-host/agent-wakeup-bounds";
 import { TURN_DELIVERY } from "@repo/service/agents/coder-host/turn-delivery-bounds";
+import { SANDBOX_RELEASE } from "@repo/service/agents/sandbox-release-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
 import { AUTOMATION_RUNS } from "@repo/service/automations/automation-run-bounds";
 import {
@@ -18,6 +20,7 @@ import {
 import { MEMBER_MCP_FUNCTION, MEMBER_MCP_METADATA_ROUTE } from "@repo/service/member-mcp/app";
 import { MEMBER_MCP_PATH } from "@repo/service/member-mcp/resource";
 import { PAGE_LINK_ROUTE } from "@repo/service/pages/page-links";
+import { PREVIEW_LINK } from "@repo/service/previews/preview-links";
 import { ORPC_ROUTE_KEY } from "./function-dispatch.js";
 
 /**
@@ -56,6 +59,7 @@ const FUNCTION_GROUP = {
   MAINTENANCE_SWEEP: "maintenance-sweep",
   BASE_DRIVE_REFRESH: "base-drive-refresh",
   PAGE_SANDBOX: "page-sandbox",
+  PREVIEW_PROXY: "preview-proxy",
   PULL_REQUEST_CHAPTERS: "pull-request-chapters",
 } as const;
 type FunctionGroup = (typeof FUNCTION_GROUP)[keyof typeof FUNCTION_GROUP];
@@ -121,6 +125,8 @@ const GROUPS: readonly GroupDefinition[] = [
   },
   // A page on the sandbox's host answers within the platform's default, in a function holding no other route.
   { file: FUNCTION_GROUP.PAGE_SANDBOX, routes: [routeKeyOf(PAGE_LINK_ROUTE.PATH)] },
+  // Every request to a shared preview's host, in a function holding no other route for the same reason.
+  { file: FUNCTION_GROUP.PREVIEW_PROXY, routes: [routeKeyOf(PREVIEW_LINK.PROXY_PATH)] },
 ];
 
 /** The WebSocket services, each a function of its own: the terminal relay, the sandbox tunnel, the Browser tab's live view, and the live reads' socket. */
@@ -134,8 +140,9 @@ const STANDALONE_ROUTES: readonly string[] = [
 /**
  * The queue consumers, each a function of its own, since a function the
  * queue invokes is reached by nothing else: the automation-runs consumer and
- * the agent-turns consumer, each under the Fluid default a Start's function
- * runs under.
+ * the agent-turns consumer, and the agent-wakeups consumer, each under the
+ * Fluid default a Start's function runs under, and the sandbox-releases
+ * consumer, under its own short bound.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -151,6 +158,20 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(TURN_DELIVERY.PATH)],
     dispatches: false,
     queueTopic: TURN_DELIVERY.TOPIC,
+  },
+  {
+    file: routeKeyOf(AGENT_WAKEUP.PATH),
+    maxDuration: AGENT_WAKEUP.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(AGENT_WAKEUP.PATH)],
+    dispatches: false,
+    queueTopic: AGENT_WAKEUP.TOPIC,
+  },
+  {
+    file: routeKeyOf(SANDBOX_RELEASE.PATH),
+    maxDuration: SANDBOX_RELEASE.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(SANDBOX_RELEASE.PATH)],
+    dispatches: false,
+    queueTopic: SANDBOX_RELEASE.TOPIC,
   },
 ];
 

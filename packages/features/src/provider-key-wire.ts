@@ -5,8 +5,8 @@ import { countedNumber } from "./service-wire.js";
 /**
  * provider-key-wire.ts -- the account's own Anthropic and OpenAI API keys, as the desktop saves, reads, and removes them.
  *
- * `/api/account/provider-keys` holds at most one key per provider for the
- * signed-in account. A key travels once, in the body of the `PUT` that saves
+ * `/api/account/provider-keys` holds as many keys per provider as the
+ * signed-in account saves. A key travels once, in the body of the `PUT` that saves
  * it, and never again: every answer names what the key is — its provider, a
  * hint of its first and last characters, when it was added, and how the
  * provider last answered it — and never the key itself. A save is checked
@@ -141,6 +141,15 @@ export const PROVIDER_KEY_REJECTION = {
 export type ProviderKeyRejection =
   (typeof PROVIDER_KEY_REJECTION)[keyof typeof PROVIDER_KEY_REJECTION];
 
+/** No subscription id we mint is longer; one past it is none of ours. */
+const SUBSCRIPTION_ID_MAX_CHARS = 64;
+
+/** No name the account gives a subscription is longer, which its row and the start chip draw whole. */
+export const SUBSCRIPTION_LABEL_MAX_CHARS = 60;
+
+/** No account holds more subscriptions of a kind than an order names. */
+const SUBSCRIPTION_ORDER_MAX = 50;
+
 const PROVIDER_KEY_BOUNDS = {
   /** No provider key is shorter; a paste this short is no key. */
   MIN_KEY_CHARS: 20,
@@ -148,16 +157,23 @@ const PROVIDER_KEY_BOUNDS = {
   MAX_KEY_CHARS: 512,
 } as const;
 
-/** The query `DELETE` names its provider in, and the kind where it is not an API key. */
+/** The query `DELETE` names its provider in, the kind where it is not an API key, and the subscription where it is not the first of its kind. */
 export const PROVIDER_KEY_QUERY = {
   PROVIDER: "provider",
   KIND: "kind",
+  SUBSCRIPTION_ID: "subscriptionId",
 } as const;
 
 const providerSchema = EffectSchema.Literals(Object.values(PROVIDER_KEY_PROVIDER));
 
 /** A stored credential's kind, as a request names it; a request that names none means an API key. */
 export const providerKeyKindSchema = EffectSchema.Literals(Object.values(PROVIDER_KEY_KIND));
+
+/** One of the account's subscriptions of a kind, by its id; a request that names none means the first of its kind in the account's order. */
+export const subscriptionIdSchema = EffectSchema.String.check(
+  EffectSchema.isMinLength(1),
+  EffectSchema.isMaxLength(SUBSCRIPTION_ID_MAX_CHARS),
+);
 
 /** What the account sees of one stored key: never the key, only what tells it apart. */
 const providerKeySummarySchema = EffectSchema.Struct({
@@ -171,20 +187,54 @@ const providerKeySummarySchema = EffectSchema.Struct({
   statusAt: countedNumber,
   /** When a plan's reached limit resets, in epoch milliseconds, where the provider said; absent otherwise. */
   limitResetsAt: EffectSchema.optionalKey(countedNumber),
+  /** The key's own id, which a reorder names it by among its provider's plans; absent from a service that predates it. */
+  id: EffectSchema.optionalKey(EffectSchema.String),
+  /** Where the key stands in its provider's order, among its plans; absent from a service that predates it, which pays with it last. */
+  position: EffectSchema.optionalKey(countedNumber),
+  /** The name the account gave it; absent for the name it is shown by default. */
+  label: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type ProviderKeySummary = typeof providerKeySummarySchema.Type;
+
+/** How much of its usage window a plan has used, as a turn on it last heard its harness report. */
+const planUsageSchema = EffectSchema.Struct({
+  /** The share of the window used, in percent. */
+  usedPercent: countedNumber,
+  /** How long the window is, in minutes, where the harness said. */
+  windowMins: EffectSchema.optionalKey(countedNumber),
+  /** The model the window alone counts, as its provider names it ("Opus"); absent for a window on every model. */
+  model: EffectSchema.optionalKey(EffectSchema.String),
+  /** When the window resets, in epoch milliseconds, where the harness said. */
+  resetsAt: EffectSchema.optionalKey(countedNumber),
+});
+
+export type PlanUsage = typeof planUsageSchema.Type;
 
 /** What the account sees of one stored subscription credential: never the credential, only what tells it apart. */
 const subscriptionKeySummarySchema = EffectSchema.Struct({
   ...providerKeySummarySchema.fields,
   kind: providerKeyKindSchema,
+  /** The subscription's own id, which a rename, a reorder, a replace, and a removal name it by. */
+  id: EffectSchema.String,
+  /** Where it stands in the account's order of its kind, the first paying first; the answer lists them in this order. */
+  position: countedNumber,
+  /** The name the account gave it; absent for the name it is shown by default. */
+  label: EffectSchema.optionalKey(EffectSchema.String),
+  /** The email of the account a ChatGPT subscription signed in as, where its sign-in named one; absent for every other kind. */
+  email: EffectSchema.optionalKey(EffectSchema.String),
   /**
    * Whether the plan pays for the account's coding agents by default, as
    * "Use my Claude plan for coding agents" says; on once it is connected.
    * A service that predates the default answers none, which reads as on.
    */
   forAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** How much of its shortest usage window it has used, as last heard, for a client from before `usageWindows`; absent until heard, and once that window has reset. */
+  usage: EffectSchema.optionalKey(planUsageSchema),
+  /** Every usage window it is counted in, the shortest first, as last heard: the 5-hour session and the week; a window that has reset since is left out. */
+  usageWindows: EffectSchema.optionalKey(EffectSchema.Array(planUsageSchema)),
+  /** When its usage windows were last heard, in epoch milliseconds, where that is known. */
+  usageHeardAt: EffectSchema.optionalKey(countedNumber),
 });
 
 export type SubscriptionKeySummary = typeof subscriptionKeySummarySchema.Type;
@@ -240,11 +290,19 @@ export function pastedKeyFits(pasted: string): boolean {
   return Option.isSome(readPastedKey(pasted));
 }
 
-/** Saving a key for a provider (PUT), replacing the one of its kind it held; a request naming no kind saves an API key. */
+/**
+ * Saving a key for a provider (PUT); a request naming no kind saves an API
+ * key. A credential replaces the one of its kind its id names, keeping that
+ * one's place and name, or is added at the bottom of the account's order
+ * where `add` says so; where it names neither, an API key is added and a
+ * subscription replaces the first of its kind.
+ */
 export const providerKeySaveRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
   kind: EffectSchema.optionalKey(providerKeyKindSchema),
   key: pastedKeySchema,
+  subscriptionId: EffectSchema.optionalKey(subscriptionIdSchema),
+  add: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /** The subscription kinds, which alone carry a default for the account's coding agents. */
@@ -253,15 +311,52 @@ const subscriptionKindSchema = EffectSchema.Literals([
   PROVIDER_KEY_KIND.CHATGPT_OAUTH,
 ]);
 
+/** A subscription's name as the account gives it, or none to have it shown by its default name again. */
+const subscriptionLabelSchema = EffectSchema.NullOr(
+  EffectSchema.String.check(
+    EffectSchema.isMinLength(1),
+    EffectSchema.isMaxLength(SUBSCRIPTION_LABEL_MAX_CHARS),
+  ),
+);
+
+/**
+ * Naming one of the account's subscriptions or API keys (PUT): the
+ * provider, its kind, its id, and its new name, or none for its default.
+ * One the account does not hold changes nothing.
+ */
+export const subscriptionLabelRequestSchema = EffectSchema.Struct({
+  provider: providerSchema,
+  kind: providerKeyKindSchema,
+  subscriptionId: subscriptionIdSchema,
+  label: subscriptionLabelSchema,
+});
+
+/**
+ * Reordering the account's subscriptions of a kind (PUT), first paying
+ * first: the ids in their new order, the provider's API key's among them
+ * where it stands between its plans. One the account does not hold is
+ * passed over, and one it holds that the order leaves out keeps its place
+ * after those named.
+ */
+export const subscriptionOrderRequestSchema = EffectSchema.Struct({
+  provider: providerSchema,
+  kind: providerKeyKindSchema,
+  subscriptionIds: EffectSchema.Array(subscriptionIdSchema).check(
+    EffectSchema.isMaxLength(SUBSCRIPTION_ORDER_MAX),
+  ),
+});
+
 /**
  * Turning a connected plan's default for the account's coding agents on or
- * off (PATCH): the provider and the subscription's kind, and whether it
- * pays for them unless Start picks another payer. A plan the account does
- * not hold changes nothing, and the answer shows it absent.
+ * off (PATCH): the provider and the subscription's kind, the subscription
+ * where it is not the first of its kind, and whether it pays for them
+ * unless Start picks another payer. A plan the account does not hold
+ * changes nothing, and the answer shows it absent.
  */
 export const providerKeyForAgentsRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
   kind: subscriptionKindSchema,
+  subscriptionId: EffectSchema.optionalKey(subscriptionIdSchema),
   forAgents: EffectSchema.Boolean,
 });
 
@@ -299,7 +394,7 @@ export const CHATGPT_DEVICE_FAILURE_MESSAGE = {
   [CHATGPT_DEVICE_LOGIN.EXPIRED]:
     "The code expired before it was entered. Start again for a new one.",
   [CHATGPT_DEVICE_LOGIN.REFUSED]:
-    "ChatGPT did not connect this account. Start again to try once more.",
+    "Codex did not connect this account. Start again to try once more.",
   [CHATGPT_DEVICE_LOGIN.CANCELED]: "This connection was canceled. Start again for a new code.",
 } as const satisfies Record<
   Exclude<
@@ -328,6 +423,15 @@ export const chatGptDeviceStartAnswerSchema = EffectSchema.Struct({
 
 export type ChatGptDeviceStartAnswer = typeof chatGptDeviceStartAnswerSchema.Type;
 
+/**
+ * A device-code connection begun (POST): whether it adds a subscription at
+ * the bottom of the account's order rather than replacing its first. A
+ * start that sends no body replaces, as every desktop before it does.
+ */
+export const chatGptDeviceStartRequestSchema = EffectSchema.Struct({
+  add: EffectSchema.optionalKey(EffectSchema.Boolean),
+});
+
 /** A poll or a cancel of a device-code connection (POST), by the login its start answered. */
 export const chatGptDeviceLoginRequestSchema = EffectSchema.Struct({
   loginId: EffectSchema.String.check(
@@ -348,3 +452,46 @@ export const chatGptDevicePollAnswerSchema = EffectSchema.Struct({
 });
 
 export type ChatGptDevicePollAnswer = typeof chatGptDevicePollAnswerSchema.Type;
+
+/** What a plan of the provider's is called wherever a surface names it and the account gave it no name. */
+export const PLAN_NAME = {
+  [PROVIDER_KEY_PROVIDER.ANTHROPIC]: "Claude plan",
+  [PROVIDER_KEY_PROVIDER.OPENAI]: "Codex plan",
+} as const satisfies Record<ProviderKeyProvider, string>;
+
+/** What a plan is named by: the name the account gave it, the ChatGPT account it signed in as, and when it was added. */
+export interface NamedPlan {
+  readonly id: string;
+  readonly label?: string | undefined;
+  readonly email?: string | undefined;
+  readonly addedAt: number;
+}
+
+/**
+ * Each of the provider's plans' name by its id, as Settings lists them and
+ * a limit's notice names them: the name the account gave it, else the
+ * ChatGPT account it signed in as, else its plan's name, numbered by when it
+ * was added where the account holds more than one, so a plan keeps its
+ * number however it is reordered.
+ */
+export function planNamesOf(
+  provider: ProviderKeyProvider,
+  plans: readonly NamedPlan[],
+): ReadonlyMap<string, string> {
+  const planName = PLAN_NAME[provider];
+  const added = plans.toSorted((a, b) => a.addedAt - b.addedAt);
+  return new Map(
+    added.map((plan, at) => [
+      plan.id,
+      plan.label ?? plan.email ?? (plans.length > 1 ? `${planName} ${at + 1}` : planName),
+    ]),
+  );
+}
+
+/** An API key's name wherever a surface names it: the name the account gave it, else its masked hint ("API key · sk-…a91F"). */
+export function apiKeyName(key: {
+  readonly label?: string | null | undefined;
+  readonly hint: string;
+}): string {
+  return key.label ?? `API key · ${key.hint}`;
+}

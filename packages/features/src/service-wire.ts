@@ -145,6 +145,8 @@ export const HOSTED_API_ERROR = {
   SANDBOX_STOPPED: "sandbox-stopped",
   /** The coding agent's sandbox can never resume: its snapshot expired or was deleted, its saved files with it, and the agent's next turn starts a fresh one. Nothing was resumed. */
   SANDBOX_SNAPSHOT_GONE: "sandbox-snapshot-gone",
+  /** A rewind asked to restore the agent's files, but no snapshot of its checkout stands for that point: its runner recorded none before that turn, or the machine no longer holds it. Nothing was rewound. */
+  CHECKOUT_SNAPSHOT_MISSING: "checkout-snapshot-missing",
   /** A skill of that name is already installed in the scope asked: the account's own, or the workspace's. Nothing was installed. */
   SKILL_NAME_TAKEN: "skill-name-taken",
   /** A skill's files were refused: a file past its bound, a `SKILL.md` that breaks the convention, or a credential-shaped literal. Nothing was installed. */
@@ -181,6 +183,10 @@ export const HOSTED_API_ERROR = {
   MEMORY_CREDENTIAL: "memory-credential",
   /** The workspace holds as many memories as it may (`MEMORY_BOUNDS.MAX_MEMORIES`), so a new one is refused until one is corrected or forgotten; nothing was written. */
   MEMORY_FULL: "memory-full",
+  /** An answer named an ask that no longer waits: answered, denied by a message, withdrawn, or expired, as the refusal names it (`approval-settled`). Nothing reached the agent. */
+  APPROVAL_SETTLED: "approval-settled",
+  /** A permission mode that asks was named for an agent whose harness runs every call unasked, as Codex does; only a Claude Code agent asks. Nothing was written. */
+  PERMISSION_MODE_REFUSED: "permission-mode-refused",
 } as const;
 
 export type HostedApiError = (typeof HOSTED_API_ERROR)[keyof typeof HOSTED_API_ERROR];

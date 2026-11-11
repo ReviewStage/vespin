@@ -17,8 +17,8 @@ import { clsx } from "clsx";
  *   a rounded box, in the tag's type and weight, its hairline
  *   drawn inside (`inset-ring`) rather than as a border, so it stands no
  *   taller than the compact chip beside it, and any glyph in it at 12px.
- * - `variant` names today's tones (`neutral`, `working`, `attention`,
- *   `complete`, `merged`, `danger`) rather than shadcn's `default`,
+ * - `variant` names today's tones (`neutral`, `working`, `starting`,
+ *   `attention`, `complete`, `merged`, `danger`) rather than shadcn's `default`,
  *   `secondary`, `destructive`, `outline`, `ghost`, and `link`: a tone is
  *   said in the badge's glyph's ink, and a neutral badge's words are muted.
  * - `face` is added: the chip's own opaque face inside its hairline
@@ -45,6 +45,7 @@ const badgeVariants = cva(
       variant: {
         neutral: "",
         working: "",
+        starting: "",
         attention: "",
         complete: "",
         merged: "",
@@ -64,7 +65,7 @@ const badgeVariants = cva(
       { face: "plain", variant: "neutral", className: "text-muted-foreground" },
       {
         face: "plain",
-        variant: ["working", "attention", "complete", "merged", "danger"],
+        variant: ["working", "starting", "attention", "complete", "merged", "danger"],
         className: "text-foreground",
       },
       { dot: true, className: "before:bg-tone-ink" },

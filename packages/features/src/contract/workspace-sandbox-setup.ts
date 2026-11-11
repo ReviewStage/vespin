@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-setup.ts -- a workspace's cloud sandbox setup (`workspace-sandbox-setup-wire.ts`), as procedures: read it, put the install script, put a repository's setup script.
+ * workspace-sandbox-setup.ts -- a workspace's cloud sandbox setup (`workspace-sandbox-setup-wire.ts`), as procedures: read it, put the install script, put a repository's setup or archive script, put a repository's run actions.
  *
  * Every output is the setup as it then stands, its wire schema flipped. A
  * body refuses a key it does not name (`exactInput`); the read's query
@@ -22,12 +22,21 @@ import {
   WORKSPACE_SANDBOX_SETUP_QUERY,
   workspaceInstallScriptPutRequestSchema,
   workspaceRepositorySetupPutRequestSchema,
+  workspaceRunActionsPutRequestSchema,
   workspaceSandboxSetupAnswerSchema,
 } from "../workspace-sandbox-setup-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
 /** A put is one script at its bound, at six bytes a character, which is the most JSON spends on one (`\u0000`), and room for the rest. */
 const PUT_BODY_BYTES = WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_SCRIPT_CHARS * 6 + 4_096;
+
+/** A run actions put is every action at its bounds, at six bytes a character, and room for the rest. */
+const RUN_ACTIONS_BODY_BYTES =
+  WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS *
+    (WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS +
+      WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_COMMAND_CHARS) *
+    6 +
+  16_384;
 
 const workspaceSandboxSetupQuerySchema = EffectSchema.Struct({
   [WORKSPACE_SANDBOX_SETUP_QUERY.WORKSPACE_ID]: workspaceIdSchema,
@@ -60,5 +69,16 @@ export const workspaceSandboxSetupContract = {
       }),
     )
     .input(exactInput(workspaceRepositorySetupPutRequestSchema))
+    .output(EffectSchema.flip(workspaceSandboxSetupAnswerSchema)),
+  putRunActions: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .meta(bodyCap(RUN_ACTIONS_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.PUT,
+        path: HOSTED_SERVICE_PATH.WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS,
+      }),
+    )
+    .input(exactInput(workspaceRunActionsPutRequestSchema))
     .output(EffectSchema.flip(workspaceSandboxSetupAnswerSchema)),
 };

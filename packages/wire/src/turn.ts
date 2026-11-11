@@ -36,3 +36,17 @@ export const TURN_STATUS = {
 } as const;
 
 export type TurnStatus = (typeof TURN_STATUS)[keyof typeof TURN_STATUS];
+
+/** The statuses of a turn still open: queued for its runner, or running. */
+export const TURN_OPEN = [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING] as const;
+
+export type TurnOpenStatus = (typeof TURN_OPEN)[number];
+
+/** The statuses a turn ends in, from which it never moves again but by a rewind. */
+export const TURN_TERMINAL = [
+  TURN_STATUS.SETTLED,
+  TURN_STATUS.CANCELED,
+  TURN_STATUS.FAILED,
+] as const;
+
+export type TurnTerminalStatus = (typeof TURN_TERMINAL)[number];

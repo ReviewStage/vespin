@@ -1,6 +1,12 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSections } from "@repo/features/task-section-wire";
-import { countWords, IRREVERSIBLE_WORDS, TERM } from "@repo/features/words";
+import {
+  placeAllWrites,
+  sectionEntries,
+  unplaceAllWrites,
+  workspaceSections,
+} from "@repo/features/task-sections-model";
+import { countWords, IRREVERSIBLE_WORDS, type Noun, TERM } from "@repo/features/words";
 import {
   CONFIRM_LOSS,
   ConfirmDialog,
@@ -11,12 +17,6 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import {
-  placeAllWrites,
-  sectionEntries,
-  unplaceAllWrites,
-  workspaceSections,
-} from "@repo/ui/task-sections-model";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type Store, useCreateStore, useSelector } from "@tanstack/react-store";
@@ -52,7 +52,10 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
  * menu key, under how many it acts on (`chosenRowMenu`), as a Mac's list
  * does; one chosen alone keeps its own menu. The sidebar, whose rows stand
  * deep under its groups and sections, hands each row its selection through
- * `ChosenTasksContext` rather than through every group between.
+ * `ChosenTasksContext` rather than through every group between. Which rows
+ * are chosen (`useChosen`) and what a row chosen among several reads
+ * (`useChosenOf`) are any list's, which a list of agents chooses with too
+ * (`agents-selection.tsx`).
  */
 
 /** What the selection bar's Move to section says beyond the sections. */
@@ -78,24 +81,25 @@ function moveToSection(
 ): void {
   const entries = sectionEntries(before);
   const moving = taskIds.filter((taskId) => (entries.get(taskId)?.sectionId ?? null) !== sectionId);
-  const members = moving.map((id) => ({ agent: false, id }));
   move(
-    members,
+    moving,
     sectionId,
     sectionId === null
-      ? unplaceAllWrites(members)
-      : placeAllWrites(before, members, sectionId, Date.now()),
+      ? unplaceAllWrites(moving)
+      : placeAllWrites(before, moving, sectionId, Date.now()),
   );
 }
 
 /**
- * A selection of several tasks as a chosen row's menu reads it: how many,
- * and the bar's acts on them all, read as the menu draws. Note that it is
- * the same while the count stands, so a row held while what it is handed
- * does (`memo`) holds as the selection moves, and reads the acts newest.
+ * A selection of several rows as a chosen row's menu reads it: how many,
+ * what each is called, and the acts on them all, read as the menu draws.
+ * Note that it is the same while the count stands, so a row held while what
+ * it is handed does (`memo`) holds as the selection moves, and reads the
+ * acts newest.
  */
-export interface ChosenTasks {
+export interface ChosenRows {
   readonly count: number;
+  readonly noun: Noun;
   readonly acts: () => readonly SelectionAct[];
 }
 
@@ -132,8 +136,7 @@ function selectionActs(
   const sections = workspaceId === undefined ? [] : workspaceSections(doors.sections, workspaceId);
   const move = (sectionId: string | null) =>
     acted(() => moveToSection(doors.sections, taskIds, sectionId, doors.move));
-  const members = taskIds.map((id) => ({ agent: false, id }));
-  const put = (sectionId: string) => placeAllWrites(latest(), members, sectionId, Date.now());
+  const put = (sectionId: string) => placeAllWrites(latest(), taskIds, sectionId, Date.now());
   const sectionMenu = (workspace: string) => [
     [
       ...sections.map((section) => ({
@@ -187,6 +190,63 @@ function deleteChosenQuestion(count: number): DialogQuestion {
   };
 }
 
+/** The rows a page has chosen of those it draws, by key, as `useChosen` keeps them. */
+export interface Chosen {
+  /** The id its `SelectionRegion` and the bar that names it share. */
+  readonly regionId: string;
+  /** The rows chosen, only those the page draws. */
+  readonly selected: ReadonlySet<string>;
+  readonly setChosen: (
+    next: ReadonlySet<string> | ((was: ReadonlySet<string>) => ReadonlySet<string>),
+  ) => void;
+  /** Chooses none. */
+  readonly onClear: () => void;
+}
+
+/**
+ * The rows a page has chosen of those it draws (`drawn`), by key. Note that
+ * a row no longer drawn leaves the selection for good, so one coming back is
+ * not chosen again unasked. The choice is held in `held` where the page
+ * hands a store that outlives it, and in a store of the hook's own otherwise.
+ */
+export function useChosen(drawn: ReadonlySet<string>, held?: ChosenTasksStore): Chosen {
+  const regionId = useId();
+  const own = useCreateStore<ReadonlySet<string>>(new Set<string>());
+  const store = held ?? own;
+  const chosen = useSelector(store);
+  const selected: ReadonlySet<string> = new Set([...chosen].filter((id) => drawn.has(id)));
+  const stale = selected.size !== chosen.size;
+  // Note that the rows no longer drawn are let go after the draw rather than during it, because a store's write redraws its readers.
+  useEffect(() => {
+    if (stale) store.setState((was) => new Set([...was].filter((id) => drawn.has(id))));
+  });
+  return {
+    regionId,
+    selected,
+    setChosen: (next) => store.setState(typeof next === "function" ? next : () => next),
+    onClear: () => store.setState(() => new Set()),
+  };
+}
+
+/**
+ * The selection a row keyed `key` stands in, where it is one of several
+ * chosen, offering `acts` on them all under how many `noun`s; none
+ * otherwise, as one chosen alone is the row's own menu already.
+ */
+export function useChosenOf(
+  selected: ReadonlySet<string>,
+  noun: Noun,
+  acts: readonly SelectionAct[],
+): (key: string) => ChosenRows | undefined {
+  const actsNow = useSteadyDoor(() => acts);
+  const count = selected.size;
+  const several: ChosenRows | undefined = useMemo(
+    () => (count > 1 ? { count, noun, acts: actsNow } : undefined),
+    [count, noun, actsNow],
+  );
+  return (key) => (several !== undefined && selected.has(key) ? several : undefined);
+}
+
 /** A page's selection of its tasks, as `useTasksSelection` keeps it. */
 export interface TasksSelection {
   /** The id its `SelectionRegion` and the bar that names it share. */
@@ -199,7 +259,7 @@ export interface TasksSelection {
   /** What the bar does to every task chosen. */
   readonly acts: readonly SelectionAct[];
   /** The selection a row of the task stands in, where it is one of several chosen; none otherwise. */
-  readonly chosenOf: (taskId: string) => ChosenTasks | undefined;
+  readonly chosenOf: (taskId: string) => ChosenRows | undefined;
   /** The questions its acts ask, Permanently delete and New section, which the page draws beside the bar. */
   readonly dialog: React.JSX.Element;
 }
@@ -225,20 +285,7 @@ export function useTasksSelection(
   const standing = useStandingWrites(tasks.drawnTasks);
   const latest = useRef(sections.sections);
   latest.current = sections.sections;
-  const regionId = useId();
-  const own = useCreateStore<ReadonlySet<string>>(new Set<string>());
-  const store = held ?? own;
-  const chosen = useSelector(store);
-  const setChosen = (
-    next: ReadonlySet<string> | ((was: ReadonlySet<string>) => ReadonlySet<string>),
-  ) => store.setState(typeof next === "function" ? next : () => next);
-  const selected: ReadonlySet<string> = new Set([...chosen].filter((id) => drawn.has(id)));
-  const stale = selected.size !== chosen.size;
-  // Note that the tasks no longer drawn are let go after the draw rather than during it, because a store's write redraws its readers.
-  useEffect(() => {
-    if (stale) store.setState((was) => new Set([...was].filter((id) => drawn.has(id))));
-  });
-  const onClear = () => setChosen(new Set());
+  const { regionId, selected, setChosen, onClear } = useChosen(drawn, held);
   // The tasks Permanently delete was asked of, held as it asks, so a selection changed meanwhile deletes none it never named.
   const [doomed, setDoomed] = useState<readonly string[]>([]);
   // Note that a refusal said once the tab went away is said in a toast, since the question went with it.
@@ -283,20 +330,14 @@ export function useTasksSelection(
       deletion.ask();
     },
   });
-  const actsNow = useSteadyDoor(() => acts);
-  // Note that a row is offered the selection's acts only among several chosen, as one chosen alone is the row's own menu already.
-  const count = selected.size;
-  const several: ChosenTasks | undefined = useMemo(
-    () => (count > 1 ? { count, acts: actsNow } : undefined),
-    [count, actsNow],
-  );
+  const chosenOf = useChosenOf(selected, TERM.TASK, acts);
   return {
     regionId,
     selected,
     onChange: setChosen,
     onClear,
     acts,
-    chosenOf: (taskId) => (several !== undefined && selected.has(taskId) ? several : undefined),
+    chosenOf,
     dialog: (
       <>
         <ConfirmDialog
@@ -306,23 +347,24 @@ export function useTasksSelection(
           restoreTo={nextRowOrHead}
         />
         {sections.dialog}
+        {standing.dialog}
       </>
     ),
   };
 }
 
-/** The menu a row chosen among several opens: the bar's acts on every task chosen, under how many. */
-export function chosenRowMenu(thing: string, chosen: ChosenTasks, shown: boolean) {
+/** The menu a row chosen among several opens: the selection's acts on every row chosen, under how many. */
+export function chosenRowMenu(thing: string, chosen: ChosenRows, shown: boolean) {
   return {
     thing,
     groups: selectionMenu(chosen.acts()),
-    heading: countWords(chosen.count, TERM.TASK),
+    heading: countWords(chosen.count, chosen.noun),
     replayUnmasked: true,
     shown,
   };
 }
 
 /** The selection a sidebar task row stands in, where it is one of several chosen (`TasksSelection.chosenOf`); none outside a choosing sidebar. */
-export const ChosenTasksContext = createContext<(taskId: string) => ChosenTasks | undefined>(
+export const ChosenTasksContext = createContext<(taskId: string) => ChosenRows | undefined>(
   () => undefined,
 );

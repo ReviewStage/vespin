@@ -35,10 +35,10 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 
 /**
- * automation-agent-run.tsx -- what an agent's page says of the automation run that started it: the path to its automation, the run's bar under the page's, and the arrows through the automation's other runs.
+ * automation-agent-run.tsx -- what a run's task says of the automation run that started its agent: the path to its automation, the run's bar under the task's, and the arrows through the automation's other runs.
  *
- * An agent an automation's run started stands on a page of its own with no
- * task to place it, so its bar leads with where it came from, Automations
+ * An agent an automation's run started stands on a task the run made, so
+ * that task's bar leads with where it came from, Automations
  * and then its automation, each a press back to that page (the
  * automation's editor), each wearing its glyph, the automation the glyph of
  * what fires it as its row in the Automations list does, so the two are
@@ -51,7 +51,7 @@ import { useAutomationRuns } from "./use-automation-runs.js";
  * between them, counted from the oldest. Only runs that started an agent are
  * stepped through, each agent once, at its newest run. The runs are the
  * automation's own, followed live as its runs panel follows them, so a
- * newer run lands while the page stands; an agent whose run is not among
+ * newer run lands while the task stands; an agent whose run is not among
  * them (an automation deleted, or a run older than the runs read) keeps its
  * path and draws no run's bar and no arrows.
  */
@@ -114,15 +114,15 @@ export function automationTrail(
 /**
  * Opens the agent of an automation's run where it works: on its task, its
  * tab chosen, as any agent on a task opens, so the run's other agents stand
- * beside it as tabs; on its own page where it has no task, or where the
- * window does not list it.
+ * beside it as tabs; through its own address where the window does not list
+ * it yet, which reads it and opens it on its task or says it is not found.
  */
 export function openRunAgent(
   tasks: Pick<TasksControl, "liveAgents" | "onShowAgent" | "agentView">,
   agentId: string,
 ): void {
-  const planId = tasks.liveAgents?.find((each) => each.id === agentId)?.planId ?? null;
-  if (planId === null) tasks.agentView.onOpen(agentId);
+  const planId = tasks.liveAgents?.find((each) => each.id === agentId)?.planId;
+  if (planId === undefined) tasks.agentView.onOpen(agentId);
   else tasks.onShowAgent(planId, agentId);
 }
 

@@ -4,19 +4,18 @@ import { NodeChildProcessSpawner, NodeFileSystem, NodePath } from "@effect/platf
 import { CLI_INSTALL_MODE } from "@repo/features/cli-release";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { CLI_INSTALL_OUTCOME, type CliInstallAnswer } from "@repo/host/contract";
-import { Duration, Effect, Layer, Option, Result, Schema } from "effect";
+import { Duration, Effect, Layer, Option, Result, Schema, Stream } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import { printed } from "./this-mac-host";
+import { ChildProcess, type ChildProcessSpawner } from "effect/process";
 
 /**
- * cli-install.ts -- the `vespin` command installed into this Mac's account, as Settings' MCP page's Install command-line tool asks: the service's install script run in its `cli` mode, the way This Mac's host runs it for the host.
+ * cli-install.ts -- the `vespin` command installed into this Mac's account, as Settings' MCP & CLI page's Install asks: the service's install script run in its `cli` mode.
  *
  * The script is the service's own, at the origin the app signs in to, never
- * one a window names, and runs with `/bin/sh` through This Mac's host's own
- * runner (`./this-mac-host.ts`), so both installs run their script the same
- * way. It links the command at `~/.local/bin/vespin` (`apps/web/install/install.sh`).
+ * one a window names, and runs with `/bin/sh`, its input on stdin. It links
+ * the command at `~/.local/bin/vespin` (`apps/web/install/install.sh`).
  * The version answered is what the installed command then says it is. Whether
  * a shell finds it is read off the login shell's own PATH, read interactively
  * so the profile that adds `~/.local/bin`, `~/.zshrc` among them, is read,
@@ -44,6 +43,40 @@ const CROSS = /^✗\s*/u;
 const decodeVersion = Schema.decodeUnknownOption(
   Schema.fromJsonString(Schema.Struct({ version: Schema.String })),
 );
+
+/** The command given run once, its input on stdin where it is given some: what it printed where it exited 0, or the words it failed with. Note that the Resources popover reads `ps` through it too (`./mac-resources.ts`). */
+export const printed = (
+  command: string,
+  args: readonly string[],
+  within: Duration.Duration,
+  input?: string,
+): Effect.Effect<Result.Result<string, string>, never, ChildProcessSpawner.ChildProcessSpawner> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const handle = yield* ChildProcess.make(command, [...args], {
+        stdin: input === undefined ? "ignore" : Stream.make(new TextEncoder().encode(input)),
+      });
+      const [out, said] = yield* Effect.all(
+        [
+          Stream.mkString(Stream.decodeText(handle.stdout)),
+          Stream.mkString(Stream.decodeText(handle.stderr)),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const code = Number(yield* handle.exitCode);
+      return code === 0
+        ? Result.succeed(out)
+        : Result.fail(said.trim() || `${command} ${args.join(" ")} exited ${code}`);
+    }),
+  ).pipe(
+    Effect.timeoutOption(within),
+    Effect.map(
+      Option.getOrElse(() =>
+        Result.fail<string>(`${command} did not answer in ${Duration.format(within)}`),
+      ),
+    ),
+    Effect.catch((failure) => Effect.succeed(Result.fail(`${command}: ${String(failure)}`))),
+  );
 
 const failed = (reason: string): CliInstallAnswer => ({
   outcome: CLI_INSTALL_OUTCOME.FAILED,

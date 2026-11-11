@@ -127,7 +127,7 @@ function agentOf(
   standing: AgentTurnStanding,
   now: number,
 ): NonNullable<AutomationRunSummary["agent"]> {
-  const status = agentStatusOf(standing.turn, { createdAt, now });
+  const status = agentStatusOf(standing.turn, { createdAt, now, boot: standing.boot });
   const failureReason = status === AGENT_STATUS.FAILED ? agentFailureOf(standing.turn) : undefined;
   return {
     id,
@@ -172,10 +172,15 @@ export const runSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
   readerId: string,
   runs: readonly AutomationRunInHistory[],
 ): Effect.fn.Return<readonly AutomationRunSummary[], HostedRefusal, DatabaseServices> {
-  const conversations = runs.flatMap((run) =>
-    run.agentConversationId === null ? [] : [run.agentConversationId],
+  const agents = runs.flatMap(({ agentId, agentConversationId }) =>
+    agentId === null || agentConversationId === null
+      ? []
+      : [{ id: agentId, conversationId: agentConversationId }],
   );
-  const standingOf = yield* standingsOf(conversations);
+  const standingOf = yield* standingsOf(
+    agents.map(({ conversationId }) => conversationId),
+    agents,
+  );
   const now = yield* Clock.currentTimeMillis;
   return runs.map((run) => runSummaryOf(run, standingOf, now, readerId));
 });
@@ -449,7 +454,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
       webhookSecretHash: webhook?.hash ?? null,
       scope,
       ...target,
-      archiveSuccessful: made.archiveSuccessful ?? false,
+      archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
     }),
   );

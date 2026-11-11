@@ -77,11 +77,12 @@ import {
   holdRepositoryLists,
   type RepositoriesRead,
 } from "../testing/app-state.js";
-import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
+import { settleQueries, startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { stubCanvas, webpBytes } from "../testing/photo-canvas.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
+import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { WorkspacePage, type WorkspaceSettingsControl } from "./workspace-page.js";
 
@@ -811,6 +812,8 @@ async function renameTo(page: HTMLElement, typed: string, key: string): Promise<
     field.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
   });
   await settle();
+  // Note that a rename's answer reaches the row on the rename's mutation, a notify tick after it lands.
+  await settleQueries();
 }
 
 test("an owner renames the workspace in place with its ends trimmed, and Escape or the same name sends nothing", async () => {
@@ -828,13 +831,17 @@ test("an owner renames the workspace in place with its ends trimmed, and Escape 
   assert.equal(document.activeElement === button(identity(page), "Rename"), true);
 });
 
-test("an admin's rename the service refuses says so under the row, and a member is offered no rename", async () => {
+test("an admin's rename the service refuses says so under the row and reopens the field over the name asked, and a member is offered no rename", async () => {
   refuseRename = true;
   const admin = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   await renameTo(admin.page, "Acme Labs", "Enter");
 
   assert.deepEqual(renames(), [{ workspaceId: ACME.id, name: "Acme Labs" }]);
   assert.equal(refusalOf(identity(admin.page)), WORKSPACE_NOT_PERMITTED_REFUSAL);
+  assert.equal(
+    admin.page.querySelector<HTMLInputElement>('input[aria-label="Workspace name"]')?.value,
+    "Acme Labs",
+  );
 
   const member = await mount(ACME);
   assert.equal(buttons(member.page, "Rename").length, 0);
@@ -856,7 +863,7 @@ test("the identity row says who shares the workspace and nothing of the account'
 
 test("a personal workspace shows its owner's name with no Rename to its owner and an admin alike, and still offers its photo, and its slug to the owner alone", async () => {
   for (const [role, acts] of [
-    [WORKSPACE_ROLE.OWNER, ["Change slug"]],
+    [WORKSPACE_ROLE.OWNER, ["Change URL"]],
     [WORKSPACE_ROLE.ADMIN, []],
   ] as const) {
     const { page } = await mount({ ...FIRST, role });
@@ -876,9 +883,9 @@ const slugs = () =>
     request.kind === ACT_KIND.WORKSPACE_SLUG_SET ? [request.payload] : [],
   );
 
-test("the owner's Change slug opens on the slug as it stands, says what is wrong with one typed under the field, and Save sends the new one", async () => {
+test("the owner's Change URL opens on the slug as it stands, says what is wrong with one typed under the field, and Save sends the new one", async () => {
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
-  await chooseAction(identity(page), "Change slug");
+  await chooseAction(identity(page), "Change URL");
   const card = document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("no dialog");
   const field = card.querySelector<HTMLInputElement>("input") ?? assert.fail("no slug field");
   const opened = field.value;
@@ -1501,12 +1508,7 @@ test("a removal the account's role does not allow says so in a toast", async () 
   await chooseAction(memberNamed(page, "Sam"), "Remove from workspace");
   await confirm("Remove member");
 
-  assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-      (words) => words.textContent,
-    ),
-    [WORKSPACE_NOT_PERMITTED_REFUSAL],
-  );
+  assert.deepEqual(standingToastWords(), [WORKSPACE_NOT_PERMITTED_REFUSAL]);
 });
 
 test("a member leaves after confirming, which names what stays and what stops, and lands the window; an owner is offered no Leave", async () => {
@@ -1563,12 +1565,7 @@ test("the owner deletes a team workspace once its name is typed, told what goes 
     [{ workspaceId: ACME.id }],
   );
   assert.equal(owner.pressed.left, 1);
-  assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-      (words) => words.textContent,
-    ),
-    [`${ACME.name} was deleted`],
-  );
+  assert.deepEqual(standingToastWords(), [`${ACME.name} was deleted`]);
 
   const member = await mount(ACME);
   assert.deepEqual(buttons(leaveGroup(member.page) ?? assert.fail("no leave"), "Delete"), []);
@@ -1631,11 +1628,11 @@ const integrationRows = (page: HTMLElement) =>
 /** The chevrons folding an integration's own rows under its row. */
 const FOLD = { GITHUB: "GitHub accounts", SLACK_BOT: "Slack settings" } as const;
 
-/** The words of every button a row draws, bar the chevron folding its rows. */
+/** The words of every button a row draws, bar the chevron folding its rows and its ⋯, which say none. */
 const rowButtons = (row: HTMLElement) =>
   [...row.querySelectorAll("button")]
-    .filter((each) => !Object.values<string | null>(FOLD).includes(each.getAttribute("aria-label")))
-    .map((each) => each.textContent);
+    .map((each) => each.textContent)
+    .filter((words) => words !== "");
 
 /** Opens the rows an integration's row folds under it, which start closed. */
 function unfold(page: HTMLElement, label: string): void {
@@ -1663,26 +1660,19 @@ const githubSent = () =>
 /** The words GitHub's row says once an account is connected, as every integration's does. */
 const MANAGED_ON_GITHUB = "Connected";
 
-test("an owner or an admin of a connected workspace sees GitHub's row, led by its mark, with Add repository, one Manage on GitHub, and no menu, and every account connected under it", async () => {
+test("an owner or an admin of a connected workspace sees GitHub's row, led by its mark, with Add repository and a ⋯ holding Manage on GitHub, and every account connected under it", async () => {
   for (const role of [WORKSPACE_ROLE.OWNER, WORKSPACE_ROLE.ADMIN]) {
     const { page } = await mount({ ...SEVERAL, role });
     const group = githubGroup(page);
     const row = rowNamed(group, "GitHub");
-    act(() => {
-      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
 
     assert.equal(group.querySelector("h2")?.textContent, "Workspace connections");
     assert.equal(
       row.querySelector(".ui-settings-row-mark")?.innerHTML,
       renderToStaticMarkup(createElement(ProviderMark, { provider: INTEGRATION_PROVIDER.GITHUB })),
     );
-    assert.deepEqual(
-      rowButtons(row),
-      ["Add repository", "Manage on GitHub"],
-      `a ${role}'s controls`,
-    );
-    assert.equal(document.querySelector('[role="menu"]'), null, "GitHub's row has no menu");
+    assert.deepEqual(rowButtons(row), ["Add repository"], `a ${role}'s controls`);
+    assert.deepEqual(rowActions(row), ["Manage on GitHub"], `a ${role}'s ⋯`);
     assert.deepEqual(integrationRows(page), [["GitHub", "Connected"]], "the accounts start folded");
     unfold(page, FOLD.GITHUB);
     assert.deepEqual(integrationRows(page), [
@@ -1707,7 +1697,7 @@ test("an owner or an admin of a connected workspace sees GitHub's row, led by it
   }
 });
 
-/** What each line folded open under an account's row says. */
+/** What each repository's line folded open under an account's row says: its whole name, then its Token mark where it wears one. */
 const foldLines = (row: HTMLElement) =>
   [...row.querySelectorAll("li")].map((line) => line.textContent);
 
@@ -1716,7 +1706,7 @@ const foldOn = (row: HTMLElement) =>
   row.querySelector<HTMLButtonElement>('button[aria-label$="repositories"]') ??
   assert.fail("no fold");
 
-test("an active account counts the App's repositories whose owner is its login in any case and folds them under it by name, closed until pressed, and an inactive account draws no row", async () => {
+test("an active account counts the App's repositories whose owner is its login in any case and folds them under it by whole name, closed until pressed, and an inactive account draws no row", async () => {
   githubRepositories = ["acme-org/relay", "ACME-ORG/site", "acme-labs/old", "other/thing"];
   tokenReach = ["acme-org/forked"];
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
@@ -1728,10 +1718,10 @@ test("an active account counts the App's repositories whose owner is its login i
   assert.equal(foldOn(org).getAttribute("aria-label"), "acme-org's repositories");
   assert.deepEqual(foldLines(org), [], "a few repositories start folded too");
   act(() => foldOn(org).click());
-  assert.deepEqual(foldLines(org), ["relay", "site"]);
+  assert.deepEqual(foldLines(org), ["acme-org/relay", "ACME-ORG/site"]);
 });
 
-test("an account given every repository says All N and opens on six lines before Show all, and one given a selection, named and found by the login GitHub holds now, or one the service says nothing of, says the count alone", async () => {
+test("an account given every repository says All N and folds every one open, and one given a selection, named and found by the login GitHub holds now, or one the service says nothing of, says the count alone", async () => {
   const shown = Array.from({ length: 8 }, (_, at) => `acme-org/r${at + 1}`);
   githubRepositories = [...shown, "acme-labs-renamed/one", "acme-tools/a", "acme-tools/b"];
   listedInstallations = [
@@ -1759,15 +1749,7 @@ test("an account given every repository says All N and opens on six lines before
     ["acme-tools", "2 repositories"],
   ]);
   act(() => foldOn(org).click());
-  assert.deepEqual(foldLines(org), [
-    ...shown.slice(0, 6).map((fullName) => fullName.split("/")[1]),
-    "Show all 8",
-  ]);
-  act(() => button(org, "Show all 8").click());
-  assert.deepEqual(
-    foldLines(org),
-    shown.map((fullName) => fullName.split("/")[1]),
-  );
+  assert.deepEqual(foldLines(org), shown);
 });
 
 test("while the repositories are read each account's line says so, and a read that failed says so once with Retry rather than as none, which reads them again", async () => {
@@ -1800,8 +1782,7 @@ test("while the repositories are read each account's line says so, and a read th
 test("Manage on GitHub opens GitHub through the same connect as Connect, and nothing on the page disconnects GitHub", async () => {
   const { page } = await mount(SEVERAL);
 
-  act(() => button(rowNamed(page, "GitHub"), "Manage on GitHub").click());
-  await settle();
+  await chooseAction(rowNamed(page, "GitHub"), "Manage on GitHub");
 
   assert.equal(page.textContent?.includes("Disconnect"), false);
   assert.deepEqual(githubSent(), [
@@ -1818,7 +1799,8 @@ test("a service from before several connections names one GitHub account alone, 
     ["GitHub", "Connected"],
     ["acme-org", "0 repositories"],
   ]);
-  assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), ["Add repository", "Manage on GitHub"]);
+  assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), ["Add repository"]);
+  assert.deepEqual(rowActions(rowNamed(page, "GitHub")), ["Manage on GitHub"]);
 });
 
 test("Escape in a member's menu hands focus back to its ⋯", async () => {
@@ -1841,8 +1823,7 @@ test("Escape in a member's menu hands focus back to its ⋯", async () => {
 test("a GitHub page the browser could not open is said under the row, from Manage on GitHub and Connect alike", async () => {
   refuseGitHubOpen = true;
   const managed = await mount(CONNECTED);
-  act(() => button(rowNamed(managed.page, "GitHub"), "Manage on GitHub").click());
-  await settle();
+  await chooseAction(rowNamed(managed.page, "GitHub"), "Manage on GitHub");
   const unconnected = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   act(() => button(rowNamed(unconnected.page, "GitHub"), "Connect").click());
   await settle();
@@ -1898,7 +1879,7 @@ test("a member reads every account connected, or is told to ask an owner or admi
   }
 });
 
-test("the repositories members added on their tokens stand by owner after the App's accounts, each owner a row like theirs, its ⋯ removing what the reader may after asking, and no ⋯ where they may remove none", async () => {
+test("the repositories members added on their tokens stand by owner after the App's accounts, each owner a row like theirs whose lines wear the Token mark, its ⋯ removing what the reader may after asking, and no ⋯ where they may remove none", async () => {
   tokenRepositories = [
     { fullName: "octo-member/side", addedBy: MEMBER.userId, addedAt: 3, removable: false },
     { fullName: "acme/relay", addedBy: READER_ID, addedAt: 2, removable: true },
@@ -1915,7 +1896,7 @@ test("the repositories members added on their tokens stand by owner after the Ap
     ["octo-member", "1 repository"],
   ]);
   act(() => foldOn(rowNamed(group, "acme")).click());
-  assert.deepEqual(foldLines(rowNamed(group, "acme")), ["relay", "notes"]);
+  assert.deepEqual(foldLines(rowNamed(group, "acme")), ["acme/relayToken", "ACME/notesToken"]);
   assert.deepEqual(rowActions(rowNamed(group, "octo-member")), []);
   assert.deepEqual(rowActions(rowNamed(group, "acme")), ["Remove relay", "Remove notes"]);
 
@@ -1965,7 +1946,10 @@ test("Add repository offers the repositories the reader's own token may push to 
   unfold(page, FOLD.GITHUB);
   act(() => foldOn(rowNamed(githubGroup(page), "octo-member")).click());
   await vi.waitFor(() =>
-    assert.deepEqual(foldLines(rowNamed(githubGroup(page), "octo-member")), ["side", "notes"]),
+    assert.deepEqual(foldLines(rowNamed(githubGroup(page), "octo-member")), [
+      "octo-member/sideToken",
+      "octo-member/notesToken",
+    ]),
   );
 });
 
@@ -1985,15 +1969,10 @@ test("Add repository offers the token's repositories from a service older than a
 
 test("with no token saved, GitHub's row offers no Add repository, to an owner, an admin, or a member", async () => {
   tokenSaved = false;
-  const expected = {
-    [WORKSPACE_ROLE.OWNER]: ["Manage on GitHub"],
-    [WORKSPACE_ROLE.ADMIN]: ["Manage on GitHub"],
-    [WORKSPACE_ROLE.MEMBER]: [],
-  };
   for (const role of Object.values(WORKSPACE_ROLE)) {
     const { page } = await mount({ ...SEVERAL, role });
 
-    assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), expected[role], `a ${role}'s controls`);
+    assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), [], `a ${role}'s controls`);
   }
 });
 
@@ -2576,6 +2555,7 @@ test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, 
   // Note that each row stands, and moves, once the workspace's integrations reach their query.
   const row = await vi.waitFor(() => rowNamed(githubGroup(admin.page), "Sentry"));
   const words = rowWords(row);
+  const acts = rowActions(row);
 
   await chooseAction(row, "Disconnect");
   await confirm("Disconnect Sentry");
@@ -2594,6 +2574,7 @@ test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, 
   const memberRow = await vi.waitFor(() => rowNamed(githubGroup(member.page), "Sentry"));
 
   assert.deepEqual(words, ["Sentry", "Connected"]);
+  assert.deepEqual(acts, ["Disconnect"]);
   assert.deepEqual(sentrySent(), [
     [
       ACT_KIND.WORKSPACE_SENTRY_DISCONNECT,
@@ -2618,6 +2599,7 @@ test("an admin connects the Slack bot, which then says Connected, and disconnect
   await settle();
   await vi.waitFor(() => assert.deepEqual(rowWords(slackRow()), ["Slack", "Connected"]));
   const connected = rowWords(slackRow());
+  const acts = rowActions(slackRow());
   await chooseAction(slackRow(), "Disconnect");
   await confirm("Disconnect Slack bot");
   await vi.waitFor(() => assert.deepEqual(rowWords(slackRow()), before));
@@ -2631,6 +2613,7 @@ test("an admin connects the Slack bot, which then says Connected, and disconnect
 
   assert.deepEqual(before, ["Slack", "Not connected."]);
   assert.deepEqual(connected, ["Slack", "Connected"]);
+  assert.deepEqual(acts, ["Disconnect"]);
   assert.deepEqual(after, before);
   assert.deepEqual(rowWords(memberRow), ["Slack", "Connected"]);
   assert.deepEqual(rowButtons(memberRow), []);

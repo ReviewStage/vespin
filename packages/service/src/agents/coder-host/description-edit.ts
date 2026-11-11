@@ -17,6 +17,8 @@ import {
   descriptionNoteSectionSchema,
   descriptionNotesSchema,
   NOTE_KIND,
+  NOTE_MISS,
+  type NoteMiss,
   readNotes,
 } from "@repo/features/description-notes";
 import { PICTURE_BOUNDS, type Picture } from "@repo/features/picture-wire";
@@ -53,7 +55,7 @@ import { type InboxSandboxDoor, readSandboxMedia } from "./inbox-image.js";
  * description's one write (`description-notes.ts`), which journals the save under the
  * agent's id, so the developer and the other agents read them and see which
  * agent wrote what. Every call names the task whose description it edits, its own
- * or any other of its workspace, so an agent on no task edits one too; the store writes only a task the
+ * or any other of its workspace; the store writes only a task the
  * member whose turn it is reaches (`agent-doors.ts`). A call's notes
  * may land anywhere in the description, its headings among it, and land together or
  * not at all: one naming what the description does not hold exactly once answers the
@@ -172,8 +174,6 @@ export const DESCRIPTION_EDIT_REFUSAL = {
   TOO_MANY_VIDEOS: `Not saved: the description holds ${DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION} videos, as many as a description may. Leave the videos out, or show them with show_image instead.`,
   TASK_GONE:
     "Not saved: this task no longer exists, so no picture can be added to its description.",
-  CONFLICT:
-    "Not saved: none of this call's notes was taken, because one names what the description does not hold exactly once. The description as it stands is in current; retry from it.",
 } as const;
 
 /** The most of a missed note's find its answer repeats; the description as it stands follows it whole. */
@@ -242,6 +242,27 @@ function refused(
   reason: string,
 ): Extract<DescriptionEditResult, { status: typeof ACTION_RESULT_STATUS.REJECTED }> {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
+}
+
+/** What the note in missed met, in the words the model reads, to say what to name instead. */
+function missWords(why: NoteMiss): string {
+  switch (why.kind) {
+    case NOTE_MISS.NOWHERE:
+      return "names text that stands nowhere in the description; it may have changed since you read it, so copy the words from current";
+    case NOTE_MISS.REPEATED:
+      return `names text that stands ${why.times} times in the description; name a longer phrase that stands once`;
+    case NOTE_MISS.HEADING_REPEATED:
+      return `names a heading that stands over ${why.times} sections, so a point added there could land in the wrong one; add under another heading, or first rename one of them with a replace naming that heading and the words under it`;
+    case NOTE_MISS.DROPS_MENTION:
+      return "would drop or break a mention, a link whose words start with @; keep each mention it touches whole in its text, or strike the mention's whole line with an empty text";
+    case NOTE_MISS.DROPS_PICTURE:
+      return "would drop or break a picture; keep each picture it touches whole in its text, or strike the picture's whole line with an empty text";
+  }
+}
+
+/** Why a call's notes were not taken, naming what the note in missed met. */
+function conflictReason(why: NoteMiss): string {
+  return `Not saved: none of this call's notes was taken, because the note in missed ${missWords(why)}. The description as it stands is in current; retry from it.`;
 }
 
 /** A note that missed, in the words the model reads: its kind and where it was aimed, a long find cut. */
@@ -384,7 +405,7 @@ function savedEdit(
     const save = yield* saveNotes(binding, all, writer);
     if (save.status === DESCRIPTION_SAVE_STATUS.CONFLICT) {
       const refusal = {
-        ...refused(DESCRIPTION_EDIT_REFUSAL.CONFLICT),
+        ...refused(conflictReason(save.why)),
         missed: missedNote(save.missed),
         current: save.current,
       };

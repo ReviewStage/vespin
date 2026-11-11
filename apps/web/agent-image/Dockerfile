@@ -16,9 +16,9 @@
 FROM vcr.vercel.com/vercel/sandbox/node:24
 
 ARG PLAYWRIGHT_VERSION=1.64.1
-ARG CLAUDE_AGENT_SDK_VERSION=0.3.304
-ARG CLAUDE_CODE_VERSION=2.1.304
-ARG CODEX_VERSION=0.163.0
+ARG CLAUDE_AGENT_SDK_VERSION=0.3.319
+ARG CLAUDE_CODE_VERSION=2.1.319
+ARG CODEX_VERSION=0.167.0
 ARG GH_STACK_VERSION=v0.2.1
 
 USER root
@@ -26,11 +26,13 @@ ENV HOME=/root
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Python and pip; tmux, which holds each Terminal tab's shell so it outlives any connection to it;
-# GitHub's CLI; and the everyday tools the agents' earlier image carried.
+# GitHub's CLI; the everyday tools the agents' earlier image carried; and an ffmpeg that writes
+# H.264, which Playwright's own does not, so the service keeps an MP4 of each recording an agent
+# makes for a phone that plays no WebM (`packages/service/src/agents/machine/phone-video.ts`).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       python3 python3-pip python-is-python3 tmux gh \
-      curl jq ripgrep unzip zstd procps bind9-dnsutils \
+      curl jq ripgrep unzip zstd procps bind9-dnsutils ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 COPY tmux.conf /etc/tmux.conf
 

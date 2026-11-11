@@ -35,7 +35,11 @@ name, its description (a Markdown document written by members and agents) with i
 full revision history, comments on the description, inbox items and their answers,
 pages that agents make, pictures and short videos added to any of these, and,
 if the Memory experiment is on, short facts agents save about how your team
-works. Every member of the workspace can see all of this.
+works. Every member of the workspace can see all of this. Agents record their
+videos as WebM, which iPhones cannot play, so for each video an agent records
+in a cloud sandbox, we also keep an MP4 copy, made in that agent's sandbox.
+The copy is shown to the same people as its video, is deleted with it, and is
+the version the iPhone app plays.
 
 ### Agent conversations
 
@@ -43,8 +47,23 @@ For each turn an agent runs, we store your message, any files you attach, the
 agent's reply and reasoning summaries, each tool call with its input and
 output, and the model, token counts, and timing. Tool output can include files
 from your repository, command output, web pages, screenshots of the agent's
-browser, and answers from your integrations. Transcripts and descriptions are stored
+browser, and answers from your integrations. We also store the agent harness's
+own record of its session, Claude Code's transcript or Codex's thread, its
+thinking text included, so the agent can resume it and an agent continued or
+forked from it goes on from it. Transcripts and descriptions are stored
 as written, not end-to-end encrypted, and our operators can read them.
+
+### Link previews
+
+When you rest the pointer on a plain web link in a conversation, a thread, or
+a description, Vespin shows a card of the page it opens: its title,
+description, site name, icon, and picture. To draw it, the Service fetches
+that page, and the icon and picture it names, from our servers over HTTPS
+only, so the site
+sees a request from Vespin and never from your Mac or browser, with no cookie
+or credential of yours. The Service refuses addresses inside a network and
+keeps what a page answered for a few minutes, keyed by the address alone and
+under no one's name; it does not record which links you hovered.
 
 ### Repository and GitHub data
 
@@ -64,12 +83,14 @@ state, and checks, and any chapters you generate for it.
 ### Credentials you save
 
 If you save an Anthropic or OpenAI API key, a GitHub personal access token, or
-sign in with your ChatGPT plan, we store it encrypted with AES-256-GCM under a
-per-credential key that is itself encrypted with a server-only secret held
-outside the database. We keep a short hint (such as `sk-ant-…abcd`) and
-whether the provider accepts it. We never send a saved credential back to your
-device, log it, or include it in analytics, error reports, or screen
-recordings.
+your Claude plan's setup token, or sign in with your ChatGPT plan, we store it
+encrypted with AES-256-GCM under a per-credential key that is itself encrypted
+with a server-only secret held outside the database. We keep a short hint
+(such as `sk-ant-…abcd`), the email of the ChatGPT account a plan signed in
+as, the name you give a plan, and whether the provider accepts it. We never
+log a saved credential or include it in analytics, error reports, or screen
+recordings. We never send one to your devices, except to run an agent on your
+own machine with Bring your own machine (see Agents on your own machines below).
 
 A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
@@ -103,24 +124,33 @@ token, key, or file contents, that goes too.
 
 ### Agents on your own machines
 
-If you turn on Bring your own host, agents can run directly on This Mac or on
+If you turn on Bring your own machine, agents can run directly on This Mac or on
 another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
-stored like any other. To tell your machines apart, each sends us a keyed hash
-of its hardware or machine id, never the id itself, and a Mac sends its model
-name.
+stored like any other, and, on a machine running host 0.11.0 or later, so is
+their harness's own session, its thinking text included, as a cloud agent's
+is. A teammate who can see such an agent may continue or fork it, unless it
+works on your own GitHub token: the new agent is handed that session where we
+keep it, or a replay of its transcript where we don't, and the branch the
+agent pushed. Nothing is read from your machine, and a continue only stops the
+agent there. To tell your machines apart, each sends us a keyed hash of its
+hardware or machine id, never the id itself, and a Mac sends its model name.
 
-For a repository the Vespin GitHub App reaches, an agent on your machine gets
-a GitHub token from us that lasts an hour and works only for that repository.
-For a repository reached only on your own GitHub token, we never send that
-token to your Mac. Instead, the agent uses the GitHub sign-in already set up on
-that Mac for its account: your `gh` login, your Git credential helper and
-settings, and your SSH keys and SSH agent. **Such an agent acts as whoever is
-signed in on that Mac, with every repository and permission that sign-in has,
-not just the task's repository.** Such an agent runs only on a Mac, never on
-another machine you add. Before it starts, it checks that the
-sign-in reaches the repository. If it doesn't, the agent doesn't start, and its
-transcript says to sign in with `gh auth login` or set up SSH.
+When such an agent starts, it runs on the Claude Code or Codex login already
+set up on that machine, never on a credential you saved in Vespin: we send that
+machine none of your Anthropic or OpenAI credentials, and its work counts
+against that login's plan or key. If the machine has no such login, the agent's
+turn fails and says to sign in on that machine. The agent and every command it
+runs have full access to that machine's account, that login included.
+
+An agent on your machine also uses the GitHub sign-in already set up on that
+machine for its account: your `gh` login, your Git credential helper and
+settings, and your SSH keys and SSH agent. We never send that machine a GitHub
+token. **Such an agent acts as whoever is signed in on that machine, with every
+repository and permission that sign-in has, not just the task's repository.**
+Before it starts, it checks that the sign-in reaches the repository. If it
+doesn't, the agent doesn't start, and its transcript says to sign in with
+`gh auth login` or set up SSH.
 
 ### Usage data and screen recordings
 
@@ -131,13 +161,20 @@ prompts, or error text. The Service counts work done through it (such as
 tasks created and agents started) the same way. Counts are grouped by
 workspace, with each workspace's name and creation date.
 
+The Vespin iOS app sends the same kind of counts while you are signed in:
+when it opens, each day you use it, sign-ins and sign-outs, and the kind of
+screen you open (the Inbox, a thread, a task, an agent, a page, a pull
+request, or Settings) and whether the window showed one column or two, never
+which thread, task, or agent it was. They go through the Service, as the Mac
+app's do, and the app holds no PostHog key of its own.
+
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your
 screen or other apps. Text you type and other content that may be sensitive is
 masked before a recording leaves your device. Recordings are linked to your
 account. While a maintainer is signed in as your account with your support
 access (section 4), their use of the web app is counted and recorded the same
-way, under your account.
+way, under your account. The iOS app records nothing.
 
 ### Error and performance data
 
@@ -163,6 +200,15 @@ it was started, and durations, never your messages, the agent's work, or its
 environment; it sends no error reports. An agent running on your own machine
 sends Sentry nothing.
 
+The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
+the next time you open the app), and reports of a screen that could not be
+drawn. It uses Sentry's default data collection, so reports may include error
+messages, stack traces, the addresses of the app's own requests, device and
+iOS details, the app's version and build, and your IP address. A report
+naming a sign-in token in an address is dropped, and reports name your
+account by its id only. The app sends no performance traces, screenshots, or
+recordings of the screen.
+
 ### Feedback
 
 If you send feedback, we receive your words, any screenshots you attach, and,
@@ -170,7 +216,7 @@ unless you untick it, your name and email.
 
 ### Notifications
 
-If you turn on Show a notification in Settings › Account › Sounds, the Mac
+If you turn on Show a notification in Settings › Preferences › Notifications, the Mac
 app, or the web app where your browser allows it, asks your system to show a
 notification while Vespin is in the background when an agent you started
 finishes, or when an Inbox item asks you something, including one on a task
@@ -181,6 +227,16 @@ on) shows it and may keep it in its notification history under its own
 settings, outside Vespin. Showing one sends nothing to us or anyone else. It is off until you
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
+
+If you add your own sounds in Settings › Preferences › Notifications, to play when an
+agent finishes or something needs you, we keep **each sound's audio and the
+name you give it** with your account: its bytes, its audio type, a
+fingerprint of them (SHA-256) that tells your other signed-in apps when it
+changed, so they fetch it again, and which sound each of yours plays. We
+never keep the file's own name, which the app only offers as the name to
+start from, and a sound is sent only to apps signed in to your account.
+You can rename or remove each one in the same place, and all of them are
+deleted with your account.
 
 If you sign in to the Vespin iOS app and allow notifications, the app
 registers your iPhone's Apple push token with the Service, with which of
@@ -193,7 +249,28 @@ its own policies, and your phone keeps it in its notification history under
 its own settings, outside Vespin. We keep the token while the phone stays
 registered: the app unregisters it when you sign out, we delete it when
 Apple tells us the phone will no longer take pushes on it, and it is deleted
-with your account.
+with your account. Beside the token we keep each phone's "Notify me" choice,
+when a push to it last reached Apple, and, while its pushes fail, since when
+and Apple's reason, which the phone's Settings shows.
+
+If your iPhone allows the app's Live Activities, the app also registers the
+two tokens Apple hands it for the one Live Activity that shows your running
+agents: one that lets the Service start the activity, and one for the
+activity while it stands on the phone. We keep them with your phone's row,
+beside when the Service last pushed the activity and what that push showed,
+and the Service sends Apple a token with each push to the activity: **your
+running agents' titles** and when each began, how many of them run, and how
+many threads wait on you. We forget the activity's token once it ends, or Apple
+says it is gone, and both tokens leave with the phone's row or your account.
+
+So your phone stays quiet while you're at your desk, the Service notes when
+a desktop or web client of yours was last active: while you use one, it
+tells the Service so at most every 30 seconds, with nothing of what you typed
+or clicked, and we keep only the latest time with your account. While that
+time is within the last two minutes, a notification due to a phone set to
+"Away" is held, and we keep which thread or agent it was about until it is
+sent once you step away, or dropped because it no longer waits on you. The
+time and the holds are deleted with your account.
 
 ### Setup questions
 
@@ -318,8 +395,9 @@ repository snapshot made before default-branch drives expires thirty days after
 its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, integration records, and your phones' push tokens) is deleted
-  at once.
+  preferences, your sounds, integration records, your phones' push
+  tokens, when you were last active at a client, and the notifications held
+  for you) is deleted at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
   but for the tasks in workspaces with other members (below), and we ask
   Vercel to delete your agents' sandboxes and the drives holding their
@@ -363,7 +441,8 @@ can also act directly in the app:
 
 - **Usage data:** turn off Settings › Account › "Share usage data". It is set
   per Mac and per browser, is on by default in the Vespin you download, and
-  does not stop the counts the Service makes of work done through it.
+  does not stop the counts the Service makes of work done through it. The
+  iOS app has no such switch yet, and counts while you are signed in.
 - **Commands on your Mac:** set Settings › This Mac › "Let agents run commands
   on this Mac" to Never.
 - **Integrations:** switch one off for a single agent in its message box's MCP

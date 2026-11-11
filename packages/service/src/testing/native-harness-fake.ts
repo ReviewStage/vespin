@@ -7,7 +7,8 @@
  * scripted sessions it writes its calls down with. Each harness acts for
  * the agent's starter, whose account the script is handed, and a script
  * that writes down whom it acts for names it `harnessFor(account)`; none
- * has a runner up to take a change of model or a halt. A script whose ids
+ * has a runner up to take a change of model or a halt, nor an answer to an
+ * ask unless the script writes one down. A script whose ids
  * name a harness (`NATIVE_SESSION_PREFIX`) takes a Stop and a retire too,
  * acting for the caller, as a harness does.
  */
@@ -18,6 +19,8 @@ import { NATIVE_SESSION_PREFIX } from "../agents/coder-host/native-runtime.js";
 import {
   NativeAgentSessions,
   type NativeAgentSessionsService,
+  type NativeSessions,
+  RUNNER_ANSWER,
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   type RunnerCheckout,
@@ -30,6 +33,9 @@ import {
   SESSION_SEND_OUTCOME,
 } from "../agents/sessions/agent-sessions.js";
 
+/** A script's sessions, and where it scripts one, how a member's answer to an ask reaches the runner; not live unless scripted. */
+export type ScriptedSessions = AgentSessions & Partial<Pick<NativeSessions, "answer">>;
+
 /** Who the script writes down a harness's call as made for: the agent's starter. */
 export function harnessFor(account: string): string {
   return `harness for ${account}`;
@@ -37,14 +43,16 @@ export function harnessFor(account: string): string {
 
 /** The native harnesses, every one answered by the script acting for the account each is asked for, as above, an added repository's checkout answered as `checkout` says, not live unless named. */
 export function scriptedHarness(
-  script: (account: string) => AgentSessions,
+  script: (account: string) => ScriptedSessions,
   checkout: RunnerCheckout = RUNNER_CHECKOUT.NOT_LIVE,
 ): NativeAgentSessionsService {
   return {
     sessions: (_runtime, account) =>
       Option.some(
         Effect.succeed({
+          answer: () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE),
           ...script(account),
+          retry: (sessionId, message) => script(account).send(sessionId, message),
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
           checkOut: () => Effect.succeed(checkout),
           halt: () => Effect.succeed(true),
@@ -57,7 +65,7 @@ export function scriptedHarness(
 
 /** `scriptedHarness` as the layer a suite provides. */
 export function scriptedHarnessLayer(
-  script: (account: string) => AgentSessions,
+  script: (account: string) => ScriptedSessions,
 ): Layer.Layer<NativeAgentSessions> {
   return Layer.succeed(NativeAgentSessions, scriptedHarness(script));
 }

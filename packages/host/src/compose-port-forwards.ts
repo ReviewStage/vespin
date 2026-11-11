@@ -10,20 +10,12 @@
  * started or woken in the sandbox on its behalf, and a stopped sandbox reads
  * as not running until it runs; once a sandbox seen running stops,
  * forwarding is turned off, so it waits on no agent whose ports are gone.
- * Each port read is listened on at `127.0.0.1` (the
- * `ListenOnLoopback` seam the desktop's launch hands over `node:net`), on
- * the same port where it is free and on the next free one where it is not;
- * a port no longer read is let go, its connections with it. Turning it on
- * for another agent turns it off for the first.
- *
- * A port's tunnel is one relay socket (`sandbox-tunnel-wire.ts`) opened
- * under the account's credential (`relay-credential.ts`) when the first
- * connection is accepted, every later connection a channel on it. A socket
- * that closes, idle, the sandbox stopped, or the relay function's bound,
- * closes the connections it carried; the listener stays, and the next
- * connection it accepts opens the socket again. That lazy open is the whole
- * of reconnecting: nothing is retried on a schedule. No byte a connection
- * carries is read beyond its channel's frame, kept, logged, or counted.
+ * Each port read is forwarded in a scope of its own
+ * (`@repo/features/port-forward-tunnel`: its loopback listener, over the
+ * `ListenOnLoopback` seam the desktop's launch hands over `node:net`, and
+ * its tunnel); a port no longer read is let go by closing that scope, its
+ * connections with it. Turning it on for another agent turns it off for the
+ * first.
  *
  * The forwarded agent's port shared by public link is read from the service
  * at the first look its sandbox runs, and again at each look while one is
@@ -31,23 +23,16 @@
  * sharing a port or closing its link sets it at once.
  */
 
-import { type HostedAgentPortsClient, portForwardAddress, webSocketOrigin } from "@repo/features";
+import { type HostedAgentPortsClient, webSocketOrigin } from "@repo/features";
 import {
   PORT_FORWARD_STATE,
   type PortForwarding,
   type PortForwardingAnswer,
 } from "@repo/features/port-forward-acts";
-import {
-  FORWARD_PORT,
-  TUNNEL_FRAME,
-  type TunnelFrame,
-  tunnelFrameSchema,
-} from "@repo/features/sandbox-tunnel-wire";
+import { type ForwardedPort, forwardPort } from "@repo/features/port-forward-tunnel";
+import type { ListenOnLoopback, OpenTerminalSocket } from "@repo/features/relay-socket";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
-import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
-import { Deferred, Duration, Effect, Exit, Result, Schedule, Schema, Scope, Stream } from "effect";
-import { Base64 } from "effect/encoding";
+import { Duration, Effect, Exit, Schedule, Scope, Semaphore } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { AccountComposer } from "./compose-account.js";
 import type { Composer } from "./composer.js";
@@ -55,20 +40,11 @@ import type { PORT_FORWARD_ACTS } from "./contract/index.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
-import { openedUnderCredential } from "./relay-credential.js";
-import type {
-  ListenOnLoopback,
-  LoopbackConnection,
-  OpenTerminalSocket,
-  TerminalSocket,
-} from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
 
 export const PORT_FORWARD = {
   /** How often the forwarded agent's listening ports are read while forwarding is on. */
   LOOK_EVERY: Duration.seconds(3),
-  /** How many local ports, from the sandbox's own up, are tried before a port is given up. */
-  LOCAL_PORT_TRIES: 20,
 } as const;
 
 /** The service's side of the forward, as this concern asks it. */
@@ -90,21 +66,28 @@ export interface PortForwardsComposer extends Composer {
   readonly reset: Effect.Effect<void>;
 }
 
-/** One port's open tunnel: its socket, and the connections it carries, by channel. */
-interface Tunnel {
-  readonly socket: TerminalSocket;
-  readonly channels: Map<number, LoopbackConnection>;
-  nextChannel: number;
+/** One port forwarded, and the scope whose close lets it go. */
+interface Forward {
+  readonly forwarded: ForwardedPort;
+  readonly scope: Scope.Closeable;
 }
 
-/** One port forwarded: the local port it is listened on, if any, and its tunnel, open or opening, where it has one. */
-interface Forward {
+/** A port shared by public link, and its link. */
+interface SharedLink {
   readonly port: number;
-  readonly localPort: number | undefined;
-  readonly scope: Scope.Closeable;
-  tunnel: Deferred.Deferred<Tunnel | undefined> | undefined;
-  connected: boolean;
+  readonly url: string;
 }
+
+/** Whether the agent's public link has been read yet. */
+const SHARE_READ = {
+  UNREAD: "unread",
+  READ: "read",
+} as const;
+
+/** The agent's public link: not yet read, or read, with the port shared where one is. */
+type ShareStanding =
+  | { readonly read: typeof SHARE_READ.UNREAD }
+  | { readonly read: typeof SHARE_READ.READ; readonly shared?: SharedLink };
 
 /** The one agent forwarded, everything it began in its scope. */
 interface Forwarding {
@@ -112,26 +95,26 @@ interface Forwarding {
   readonly scope: Scope.Closeable;
   running: boolean;
   readonly forwards: Map<number, Forward>;
-  /** The port shared by public link and its link; none until read, or where none is. */
-  shared: { readonly port: number; readonly url: string } | undefined;
-  sharedRead: boolean;
-  /** How many times a share or its close set `shared`, so a read begun before one does not undo it. */
+  /** What serves each port, as the last read said. */
+  labels: ReadonlyMap<number, string>;
+  /** The port shared by public link and its link, as last read or set. */
+  share: ShareStanding;
+  /** How many times a share or its close set `share`, so a read begun before one does not undo it. */
   shareMoves: number;
-}
-
-const readFrame = readEither(Schema.fromJsonString(tunnelFrameSchema), {
-  excess: EXCESS_KEYS.DROP,
-});
-
-/** A channel frame as the text the relay reads, its bytes base64-encoded. */
-function frameText(frame: TunnelFrame): string {
-  return JSON.stringify(
-    frame.type === TUNNEL_FRAME.DATA ? { ...frame, data: Base64.encode(frame.data) } : frame,
-  );
 }
 
 /** What an agent forwarding is off for answers. */
 const OFF: PortForwardingAnswer = { on: false, running: false, ports: [] };
+
+/** The link as read or set: the port shared, or none. */
+function shareRead(shared: SharedLink | null): ShareStanding {
+  return shared === null ? { read: SHARE_READ.READ } : { read: SHARE_READ.READ, shared };
+}
+
+/** The forwarded agent's shared port and link, where one is known. */
+function sharedLink(current: Forwarding): SharedLink | undefined {
+  return current.share.read === SHARE_READ.READ ? current.share.shared : undefined;
+}
 
 export function composePortForwards(
   dependencies: PortForwardsDependencies,
@@ -144,6 +127,8 @@ export function composePortForwards(
     const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
     let forwarding: Forwarding | undefined;
     let toldText = JSON.stringify(null);
+    // Note that turning forwarding on or off runs one at a time, because each lets the forwarded agent go across a wait and a second move in that wait would leave a scope no one closes.
+    const oneAtATime = (yield* Semaphore.make(1)).withPermits(1);
 
     /** How the forwarded agent's forwarding stands, told to the windows where it moved since it was last told. */
     const tell = Effect.sync(() => {
@@ -160,116 +145,19 @@ export function composePortForwards(
     const withHttp = <A, E>(call: Effect.Effect<A, E, HttpClient.HttpClient>) =>
       Effect.provideService(call, HttpClient.HttpClient, http);
 
-    /** A text frame the relay sent: a channel's bytes written to its connection, or its close ending it. */
-    const heard = (tunnel: Tunnel, text: string) => {
-      const frame = Result.getOrUndefined(readFrame(unparsedWire(text)));
-      const connection = frame === undefined ? undefined : tunnel.channels.get(frame.channel);
-      if (frame === undefined || connection === undefined) return Effect.void;
-      if (frame.type === TUNNEL_FRAME.DATA) return connection.write(frame.data);
-      if (frame.type !== TUNNEL_FRAME.CLOSE) return Effect.void;
-      tunnel.channels.delete(frame.channel);
-      return connection.close;
-    };
-
-    /** One port's socket from its open until it closes, every connection it carried closed with it. */
-    const tunneled = (
-      agentId: string,
-      forward: Forward,
-      opened: Deferred.Deferred<Tunnel | undefined>,
-    ) => {
-      let tunnel: Tunnel | undefined;
-      const ended = Effect.suspend(() => {
-        forward.tunnel = undefined;
-        forward.connected = false;
-        const held = [...(tunnel?.channels.values() ?? [])];
-        tunnel?.channels.clear();
-        return Effect.andThen(
-          Deferred.succeed(opened, undefined),
-          Effect.andThen(
-            Effect.forEach(held, (connection) => connection.close, { discard: true }),
-            tell,
-          ),
-        );
-      });
-      const open = Effect.gen(function* () {
-        if (socketOrigin === undefined) return;
-        const address = portForwardAddress(socketOrigin, { agentId, port: forward.port });
-        const opening = yield* openedUnderCredential(account.credential, openSocket, address);
-        if (!("socket" in opening)) return;
-        const standing: Tunnel = { socket: opening.socket, channels: new Map(), nextChannel: 0 };
-        tunnel = standing;
-        forward.connected = true;
-        yield* tell;
-        yield* Deferred.succeed(opened, standing);
-        yield* Stream.runForEach(opening.socket.arrivals, (arrival) =>
-          "text" in arrival ? heard(standing, arrival.text) : Effect.void,
-        );
-      });
-      return Effect.ensuring(Effect.scoped(open), ended);
-    };
-
-    /** The port's tunnel: the one open or opening, or one opened now; nothing where it would not open. */
-    const tunnelOf = (agentId: string, forward: Forward) =>
-      Effect.suspend(() => {
-        if (forward.tunnel !== undefined) return Deferred.await(forward.tunnel);
-        const opened = Deferred.makeUnsafe<Tunnel | undefined>();
-        forward.tunnel = opened;
-        return Effect.andThen(
-          Effect.forkIn(tunneled(agentId, forward, opened), forward.scope),
-          Deferred.await(opened),
-        );
-      });
-
-    /** One accepted connection carried on a channel of its port's tunnel until either side ends it. */
-    const carry = (agentId: string, forward: Forward, connection: LoopbackConnection) =>
-      Effect.gen(function* () {
-        const tunnel = yield* tunnelOf(agentId, forward);
-        if (tunnel === undefined) return yield* connection.close;
-        const channel = tunnel.nextChannel++;
-        tunnel.channels.set(channel, connection);
-        const send = (frame: TunnelFrame) => tunnel.socket.send({ text: frameText(frame) });
-        yield* send({ type: TUNNEL_FRAME.OPEN, channel });
-        yield* Stream.runForEach(connection.received, (data) =>
-          tunnel.channels.has(channel)
-            ? send({ type: TUNNEL_FRAME.DATA, channel, data })
-            : Effect.void,
-        );
-        // Note that a channel the relay closed first is gone already, so nothing more is said of it.
-        if (tunnel.channels.delete(channel)) yield* send({ type: TUNNEL_FRAME.CLOSE, channel });
-      });
-
-    /** The first local port from the sandbox's own up that listens, and what it accepts; nothing where none of them is free. */
-    const listened = (port: number) =>
-      Effect.gen(function* () {
-        const last = Math.min(port + PORT_FORWARD.LOCAL_PORT_TRIES - 1, FORWARD_PORT.MAX);
-        for (let localPort = port; localPort <= last; localPort++) {
-          const accepted = yield* listen(localPort);
-          if (accepted !== undefined) return { localPort, accepted };
-        }
-        return undefined;
-      });
-
-    /** One port forwarded in a scope of its own under the agent's: its listener, and a fiber for each connection it accepts. */
+    /** One port forwarded in a scope of its own under the agent's: its listener, and its tunnel as connections ask for it. */
     const forwarded = (current: Forwarding, port: number) =>
       Effect.gen(function* () {
         const scope = yield* Scope.fork(current.scope);
-        const bound = yield* Scope.provide(listened(port), scope);
-        const forward: Forward = {
-          port,
-          localPort: bound?.localPort,
+        const forwarded = yield* Scope.provide(
+          forwardPort(
+            { socketOrigin, credential: account.credential, openSocket, listen },
+            { agentId: current.agentId, port },
+            tell,
+          ),
           scope,
-          tunnel: undefined,
-          connected: false,
-        };
-        if (bound !== undefined) {
-          yield* Effect.forkIn(
-            Stream.runForEach(bound.accepted, (connection) =>
-              Effect.forkIn(carry(current.agentId, forward, connection), scope),
-            ),
-            scope,
-          );
-        }
-        return forward;
+        );
+        return { forwarded, scope } satisfies Forward;
       });
 
     /** One read of the agent's ports, the forwards made to follow it: each port read forwarded, and each no longer read let go. */
@@ -283,6 +171,7 @@ export function composePortForwards(
           return;
         }
         current.running = answer.running;
+        current.labels = new Map((answer.labels ?? []).map(({ port, label }) => [port, label]));
         const read = new Set(answer.ports);
         for (const [port, forward] of current.forwards) {
           if (read.has(port)) continue;
@@ -293,13 +182,14 @@ export function composePortForwards(
           if (!current.forwards.has(port))
             current.forwards.set(port, yield* forwarded(current, port));
         }
-        if (answer.running && (!current.sharedRead || current.shared !== undefined)) {
+        if (
+          answer.running &&
+          (current.share.read === SHARE_READ.UNREAD || sharedLink(current) !== undefined)
+        ) {
           const moves = current.shareMoves;
           const read = yield* withHttp(client.shared(current.agentId));
-          if (!("failure" in read) && moves === current.shareMoves) {
-            current.shared = read.shared ?? undefined;
-            current.sharedRead = true;
-          }
+          if (!("failure" in read) && moves === current.shareMoves)
+            current.share = shareRead(read.shared);
         }
         yield* tell;
       });
@@ -307,7 +197,7 @@ export function composePortForwards(
     /** The ending agent's public link closed, a close the service refuses logged rather than holding forwarding on. */
     const unshared = (ending: Forwarding) =>
       Effect.gen(function* () {
-        if (ending.shared === undefined) return;
+        if (sharedLink(ending) === undefined) return;
         const answer = yield* withHttp(client.unshare(ending.agentId));
         if ("failure" in answer)
           yield* Effect.logWarning(
@@ -315,34 +205,45 @@ export function composePortForwards(
           );
       });
 
-    /** Forwarding turned off, and its public link with it, since nothing closes one once forwarding is off. */
-    const turnOff = Effect.suspend(() => {
-      const ending = forwarding;
-      forwarding = undefined;
-      return ending === undefined
-        ? Effect.void
-        : unshared(ending).pipe(
-            Effect.andThen(Scope.close(ending.scope, Exit.void)),
-            Effect.andThen(tell),
-          );
-    });
+    /**
+     * Forwarding turned off, its public link closed with it only where
+     * `closeLink` asks: forwarding turned off keeps the link, which the
+     * plug's menu still lists and can stop, while a sign-out closes it,
+     * since nothing on this Mac could stop it after.
+     */
+    const letGo = (closeLink: boolean) =>
+      Effect.suspend(() => {
+        const ending = forwarding;
+        forwarding = undefined;
+        return ending === undefined
+          ? Effect.void
+          : (closeLink ? unshared(ending) : Effect.void).pipe(
+              Effect.andThen(Scope.close(ending.scope, Exit.void)),
+              Effect.andThen(tell),
+            );
+      });
+    /** Forwarding let go for the agent, unless another agent has taken it since. */
+    const turnOff = (agentId: string) =>
+      oneAtATime(
+        Effect.suspend(() => (forwarding?.agentId === agentId ? letGo(false) : Effect.void)),
+      );
 
-    /** Forwarding let go for the agent it was on, unless another agent has taken it since. */
+    /** Forwarding let go for the forward it was on, unless another has taken it since. */
     const released = (current: Forwarding) =>
-      Effect.suspend(() => (forwarding === current ? turnOff : Effect.void));
+      oneAtATime(Effect.suspend(() => (forwarding === current ? letGo(false) : Effect.void)));
 
     /** Forwarding started for the agent, and whichever agent was forwarded before let go. */
     const turnOn = (agentId: string) =>
       Effect.gen(function* () {
         if (forwarding?.agentId === agentId) return;
-        yield* turnOff;
+        yield* letGo(false);
         const current: Forwarding = {
           agentId,
           scope: yield* Scope.fork(lifetimeScope),
           running: false,
           forwards: new Map(),
-          shared: undefined,
-          sharedRead: false,
+          labels: new Map(),
+          share: { read: SHARE_READ.UNREAD },
           shareMoves: 0,
         };
         forwarding = current;
@@ -351,25 +252,30 @@ export function composePortForwards(
           Effect.repeat(look(current), Schedule.spaced(PORT_FORWARD.LOOK_EVERY)),
           current.scope,
         );
-      });
+      }).pipe(oneAtATime);
 
     /** How the agent's forwarding stands, its ports the lowest first. */
     const standing = (agentId: string): PortForwardingAnswer => {
       if (forwarding?.agentId !== agentId) return OFF;
-      const forwards = [...forwarding.forwards.values()].sort((a, b) => a.port - b.port);
-      const { shared } = forwarding;
+      const forwards = [...forwarding.forwards.values()]
+        .map((forward) => forward.forwarded)
+        .sort((a, b) => a.port - b.port);
+      const { labels } = forwarding;
+      const shared = sharedLink(forwarding);
       return {
         on: true,
         running: forwarding.running,
         ...(shared === undefined ? {} : { shared }),
         ports: forwards.map((forward) => {
+          const label = labels.get(forward.port);
+          const served = label === undefined ? {} : { label };
           if (forward.localPort === undefined) {
-            return { port: forward.port, state: PORT_FORWARD_STATE.UNAVAILABLE };
+            return { port: forward.port, state: PORT_FORWARD_STATE.UNAVAILABLE, ...served };
           }
           const state = forward.connected
             ? PORT_FORWARD_STATE.CONNECTED
             : PORT_FORWARD_STATE.LISTENING;
-          return { port: forward.port, localPort: forward.localPort, state };
+          return { port: forward.port, localPort: forward.localPort, state, ...served };
         }),
       };
     };
@@ -379,7 +285,7 @@ export function composePortForwards(
       PORT_FORWARD_SET: ({ agentId, on }) =>
         Effect.gen(function* () {
           if (!on) {
-            if (forwarding?.agentId === agentId) yield* turnOff;
+            yield* turnOff(agentId);
             return standing(agentId);
           }
           // Note that a signed-out host refuses in the act's own sentence, as the Gateway's refusal of its method was drawn.
@@ -395,19 +301,18 @@ export function composePortForwards(
           if (port === null) {
             const answer = yield* withHttp(client.unshare(agentId));
             if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
-            current.shared = undefined;
+            current.share = shareRead(null);
           } else {
             const answer = yield* withHttp(client.share(agentId, port));
             if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
-            current.shared = { port, url: answer.url };
+            current.share = shareRead({ port, url: answer.url });
           }
           current.shareMoves++;
-          current.sharedRead = true;
           yield* tell;
           return standing(agentId);
         }),
     };
 
-    return { methods, acts, lifetime: Effect.void, reset: turnOff };
+    return { methods, acts, lifetime: Effect.void, reset: oneAtATime(letGo(true)) };
   });
 }

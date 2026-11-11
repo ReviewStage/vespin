@@ -1,8 +1,8 @@
 /**
  * copy-feedback.tsx -- the window's copy acts: the shell's clipboard for a `CopyButton`, and a toast for a copy made from a menu.
  *
- * Every copy goes to the shell's clipboard (`appPlatform().copyText`, or
- * `copyImage` for a picture, drawn as a PNG where it is not one). A copy
+ * Every copy goes to the shell's clipboard (`appPlatform().copyText`,
+ * `copyRich` for a draft's rich text, or `copyImage` for a picture, drawn as a PNG where it is not one). A copy
  * button answers on itself (`CopyButton` in `@repo/ui`), handed the act
  * here; a copy made from a menu has no button left to answer on once the
  * menu closes, so it is answered with the window's toast (`toast.tsx`)
@@ -12,7 +12,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { appPlatform } from "./app-platform.js";
-import { TOAST_HOLD, useToast } from "./toast.js";
+import { useToast } from "./toast.js";
 
 /** What every item that copies an app link is called, wherever it stands, and what its toast says once the clipboard took it. */
 export const LINK_COPY = {
@@ -57,6 +57,14 @@ export function copyThroughShell(words: string): Promise<void> {
   return appPlatform().copyText(words);
 }
 
+/** The copy act a `@repo/ui` draft card is handed: its words on the shell's clipboard as rich text, a refusal rejecting. */
+export function copyRichThroughShell(rich: {
+  readonly html: string;
+  readonly text: string;
+}): Promise<void> {
+  return appPlatform().copyRich(rich);
+}
+
 /** The copy act a `@repo/ui` copy button is handed for a picture: the one at `url` on the shell's clipboard, a refusal rejecting. */
 export function copyImageThroughShell(url: string): Promise<void> {
   return appPlatform().copyImage(pngBase64Of(url));
@@ -90,7 +98,6 @@ function useMenuCopy(): (copying: () => Promise<void>, label: string) => void {
         show({
           words: label,
           tone: STATUS_TONE.COMPLETE,
-          hold: TOAST_HOLD.DONE,
           replayUnmasked: true,
         });
       },
@@ -99,7 +106,6 @@ function useMenuCopy(): (copying: () => Promise<void>, label: string) => void {
         show({
           words: COPY_FAILED_NOTE,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.COPY, cause },
           replayUnmasked: true,
         });

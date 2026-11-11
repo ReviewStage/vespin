@@ -1,5 +1,4 @@
-import { INBOX_STATUS, type InboxStatus } from "@repo/features/inbox-wire";
-import { sql } from "drizzle-orm";
+import type { InboxStatus } from "@repo/features/inbox-wire";
 import {
   type AnyPgColumn,
   boolean,
@@ -10,7 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { literal, timestamptz } from "./_helpers.js";
+import { timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 import { organization, user } from "./auth.js";
 import { inboxMessage } from "./inbox-message.js";
@@ -45,8 +44,10 @@ export const inboxItem = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    /** The agent's task; null for an agent with no task. */
-    taskId: uuid("task_id").references(() => task.id, { onDelete: "cascade" }),
+    /** The agent's task. */
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
     /** The agent's workspace. */
     organizationId: text("organization_id")
       .notNull()
@@ -128,14 +129,8 @@ export const inboxItem = pgTable(
     uniqueIndex("inbox_item_agent_key").on(table.agentId, table.key),
     // A task's inbox is read the latest changed first.
     index("inbox_item_task_updated").on(table.taskId, table.updatedAt),
-    // A workspace's items of agents with no task are read the latest changed first.
+    // A workspace's items are read the latest changed first.
     index("inbox_item_org_updated").on(table.organizationId, table.updatedAt),
-    // The open items of agents with no task, which every account's read of what waits names
-    // beside its tasks' items, are read by workspace the latest changed first. The predicate is
-    // DDL, which takes no bound parameter, so the status is inlined rather than passed.
-    index("inbox_item_org_open_taskless_updated")
-      .on(table.organizationId, table.updatedAt)
-      .where(sql`${table.status} = ${literal(INBOX_STATUS.OPEN)} and ${table.taskId} is null`),
     // What waits across the account is read on every look of a held read, its open items the latest changed first.
     index("inbox_item_user_status_updated").on(table.userId, table.status, table.updatedAt),
   ],

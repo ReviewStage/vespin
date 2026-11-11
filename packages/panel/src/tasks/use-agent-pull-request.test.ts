@@ -66,21 +66,18 @@ test("a tab draws the pull request the task list carries over a held read that f
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 const ELSEWHERE = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
 const LATER = "5d1e2f3a-4b5c-4d6e-8f70-000000000001";
-const TASKLESS = "5d1e2f3a-4b5c-4d6e-8f70-000000000002";
 
-test("a task's agents' pull requests are those the task list carries of its own agents, and an agent on no task holds its own alone", () => {
+test("a task's agents' pull requests are those the task list carries of its own agents", () => {
   const opened = PUBLISHED.pullRequest ?? assert.fail("a pull request");
   const other = { ...opened, number: 7, url: "https://github.com/acme/relay/pull/7" };
   const listed = [
     { agentId: AGENT, taskId: TASK, pullRequest: opened },
     { agentId: LATER, taskId: TASK, pullRequest: other },
     { agentId: ELSEWHERE, taskId: "another-task", pullRequest: other },
-    { agentId: TASKLESS, taskId: null, pullRequest: other },
   ];
-  const held: { task?: ReadonlyMap<string, unknown>; agent?: ReadonlyMap<string, unknown> } = {};
+  const held: { task?: ReadonlyMap<string, unknown> } = {};
   function Holders(): null {
-    held.task = useListedPullRequests(listed, { taskId: TASK });
-    held.agent = useListedPullRequests(listed, { agentId: TASKLESS });
+    held.task = useListedPullRequests(listed, TASK);
     return null;
   }
   root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -92,5 +89,4 @@ test("a task's agents' pull requests are those the task list carries of its own 
       [LATER, other],
     ],
   );
-  assert.deepEqual([...(held.agent ?? new Map())], [[TASKLESS, other]]);
 });

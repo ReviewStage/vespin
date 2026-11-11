@@ -58,7 +58,12 @@ import { PROVIDER_KEY_KIND, PROVIDER_KEY_STATUS } from "@repo/features/provider-
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
-import type { WorkspaceSandboxSetupAnswer } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  REPOSITORY_SCRIPT_KIND,
+  type RepositoryScriptKind,
+  type RunActionPut,
+  type WorkspaceSandboxSetupAnswer,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -149,6 +154,7 @@ const STAGED_INSTALL_SCRIPT = "https://app.test/install.sh";
 /** The page each Settings profile opens on, and the workspace it shows where that is not the sidebar's first. */
 const SETTINGS_LINKS: ReadonlyMap<string, SettingsLink> = new Map<string, SettingsLink>([
   [RUN_PROFILE.SETTINGS_ACCOUNT, { page: SETTINGS_VIEW.ACCOUNT }],
+  [RUN_PROFILE.SETTINGS_PREFERENCES, { page: SETTINGS_VIEW.PREFERENCES }],
   [RUN_PROFILE.SETTINGS_WORKSPACE, { page: SETTINGS_VIEW.WORKSPACE, workspaceId: WORKSPACE.ACME }],
   [RUN_PROFILE.SETTINGS_AGENTS, { page: SETTINGS_VIEW.AGENTS }],
   [RUN_PROFILE.SETTINGS_HOSTS, { page: SETTINGS_VIEW.HOSTS }],
@@ -621,7 +627,7 @@ let acmeSlackBot: WorkspaceSlackBot = {
   ],
 };
 
-/* ----- Settings › Environment ----- */
+/* ----- Settings › Cloud environment's Variables ----- */
 
 /** Acme's environment variables by name, as an add, a replace, and a delete leave them. */
 let acmeVariables: readonly WorkspaceVariable[] = [
@@ -636,9 +642,9 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   return { variables: acmeVariables };
 }
 
-/* ----- Settings › Cloud setup ----- */
+/* ----- Settings › Cloud environment's scripts ----- */
 
-/** Acme's sandbox setup, as a save leaves it: an install script, and setup scripts for two of its repositories. */
+/** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, an archive script for one, and run actions for one. */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
     script: [
@@ -656,10 +662,61 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       updatedAt: NOW - 2 * HOUR,
     },
   ],
+  archives: [
+    {
+      repository: "acme/relay",
+      script: "docker compose down --volumes\n./scripts/drop-preview-database.sh",
+      updatedAt: NOW - HOUR,
+    },
+  ],
+  runActions: [
+    {
+      repository: "acme/relay",
+      actions: [
+        { id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01", label: "Dev server", command: "pnpm dev" },
+        {
+          id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a02",
+          label: "Storybook",
+          command: "cd packages/ui && pnpm storybook",
+        },
+      ],
+      updatedAt: NOW - HOUR,
+    },
+  ],
 };
 
+/** The setup a run actions save leaves, an empty list removing the repository's, an action keeping its id only where it is already the repository's and only once, as the service keeps them. */
+function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) {
+  const others = (acmeSandboxSetup.runActions ?? []).filter(
+    (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
+  );
+  const keepable = new Set(
+    (acmeSandboxSetup.runActions ?? [])
+      .filter((each) => each.repository.toLowerCase() === repository.toLowerCase())
+      .flatMap((each) => each.actions.map((action) => action.id)),
+  );
+  const named = actions.map(({ id, label, command }) => ({
+    id: id !== undefined && keepable.delete(id) ? id : crypto.randomUUID(),
+    label,
+    command,
+  }));
+  const lists =
+    named.length === 0 ? others : [...others, { repository, actions: named, updatedAt: NOW }];
+  acmeSandboxSetup = {
+    ...acmeSandboxSetup,
+    runActions: lists.sort((one, other) =>
+      one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
+    ),
+  };
+  return acmeSandboxSetup;
+}
+
 /** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
-function sandboxSetupAnswer(repository: string | undefined, script: string) {
+function sandboxSetupAnswer(
+  repository: string | undefined,
+  script: string,
+  kind: RepositoryScriptKind = REPOSITORY_SCRIPT_KIND.SETUP,
+) {
   const removes = script.trim() === "";
   if (repository === undefined) {
     acmeSandboxSetup = {
@@ -668,13 +725,14 @@ function sandboxSetupAnswer(repository: string | undefined, script: string) {
     };
     return acmeSandboxSetup;
   }
-  const others = acmeSandboxSetup.setups.filter(
+  const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
+  const others = acmeSandboxSetup[list].filter(
     (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
   );
-  const setups = removes ? others : [...others, { repository, script, updatedAt: NOW }];
+  const scripts = removes ? others : [...others, { repository, script, updatedAt: NOW }];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
-    setups: setups.sort((one, other) =>
+    [list]: scripts.sort((one, other) =>
       one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
     ),
   };
@@ -730,8 +788,10 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
-  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
-    sandboxSetupAnswer(repository, script),
+  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script, kind }) =>
+    sandboxSetupAnswer(repository, script, kind),
+  [ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: ({ repository, actions }) =>
+    runActionsAnswer(repository, actions),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>
     skillContent(id) ?? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND },
   // The command-line tool installed on this Mac, as Settings' MCP page's Install asks, without running the install script: a fixture run reaches no network and installs nothing.
@@ -801,6 +861,8 @@ const STAGED_KEYS: AppProviderKeys = {
           status: PROVIDER_KEY_STATUS.VERIFIED,
           statusAt: NOW - HOUR,
           forAgents: true,
+          id: "subscription-claude",
+          position: 0,
         },
         {
           provider: MODEL_PROVIDER.OPENAI,
@@ -810,6 +872,9 @@ const STAGED_KEYS: AppProviderKeys = {
           status: PROVIDER_KEY_STATUS.INVALID,
           statusAt: NOW - 3 * DAY,
           forAgents: true,
+          id: "subscription-chatgpt",
+          position: 0,
+          email: "dev@example.com",
         },
       ],
     },
@@ -826,6 +891,7 @@ const STAGED_PREFERENCES: AppAccountPreferences = {
       agent: { model: "anthropic/claude-opus-5.5", effort: "high" },
       chaptersModel: CHAPTERS_MODEL.SONNET,
       slackNotifications: true,
+      sounds: { list: [], choices: { finish: undefined, ask: undefined } },
     },
   },
 };

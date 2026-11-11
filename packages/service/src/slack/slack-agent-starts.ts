@@ -33,8 +33,7 @@
  * agent continues it as Continue does, handed its work, a summary of its
  * transcript, and the message, and the thread moves to it, with one line in
  * the thread linking it, the new agent on the ended one's own task, as
- * Continue puts it, and on no task only for an agent started from Slack
- * before its starts made tasks; any other
+ * Continue puts it; any other
  * makes a task and starts an agent as the writer on it, on the one path a
  * Start takes (`coder-host/start.ts`), both keyed by Slack's event id. The
  * task starts untitled, for its agent's title to name it, with a blank
@@ -121,6 +120,7 @@ import {
 import { createTaskOnce, readTask } from "@repo/database/models/task-store";
 import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
+import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { shownPicturesOf } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS, type AgentAttachment } from "@repo/features/agent-wire";
@@ -130,7 +130,7 @@ import {
 } from "@repo/features/conversation-picture-wire";
 import { sniffImageType } from "@repo/features/image-signature";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
@@ -150,6 +150,7 @@ import {
   TOOL_PART_STATE,
 } from "@repo/wire/ui-messages";
 import { Clock, Effect, Option, Result, Schema } from "effect";
+import { AUTOMATIC_ARCHIVE_REASON } from "../agents/agent-change.js";
 import { calledId } from "../agents/called-id.js";
 import {
   productionSummaryModel,
@@ -164,6 +165,7 @@ import { fencedWithin } from "../agents/fenced-text.js";
 import { workspaceStepOf } from "../agents/written-mentions.js";
 import { runResultContent } from "../automations/automation-slack-delivery.js";
 import { archiveFinishedAgents } from "../automations/run-archive.js";
+import { TURN_FAILURE } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { workspaceRepository } from "../github/workspace-repository.js";
 import { afterResponse } from "../http/after-response.js";
@@ -473,6 +475,8 @@ function refusalReply(what: string, failure: unknown): SlackMessageContent {
     typeof failure === "object" && failure !== null && "error" in failure
       ? String(failure.error)
       : "model_refused";
+  // A plan's reached limit is said in its own words, not as a refusal's code.
+  if (slug === HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED) return plainReply(LIMIT_REACHED_WORDS);
   return plainReply(`${PRODUCT_NAME} couldn't ${what} (${slug}).`);
 }
 
@@ -597,7 +601,7 @@ function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<stri
 /** The agent's link in the workspace, as the member's other links name it. */
 const agentLink = (userId: string, organizationId: string, agentId: string) =>
   Effect.map(workspaceStepOf(userId, organizationId), (step) =>
-    linkOf({ kind: LINK_PLACE.AGENT, agentId }, step),
+    linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, step),
   );
 
 /** The one line the bot says once an agent starts: that it is on it, where, and the agent's link, so the thread opens the transcript before the agent's first reply. */
@@ -967,6 +971,8 @@ export function actOnSlackEvent(
 
 /** What the post says of the turn: its final message where it finished, that it failed and why, or that it was stopped. */
 function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMessageContent {
+  // A turn its plan's usage limit stopped is said so, not that the agent failed.
+  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return plainReply(LIMIT_REACHED_WORDS);
   if (turn.status === TURN_STATUS.FAILED) {
     return plainReply(
       turn.failure === null ? "The agent failed." : `The agent failed: ${turn.failure}.`,
@@ -1023,6 +1029,7 @@ const archivedWhenFinished = (agent: Agent) =>
         },
       ],
       now,
+      AUTOMATIC_ARCHIVE_REASON.SLACK_FINISHED,
     );
   }).pipe(
     Effect.catchCause((cause) =>

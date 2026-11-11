@@ -1,0 +1,168 @@
+{
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The agent's id, as list_agents answered it."
+    },
+    "change": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "change": {
+              "type": "string",
+              "enum": [
+                "resume"
+              ]
+            }
+          },
+          "required": [
+            "change"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "change": {
+              "type": "string",
+              "enum": [
+                "hold"
+              ]
+            },
+            "messageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "The queued message's id, as read_agent's queue lists it."
+            },
+            "held": {
+              "type": "boolean",
+              "description": "true to hold it, as the member's Edit does, so the queue sends what stands ahead of it and nothing from it on; false to let it go again."
+            }
+          },
+          "required": [
+            "change",
+            "messageId",
+            "held"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "change": {
+              "type": "string",
+              "enum": [
+                "edit"
+              ]
+            },
+            "messageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "The queued message's id, as read_agent's queue lists it."
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16000,
+              "description": "Its new words, as the member's own: they replace its words, and it goes without the files it carried."
+            }
+          },
+          "required": [
+            "change",
+            "messageId",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "change": {
+              "type": "string",
+              "enum": [
+                "delete"
+              ]
+            },
+            "messageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "The queued message's id, as read_agent's queue lists it."
+            }
+          },
+          "required": [
+            "change",
+            "messageId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "change": {
+              "type": "string",
+              "enum": [
+                "reorder"
+              ]
+            },
+            "order": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 36
+              },
+              "maxItems": 50,
+              "description": "Every message the queue holds, by its id, each once, in the order they are to go."
+            }
+          },
+          "required": [
+            "change",
+            "order"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "change": {
+              "type": "string",
+              "enum": [
+                "steer"
+              ]
+            },
+            "messageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "The queued message's id, as read_agent's queue lists it."
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16000,
+              "description": "Its new words, as the member's own: they replace its words, and it goes without the files it carried."
+            }
+          },
+          "required": [
+            "change",
+            "messageId"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "The change: resume the paused queue; hold a message or let it go; edit its words; delete it; reorder the queue; or steer a message into the turn under way now, with new words or as it stands."
+    }
+  },
+  "required": [
+    "agentId",
+    "change"
+  ],
+  "additionalProperties": false
+}

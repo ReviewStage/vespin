@@ -122,6 +122,8 @@ export const RUN_PROFILE = {
   AGENT_PAGE: "agent-page",
   /** A synthetic account signed in, Settings opened at launch on its Account page. */
   SETTINGS_ACCOUNT: "settings-account",
+  /** The same account, Settings on Preferences: its team's Slack bot connected, so Slack notifications stand under Notifications. */
+  SETTINGS_PREFERENCES: "settings-preferences",
   /** The same account, Settings on its team's workspace: its members and an invitation waiting. */
   SETTINGS_WORKSPACE: "settings-workspace",
   /** The same account, Settings on Agents: its Claude plan connected and its ChatGPT sign-in expired. */
@@ -130,7 +132,7 @@ export const RUN_PROFILE = {
   SETTINGS_HOSTS: "settings-hosts",
   /** The same account, Settings on Integrations: some connected, some with their sign-in expired. */
   SETTINGS_INTEGRATIONS: "settings-integrations",
-  /** The same account, Settings on MCP: the agents it let in and how to connect another. */
+  /** The same account, Settings on MCP & CLI: the agents it let in, how to connect another, and the `vespin` command's install and sign-in. */
   SETTINGS_MCP: "settings-mcp",
   /** The same account, Settings on Skills: its team's and its own. */
   SETTINGS_SKILLS: "settings-skills",
@@ -234,57 +236,6 @@ export interface AppInboxTaskHolding {
 }
 
 /**
- * One inbox item of an agent an automation started with no task, waiting on
- * the developer: the item as a task's are, the agent as its row names it
- * now, and the automation and repository standing where a task would; the
- * automation, and its name, null where the reader may not read it or none
- * stands, and the repository null for an agent that works in none.
- */
-export interface AppInboxTasklessItem extends AppInboxWaitingItem {
-  /** When the item last changed, by the service's clock, which a follow of its agent's inbox is current once it holds. */
-  updatedAt: number;
-  agentTitle: string | null;
-  agentModel: string;
-  automationId: string | null;
-  automationName: string | null;
-  repository: string | null;
-  /** The workspace the agent belongs to, whose Inbox lists the item; absent from a service before it. */
-  workspaceId?: string;
-  /** The account that started the agent, whom the item waits on; absent where the service does not say, when it is the reader's own. */
-  startedBy?: string;
-  /** The account the item waits on: the member its agent addressed it to, else its starter; absent from a service before it, which reads as waiting on `startedBy`. */
-  waitsOn?: string;
-}
-
-/** One automation holding items of its runs' agents with no task, waiting or settled, as a task holding items is listed: how many, and when the latest changed; null for the agents no automation the reader may read names. */
-interface AppInboxAutomationHolding {
-  automationId: string | null;
-  items: number;
-  updatedAt: number;
-}
-
-/**
- * One agent with no task holding inbox items, waiting or settled, as a task
- * holding items is listed: how many, how many are the reader's to do, and
- * when the latest changed, by the service's clock; and the agent as an item
- * of it names it, since one whose items are all settled has none waiting.
- */
-export type AppInboxAgentHolding = Pick<
-  AppInboxTasklessItem,
-  | "agentId"
-  | "agentTitle"
-  | "agentModel"
-  | "automationId"
-  | "automationName"
-  | "repository"
-  | "workspaceId"
-  | "updatedAt"
-> & {
-  items: number;
-  toDo: number;
-};
-
-/**
  * What waits on the developer across the account's tasks, as main's own
  * read of it last answered (`@repo/host/agent-notices`): each task with an
  * open inbox item, the task whose item changed latest first. What the
@@ -295,12 +246,6 @@ export interface AppInboxSlice {
   waiting: readonly AppInboxTask[];
   /** Every task holding an inbox item, waiting or settled, the task whose item changed latest first: what the window's Inbox lists. */
   tasks: readonly AppInboxTaskHolding[];
-  /** The open items of agents with no task in the account's workspaces, every member's, the latest changed first, as the window's Inbox lists them; those of the reader's own agents (`startedBy`) alone wait on it and count with the tasks'. */
-  taskless: readonly AppInboxTasklessItem[];
-  /** Every automation holding items of its agents with no task, as `tasks` lists the tasks. */
-  automations: readonly AppInboxAutomationHolding[];
-  /** Every agent with no task holding an inbox item, waiting or settled, as `tasks` lists the tasks; none from a service before it. */
-  agents: readonly AppInboxAgentHolding[];
   /** The newest run of each of the account's own automations that failed to start lately, the latest first, which marks the window's Automations until that automation is opened. */
   failedRuns: readonly AccountFailedRun[];
 }
@@ -325,12 +270,12 @@ type AppAgentOrigin = AppHostRead<AgentOrigin | null>;
 
 /**
  * Each agent's origin the host holds for the windows (`compose-agents.ts`):
- * those an agent's page chose, and the few let go lately, by the agent's
+ * those an agent's tab chose, and the few let go lately, by the agent's
  * id, each as its own read stands. One absent is held by nobody.
  */
 export type AppAgentOrigins = Readonly<Record<string, AppAgentOrigin>>;
 
-/** No origin held, as the host stands before any window shows an agent's page and after the session ends. */
+/** No origin held, as the host stands before any window shows an automation's agent and after the session ends. */
 export const NO_AGENT_ORIGINS: AppAgentOrigins = {};
 
 /** The key an agent's own transcript stands under beside its workers', which stand under the call that started each. */
@@ -391,24 +336,25 @@ export type AppTranscripts = Readonly<
 /** No transcript held, as the host stands before any tab shows one and after the session ends. */
 export const NO_TRANSCRIPTS: AppTranscripts = {};
 
-/** One value for each holder of inbox items, a plan or an agent, by its kind and then its id, never by a key built from both. */
+/** One value for each holder of inbox items, a plan, by its kind and then its id, never by a key built from both. */
 type ByInboxHolder<Value> = {
   readonly [Kind in InboxScopeKind]: Readonly<Record<string, Value>>;
 };
 
 /**
  * Every inbox item the account reaches, settled ones of the read's window
- * among them, by the plan each is on, or its agent where that has no task,
- * each holder's in the order its own read answers them. A holder it holds
- * nothing of holds nothing now.
+ * among them, by the plan each is on, each plan's in the order its own read
+ * answers them. A plan it holds nothing of holds nothing now.
  */
-export type AppInboxItems = ByInboxHolder<readonly InboxItem[]>;
+export type AppInboxItems = {
+  readonly [INBOX_SCOPE_KIND.PLAN]: Readonly<Record<string, readonly InboxItem[]>>;
+};
 
-/** One plan's or agent's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
+/** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
 export type AppHolderInbox = AppHostRead<readonly InboxItem[]>;
 
 /**
- * Each plan's or agent's inbox the host holds for the windows
+ * Each plan's inbox the host holds for the windows
  * (`scope-inbox-follow.ts`): the holders a window chose, and the few let go
  * lately, by kind and then by id, each as its own read stands. A holder
  * absent is held by nobody, so a surface draws it from the account's feed.
@@ -418,17 +364,16 @@ export type AppHolderInboxes = ByInboxHolder<AppHolderInbox>;
 /** No holder's inbox held, as the host stands before any window chooses one and after the session ends. */
 export const NO_HOLDER_INBOXES: AppHolderInboxes = {
   [INBOX_SCOPE_KIND.PLAN]: {},
-  [INBOX_SCOPE_KIND.AGENT]: {},
 };
 
-/** What pages stand on: a task, or an agent with no task. */
+/** What pages stand on: a task. */
 type PageOwnerKind = (typeof PAGE_OWNER)[keyof typeof PAGE_OWNER];
 
-/** One task's or agent's pages, as the host's read of them stands: each page by its newest version, the most recently written first, once it answered. */
+/** One task's pages, as the host's read of them stands: each page by its newest version, the most recently written first, once it answered. */
 export type AppHolderPages = AppHostRead<readonly PageLine[]>;
 
 /**
- * Each task's or agent's pages the host holds for the windows
+ * Each task's pages the host holds for the windows
  * (`compose-tasks.ts`): those a window chose, and the few let go lately, by
  * what they stand on and then its id, each as its own read stands. One
  * absent is held by nobody.
@@ -437,8 +382,8 @@ export type AppPages = {
   readonly [Kind in PageOwnerKind]: Readonly<Record<string, AppHolderPages>>;
 };
 
-/** No pages held, as the host stands before any window chooses a task or an agent and after the session ends. */
-export const NO_PAGES: AppPages = { [PAGE_OWNER.TASK]: {}, [PAGE_OWNER.AGENT]: {} };
+/** No pages held, as the host stands before any window chooses a task and after the session ends. */
+export const NO_PAGES: AppPages = { [PAGE_OWNER.TASK]: {} };
 
 /**
  * Each task's or agent's cloud Browser tabs the host holds for the windows
@@ -546,8 +491,8 @@ export type AppWorkspaceInvitations = Readonly<
  * This Mac as its host reads it (`compose-this-mac-host.ts`): the machine's
  * id in the keyed hash every host reports (`@repo/host/node`'s
  * `machine-identity.ts`), where it could be read, and the device of the
- * record of the account install on this Mac, where that install was
- * enrolled with this app's service.
+ * record of the host the app carries, where it was enrolled with this app's
+ * service.
  */
 export interface AppThisMacHost {
   deviceId?: string;
@@ -556,6 +501,8 @@ export interface AppThisMacHost {
   enrolled?: boolean;
   /** How many agents' folders its host made on this Mac, which turning it off may delete; absent reads as none. */
   agentFolders?: number;
+  /** Whether macOS holds its host until the member allows the app in System Settings › Login Items; absent reads as not. */
+  needsApproval?: boolean;
 }
 
 /** This Mac as the host last read it, by the account signed in: the one key the host holds, none while nobody is signed in. */
@@ -804,6 +751,8 @@ interface AppNetworkSlice {
   reachable: boolean;
   /** How many changes made offline the service refused as they were sent again, until a window clears the count; none where none was. */
   offlineRefused?: number;
+  /** Set once the service refused this build as older than it serves (426), until its next answer of another status: the one fact every surface that offers the update draws. */
+  updateNeeded?: true;
 }
 
 /**
@@ -870,13 +819,13 @@ export interface AppState {
   tasks: TasksView;
   agents: AppAgentsSlice;
   inbox: AppInboxSlice;
-  /** Each agent's origin the windows chose, held while an agent's page holds it and a while after: the run its page says started it. */
+  /** Each agent's origin the windows chose, held while an agent's tab holds it and a while after: the run its tab says started it. */
   [LIVE_READ.AGENT_ORIGINS]: AppAgentOrigins;
   /** The account's preferences row, by the account, held for the signed-in session: the default agent, the chapters model, and Slack notifications every surface draws. */
   [LIVE_READ.ACCOUNT_PREFERENCES]: AppAccountPreferences;
   /** Every inbox item the account reaches, held for the signed-in session: what the window's Inbox, its search, and a person's page list. */
   [LIVE_READ.INBOX_ITEMS]: AppHostRead<AppInboxItems>;
-  /** Each plan's or agent's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane, a task's Inbox tab, and an agent's page read past the feed. */
+  /** Each plan's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane and a task's Inbox tab read past the feed. */
   [LIVE_READ.HOLDER_INBOX]: AppHolderInboxes;
   /** The skills the account sees in each workspace the windows chose, by the workspace, held while Settings › Skills shows them and a while after: what that page draws. */
   [LIVE_READ.INSTALLED_SKILLS]: AppInstalledSkills;
@@ -890,7 +839,7 @@ export interface AppState {
   [LIVE_READ.MEMORIES]: AppMemories;
   /** The models the account is offered and its devices, by the account, held while a window draws a model or a device and a while after: what every model menu, Settings › Agents, setup, and New task's Runs on read. */
   [LIVE_READ.MODELS]: AppModels;
-  /** Each task's or agent's pages the windows chose, held while a window holds them and a while after: what the panel beside an Inbox item, and beside an agent's page, lists. */
+  /** Each task's pages the windows chose, held while a window holds them and a while after: what the panel beside a task and an Inbox item lists. */
   [LIVE_READ.PAGES]: AppPages;
   /** The account's own provider keys, held while a window draws them: what Settings › Agents and Call and Dictate read. */
   [LIVE_READ.PROVIDER_KEYS]: AppProviderKeys;
@@ -1112,7 +1061,6 @@ export const HOST_READ_SLICE = {
     rowIds: {
       tasks: "id" satisfies keyof TasksRows<"tasks">[number],
       taskAgents: "id" satisfies keyof TasksRows<"taskAgents">[number],
-      tasklessAgents: "id" satisfies keyof TasksRows<"tasklessAgents">[number],
       taskPullRequests: "taskId" satisfies keyof TasksRows<"taskPullRequests">[number],
       agentPullRequests: "agentId" satisfies keyof TasksRows<"agentPullRequests">[number],
     } satisfies { readonly [Part in keyof TasksView]?: string },

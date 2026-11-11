@@ -1,5 +1,6 @@
-import { AGENT_MACHINE, type AgentAttachment, type AgentSummary } from "@repo/features/agent-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   CARD_CORNER,
   CARD_LOOK,
@@ -22,7 +23,6 @@ import { MessageAction } from "../ai-elements/message.js";
 import { agentActor, agentName } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
 import { type AgentFork, FORK_WORDS, type ForkCut, forksOf, messageOpening } from "./fork-model.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
 
@@ -145,14 +145,11 @@ export function agentForkDoors(input: {
     if (each.messageId === undefined || listed.some((one) => one.id === each.agentId)) continue;
     forks.set(each.messageId, [...(forks.get(each.messageId) ?? []), each.agentId]);
   }
-  // An agent with no task opens on its own page, listed or not; on a task, a listed one opens its
-  // tab, an archived one's among them.
-  const opens = (agentId: string) => listedIds.has(agentId) || agent.planId === null;
-  // Note that an agent with no task is forked and continued as a task's is, its draft on its own page,
-  // and that an archived one, on its page or in its task's tab, opens no draft.
+  // A listed agent opens its tab, an archived one's among them.
+  const opens = (agentId: string) => listedIds.has(agentId);
+  // Note that an archived agent, on its page or in its task's tab, opens no draft.
   const drafts = control.onUnarchive === undefined && agent.archivedAt === undefined;
-  // Note that a local agent has no sandbox snapshot to fork from, so it offers no fork.
-  const forkable = onFork !== undefined && drafts && agent.machine !== AGENT_MACHINE.DEVICE;
+  const forkable = onFork !== undefined && drafts;
   const open =
     onOpenTarget === undefined
       ? undefined
@@ -250,18 +247,17 @@ export function ForkChip({
   onDrop: () => void;
 }): React.JSX.Element {
   const openPlace = useOpenPlace();
-  const taskId = source?.planId ?? null;
   const { agentId, messageId } = fork;
-  // A source with no task, or none the list holds, is opened on its own page.
-  const task = taskId === null ? undefined : { planId: taskId };
+  // A source the list does not hold is opened on its own page.
+  const task = source === undefined ? undefined : { planId: source.planId };
   const open =
     openPlace === undefined
       ? undefined
       : () =>
           openPlace(
             messageId === undefined
-              ? { kind: LINK_PLACE.AGENT, ...task, agentId }
-              : { kind: LINK_PLACE.MESSAGE, ...task, agentId, messageId },
+              ? { kind: LINK_DESTINATION.AGENT, ...task, agentId }
+              : { kind: LINK_DESTINATION.MESSAGE, ...task, agentId, messageId },
           );
   const quote = `“${fork.opening}”`;
   const drop = messageId === undefined ? FORK_WORDS.DROP_CONTINUE : FORK_WORDS.DROP;

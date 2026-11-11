@@ -1,0 +1,22 @@
+{
+  "rows": {
+    "TaskRow": {
+      "from": "@repo/ui",
+      "behavior": ["menu", "editor", "note", "choosable", "settled", "unread"]
+    },
+    "TaskListRow": {
+      "from": "task-list-row.js",
+      "behavior": ["menu", "editor", "note"]
+    },
+    "AgentListRow": {
+      "from": "agent-list-row.js",
+      "behavior": ["menu", "editor", "note"]
+    }
+  },
+  "drawers": {
+    "packages/panel/src/desktop/task-list-row.tsx": "TaskListRow: the task row every list of tasks draws, its menu, rename, selection, and muted and unread states built here.",
+    "packages/panel/src/desktop/agent-list-row.tsx": "AgentListRow: the agent row every list of agents draws.",
+    "packages/panel/src/tasks/new-task-relation.tsx": "The composer's dock of related tasks, the one list of its kind: a bare row whose press opens its relation's menu.",
+    "apps/catalog/src/examples/task-rows.tsx": "The catalog shows TaskRow's every state, menu, rename and selection among them, with sample data and no page behind it."
+  }
+}

@@ -1,6 +1,5 @@
 import { Schema as EffectSchema } from "effect";
 import { checkoutIdentitySchema } from "./checkout-identity.js";
-import type { GitHubAccess } from "./github-repositories-wire.js";
 import { HOST_TARGET } from "./host-release.js";
 import { wireUuidSchema } from "./service-wire.js";
 
@@ -40,6 +39,16 @@ export const DEVICE_AGENT_BOUNDS = {
    * (`SANDBOX_DOOR_MAX_BYTES`), past every bound a tool holds a file to.
    */
   MAX_ANSWER_BYTES: 8 * 1024 * 1024,
+  /** The most characters of diff one answer carries, past the diff script's own bound (`CHECKOUT_DIFF_BOUNDS.MAX_BYTES`). */
+  MAX_DIFF_CHARS: 8 * 1024 * 1024,
+  /**
+   * The most milliseconds a diff runs on the Mac before it is answered as
+   * failed, and the service waits on its answer before the request is
+   * withdrawn: one number, so neither gives up on a diff the other is still
+   * at, within the window's own deadline on the read
+   * (`HOSTED_DEADLINE.TURN_CHANGES`).
+   */
+  DIFF_WAIT_MS: 60_000,
   /**
    * The most bytes of files and their paths, raw, one files line carries:
    * about 4 MB in base64, so its claim answers under the 4.5 MB a Vercel
@@ -69,6 +78,8 @@ export const DEVICE_AGENT_LINE_KIND = {
   FILES: "files",
   /** Let the agent go: its runner stopped, and its folder, its worktree and everything it wrote there, removed from the device. */
   DISCARD: "discard",
+  /** Put the agent's worktree back to a snapshot its runner took before a turn (`@repo/features/checkout-restore`), settled with the restore's exit code. */
+  RESTORE: "restore",
 } as const;
 
 export type DeviceAgentLineKind =
@@ -112,20 +123,12 @@ export const DEVICE_LAUNCH_UNSTARTED = {
 export type DeviceLaunchUnstarted =
   (typeof DEVICE_LAUNCH_UNSTARTED)[keyof typeof DEVICE_LAUNCH_UNSTARTED];
 
-/**
- * How a launch's repository is reached where the App's installation does
- * not reach it: on the member's own token, which never leaves the service
- * for a device, so the device reaches the repository on its own GitHub
- * sign-in instead (`deviceAgentLaunchPayloadSchema`'s `githubAccess`).
- */
-export const DEVICE_GITHUB_ACCESS = {
-  TOKEN: "token",
-} as const satisfies Record<string, GitHubAccess>;
-
 /** What one of an agent's tools asks of its Mac. */
 export const DEVICE_AGENT_REQUEST_KIND = {
   /** Read one file, confined to the agent's worktree and temp folder. */
   READ_FILE: "read_file",
+  /** Diff the agent's worktree between two checkouts its runner recorded, or one and the worktree as it stands (`checkout-diff.ts`). */
+  DIFF_CHECKOUT: "diff_checkout",
 } as const;
 
 export type DeviceAgentRequestKind =
@@ -142,13 +145,23 @@ export const DEVICE_CAPABILITY = {
   /** It takes a discard line (`DEVICE_AGENT_LINE_KIND.DISCARD`). */
   DISCARD: "discard",
   /**
-   * It launches an agent whose repository is reached on its member's own
-   * token on the device's own GitHub sign-in (`DEVICE_GITHUB_ACCESS`),
-   * asking the service for no token. A follower from before it reads such
-   * a launch as the App's and asks for a token the service refuses, so no
-   * such agent is started on, or launched to, a device without it.
+   * It launches every agent in a repository on the device's own GitHub
+   * sign-in, asking the service for no token. A follower from before it asks
+   * for a token the service never hands a device, so no agent in a
+   * repository is started on, or launched to, a device without it.
    */
   GITHUB_SIGN_IN: "github-sign-in",
+  /**
+   * It runs an agent in the permission mode its launch names: the runner its
+   * release bundles reads the config's `permissionMode`. A runner from
+   * before it runs every agent with full access whatever mode it is handed,
+   * so no launch in a mode that asks goes to a device without it.
+   */
+  PERMISSION_MODES: "permission-modes",
+  /** It takes a restore line (`DEVICE_AGENT_LINE_KIND.RESTORE`), its bundled runner recording the snapshot such a line puts the worktree back to; a follower from before it settles the line without acting on it. */
+  RESTORE_CHECKOUT: "restore-checkout",
+  /** It answers a diff request (`DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT`); a follower from before it would fail its whole requests read on one, so none is queued to a device without it. */
+  DIFF_CHECKOUT: "diff-checkout",
 } as const;
 
 export type DeviceCapability = (typeof DEVICE_CAPABILITY)[keyof typeof DEVICE_CAPABILITY];
@@ -215,7 +228,7 @@ export const hostUpdateSchema = EffectSchema.Literals(Object.values(HOST_UPDATE)
 /** The most characters of the words a host says its update failed for. */
 export const HOST_UPDATE_FAILURE_MAX_CHARS = 200;
 
-/** A device's operating system, as Node's `process.platform` names it. */
+/** A device's operating system, as Node's `platform` of the process names it. */
 export const DEVICE_PLATFORM = {
   DARWIN: "darwin",
   LINUX: "linux",
@@ -223,7 +236,7 @@ export const DEVICE_PLATFORM = {
 
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[keyof typeof DEVICE_PLATFORM];
 
-/** A device's CPU architecture, as Node's `process.arch` names it. */
+/** A device's CPU architecture, as Node's `arch` of the process names it. */
 export const DEVICE_ARCH = {
   ARM64: "arm64",
   X64: "x64",
@@ -269,19 +282,30 @@ export const deviceAgentObjectSchema = EffectSchema.Record(
 
 export type DeviceAgentObject = typeof deviceAgentObjectSchema.Type;
 
+/** A diff's answer: how the diff script exited, and what it printed, nothing where it did not exit well. */
+const deviceAgentDiffAnswerSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT),
+  exit: EffectSchema.Int,
+  diff: EffectSchema.String.check(EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_DIFF_CHARS)),
+});
+
 /**
  * What the Mac answered a request: a read's file bytes, read one byte past
  * the bound so the caller still sees a file larger than it, or null where
- * the path names no regular file the agent may read.
+ * the path names no regular file the agent may read; or a diff's exit and
+ * what it printed.
  */
-export const deviceAgentAnswerSchema = EffectSchema.Struct({
-  kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
-  bytes: EffectSchema.NullOr(
-    EffectSchema.Uint8Array.check(
-      EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+export const deviceAgentAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
+    bytes: EffectSchema.NullOr(
+      EffectSchema.Uint8Array.check(
+        EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+      ),
     ),
-  ),
-});
+  }),
+  deviceAgentDiffAnswerSchema,
+]);
 
 export type DeviceAgentAnswer = typeof deviceAgentAnswerSchema.Type;
 
@@ -293,10 +317,6 @@ const DEVICE_AGENT_FOLDER = {
   REPOSITORY: "repository",
   /** The files a message carries, one folder per line, made `0700`. */
   ATTACHMENTS: "attachments",
-  /** The skills the member installed into the app, as the harness's local plugin. */
-  INSTALLED_SKILLS: "installed-skills",
-  /** The agent's own `gh` sign-in on a host (`GH_CONFIG_DIR`), which no read of the agent's tools answers from; for an agent on the device's own GitHub sign-in, none of the agent's, since its `gh` reads the device user's. */
-  GITHUB_CONFIG: "gh",
   /** The agent's temp folder (`TMPDIR`), made `0700`, which its runner and its commands write to, and where it saves what we read back. */
   TEMP: "tmp",
 } as const;
@@ -306,8 +326,6 @@ export interface DeviceAgentLayout {
   readonly folder: string;
   readonly checkoutPath: string;
   readonly attachments: string;
-  readonly installedSkills: string;
-  readonly githubConfig: string;
   readonly temp: string;
 }
 
@@ -331,8 +349,6 @@ export function deviceAgentLayoutIn(agentsFolder: string, agentId: string): Devi
     folder,
     checkoutPath: [folder, DEVICE_AGENT_FOLDER.REPOSITORY].join("/"),
     attachments: [folder, DEVICE_AGENT_FOLDER.ATTACHMENTS].join("/"),
-    installedSkills: [folder, DEVICE_AGENT_FOLDER.INSTALLED_SKILLS].join("/"),
-    githubConfig: [folder, DEVICE_AGENT_FOLDER.GITHUB_CONFIG].join("/"),
     temp: [folder, DEVICE_AGENT_FOLDER.TEMP].join("/"),
   };
 }
@@ -347,8 +363,7 @@ const macPath = EffectSchema.String.check(
  * A launch line's payload: where its worktree goes and what it checks out,
  * the repository as `owner/name` and the branch it starts from, none for an
  * agent with no repository or on the default branch, and who its commits
- * are by, and, for one the App's installation does not reach, that it is
- * reached on the device's own GitHub sign-in. Its environment and
+ * are by, which the device reaches on its own GitHub sign-in. Its environment and
  * its first lines are its secrets, handed over by the claim alone.
  */
 export const deviceAgentLaunchPayloadSchema = EffectSchema.Struct({
@@ -366,16 +381,6 @@ export const deviceAgentLaunchPayloadSchema = EffectSchema.Struct({
    * repository, and from a service before the field, whose launch sets none.
    */
   identity: EffectSchema.optionalKey(checkoutIdentitySchema),
-  /**
-   * That the agent's repository is reached on its member's own token
-   * (`DEVICE_GITHUB_ACCESS.TOKEN`), so the device reaches it on its own
-   * GitHub sign-in and asks the service for no token; absent for one the
-   * App's installation reaches, whose device asks for an installation token
-   * as ever. Only a device that registered `GITHUB_SIGN_IN` is launched one.
-   */
-  githubAccess: EffectSchema.optionalKey(
-    EffectSchema.Literals(Object.values(DEVICE_GITHUB_ACCESS)),
-  ),
 });
 
 export type DeviceAgentLaunchPayload = typeof deviceAgentLaunchPayloadSchema.Type;
@@ -393,6 +398,13 @@ const deviceAgentFileSchema = EffectSchema.Struct({
 /** A files line's payload. */
 export const deviceAgentFilesPayloadSchema = EffectSchema.Struct({
   files: EffectSchema.Array(deviceAgentFileSchema),
+});
+
+/** A restore line's payload: the snapshot the worktree goes back to, as the turn's row keeps it (`@repo/features/checkout-restore`'s `CheckoutRestoreSnapshot`). */
+export const deviceAgentRestorePayloadSchema = EffectSchema.Struct({
+  commit: EffectSchema.String,
+  head: EffectSchema.NullOr(EffectSchema.String),
+  branch: EffectSchema.NullOr(EffectSchema.String),
 });
 
 /**
@@ -446,6 +458,12 @@ export type DeviceAgentRequest = typeof deviceAgentRequestSchema.Type;
 export const deviceAgentReadArgsSchema = EffectSchema.Struct({
   path: EffectSchema.String,
   maxBytes: EffectSchema.Int,
+});
+
+/** A diff request's arguments: the commit before, and the commit after, or null for the worktree as it stands. */
+export const deviceAgentDiffArgsSchema = EffectSchema.Struct({
+  from: EffectSchema.String,
+  to: EffectSchema.NullOr(EffectSchema.String),
 });
 
 /** The device a call names, by the id it enrolled under. */
@@ -558,18 +576,21 @@ export const deviceAgentStepRequestSchema = EffectSchema.Struct({
   step: EffectSchema.Literals(DEVICE_LAUNCH_STEPS),
 });
 
-/** A request answered: its id, and the answer of its kind, a read's bytes in base64. */
+/** A request answered: its id, and the answer of its kind, a read's bytes in base64, or a diff's exit and text. */
 export const deviceAgentAnswerRequestSchema = EffectSchema.Struct({
   ...deviceField,
   id: wireUuidSchema,
-  answer: EffectSchema.Struct({
-    kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
-    bytes: EffectSchema.NullOr(
-      EffectSchema.Uint8ArrayFromBase64.check(
-        EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+  answer: EffectSchema.Union([
+    EffectSchema.Struct({
+      kind: EffectSchema.Literal(DEVICE_AGENT_REQUEST_KIND.READ_FILE),
+      bytes: EffectSchema.NullOr(
+        EffectSchema.Uint8ArrayFromBase64.check(
+          EffectSchema.isMaxLength(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 1),
+        ),
       ),
-    ),
-  }),
+    }),
+    deviceAgentDiffAnswerSchema,
+  ]),
 });
 
 /** That the service kept what the Mac said. */

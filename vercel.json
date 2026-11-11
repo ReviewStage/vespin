@@ -19,6 +19,18 @@
       "ignoreCommand": "git diff --quiet HEAD^ HEAD -- :/apps/web :/packages :/pnpm-lock.yaml :/pnpm-workspace.yaml :/package.json :/CHANGELOG.md :/PRIVACY.md :/vercel.json",
       "routes": [
         {
+          "src": "/(.*)",
+          "has": [
+            {
+              "type": "host",
+              "value": {
+                "re": "^(?:[0-9a-f]{32}|[a-z0-9]+(?:-[a-z0-9]+)*-[1-9][0-9]*-[0-9a-f]{6})\\.vespin\\.page\\.?$"
+              }
+            }
+          ],
+          "dest": "/api/preview-proxy.js?route=previews/proxy&route-path=previews/proxy/$1"
+        },
+        {
           "src": "/p/([A-Za-z0-9_.-]+)",
           "has": [
             {
@@ -220,6 +232,10 @@
           "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
         },
         {
+          "src": "/api/previews/sign-in",
+          "dest": "/api/default.js?route=previews/sign-in"
+        },
+        {
           "src": "/api/slack/events",
           "dest": "/api/default.js?route=slack/events"
         },
@@ -246,6 +262,10 @@
         {
           "src": "/api/pages/sandbox",
           "dest": "/api/page-sandbox.js?route=pages/sandbox"
+        },
+        {
+          "src": "/api/previews/proxy",
+          "dest": "/api/preview-proxy.js?route=previews/proxy"
         },
         {
           "src": "/api/browser/live",
@@ -510,6 +530,20 @@
     }
   },
   "rewrites": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": {
+            "re": "^(?:[0-9a-f]{32}|[a-z0-9]+(?:-[a-z0-9]+)*-[1-9][0-9]*-[0-9a-f]{6})\\.vespin\\.page\\.?$"
+          }
+        }
+      ],
+      "destination": {
+        "service": "web"
+      }
+    },
     {
       "source": "/(.*)",
       "has": [

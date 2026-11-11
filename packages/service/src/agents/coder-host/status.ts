@@ -1,4 +1,4 @@
-import type { AgentOwnerFacts } from "@repo/database/models/agent-owners";
+import { CONNECTION_LOST_DETAIL } from "@repo/agent-runner/protocol";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -9,6 +9,9 @@ import {
 } from "@repo/database/models/agent-store";
 import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
+import type { BootPhase } from "@repo/features/agent-boot";
+import { originSubjectsOf } from "@repo/features/agent-origin-live";
 import {
   agentStatusAt,
   type StatusTurn,
@@ -40,9 +43,11 @@ import {
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
 } from "@repo/features/device-agent-wire";
+import { sandboxVcpus } from "@repo/features/sandbox-size";
 import { TURN_FAILURE, TURN_STATUS, type TurnFailure } from "../../core.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { CODER_REFUSAL } from "./bounds.js";
+import { permissionModeOf } from "./permission-mode.js";
 
 /**
  * status.ts -- where a coding agent stands, read from its newest turn.
@@ -70,6 +75,8 @@ export interface AgentStanding {
   readonly now: number;
   /** Whether the agent was started blank, handed neither the description nor a prompt, so no first turn is on its way; unsaid reads as not. */
   readonly blank?: boolean | undefined;
+  /** Where the agent's first launch stands while its boot record does (`@repo/features/agent-boot`); unsaid reads as none. */
+  readonly boot?: BootPhase | undefined;
 }
 
 /** Whether an agent was started blank, as a full read or a list line says it. */
@@ -91,6 +98,7 @@ function statusStandingOf(standing: AgentStanding) {
     createdAt: standing.createdAt.getTime(),
     now: standing.now,
     blank: standing.blank === true,
+    boot: standing.boot,
   };
 }
 
@@ -160,9 +168,10 @@ const LAUNCH_UNSTARTED_DETAIL = ", because of ";
 
 /**
  * The host's refusal sentences, a provider's words for a prompt past the
- * window, and the words of a run its host lost or a launch it settled
- * unstarted, a failed turn's detail may carry, by the word the wire says for
- * each. Note that those last two read as `other` rather than words of their
+ * window, the words of a run its host lost or a launch it settled
+ * unstarted, and the runner's words for a provider's host it waited for in
+ * vain (`@repo/agent-runner/protocol`'s `CONNECTION_LOST_DETAIL`), a failed
+ * turn's detail may carry, by the word the wire says for each. Note that those last two read as `other` rather than words of their
  * own, because a window reads `failureReason` as one of the words it knows
  * and an older build would refuse the whole page over a new one: `other`
  * reads there as a run that ended without saying why, rather than as the
@@ -198,7 +207,9 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     ],
   ],
+  [AGENT_FAILURE.MACHINE_SIGN_IN, [CODER_REFUSAL.MACHINE_SIGNED_OUT]],
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
+  [AGENT_FAILURE.CONNECTION_LOST, Object.values(CONNECTION_LOST_DETAIL)],
 ];
 
 /**
@@ -216,6 +227,8 @@ export const SETTLED_FAILURES: readonly (readonly [TurnFailure, AgentFailure])[]
   [TURN_FAILURE.RUNNER_LOST, AGENT_FAILURE.RUNNER_LOST],
   [TURN_FAILURE.NO_PROGRESS, AGENT_FAILURE.NO_PROGRESS],
   [TURN_FAILURE.LINE_UNTAKEN, AGENT_FAILURE.LINE_UNTAKEN],
+  [TURN_FAILURE.PLAN_LIMIT, AGENT_FAILURE.PLAN_LIMIT],
+  [TURN_FAILURE.REFUSAL, AGENT_FAILURE.REFUSAL],
 ];
 
 /** The host that lost a failed turn's run, by the name its turn records; nothing for any other turn. */
@@ -305,6 +318,7 @@ function agentTurnOf(turn: AgentLatestTurn | undefined): AgentTurn | undefined {
     status: turnStatusOfWord(turn.status),
     ...(turn.cancelRequestedAt === null ? undefined : { stopAsked: true }),
     ...(failure === undefined ? undefined : { failure }),
+    ...(turn.waitsUntil == null ? undefined : { waitsUntil: turn.waitsUntil.getTime() }),
   };
 }
 
@@ -315,6 +329,8 @@ export interface AgentTurnStanding {
   readonly runtime?: NativeAgentRuntime | undefined;
   /** Whether its sandbox stands open (`openSandboxesOfReached`); none where the read named none. */
   readonly sandboxOpen?: boolean | undefined;
+  /** Where its first launch stands while its boot record does (`agentBootsOf`); none where it has none or the read named none. */
+  readonly boot?: BootPhase | undefined;
 }
 
 /** When the run the status is read from began: the newest turn's start, or its queueing before a runner takes it, and the agent's own before any turn. */
@@ -383,25 +399,22 @@ export function summaryDevices(
   );
 }
 
-/** What every read of one agent says of it but its task, its status read at `now`, its owner as `owners` reads it, the agents started from it where any was, and the Mac it runs on where `macs` holds it. */
+/** What every read of one agent says of it but its task, its status read at `now`, its owner, the task it stands on, the agents started from it where any was, and the Mac it runs on where `macs` holds it. */
 function summaryFields(
   agent: AgentLine,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[],
   macs: ReadonlyMap<string, Device>,
 ): Omit<AgentSummary, "id" | "planId"> {
   const starter = names.get(agent.userId);
   const mac = macOf(agent, macs);
+  // Every agent stands on a task, which owns it, so the run's automation is never asked.
   const owner = agentOwnerOf({
     taskId: agent.taskId,
     runId: agent.automationRunId,
-    runAutomationId:
-      agent.automationRunId === null
-        ? null
-        : (owners.runAutomations.get(agent.automationRunId) ?? null),
+    runAutomationId: null,
   });
   const turn = agentTurnOf(standing.turn);
   const summary: Omit<AgentSummary, "id" | "planId"> = {
@@ -413,13 +426,16 @@ function summaryFields(
     ...(standing.runtime === undefined ? undefined : { runtime: standing.runtime }),
     title: agent.title,
     // Note that only a local agent says where it runs, so a sandboxed agent's summary is as it was.
-    ...(agent.machine === AGENT_MACHINE.DEVICE ? { machine: agent.machine } : undefined),
+    ...(agent.machine === AGENT_MACHINE.DEVICE
+      ? { machine: agent.machine }
+      : { sandboxVcpus: sandboxVcpus(agent.repository) }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: agent.createdAt.getTime(),
     status: agentStatusOf(standing.turn, {
       createdAt: agent.createdAt,
       now,
       blank: startedBlank(agent),
+      boot: standing.boot,
     }),
     turnId: standing.turn?.id ?? null,
     ...(turn === undefined ? undefined : { turn }),
@@ -431,7 +447,12 @@ function summaryFields(
     ...(agent.disabledServers.length === 0
       ? undefined
       : { disabledServers: agent.disabledServers }),
+    // Note that full access is said by saying nothing, as a service before modes did; the asks are the task list's to carry.
+    ...(permissionModeOf(agent) === AGENT_PERMISSION_MODE.FULL_ACCESS
+      ? undefined
+      : { permissionMode: permissionModeOf(agent) }),
     ...(starter === undefined ? undefined : { startedBy: { userId: agent.userId, name: starter } }),
+    ...(agent.startedByAgentId === null ? undefined : { startedByAgentId: agent.startedByAgentId }),
     ...(agent.automationId === null ? undefined : { automationId: agent.automationId }),
     ...(agent.automationName === null ? undefined : { automationName: agent.automationName }),
     ...(agent.source == null ? undefined : { source: agent.source }),
@@ -458,17 +479,12 @@ function summaryFields(
   };
 }
 
-/**
- * One agent as the tabs draw it, on a task or with none, read whole or as a
- * list's line. Its owner is read from `owners`, which `agentOwnerFactsOf`
- * answers for the agents of the read.
- */
+/** One agent as the tabs draw it, read whole or as a list's line. */
 export function agentSummary(
   agent: Agent | AgentLine,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[] = [],
   macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentSummary {
@@ -476,26 +492,18 @@ export function agentSummary(
   return {
     id: line.id,
     planId: line.taskId,
-    ...summaryFields(line, standing, now, names, owners, continuedBy, macs),
+    ...summaryFields(line, standing, now, names, continuedBy, macs),
   };
 }
 
 /**
  * The run that started an agent as its page opens on it: the prompt alone,
- * the issue or pull request a GitHub event named, a webhook's body, and the
+ * what its firing was about (`originSubjectsOf`), a webhook's body, and the
  * member who asked for a run now, named by `names` where their account
  * stands.
  */
 function originOf(origin: StoredAutomationOrigin, names: ReadonlyMap<string, string>): AgentOrigin {
   const { firing } = origin;
-  const subject =
-    firing.kind === AUTOMATION_FIRING.GITHUB && firing.number !== undefined
-      ? {
-          number: firing.number,
-          ...(firing.title === undefined ? undefined : { title: firing.title }),
-          ...(firing.url === undefined ? undefined : { url: firing.url }),
-        }
-      : undefined;
   const runner =
     firing.kind === AUTOMATION_FIRING.MANUAL && firing.userId !== undefined
       ? firing.userId
@@ -503,7 +511,7 @@ function originOf(origin: StoredAutomationOrigin, names: ReadonlyMap<string, str
   const name = runner === undefined ? undefined : names.get(runner);
   return {
     prompt: origin.prompt,
-    ...(subject === undefined ? undefined : { subject }),
+    ...originSubjectsOf(firing),
     ...(origin.body === undefined ? undefined : { body: origin.body }),
     ...(runner === undefined || name === undefined
       ? undefined
@@ -526,20 +534,19 @@ export function pageAccounts(agent: Agent): readonly string[] {
     : summaryAccounts(agent);
 }
 
-/** One agent as its own page reads it, on a task or with none, its status read at `now`, with the agents started from it and the Mac it runs on. */
+/** One agent as its own page reads it, its status read at `now`, with the agents started from it and the Mac it runs on. */
 export function agentPage(
   agent: Agent,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[] = [],
   macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentPage {
   return {
     id: agent.id,
     planId: agent.taskId,
-    ...summaryFields(agentLineOf(agent), standing, now, names, owners, continuedBy, macs),
+    ...summaryFields(agentLineOf(agent), standing, now, names, continuedBy, macs),
     automationId: agent.automationId,
     ...(agent.automationOrigin === null
       ? undefined

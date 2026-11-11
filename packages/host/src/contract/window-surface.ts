@@ -1,5 +1,5 @@
 /**
- * window-surface.ts -- what a window asks of the system it is drawn on: the microphone, the notifications, a mail, focus, a copy of words or a picture, a save, and feedback, as procedures.
+ * window-surface.ts -- what a window asks of the system it is drawn on: the microphone, the notifications, a mail, focus, a copy of words, rich text, or a picture, a save, and feedback, as procedures.
  *
  * Main answers them itself (`apps/desktop/src/main/ipc/window-surface.ts`),
  * since each reaches Electron or the Mac; a browser tab answers the ones a
@@ -119,6 +119,11 @@ export const windowSurfaceActsContract = {
   )
     .input(exactInput(EffectSchema.Undefined))
     .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS]: actProcedure(
+    "Could not open the login items settings.",
+  )
+    .input(exactInput(EffectSchema.Undefined))
+    .output(EffectSchema.Void),
   [WINDOW_SURFACE_ACT_KIND.CONTACT_EMAIL]: actProcedure(
     "Could not open a new email on this system.",
   )
@@ -148,6 +153,21 @@ export const windowSurfaceActsContract = {
     "Could not copy that picture to the clipboard on this system.",
   )
     .input(exactInput(EffectSchema.Struct({ png: pngBase64 })))
+    .output(EffectSchema.Void),
+  // A draft an agent wrote to be sent elsewhere, put on the clipboard as its
+  // HTML and its plain words together, so it pastes into Slack or Mail with
+  // its links and bold and into a plain field as words.
+  [WINDOW_SURFACE_ACT_KIND.WINDOW_COPY_RICH]: actProcedure(
+    "Could not copy that to the clipboard on this system.",
+  )
+    .input(
+      exactInput(
+        EffectSchema.Struct({
+          html: textUpTo(FILE_TEXT_MAX_CHARS),
+          text: textUpTo(FILE_TEXT_MAX_CHARS),
+        }),
+      ),
+    )
     .output(EffectSchema.Void),
   // A File tab's file, saved where the developer chooses in the system's
   // save dialog; answers whether it was saved rather than the dialog canceled.

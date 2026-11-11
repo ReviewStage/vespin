@@ -1,9 +1,8 @@
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { type DescriptionSection, descriptionSections } from "@repo/features/description-document";
-import { LINK_PLACE, linkOf, taskLinkStep } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import {
   type DescriptionMention,
-  type MentionLines,
   type MentionPlace,
   sectionAnchors,
 } from "@repo/features/mention-link";
@@ -18,6 +17,7 @@ import { agoText, dateOfText, momentText, sinceText } from "@repo/features/time-
 import { EXPERIMENT } from "@repo/settings";
 import {
   Button,
+  DocumentRule,
   EDITABLE_BLOCK_CLASS,
   IconButton,
   SavedTick,
@@ -64,7 +64,7 @@ import {
 } from "../markdown-message.js";
 import { useCreator } from "../member-directory.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useWorkspaceExperiment, useWorkspaceExperimentOnSince } from "../workspace-experiments.js";
 import {
   CommentsToggle,
@@ -102,7 +102,7 @@ import {
   type TaskReader,
   useEditReader,
 } from "./edit-ref.js";
-import { type MentionDoors, mentionLinkDrawer } from "./mention-chip.js";
+import { type MentionDoors, mentionLinkDrawer, type OpenFileLines } from "./mention-chip.js";
 import { TaskPath, TaskStandingChips, type TaskStandingDoor } from "./task-standing.js";
 import { TaskTitle } from "./task-title.js";
 import { EDITOR_PLACE, type EditorHost, useDescriptionEditing } from "./use-description-editing.js";
@@ -164,7 +164,7 @@ import {
 export interface SectionLinks {
   readonly workspace: string;
   readonly onOpen: (mention: DescriptionMention) => void;
-  readonly onOpenFile?: ((path: string, lines: MentionLines | undefined) => void) | undefined;
+  readonly onOpenFile?: ((path: string, lines: OpenFileLines | undefined) => void) | undefined;
   readonly reveal: SectionReveal | undefined;
   /** The document showed the section `reveal` asked for, so the ask can be let go. */
   readonly onRevealed?: ((ask: number) => void) | undefined;
@@ -834,7 +834,7 @@ function SectionLink({
   tabbable: boolean;
 }): React.JSX.Element {
   const link = linkOf(
-    { kind: LINK_PLACE.SECTION, planId: linked.step, anchor },
+    { kind: LINK_DESTINATION.SECTION, planId: linked.step, anchor },
     linked.place.workspace,
   );
   return (
@@ -850,7 +850,7 @@ function TitleLink({
   linked: LinkedTask;
   tabbable: boolean;
 }): React.JSX.Element {
-  const link = linkOf({ kind: LINK_PLACE.TASK, planId: linked.step }, linked.place.workspace);
+  const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: linked.step }, linked.place.workspace);
   return <UnitLinkButton link={link} label={LINK_COPY.LABEL} tabbable={tabbable} />;
 }
 
@@ -1273,7 +1273,6 @@ export const DescriptionBody = memo(function DescriptionBody({
         replayUnmasked: true,
         words: DESCRIPTION_NOT_SAVED,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface: FAILURE_SURFACE.DESCRIPTION_SAVE,
           cause,
@@ -1499,6 +1498,8 @@ export const DescriptionBody = memo(function DescriptionBody({
           />
           {documented ? <ChangedLine looks={looks} marks={marks} /> : null}
           <Fragment key={HEAD_KEY}>{head?.(room)}</Fragment>
+          {/* A hairline parts the head from the description's text, as Notion's parts a page's properties from its body. */}
+          {documented ? <DocumentRule /> : null}
           {!documented ? null : editing.editor === undefined ? (
             editable && views.length === 0 ? (
               <EmptyDocumentBlock entry={entry === EDITOR_PLACE.EMPTY} editing={editing}>

@@ -91,16 +91,15 @@ function agentOf(id: string, overrides: Partial<AgentSummary>): AgentSummary {
 
 const PRORATE = agentOf("7b1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f", {});
 
+/** The reader's own agent on the billing task. */
 const SWEEPER = agentOf("5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", {
-  planId: null,
   title: "Sweep flaky tests",
   status: AGENT_STATUS.COMPLETED,
   startedBy: { userId: ME, name: "Dean Stratakos" },
 });
 
-/** An agent on no task the task list carries not, one of a workspace the reader left say. */
+/** An agent the task list carries not, one of a workspace the reader left say. */
 const AUDITOR = agentOf("2a1b0c9d-8e7f-4a6b-9c5d-4e3f2a1b0c9d", {
-  planId: null,
   title: "Audit retries",
   status: AGENT_STATUS.COMPLETED,
 });
@@ -167,16 +166,7 @@ const LISTED_STATE: AppStateSnapshot = {
         },
       },
     ],
-    taskAgents: [listedAgent(PRORATE)],
-    tasklessAgents: [
-      {
-        ...SWEEPER,
-        automationId: null,
-        workspaceId: ACME.id,
-        repository: "acme/relay",
-        activityAt: AT,
-      },
-    ],
+    taskAgents: [listedAgent(PRORATE), listedAgent(SWEEPER)],
     agentPullRequests: [
       { agentId: PRORATE.id, taskId: BILLING.id, pullRequest: SEAT_PULL_REQUEST },
     ],
@@ -297,7 +287,7 @@ async function cardOf(chip: Element | undefined) {
   return look;
 }
 
-test("chips of agents off their task's page read nothing, and hang their tab's card at once, on another task or on none; one the list carries not keeps the chip's own", async () => {
+test("chips of agents off their task's page read nothing, and hang their tab's card at once; one the list carries not keeps the chip's own", async () => {
   const container = await drawn(
     [
       mentionOf(PRORATE, "Prorate"),
@@ -306,10 +296,10 @@ test("chips of agents off their task's page read nothing, and hang their tab's c
     ].join(" "),
     LISTED_STATE,
   );
-  const [onTask, onNone, unlisted] = container.querySelectorAll("[data-mention-ref]");
+  const [onTask, own, unlisted] = container.querySelectorAll("[data-mention-ref]");
 
   const prorate = await cardOf(onTask);
-  const sweeper = await cardOf(onNone);
+  const sweeper = await cardOf(own);
   const auditor = await cardOf(unlisted);
 
   assert.deepEqual(
@@ -319,7 +309,7 @@ test("chips of agents off their task's page read nothing, and hang their tab's c
   assert.match(prorate.words ?? "", /Started by.*Sam Okafor/u);
   assert.deepEqual(
     [sweeper.agent, sweeper.name, sweeper.foot],
-    [true, "Sweep flaky tests", "On no task"],
+    [true, "Sweep flaky tests", "On Billing by seat"],
   );
   assert.doesNotMatch(
     sweeper.words ?? "",

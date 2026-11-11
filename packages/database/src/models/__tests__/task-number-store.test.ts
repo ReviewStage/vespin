@@ -5,8 +5,10 @@ import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { organization, user } from "../../schemas/auth.js";
+import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
-import { taskIdOfNumber } from "../task-number-store.js";
+import { createAgent } from "../agent-store.js";
+import { agentIdOfTaskNumber, taskIdOfNumber, taskKeyOfAgent } from "../task-number-store.js";
 import { createTask, updateTask } from "../task-store.js";
 import { setWorkspaceSlug } from "../workspace-slug-store.js";
 
@@ -14,7 +16,9 @@ import { setWorkspaceSlug } from "../workspace-slug-store.js";
  * A task found by its workspace's slug and its number, as a link
  * `/<slug>/task/<number>` names it, through the store's public functions
  * over a real dialect: a member finds it, by its old number too once it
- * moved, and an account outside the workspace finds nothing.
+ * moved, and an account outside the workspace finds nothing; and an agent
+ * found by its task's number and the head of its id, as a shared preview's
+ * host names it.
  *
  * Synthetic accounts, workspaces, and tasks throughout.
  */
@@ -35,6 +39,22 @@ const slugOf = (organizationId: string) =>
       .where(eq(organization.id, organizationId));
     return row?.slug ?? assert.fail("the workspace was not written");
   });
+
+/** A starter's coding agent on the task named. */
+const startAgent = (starter: string, taskId: string) =>
+  Effect.map(
+    createAgent(starter, {
+      taskId,
+      descriptionSnapshot: "# Preview",
+      prompt: null,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: "acme/shop",
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    }),
+    (started) => Option.getOrThrow(started).agent,
+  );
 
 it.layer(getTestDB())("a task found by its number", (it) => {
   it.effect(
@@ -80,6 +100,38 @@ it.layer(getTestDB())("a task found by its number", (it) => {
         assert.deepEqual(yield* taskIdOfNumber(dean, to, 2), Option.some(moving.id));
         // Charles is a member of the workspace it left, and no longer reaches the task where it landed.
         assert.deepEqual(yield* taskIdOfNumber(charles, from, 1), Option.none());
+      }),
+  );
+
+  it.effect(
+    "a member finds each agent on a task by the task's key and the head of its id, and another account finds none",
+    () =>
+      Effect.gen(function* () {
+        const dean = yield* openAccount;
+        const charles = yield* openAccount;
+        const stranger = yield* openAccount;
+        const workspace = yield* openWorkspace(dean);
+        yield* joinWorkspace(workspace, charles);
+        yield* openWorkspace(stranger);
+        const preview = yield* createTask(dean, { name: "Preview", organizationId: workspace });
+        const first = yield* startAgent(dean, preview.id);
+        const second = yield* startAgent(dean, preview.id);
+        const slug = yield* slugOf(workspace);
+
+        assert.deepEqual(
+          yield* taskKeyOfAgent(charles, second.id),
+          Option.some({ slug, number: 1 }),
+        );
+        assert.deepEqual(yield* taskKeyOfAgent(stranger, second.id), Option.none());
+        for (const agent of [first, second]) {
+          const head = agent.id.slice(0, 6);
+          assert.deepEqual(
+            yield* agentIdOfTaskNumber(charles, slug, 1, head),
+            Option.some(agent.id),
+          );
+          assert.deepEqual(yield* agentIdOfTaskNumber(stranger, slug, 1, head), Option.none());
+          assert.deepEqual(yield* agentIdOfTaskNumber(charles, slug, 2, head), Option.none());
+        }
       }),
   );
 });

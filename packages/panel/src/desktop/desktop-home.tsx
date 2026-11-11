@@ -1,5 +1,8 @@
+import { type InboxListed, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { TASK_ORDER, taskTime } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { TERM } from "@repo/features/words";
 import {
   Arrival,
   DetailPage,
@@ -11,7 +14,6 @@ import {
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
-import { TASK_ORDER, taskTime } from "@repo/ui/task-list-model";
 import { useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
@@ -19,14 +21,13 @@ import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { NOTICE_LOOK } from "../tasks/connect-agent-banner.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
-import { type InboxListed, waitsOnReaderNow } from "../tasks/inbox-model.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
 import { NewTaskComposer } from "../tasks/new-task-composer.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
-import { letGoOfFocus, useHomeNewTask, useWelcomed } from "./desktop-welcome.js";
-import { PersonSectionFrame } from "./person-frame.js";
+import { letGoOfFocus, useHomeNewTask, welcomed } from "./desktop-welcome.js";
+import { PERSON_SECTION_FOLD, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
 /**
@@ -43,7 +44,8 @@ import { RecentTasks } from "./recent-tasks.js";
  * the Inbox's own row draws it, a press opening the Inbox on it; then Recent, the listed workspace's tasks with the latest activity,
  * each the Tasks page's row as a person's page lists it (`recent-tasks.tsx`),
  * a press opening it. Its sections are a person's page's (`person-frame.tsx`),
- * whose voice was Home's to begin with. Inbox stands only while something
+ * whose voice was Home's to begin with, each folding on a press on its
+ * head as the person's page's do. Inbox stands only while something
  * waits, so a new account's page is its greeting and composer alone, and a
  * cleared one's Recent rises under the composer. An account with nothing yet
  * is greeted as new.
@@ -164,14 +166,16 @@ function HomeInbox({
       label={TAB_WORDS.INBOX}
       title={TAB_WORDS.INBOX}
       count={waiting.length}
+      noun={TERM.INBOX_ITEM}
       tone={STATUS_TONE.ATTENTION}
+      fold={PERSON_SECTION_FOLD}
     >
       <InboxItemRows label={TAB_WORDS.INBOX} listed={waiting} tasks={tasks} joinsWalk />
     </PersonSectionFrame>
   );
 }
 
-/** Recent: the tasks worked on latest, under a refused read's Retry where the list could not be read, and nothing where neither stands. */
+/** Recent: the tasks worked on latest, under a refused read's Retry where the list could not be read, which stands while Recent is folded too, and nothing where neither stands. */
 function HomeRecent({
   tasks,
   room,
@@ -185,18 +189,20 @@ function HomeRecent({
   const unread = useUnreadTasks({ staged });
   const recent = recentTasks(tasks.listed.tasks, room);
   if (recent.length === 0 && !tasks.listFailed) return null;
+  const refused = tasks.listFailed ? (
+    <div className="home-note my-tight-gap">
+      <ErrorState
+        failure={unreadShown(FAILURE_SURFACE.HOME_TASKS_READ)}
+        onRetry={tasks.onRetryList}
+      >
+        {TASKS_NOT_READ}
+      </ErrorState>
+    </div>
+  ) : null;
+  // Note that a refused read stays under the head while Recent is folded too, so its Retry is never folded away.
   return (
-    <PersonSectionFrame label={RECENT} title={RECENT}>
-      {tasks.listFailed ? (
-        <div className="home-note my-tight-gap">
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.HOME_TASKS_READ)}
-            onRetry={tasks.onRetryList}
-          >
-            {TASKS_NOT_READ}
-          </ErrorState>
-        </div>
-      ) : null}
+    <PersonSectionFrame label={RECENT} title={RECENT} fold={PERSON_SECTION_FOLD} standing={refused}>
+      {refused}
       {recent.length === 0 ? null : (
         <ReplayMask>
           <RecentTasks
@@ -234,7 +240,7 @@ function HomeComposer({
   const refusal = tasks.newTask.homeRefused;
   if (!tasks.signedIn) return null;
   return (
-    <div className="home-composer ph-no-capture mb-page-section-gap" ref={box}>
+    <div className="home-composer mb-page-section-gap" ref={box}>
       <NewTaskComposer
         // Note that each refusal mounts the composer afresh, as the card opens on what it pressed only as it mounts.
         key={refusal?.opening}
@@ -276,7 +282,7 @@ export function DesktopHome({
   const now = useMinute();
   const waiting = read.items.filter(({ item }) => waitsOnReaderNow(item, tasks.me, now));
   const arriving = useArriving(tasks, read, waiting.length);
-  const fresh = useWelcomed(tasks);
+  const fresh = welcomed(tasks);
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.
     <LinkWorkspaceProvider value={tasks.workspace?.slug ?? tasks.workspace?.id}>

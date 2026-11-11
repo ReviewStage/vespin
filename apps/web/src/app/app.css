@@ -41,7 +41,8 @@
    so it stands centered on a phone, whose notch and home indicator the
    screen counts, as on a desktop, and at the one size on both. It comes up
    once the wait has run long enough to notice (`--ui-hint-delay`), so a
-   quick load never flashes it. */
+   quick load never flashes it. Its `display` is what shows it at all,
+   over the `hidden` app.html marks it with until this sheet lands. */
 .boot-frame {
   position: fixed;
   inset: 0;

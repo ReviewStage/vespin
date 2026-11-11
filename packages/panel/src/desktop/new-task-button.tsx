@@ -1,15 +1,6 @@
 import type { TaskStanding } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import {
-  BUTTON_SIZE,
-  ComposeIcon,
-  CornerBadge,
-  DRAFT_WORD,
-  IconButton,
-  PlusIcon,
-  Tooltip,
-} from "@repo/ui";
-import { PencilLineIcon } from "@repo/ui/icons";
+import { BUTTON_SIZE, ComposeIcon, IconButton, PlusIcon, Tooltip } from "@repo/ui";
 import { TASKS_GROUP, type TasksGroupHead } from "@repo/ui/tasks-page-model";
 import type { QuickAddInto } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -38,40 +29,29 @@ export function groupStanding(head: TasksGroupHead): TaskStanding | undefined {
  * dialog over whatever stands, or Home's own composer on Home, the way a
  * chat app keeps its compose button in reach; `onNewTask` asks for it where
  * a press must first leave a place, else the tasks' own door is pressed.
- * Where told, it is the place shown while New task's words are in sight,
- * and wears the Draft pencil at its corner while they wait unseen as the
- * workspace's draft (`composer-drafts.ts`), said to a reader after its
- * name. Pressed by nothing while no one is signed in.
+ * Where told, it is the place shown while New task's words are in sight.
+ * Pressed by nothing while no one is signed in.
  */
 export function NewTaskButton({
   tasks,
   current = false,
-  drafted = false,
   onNewTask = tasks.newTask.onOpen,
 }: {
   tasks: TasksControl;
   /** Whether New task's words are in sight: its card open, or Home shown. */
   current?: boolean;
-  /** Whether its words wait as the workspace's draft, out of sight. */
-  drafted?: boolean;
   onNewTask?: () => void;
 }): React.JSX.Element {
-  const button = (
+  return (
     <Tooltip label="New task" command={APP_COMMAND.NEW_TASK}>
       <IconButton
         icon={<ComposeIcon />}
         label="New task"
         aria-current={current ? "page" : undefined}
-        aria-description={drafted ? DRAFT_WORD : undefined}
         disabled={!tasks.signedIn}
         onClick={onNewTask}
       />
     </Tooltip>
-  );
-  return drafted ? (
-    <CornerBadge mark={<PencilLineIcon aria-hidden="true" />}>{button}</CornerBadge>
-  ) : (
-    button
   );
 }
 

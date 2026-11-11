@@ -76,12 +76,12 @@ import {
   NOT_FOUND_LIVE,
   nextPoll,
   PERSONAL,
+  planRow,
   type RecordPart,
   rowOfTask,
   SECTION_ID,
   subject,
   task,
-  taskRow,
   workspacesLiveRows,
 } from "./testing/tasks-subject.js";
 import { testCipher } from "./testing/test-cipher.js";
@@ -968,26 +968,6 @@ it.effect(
       assert.equal(tasks.snapshot().tasks[0], first.tasks[0]);
       assert.equal(tasks.snapshot().workspaces, first.workspaces);
     }),
-);
-
-it.effect("the window's refresh lists the agents with no task beside the tasks", () =>
-  Effect.gen(function* () {
-    const billing = task(BILLING, "Billing export", "# Billing export", 20);
-    const { call, last, listed } = yield* subject(fakeService([billing]));
-    const triage = agentRow(null, 60_000);
-
-    yield* call("TASKS_REFRESH", undefined);
-    yield* listed([triage]);
-
-    assert.deepEqual(
-      last()?.tasks.map((each) => each.id),
-      [BILLING],
-    );
-    assert.deepEqual(
-      last()?.tasklessAgents?.map((each) => each.id),
-      [triage.id],
-    );
-  }),
 );
 
 it.effect(
@@ -2220,7 +2200,7 @@ it.effect(
       const { unfollow, follow, told, pushed, reset } = yield* subject(service);
       const held = (read: WireValue) => [
         LIVE_READ.PAGES,
-        { [PAGE_OWNER.TASK]: { [INVITES]: read }, [PAGE_OWNER.AGENT]: {} },
+        { [PAGE_OWNER.TASK]: { [INVITES]: read } },
       ];
 
       yield* follow("TASKS_PAGES_FOLLOW", { taskId: INVITES });
@@ -2250,7 +2230,7 @@ it.effect(
       assert.equal(pages.held(), 0);
       assert.deepEqual(
         pushed.findLast(([kind]) => kind === LIVE_READ.PAGES),
-        [LIVE_READ.PAGES, { [PAGE_OWNER.TASK]: {}, [PAGE_OWNER.AGENT]: {} }],
+        [LIVE_READ.PAGES, { [PAGE_OWNER.TASK]: {} }],
       );
     }),
 );
@@ -2278,10 +2258,7 @@ it.effect(
       yield* followSettled;
       assert.equal(seals, 1, "a plan the reader cannot reach is not asked again while held");
       assert.deepEqual(pushed, [
-        [
-          LIVE_READ.PAGES,
-          { [PAGE_OWNER.TASK]: { [INVITES]: { failed: true } }, [PAGE_OWNER.AGENT]: {} },
-        ],
+        [LIVE_READ.PAGES, { [PAGE_OWNER.TASK]: { [INVITES]: { failed: true } } }],
       ]);
 
       yield* unfollow("TASKS_PAGES_FOLLOW", { taskId: INVITES });
@@ -2695,8 +2672,8 @@ it.effect(
 /** The instant the live list is read at, which the test's clock is set to. */
 const LIVE_NOW = 1_800_000_000_000;
 
-/** One agent of the plan, or of none, as the agents statement delivers its row, started `ago` before the list is read, with no turn yet. */
-function agentRow(planId: string | null, ago: number) {
+/** One agent of the plan as the agents statement delivers its row, started `ago` before the list is read, with no turn yet. */
+function agentRow(planId: string, ago: number) {
   return agentListRow(planId, LIVE_NOW - ago);
 }
 
@@ -2717,7 +2694,7 @@ it.effect(
       service.live.list.refuse(undefined);
       yield* TestClock.adjust(Duration.seconds(5));
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [],
         issues: [],
       });
@@ -2750,7 +2727,7 @@ it.effect(
       const { call, last } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations"), taskRow(BILLING, "Billing export")],
+        plans: [planRow(INVITES, "Teammate invitations"), planRow(BILLING, "Billing export")],
         agents: [],
         issues: [],
       });
@@ -2762,7 +2739,7 @@ it.effect(
       );
 
       // Another member deleted the billing task, and nothing else moved.
-      yield* listAnswers(service, { plans: [taskRow(INVITES, "Teammate invitations")] });
+      yield* listAnswers(service, { plans: [planRow(INVITES, "Teammate invitations")] });
 
       assert.deepEqual(
         last()?.tasks.map((row) => row.id),
@@ -2781,7 +2758,7 @@ it.effect(
 
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [agentRow(INVITES, 60_000)],
         issues: [],
       });
@@ -2809,7 +2786,7 @@ it.effect(
 );
 
 it.effect(
-  "a list whose rows stop decoding keeps what it drew and says it is catching up, and is live again once it is read again",
+  "a list stays live across a row that stops decoding, which is left out until it decodes again",
   () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(LIVE_NOW);
@@ -2817,23 +2794,22 @@ it.effect(
       const { call, last, settled } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [],
         issues: [],
       });
       assert.equal(last()?.live, HOST_LIVE.LIVE);
 
-      // A deploy changed the row's shape, so it no longer decodes, and the poll asked again within a second fails the same way.
+      // A deploy changed the row's shape, so it no longer decodes: the row is left out, so the one drawn stands, and the list stays live.
       yield* listAnswers(service, { plans: [{ id: INVITES, title: "Teammate invitations" }] });
       yield* TestClock.adjust(Duration.seconds(1));
       yield* settled;
-      assert.equal(last()?.live, HOST_LIVE.CATCHING_UP);
-      assert.equal(last()?.listStatus, TASKS_READ.READY, "the list drawn stands");
+      assert.equal(last()?.live, HOST_LIVE.LIVE);
+      assert.equal(last()?.listStatus, TASKS_READ.READY);
       assert.equal(last()?.tasks[0]?.name, "Teammate invitations, live");
 
-      // The rows decode again by the time the follow starts again, a pause later.
-      service.live.list.set({ plans: [taskRow(INVITES, "Teammate invitations, again")] });
-      yield* TestClock.adjust(Duration.seconds(5));
+      // The row decodes again, and stands again.
+      yield* listAnswers(service, { plans: [planRow(INVITES, "Teammate invitations, again")] });
       yield* settled;
       assert.equal(last()?.live, HOST_LIVE.LIVE);
       assert.equal(last()?.tasks[0]?.name, "Teammate invitations, again");
@@ -2854,7 +2830,7 @@ it.effect(
 
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [],
         issues: [],
       });

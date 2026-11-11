@@ -31,6 +31,7 @@ import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { AgentTab } from "./agent-tab.js";
+import type { AgentThreads } from "./threads-dock.js";
 
 /**
  * agent-tab-send.test.ts -- a message sent from an agent's tab stands in
@@ -120,6 +121,11 @@ async function drawnTab(
   agent = AGENT_SUMMARY,
   /** What each page says of the agent: the first, and the one that lands `later`. */
   statuses: readonly [AgentStatus, AgentStatus] = [AGENT_STATUS.COMPLETED, AGENT_STATUS.COMPLETED],
+  /** The transcript the first page carries, and the threads the bar over the box draws. */
+  {
+    first = MESSAGES,
+    threads,
+  }: { first?: readonly AgentTranscriptMessage[]; threads?: AgentThreads } = {},
 ) {
   fakeAppBridge({});
   const answers: ((answer: AgentAgentAnswer) => void)[] = [];
@@ -134,13 +140,10 @@ async function drawnTab(
     status,
     title: null,
   });
-  pushedTranscripts(
-    () => [page(MESSAGES, statuses[0]), page([...MESSAGES, ...later], statuses[1])],
-    {
-      page: 1,
-      release: released,
-    },
-  );
+  pushedTranscripts(() => [page(first, statuses[0]), page([...first, ...later], statuses[1])], {
+    page: 1,
+    release: released,
+  });
   const control = agentsControl({
     agents: [agent],
     onMessage: (_agentId, text, clientKey) => {
@@ -167,6 +170,7 @@ async function drawnTab(
                   onOpenSubagent: () => undefined,
                   onOpenTarget: () => undefined,
                   onHeld: () => undefined,
+                  threads,
                 })
               : null,
             createElement(ToastHost),
@@ -311,7 +315,7 @@ test("a Codex or Claude Code agent's box says nothing under it of the plan that 
   for (const runtime of [AGENT_RUNTIME.CODEX, AGENT_RUNTIME.CLAUDE_CODE]) {
     const tab = await drawnTab([], { ...AGENT_SUMMARY, runtime });
     const box = composerEditor(tab.container).closest(".agent-composer") ?? tab.container;
-    for (const words of ["Using ChatGPT plan", "Using Claude plan", "Manage usage"]) {
+    for (const words of ["Codex plan", "Claude plan", "Manage usage"]) {
       assert.ok(!box.textContent?.includes(words), `${runtime} draws no "${words}"`);
     }
   }
@@ -382,6 +386,29 @@ test("a message refused stays where it went, marked Not delivered, the box empty
     "the line tried again stands last",
   );
   assert.equal(statusOf(tab.lines("Rebase on main")[0]), undefined, "and is on its way again");
+});
+
+test("a message the plan's usage limit refused says the limit's words where Not delivered stands, its mark's Retry sending it again", async () => {
+  const tab = await drawnTab([]);
+  await tab.send("Rebase on main");
+
+  await tab.answer(0, {
+    failure: AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED,
+    resetsAt: Date.UTC(2026, 10, 10, 4),
+  });
+  const [line] = tab.lines("Rebase on main");
+  assert.match(statusOf(line) ?? "", /^Usage limit reached · Resets /u);
+
+  const mark =
+    line?.querySelector<HTMLButtonElement>('button[aria-label^="Usage limit reached"]') ??
+    assert.fail("the line's mark is named by the limit's words");
+  await act(async () => mark.click());
+  await act(async () => menuItem("Retry").click());
+  await settle();
+  assert.deepEqual(
+    tab.sent.map((each) => each.text),
+    ["Rebase on main", "Rebase on main"],
+  );
 });
 
 test("Edit takes a message that did not go back into the box, ahead of the words written since, and lets its line go", async () => {
@@ -500,4 +527,44 @@ test("a line another hand sent after a stopped turn puts the tab to work once th
     tab.container.querySelector('button[aria-label="Queue"]'),
     "holding ⌘ turns Send into Queue",
   );
+});
+
+test("with Done and follow-ups on, the follow-ups a done turn offered stand in the bar, and the ticked ones go out under the box's words", async () => {
+  const ended: AgentTranscriptMessage = {
+    id: "ended",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: {
+          summary: "- Fixed the tile.",
+          followUps: ["Show pending invitations", "Let an admin revoke an invitation"],
+        },
+        output: { status: "accepted" },
+      },
+    ],
+  };
+  const threads: AgentThreads = { waiting: [], posted: [], onOpen: () => undefined, turnEnd: true };
+  const tab = await drawnTab([], AGENT_SUMMARY, undefined, {
+    first: [...MESSAGES, ended],
+    threads,
+  });
+  const tick =
+    [...tab.container.querySelectorAll<HTMLElement>('[role="checkbox"]')].find(
+      (each) => each.textContent === "Let an admin revoke an invitation",
+    ) ?? assert.fail("each follow-up is a row that ticks");
+  await act(async () => tick.click());
+  await tab.send("Keep the link valid for a week.");
+
+  assert.deepEqual(
+    tab.sent.map((each) => each.text),
+    ["Keep the link valid for a week.\n\nFollow-ups:\n- Let an admin revoke an invitation"],
+  );
+
+  // The ticks went with that message, so the next one carries the box's words alone.
+  await tab.answer(0, TAKEN);
+  await tab.send("Then run the tests.");
+  assert.equal(tab.sent[1]?.text, "Then run the tests.");
 });

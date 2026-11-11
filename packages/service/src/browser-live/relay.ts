@@ -16,7 +16,7 @@
  * here: it reaches the panel alone (root `AGENTS.md`'s cloud browser line).
  *
  * Takeover goes over this same socket, on the tabs contract's store and
- * terms (`agent-browser-tabs-procedures.ts`): a member who controls the
+ * terms (`agent-browser-tabs.ts`): a member who controls the
  * agent takes the tab for `BROWSER_TAKEOVER_HOLD_MS`, and their input moves
  * the takeover on, written at most every `RENEW_EVERY`, so the takeover
  * always stands well past their last input. A takeover is the member's
@@ -44,9 +44,9 @@
  * only until the last write lapses, and the tab's screencast is stopped as
  * the view ends.
  *
- * While the browser is reached, the connection touches the sandbox
- * (`@repo/sandbox`'s `touch`) every `SANDBOX_TOUCH_EVERY`, so a member
- * watching after the agent's turn ended is never cut off by its idle stop.
+ * The view never holds its sandbox up: only agent or terminal activity
+ * does, and an agent open in a focused window is that (`@repo/sandbox`'s
+ * `SANDBOX_IDLE`), so a sandbox the view reaches stops on that rule alone.
  * The panel says it is watching while it is shown, and a viewport counts
  * only where it resizes the view, since an older panel sends the same size
  * again whether shown or not. The socket closes as idle once the panel has
@@ -76,7 +76,6 @@ import {
   type BrowserLiveServerMessage,
   browserLiveClientMessageSchema,
 } from "@repo/features/browser-live-wire";
-import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -94,14 +93,14 @@ import {
   type Scope,
   Stream,
 } from "effect";
-import { BROWSER_TAKEOVER_HOLD_MS } from "../agents/agent-browser-tabs-procedures.js";
+import { BROWSER_TAKEOVER_HOLD_MS } from "../agents/agent-browser-tabs.js";
 import { controlsAgent } from "../agents/agent-reach.js";
 import { BROWSER_UNREACHABLE, type BrowserUnreachable } from "../agents/browser/agent-browser.js";
 import { EXCESS_KEYS, type UnparsedWireValue } from "../core.js";
 import type { ServerAgentTool } from "../events/server-events.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
 import { jsonOf } from "../http/http-effect.js";
-import { NO_TOPICS, Sync } from "../sync/watch.js";
+import { Sync } from "../sync/watch.js";
 import type { RelaySocket } from "../terminal/relay.js";
 import { BROWSER_LIVE_BOUNDS } from "./bounds.js";
 
@@ -161,8 +160,6 @@ export interface BrowserLiveDependencies {
     targetId: string,
     page: { readonly address: string; readonly title: string },
   ) => Effect.Effect<void>;
-  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
-  readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
 
 /** The panel left: it is sent no close. */
@@ -494,13 +491,10 @@ function checkTab(view: LiveView): Effect.Effect<boolean> {
 /**
  * The topics a write that moves the tab, or the member's reach of it,
  * notifies: the tab's task, which its row, its agent's, and the task's own
- * name, and the member's account, which their memberships name. Note that a
- * tab on no task names no topic of its own, so it is read on the clock
- * alone, as before Sync.
+ * name, and the member's account, which their memberships name.
  */
 function tabTopics(view: LiveView): readonly SyncTopic[] {
   const { taskId } = view.reached.tab;
-  if (taskId === null) return NO_TOPICS;
   return [
     [TOPIC.TASK, taskId],
     [TOPIC.ACCOUNT, view.ask.userId],
@@ -948,12 +942,6 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
         : BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
     }
     const cdp = connected.success;
-    // The connect resumed the sandbox where it was stopped, so it is touched from here for as long as the view stands.
-    yield* Effect.forkScoped(
-      Effect.repeat(deps.touch(session.success.value), {
-        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
-      }),
-    );
     // The tab is read again, since a browser that started afresh reopened it on a new target.
     const current = yield* Effect.result(
       deps.readTab(view.ask.userId, view.ask.place, view.ask.tabId),

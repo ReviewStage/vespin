@@ -42,7 +42,7 @@
  * The other two (`GET` and `POST /api/pull-requests/chapters`) name the pull
  * request by its workspace, repository, and number in the query, for one no
  * agent opened, and reach it as its other reads by repository do
- * (`github/repository-pull-request-procedures.ts`): a workspace the account
+ * (`github/repository-pull-request.ts`): a workspace the account
  * is no member of is not found. The read confirms the repository in reach
  * on a minted token and answers as the agent's read does, asking GitHub for
  * nothing more and starting no model call. The Generate reads the pull
@@ -114,10 +114,7 @@ import {
   pullRequestCommitMessages,
   pullRequestFiles,
 } from "../github/pull-requests.js";
-import {
-  reachedByNumber,
-  reachedRepository,
-} from "../github/repository-pull-request-procedures.js";
+import { reachedByNumber, reachedRepository } from "../github/repository-pull-request.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import {
   HOSTED_REFUSAL,
@@ -155,6 +152,13 @@ const reachedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string
   const { agent } = yield* reachedAgentById(userId, id);
   return agent;
 });
+
+/** A repository's pull request as a read by its repository names it: the workspace that reaches it, the repository, and the number. */
+interface RepositoryPullRequest {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}
 
 /** What a pull request's chapters are kept under: its repository, and the workspace that reaches it. */
 interface ChaptersOf {
@@ -327,7 +331,7 @@ interface GenerateOn {
 }
 
 /** Haiku's tier, which every Generate runs on, on the member's own API key, the one they picked first; none where they saved none. */
-const modelOf = (seams: PullRequestChaptersProcedureSeams, userId: string) =>
+const modelOf = (seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">, userId: string) =>
   Effect.map(ownKeysFor(userId), (keys): GenerateOn | undefined => {
     const [own] = keys;
     return own === undefined
@@ -511,6 +515,77 @@ const generatedFor = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* answerOf(subject, pullRequest.number, generator);
 });
 
+/**
+ * The operations each door runs: the chapters resource's procedures below
+ * and the member MCP server's chapters tools (`member-mcp/tools.ts`), so a
+ * read or a Generate made either way is the same one, held to the same
+ * reach, the same key of the asker's own, and the same claim.
+ */
+
+/**
+ * The workspace's newest chapters for the agent's repository's pull request
+ * the number names, as the agent's read answers them; where none is named,
+ * for the agent's own pull request as its Pull request tab finds it, none
+ * where it opened none yet.
+ */
+export const agentChaptersRead = /* @__PURE__ */ Effect.fnUntraced(function* (
+  published: Effect.Effect<PublishedCache>,
+  userId: string,
+  agent: Agent,
+  number: number | undefined,
+) {
+  const asked =
+    number ?? (yield* askedPullRequest(yield* published, userId, agent, undefined))?.number;
+  if (asked === undefined) return { pullRequest: null };
+  const { kept, generator } = yield* agentChaptersAdmission(userId, agent);
+  if (Option.isNone(kept)) return { pullRequest: null };
+  return yield* answerOf(kept.value, asked, generator);
+});
+
+/** The agent's own pull request's chapters generated now, or another of its repository's the number names, on the asker's own key; unavailable where they saved none. */
+export const agentChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">,
+  published: Effect.Effect<PublishedCache>,
+  userId: string,
+  agent: Agent,
+  number: string | undefined,
+) {
+  // The model runs on the presser's own key, while the chapters it tells are the workspace's.
+  const on = yield* modelOf(seams, userId);
+  if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  const subject = yield* subjectOf(published, userId, agent, number);
+  if (Option.isNone(subject)) return { pullRequest: null };
+  return yield* generatedFor(userId, on, subject.value);
+});
+
+/** A repository's pull request's chapters as the workspace keeps them, by the workspace, repository, and number; not found for a workspace the asker is no member of. */
+export const repositoryChaptersRead = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  query: RepositoryPullRequest,
+) {
+  const { subject } = yield* reachedRepository(userId, query);
+  // What the reader's Generate would run on, as the agent's read asks it.
+  return yield* answerOf(subject, query.number, yield* generatorFor(userId));
+});
+
+/** That pull request's chapters generated now on the asker's own key; not found where the repository holds none of the number. */
+export const repositoryChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">,
+  userId: string,
+  query: RepositoryPullRequest,
+) {
+  // The pull request is reached before the presser's key is asked about, so a non-member is refused alike whatever key they saved.
+  const { token, subject, found } = yield* reachedByNumber(userId, query, pullRequestByNumber);
+  const on = yield* modelOf(seams, userId);
+  if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  return yield* generatedFor(userId, on, {
+    repository: subject.repository,
+    organizationId: subject.organizationId,
+    token,
+    pullRequest: found,
+  });
+});
+
 /** The chapters resource: the read and the Generate through an agent and by the repository and number, each to a signed-in caller. */
 export function pullRequestChaptersProcedures(seams: PullRequestChaptersProcedureSeams) {
   const signedIn = hosted.pullRequestChapters.use(accountMiddleware(seams.resolveUserId));
@@ -521,42 +596,26 @@ export function pullRequestChaptersProcedures(seams: PullRequestChaptersProcedur
       const number = yield* pullRequestNumberOf([input.number]);
       // One number named always reads as one or is refused.
       if (number === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-      const { kept, generator } = yield* agentChaptersAdmission(context.userId, agent);
-      if (Option.isNone(kept)) return { pullRequest: null };
-      return yield* answerOf(kept.value, number, generator);
+      return yield* agentChaptersRead(published, context.userId, agent, number);
     }),
 
     generate: signedIn.generate.effect(function* ({ input, context }) {
       const agent = yield* reachedAgent(context.userId, input.params.id);
-      // The model runs on the presser's own key, while the chapters it tells are the workspace's.
-      const on = yield* modelOf(seams, context.userId);
-      if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-      const subject = yield* subjectOf(published, context.userId, agent, input.query?.number);
-      if (Option.isNone(subject)) return { pullRequest: null };
-      return yield* generatedFor(context.userId, on, subject.value);
+      return yield* agentChaptersGenerate(
+        seams,
+        published,
+        context.userId,
+        agent,
+        input.query?.number,
+      );
     }),
 
     repositoryRead: signedIn.repositoryRead.effect(function* ({ input, context }) {
-      const { subject } = yield* reachedRepository(context.userId, input);
-      // What the reader's Generate would run on, as the agent's read asks it.
-      return yield* answerOf(subject, input.number, yield* generatorFor(context.userId));
+      return yield* repositoryChaptersRead(context.userId, input);
     }),
 
     repositoryGenerate: signedIn.repositoryGenerate.effect(function* ({ input, context }) {
-      // The pull request is reached before the presser's key is asked about, so a non-member is refused alike whatever key they saved.
-      const { token, subject, found } = yield* reachedByNumber(
-        context.userId,
-        input.query,
-        pullRequestByNumber,
-      );
-      const on = yield* modelOf(seams, context.userId);
-      if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-      return yield* generatedFor(context.userId, on, {
-        repository: subject.repository,
-        organizationId: subject.organizationId,
-        token,
-        pullRequest: found,
-      });
+      return yield* repositoryChaptersGenerate(seams, context.userId, input.query);
     }),
   };
 }

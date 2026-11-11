@@ -10,16 +10,21 @@ import {
   COMBOBOX_HEADING,
   COMBOBOX_ITEM,
   COMBOBOX_ITEM_DETAIL,
+  COMBOBOX_ITEM_DETAIL_UNDER,
   COMBOBOX_ITEM_END,
   COMBOBOX_ITEM_GLYPH,
   COMBOBOX_ITEM_HINT,
   COMBOBOX_ITEM_LABEL,
+  COMBOBOX_ITEM_LABEL_STACKED,
   COMBOBOX_ITEM_LEAD,
+  COMBOBOX_ITEM_TALL,
   COMBOBOX_LIST,
   COMBOBOX_WELL,
 } from "../../shadcn/combobox.js";
 import { INPUT_CONTROL, INPUT_FIELD } from "../../shadcn/input.js";
 import { ANNOUNCE, useAnnounce } from "../announcer/announcer.js";
+import { BUTTON_LIGHT, BUTTON_SIZE } from "../button/button.js";
+import { MoreButton } from "../more-button/more-button.js";
 import { OneLine } from "../one-line/one-line.js";
 import { SCROLL_FADE, type ScrollFade, scrollFadeMarks } from "../scroll-area/scroll-area.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
@@ -134,6 +139,8 @@ export interface ComboboxOption {
   readonly icon?: ReactNode;
   /** Words after the name, quieter, which give way to it in a narrow list. */
   readonly detail?: ReactNode;
+  /** Whether the detail stands on a line of its own under the name, wrapping, as a mode's one-line hint does, rather than after it. */
+  readonly detailUnder?: boolean | undefined;
   /** Whether the option names a person's thing, kept masked in a screen recording whole, its glyph and lead with its words, whatever mark stands round its list. */
   readonly replayMasked?: boolean | undefined;
   /** The detail in plain words, where `detail` draws them as a tree (marked for a screen recording), so its hint still says it whole. */
@@ -153,6 +160,22 @@ export interface ComboboxOption {
   readonly current?: boolean | undefined;
   /** The card hung beside the option while the pointer rests on it, as a row of ⌘K hangs its agent's; none hangs nothing. */
   readonly card?: ReactNode;
+  /** A ⋯ before its end, opening the acts on its thing while a press on the option still chooses it; none draws no ⋯. */
+  readonly more?: ComboboxOptionMore | undefined;
+}
+
+/**
+ * An option's ⋯: what it acts on, which names it, whether the acts it opens
+ * stand open, and what a press on it does. It stands before the check, as a
+ * list row's ⋯ stands at the row's end, shown as the option is highlighted
+ * or the pointer rests on it, and while its acts stand open, its room kept
+ * whether it shows or not (`combobox.css`, over `row-menu.css`).
+ */
+export interface ComboboxOptionMore {
+  /** What it acts on, as a sentence opens with it: "Sound" names it "Sound actions". */
+  readonly thing: string;
+  readonly expanded: boolean;
+  readonly onPress: () => void;
 }
 
 /** A run of options under a heading, or under none. */
@@ -188,6 +211,10 @@ export function ComboboxOptionItem({
   option: ComboboxOption;
   place?: VirtualRowPlace | undefined;
 } & ComboboxOptionEngineProps): React.JSX.Element {
+  const under = option.detailUnder === true && option.detail !== undefined;
+  const more = option.more;
+  // Note that an option with a ⋯ keeps its end's room though it is not chosen, so the ⋯ of every such option stands in one column.
+  const ended = option.opens === true || option.current === true || more !== undefined;
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the field or the engine reads the keys and names this option active.
     <div
@@ -203,7 +230,9 @@ export function ComboboxOptionItem({
         option.disabled === true ? undefined : pulseOnPress(engine.onClick, PRESS_PULSE.QUIET)
       }
       {...(option.replayMasked === true ? REPLAY_MASKED : undefined)}
-      className={cn("ui-combobox-option", COMBOBOX_ITEM)}
+      data-row-menu={more === undefined ? undefined : ""}
+      data-menu-open={more?.expanded === true ? "true" : undefined}
+      className={cn("ui-combobox-option", COMBOBOX_ITEM, under && COMBOBOX_ITEM_TALL)}
       style={place?.style}
     >
       {option.lead === undefined ? null : (
@@ -222,14 +251,21 @@ export function ComboboxOptionItem({
         <span className={cn("ui-combobox-option-glyph", COMBOBOX_ITEM_GLYPH)}>{option.icon}</span>
       )}
       {/* Note that the name and its detail fade where the row cuts them short, as every cut line of the app does, rather than ending in an ellipsis. */}
-      <span className={cn("ui-combobox-option-label", COMBOBOX_ITEM_LABEL)}>
+      <span
+        className={cn(
+          "ui-combobox-option-label",
+          COMBOBOX_ITEM_LABEL,
+          under && COMBOBOX_ITEM_LABEL_STACKED,
+        )}
+      >
         {/* A label drawn as a tree (marked for a recording, or a search's matches) is measured by its plain words, so its hint still says it whole. */}
         <OneLine words={typeof option.label === "string" ? undefined : option.words}>
           {option.label}
         </OneLine>
+        {under ? <span className={COMBOBOX_ITEM_DETAIL_UNDER}>{option.detail}</span> : null}
       </span>
       {/* Note that the first of the detail, the hint, and the end to stand pushes the rest to the row's end. */}
-      {option.detail === undefined ? null : (
+      {option.detail === undefined || under ? null : (
         <span className={cn("ui-combobox-option-detail", COMBOBOX_ITEM_DETAIL, "ml-auto")}>
           <OneLine words={option.detailWords}>{option.detail}</OneLine>
         </span>
@@ -239,21 +275,50 @@ export function ComboboxOptionItem({
           className={cn(
             "ui-combobox-option-hint",
             COMBOBOX_ITEM_HINT,
-            option.detail === undefined && "ml-auto",
+            (option.detail === undefined || under) && "ml-auto",
           )}
         >
           {option.hint}
         </span>
       )}
-      {option.opens === true || option.current === true ? (
+      {/* Note that a press on the ⋯ never chooses the option, and the list keeps it from taking the focus from the field. */}
+      {more === undefined ? null : (
+        <span
+          className={cn(
+            "ui-row-more ui-combobox-option-more",
+            (option.detail === undefined || under) && option.hint === undefined && "ml-auto",
+          )}
+        >
+          <MoreButton
+            thing={more.thing}
+            size={BUTTON_SIZE.COMPACT}
+            lights={BUTTON_LIGHT.GLYPH}
+            tabbable={false}
+            aria-haspopup="menu"
+            aria-expanded={more.expanded}
+            onClick={(event) => {
+              event.stopPropagation();
+              more.onPress();
+            }}
+          />
+        </span>
+      )}
+      {ended ? (
         <span
           className={cn(
             "ui-combobox-option-end",
             COMBOBOX_ITEM_END,
-            option.detail === undefined && option.hint === undefined && "ml-auto",
+            (option.detail === undefined || under) &&
+              option.hint === undefined &&
+              more === undefined &&
+              "ml-auto",
           )}
         >
-          {option.opens === true ? <ChevronRightIcon /> : <CheckIcon />}
+          {option.opens === true ? (
+            <ChevronRightIcon />
+          ) : option.current === true ? (
+            <CheckIcon />
+          ) : null}
         </span>
       ) : null}
     </div>

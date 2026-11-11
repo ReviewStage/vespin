@@ -157,7 +157,6 @@ function mount(
       : {
           rows: {
             [INBOX_SCOPE_KIND.PLAN]: items.length === 0 ? {} : { [RETRIES.id]: items },
-            [INBOX_SCOPE_KIND.AGENT]: {},
           },
         },
     inbox: {
@@ -353,7 +352,7 @@ test("a right-click on an Inbox row opens the Inbox row's own menu, and opens no
   assert.equal(router.history.location.pathname, HOME_AT, "no item opens");
 });
 
-test("nothing waiting draws no Inbox section, but an Inbox that could not be read says so, and a list that could not be read says so under Recent", async () => {
+test("nothing waiting draws no Inbox section, but an Inbox that could not be read says so, and a list that could not be read says so under Recent, folded or not", async () => {
   // Note that the feed that could not be read comes first, since the test's one client keeps a feed that answered, as the window does.
   const unread = mount({}, [RETRY_429], SHELL_ROOM.WIDE, true);
   await vi.waitFor(() =>
@@ -368,6 +367,17 @@ test("nothing waiting draws no Inbox section, but an Inbox that could not be rea
   const refused = mount({ listRead: false, listFailed: true }, []);
   await settle();
   assert.match(refused.page.textContent ?? "", /Your tasks could not be read\./u);
+  const head = refused.page.querySelector<HTMLButtonElement>(
+    'section[aria-label="Recent"] button[aria-expanded]',
+  );
+  act(() => head?.click());
+  await vi.waitFor(() => assert.equal(head?.getAttribute("aria-expanded"), "false"));
+  await settle();
+  assert.match(refused.page.textContent ?? "", /Your tasks could not be read\./u);
+  assert.ok(
+    [...refused.page.querySelectorAll("button")].some((each) => each.textContent === "Retry"),
+    "its Retry stands while Recent is folded",
+  );
 });
 
 /** A new account, its one model connected, over a workspace that reaches no repository. */

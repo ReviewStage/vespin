@@ -28,7 +28,7 @@ import { Tooltip } from "../tooltip/hint.js";
  * the success color, and the window's `Announcer` says "Copied"
  * politely; a clipboard that refused turns it to the alert, in the danger
  * color, and the announcer says so as an alert. Either stands for the
- * toast's short hold (`TOAST_HOLD.DONE`), so a copy answered on its button
+ * toast's hold (`TOAST_HOLD`), so a copy answered on its button
  * and one answered by a toast last the same, then the copy glyph comes back
  * and the announcer's words are taken back with it, as they are by a later
  * answer, so a refusal a retry answered is left nowhere for a reader. Its name stays as it was throughout, so
@@ -236,7 +236,7 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
       said.current = announce(COPY_SAID[state], COPY_ANSWER[state]);
       hold.start(
         Effect.andThen(
-          Effect.sleep(TOAST_HOLD.DONE),
+          Effect.sleep(TOAST_HOLD),
           Effect.sync(() => {
             turn(COPY_STATE.IDLE);
             said.current();

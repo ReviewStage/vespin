@@ -15,6 +15,7 @@ import {
   type TaskBlockRequest,
   type TaskRelationChangeRequest,
 } from "@repo/features/task-wire";
+import { repositoryChangeFailureNote } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
   type ParentCallFailure,
@@ -30,13 +31,12 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
-import { repositoryChangeFailureNote } from "@repo/ui/tasks-model";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
-import { heldTask, pressWrite, type TaskRows, taskRow, type UndoWrite } from "../undo-stack.js";
+import { useToast } from "../toast.js";
+import { drawnTask, heldTask, pressWrite, type TaskRows, type UndoWrite } from "../undo-stack.js";
 import {
   appStateIn,
   appStateQuery,
@@ -160,17 +160,17 @@ const RELATION_WRITE = {
     kind: ACT_KIND.TASKS_SET_PARENT,
     read: (rows, { taskId }) => {
       const parentTaskId =
-        taskRow(rows, taskId)?.parentTaskId ?? heldTask(rows, taskId)?.parentTaskId;
+        drawnTask(rows, taskId)?.parentTaskId ?? heldTask(rows, taskId)?.parentTaskId;
       return parentTaskId === undefined ? undefined : { taskId, parentTaskId };
     },
     act: (send, { taskId }) => relationAsked(send({ taskId, parentTaskId: null })),
     undo: (send, { taskId, parentTaskId }) => relationAsked(send({ taskId, parentTaskId })),
     holds: (rows, { taskId }) => {
-      const task = taskRow(rows, taskId);
+      const task = drawnTask(rows, taskId);
       return task !== undefined && task.parentTaskId === undefined;
     },
     undone: (rows, { taskId, parentTaskId }) =>
-      taskRow(rows, taskId)?.parentTaskId === parentTaskId,
+      drawnTask(rows, taskId)?.parentTaskId === parentTaskId,
     refused: relationRefused,
     surface: FAILURE_SURFACE.TASK_PARENT,
     about: ({ taskId }) => ({ taskId }),
@@ -253,7 +253,6 @@ export function useTaskRelationWrites(): TaskRelationWrites {
         replayUnmasked: true,
         words,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface, cause: answer, about: { taskId } },
       });
     });

@@ -9,7 +9,7 @@
  * page, the window past every surface, and the window's Tasks tab as it goes
  * to a place. Each surface's choice lives with it, a place in the app
  * answered by the declaration its route matched, keyed by its name
- * (`LinkPlaceName`), and a page on the web by the surface's own answers
+ * (`LinkDestinationName`), and a page on the web by the surface's own answers
  * (`pull-request-beside.ts`, `inbox-item-links.ts`'s `fileBeside`); the list
  * below is where the choices are stated together, and nothing else decides
  * them: a surface asks its own of every link pressed on it first
@@ -19,12 +19,14 @@
  * its own door's: which tab stands for the thing, and how the window goes to
  * a place, kind by kind.
  *
- * The choices, by surface:
+ * The choices, by surface, where the account opens pull requests in the
+ * app; where it chose GitHub (`pull-request-opens.ts`), a pull request's page
+ * leaves for the browser from every surface:
  *
  * - An Inbox item (`inbox-item-links.ts`) opens beside it what the panel
  *   standing for what holds it draws: a file of any repository, read through
- *   the item's workspace where it is not the item's own, a page of any task
- *   or agent on no task, read on its own place where it is not the item's,
+ *   the item's workspace where it is not the item's own, a page of any task,
+ *   read on its own place where it is not the item's,
  *   an archived agent's Changes, one of its task's agents' transcripts, at a
  *   message of it where the link names one, a review thread of one of its
  *   agents' pull requests, and a pull request as `pullRequestBeside` opens
@@ -51,7 +53,7 @@
  */
 
 import {
-  LINK_PLACE,
+  LINK_DESTINATION,
   type PullRequestThreadView,
   pullRequestAddressOf,
   type ReadLink,
@@ -96,6 +98,8 @@ export type Address =
       readonly number: number;
       /** The agent of a task or the agent on no task the window lists that opened it, and its task; none where the window lists none, or is not asked. */
       readonly listed: ReturnType<typeof listedPullRequestOf>;
+      /** Whether the account opens pull requests on GitHub (`pull-request-opens.ts`), so no surface opens it in a tab and the window leaves it for the browser; none where it is not asked. */
+      readonly onGitHub?: boolean;
     }
   | {
       readonly kind: typeof ADDRESS.FILE;
@@ -116,8 +120,6 @@ export const HERE = {
   INBOX_ITEM: "inbox-item",
   /** A task's page. */
   TASK: "task",
-  /** An agent's own page. */
-  AGENT: "agent",
 } as const;
 
 /** The things a press opens beside a surface, in the panel there, or, an Inbox item, in the Inbox the surface stands in. */
@@ -168,8 +170,8 @@ export type Thing =
   | {
       readonly kind: typeof THING.INBOX_ITEM;
       readonly itemId: string;
-      /** The task that holds it; none for an item of an agent on no task. */
-      readonly taskId: string | undefined;
+      /** The task that holds it. */
+      readonly taskId: string;
       /** The agent that posted it, where the link names it under its agent. */
       readonly agentId: string | undefined;
     };
@@ -199,11 +201,11 @@ export const NOTHING: Route = { kind: ROUTE.NOTHING };
 function mentionedLinkOf(mention: ReturnType<typeof decodeMention>): ReadLink | undefined {
   switch (mention?.kind) {
     case MENTION_KIND.TASK:
-      return { workspace: "", place: { kind: LINK_PLACE.TASK, planId: mention.taskId } };
+      return { workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: mention.taskId } };
     case MENTION_KIND.SECTION:
       return {
         workspace: "",
-        place: { kind: LINK_PLACE.SECTION, planId: mention.taskId, anchor: mention.anchor },
+        place: { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor },
       };
     default:
       return undefined;

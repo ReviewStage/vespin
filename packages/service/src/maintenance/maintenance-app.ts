@@ -4,10 +4,15 @@ import type { Sandbox } from "@repo/sandbox";
 import { Effect, Layer } from "effect";
 import { HttpClient, HttpRouter } from "effect/http";
 import { keepRunningSandboxesUp, reconcileAgents } from "../agents/coder-host/reconcile.js";
+import { resumeWaitedTurns } from "../agents/coder-host/steer.js";
 import { republishQueuedTurns } from "../agents/coder-host/turn-delivery.js";
+import { releaseUnusedSandboxes } from "../agents/session-sandboxes.js";
 import { HostedEnvironment } from "../environment.js";
+import type { GitHubApp } from "../github/github-app.js";
 import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
 import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js";
+import { releaseHeldPushes } from "../push/inbox-pushes.js";
+import { refreshLiveActivities } from "../push/live-activities.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
 import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
@@ -28,7 +33,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
 ): Effect.fn.Return<
   Response,
   unknown,
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | Sandbox
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   const environment = yield* HostedEnvironment;
   // The reap asks the agents' machines where their runners stand, over the deployment's own client.
@@ -42,6 +47,10 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
       Effect.provideService(reconcileAgents(now), HttpClient.HttpClient, http),
     republishTurns: republishQueuedTurns,
     keepSandboxesUp: keepRunningSandboxesUp,
+    resumeWaitedTurns,
+    releaseHeldPushes,
+    refreshLiveActivities: () => refreshLiveActivities(),
+    releaseSandboxes: releaseUnusedSandboxes,
   });
 });
 
@@ -51,7 +60,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
  * since `vercel.json` sends the function only its own path.
  */
 export function maintenanceApp(): WebRoutes<
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | Sandbox
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   return Layer.mergeAll(
     // `ANY_METHOD`, not `GET`: the handler decides its own method refusal, so a

@@ -1,4 +1,14 @@
 import assert from "node:assert/strict";
+import {
+  AGENT_PART,
+  agentParts,
+  agentRows,
+  delegates,
+  messageWords,
+  placedMessages,
+  startedAgentOf,
+} from "@repo/features/agent-parts";
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
   AGENT_FAILURE,
@@ -15,49 +25,53 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
+import { effortFor } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_PROVIDER,
+  PROVIDER_KEY_STATUS,
+  type SubscriptionKeySummary,
+} from "@repo/features/provider-key-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
+import { TOOL_STATE } from "@repo/features/tool-call-block";
+import { TURN_ROW } from "@repo/features/turn-rows";
+import { MESSAGE_ROLE, TURN_STATUS, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { test } from "vitest";
-import { TOOL_STATE } from "../ai-elements/tool.js";
 import {
-  AGENT_PART,
   agentLines,
-  agentParts,
   agentWorkingSince,
   checkoutCommand,
   choiceLabel,
   choiceModelId,
   choiceOn,
   continueFailureNote,
-  delegates,
   dockedPullRequests,
-  effortFor,
+  finishedReplyLead,
+  lastTurnEnding,
   messageFailureNote,
-  messageFailureWords,
-  messageWords,
   modelLabel,
   noteWhileOffline,
   offeredModels,
   offersStop,
   openingLineOf,
-  placedMessages,
+  payerPlanName,
   planPayerOf,
-  publishedUrl,
   pullRequestPillLabel,
   pullRequestStateWord,
   readModelChoice,
   SENT_LINE_STATE,
   type SentLine,
-  startedAgentOf,
   startFailureNote,
   type TabSends,
   tabTurnOf,
   transcriptRowKey,
   unreadOpeningLine,
   unreadSentLines,
+  wakeupDelayOf,
+  workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
 
@@ -135,6 +149,129 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
     { kind: AGENT_PART.OTHER },
     { kind: AGENT_PART.OTHER },
   ]);
+});
+
+test("a finished turn that ended with end_turn replies in its summary, folding the words it wrote on the way with its work, while a turn still moving keeps its words", () => {
+  const summary = "- Fixed the failing check.\n- Pushed to #214.";
+  const turn: AgentTranscriptMessage = {
+    id: "t",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "text", text: "Reading the check's log." },
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: { summary, followUps: ["Show pending invitations on the Members page"] },
+        output: { status: "accepted" },
+      },
+      { type: "text", text: "It's all in the summary above." },
+    ],
+  };
+  const words = (moving: boolean) =>
+    agentRows(turn, moving).flatMap((row) =>
+      row.kind === TURN_ROW.BLOCK && row.block.kind === AGENT_PART.TEXT ? [row.block.text] : [],
+    );
+
+  assert.deepEqual(words(false), [summary]);
+  assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
+  assert.equal(messageWords(turn), summary);
+  assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
+  // A follow-up offered twice is one to tick.
+  const twice: AgentTranscriptMessage = {
+    ...turn,
+    parts: [
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: { summary, followUps: ["Add a Members page", " Add a Members page", "Resend"] },
+        output: { status: "accepted" },
+      },
+    ],
+  };
+  assert.deepEqual(lastTurnEnding([twice])?.followUps, ["Add a Members page", "Resend"]);
+  // A line the turn took in under way stands after its journal yet waits on no turn; one no turn took does.
+  const line = (taken: boolean): AgentTranscriptMessage => ({
+    id: taken ? "steer" : "next",
+    role: MESSAGE_ROLE.USER,
+    parts: [{ type: "text", text: "Keep the link valid for a week." }],
+    ...(taken ? { arrivedIn: { journalId: twice.id, afterStep: 1 } } : {}),
+  });
+  assert.equal(lastTurnEnding([twice, line(true)])?.messageId, twice.id);
+  assert.equal(lastTurnEnding([twice, line(false)]), undefined);
+  // A later call refused stands for the turn, which then replies in its own words.
+  const refused: AgentTranscriptMessage = {
+    ...turn,
+    parts: [
+      ...turn.parts,
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_again",
+        state: "output-available",
+        input: { summary: "" },
+        output: { status: "rejected", reason: "A summary is required." },
+      },
+    ],
+  };
+  assert.equal(messageWords(refused), "Reading the check's log.\n\nIt's all in the summary above.");
+});
+
+test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {
+  type Call = { input: Record<string, number | string | boolean>; output?: WireValue };
+  const turnWith = (tool: string, ...calls: Call[]) => ({
+    id: "t",
+    role: "assistant" as const,
+    parts: [
+      { type: "text", text: "Pushed; waiting on the checks." },
+      ...calls.map((call, index) => ({
+        type: `tool-${tool}`,
+        toolCallId: `call_${index}`,
+        state: "output-available",
+        input: call.input,
+        output: call.output ?? "ok",
+      })),
+    ],
+  });
+  assert.equal(
+    wakeupDelayOf(turnWith("ScheduleWakeup", { input: { delaySeconds: 270, prompt: "Check CI" } })),
+    270_000,
+  );
+  // The service held the booking to a minute, which its answer names, so the head says a minute and not the second asked.
+  assert.equal(
+    wakeupDelayOf(
+      turnWith("schedule_wakeup", {
+        input: { delaySeconds: 1, prompt: "Check CI" },
+        output: {
+          status: "accepted",
+          wakeup: { at: "2026-10-21T12:01:00.000Z", delaySeconds: 60 },
+        },
+      }),
+    ),
+    60_000,
+  );
+  // A refused call left the booking before it standing, and a cancel books none.
+  assert.equal(
+    wakeupDelayOf(
+      turnWith(
+        "schedule_wakeup",
+        {
+          input: { delaySeconds: 600, prompt: "Check CI" },
+          output: {
+            status: "accepted",
+            wakeup: { at: "2026-10-21T12:10:00.000Z", delaySeconds: 600 },
+          },
+        },
+        {
+          input: { delaySeconds: 3_600 },
+          output: { status: "rejected", reason: "Not booked: pass a prompt." },
+        },
+      ),
+    ),
+    600_000,
+  );
+  assert.equal(wakeupDelayOf(turnWith("schedule_wakeup", { input: { stop: true } })), undefined);
+  assert.equal(wakeupDelayOf(undefined), undefined);
 });
 
 /** A row of the developer's, as the service writes one. */
@@ -290,29 +427,15 @@ test("the dock lists every pull request the agent opened, one still open before 
   );
 });
 
-test("the checkout command fetches and switches to the branch, and the chip opens the pull request, else the branch compared, else nowhere", () => {
+test("the checkout command fetches and switches to the branch", () => {
   assert.equal(
     checkoutCommand("luke/teammate-invitations"),
     "git fetch origin luke/teammate-invitations && git switch luke/teammate-invitations",
   );
-  const repository = "acme/relay";
-  assert.equal(
-    publishedUrl({ repository, branch: "luke/x", pullRequest: PULL_REQUEST }),
-    "https://github.com/acme/relay/pull/123",
-  );
-  assert.equal(
-    publishedUrl({ repository, branch: "luke/x", pullRequest: null }),
-    "https://github.com/acme/relay/compare/luke/x?expand=1",
-  );
-  assert.equal(publishedUrl({ repository, branch: null, pullRequest: null }), undefined);
-  // A branch a shell or an address would read into is quoted or encoded, never read.
+  // A branch a shell would read into is quoted, never read.
   assert.equal(
     checkoutCommand("luke/$(touch pwned)'x"),
     "git fetch origin 'luke/$(touch pwned)'\\''x' && git switch 'luke/$(touch pwned)'\\''x'",
-  );
-  assert.equal(
-    publishedUrl({ repository, branch: "luke/issue#12 fix", pullRequest: null }),
-    "https://github.com/acme/relay/compare/luke/issue%2312%20fix?expand=1",
   );
 });
 
@@ -517,6 +640,17 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
     read({ status: AGENT_STATUS.CANCELED, turn: { ...running, stopAsked: true } }).slice(0, 3),
     [true, "stopping", AGENT_STATUS.CANCELED],
   );
+  // A turn held open for a usage limit's reset works, its line naming when the limit resets.
+  const resetsAt = new Date(2026, 10, 9, 15, 40).getTime();
+  const waiting = tabTurnOf(
+    { status: AGENT_STATUS.RUNNING, turn: { ...running, waitsUntil: resetsAt } },
+    idle,
+  );
+  assert.equal(waiting.working, true);
+  assert.equal(
+    workingLineWords(waiting.phase, waiting.waitsUntil, resetsAt - 60_000),
+    "Waiting for your usage limit to reset at 3:40 PM",
+  );
   // A send not yet answered, or a rewind out, works past an ended turn until its call answers.
   assert.deepEqual(
     read({ status: AGENT_STATUS.COMPLETED, turn: settled }, { ...idle, unanswered: true }).slice(
@@ -542,13 +676,12 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
   ]);
 });
 
-test("Stop is offered while an agent may still write, a stalled one starting or awaiting its turn included, and not once it has ended", () => {
-  // A line awaiting a turn that never opens reads running with nothing yet to cancel, which a Stop settles where its runner went quiet.
-  const awaitingItsTurn = { status: AGENT_STATUS.RUNNING, stoppable: false } as const;
-  assert.equal(offersStop(awaitingItsTurn), true);
-  assert.equal(offersStop({ status: AGENT_STATUS.STARTING }), true);
+test("Stop is offered only while a turn runs that it can cancel, not while the agent sets up or once it has ended", () => {
+  assert.equal(offersStop({ status: AGENT_STATUS.RUNNING }), true);
+  // A line awaiting a runner to take it, as while the agent's machine is set up, has no turn to cancel yet.
+  assert.equal(offersStop({ status: AGENT_STATUS.RUNNING, stoppable: false }), false);
+  assert.equal(offersStop({ status: AGENT_STATUS.STARTING }), false);
   assert.equal(offersStop({ status: AGENT_STATUS.COMPLETED }), false);
-  assert.equal(offersStop({ status: AGENT_STATUS.CANCELED }), false);
 });
 
 test("the working line counts from the press of the line that opened the turn, through the turn and a line steering it", () => {
@@ -732,22 +865,24 @@ test("a Start refused for a missing credential says in one sentence which harnes
   );
 });
 
-test("a message to an agent whose device is away says it is offline, in the words a Start on it gets, under the composer and in the Inbox alike", () => {
-  const away =
-    "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.";
+test("a message to an agent whose device is away offers to continue it in the cloud under the composer, and says it in a Start's words in the Inbox, which offers no move", () => {
+  const refused = {
+    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+    refusedDevice: { name: "Studio" },
+  };
+  const note = messageFailureNote(refused, null);
 
   assert.deepEqual(
+    [note, remedyLabel(note), messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED)],
     [
-      messageFailureNote(
-        {
-          failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
-          localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        },
-        null,
-      ).text,
-      messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED),
+      {
+        reason: FAILURE_REASON.CONTINUE_IN_CLOUD,
+        text: "Studio is offline. Unpushed changes stay on it.",
+      },
+      "Continue in the cloud",
+      "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.",
     ],
-    [away, away],
   );
 });
 
@@ -887,4 +1022,30 @@ test("a message to a teammate's agent its starter's own key refused names the st
       },
     ],
   );
+});
+
+test("a plan payer names the reader's plan the page named, a new agent's first with room left, and none of a plan the reader does not hold or a teammate's agent", () => {
+  const plan = (id: string, position: number, more: Partial<SubscriptionKeySummary>) => ({
+    provider: PROVIDER_KEY_PROVIDER.OPENAI,
+    kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+    hint: "ChatGPT",
+    addedAt: 0,
+    statusAt: 0,
+    status: PROVIDER_KEY_STATUS.VERIFIED,
+    id,
+    position,
+    ...more,
+  });
+  const plans: SubscriptionKeySummary[] = [
+    plan("third", 2, { email: "side@work.test" }),
+    plan("first", 0, { email: "ana@work.test", status: PROVIDER_KEY_STATUS.LIMIT_REACHED }),
+    plan("second", 1, { email: "ana@home.test", label: "Home" }),
+  ];
+  const { CHATGPT_SUBSCRIPTION, API_KEY } = AGENT_PAYER;
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "third", false), "side@work.test");
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, true), "Home");
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "a-teammates", false), undefined);
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, false), undefined);
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, true, true), undefined);
+  assert.equal(payerPlanName(API_KEY, plans, "third", false), undefined);
 });

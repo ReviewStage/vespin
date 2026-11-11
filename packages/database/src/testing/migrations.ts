@@ -90,7 +90,7 @@ export function laterRenames(): Effect.Effect<{
   );
 }
 
-/** The tables a later migration dropped: the attachments' old names (`20261021000416_attachment_views_drop`), Chat's (`drop_chat`), the cut features' (`drop_retired_storage`), the operator's (`operator_drop`), and the native agents' wakeups by both their names (`agent_wakeup_drop`). */
+/** The tables a later migration dropped: the attachments' old names (`20261021000416_attachment_views_drop`), Chat's (`drop_chat`), the cut features' (`drop_retired_storage`), the operator's (`operator_drop`), and the native agents' wakeups by both their names (`agent_wakeup_drop`), and the read marks and sections of agents with no task (`agent_read_and_section_entry_drop`). */
 const DROPPED_TABLES = [
   "chat_attachment",
   "inbox_attachment",
@@ -114,12 +114,28 @@ const DROPPED_TABLES = [
   "operator_wake",
   "coding_agent_wakeup",
   "agent_wakeup",
+  "agent_read",
+  "agent_section_entry",
 ] as const;
 
-/** The indexes a later migration dropped on a table that stands, by every name each held: the operator's one per member (`operator_drop`). */
-const DROPPED_INDEXES = ["coding_agent_member_operator", "agent_member_operator"] as const;
+/** The indexes a later migration dropped on a table that stands, by every name each held: the operator's one per member (`operator_drop`), the agents with no task (`agent_task_required`), and their open Inbox items (`every_row_on_a_task`). */
+const DROPPED_INDEXES = [
+  "coding_agent_member_operator",
+  "agent_member_operator",
+  "coding_agent_org_taskless_created",
+  "agent_org_taskless_created",
+  "inbox_item_org_open_taskless_updated",
+] as const;
 
-/** The columns a later migration dropped, by every name each held, and the indexes that went with them: an automation's task (`20261028195432_automation_task_drop`), and a private memory's member (`operator_drop`). */
+/** The constraints and triggers a later migration dropped on a table that stands, by every name each held: a page's owner check and the trigger that deleted the pages of an agent on no task, with its function (`every_row_on_a_task`). */
+const DROPPED_CONSTRAINTS = [
+  "plan_page_version_owner",
+  "task_page_version_owner",
+  "plan_page_version_agent_delete",
+  "task_page_version_agent_delete",
+] as const;
+
+/** The columns a later migration dropped, by every name each held, and the indexes that went with them: an automation's task (`20261028195432_automation_task_drop`), a private memory's member (`operator_drop`), and an agent's read mark from before every agent stood on a task (`agent_drop_read_through`). */
 const DROPPED_COLUMNS = [
   {
     table: "automation",
@@ -127,6 +143,7 @@ const DROPPED_COLUMNS = [
     indexes: ["automation_trigger_plan", "automation_trigger_task"],
   },
   { table: "memory", columns: ["private_to"], indexes: [] },
+  { table: "agent", columns: ["read_through"], indexes: [] },
 ] as const;
 
 /** Whether the statement names a column since dropped, or an index that went with it. */
@@ -145,6 +162,7 @@ export function replayable(statements: readonly string[]): readonly string[] {
     (statement) =>
       DROPPED_TABLES.every((table) => !statement.includes(`"${table}`)) &&
       DROPPED_INDEXES.every((index) => !statement.includes(`"${index}"`)) &&
+      DROPPED_CONSTRAINTS.every((constraint) => !statement.includes(`"${constraint}"`)) &&
       !namesDroppedColumn(statement),
   );
 }

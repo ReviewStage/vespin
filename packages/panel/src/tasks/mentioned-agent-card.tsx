@@ -1,6 +1,6 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
-import { LINK_PLACE, pullRequestAddressOf } from "@repo/features/link-grammar";
-import { summaryOfTaskless, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { LINK_DESTINATION, pullRequestAddressOf } from "@repo/features/link-grammar";
+import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
 import { useQuery } from "@tanstack/react-query";
@@ -42,7 +42,6 @@ import { useOpenPlace } from "./use-open-link.js";
 
 /** What a card's foot says of the task an agent works on. */
 const TASK_WORDS = {
-  NONE: "On no task",
   UNKNOWN: "On another task",
 } as const;
 
@@ -67,15 +66,13 @@ function agentOf(listed: Listed): AgentSummary | undefined {
 
 /**
  * An agent as the task list carries it: among every task's agents, archived
- * ones among them, or the agents on no task. Note that the list carries a
+ * ones among them. Note that the list carries a
  * task's agents only once it has answered live, so until then, and unless
  * it failed, an agent it does not name may still be among them.
  */
 function listedAgentOf(tasks: TasksView | undefined, agentId: string): Listed {
   const onTask = tasks?.taskAgents?.find((agent) => agent.id === agentId);
   if (onTask !== undefined) return onTask;
-  const onNone = tasks?.tasklessAgents?.find((agent) => agent.id === agentId);
-  if (onNone !== undefined) return summaryOfTaskless(onNone);
   const answered = tasks?.taskAgents !== undefined || tasks?.listStatus === TASKS_READ.FAILED;
   return answered ? UNLISTED.ABSENT : UNLISTED.READING;
 }
@@ -116,11 +113,10 @@ export function ReadAgentModel({
   return children(useListedModel(agentId));
 }
 
-/** What a card of an agent's says of the task it works on: its name as the window lists it, none, or another the window does not list. */
+/** What a card of an agent's says of the task it works on: its name as the window lists it, or another the window does not list. */
 function useTaskFoot(agent: AgentSummary | undefined): string | undefined {
   const tasks = useKnownNames().tasks;
   if (agent === undefined) return undefined;
-  if (agent.planId === null) return TASK_WORDS.NONE;
   const task = tasks.get(agent.planId);
   return task === undefined ? TASK_WORDS.UNKNOWN : `On ${task}`;
 }
@@ -170,19 +166,19 @@ export function MentionedAgentCard({
   });
 }
 
-/** A pull request one of the workspace's agents opened, as the window lists it: the agent, the task it works on, none for one on none, and its number. */
+/** A pull request one of the workspace's agents opened, as the window lists it: the agent, the task it works on where it is named, and its number. */
 interface OwnedPullRequest {
   readonly agentId: string;
   readonly taskId: string | undefined;
   readonly number: number | undefined;
 }
 
-/** The agent that opened the pull request a link names, among the tasks and the agents on no task the window lists; none where none of them did. */
+/** The agent that opened the pull request a link names, among the tasks the window lists; none where none of them did. */
 function useOwnedPullRequest(url: string): OwnedPullRequest | undefined {
   const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
   if (tasks === undefined) return undefined;
   const number = pullRequestAddressOf(url)?.number;
-  const listed = listedPullRequestOf(url, tasks.taskPullRequests ?? [], tasks.tasklessAgents);
+  const listed = listedPullRequestOf(url, tasks.taskPullRequests ?? []);
   return listed === undefined ? undefined : { ...listed, number };
 }
 
@@ -219,7 +215,7 @@ function OwnedPullRequestCard({
     people: undefined,
     onOpenAgent: () =>
       openPlace?.({
-        kind: LINK_PLACE.AGENT,
+        kind: LINK_DESTINATION.AGENT,
         ...(taskId === undefined ? undefined : { planId: taskId }),
         agentId,
       }),

@@ -15,7 +15,7 @@ import { type UnparsedWireValue, wireUuidSchema } from "../core.js";
 import { assigneeIdOf, memberLinkWrittenSchema } from "./task-assignee.js";
 
 /**
- * workspace-agents.ts -- the coding agents of one workspace as an agent's tools read them: on any task or none, by any member, one task's alone where asked, each with its task's name.
+ * workspace-agents.ts -- the coding agents of one workspace as an agent's tools read them: on any task, by any member, one task's alone where asked, each with its task's name.
  *
  * The agent tools every coding agent is offered
  * (`agent-tools.ts`) list and find the agents here. A list names the archived
@@ -108,10 +108,7 @@ export const AGENT_LIST_INPUT = Schema.Struct({
     ),
   ),
   taskStatus: Schema.optionalKey(
-    describeWire(
-      taskStatusSchema,
-      "Only the agents on a task that stands here, such as done; an agent on no task matches none.",
-    ),
+    describeWire(taskStatusSchema, "Only the agents on a task that stands here, such as done."),
   ),
   offset: Schema.optionalKey(
     describeWire(
@@ -124,7 +121,7 @@ export const AGENT_LIST_INPUT = Schema.Struct({
 
 const readFilter = Schema.decodeUnknownResult(AGENT_LIST_INPUT);
 
-/** An agent's task as a list names it; null for an agent on none, or on a task the reader cannot read. */
+/** An agent's task as a list names it; null for a task the reader cannot read. */
 export interface AgentTask {
   readonly id: string;
   readonly name: string;
@@ -280,11 +277,11 @@ export const workspaceAgentsOf = (
     );
     const names = yield* taskNamesOf(
       userId,
-      agents.flatMap((agent) => agent.taskId ?? []),
+      agents.map((agent) => agent.taskId),
     );
     const taskOf = (agent: Agent): AgentTask | null => {
-      const named = agent.taskId === null ? undefined : names.get(agent.taskId);
-      return agent.taskId === null || named === undefined ? null : { id: agent.taskId, ...named };
+      const named = names.get(agent.taskId);
+      return named === undefined ? null : { id: agent.taskId, ...named };
     };
     return { agents, taskOf, nextOffset };
   });
@@ -309,14 +306,14 @@ export const workspaceAgent = (
     (found) => Option.filter(found, (agent) => agent.organizationId === workspaceId),
   );
 
-/** The task one agent stands on, read as the account; null for an agent on none or on one the account cannot read. */
+/** The task one agent stands on, read as the account; null for one the account cannot read. */
 export const agentTaskOf = (
   userId: string,
   agent: Agent,
 ): Effect.Effect<AgentTask | null, StoreFailure, DatabaseServices> =>
-  Effect.map(taskNamesOf(userId, agent.taskId === null ? [] : [agent.taskId]), (names) => {
-    const named = agent.taskId === null ? undefined : names.get(agent.taskId);
-    return agent.taskId === null || named === undefined ? null : { id: agent.taskId, ...named };
+  Effect.map(taskNamesOf(userId, [agent.taskId]), (names) => {
+    const named = names.get(agent.taskId);
+    return named === undefined ? null : { id: agent.taskId, ...named };
   });
 
 /** One agent's task as the model reads it, and whether it is the task of whoever is asking. */

@@ -7,7 +7,6 @@ import {
   type StoreFailure,
 } from "@repo/database/core/query";
 import { CURRENT_TXID } from "@repo/database/core/txid";
-import { automationReadableBy } from "@repo/database/models/automation-store";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import {
   agentReachableBy,
@@ -18,7 +17,7 @@ import {
   workspaceReachableBy,
 } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { attachment } from "@repo/database/schemas/attachment";
+import { attachment, servedColumns } from "@repo/database/schemas/attachment";
 import { member, organization, user } from "@repo/database/schemas/auth";
 import { automation } from "@repo/database/schemas/automation";
 import { inboxItem } from "@repo/database/schemas/inbox";
@@ -36,13 +35,7 @@ import {
   taskSync,
   userSync,
 } from "@repo/database/sync/tables";
-import type {
-  AccountInboxAgent,
-  AccountInboxAutomation,
-  AccountInboxEntry,
-  AccountInboxTask,
-  AccountTasklessEntry,
-} from "@repo/features/account-inbox-wire";
+import type { AccountInboxEntry, AccountInboxTask } from "@repo/features/account-inbox-wire";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import type { ConversationMediaType } from "@repo/features/conversation-picture-wire";
 import {
@@ -54,26 +47,37 @@ import {
 import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, SCOPE_INBOX_PARTS } from "@repo/features/inbox-live";
 import {
   INBOX_ASK_STATUS,
+  INBOX_ASK_STATUS_MOVES,
   INBOX_BOUNDS,
   INBOX_FILE_TYPE,
   INBOX_MESSAGE_AUTHOR,
   INBOX_STATUS,
+  INBOX_STATUS_MOVES,
   INBOX_WIRE_VERSION,
   type InboxAnswers,
   type InboxAsk,
   type InboxAskStanding,
+  type InboxAskStatus,
   type InboxFileType,
   type InboxItem,
   type InboxItemHome,
   type InboxMessage,
+  type InboxStatus,
   inboxAnswersRefusal,
   inboxAnswersSchema,
   inboxReadAskSchema,
   knownAsk,
   standingAsk,
+  statusesMovingTo,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { insideCode } from "@repo/features/mention-link";
+import {
+  MP4_TYPE,
+  PLAYABLE_VIDEO_TYPE,
+  type PlayableVideoType,
+  playableVideoTypeSchema,
+} from "@repo/features/video-signature";
 import {
   and,
   count,
@@ -175,19 +179,15 @@ import type { SyncMoved } from "../sync/live-query.js";
 /** What an inbox store operation answers: an effect over the ambient client, composed into whatever called it. */
 export type InboxStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** The agent an item belongs to, as every write of the agent's names it: the task it works on, or none for an agent an automation started with no task. */
+/** The agent an item belongs to, as every write of the agent's names it: the task it works on. */
 export interface InboxAgent {
   readonly userId: string;
-  readonly taskId: string | null;
+  readonly taskId: string;
   readonly agentId: string;
 }
 
 /** Why a post was not written. */
 export const INBOX_POST_REFUSAL = {
-  /** The agent holds as many open asks as it may; it closes one first. */
-  TOO_MANY_OPEN: "too-many-open",
-  /** The agent holds as many notices the developer has yet to acknowledge as it may. */
-  TOO_MANY_NOTICES: "too-many-notices",
   /** The agent is no longer the account's. */
   NO_AGENT: "no-agent",
   /** The post names no title and opens a thread under a key with no item, which needs one. */
@@ -222,6 +222,8 @@ export interface StoredInboxItem {
 export interface InboxImage {
   readonly contentType: ConversationMediaType;
   readonly bytes: Uint8Array;
+  /** A recording's MP4 copy, made in the agent's sandbox beside it for a phone; none for a still, or where the sandbox made none. */
+  readonly mp4Bytes?: Uint8Array | undefined;
 }
 
 /** A picture as the agent's message on a thread carries it: its file's own name, the type its bytes were sniffed to be, and the bytes. */
@@ -398,8 +400,8 @@ function liveReminderFor(readerId: string): { remindAt: SQL; snoozedUntil: SQL }
 /**
  * The member an item waits on: the member its agent addressed it to, or,
  * where it names none, its task's assignee while a member of its workspace,
- * or the member who started its agent where the task has nobody assigned,
- * is assigned to a member who left, or the agent works on no task. A
+ * or the member who started its agent where the task has nobody assigned
+ * or is assigned to a member who left. A
  * scalar read rather than a join, because `returning` projects it too and
  * joins nothing, and every name is qualified, because it is nested in reads
  * that join the task themselves.
@@ -612,7 +614,7 @@ function itemAgentSeenBy(userId: string): SQL {
   return sql`(${isNull(inboxItem.agentId)} or ${seen})`;
 }
 
-/** The condition that the account is a member of the workspace of the item a statement reads, an item of an agent with no task as much as one on a task, and sees the agent that posted it: what an agent's own reads of its items keep, under the member who started it, as it acts as itself (`agentReachableBy`). What a member reads keeps `itemVisibleTo`. */
+/** The condition that the account is a member of the workspace of the item a statement reads, and sees the agent that posted it: what an agent's own reads of its items keep, under the member who started it, as it acts as itself (`agentReachableBy`). What a member reads keeps `itemVisibleTo`. */
 function itemReachableBy(userId: string): SQL {
   return sql`(${workspaceReachableBy(userId, ITEM_WORKSPACE)} and ${itemAgentSeenBy(userId)})`;
 }
@@ -633,7 +635,7 @@ function itemVisibleTo(userId: string): SQL {
       .from(task)
       .where(and(eq(task.id, inboxItem.taskId), taskReachableBy(userId))),
   );
-  return sql`(${itemReachableBy(userId)} and (${inboxItem.taskId} is null or ${taskReached}))`;
+  return sql`(${itemReachableBy(userId)} and ${taskReached})`;
 }
 
 /** The step a link names the agent's workspace by: its slug, or its id where it has none, as a description's picture names it. */
@@ -663,50 +665,9 @@ const lockAgent = SqlSchema.findOneOption({
     ),
 });
 
-/** How many asks the agent holds open under a key other than the one given; a notice holds none. */
-const countOpenBesides = SqlSchema.findOne({
-  Request: Schema.Struct({ ...AgentKeySchema.fields, key: Schema.String }),
-  Result: Schema.Struct({ open: Schema.Number }),
-  execute: ({ userId, agentId, key }) =>
-    Database.use((db) =>
-      db
-        .select({ open: sql<number>`count(*)::int` })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.userId, userId),
-            eq(inboxItem.agentId, agentId),
-            ASKING,
-            ne(inboxItem.key, key),
-          ),
-        ),
-    ),
-});
-
-/** How many notices the agent holds open, waiting on the developer's nod, under a key other than the one given. */
-const countNoticesBesides = SqlSchema.findOne({
-  Request: Schema.Struct({ ...AgentKeySchema.fields, key: Schema.String }),
-  Result: Schema.Struct({ open: Schema.Number }),
-  execute: ({ userId, agentId, key }) =>
-    Database.use((db) =>
-      db
-        .select({ open: sql<number>`count(*)::int` })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.userId, userId),
-            eq(inboxItem.agentId, agentId),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
-            NOTICE,
-            ne(inboxItem.key, key),
-          ),
-        ),
-    ),
-});
-
 const PostWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   organizationId: Schema.String,
   agentId: Schema.String,
   key: Schema.String,
@@ -789,13 +750,14 @@ function insertMessage(
 
 const MessageFileWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   organizationId: Schema.String,
   itemId: Schema.String,
   name: Schema.String,
   position: Schema.Number,
   contentType: inboxFileTypeSchema,
   bytes: Schema.Uint8Array,
+  mp4Bytes: Schema.optional(Schema.Uint8Array),
   now: Schema.Date,
   messageId: Schema.String,
   /** The id the file is kept under, where the message's words name it; minted by the database where none is given. */
@@ -807,8 +769,9 @@ const insertMessageFiles = SqlSchema.void({
   execute: (files) =>
     Database.use((db) =>
       db.insert(attachment).values(
-        files.map(({ now, itemId, messageId, ...file }) => ({
+        files.map(({ now, itemId, messageId, mp4Bytes, ...file }) => ({
           ...file,
+          mp4Bytes: mp4Bytes ?? null,
           inboxItemId: itemId,
           inboxMessageId: messageId,
           kind: INBOX_ATTACHMENT_KIND.MESSAGE,
@@ -854,8 +817,21 @@ function askStanding({
   return sql`(${inboxMessage.ask} - 'withdrawnAt' - 'withdrawnBy') || ${standing}`;
 }
 
+/** A message's ask's status, as it was kept. */
+const ASK_STATUS = sql<string>`${inboxMessage.ask} ->> 'status'`;
+
 /** Whether a message's ask stands open, as it was kept. */
-const ASK_KEPT_OPEN = sql`${inboxMessage.ask} ->> 'status' = ${INBOX_ASK_STATUS.OPEN}`;
+const ASK_KEPT_OPEN = sql`${ASK_STATUS} = ${INBOX_ASK_STATUS.OPEN}`;
+
+/** Whether a message's ask stands in a status among `from`, every one by default, that may move to `to`. */
+function askMovesTo(to: InboxAskStatus, from?: readonly InboxAskStatus[]): SQL {
+  return inArray(ASK_STATUS, statusesMovingTo(INBOX_ASK_STATUS_MOVES, to, from));
+}
+
+/** Whether the item stands in a status among `from`, every one by default, that may move to `to`. */
+function itemMovesTo(to: InboxStatus, from?: readonly InboxStatus[]): SQL {
+  return inArray(inboxItem.status, statusesMovingTo(INBOX_STATUS_MOVES, to, from));
+}
 
 /** Every ask of the item kept open, but the one message's named, set to stand as given: what a post replaces and a close withdraws. */
 const settleOpenAsks = SqlSchema.void({
@@ -872,28 +848,36 @@ const settleOpenAsks = SqlSchema.void({
         .where(
           and(
             eq(inboxMessage.itemId, itemId),
-            ASK_KEPT_OPEN,
+            askMovesTo(standing.status, [INBOX_ASK_STATUS.OPEN]),
             except === null ? undefined : ne(inboxMessage.id, except),
           ),
         ),
     ),
 });
 
-/** The ask of the one message named set to stand as given: what an answer settles and an answer taken back opens again. */
-const standAsk = SqlSchema.void({
+/** The ask of the one message named set to stand as given, where its moves allow it: what an answer settles and an answer taken back opens again; the message's id where it moved. */
+const standAsk = SqlSchema.findAll({
   Request: Schema.Struct({ ...AskStandingSchema.fields, messageId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
   execute: ({ messageId, ...standing }) =>
     Database.use((db) =>
       db
         .update(inboxMessage)
         .set({ ask: askStanding(standing) })
-        .where(and(eq(inboxMessage.id, messageId), isNotNull(inboxMessage.ask))),
+        .where(
+          and(
+            eq(inboxMessage.id, messageId),
+            isNotNull(inboxMessage.ask),
+            askMovesTo(standing.status),
+          ),
+        )
+        .returning({ id: inboxMessage.id }),
     ),
 });
 
-/** The item pointed at the message whose ask it now holds open. */
+/** The item pointed at the message whose ask it now holds open, or at none. */
 const holdAsk = SqlSchema.void({
-  Request: Schema.Struct({ itemId: Schema.String, messageId: Schema.String }),
+  Request: Schema.Struct({ itemId: Schema.String, messageId: Schema.NullOr(Schema.String) }),
   execute: ({ itemId, messageId }) =>
     Database.use((db) =>
       db.update(inboxItem).set({ openAskMessageId: messageId }).where(eq(inboxItem.id, itemId)),
@@ -979,28 +963,48 @@ function deleteMessage(target: {
   return Effect.andThen(deleteMessageRow(target), rereadLastWriter({ itemId: target.itemId }));
 }
 
-/** The attachment, a block's picture or an answer's file, where it is the item's and the account reaches the item's task: its type and its bytes. */
-const findAttachment = SqlSchema.findOneOption({
-  Request: Schema.Struct({
-    userId: Schema.String,
-    itemId: Schema.String,
-    attachmentId: Schema.String,
-  }),
-  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
-  execute: ({ userId, itemId, attachmentId }) =>
-    Database.use((db) =>
-      db
-        .select({ contentType: attachment.contentType, bytes: attachment.bytes })
-        .from(attachment)
-        .innerJoin(inboxItem, eq(inboxItem.id, attachment.inboxItemId))
-        .where(
-          and(
-            eq(attachment.inboxItemId, itemId),
-            eq(attachment.id, attachmentId),
-            itemVisibleTo(userId),
-          ),
+/** Which attachment of which item an account reads. */
+const AttachmentAskSchema = Schema.Struct({
+  userId: Schema.String,
+  itemId: Schema.String,
+  attachmentId: Schema.String,
+});
+
+/** The attachment, a block's picture or an answer's file, where it is the item's and the account reaches the item's task, served as the reader plays a video. */
+function attachmentQuery(
+  { userId, itemId, attachmentId }: typeof AttachmentAskSchema.Type,
+  playable: PlayableVideoType,
+) {
+  return Database.use((db) =>
+    db
+      .select(servedColumns(playable))
+      .from(attachment)
+      .innerJoin(inboxItem, eq(inboxItem.id, attachment.inboxItemId))
+      .where(
+        and(
+          eq(attachment.inboxItemId, itemId),
+          eq(attachment.id, attachmentId),
+          itemVisibleTo(userId),
         ),
-    ),
+      ),
+  );
+}
+
+/** The attachment as it was kept: its type and its bytes. */
+const findAttachment = SqlSchema.findOneOption({
+  Request: AttachmentAskSchema,
+  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
+  execute: (ask) => attachmentQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
+});
+
+/** The attachment as a reader that plays the video given is served it. */
+const findServedAttachment = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...AttachmentAskSchema.fields, playable: playableVideoTypeSchema }),
+  Result: Schema.Struct({
+    contentType: Schema.Union([inboxFileTypeSchema, Schema.Literal(MP4_TYPE)]),
+    bytes: Schema.Uint8Array,
+  }),
+  execute: ({ playable, ...ask }) => attachmentQuery(ask, playable),
 });
 
 /**
@@ -1043,6 +1047,7 @@ const upsertItem = SqlSchema.findOne({
         .onConflictDoUpdate({
           target: [inboxItem.agentId, inboxItem.key],
           set: { ...posted, revision: sql`${inboxItem.revision} + 1` },
+          setWhere: itemMovesTo(write.status),
         })
         .returning({ id: inboxItem.id }),
     );
@@ -1083,6 +1088,7 @@ const closeItem = SqlSchema.findOneOption({
             eq(inboxItem.agentId, agentId),
             eq(inboxItem.key, key),
             ASKING,
+            itemMovesTo(INBOX_STATUS.CLOSED),
           ),
         )
         .returning({ id: inboxItem.id }),
@@ -1214,26 +1220,6 @@ function accountWaiting(userId: string) {
   );
 }
 
-/** The open items of agents with no task in the account's workspaces, whichever member's agent posted each, but those that are their agent's turn (`AGENTS_TURN`): what the account's read names beside the tasks' items. */
-function tasklessWaiting(userId: string) {
-  return and(
-    isNull(inboxItem.taskId),
-    itemVisibleTo(userId),
-    eq(inboxItem.status, INBOX_STATUS.OPEN),
-    not(AGENTS_TURN),
-  );
-}
-
-/**
- * The condition that the agent of an item with no task works in a
- * repository, unless the reader asked to be carried those of agents that
- * work in none (`ACCOUNT_INBOX_REPOSITORYLESS`). Note that a build from before it reads the repository as a string,
- * so one null would fail its whole read.
- */
-function repositoryCarried(repositoryless: boolean): SQL | undefined {
-  return repositoryless ? undefined : isNotNull(agentTable.repository);
-}
-
 /**
  * How many of a group's items wait on the reader (`waitingOnReader`), as a
  * number rather than a `bigint`. Note that an item whose reminder the reader
@@ -1246,7 +1232,7 @@ function toDoCount(userId: string): SQL<number> {
 
 /**
  * The settled items still unread that wait on the reader (`WAITS_ON`) in
- * their workspaces, a task's or an agent's with no task, among those they
+ * their workspaces, among those they
  * may read (`itemVisibleTo`): what To do lists beside the open items, so
  * their read marks and new messages on those items move the account's
  * cursor as an open item's change does. Note that who it waits on is
@@ -1255,8 +1241,8 @@ function toDoCount(userId: string): SQL<number> {
  * reader's own index (`inbox_item_user_status_updated`) and the assignee's
  * by the task's, where a `coalesce` would read every settled item of their
  * workspaces on each look; an item addressed to someone waits on them
- * alone, one whose task's assignee left on its starter, as `WAITS_ON` reads
- * it, and one with no task, which joins no assignee, on its starter.
+ * alone, and one whose task's assignee left on its starter, as `WAITS_ON` reads
+ * it.
  */
 function accountUnreadSettled(userId: string) {
   const assigneeLeft = notExists(
@@ -1330,67 +1316,7 @@ const findWaitingItems = SqlSchema.findAll({
     ),
 });
 
-/** One open item of an agent with no task as the account's read carries it, with its automation and repository where a task's item names its task. */
-const TasklessRowSchema = Schema.Struct({
-  id: Schema.String,
-  agentId: Schema.String,
-  agentTitle: Schema.NullOr(Schema.String),
-  agentModel: Schema.String,
-  startedBy: Schema.String,
-  waitsOn: Schema.String,
-  automationId: Schema.NullOr(Schema.String),
-  automationName: Schema.NullOr(Schema.String),
-  repository: Schema.NullOr(Schema.String),
-  workspaceId: Schema.NullOr(Schema.String),
-  title: Schema.String,
-  revision: Schema.Number,
-  status: Schema.Literals(Object.values(INBOX_STATUS)),
-  postedAt: InstantColumnSchema,
-  updatedAt: InstantColumnSchema,
-  unread: Schema.Boolean,
-  asking: Schema.Boolean,
-  remindAt: Schema.NullOr(Schema.Number),
-});
-
-const findTasklessWaitingItems = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, repositoryless: Schema.Boolean }),
-  Result: TasklessRowSchema,
-  execute: ({ userId, repositoryless }) =>
-    Database.use((db) =>
-      db
-        .select({
-          id: inboxItem.id,
-          agentId: inboxItem.agentId,
-          agentTitle: agentTable.title,
-          agentModel: agentTable.model,
-          startedBy: agentTable.userId,
-          waitsOn: WAITS_ON,
-          automationId: automation.id,
-          automationName: automation.name,
-          repository: agentTable.repository,
-          workspaceId: agentTable.organizationId,
-          title: inboxItem.title,
-          revision: inboxItem.revision,
-          status: inboxItem.status,
-          postedAt: inboxItem.postedAt,
-          updatedAt: inboxItem.updatedAt,
-          unread: unreadFor(userId),
-          asking: ASKING,
-          remindAt: remindAtMillisFor(userId),
-        })
-        .from(inboxItem)
-        .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        // The automation, its id as its name, is told only to an account that may read the automation itself.
-        .leftJoin(
-          automation,
-          and(eq(automation.id, agentTable.automationId), automationReadableBy(userId)),
-        )
-        .where(and(tasklessWaiting(userId), repositoryCarried(repositoryless)))
-        .orderBy(...LATEST_FIRST),
-    ),
-});
-
-/** Where every item the account's read names or counts stands: a task's or an agent's with no task open, and the reader's own settled ones still unread, which its tasks' To do counts. Note that the task is joined on the left, because an item with no task has none to join. */
+/** Where every item the account's read names or counts stands: a task's open, and the reader's own settled ones still unread, which its tasks' To do counts. Note that the task is joined on the left, because an item's task column is still nullable. */
 const findWaitingStamps = SqlSchema.findAll({
   Request: AccountRequestSchema,
   Result: StampRowSchema,
@@ -1400,7 +1326,7 @@ const findWaitingStamps = SqlSchema.findAll({
         .select(stampColumns(userId))
         .from(inboxItem)
         .leftJoin(task, eq(task.id, inboxItem.taskId))
-        .where(or(accountWaiting(userId), tasklessWaiting(userId), accountUnreadSettled(userId)))
+        .where(or(accountWaiting(userId), accountUnreadSettled(userId)))
         .orderBy(...LATEST_FIRST),
     ),
 });
@@ -1441,111 +1367,20 @@ const findTasksWithItems = SqlSchema.findAll({
     ),
 });
 
-/** One automation holding items of its runs' agents with no task, as the account's read lists it; null for the agents no standing automation names. */
-const AutomationItemsRowSchema = Schema.Struct({
-  automationId: Schema.NullOr(Schema.String),
-  items: Schema.Number,
-  updatedAt: InstantColumnSchema,
-});
-
-/**
- * Every automation whose runs' agents with no task hold an item in the
- * account's workspaces, open or settled, whichever member's agent posted
- * it, the automation whose item changed latest first, as the tasks are
- * listed; one the account may not read is listed as none, beside the
- * agents no standing automation names.
- */
-const findAutomationsWithItems = SqlSchema.findAll({
-  Request: AccountRequestSchema,
-  Result: AutomationItemsRowSchema,
-  execute: ({ userId }) =>
-    Database.use((db) =>
-      db
-        .select({ automationId: automation.id, items: count(), updatedAt: LATEST_ITEM })
-        .from(inboxItem)
-        .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        // An automation the account may not read groups with the agents no standing automation names.
-        .leftJoin(
-          automation,
-          and(eq(automation.id, agentTable.automationId), automationReadableBy(userId)),
-        )
-        .where(and(isNull(inboxItem.taskId), itemVisibleTo(userId)))
-        .groupBy(automation.id)
-        .orderBy(desc(LATEST_ITEM), desc(automation.id)),
-    ),
-});
-
-/** How an agent with no task holding items is named, as an open item of it names it (`findTasklessWaitingItems`), its automation only to a reader who may read it. */
-const AGENT_HOLDING_NAMING = {
-  agentTitle: agentTable.title,
-  agentModel: agentTable.model,
-  automationId: automation.id,
-  automationName: automation.name,
-  repository: agentTable.repository,
-  workspaceId: agentTable.organizationId,
-};
-
-/** One agent with no task holding items as the account's read lists it, as a task is listed, and as an open item of it names it. */
-const AgentItemsRowSchema = Schema.Struct({
-  agentId: Schema.String,
-  items: Schema.Number,
-  toDo: Schema.Number,
-  updatedAt: InstantColumnSchema,
-  agentTitle: Schema.NullOr(Schema.String),
-  agentModel: Schema.String,
-  automationId: Schema.NullOr(Schema.String),
-  automationName: Schema.NullOr(Schema.String),
-  repository: Schema.NullOr(Schema.String),
-  workspaceId: Schema.NullOr(Schema.String),
-});
-
-/**
- * Every agent with no task of the account's workspaces that holds an item
- * the reader may read (`itemVisibleTo`), open or settled, whichever
- * member's agent posted it, with how many of them are waiting on the
- * reader (`waitingOnReader`), the agent whose item changed latest first,
- * as `findTasksWithItems` lists the tasks; those of agents with no
- * repository only where `repositoryless` asks (`repositoryCarried`). Note
- * that it groups by the agent's and the automation's own keys, which every
- * column it names of either depends on.
- */
-const findAgentsWithItems = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, repositoryless: Schema.Boolean }),
-  Result: AgentItemsRowSchema,
-  execute: ({ userId, repositoryless }) =>
-    Database.use((db) =>
-      db
-        .select({
-          agentId: agentTable.id,
-          items: count(),
-          toDo: toDoCount(userId),
-          updatedAt: LATEST_ITEM,
-          ...AGENT_HOLDING_NAMING,
-        })
-        .from(inboxItem)
-        .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .leftJoin(
-          automation,
-          and(eq(automation.id, agentTable.automationId), automationReadableBy(userId)),
-        )
-        .where(
-          and(isNull(inboxItem.taskId), itemVisibleTo(userId), repositoryCarried(repositoryless)),
-        )
-        .groupBy(agentTable.id, automation.id)
-        .orderBy(desc(LATEST_ITEM), desc(agentTable.id)),
-    ),
-});
-
 /**
  * What waits on the developer across the account, written for Neon Realtime:
- * the same rows, joins, and rule of who may read them as `accountWaitingItems`,
- * `accountTasklessItems`, `accountInboxTasks`, and
- * `accountInboxAutomations`, and `accountInboxAgents`, each item unread or not for the account as they say it, each
+ * the same rows, joins, and rule of who may read them as `accountWaitingItems`
+ * and `accountInboxTasks`, each item unread or not for the account as they say it, each
  * column under the key `ACCOUNT_INBOX_READ` declares it by and each instant
  * in epoch milliseconds, so a row decodes as the held read's entry does. The order is the reader's to keep, since Realtime keeps none.
  * The account's failed runs are its binding's own (`../live/reads/account-inbox.ts`).
+ * The items of agents with no task, and the automations and agents holding
+ * them (`planless`, `automations`, `agents`), answer no rows, since every
+ * agent stands on a task, and stand because a released desktop follows
+ * them: each still joins its items' agents and their automations, so its
+ * columns read as they did, and takes no row.
  */
-export function accountInboxLiveStatements(userId: string, repositoryless: boolean) {
+export function accountInboxLiveStatements(userId: string) {
   const { parts } = ACCOUNT_INBOX_READ;
   const items = liveRowsStatement(
     parts.items,
@@ -1609,11 +1444,8 @@ export function accountInboxLiveStatements(userId: string, repositoryless: boole
         .select(selection)
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .leftJoin(
-          automation,
-          and(eq(automation.id, agentTable.automationId), automationReadableBy(userId)),
-        )
-        .where(and(tasklessWaiting(userId), repositoryCarried(repositoryless))),
+        .leftJoin(automation, eq(automation.id, agentTable.automationId))
+        .where(sql`false`),
   );
   const plans = liveRowsStatement(
     parts.plans,
@@ -1646,11 +1478,8 @@ export function accountInboxLiveStatements(userId: string, repositoryless: boole
         .select(selection)
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .leftJoin(
-          automation,
-          and(eq(automation.id, agentTable.automationId), automationReadableBy(userId)),
-        )
-        .where(and(isNull(inboxItem.taskId), itemVisibleTo(userId)))
+        .leftJoin(automation, eq(automation.id, agentTable.automationId))
+        .where(sql`false`)
         .groupBy(automation.id),
   );
   const agents = liveRowsStatement(
@@ -1659,7 +1488,9 @@ export function accountInboxLiveStatements(userId: string, repositoryless: boole
       ordered: false,
       columns: {
         agentId: agentTable.id,
-        ...AGENT_HOLDING_NAMING,
+        agentTitle: agentTable.title,
+        agentModel: agentTable.model,
+        repository: agentTable.repository,
         automationId: outerJoined(automation.id),
         automationName: outerJoined(automation.name),
         workspaceId: sql<string | null>`${agentTable.organizationId}`,
@@ -1673,13 +1504,8 @@ export function accountInboxLiveStatements(userId: string, repositoryless: boole
         .select(selection)
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .leftJoin(
-          automation,
-          and(eq(automation.id, agentTable.automationId), automationReadableBy(userId)),
-        )
-        .where(
-          and(isNull(inboxItem.taskId), itemVisibleTo(userId), repositoryCarried(repositoryless)),
-        )
+        .leftJoin(automation, eq(automation.id, agentTable.automationId))
+        .where(sql`false`)
         .groupBy(agentTable.id, automation.id),
   );
   return { items, planless, plans, automations, agents };
@@ -1860,7 +1686,7 @@ export function accountItemsLiveStatements(userId: string, since: Date, settledS
 /** The account's items `narrowed` keeps, as `accountItemsLiveStatements` reads them, those `changed` keeps among them whole. */
 function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, changed: SQL) {
   const carried = and(
-    // Every item the account may read, as its read of what waits names them (`accountWaiting`, `tasklessWaiting`).
+    // Every item the account may read, as its read of what waits names them (`accountWaiting`).
     itemVisibleTo(userId),
     // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
     or(
@@ -1979,7 +1805,7 @@ const findItemHome = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, itemId: Schema.String }),
   Result: Schema.Struct({
     agentId: Schema.String,
-    planId: Schema.NullOr(Schema.String),
+    planId: Schema.String,
     workspaceId: Schema.String,
   }),
   execute: ({ userId, itemId }) =>
@@ -2010,7 +1836,7 @@ const findItemScope = SqlSchema.findOne({
   Request: Schema.Struct({ itemId: Schema.String }),
   Result: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
     organizationId: Schema.String,
   }),
   execute: ({ itemId }) =>
@@ -2262,7 +2088,7 @@ const answerItem = SqlSchema.findOneOption({
             itemVisibleTo(userId),
             eq(inboxItem.revision, revision),
             eq(inboxItem.openAskMessageId, askId),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            itemMovesTo(INBOX_STATUS.ANSWERED),
           ),
         )
         .returning({ id: inboxItem.id, txid: CURRENT_TXID }),
@@ -2307,7 +2133,7 @@ const acknowledgeNotice = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.revision, revision),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            itemMovesTo(INBOX_STATUS.ANSWERED),
             NOTICE,
           ),
         )
@@ -2397,7 +2223,7 @@ const memberCloseItem = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.revision, revision),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            itemMovesTo(INBOX_STATUS.CLOSED),
           ),
         )
         .returning({ id: inboxItem.id, txid: CURRENT_TXID }),
@@ -2410,8 +2236,8 @@ interface PostView {
   readonly needsReply: boolean;
 }
 
-/** One picture a post keeps as a file of its message: the id its blocks and words name it by, its file's own name, its type, and its bytes. */
-interface PostPicture extends InboxNamedImage {
+/** One picture a post keeps as a file of its message: the id its words or its ask's options name it by, its file's own name, its type, and its bytes. */
+export interface PostPicture extends InboxNamedImage {
   readonly id: string;
 }
 
@@ -2427,6 +2253,7 @@ interface PostWrite {
   /** The message's words, its pictures written by the addresses the item gives them. */
   readonly body: (addressOf: PictureAddress) => string;
   readonly ask: InboxAsk | undefined;
+  /** The message's files: the pictures its words name, then those its ask's options carry. */
   readonly pictures: readonly PostPicture[];
   readonly addresseeId: string | null;
 }
@@ -2439,7 +2266,7 @@ interface LockedWorkspace {
 
 /** The item as its link names it: under its agent, whichever task it works on, whose reader finds the task by the agent. */
 function itemPlace(agent: InboxAgent, itemId: string): InboxItemPlace {
-  return { kind: LINK_PLACE.INBOX_ITEM, agentId: agent.agentId, itemId };
+  return { kind: LINK_DESTINATION.INBOX_ITEM, agentId: agent.agentId, itemId };
 }
 
 /** The address each picture of the item is written by in a message's words (`inbox-attachment-link.ts`). */
@@ -2535,44 +2362,12 @@ function keepPost(
         position,
         contentType: picture.contentType,
         bytes: picture.bytes,
+        mp4Bytes: picture.mp4Bytes,
         now,
       })),
     );
     return yield* itemAsWritten(agent.userId, itemId);
   });
-}
-
-/** The agent's open asks besides the key's against the bound: whether one more may stand open. */
-function roomToAsk(agent: InboxAgent, key: string): InboxStoreEffect<boolean> {
-  return countOpenBesides({ ...agent, key }).pipe(
-    // A count that returned no row is the database breaking its own contract, not an outcome.
-    Effect.catchTag("NoSuchElementError", Effect.die),
-    Effect.map(({ open }) => open < INBOX_BOUNDS.MAX_OPEN_PER_AGENT),
-  );
-}
-
-/** The agent's open notices besides the key's against the same bound: whether one more may wait on the developer's nod. */
-function roomToNotify(agent: InboxAgent, key: string): InboxStoreEffect<boolean> {
-  return countNoticesBesides({ ...agent, key }).pipe(
-    // A count that returned no row is the database breaking its own contract, not an outcome.
-    Effect.catchTag("NoSuchElementError", Effect.die),
-    Effect.map(({ open }) => open < INBOX_BOUNDS.MAX_OPEN_PER_AGENT),
-  );
-}
-
-/** Whether the post finds room under its bound: an ask among the open asks, a notice among the open notices. */
-function roomToPost(
-  agent: InboxAgent,
-  key: string,
-  ask: InboxAsk | undefined,
-): InboxStoreEffect<Result.Result<void, InboxPostRefusal>> {
-  return ask === undefined
-    ? Effect.map(roomToNotify(agent, key), (room) =>
-        room ? Result.void : Result.fail(INBOX_POST_REFUSAL.TOO_MANY_NOTICES),
-      )
-    : Effect.map(roomToAsk(agent, key), (room) =>
-        room ? Result.void : Result.fail(INBOX_POST_REFUSAL.TOO_MANY_OPEN),
-      );
 }
 
 /** A post as the tool from version 5 writes one: the item's key, its title where the post names one, the agent's words in Markdown, the ask they end with, if any, and whether the agent is to hear the answer. */
@@ -2667,7 +2462,9 @@ function followUp(
  * words in Markdown, and the ask they end with, if any. The pictures are
  * those the words name by their paths in the agent's sandbox, read by the
  * caller, each kept as a file of the agent's message under an id minted
- * here, its path in the words written as its address. A post that asks is
+ * here, its path in the words written as its address; the files its ask's
+ * options carry follow them, under the ids the caller minted and the ask
+ * names them by, and are written only with an ask. A post that asks is
  * written as `keepPost` writes one; it is refused where the agent would hold more open
  * asks than the bound, and a notice where it would hold more open notices
  * than the same bound. A post that asks nothing on a thread whose ask
@@ -2687,6 +2484,7 @@ export function postInboxThread(
   agent: InboxAgent,
   post: InboxThreadPost,
   pictures: readonly InboxBodyPicture[] = [],
+  optionFiles: readonly PostPicture[] = [],
 ): InboxStoreEffect<Result.Result<InboxItem, InboxPostRefusal>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -2703,8 +2501,6 @@ export function postInboxThread(
         }
         const title = post.title ?? Option.getOrUndefined(standing)?.title;
         if (title === undefined) return Result.fail(INBOX_POST_REFUSAL.NO_TITLE);
-        const room = yield* roomToPost(agent, post.key, post.ask);
-        if (Result.isFailure(room)) return Result.fail(room.failure);
         const now = yield* DateTime.nowAsDate;
         const { kept, idOf } = yield* Effect.sync(() => picturesByPath(pictures));
         const view = { title, needsReply: post.needsReply ?? true };
@@ -2715,7 +2511,7 @@ export function postInboxThread(
           view,
           body,
           ask: post.ask,
-          pictures: kept,
+          pictures: [...kept, ...optionFiles],
           ...placed.success,
         };
         return Result.succeed(yield* keepPost(agent, locked.value, write, now));
@@ -2731,6 +2527,16 @@ export function readInboxAttachment(
   attachmentId: string,
 ): InboxStoreEffect<Option.Option<InboxFile>> {
   return findAttachment({ userId, itemId, attachmentId });
+}
+
+/** The attachment as `readInboxAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */
+export function readServedInboxAttachment(
+  userId: string,
+  itemId: string,
+  attachmentId: string,
+  playable: PlayableVideoType,
+): InboxStoreEffect<Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }>> {
+  return findServedAttachment({ userId, itemId, attachmentId, playable });
 }
 
 /**
@@ -2799,7 +2605,7 @@ export function taskInboxItems(
   );
 }
 
-/** One agent's items as any member of its workspace reads them, an agent with no task as much as one on a task: every open one, then the latest settled. */
+/** One agent's items as any member of its workspace reads them: every open one, then the latest settled. */
 export function memberAgentInboxItems(
   userId: string,
   agentId: string,
@@ -2812,8 +2618,7 @@ export function memberAgentInboxItems(
 }
 
 /**
- * Every item of one workspace the member may read, a task's or an agent's
- * with no task, any member's agents' alike: every open one, then the latest
+ * Every item of one workspace the member may read, any member's agents' alike: every open one, then the latest
  * settled as many as an agent's own read is told (`MAX_SETTLED_TOLD`), what
  * an outside agent acting for the member reads of their inbox
  * (`member-mcp/inbox.ts`). Note that it is handed no member's key, since
@@ -2957,6 +2762,23 @@ export function markInboxRead(
 }
 
 /**
+ * The ask of the message named open again on the item that had held it,
+ * where its moves allow it; otherwise the item holds no ask open, so it
+ * never points at an ask that does not stand open.
+ */
+function reopenAskOrNone(itemId: string, messageId: string): InboxStoreEffect<void> {
+  return Effect.gen(function* () {
+    const opened = yield* standAsk({
+      messageId,
+      status: INBOX_ASK_STATUS.OPEN,
+      withdrawnReason: null,
+      withdrawnAt: null,
+    });
+    if (opened.length === 0) yield* holdAsk({ itemId, messageId: null });
+  });
+}
+
+/**
  * The answer taken back off the item it was taken on under the key,
  * opening it again and holding open again the ask the answer settled, where
  * one did; its id, or nothing where that answer no longer stands.
@@ -2987,7 +2809,7 @@ const withdrawAnswer = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.answerKey, answerKey),
-            eq(inboxItem.status, INBOX_STATUS.ANSWERED),
+            itemMovesTo(INBOX_STATUS.OPEN, [INBOX_STATUS.ANSWERED]),
           ),
         )
         .returning({ id: inboxItem.id }),
@@ -3014,12 +2836,7 @@ export function withdrawInboxAnswer(
         const withdrawn = yield* withdrawAnswer({ userId, itemId, answerKey, openAsk, now });
         if (Option.isNone(withdrawn)) return Option.none();
         if (openAsk !== null) {
-          yield* standAsk({
-            messageId: openAsk,
-            status: INBOX_ASK_STATUS.OPEN,
-            withdrawnReason: null,
-            withdrawnAt: null,
-          });
+          yield* reopenAskOrNone(itemId, openAsk);
           yield* deleteMessage({ itemId, clientKey: answerKey });
         }
         // The answer taken back is the member's own, so it leaves the item read for them as the answer did.
@@ -3126,7 +2943,7 @@ const withdrawClose = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.answerKey, closeKey),
-            eq(inboxItem.status, INBOX_STATUS.CLOSED),
+            itemMovesTo(INBOX_STATUS.OPEN, [INBOX_STATUS.CLOSED]),
             // The agent's own close since, which always says why, is never opened by taking the member's back.
             isNull(inboxItem.closedReason),
           ),
@@ -3180,14 +2997,7 @@ export function withdrawInboxClose(
         const withdrawn = yield* withdrawClose({ userId, itemId, closeKey, openAsk, now });
         if (Option.isNone(withdrawn)) return Option.none();
         yield* deleteMessage({ itemId, clientKey: closeKey });
-        if (openAsk !== null) {
-          yield* standAsk({
-            messageId: openAsk,
-            status: INBOX_ASK_STATUS.OPEN,
-            withdrawnReason: null,
-            withdrawnAt: null,
-          });
-        }
+        if (openAsk !== null) yield* reopenAskOrNone(itemId, openAsk);
         yield* upsertRead({ userId, itemId });
         return Option.map(
           yield* findItem({ userId, itemId }),
@@ -3786,7 +3596,7 @@ const findStartedThread = SqlSchema.findOneOption({
 const insertStartedItem = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
     organizationId: Schema.String,
     agentId: Schema.String,
     key: Schema.String,
@@ -4072,32 +3882,7 @@ export function accountWaitingItems(
   );
 }
 
-/** One open item of an agent with no task as the account's read carries it, and where it stands. */
-type AccountTasklessRow = AccountTasklessEntry & Pick<InboxStamp, "status">;
-
-/**
- * Every item that waits on the developer from an agent with no task in the
- * account's workspaces, the latest changed first, with the automation and
- * repository that stand in a task's place; none is left out for being old,
- * as `accountWaitingItems` leaves none out, and those of agents with no
- * repository only where `repositoryless` asks (`repositoryCarried`).
- */
-export function accountTasklessItems(
-  userId: string,
-  repositoryless: boolean,
-): InboxStoreEffect<readonly AccountTasklessRow[]> {
-  return Effect.map(findTasklessWaitingItems({ userId, repositoryless }), (rows) =>
-    rows.map(({ workspaceId, ...row }) => ({
-      ...row,
-      snoozedUntil: row.remindAt,
-      ...(workspaceId === null ? undefined : { workspaceId }),
-      postedAt: row.postedAt.getTime(),
-      updatedAt: row.updatedAt.getTime(),
-    })),
-  );
-}
-
-/** Where each item `accountWaitingItems` and `accountTasklessItems` read stands, the same items and none of their words: what a held read of the account compares between looks. */
+/** Where each item `accountWaitingItems` reads stands, the same items and none of their words: what a held read of the account compares between looks. */
 export function accountWaitingStamps(userId: string): InboxStoreEffect<readonly InboxStamp[]> {
   return Effect.map(findWaitingStamps({ userId }), (rows) =>
     rows.map((row) => ({ ...row, updatedAt: row.updatedAt.getTime() })),
@@ -4166,29 +3951,6 @@ export function accountInboxTasks(userId: string): InboxStoreEffect<readonly Acc
     rows.map(({ taskId, ...row }) => ({
       ...row,
       planId: taskId,
-      updatedAt: row.updatedAt.getTime(),
-    })),
-  );
-}
-
-/** Every automation whose runs' agents with no task hold an item, waiting or settled, listed as `accountInboxTasks` lists the tasks. */
-export function accountInboxAutomations(
-  userId: string,
-): InboxStoreEffect<readonly AccountInboxAutomation[]> {
-  return Effect.map(findAutomationsWithItems({ userId }), (rows) =>
-    rows.map((row) => ({ ...row, updatedAt: row.updatedAt.getTime() })),
-  );
-}
-
-/** Every agent with no task holding an item, waiting or settled, listed as `accountInboxTasks` lists the tasks, and named as `accountTasklessItems` names an open item's agent. */
-export function accountInboxAgents(
-  userId: string,
-  repositoryless: boolean,
-): InboxStoreEffect<readonly AccountInboxAgent[]> {
-  return Effect.map(findAgentsWithItems({ userId, repositoryless }), (rows) =>
-    rows.map(({ workspaceId, ...row }) => ({
-      ...row,
-      ...(workspaceId === null ? undefined : { workspaceId }),
       updatedAt: row.updatedAt.getTime(),
     })),
   );

@@ -1,0 +1,9 @@
+/* resources-popover.css -- a process's name cut short by its cell (`resources-popover.tsx`):
+   it fades out over its last few pixels rather than ending in an ellipsis,
+   as a list row's title does, only while it is measured cut. */
+
+@layer components {
+  .ui-resources-name[data-overflow="true"] {
+    mask-image: linear-gradient(to left, transparent, #000 var(--ui-label-fade));
+  }
+}

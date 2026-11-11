@@ -140,10 +140,17 @@ export const automationRun = pgTable(
       onDelete: "set null",
     }),
     /**
+     * When the run was claimed for its start, while it is started and does
+     * not yet hold the agent it started; null before the claim and once the
+     * run holds its agent or failed to start. Note that the claim is kept
+     * here rather than read off a missing `agent_id`, because that goes null
+     * too where a started run's agent is deleted.
+     */
+    claimedAt: timestamptz("claimed_at"),
+    /**
      * The task the run's agent works on: the one the run made for itself, or,
      * where every run goes to the same agent, that agent's task; null before
-     * the run is acted on, for a run whose agent works on no task, and once
-     * the task is deleted.
+     * the run is acted on, and once the task is deleted.
      */
     taskId: uuid("task_id").references(() => task.id, { onDelete: "set null" }),
     /**
@@ -167,11 +174,16 @@ export const automationRun = pgTable(
     index("automation_run_automation_fired").on(table.automationId, table.firedAt),
     // The sweep starts the queued runs oldest first and fails the ones queued too long.
     index("automation_run_status_fired").on(table.status, table.firedAt),
-    // The sweep recovers the started runs no agent was recorded for, oldest claim first.
     // A task's finish asks whether a run made it, and a task's delete clears the runs that name it.
     index("automation_run_task").on(table.taskId).where(sql`${table.taskId} is not null`),
+    // The started runs that hold no agent, by when they settled: claims still starting, and runs whose agent was deleted.
+    // Note that nothing recovers a claim whose act failed midway; it counts against concurrency only for the claim window.
     index("automation_run_unrecorded_settled")
       .on(table.status, table.settledAt)
       .where(sql`${table.agentId} is null`),
+    // The concurrency guard counts one automation's claims still starting, by when each was claimed.
+    index("automation_run_claimed")
+      .on(table.automationId, table.settledAt)
+      .where(sql`${table.claimedAt} is not null`),
   ],
 );

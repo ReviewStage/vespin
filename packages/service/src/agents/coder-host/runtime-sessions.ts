@@ -29,6 +29,7 @@
  * (`RUNTIME_REFUSAL.NOT_HERE`).
  */
 
+import type { INPUT_LINE, InputLine } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentHeaderOfConversation, readAgentRouting } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
@@ -57,6 +58,7 @@ import {
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
+  type SessionMessage,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
 import { agentLogIds } from "./agent-log.js";
@@ -72,6 +74,21 @@ export const RUNNER_CHOICE = {
 } as const;
 
 export type RunnerChoice = (typeof RUNNER_CHOICE)[keyof typeof RUNNER_CHOICE];
+
+/** A member's answer to an ask as the runner's input line names it. */
+export type ApprovalLine = Extract<InputLine, { readonly type: typeof INPUT_LINE.APPROVAL }>;
+
+/** What a member's answer to an ask came to at the agent's runner (`runnerApprovalAnswered`). */
+export const RUNNER_ANSWER = {
+  /** The `approval` line was written to the runner, which hands it to the call it holds. */
+  WRITTEN: "written",
+  /** No runner of the agent runs now, so none holds the ask. */
+  NOT_LIVE: "not_live",
+  /** The runner could not be reached just now; the ask still waits. */
+  FAILED: "failed",
+} as const;
+
+export type RunnerAnswer = (typeof RUNNER_ANSWER)[keyof typeof RUNNER_ANSWER];
 
 /** What a repository added beside a native agent's own came to at the place it runs in. */
 export const RUNNER_CHECKOUT = {
@@ -94,6 +111,8 @@ export const TURN_HANDOVER = {
   AWAITED: "awaited",
   /** The hand-over could not succeed, and the turn was failed with why. */
   FAILED: "failed",
+  /** The plan's usage limit refused the launch, and the turn is held until its reset, which the sweep hands it on at. */
+  WAITING: "waiting",
   /** Nothing here reaches the turn's agent: it runs on no harness, its session never claimed its record, or this function holds no harness. */
   UNREACHED: "unreached",
 } as const;
@@ -104,6 +123,12 @@ export type TurnHandover = (typeof TURN_HANDOVER)[keyof typeof TURN_HANDOVER];
 export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   extends AgentSessions<Turn> {
   readonly retune: (sessionId: string, conversationId: string) => Effect.Effect<RunnerChoice>;
+  /** A member's answer to an ask written to the session's runner as an `approval` line, the way its messages go (`runner-sessions.ts`); not live where no runner runs. */
+  readonly answer: (
+    sessionId: string,
+    conversationId: string,
+    line: ApprovalLine,
+  ) => Effect.Effect<RunnerAnswer>;
   /** The agent's credential set afresh for every repository it works in and each one the running place does not hold cloned there (`runner-sessions.ts`); not live where no place runs. */
   readonly checkOut: (sessionId: string, conversationId: string) => Effect.Effect<RunnerCheckout>;
   /** The session's runner ended, keeping its sandbox and the harness's session, so the next message relaunches it; whether no runner runs now. */
@@ -120,6 +145,18 @@ export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   ) => Effect.Effect<TurnHandover, { readonly _tag: string }>;
   /** The session's runner launched with no message past the answer, where none runs, for an agent on screen (`runner-sessions.ts`'s `warm`); it answers at once and fails nothing. */
   readonly warm: (sessionId: string, conversationId: string) => Effect.Effect<void>;
+  /**
+   * The message handed to a runner launched afresh, any runner up ended
+   * first, so a turn its plan's limit cut short goes on with its own line on
+   * the payer the launch chooses (`runner-sessions.ts`'s `retry`); with
+   * `replayed`, the harness's session let go and the agent's steps so far
+   * handed ahead of the line, for a turn whose launch could not resume it.
+   */
+  readonly retry: (
+    sessionId: string,
+    message: SessionMessage<Turn>,
+    replayed?: boolean,
+  ) => ReturnType<AgentSessions<Turn>["send"]>;
 }
 
 export interface NativeAgentSessionsService {
@@ -318,6 +355,43 @@ export const runnerChoiceApplied = (agent: {
   );
 
 /**
+ * A member's answer to an ask, written to the agent's runner as an
+ * `approval` line the way its messages go: the store's line in the cloud,
+ * the device's MESSAGE line on a host, acting for the agent's starter as
+ * every native call does. An agent on no harness, one whose session ended,
+ * one whose runner is not up, and a function that cannot reach the harness
+ * write nothing, since no runner holds the ask then.
+ */
+export const runnerApprovalAnswered = (
+  agent: { readonly id: string; readonly userId: string; readonly conversationId: string },
+  line: ApprovalLine,
+): Effect.Effect<RunnerAnswer, never, DatabaseServices> =>
+  Effect.gen(function* () {
+    const routing = yield* readAgentRouting(agent.userId, agent.id);
+    const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+    if (runtime === undefined) return RUNNER_ANSWER.NOT_LIVE;
+    const native = yield* Effect.serviceOption(NativeAgentSessions);
+    const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+    if (Option.isNone(reached)) return RUNNER_ANSWER.FAILED;
+    const sessionId = yield* recordedRuntimeSession({
+      userId: agent.userId,
+      conversationId: agent.conversationId,
+    });
+    if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
+      return RUNNER_ANSWER.NOT_LIVE;
+    }
+    return yield* (yield* reached.value).answer(sessionId, agent.conversationId, line);
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`a member's answer did not reach its runner: ${failureKind(failure)}`),
+        RUNNER_ANSWER.FAILED,
+      ),
+    ),
+    Effect.annotateLogs(agentLogIds(agent)),
+  );
+
+/**
  * A repository added beside the agent's own, already written among its
  * repositories, handed to the place its session runs in now, acting for the
  * agent's starter as every native call does: its credential set afresh for
@@ -482,6 +556,9 @@ export function failedCallRefusal(failed: {
   // Note that an away device refuses a message as it refuses a Start, so the words are the same.
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.DEVICE_AWAY) {
     return localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY);
+  }
+  if (failed.runtimeRefusal === RUNTIME_REFUSAL.MODES_UNSUPPORTED) {
+    return localAgentRefused(LOCAL_AGENT_REFUSAL.PERMISSION_MODES);
   }
   return HOSTED_REFUSAL.UNAVAILABLE;
 }

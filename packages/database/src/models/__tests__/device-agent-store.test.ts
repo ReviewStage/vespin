@@ -42,6 +42,7 @@ import {
   settleLapsedDeviceAgentLine,
   stepDeviceAgentLaunch,
   withdrawExpiredDeviceAgentRows,
+  withdrawUnclaimedDeviceAgentLine,
 } from "../device-agent-store.js";
 import { beatDevice, registerDevice } from "../device-store.js";
 
@@ -575,6 +576,56 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
     }),
   );
 
+  it.effect("a diff's answer, its exit and what it printed, is read back as given", () =>
+    Effect.gen(function* () {
+      const { userId, deviceId, agentId } = yield* openAccount();
+      const answered = (answer: { exit: number; diff: string }) =>
+        Effect.gen(function* () {
+          const id = randomUUID();
+          yield* queueDeviceAgentRequest(userId, {
+            id,
+            agentId,
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            args: { from: "0123", to: null },
+          });
+          yield* claimDeviceAgentRequest(userId, deviceId, id);
+          yield* answerDeviceAgentRequest(userId, deviceId, id, {
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            ...answer,
+          });
+          return yield* deviceAgentRequestAnswer(userId, id);
+        });
+
+      const diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-1\n+2\n";
+      assert.deepEqual(
+        yield* answered({ exit: 0, diff }),
+        Option.some({ kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, exit: 0, diff }),
+      );
+      assert.deepEqual(
+        yield* answered({ exit: 3, diff: "" }),
+        Option.some({ kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, exit: 3, diff: "" }),
+      );
+
+      // A diff request answered no bytes, as a host from before the kind would answer it, reads as a failed diff.
+      const id = randomUUID();
+      yield* queueDeviceAgentRequest(userId, {
+        id,
+        agentId,
+        kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+        args: { from: "0123", to: null },
+      });
+      yield* claimDeviceAgentRequest(userId, deviceId, id);
+      yield* answerDeviceAgentRequest(userId, deviceId, id, {
+        kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
+        bytes: null,
+      });
+      assert.deepEqual(
+        yield* deviceAgentRequestAnswer(userId, id),
+        Option.some({ kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, exit: 1, diff: "" }),
+      );
+    }),
+  );
+
   it.effect(
     "a waiting request of a kind this build no longer knows is passed over, so the requests after it still reach the Mac",
     () =>
@@ -626,6 +677,35 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
 
       assert.equal(answered._tag, "Failure");
       assert.deepEqual(yield* deviceAgentRequestAnswer(userId, id), Option.none());
+    }),
+  );
+
+  it.effect("a withdrawal takes back a line its Mac has not claimed, and leaves one claimed", () =>
+    Effect.gen(function* () {
+      const { userId, deviceId, agentId } = yield* openAccount();
+      const other = yield* openAccount();
+      const running = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
+      yield* claimDeviceAgentLine(userId, deviceId, running.id);
+      const left = Option.getOrThrow(
+        yield* queueDeviceAgentLine(userId, message(agentId, "never taken")),
+      );
+
+      yield* withdrawUnclaimedDeviceAgentLine(other.userId, left.id);
+      const stillWaiting = yield* deviceAgentLinesWaiting(userId, deviceId);
+      yield* withdrawUnclaimedDeviceAgentLine(userId, left.id);
+      yield* withdrawUnclaimedDeviceAgentLine(userId, running.id);
+
+      assert.deepEqual(
+        stillWaiting.map((line) => line.id),
+        [left.id],
+        "another account withdraws nothing",
+      );
+      assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+      assert.equal(
+        Option.isSome(yield* settleDeviceAgentLine(userId, deviceId, running.id, 0)),
+        true,
+        "the claimed line is still there to settle",
+      );
     }),
   );
 

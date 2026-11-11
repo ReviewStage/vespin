@@ -1,18 +1,17 @@
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   linkOf,
   type ReadLink,
   taskLinkStep,
   withTaskId,
 } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { SettingsView } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
-import { createContext, useContext, useEffect, useState } from "react";
 import type { AdminView } from "./admin/routing.js";
 import { useAppCommand } from "./app-commands.js";
 import { LINK_COPY, useCopyToast } from "./copy-feedback.js";
@@ -32,16 +31,14 @@ import { type RoutedViews, useRoutedViews } from "./workspace-routes.js";
  * first: the tab of the side panel where the keyboard is in it or the panel
  * fills the window, else the
  * work column's agent, then the side panel's tab, then the task under them;
- * what stands in the plan's place (an agent's page, the Inbox on an item,
+ * what stands in the plan's place (an agent's address, the Inbox on an item,
  * an automation, an Admin view) before the list it is in; and a page of Settings
  * while Settings stands. A tab with nothing of its own to link to, a
  * file's, the board, the code, the Inbox, or a terminal, is passed over for
  * the task, and so is the plan's, whose link is the task's.
  * Each link is written under its workspace's slug, or its id until the
  * workspaces are read, as a task's own is, and names a task by its number
- * where it has one (`taskLinkStep`); an Inbox item by its id alone; an agent's page under the
- * workspace the page read its agent into, which only the page knows, so the
- * page tells the window (`usePageWorkspace`). A place whose workspace is
+ * where it has one (`taskLinkStep`); an Inbox item by its id alone. A place whose workspace is
  * known by neither, as with no workspace listed, has no link, since a link
  * with no workspace would name a path of none.
  *
@@ -97,13 +94,7 @@ export interface LinkAtHand {
   readonly step?: boolean;
 }
 
-/** The workspace an agent's page read its agent into, by the agent's id. */
-interface PageWorkspace {
-  readonly agentId: string;
-  readonly workspaceId: string;
-}
-
-/** Where the window stands beyond the Plans tab: Settings on a page, whether the keyboard is in the side panel, and an agent's page's workspace. */
+/** Where the window stands beyond the Plans tab: Settings on a page, and whether the keyboard is in the side panel. */
 export interface WindowAt {
   readonly settings:
     | {
@@ -120,19 +111,11 @@ export interface WindowAt {
   readonly admin?: AdminView | undefined;
   /** Whether the links asked for are the place the window's state says, under whatever routed place stands, as a routed place is left for it. */
   readonly underRouted?: boolean;
-  readonly pageWorkspace?: PageWorkspace | undefined;
   /** Whether the room is narrow, showing one pane at a time. */
   readonly narrow?: boolean;
   /** The task the Inbox is narrowed to. */
   readonly inboxTask?: string | undefined;
 }
-
-const PageWorkspaceContext = createContext<(held: PageWorkspace | undefined) => void>(
-  () => undefined,
-);
-
-/** Hands an agent's page the window's ear for the workspace it read its agent into (`CopyLink`'s `onPageWorkspace`). */
-export const PageWorkspaceProvider = PageWorkspaceContext.Provider;
 
 /** A workspace as a link names it: its slug, or its id before its slug is read; empty where neither is known. */
 export function slugOf(workspaces: readonly Workspace[], workspaceId: string | undefined): string {
@@ -141,8 +124,8 @@ export function slugOf(workspaces: readonly Workspace[], workspaceId: string | u
 }
 
 /**
- * The place a tab of the side panel shows, on the task or the agent's page
- * that holds the panel; none for a tab whose thing has no link of its own:
+ * The place a tab of the side panel shows, on the task that holds the
+ * panel; none for a tab whose thing has no link of its own:
  * a file's, the Inbox, the comments, a terminal, the plan's of old,
  * whose task is the column's Overview and linked as the task, a pull request
  * the agent did not open, and a worker of the app's own, which is drawn
@@ -153,18 +136,18 @@ export function slugOf(workspaces: readonly Workspace[], workspaceId: string | u
 export function panelTabPlace(
   holder: PagePlace,
   tab: SidePanelTab | undefined,
-): LinkPlace | undefined {
+): LinkDestination | undefined {
   return tab === undefined ? undefined : stripTabLink(tab, holder);
 }
 
 /** What a side panel tab's link is called, by the kind of place it names; none for a kind no tab of the panel shows. */
-function panelThing(place: LinkPlace): LinkThing | undefined {
+function panelThing(place: LinkDestination): LinkThing | undefined {
   switch (place.kind) {
-    case LINK_PLACE.PAGE:
+    case LINK_DESTINATION.PAGE:
       return LINK_THING.PAGE;
-    case LINK_PLACE.CHANGES:
+    case LINK_DESTINATION.CHANGES:
       return LINK_THING.CHANGES;
-    case LINK_PLACE.WORKER:
+    case LINK_DESTINATION.WORKER:
       return LINK_THING.WORKER;
     default:
       return undefined;
@@ -172,8 +155,8 @@ function panelThing(place: LinkPlace): LinkThing | undefined {
 }
 
 /** An Inbox item's place, by its id alone, whose agent, task, and workspace its reader asks the service for, as every Copy link of an item writes it. */
-export function inboxItemPlace(chosen: InboxChoice): LinkPlace {
-  return { kind: LINK_PLACE.INBOX_ITEM, itemId: chosen.itemId };
+export function inboxItemPlace(chosen: InboxChoice): LinkDestination {
+  return { kind: LINK_DESTINATION.INBOX_ITEM, itemId: chosen.itemId };
 }
 
 /** The links of the task drawn: its version chosen, its tabs', and its own, the most specific first. */
@@ -185,7 +168,7 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
   const planId = taskLinkStep(drawn);
   const task: LinkAtHand = {
-    link: { workspace, place: { kind: LINK_PLACE.TASK, planId } },
+    link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
@@ -199,7 +182,7 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
     agentId === undefined
       ? undefined
       : {
-          link: { workspace, place: { kind: LINK_PLACE.AGENT, agentId } },
+          link: { workspace, place: { kind: LINK_DESTINATION.AGENT, agentId } },
           thing: LINK_THING.AGENT,
           name: tasks.agents.agents?.find((each) => each.id === agentId)?.title ?? undefined,
         };
@@ -242,26 +225,15 @@ function placesAtHand(
   return at.place.links({ tasks, views, at, listed, under });
 }
 
-/** The links of an agent's own page: the page's, under the workspace the page read its agent into, else the one listed, and the tab of the panel beside it with a link of its own, first where the panel holds the keys. */
-export function agentPageLinks(
-  tasks: TasksControl,
-  at: WindowAt,
-  listed: string,
-  agentId: string,
-): readonly LinkAtHand[] {
-  const page = at.pageWorkspace;
-  const home = page?.agentId === agentId ? slugOf(tasks.workspaces, page.workspaceId) : listed;
-  const own: LinkAtHand = {
-    link: { workspace: home, place: { kind: LINK_PLACE.AGENT, agentId } },
-    thing: LINK_THING.AGENT,
-    step: true,
-  };
-  // A tab of the panel beside it with a link of its own, a page the agent showed, its Changes, or a worker's, is at hand under the agent's link.
-  const held = tasks.sidePanel.open ? panelTabPlace({ agentId }, tasks.sidePanel.tab) : undefined;
-  const thing = held === undefined ? undefined : panelThing(held);
-  if (held === undefined || thing === undefined) return [own];
-  const shown: LinkAtHand = { link: { workspace: home, place: held }, thing };
-  return at.sidePanelFocused || tasks.sidePanel.fullScreen ? [shown, own] : [own, shown];
+/** The link of an agent's own address, which opens it on its task, under the workspace listed. */
+export function agentPageLinks(listed: string, agentId: string): readonly LinkAtHand[] {
+  return [
+    {
+      link: { workspace: listed, place: { kind: LINK_DESTINATION.AGENT, agentId } },
+      thing: LINK_THING.AGENT,
+      step: true,
+    },
+  ];
 }
 
 /** The links of the place the window's state says, the task bound for; none while none is, as a link's task waits on its open, Home being the router's (`ROUTED_PLACE.HOME`). */
@@ -273,7 +245,7 @@ function stateLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
  * The links at hand, the most specific first, as the keyboard stood in or
  * out of the side panel, and the copy of one, as the command palette offers
  * them; the link of the step the window stands on, which its history writes
- * as that step's address; and the ear an agent's page tells its workspace to.
+ * as that step's address.
  */
 export interface CopyLink {
   readonly linksAt: (sidePanelFocused: boolean) => readonly LinkAtHand[];
@@ -281,22 +253,11 @@ export interface CopyLink {
   /** The link of the place the window's state says, the step a routed place is left for. */
   readonly placed: ReadLink | undefined;
   readonly copy: (held: LinkAtHand) => void;
-  readonly onPageWorkspace: (held: PageWorkspace | undefined) => void;
 }
 
 /** Whether `element` is in the side panel, which makes its tab the thing at hand while the keyboard is there. */
 export function inSidePanel(element: Element | null): boolean {
   return element?.closest(SIDE_PANEL_SELECTOR) != null;
-}
-
-/** Tells the window the workspace `agentId`'s page read its agent into, so its links name that one rather than the one listed. */
-export function usePageWorkspace(agentId: string, workspaceId: string | undefined): void {
-  const tell = useContext(PageWorkspaceContext);
-  useEffect(() => {
-    if (workspaceId === undefined) return undefined;
-    tell({ agentId, workspaceId });
-    return () => tell(undefined);
-  }, [tell, agentId, workspaceId]);
 }
 
 /**
@@ -318,7 +279,6 @@ export function useCopyLink(
   const copyWords = useCopyToast();
   const copy = (held: LinkAtHand) =>
     copyWords(linkOf(held.link.place, held.link.workspace), LINK_COPY.COPIED);
-  const [pageWorkspace, onPageWorkspace] = useState<PageWorkspace | undefined>(undefined);
   const views = useRoutedViews();
   const inboxTask = views.inbox.narrowed;
   const linksAt = (sidePanelFocused: boolean) =>
@@ -327,7 +287,6 @@ export function useCopyLink(
       place,
       admin,
       sidePanelFocused,
-      pageWorkspace,
       narrow: room === SHELL_ROOM.NARROW,
       inboxTask,
     });
@@ -350,9 +309,8 @@ export function useCopyLink(
     settings: undefined,
     underRouted: true,
     sidePanelFocused: false,
-    pageWorkspace,
     narrow: room === SHELL_ROOM.NARROW,
     inboxTask,
   }).find((each) => each.step === true)?.link;
-  return { linksAt, standing, placed, copy, onPageWorkspace };
+  return { linksAt, standing, placed, copy };
 }

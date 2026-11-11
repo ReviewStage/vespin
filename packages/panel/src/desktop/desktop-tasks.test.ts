@@ -33,6 +33,7 @@ import {
   type Task,
   type TaskStanding,
 } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { COMMENT_SUBJECT, type TasksCommentsFollow } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -48,7 +49,6 @@ import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { agentTab, changesTab, draftTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { Effect } from "effect";
 import { act, createElement, Fragment, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -336,7 +336,7 @@ test("a run's task leads its bar with the path to the automation whose run made 
   );
 });
 
-test("a wide task's details with no agent offer New agent at their head, which opens a draft as the way back to the agents does", async () => {
+test("a wide task's details with no agent offer New agent on its Agents group's head, which opens a draft as the way back to the agents does", async () => {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
   fakeActPort({});
@@ -366,12 +366,11 @@ test("a wide task's details with no agent offer New agent at their head, which o
       ),
     ),
   );
-  const newAgent = (within: Element | null) =>
-    [...(within?.querySelectorAll<HTMLElement>("button, [role='option']") ?? [])].find(
-      (each) => each.textContent === "New agent",
-    ) ?? assert.fail("New agent is offered");
+  const newAgent =
+    container.querySelector<HTMLElement>(".plan-agents button[aria-label='New agent']") ??
+    assert.fail("New agent is offered");
 
-  act(() => newAgent(container.querySelector(".plan-agents [aria-label='Agents']")).click());
+  act(() => newAgent.click());
   const back =
     [...container.querySelectorAll<HTMLButtonElement>(".desktop-document button")].find(
       (each) => each.textContent === "Agents",
@@ -494,7 +493,6 @@ async function _narrowTaskInbox(
   // again what `later` says once it settles; one that fails after it answered keeps its rows, as the host keeps them.
   const heldOf = (read: AppHolderInbox): AppHolderInboxes => ({
     [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: read },
-    [INBOX_SCOPE_KIND.AGENT]: {},
   });
   let standing: AppHolderInbox = first === undefined ? { rows: items } : UNREAD;
   // Note that the window is a fresh one, so nothing a test before handed it stands.

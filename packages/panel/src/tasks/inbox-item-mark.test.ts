@@ -12,7 +12,6 @@ import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { listedAgent } from "../testing/tasks-control.js";
 import { ItemMark } from "./inbox-item-parts.js";
-import { taskHolder } from "./inbox-model.js";
 
 /**
  * inbox-item-mark.test.ts -- an Inbox item whose agent was archived still
@@ -76,7 +75,6 @@ test("an item an archived agent posted wears the harness that agent ran on, as t
     root?.render(
       withQueryClient(
         createElement(ItemMark, {
-          holder: taskHolder(TASK),
           agentId: ARCHIVED,
           models: undefined,
           readerId: undefined,

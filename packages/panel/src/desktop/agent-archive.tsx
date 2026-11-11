@@ -1,5 +1,7 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { agentStillWriting } from "@repo/features/task-agents-model";
+import { archiveStopWords } from "@repo/features/tasks-model";
 import {
   ArchiveIcon,
   BUTTON_SIZE,
@@ -21,6 +23,7 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { Schema } from "effect";
@@ -29,12 +32,12 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
-import { useBusyPress } from "../settings/busy-press.js";
-import { agentName, agentStillWriting, teammateStarter } from "../tasks/agent-model.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
+import { teammateStarter } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { type MenuAction, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
@@ -42,16 +45,15 @@ import { type CountNoun, foldedCount } from "./sidebar-fold.js";
 import { useRefusalHeard } from "./use-refusal-heard.js";
 
 /**
- * agent-archive.tsx -- a coding agent's Archive, asked first while a teammate's agent still works, and the task's archived agents, each a row with its Unarchive, folded under Archived at the foot of a phone's Overview agents; the tab bar's History lists them as it lists a closed agent (`agent-history.tsx`).
+ * agent-archive.tsx -- a coding agent's Archive, asked first while the agent still works, and the task's archived agents, each a row with its Unarchive, folded under Archived at the foot of a phone's Overview agents; the tab bar's History lists them as it lists a closed agent (`agent-history.tsx`).
  *
- * Archive stands in an agent's tab menu, and for an agent with no task in its page's ⋯ and its
- * sidebar row's menu, whose Unarchive stands in its place once archived
- * (`useAgentUnarchive`). The reader's own agent is archived at once, at
- * rest or working, since the toast's Undo brings it back with its
- * transcript, though a turn the archive stopped stays stopped. A
- * teammate's at rest is archived at once too; one still working asks
- * first, in the accent, since archiving it stops a turn that is not the
- * reader's. Note that a teammate's agent drawn at rest is read again
+ * Archive stands in an agent's tab menu and its sidebar row's menu, whose
+ * Unarchive stands in its place once archived
+ * (`useAgentUnarchive`). An agent at rest is archived at once, since the
+ * toast's Undo brings it back with its transcript. One still working, the
+ * reader's own or a teammate's, asks first, in red, since archiving it
+ * stops it and the work it is in the middle of, which Undo does not bring
+ * back. Note that a teammate's agent drawn at rest is read again
  * before it is archived unasked, because nothing follows an agent whose
  * tab is not shown, and a turn begun since, by the app or another window, is
  * asked about first like any other, a button that pressed it held busy while
@@ -104,21 +106,15 @@ const UNARCHIVE = commandHead(PANEL_COMMAND.UNARCHIVE_AGENT);
 const UNARCHIVING = "Unarchiving";
 
 /**
- * What asking to archive a teammate's working agent says. Unarchive brings
- * the agent back, so the act is never red: it asks in the accent, as an act
- * that reaches someone else, whose turn it stops.
+ * What asking to archive a working agent says. Unarchive brings the agent
+ * back but not the work its stop cut off, so the act is red.
  */
-function archiveQuestion(name: string): DialogQuestion {
-  return {
-    title: `Stop and archive ${name}?`,
-    body: "Its transcript and pull request are kept.",
-    verb: "Stop and archive agent",
-    running: "Stopping and archiving",
-    loss: CONFIRM_LOSS.AFFECTS_OTHERS,
-    replayUnmasked: true,
-    titleReplayMasked: true,
-  };
-}
+const ARCHIVE_QUESTION: DialogQuestion = {
+  ...archiveStopWords(false),
+  running: "Stopping and archiving",
+  loss: CONFIRM_LOSS.IRREVERSIBLE,
+  replayUnmasked: true,
+};
 
 /** A press that archives or unarchives without a dialog, its refusal said in a toast. */
 function useArchivePress(agents: AgentsControl) {
@@ -129,7 +125,6 @@ function useArchivePress(agents: AgentsControl) {
       toast({
         words: result.reason,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.AGENT_ARCHIVE, cause: result, about: { agentId } },
       });
     });
@@ -146,15 +141,20 @@ export interface AgentArchive {
 /** An archived agent's Unarchive as a menu offers it, its refusal said in a toast. */
 export function useAgentUnarchive(agentId: string, agents: AgentsControl): MenuAction {
   const press = useArchivePress(agents);
-  return commandAction(PANEL_COMMAND.UNARCHIVE_AGENT, () => press(agentId, false), false);
+  return commandAction(
+    PANEL_COMMAND.UNARCHIVE_AGENT,
+    () => press(agentId, false),
+    shortcutSubject(SHORTCUT_SUBJECT.AGENT, agentId),
+  );
 }
 
 /**
  * One agent's Archive as a menu offers it, and the dialog it asks through
- * while a teammate's agent still works, which the caller draws beside the
- * menu. The reader's own agent is archived at once, working or not, since
- * the toast's Undo brings it back; a teammate's is read first and asked
- * about while it works. The question goes with the surface it was asked on.
+ * while the agent still works, which the caller draws beside the menu. An
+ * agent drawn at work asks; the reader's own at rest is archived at once,
+ * since the toast's Undo brings it back; a teammate's at rest is read first
+ * and asked about where it works. The question goes with the surface it was
+ * asked on.
  */
 export function useAgentArchive(
   agent: Pick<AgentSummary, "id" | "status" | "title" | "automationName" | "model" | "startedBy">,
@@ -194,17 +194,12 @@ export function useAgentArchive(
   return {
     action: commandAction(
       PANEL_COMMAND.ARCHIVE_AGENT,
-      teammate ? (agentStillWriting(agent.status) ? confirm.ask : asked) : archive,
-      false,
+      agentStillWriting(agent.status) ? confirm.ask : teammate ? asked : archive,
+      shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id),
     ),
     reading,
     dialog: (
-      <ConfirmDialog
-        open
-        confirm={confirm}
-        question={archiveQuestion(agentName(agent, agents.models))}
-        restoreTo={nextRowOrHead}
-      />
+      <ConfirmDialog open confirm={confirm} question={ARCHIVE_QUESTION} restoreTo={nextRowOrHead} />
     ),
   };
 }
@@ -233,7 +228,7 @@ function ArchivedAgentRow({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
-  const unarchiving = useBusyPress(() => press(agent.id, false));
+  const unarchiving = useAsyncAction(rejectionWords);
   const coarse = useCoarsePointer();
   return (
     <>
@@ -264,9 +259,9 @@ function ArchivedAgentRow({
                   icon={UNARCHIVE.icon}
                   label={UNARCHIVE.label}
                   size={BUTTON_SIZE.COMPACT}
-                  busy={unarchiving.busy}
+                  busy={unarchiving.running}
                   busyLabel={UNARCHIVING}
-                  onClick={unarchiving.onPress}
+                  onClick={() => void unarchiving.run(() => press(agent.id, false))}
                 />
               </Tooltip>
             )

@@ -21,6 +21,9 @@
  * A chime plays in the tab itself, which runs the host and is its one
  * window, through `@repo/ui`'s player. A browser keeps the tab's sound
  * suspended until its first press, so one heard before that waits for it.
+ * The account's own clip is that same player's, loaded by the panel the
+ * tab mounts (`@repo/panel`'s `useSoundClipLoaded`), so a chime of Your
+ * clip here plays it, or the chime while none has loaded.
  */
 
 import type { AgentNoticeDoorsSurface } from "@repo/host/agent-notices";

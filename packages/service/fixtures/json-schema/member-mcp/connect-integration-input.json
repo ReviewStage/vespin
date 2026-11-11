@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": [
+        "executor",
+        "github",
+        "gmail",
+        "google-calendar",
+        "google-drive",
+        "granola",
+        "linear",
+        "mercury",
+        "neon",
+        "notion",
+        "posthog",
+        "resend",
+        "sentry",
+        "slack",
+        "stripe",
+        "supabase",
+        "vercel",
+        "ycombinator"
+      ],
+      "description": "The provider to sign in to."
+    },
+    "connection": {
+      "type": "string",
+      "description": "An account the member holds, by the connection name list_integrations answered, to sign it in again; leave it out for the provider's first account."
+    },
+    "add": {
+      "type": "boolean",
+      "description": "true to sign in another account at the provider, where it takes more than one."
+    }
+  },
+  "required": [
+    "provider"
+  ],
+  "additionalProperties": false
+}

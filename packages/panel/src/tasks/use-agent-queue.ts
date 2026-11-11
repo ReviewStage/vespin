@@ -1,6 +1,8 @@
 import type { AgentQueue, QueuedMessage } from "@repo/features/agent-queue-wire";
+import { QUEUE_LEFT_WORDS, QUEUE_REFUSED_WORDS } from "@repo/features/agent-queue-words";
 import { AGENT_CALL_FAILURE, type AgentQueueAnswerView } from "@repo/features/agent-view";
 import {
+  AGENT_BOUNDS,
   type AgentAttachment,
   type AgentQueueChange,
   agentAttachmentsSchema,
@@ -18,8 +20,9 @@ import { Option, Schema } from "effect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sendMutation } from "../act-mutations.js";
 import { keepPictureRead, pictureNow, pictureQuery } from "../picture-query.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import type { AgentPictureDoor } from "./agent-pictures.js";
+import { putBackRefused } from "./refused-send.js";
 import type { HeldComposer } from "./use-agent-composer.js";
 
 /**
@@ -41,19 +44,6 @@ import type { HeldComposer } from "./use-agent-composer.js";
 
 /** What a change answered where the act itself failed. */
 const UNANSWERED: AgentQueueAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
-
-/** What the toast says of a change the host drew and took back, by what it asked; a hold's refusal closes its edit, which says it. */
-const REFUSED_WORDS: { readonly [Change in AgentQueueChange["change"]]?: string } = {
-  [QUEUE_CHANGE.ADD]: "Could not queue the message.",
-  [QUEUE_CHANGE.EDIT]: "Could not save the queued message.",
-  [QUEUE_CHANGE.DELETE]: "Could not delete the queued message.",
-  [QUEUE_CHANGE.STEER]: "Could not send the queued message.",
-  [QUEUE_CHANGE.REORDER]: "Could not reorder the queue.",
-  [QUEUE_CHANGE.RESUME]: "Could not resume the queue.",
-};
-
-/** What the toast says beneath them where the service said the message is no longer in the queue. */
-const LEFT_WORDS = "It already left the queue.";
 
 /** The messages of a queue its page carries none of, as an agent's page before its first change. */
 const NO_MESSAGES: readonly QueuedMessage[] = [];
@@ -151,16 +141,15 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
         if ("queue" in answer && messageId !== undefined && files.length > 0) {
           keepLandedFiles(queryClient, agentId, answer.queue, messageId, files);
         }
-        const words = REFUSED_WORDS[next.change];
+        const words = QUEUE_REFUSED_WORDS[next.change];
         if (!("failure" in answer) || words === undefined) return answer;
         toast({
           replayUnmasked: true,
           words,
           ...(answer.failure === AGENT_CALL_FAILURE.NOT_FOUND && messageId !== undefined
-            ? { detail: LEFT_WORDS }
+            ? { detail: QUEUE_LEFT_WORDS }
             : undefined),
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: {
             surface:
               next.change === QUEUE_CHANGE.DELETE
@@ -250,13 +239,14 @@ export interface QueueEditing {
  * taken off or joined as any message's are, and Save and Steer send the
  * box's files with its words; neither goes while they are still read, and an
  * edit whose files did not read closes, the message left as it was. A
- * message the queue did not take comes back into the box under the id it
- * went under, so queueing it again can never queue it twice.
+ * message the queue did not take comes back into the box ahead of whatever
+ * was written there while it was out (`refused-send.ts`), under the id it
+ * went under, so queueing it again as it went can never queue it twice.
  */
 export function useQueueEditing(
   composer: Pick<
     HeldComposer,
-    "draft" | "setDraft" | "attachments" | "setAttachments" | "sendsSettled"
+    "draft" | "setDraft" | "attachments" | "setAttachments" | "sendsSettled" | "updateHeld"
   >,
   queue: Pick<AgentQueueControl, "change" | "listed">,
   files: AgentPictureDoor,
@@ -276,9 +266,6 @@ export function useQueueEditing(
   useEffect(() => {
     if (left) setStashed(undefined);
   }, [left]);
-  // The box's words as they stand now, which an answer that lands later reads rather than those of the draw that asked.
-  const draft = useRef(composer.draft);
-  draft.current = composer.draft;
   // The words a refused queue gave back, and the id they went under, which queueing them again reuses.
   const refused = useRef<{ readonly text: string; readonly id: string } | undefined>(undefined);
   // The message whose files are still being read into the box, by id, which no Save or Steer sends meanwhile.
@@ -323,12 +310,18 @@ export function useQueueEditing(
         },
         composer.sendsSettled(),
       ).then((answer) => {
-        // A message the queue did not take comes back into the box, where the box holds nothing newer.
-        if ("failure" in answer && draft.current === "") {
-          refused.current = { text, id };
-          composer.setDraft(text);
-          composer.setAttachments(() => attachments);
-        }
+        if (!("failure" in answer)) return;
+        // A message the queue did not take comes back into the box ahead of what was written there meanwhile.
+        putBackRefused({
+          went: { text, attachments },
+          most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
+          update: (next) =>
+            composer.updateHeld((now) => {
+              const joined = next(now);
+              if (joined !== undefined) refused.current = { text, id };
+              return joined;
+            }),
+        });
       });
     },
     edit: (message) => {

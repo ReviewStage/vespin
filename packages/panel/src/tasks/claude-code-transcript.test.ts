@@ -3,16 +3,17 @@
 import assert from "node:assert/strict";
 import { AGENT_PAYER, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
+import { ACTOR_KIND } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE, type WireRecord, type WireValue } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { agentPayerLine } from "./agent-model.js";
+import { PayerValue } from "./agent-payer.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
 import { newestTodos, taskTodos } from "./agent-todos.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 
 /**
  * claude-code-transcript.test.ts -- a coding agent on Claude Code stores its
@@ -353,21 +354,137 @@ test("Vespin's read_agent, called over its MCP server and stored under its own n
   assert.deepEqual(opened, [{ kind: TOOL_TARGET.AGENT, agent: "agent-7" }]);
 });
 
-test("an agent paid for by a plan says the plan where an agent on a key names the key and what it has cost", () => {
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.API_KEY, MODEL_PROVIDER.OPENAI, 0.42),
-    "OpenAI API key · $0.42 so far",
+test("an agent's payer says whose it is: the reader's own, by its name masked from a screen recording where it names one, or the teammate who started it, by name", () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const theo = {
+    kind: ACTOR_KIND.PERSON,
+    userId: "user-theo",
+    name: "Theo Lindqvist",
+    you: false,
+  } as const;
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(
+          "div",
+          null,
+          createElement(
+            "p",
+            null,
+            createElement(PayerValue, {
+              payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+              provider: MODEL_PROVIDER.ANTHROPIC,
+              usage: { inputTokens: 10, outputTokens: 1, costUsd: 2.41 },
+              owner: undefined,
+            }),
+          ),
+          createElement(
+            "p",
+            null,
+            createElement(PayerValue, {
+              payer: AGENT_PAYER.API_KEY,
+              provider: MODEL_PROVIDER.ANTHROPIC,
+              usage: { inputTokens: 10, outputTokens: 1, costUsd: 0.42 },
+              owner: theo,
+            }),
+          ),
+          createElement(
+            "p",
+            null,
+            createElement(PayerValue, {
+              payer: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+              provider: MODEL_PROVIDER.OPENAI,
+              usage: undefined,
+              owner: undefined,
+              planName: "ana@work.com",
+            }),
+          ),
+        ),
+      ),
+    ),
   );
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.API_KEY, MODEL_PROVIDER.ANTHROPIC, undefined),
-    "Anthropic API key",
-  );
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.CLAUDE_SUBSCRIPTION, MODEL_PROVIDER.ANTHROPIC, 2.41),
-    "Using Claude plan",
-  );
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.CHATGPT_SUBSCRIPTION, MODEL_PROVIDER.OPENAI, 2.41),
-    "Using ChatGPT plan",
+  const lines = [...container.querySelectorAll("p")];
+  const [own, theirs, named] = lines.map((line) => line.textContent);
+  assert.equal(own, "Your Claude plan");
+  // Note that a plan's name may be the account's email, so its words are masked in a screen recording.
+  assert.equal(named, "Your Codex plan (ana@work.com)");
+  assert.equal(lines[2]?.querySelector("[data-replay-mask]")?.textContent, named);
+  // Note that the chip's face draws the teammate's initial before their name.
+  assert.match(theirs ?? "", /Theo Lindqvist’s Anthropic API key · \$0\.42 so far$/);
+  assert.doesNotMatch(theirs ?? "", /Your/);
+});
+
+test("a usage-limit notice stays visible between the work before a pause and the answer after it", () => {
+  const { container } = drawn([
+    storedPart("Read", { file_path: "/workspace/repository/README.md" }, "Read the guide."),
+    { type: "data-usage-limit", data: { agent: "Claude", resetsAt: Date.UTC(2026, 10, 9, 23) } },
+    storedPart("Bash", { command: "pnpm test" }, "Tests passed."),
+    { type: "text", text: "The work is complete." },
+  ]);
+  assert.ok(container.textContent?.includes("Claude usage limit reached"));
+  assert.ok(container.textContent?.includes("Resumes at"));
+  assert.ok(
+    (container.textContent ?? "").indexOf("Claude usage limit reached") <
+      (container.textContent ?? "").indexOf("The work is complete."),
   );
 });
+
+test("a compaction says so where it happened, with the tokens it folded where the harness counted them, and a new session says the agent no longer has the messages above", () => {
+  const { container } = drawn([
+    { type: "text", text: "Read the guide." },
+    { type: "data-compacted", data: { tokensBefore: 148_000 } },
+    { type: "data-compacted", data: { tokensBefore: null } },
+    { type: "data-session-cleared", data: { at: Date.UTC(2026, 10, 10) } },
+  ]);
+  const said = container.textContent ?? "";
+  assert.ok(said.includes("Compacted the conversation from 148K tokens"), said);
+  assert.equal(said.split("Compacted the conversation").length - 1, 2, said);
+  assert.ok(said.includes("The agent no longer has the messages above."), said);
+});
+
+test("a usage limit with no known reset tells the reader to send a message", () => {
+  const { container } = drawn({
+    type: "data-usage-limit",
+    data: { agent: "Codex", resetsAt: null },
+  });
+  assert.ok(container.textContent?.includes("Codex usage limit reached"));
+  assert.ok(container.textContent?.includes("Send a message to continue"));
+});
+
+test("a usage limit that moved the turn on names the payer it ran out on and the one it continues on", () => {
+  const { container } = drawn({
+    type: "data-usage-limit",
+    data: {
+      agent: "Claude",
+      resetsAt: null,
+      moved: { from: "Work plan", to: "API key · sk-…a91F" },
+    },
+  });
+  assert.ok(container.textContent?.includes("Claude usage limit reached on Work plan"));
+  assert.ok(container.textContent?.includes("Continuing on API key · sk-…a91F"));
+  assert.ok(!container.textContent?.includes("Send a message to continue"));
+});
+
+test.each([
+  { name: "a worker on Claude Code", tool: "Agent", agent: "Claude" },
+  { name: "a subagent on Codex", tool: "collabAgentToolCall", agent: "Codex" },
+])(
+  "$name the plan's usage limit ended draws the limit's notice in its answer's place",
+  ({ tool, agent }) => {
+    const { container } = drawn(
+      storedPart(
+        tool,
+        { description: "Collect real menu items", prompt: "List the menus.", tool: "spawnAgent" },
+        { usageLimit: { agent, resetsAt: null } },
+      ),
+    );
+    const words = container.textContent ?? "";
+    assert.ok(words.includes(`${agent} usage limit reached`), words);
+    // The worker's card says its title alone, since nothing goes on from the worker.
+    assert.ok(!words.includes("Send a message to continue"), words);
+    assert.ok(!words.includes("usageLimit"), words);
+  },
+);

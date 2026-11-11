@@ -23,6 +23,8 @@ import { controlsAgent, reachedAgentById } from "../agent-reach.js";
 interface ReachedAgentSession {
   readonly sessionId: string | undefined;
   readonly machine: Agent["machine"];
+  /** The agent itself, for a route that reads more of it, such as its repository's run actions. */
+  readonly agent: Agent;
 }
 
 /**
@@ -44,6 +46,7 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   return {
     sessionId: session?.sessionId,
     machine: agent.machine,
+    agent,
   };
 });
 

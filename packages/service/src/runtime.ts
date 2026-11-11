@@ -13,8 +13,11 @@ import { FetchHttpClient } from "effect/http";
 import { invitationMailFromEnvironment } from "./accounts/invitation-mail.js";
 import { onboardingEventsFromEnvironment } from "./accounts/onboarding-events.js";
 import { welcomeMailFromEnvironment } from "./accounts/welcome-mail.js";
+import { agentWakeupsFromEnvironment } from "./agents/coder-host/agent-wakeups.js";
 import { settledTurnListener } from "./agents/coder-host/settled-turns.js";
+import { startedTurnListener } from "./agents/coder-host/started-turns.js";
 import { queuedTurnListener, turnQueueFromEnvironment } from "./agents/coder-host/turn-delivery.js";
+import { sandboxReleasesFromEnvironment } from "./agents/session-sandboxes.js";
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
 import { webSqlClient } from "./db/sql-client.js";
@@ -96,6 +99,10 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  * started it, sends an automation run's result on Slack, and hands on the
  * agent's queue (`agents/coder-host/settled-turns.ts`).
  *
+ * `StartedTurnListener` is here on the same terms: the store writer tells it
+ * of every coding agent turn it starts running, which refreshes the Live
+ * Activity of the member's phones (`agents/coder-host/started-turns.ts`).
+ *
  * `QueuedTurnListener` is here on the same terms: the store writer tells it
  * of every coding agent turn it leaves queued for a runner, which it
  * publishes on the `TurnQueue` beside it, Vercel Queues on production and on
@@ -173,7 +180,10 @@ export const webServices = Layer.mergeAll(
   pageLinksFromEnvironment,
   automationCadenceFromEnvironment,
   queuedTurnListener,
+  startedTurnListener.pipe(Layer.provide(apnsSender)),
   turnQueueFromEnvironment,
+  sandboxReleasesFromEnvironment,
+  agentWakeupsFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(

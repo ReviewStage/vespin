@@ -3,8 +3,7 @@
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the service stands, so the relay itself requires none.
- * A touch of the sandbox Vercel did not confirm is logged, since the next
- * tries again; nothing a tab shows is.
+ * Nothing a tab shows is logged.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -17,10 +16,9 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
-import { Sandbox, touchSandbox } from "@repo/sandbox";
+import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
-import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import { AgentBrowser, agentBrowserOver } from "../agents/browser/agent-browser.js";
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
 import { AgentImage } from "../agents/coder-host/agent-image.js";
@@ -78,6 +76,5 @@ export const browserLiveDependencies: Effect.Effect<
         Effect.catch(() => Effect.logWarning("a watched tab's page was not kept")),
         Effect.asVoid,
       ),
-    touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
   };
 });

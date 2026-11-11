@@ -13,7 +13,6 @@ import {
   WORKSPACE_CALL_FAILURE,
   type WorkspaceCallResult,
 } from "@repo/features";
-import type { TasklessAgent } from "@repo/features/agent-wire";
 import { AGENT_BROWSER_TABS_READ, TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import {
@@ -25,6 +24,7 @@ import {
 import type { DescriptionEditAnswer } from "@repo/features/description-edit";
 import type { GitHubConnection } from "@repo/features/github-connection-wire";
 import { WRITE_UNTAKEN, type WriteUntaken } from "@repo/features/keyed-write";
+import { LINK_PREVIEW_UNANSWERED } from "@repo/features/link-preview-view";
 import {
   LIVE_READ,
   LIVE_SIGNED_OUT,
@@ -158,8 +158,6 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   commentLives: Record<string, PolledLive<CommentPart, typeof NOT_FOUND_LIVE>>;
   /** What the list says of each task's coding agents, by task id; a task with none says nothing. */
   agents: Record<string, TaskAgentsSummary>;
-  /** The agents with no plan the list carries beside the plans. */
-  tasklessAgents: TasklessAgent[];
   /** How many times the list's live read was first asked, its polls apart. */
   liveListReads: number;
   /** Whether a delete is refused, as a service that did not answer refuses it. */
@@ -600,7 +598,6 @@ export function fakeService(tasks: Task[]): FakeService {
         }),
       ),
     agents: {},
-    tasklessAgents: [],
     liveListReads: 0,
     deleteFails: false,
     deleteAnswered: Effect.void,
@@ -777,6 +774,7 @@ export function fakeService(tasks: Task[]): FakeService {
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),
       // Each workspace read as the service answers it; a poll is not counted among the reads.
       // SAFETY: each declared read answers its own script's rows, as its declaration's answer.
       liveRead: ((
@@ -1080,6 +1078,7 @@ export function fakeService(tasks: Task[]): FakeService {
         service.reads.push(`skills:${taskId}`);
         return service.skills[taskId];
       }),
+    linkPreview: () => Effect.succeed(LINK_PREVIEW_UNANSWERED),
     readRepositoryFile: (place, window) =>
       Effect.sync(() => service.places[place.workspaceId]?.[place.repository]?.files[window.path]),
     readRepositoryTree: (place, folder) =>
@@ -1586,7 +1585,7 @@ export const answered = (set: () => void) =>
   );
 
 /** One plan as the plans statement delivers its row. */
-export function taskRow(id: string, name: string) {
+export function planRow(id: string, name: string) {
   return {
     id,
     workspaceId: "workspace-personal",
@@ -1611,7 +1610,7 @@ export function taskRow(id: string, name: string) {
 /** One plan as the plans statement delivers the service's task. */
 export function rowOfTask(each: Task) {
   return {
-    ...taskRow(each.id, each.name),
+    ...planRow(each.id, each.name),
     workspaceId: each.workspaceId,
     repository: each.repository,
     createdAt: each.createdAt,

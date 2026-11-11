@@ -18,7 +18,8 @@
  * rather than Base UI's `data-highlighted`, its glyph, name, and end dimmed by
  * `aria-disabled` while its detail and hint, which say why, are not, its
  * indicator a slot of its own at the row's end rather than an absolute
- * check; the list is capped by the app's placement hook
+ * check, and an item may stand its detail under its name as a second,
+ * wrapping line (a permission mode's hint), growing to fit; the list is capped by the app's placement hook
  * (`--ui-combobox-list-max`), scrolls only down (its ring is `combobox.css`'s
  * to leave off, the active option marking it); the label is the muted caption; and the empty
  * line is a row or two tall, so a list with nothing never falls to a sliver.
@@ -53,6 +54,16 @@ export const COMBOBOX_ITEM_LABEL =
 /** An item's detail, quieter, giving way first where the row runs short, and never dimmed, since it may say why the item cannot be chosen. */
 export const COMBOBOX_ITEM_DETAIL =
   "block min-w-0 flex-[0_1000_auto] overflow-hidden pl-ui-12 text-caption leading-[inherit] text-muted-foreground";
+
+/** An item whose detail stands under its name: as tall as its two lines, its glyph level with the name. */
+export const COMBOBOX_ITEM_TALL = "h-auto min-h-menu-row items-start py-ui-6 whitespace-normal";
+
+/** An item's name with its detail under it, the two as one column. */
+export const COMBOBOX_ITEM_LABEL_STACKED = "flex flex-col gap-ui-2";
+
+/** An item's detail on its own line under its name, wrapping. */
+export const COMBOBOX_ITEM_DETAIL_UNDER =
+  "block text-caption font-sans text-muted-foreground whitespace-normal";
 
 /** An item's hint at its end, at a menu's distance from what stands before it, as a chord is; never dimmed, for the same reason as the detail. */
 export const COMBOBOX_ITEM_HINT =

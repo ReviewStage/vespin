@@ -133,6 +133,7 @@ import type { IntegrationAccountKey, IntegrationConnectionRow } from "./integrat
 import { type AccountNameRead, INTEGRATION, type IntegrationDefinition } from "./integrations.js";
 import {
   INTEGRATION_CALLBACK_QUERY,
+  type IntegrationAccountSeams,
   type IntegrationsAppSeams,
   signInStands,
 } from "./integrations-app.js";
@@ -165,7 +166,7 @@ interface ToolsRead {
 }
 
 /** The tools read lately, by user account and then by connection name, for as long as the instance stands. */
-type ToolsCache = Map<string, Map<string, ToolsRead>>;
+export type ToolsCache = Map<string, Map<string, ToolsRead>>;
 
 /** When a provider lately answered no name for an account, asked with its token (`providerAccountName`), and under which grant: a sign-in completed since names another. */
 interface UnnamedRead {
@@ -178,7 +179,7 @@ interface UnnamedRead {
  * then by connection name, for as long as the instance stands, so a provider
  * that keeps failing is asked again only once its hold has passed.
  */
-type UnnamedHold = Map<string, Map<string, UnnamedRead>>;
+export type UnnamedHold = Map<string, Map<string, UnnamedRead>>;
 
 /** Every read past its time let go, so an instance that stands long holds the reads of no account that stopped asking. */
 function heldReadsSwept(
@@ -229,7 +230,7 @@ function rowStatus(row: IntegrationConnectionRow): IntegrationStatus {
 }
 
 /** What a provider's procedure is asked: the path's provider, and the account in the query. */
-interface AccountAsked {
+export interface AccountAsked {
   readonly params: { readonly provider: string };
   readonly query?: { readonly connection?: string | undefined } | undefined;
 }
@@ -240,7 +241,7 @@ interface AccountAsked {
  * named none. A provider this build has no route for, and a name that is no
  * account at that provider, are not found.
  */
-const requestedAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
+export const requestedAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
   asked: AccountAsked,
 ): Effect.fn.Return<
   { readonly provider: IntegrationProvider; readonly connectionName: string },
@@ -262,7 +263,10 @@ const requestedAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
  * out of time holds none, because no read answers it, so nothing the
  * developer sees could free its place.
  */
-function holdsAccountPlace(seams: IntegrationsAppSeams, row: IntegrationConnectionRow): boolean {
+function holdsAccountDestination(
+  seams: IntegrationAccountSeams,
+  row: IntegrationConnectionRow,
+): boolean {
   return (
     row.status === INTEGRATION_ROW_STATUS.CONNECTED ||
     row.status === INTEGRATION_ROW_STATUS.EXPIRED ||
@@ -278,7 +282,7 @@ function holdsAccountPlace(seams: IntegrationsAppSeams, row: IntegrationConnecti
  * the next read asks again.
  */
 const settledSignIn = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   connector: ConnectorService,
   row: IntegrationConnectionRow,
   state: string,
@@ -333,7 +337,7 @@ function standingWithoutSignIn(row: IntegrationConnectionRow): IntegrationStatus
  * pending otherwise, until the sign-in's window runs out.
  */
 const standingStatus = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   connector: ConnectorService,
   row: IntegrationConnectionRow | undefined,
 ): Effect.fn.Return<Standing, HostedRefusal, DatabaseServices> {
@@ -425,7 +429,7 @@ const providerAccountName = /* @__PURE__ */ Effect.fnUntraced(function* (
  * long as a tools read is (`unnamed`), so the read never waits on it twice.
  */
 const labeledRow = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   unnamed: UnnamedHold,
   connector: ConnectorService,
   row: IntegrationConnectionRow,
@@ -477,7 +481,7 @@ interface ProviderStanding {
  * nothing.
  */
 const providerStanding = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   unnamed: UnnamedHold,
   connector: ConnectorService,
   provider: IntegrationProvider,
@@ -525,8 +529,8 @@ const providerStanding = /* @__PURE__ */ Effect.fnUntraced(function* (
  * each provider's word, every account it holds, and the providers it may
  * add another account at.
  */
-const statusesAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+export const statusesAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: IntegrationAccountSeams,
   unnamed: UnnamedHold,
   userId: string,
   settles: boolean,
@@ -606,7 +610,7 @@ function toolsProblem(failure: McpToolsFailure) {
  * account has not connected, are refused as unavailable.
  */
 const standingGrant = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   provider: IntegrationProvider,
   connectionName: string,
   userId: string,
@@ -688,7 +692,7 @@ function callbackUrl(requestUrl: string, state: string): string {
  * was possible.
  */
 const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   connector: ConnectorService,
   userId: string,
   asked: { readonly provider: IntegrationProvider; readonly connectionName: string },
@@ -699,7 +703,7 @@ const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (adding) {
     if (!connector.multipleAccounts) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     // Note that a sign-in left past its window is let go first, so its name is free again and no read takes it for an account.
-    const left = providerRows(rows, provider).filter((row) => !holdsAccountPlace(seams, row));
+    const left = providerRows(rows, provider).filter((row) => !holdsAccountDestination(seams, row));
     yield* Effect.forEach(
       left,
       (row) =>
@@ -713,7 +717,9 @@ const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
     // Note that the rows are read again, so a sign-in restarted, or an account added, while these were let go keeps its name and its place.
     const remaining =
       left.length === 0 ? rows : yield* hostedStoreOrUnavailable(seams.readConnections(userId));
-    const held = providerRows(remaining, provider).filter((row) => holdsAccountPlace(seams, row));
+    const held = providerRows(remaining, provider).filter((row) =>
+      holdsAccountDestination(seams, row),
+    );
     if (held.length >= INTEGRATION_ACCOUNTS_MAX) {
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
@@ -743,7 +749,7 @@ const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
  * statuses read that settles nothing.
  */
 function storedStanding(
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   row: IntegrationConnectionRow | undefined,
 ): IntegrationStatus {
   if (row?.status === INTEGRATION_ROW_STATUS.CONNECTED) return INTEGRATION_STATUS.CONNECTED;
@@ -756,7 +762,7 @@ function storedStanding(
 
 /** The account as it stands after a rename, read again so the answer is what is stored. */
 const accountAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: IntegrationsAppSeams,
+  seams: IntegrationAccountSeams,
   userId: string,
   provider: IntegrationProvider,
   connectionName: string,
@@ -768,6 +774,176 @@ const accountAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   const row = held.find((each) => each.connectionName === connectionName);
   if (row === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   return { account: accountOf(row, rowStatus(row)) };
+});
+
+/** One account at a provider a call is about, as `requestedAccount` reads it. */
+export interface IntegrationAccountAsked {
+  readonly provider: IntegrationProvider;
+  readonly connectionName: string;
+}
+
+/**
+ * Begins a browser sign-in to one account at a provider for the account,
+ * a new one where `adding`, and answers the address the browser opens, the
+ * account it signs in, and the transaction it was recorded in. Connect is
+ * asked first, so a sign-in it refused leaves the row as it stood; the state
+ * is recorded before the address is answered, so no browser can return
+ * before the callback can read it, at the deployment `serviceUrl` names. A
+ * sign-in for another account asks the provider for its workspace picker
+ * where the provider documents how.
+ */
+export const beginConnect = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: IntegrationAccountSeams,
+  userId: string,
+  asked: IntegrationAccountAsked,
+  adding: boolean,
+  serviceUrl: string,
+) {
+  const connector = (yield* hostedStoreOrUnavailable(accountIntegrationConnect(userId)))[
+    asked.provider
+  ];
+  if (!connector.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  const account = yield* signInAccount(seams, connector, userId, asked, adding);
+  const state = seams.mintState();
+  const prompt = adding ? connector.addAccountPrompt : undefined;
+  const { url } = yield* connector
+    .authorize(
+      account.connectSubject,
+      callbackUrl(serviceUrl, state),
+      prompt !== undefined ? { prompt } : undefined,
+    )
+    .pipe(
+      Effect.tapError((failure) =>
+        Effect.logWarning(
+          `Vercel Connect could not begin a ${INTEGRATION_NAME[asked.provider]} sign-in`,
+          failure.message,
+        ),
+      ),
+      Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
+    );
+  const txid = yield* hostedStoreOrUnavailable(seams.beginSignIn(userId, account, state));
+  // Another sign-in took the name meanwhile: this one would settle a grant no row names, so it is refused.
+  if (txid === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  return { url, connection: account.connectionName, txid };
+});
+
+/**
+ * Ends one account's connection at a provider; every other account there
+ * stands. The row goes first, so whatever Connect answers, no agent reads a
+ * token again; the revoke after it, under that account's own subject, is the
+ * courtesy of telling the provider, and a failed one is logged rather than
+ * answered, since the account asked to be disconnected and is. GitHub, whose
+ * grant is the account's own GitHub sign-in, is refused as unavailable:
+ * nothing here ends that sign-in.
+ */
+export const disconnectAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: IntegrationAccountSeams,
+  userId: string,
+  { provider, connectionName }: IntegrationAccountAsked,
+): Effect.fn.Return<
+  { readonly status: IntegrationStatus; readonly txid?: string },
+  HostedRefusal,
+  DatabaseServices | IntegrationConnect
+> {
+  // A grant that is the account's GitHub sign-in ends with that sign-in, never here.
+  if (INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN) {
+    return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  }
+  const rows = yield* hostedStoreOrUnavailable(seams.readConnections(userId));
+  const row = rows.find((each) => each.connectionName === connectionName);
+  if (row === undefined) return { status: INTEGRATION_STATUS.DISCONNECTED };
+  const txid = yield* hostedStoreOrUnavailable(seams.deleteAccount(row));
+  if (txid !== undefined) {
+    yield* revokeIntegrationGrant(row);
+    yield* recordServerEvent(
+      SERVER_EVENT.INTEGRATION_CONNECTION_DELETE,
+      { userId },
+      {
+        provider: row.provider,
+      },
+    );
+    return { status: INTEGRATION_STATUS.DISCONNECTED, txid };
+  }
+  // Note that only the row read is deleted and revoked, so an account added since under the same name stands, and is answered as it stands.
+  const standing = (yield* hostedStoreOrUnavailable(seams.readConnections(userId))).find(
+    (each) => each.connectionName === connectionName,
+  );
+  return {
+    status: standing === undefined ? INTEGRATION_STATUS.DISCONNECTED : rowStatus(standing),
+  };
+});
+
+/**
+ * Names one account as the developer calls it, a trimmed label of up to
+ * `INTEGRATION_LABEL_MAX` characters, and answers it as it then stands; one
+ * the account does not hold is not found.
+ */
+export const renameAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: IntegrationAccountSeams,
+  userId: string,
+  { provider, connectionName }: IntegrationAccountAsked,
+  label: string,
+) {
+  const txid = yield* hostedStoreOrUnavailable(
+    seams.renameConnection(userId, connectionName, label),
+  );
+  if (txid === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  return { ...(yield* accountAnswer(seams, userId, provider, connectionName)), txid };
+});
+
+/**
+ * The tools one provider's server offers the account's agents, through one
+ * account there, held in `cache` under its grant for a while. A provider
+ * with no connector here or not offered to the account, one the account has
+ * not connected, and a Connect that could not be asked are the one
+ * unavailable refusal. A grant Connect no longer holds, and a server that
+ * listed none, are an answer rather than a refusal: why, which the desktop
+ * draws in place of the connection's "Connected", and never held.
+ */
+export const toolsAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: IntegrationAccountSeams,
+  cache: ToolsCache,
+  userId: string,
+  { provider, connectionName }: IntegrationAccountAsked,
+) {
+  const row = yield* standingGrant(seams, provider, connectionName, userId);
+  const grant = row?.connectedAt?.getTime();
+  // Note that GitHub's tools are never held, because its grant has no instant to tell a new one by.
+  const holds = INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.CONNECT;
+  const held = holds ? cache.get(userId)?.get(connectionName) : undefined;
+  if (
+    held !== undefined &&
+    held.connectedAt === grant &&
+    seams.now() - held.at < INTEGRATION_TOOLS_TTL_MS
+  ) {
+    return { tools: held.tools };
+  }
+  const name = INTEGRATION_NAME[provider];
+  const issued = yield* toolsToken(provider, userId, row);
+  // A grant no longer held is a refusal the developer mends by connecting again, not an outage.
+  if (Result.isFailure(issued)) {
+    return { problem: { reason: INTEGRATION_TOOLS_PROBLEM.REFUSED } };
+  }
+  const definition: IntegrationDefinition = INTEGRATION[provider];
+  const listed = yield* Effect.result(
+    listMcpTools(definition.MCP_URL, Redacted.value(issued.success)),
+  );
+  if (Result.isFailure(listed)) {
+    const failure = listed.failure;
+    yield* Effect.logWarning(
+      `${name}'s MCP server listed no tools: ${failure.reason}`,
+      failure.code ?? "no code",
+    );
+    return { problem: toolsProblem(failure) };
+  }
+  const tools = listed.success;
+  heldReadsSwept(cache, seams.now());
+  if (holds) {
+    const accountReads = cache.get(userId) ?? new Map<string, ToolsRead>();
+    accountReads.set(connectionName, { at: seams.now(), connectedAt: grant, tools });
+    cache.set(userId, accountReads);
+  }
+  return { tools };
 });
 
 /**
@@ -807,97 +983,19 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
     github: integrations.github.effect(function* ({ context }) {
       return { status: yield* githubIntegrationStatus(context.userId) };
     }),
-    /**
-     * POST: begins a browser sign-in to one account at a provider. Connect is
-     * asked first, so a sign-in it refused leaves the row as it stood; the
-     * state is recorded before the address is answered, so no browser can
-     * return before the callback can read it. A sign-in for another account
-     * asks the provider for its workspace picker where the provider documents
-     * how.
-     */
+    /** POST: begins a browser sign-in to one account at a provider (`beginConnect`), at the address the request reached. */
     connect: integrations.connect.effect(function* ({ context, input }) {
       const asked = yield* requestedAccount(input);
-      const userId = context.userId;
-      const connector = (yield* hostedStoreOrUnavailable(accountIntegrationConnect(userId)))[
-        asked.provider
-      ];
-      if (!connector.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
       const adding = input.query?.add === INTEGRATION_ADD_ACCOUNT;
-      const account = yield* signInAccount(seams, connector, userId, asked, adding);
-      const state = seams.mintState();
-      const prompt = adding ? connector.addAccountPrompt : undefined;
-      const { url } = yield* connector
-        .authorize(
-          account.connectSubject,
-          callbackUrl(context.request.url, state),
-          prompt !== undefined ? { prompt } : undefined,
-        )
-        .pipe(
-          Effect.tapError((failure) =>
-            Effect.logWarning(
-              `Vercel Connect could not begin a ${INTEGRATION_NAME[asked.provider]} sign-in`,
-              failure.message,
-            ),
-          ),
-          Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
-        );
-      const txid = yield* hostedStoreOrUnavailable(seams.beginSignIn(userId, account, state));
-      // Another sign-in took the name meanwhile: this one would settle a grant no row names, so it is refused.
-      if (txid === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-      return { url, connection: account.connectionName, txid };
+      return yield* beginConnect(seams, context.userId, asked, adding, context.request.url);
     }),
-    /**
-     * GET: the tools one provider's server offers the account's agents. A
-     * provider with no connector here or not offered to the account, one the
-     * account has not connected, and a Connect that could not be asked are the
-     * one unavailable refusal. A grant Connect no longer holds, and a server
-     * that listed none, are an answer rather than a refusal: why, which the
-     * desktop draws in place of the connection's "Connected", and never held.
-     */
+    /** GET: the tools one provider's server offers the caller's agents (`toolsAnswer`). */
     tools: integrations.tools.effect(function* ({ context, input }) {
-      const { provider, connectionName } = yield* requestedAccount({
+      const asked = yield* requestedAccount({
         params: { provider: input.provider },
         query: { connection: input.connection },
       });
-      const userId = context.userId;
-      const row = yield* standingGrant(seams, provider, connectionName, userId);
-      const grant = row?.connectedAt?.getTime();
-      // Note that GitHub's tools are never held, because its grant has no instant to tell a new one by.
-      const holds = INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.CONNECT;
-      const held = holds ? cache.get(userId)?.get(connectionName) : undefined;
-      if (
-        held !== undefined &&
-        held.connectedAt === grant &&
-        seams.now() - held.at < INTEGRATION_TOOLS_TTL_MS
-      ) {
-        return { tools: held.tools };
-      }
-      const name = INTEGRATION_NAME[provider];
-      const issued = yield* toolsToken(provider, userId, row);
-      // A grant no longer held is a refusal the developer mends by connecting again, not an outage.
-      if (Result.isFailure(issued)) {
-        return { problem: { reason: INTEGRATION_TOOLS_PROBLEM.REFUSED } };
-      }
-      const definition: IntegrationDefinition = INTEGRATION[provider];
-      const listed = yield* Effect.result(
-        listMcpTools(definition.MCP_URL, Redacted.value(issued.success)),
-      );
-      if (Result.isFailure(listed)) {
-        const failure = listed.failure;
-        yield* Effect.logWarning(
-          `${name}'s MCP server listed no tools: ${failure.reason}`,
-          failure.code ?? "no code",
-        );
-        return { problem: toolsProblem(failure) };
-      }
-      const tools = listed.success;
-      heldReadsSwept(cache, seams.now());
-      if (holds) {
-        const accountReads = cache.get(userId) ?? new Map<string, ToolsRead>();
-        accountReads.set(connectionName, { at: seams.now(), connectedAt: grant, tools });
-        cache.set(userId, accountReads);
-      }
-      return { tools };
+      return yield* toolsAnswer(seams, cache, context.userId, asked);
     }),
     /**
      * POST: ends the sign-in to one provider under way, under the state the row
@@ -926,58 +1024,14 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
         ...(txid === undefined ? undefined : { txid }),
       };
     }),
-    /**
-     * POST: ends one account's connection at a provider; every other account
-     * there stands. The row goes first, so whatever Connect answers, no agent
-     * reads a token again; the revoke after it, under that account's own
-     * subject, is the courtesy of telling the provider, and a failed one is
-     * logged rather than answered, since the account asked to be disconnected
-     * and is. GitHub, whose grant is the account's own GitHub sign-in, is
-     * refused as unavailable: nothing here ends that sign-in.
-     */
+    /** POST: ends one account's connection at a provider (`disconnectAccount`). */
     disconnect: integrations.disconnect.effect(function* ({ context, input }) {
-      const { provider, connectionName } = yield* requestedAccount(input);
-      const userId = context.userId;
-      // A grant that is the account's GitHub sign-in ends with that sign-in, never here.
-      if (INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN) {
-        return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-      }
-      const rows = yield* hostedStoreOrUnavailable(seams.readConnections(userId));
-      const row = rows.find((each) => each.connectionName === connectionName);
-      if (row === undefined) return { status: INTEGRATION_STATUS.DISCONNECTED };
-      const txid = yield* hostedStoreOrUnavailable(seams.deleteAccount(row));
-      if (txid !== undefined) {
-        yield* revokeIntegrationGrant(row);
-        yield* recordServerEvent(
-          SERVER_EVENT.INTEGRATION_CONNECTION_DELETE,
-          { userId },
-          {
-            provider: row.provider,
-          },
-        );
-        return { status: INTEGRATION_STATUS.DISCONNECTED, txid };
-      }
-      // Note that only the row read is deleted and revoked, so an account added since under the same name stands, and is answered as it stands.
-      const standing = (yield* hostedStoreOrUnavailable(seams.readConnections(userId))).find(
-        (each) => each.connectionName === connectionName,
-      );
-      return {
-        status: standing === undefined ? INTEGRATION_STATUS.DISCONNECTED : rowStatus(standing),
-      };
+      return yield* disconnectAccount(seams, context.userId, yield* requestedAccount(input));
     }),
-    /**
-     * POST: names one account as the developer calls it, a trimmed label of up
-     * to `INTEGRATION_LABEL_MAX` characters; one the account does not hold is
-     * not found, and any other body is an invalid request.
-     */
+    /** POST: names one account (`renameAccount`); any body but a label is an invalid request. */
     rename: integrations.rename.effect(function* ({ context, input }) {
-      const { provider, connectionName } = yield* requestedAccount(input);
-      const userId = context.userId;
-      const txid = yield* hostedStoreOrUnavailable(
-        seams.renameConnection(userId, connectionName, input.body.label),
-      );
-      if (txid === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { ...(yield* accountAnswer(seams, userId, provider, connectionName)), txid };
+      const asked = yield* requestedAccount(input);
+      return yield* renameAccount(seams, context.userId, asked, input.body.label);
     }),
   };
 }

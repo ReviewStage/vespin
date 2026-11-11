@@ -1,26 +1,25 @@
 import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
 import { namedServers } from "@repo/ui/agent-servers-model";
 import type { ReactNode, RefObject } from "react";
-import type { IntegrationStatuses } from "../integration-statuses.js";
 import type {
   ComposerChip,
   ComposerEditorHandle,
   ComposerTrigger,
 } from "../description-editor/contract.js";
+import type { IntegrationStatuses } from "../integration-statuses.js";
 import type { ComposerFieldMentions } from "./composer-field.js";
 import { MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, useMentionPicker } from "./mention-picker.js";
 import { MentionedServers, type MentionedServersPlace } from "./server-card.js";
 import { useSkillOpener } from "./skill-chip.js";
-import { type SkillSource, useSkillPicker } from "./skill-picker.js";
+import { type ComposerCommands, type SkillSource, useSkillPicker } from "./skill-picker.js";
 import { useTaskMentions } from "./task-mentions.js";
 import { DICTATION_PHASE, type DictationControl, useDictation } from "./use-dictation.js";
 import { useKnownNames } from "./use-known-names.js";
 import { useNumberedTaskIdOf } from "./use-link-standing.js";
 
 /**
- * composer-pickers.tsx -- what a box written to an agent offers inside its field, alike in the agent's message box and the Inbox's answer box: the `@` list of mentions, the `/` list of skills, dictation, and the keys that work them.
+ * composer-pickers.tsx -- what a box written to an agent or a description comment offers inside its field, through the message box (`message-box.tsx`): the `@` list of mentions, the `/` list of skills, dictation, and the keys that work them.
  *
  * Both boxes write words an agent reads as one of the developer's messages,
  * so both take the same things: an `@` at the start of a word, where the box
@@ -39,6 +38,7 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
 /** The field's props the pickers own, laid onto `ComposerField` as they are. */
 interface PickedField {
   readonly skills: ReadonlySet<string>;
+  readonly commands: ReadonlySet<string>;
   readonly aria: Readonly<Record<string, string | undefined>>;
   readonly onKey: (event: KeyboardEvent) => boolean;
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
@@ -62,10 +62,12 @@ export function useComposerPickers({
   placeholder,
   self,
   skills,
+  commands,
   keywords,
   servers,
   onNote,
   onLeave,
+  escapeClimbs = false,
   side = MENTION_MENU_SIDE.ABOVE,
 }: {
   /** The box's editor; nothing until it has mounted. */
@@ -74,18 +76,24 @@ export function useComposerPickers({
   room: RefObject<HTMLDivElement | null>;
   draft: string;
   placeholder: string;
-  /** The agent the words go to, which the `@` list does not offer; none for a draft not yet started. */
-  self: string | undefined;
+  /** The agent the words go to, which the `@` list does not offer; none for a draft not yet started, or a comment. */
+  self?: string | undefined;
   /** Where the repository's skills are read from; nothing where the box offers none. */
-  skills: SkillSource | undefined;
+  skills?: SkillSource | undefined;
+  /** The box's own commands, which a `/` opening the message offers ahead of the skills; none where it runs none. */
+  commands?: ComposerCommands | undefined;
   /** The words a dictation is likely to say (`dictation-keywords.ts`). */
   keywords: readonly string[];
-  /** Where the account's servers stand, which the `@` list offers, and what a send does with one the words name. */
-  servers: { readonly statuses: IntegrationStatuses; readonly place: MentionedServersPlace };
+  /** Where the account's servers stand, which the `@` list offers, and what a send does with one the words name; none where the words go to no agent, as a comment's. */
+  servers?:
+    | { readonly statuses: IntegrationStatuses; readonly place: MentionedServersPlace }
+    | undefined;
   /** Says why a dictation left nothing, or clears what the last one said. */
   onNote: (note: string | undefined) => void;
   /** What Escape does where no list or dictation takes it: New task's box closes its card; the box gives up the caret where none is given. */
   onLeave?: (() => void) | undefined;
+  /** Whether Escape, once it lets go of the caret, climbs on to the window, as on a page whose every field hands it there. */
+  escapeClimbs?: boolean | undefined;
   /** Which side of the caret's line the `@` and `/` lists stand: over it, as at a tab's foot, or under it, where the box stands at the top of its page. */
   side?: MentionMenuSide;
 }): ComposerPickers {
@@ -97,6 +105,7 @@ export function useComposerPickers({
     draft,
     source: skills,
     onOpen: openSkill,
+    commands,
     side,
   });
   // An `@` picks a mention of the page the box stands on, where it stands on one that hands them.
@@ -118,11 +127,14 @@ export function useComposerPickers({
             onChoose: (name) => editor.current?.chooseSkillAtMention(name),
           },
     // The servers the account connected, each one a mention hands the agent's next turn.
-    servers: namedServers({
-      statusOf: servers.statuses.statusOf,
-      accountsOf: servers.statuses.accountsOf,
-      standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
-    }),
+    servers:
+      servers === undefined
+        ? undefined
+        : namedServers({
+            statusOf: servers.statuses.statusOf,
+            accountsOf: servers.statuses.accountsOf,
+            standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
+          }),
     room,
     side,
     onChoose: (mention) => editor.current?.chooseMention(mention),
@@ -133,7 +145,7 @@ export function useComposerPickers({
       return true;
     }
     if (event.key !== "Escape") return false;
-    event.stopPropagation();
+    if (!escapeClimbs) event.stopPropagation();
     if (onLeave === undefined) editor.current?.blur();
     else onLeave();
     return true;
@@ -144,6 +156,7 @@ export function useComposerPickers({
     dictating: dictation.phase !== DICTATION_PHASE.IDLE,
     field: {
       skills: skillPicker.names,
+      commands: skillPicker.commands,
       // Note that one list stands at a time, so the field names whichever of the two stands.
       aria: {
         ...(mentionPicker.aria["aria-expanded"] === "true" ? mentionPicker.aria : skillPicker.aria),
@@ -158,22 +171,27 @@ export function useComposerPickers({
           : {
               onTrigger: mentionPicker.onTrigger,
               // A server's chip in the box says what a send now does with it.
-              chip: (mention, node) => (
-                <MentionedServers value={servers.place}>
+              chip: (mention, node) => {
+                const chip = (
                   <MentionNodeChip
                     mention={mention}
                     doors={taskMentions.doors}
                     edit={{ node, pickDate: mentionPicker.pickDate }}
                   />
-                </MentionedServers>
-              ),
+                );
+                return servers === undefined ? (
+                  chip
+                ) : (
+                  <MentionedServers value={servers.place}>{chip}</MentionedServers>
+                );
+              },
               pasted: (words) =>
                 taskMentions.doors.place === undefined
                   ? undefined
                   : pastedMentionNode(words, taskMentions.doors.place, {
                       known,
                       taskIdOf,
-                      taskId: holderTaskId(taskMentions.holder),
+                      taskId: taskMentions.holder?.taskId,
                       text: taskMentions.text,
                     }),
             },

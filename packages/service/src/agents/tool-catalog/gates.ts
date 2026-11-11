@@ -41,6 +41,8 @@ export const TOOL_GATE = {
   MEMORY: "memory",
   /** The agent's workspace has Task descriptions on. */
   DESCRIPTIONS: "descriptions",
+  /** The agent's workspace has Done and follow-ups on. */
+  TURN_END: "turn-end",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
@@ -77,6 +79,10 @@ export const GATES: { readonly [G in ToolGate]: Gate } = {
   },
   [TOOL_GATE.DESCRIPTIONS]: {
     opens: (_agent, experiments) => experiments.descriptionsOn,
+    refusal: EXPERIMENT_OFF_REFUSAL,
+  },
+  [TOOL_GATE.TURN_END]: {
+    opens: (_agent, experiments) => experiments.turnEndOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
 };

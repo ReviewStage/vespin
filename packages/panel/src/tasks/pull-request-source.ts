@@ -2,10 +2,10 @@ import type { AgentPullRequestWriteAnswerView } from "@repo/features/agent-view"
 import { AGENT_STATUS, type AgentPullRequest } from "@repo/features/agent-wire";
 import type { PullRequestChaptersAnswerView } from "@repo/features/pull-request-chapters-view";
 import type { PullRequestActionRequest } from "@repo/features/pull-request-write-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { createContext, useContext, useMemo } from "react";
 import { sendAct } from "../act.js";
-import { agentStillWriting } from "./agent-model.js";
 import { pullRequestAsked, pullRequestOfTab } from "./pull-request-number.js";
 import type { WritePlace } from "./pull-request-writes.js";
 import type { AgentsControl } from "./use-agents.js";
@@ -78,7 +78,6 @@ export function useAgentPullRequestSource(
     control.archived?.find((each) => each.id === agentId);
   const ended = !agentStillWriting(agent?.status ?? AGENT_STATUS.RUNNING);
   const taskId = agent?.planId ?? null;
-  const { workspaceId } = control;
   const published = pullRequestOfTab(control, { changes: agentId, number });
   const { generateChapters } = control;
   // Note that the doors are kept while what they name stands, because every part under the tab that hears the source draws anew on a new one.
@@ -89,8 +88,8 @@ export function useAgentPullRequestSource(
     }),
     [write, agentId, number, generateChapters],
   );
-  // Note that a repository out of reach is mended in the agent's own workspace, by its task or, on none, its page's.
-  const place = useMemo(() => ({ taskId, workspaceId }), [taskId, workspaceId]);
+  // Note that a repository out of reach is mended in the agent's own workspace, by its task.
+  const place = useMemo(() => ({ taskId }), [taskId]);
   return useMemo(
     () => ({ ...doors, ended, place, published, number }),
     [doors, ended, place, published, number],

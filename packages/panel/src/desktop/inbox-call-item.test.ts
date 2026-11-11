@@ -15,10 +15,10 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
-import type { LinkPlace, ReadLink } from "@repo/features/link-grammar";
+import type { LinkDestination, ReadLink } from "@repo/features/link-grammar";
 import type { Task } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -144,7 +144,7 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
   );
   // The account's feed holds the task's items, which its Inbox tab draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: ITEMS }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: ITEMS } },
   });
   pushedTranscripts(() => [
     { messages: [POSTED], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
@@ -197,7 +197,7 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
 }
 
 test("a post's chip opens the item the agent posted under its key, not another agent's under the same key", async () => {
-  const opened: LinkPlace[] = [];
+  const opened: LinkDestination[] = [];
   const container = await mount((link) => opened.push(link.place));
 
   const chip =

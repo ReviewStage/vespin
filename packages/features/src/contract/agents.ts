@@ -1,5 +1,5 @@
 /**
- * agents.ts -- a coding agent as the desktop lists, starts, reads, changes, and stops it, its changes and review options, and its shells (`agent-wire.ts`, `terminal-wire.ts`).
+ * agents.ts -- a coding agent as the desktop lists, starts, reads, changes, and stops it, answers its asks, its changes and review options, and its shells (`agent-wire.ts`, `agent-approval-wire.ts`, `terminal-wire.ts`).
  *
  * Every path names the task or the agent it is about as `{id}`, and a shell
  * as `{terminal}`, which the handler reads as an id: one that is no UUID
@@ -9,11 +9,10 @@
  * for the agent it made and 200 for the one a retry under the same key
  * already made, so it answers its status beside its body
  * (`outputStructure: "detailed"`). A Start from an agent is keyed by that
- * agent rather than a task (`POST /api/agents/{id}/agents`), so an agent with
- * no task is continued and forked as one on a task is; its body is a Start's,
+ * agent rather than a task (`POST /api/agents/{id}/agents`), the new agent
+ * landing on that agent's task; its body is a Start's,
  * whose `from` names the path's agent. A delete (`DELETE /api/agents/{id}`)
- * takes the agent for good, as a task's delete takes a task. No path starts
- * a fresh agent on no task. Outputs are the
+ * takes the agent for good, as a task's delete takes a task. Outputs are the
  * wire schemas flipped (`packages/service/src/orpc/base.ts`).
  *
  * Every procedure declares its own refusals (`declaredProcedure`).
@@ -22,6 +21,11 @@
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
+import {
+  agentPermissionModeRequestSchema,
+  approvalAnswerAnswerSchema,
+  approvalAnswerRequestSchema,
+} from "../agent-approval-wire.js";
 import {
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
@@ -39,13 +43,14 @@ import {
   agentRewindRequestSchema,
   agentServersRequestSchema,
   agentStartRequestSchema,
+  agentTurnChangesAnswerSchema,
   agentWarmAnswerSchema,
   agentWorkspaceListAnswerSchema,
   MAXIMUM_START_BODY_BYTES,
 } from "../agent-wire.js";
 import { modelChoiceSchema } from "../models-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
-import { HOSTED_API_ERROR } from "../service-wire.js";
+import { HOSTED_API_ERROR, wireUuidSchema } from "../service-wire.js";
 import {
   sandboxResumedAnswerSchema,
   terminalCreatedAnswerSchema,
@@ -117,9 +122,10 @@ const AGENT_STOP_REFUSALS = [
 
 /**
  * What one change of an agent refuses: an archive's Stop, a key already
- * written under (`writeReceiptMiddleware`), and a repository added refused
+ * written under (`writeReceiptMiddleware`), a repository added refused
  * by why (`agent-repository-add.ts`), out of reach, unread off GitHub, or
- * its branch gone. A choice the catalog refuses is an invalid request.
+ * its branch gone, and a permission mode that asks for an agent whose
+ * harness never asks. A choice the catalog refuses is an invalid request.
  */
 const CHANGE_REFUSALS = [
   ...STOP_REFUSALS,
@@ -128,6 +134,20 @@ const CHANGE_REFUSALS = [
   HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
   HOSTED_API_ERROR.GITHUB_UNANSWERED,
   HOSTED_API_ERROR.BRANCH_NOT_FOUND,
+  HOSTED_API_ERROR.PERMISSION_MODE_REFUSED,
+] as const;
+
+/**
+ * What an answer to an ask refuses (`coder-host/approval-answer.ts`): an
+ * agent or an ask not found or not the caller's to answer, an ask that no
+ * longer waits, by how it stands, and a runner the service could not reach
+ * just now, to be tried again.
+ */
+const APPROVAL_ANSWER_REFUSALS = [
+  HOSTED_API_ERROR.NOT_FOUND,
+  HOSTED_API_ERROR.NOT_PERMITTED,
+  HOSTED_API_ERROR.APPROVAL_SETTLED,
+  HOSTED_API_ERROR.UNAVAILABLE,
 ] as const;
 
 /**
@@ -172,11 +192,29 @@ export const AGENT_START_STATUS = { CREATED: 201, STARTED_BEFORE: 200 } as const
 /** The task or the agent a path names, read as an id by the handler. */
 const idParams = EffectSchema.Struct({ id: EffectSchema.String });
 
+/** One ask of an agent a path names, read as ids by the handler. */
+const approvalParams = EffectSchema.Struct({
+  id: EffectSchema.String,
+  approval: EffectSchema.String,
+});
+
+/** An answer and the words of a denial at their widest escape, so a body past this is no answer. */
+const APPROVAL_BODY_BYTES = 32_768;
+
 /** One shell of an agent a path names. */
 const terminalParams = EffectSchema.Struct({
   id: EffectSchema.String,
   terminal: EffectSchema.String,
 });
+
+/** One of an agent's repository's run actions a path names, read as ids by the handler. */
+const runActionParams = EffectSchema.Struct({
+  id: EffectSchema.String,
+  action: EffectSchema.String,
+});
+
+/** One agent's run of one of its repository's run actions. */
+const RUN_ACTION_PATH = `${AGENT_PATH}/run-actions/{action}` as const;
 
 /** How many of a workspace's agents a page passes over, as its query carries it: a whole number from zero. */
 const offsetQuery = EffectSchema.NumberFromString.pipe(
@@ -189,7 +227,7 @@ const archivedQuery = EffectSchema.optionalKey(EffectSchema.String);
 /**
  * One change of an agent (PATCH): its title, its archive, its pin, the
  * reader's read mark, its MCP servers, a repository added beside its own,
- * or its model and effort, tried in that order.
+ * its permission mode, or its model and effort, tried in that order.
  */
 const agentChangeRequestSchema = EffectSchema.Union([
   agentRenameRequestSchema,
@@ -198,6 +236,7 @@ const agentChangeRequestSchema = EffectSchema.Union([
   agentReadRequestSchema,
   agentServersRequestSchema,
   agentAddRepositoryRequestSchema,
+  agentPermissionModeRequestSchema,
   modelChoiceSchema,
 ]);
 
@@ -247,7 +286,7 @@ export const agentsContract = {
     )
     .input(exactBodyInput(idParams, agentStartRequestSchema))
     .output(EffectSchema.flip(startAnswerSchema)),
-  /** An agent started from the one the path names, continuing it or forking it, in that agent's own place: its task, or its workspace and repository where it has no task. */
+  /** An agent started from the one the path names, continuing it or forking it, in that agent's own place, its task. */
   startFrom: declaredProcedure
     .errors(refuses(...START_REFUSALS))
     .meta(bodyCap(MAXIMUM_START_BODY_BYTES))
@@ -274,6 +313,19 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.PATCH, path: AGENT_PATH, inputStructure: "detailed" }))
     .input(exactBodyInput(idParams, agentChangeRequestSchema))
     .output(EffectSchema.flip(agentAnswerSchema)),
+  /** One ask of an agent answered, and the answer written to its runner. */
+  answerApproval: declaredProcedure
+    .errors(refuses(...APPROVAL_ANSWER_REFUSALS))
+    .meta(bodyCap(APPROVAL_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: `${AGENT_PATH}/approvals/{approval}`,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(approvalParams, approvalAnswerRequestSchema))
+    .output(EffectSchema.flip(approvalAnswerAnswerSchema)),
   /** One agent deleted for good, stopped first where it still works. */
   delete: declaredProcedure
     .errors(refuses(...STOP_REFUSALS))
@@ -286,15 +338,38 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/stop` }))
     .input(idParams)
     .output(EffectSchema.flip(agentAnswerSchema)),
+  /**
+   * One agent's harness started on a fresh session in the same agent
+   * (`coder-host/clear.ts`), its transcript kept; refused while the agent
+   * works, and for one on no harness.
+   */
+  clear: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.AGENT_NOT_READY,
+        HOSTED_API_ERROR.INVALID_REQUEST,
+      ),
+    )
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/clear` }))
+    .input(idParams)
+    .output(EffectSchema.flip(agentAnswerSchema)),
   /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`). */
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/warm` }))
     .input(idParams)
     .output(EffectSchema.flip(agentWarmAnswerSchema)),
-  /** One agent taken back to just before one of the developer's lines, stopped first where it still works. */
+  /** One agent taken back to just before one of the developer's lines, stopped first where it still works, its files put back too where asked and a snapshot of them stands. */
   rewind: declaredProcedure
-    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING,
+      ),
+    )
     .meta(bodyCap(CHOICE_BODY_BYTES))
     .meta(
       openapi({
@@ -316,6 +391,25 @@ export const agentsContract = {
       }),
     )
     .output(EffectSchema.flip(agentChangesAnswerSchema)),
+  /**
+   * The files one of the agent's turns changed, the turn one of the
+   * developer's lines opened, between the checkout its runner recorded
+   * before it and the next one recorded, or the checkout as it stands; read
+   * on the agent's machine, so refused as a line to an away or removed Mac
+   * is, and where no snapshot of the turn stands any more.
+   */
+  turnChanges: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING,
+        HOSTED_API_ERROR.LOCAL_AGENT_REFUSED,
+        HOSTED_API_ERROR.DEVICE_REMOVED,
+      ),
+    )
+    .meta(openapi({ method: HTTP_METHOD.GET, path: `${AGENT_PATH}/turn-changes` }))
+    .input(EffectSchema.Struct({ id: EffectSchema.String, messageId: wireUuidSchema }))
+    .output(EffectSchema.flip(agentTurnChangesAnswerSchema)),
   /** What the reviewer and label pickers of one agent's Pull request tab offer. */
   reviewOptions: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE))
@@ -362,6 +456,21 @@ export const agentsContract = {
       }),
     )
     .input(exactBodyInput(terminalParams, terminalRenameRequestSchema))
+    .output(EffectSchema.flip(terminalsAnswerSchema)),
+  /**
+   * One of the agent's repository's run actions run in its running
+   * sandbox, behind the Run actions experiment, answering its shell: the one
+   * already running it, or one it was typed into or started in now. A
+   * stopped sandbox is refused, never woken.
+   */
+  runAction: shellProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: RUN_ACTION_PATH }))
+    .input(runActionParams)
+    .output(EffectSchema.flip(terminalCreatedAnswerSchema)),
+  /** What one run action's shell runs interrupted, the shell left standing, answering the shells as they stand after. */
+  stopRunAction: shellProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${RUN_ACTION_PATH}/stop` }))
+    .input(runActionParams)
     .output(EffectSchema.flip(terminalsAnswerSchema)),
   /** One shell ended, answering the shells as they stand after. */
   endTerminal: shellProcedure

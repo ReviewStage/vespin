@@ -221,6 +221,34 @@ test("on a coarse pointer Enter is a new line, ⌘ or Ctrl with Enter sends, and
   assert.equal(box.sends.count, 2);
 });
 
+test("Markdown typed in a fenced block stands as the words typed, and outside one is still read into marks", () => {
+  const fenced = mounted("```\n");
+  fenced.caretAt(6);
+  typeKeys(fenced.host, "` a ` _y_ ");
+  const outside = mounted("plain ");
+  typeKeys(outside.host, "_y_ ");
+
+  assert.equal(fenced.drafts.at(-1), "```\n` a ` _y_ ");
+  assert.equal(outside.drafts.at(-1), "plain *y* ");
+});
+
+test("where Enter writes, a bare Enter is a new line with a mouse too, ⌘ or Ctrl with Enter is the owner's but not with Shift held, and the return key says so", () => {
+  pointerIs(false);
+  const box = mounted("Ship it", { enterWrites: true });
+  assert.equal(composerEditor(box.host).getAttribute("enterkeyhint"), "enter");
+
+  pressInComposer(box.host, "Enter");
+  typeInComposer(box.host, "today");
+  pressInComposer(box.host, "Enter", { metaKey: true, shiftKey: true });
+  pressInComposer(box.host, "Enter", { ctrlKey: true, shiftKey: true });
+  assert.equal(box.sends.count, 0);
+  assert.equal(box.drafts.at(-1), "Ship it\ntoday");
+
+  pressInComposer(box.host, "Enter", { metaKey: true });
+  pressInComposer(box.host, "Enter", { ctrlKey: true });
+  assert.equal(box.sends.count, 2);
+});
+
 test("with a mouse Enter sends, and the return key says Send", () => {
   pointerIs(false);
   const box = mounted("Ship it");
@@ -431,6 +459,27 @@ test("an @ word is reported to the mentions, and a pick writes the mention into 
   assert.deepEqual(box.drawn, ["session-store.ts luke://file/apps/web/session-store.ts"]);
 });
 
+test("a pick before closing punctuation leaves it standing, no space before it, and replaces a dot inside the name", () => {
+  const box = mountedWithMentions("");
+
+  typeInComposer(box.host, "Fix @ses.");
+  // The caret back before the period, inside the word: the paragraph opens at 1.
+  box.caretAt(1 + "Fix @ses".length);
+  box.handle.chooseMention({
+    name: "session-store.ts",
+    target: "luke://file/apps/web/session-store.ts",
+  });
+  assert.equal(box.drafts.at(-1), `Fix ${STORE_LINK}.`);
+
+  box.handle.replace("See @session-store.ts");
+  box.caretAt(1 + "See @ses".length);
+  box.handle.chooseMention({
+    name: "session-store.ts",
+    target: "luke://file/apps/web/session-store.ts",
+  });
+  assert.equal(box.drafts.at(-1), `See ${STORE_LINK} `);
+});
+
 test("words laid in with a mention's link hold it as its chip, and hand the same words back", () => {
   const box = mountedWithMentions("");
 
@@ -523,25 +572,29 @@ test("a page's address pasted on the line after a closing fence is laid in as it
   assert.deepEqual(box.drawn, [`ACME-142/fix-the-thing ${ISSUE_URL}`]);
 });
 
-test("a mention laid in from elsewhere stands where the caret is, a space after it, and none is laid in past the box's bound", () => {
-  const box = mountedWithMentions("Fix  first");
+test("a mention laid in from elsewhere stands where the caret is, spaced from the words either side, and none is laid in past the box's bound", () => {
+  const box = mountedWithMentions("Fixfirst");
   const lines = {
     name: "invite.ts:2–3",
     target: "https://github.com/acme/relay/blob/HEAD/src/invite.ts#L2-L3",
   };
   const full = mounted("12345678", { maxLength: 10 });
 
-  box.caretAt(1 + "Fix ".length);
+  box.caretAt(1 + "Fix".length);
   box.handle.insertMention(lines);
   full.handle.insertMention(lines);
 
   assert.equal(box.drafts.at(-1), `Fix [@invite.ts:2–3](${lines.target}) first`);
   assert.deepEqual(full.drafts, []);
+  typeInComposer(box.host, "now ");
+  assert.equal(box.drafts.at(-1), `Fix [@invite.ts:2–3](${lines.target}) now first`);
 });
 
-/** The quote blocks the box holds, by their words. */
-function quotesIn(host: HTMLElement): (string | null)[] {
-  return [...host.querySelectorAll("[data-quote]")].map((element) => element.textContent);
+/** The quotes the box holds, by their words, a line for each of their lines. */
+function quotesIn(host: HTMLElement): string[] {
+  return [...host.querySelectorAll("blockquote")].map((element) =>
+    [...element.querySelectorAll("p")].map((line) => line.textContent).join("\n"),
+  );
 }
 
 test("a quote laid in stands as a block under the caret's line, the caret on a line under it, and reads out as a blockquote set apart", () => {
@@ -571,19 +624,42 @@ test("words laid in with quotes set apart hold them as blocks, and hand the same
   assert.deepEqual(quotesIn(box.host), [], "a > line run into its neighbors stays words");
 });
 
-test("one Backspace at the start of the line under a quote takes the quote out whole, and Delete at the end of the line above it too", () => {
+test("a quote is typed with `> `, edited like any words, Backspace at its start turns its line back into words, and Shift with Enter on its empty last line leaves it", () => {
   const box = mounted("");
-  box.handle.insertQuote("A or B?");
+  typeKeys(box.host, "> Option A ships today.");
+  assert.deepEqual(quotesIn(box.host), ["Option A ships today."]);
+  assert.equal(box.drafts.at(-1), "> Option A ships today.");
+
+  // The quote's line starts past the quote's and the line's openings.
+  const line = 2;
+  box.caretAt(line + "Option A ships today".length);
+  typeKeys(box.host, ", surely");
+  assert.equal(box.drafts.at(-1), "> Option A ships today, surely.");
+
+  box.caretAt(line + "Option A ships today, surely.".length);
+  pressInComposer(box.host, "Enter", { shiftKey: true });
+  pressInComposer(box.host, "Enter", { shiftKey: true });
+  typeKeys(box.host, "Why?");
+  assert.equal(box.drafts.at(-1), "> Option A ships today, surely.\n\nWhy?");
+
+  box.caretAt(line);
   pressInComposer(box.host, "Backspace");
   assert.deepEqual(quotesIn(box.host), []);
-  assert.equal(box.drafts.at(-1), "");
+  assert.equal(box.drafts.at(-1), "Option A ships today, surely.\nWhy?");
+});
 
-  typeInComposer(box.host, "Above");
-  box.handle.insertQuote("A or B?");
-  typeInComposer(box.host, "Below");
-  box.caretAt(1 + "Above".length);
-  pressInComposer(box.host, "Delete");
-  assert.equal(box.drafts.at(-1), "Above\nBelow");
+test("words copied from inside a quote are copied as words, and a quote copied whole as a quote", () => {
+  const box = mounted("> Option A ships today.\n\nWhy?");
+  const view = composerEditor(box.host).editor?.view ?? assert.fail("the editor is running");
+  const copied = () =>
+    view.someProp("clipboardTextSerializer", (serialize) =>
+      serialize(view.state.selection.content(), view),
+    );
+  // The quote's line starts past the quote's and the line's openings.
+  box.select(2 + "Option ".length, 2 + "Option A ships".length);
+  assert.equal(copied(), "A ships");
+  box.selectAll();
+  assert.equal(copied(), "> Option A ships today.\n\nWhy?");
 });
 
 test("a quote is cut from its end to the room the bound leaves, and none is laid in where there is none", () => {
@@ -799,4 +875,11 @@ test("a paste over part of a marked word is cut to fit the bound as the words wo
   paste(box.host, "abcde");
 
   assert.equal(box.drafts.at(-1), "abcd**t** ok");
+});
+
+test("a fenced block's lines are handed back as they were written once the words change, its code read into no marks", () => {
+  const box = mounted("Run this:\n```js\nconst s = ``hi`` + **x**;\n```\nThen");
+  typeInComposer(box.host, " stop");
+
+  assert.equal(box.drafts.at(-1), "Run this:\n```js\nconst s = ``hi`` + **x**;\n```\nThen stop");
 });

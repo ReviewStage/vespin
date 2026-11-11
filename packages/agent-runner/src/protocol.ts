@@ -5,17 +5,17 @@
  * service that launches the runner (P08) and the route that takes its events
  * (P09) import it without the SDK behind it. Every line on stdin is one JSON
  * object: the first is the config, each later one a message, a stop, a model
- * change, a retire, or a warm. A config that names `linesUrl` has the runner read
+ * change, a retire, a warm, or an approval. A config that names `linesUrl` has the runner read
  * the later lines from the service instead (`RUNNER_LINES`).
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
  * through `codex app-server` (P20). Secrets never travel in argv or on
- * stdin: the runner's bearer and the harness's credential are in its
- * environment. Codex's ChatGPT access token is never handed in at all: the
- * runner asks the service for each over HTTPS (`codex-token.ts`), on a host
- * through its token command and in the cloud's sandbox as it signs
- * app-server in, so no line carries one, on a Mac's queue
- * (`@repo/features/device-agent-wire`) or anywhere else.
+ * stdin: the runner's bearer and, in the cloud, the harness's credential are
+ * in its environment; on a host the harnesses run on the machine's own
+ * logins. Codex's ChatGPT access token is never handed in at all: in the
+ * cloud's sandbox the runner asks the service for each over HTTPS
+ * (`codex-token.ts`) as it signs app-server in, so no line carries one, on a
+ * Mac's queue (`@repo/features/device-agent-wire`) or anywhere else.
  */
 
 import type {
@@ -37,11 +37,12 @@ import type { ServerNotification } from "./codex-protocol/index.js";
  * stands in its place for an agent the account's key pays for. In a sandbox
  * either is a placeholder minted for the launch, which the sandbox's firewall
  * swaps for the real one on Anthropic's API, so neither enters the sandbox;
- * on a host it is the credential itself. Codex's token is never in it: the
- * runner asks the service for it, on a host through its token command and in
- * the cloud's sandbox as it signs app-server in (`codex-token.ts`). An OpenAI
- * API key in the sandbox is a placeholder, swapped for the real one at the
- * sandbox's firewall, as Anthropic's are.
+ * on a host the runner hands its harnesses none of them, whatever it was
+ * started with, since they run on the machine's own logins
+ * (`launch.ts`'s `harnessEnvOf`). Codex's token is never in it: the runner
+ * asks the service for it in the cloud's sandbox as it signs app-server in
+ * (`codex-token.ts`). An OpenAI API key in the sandbox is a placeholder,
+ * swapped for the real one at the sandbox's firewall, as Anthropic's are.
  */
 export const RUNNER_ENV = {
   BEARER: "APP_RUNNER_TOKEN",
@@ -60,19 +61,6 @@ export const RUNNER_ENV = {
    */
   OPENAI_API_KEY: "OPENAI_API_KEY",
   /**
-   * Which backend a host's Codex launch on the plan sends its requests to
-   * (`CODEX_PLAN_BACKEND`): set where the plan was connected through Codex's
-   * own device-code login, whose token only Codex's ChatGPT backend accepts,
-   * and unset for OpenAI's API, where a third-party sign-in's token goes.
-   */
-  CODEX_PLAN_BACKEND: "APP_CODEX_PLAN_BACKEND",
-  /**
-   * The ChatGPT workspace a host's device-code plan pays from, which Codex's
-   * ChatGPT backend reads from the account header of each request; unset
-   * where the plan's ID token named none. A workspace id is no secret.
-   */
-  CHATGPT_ACCOUNT_ID: "APP_CHATGPT_ACCOUNT_ID",
-  /**
    * Where the runner runs, where its starter says (`RUNNER_PLACE`): set by a
    * host's daemon alone, on a Linux box and a Mac alike, This Mac's among
    * them, and unset in the cloud's sandbox.
@@ -80,29 +68,17 @@ export const RUNNER_ENV = {
   PLACE: "APP_RUNNER_PLACE",
 } as const;
 
-/**
- * The backends a host's Codex launch on the plan sends its requests to, as its
- * starter names one in `RUNNER_ENV.CODEX_PLAN_BACKEND`: OpenAI's API, for a
- * token a third-party sign-in was issued, or Codex's ChatGPT backend, for
- * one Codex's own device-code login was issued.
- */
-export const CODEX_PLAN_BACKEND = {
-  OPENAI_API: "openai_api",
-  CHATGPT: "chatgpt",
-} as const;
-
-export type CodexPlanBackend = (typeof CODEX_PLAN_BACKEND)[keyof typeof CODEX_PLAN_BACKEND];
-
 /** The places a runner's starter names in `RUNNER_ENV.PLACE`. */
 export const RUNNER_PLACE = {
   /**
    * A machine its member runs our host on, a Linux box or a Mac, with
    * nobody signed in at it, where each launch runs straight on the box as
    * the host's own user, with full access to what that user reaches, beside
-   * the box's other processes. No harness runs a sandbox of its own or
-   * asks an approval there, as in the cloud's sandbox: Claude Code under
-   * `bypassPermissions`, and Codex in `danger-full-access` with approval
-   * `never`.
+   * the box's other processes. No harness runs a sandbox of its own there,
+   * as in the cloud's sandbox, and none asks an approval but where its
+   * agent's mode does (`PERMISSION_MODE`): Claude Code under
+   * `bypassPermissions` by default, and Codex in `danger-full-access` with
+   * approval `never` by default.
    */
   HOST: "host",
 } as const;
@@ -131,8 +107,10 @@ export const INSTALLED_SKILLS = {
  * to-do tool (TaskCreate and its siblings replaced TodoWrite), so each is
  * listed to be offered; and that a tool beside one of our own, or one no
  * headless agent can use, is denied, so the agent has one way to do each
- * thing. SendMessage stays, because the Agent tool continues a subagent
- * with it.
+ * thing: `ScheduleWakeup` among them, because our `schedule_wakeup` ends
+ * the turn and lets the sandbox stop while the agent waits, where the CLI's
+ * holds the CLI, and so its sandbox, up for the whole wait. SendMessage
+ * stays, because the Agent tool continues a subagent with it.
  */
 export const CLAUDE_CODE_TOOLS = {
   ADDED: ["Glob", "Grep", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"],
@@ -144,11 +122,56 @@ export const CLAUDE_CODE_TOOLS = {
     "RemoteTrigger",
     "PushNotification",
     "AskUserQuestion",
+    "ScheduleWakeup",
   ],
 } as const;
 
 /** The read-only subagent a Claude Code launch defines, by the `subagent_type` the Agent tool takes. */
 export const CLAUDE_CODE_WORKER = "worker";
+
+/**
+ * How a Claude Code launch answers its agent's tool calls (its config's
+ * `permissionMode`): every call run unasked, as every launch ran before
+ * modes, under the CLI's `bypassPermissions` (`FULL_ACCESS`, the default);
+ * a file edit or a shell command asked of the member first, in the CLI's
+ * `default` mode (`ASK`); or each call left to the CLI's `auto` classifier,
+ * which asks the member where it cannot decide (`AUTO`). An ask reaches the
+ * service as an APPROVAL_REQUESTED event and is answered by an `approval`
+ * line. A Codex launch reads the same modes with the Codex app's own
+ * meanings (`codex.ts`'s Sandbox): no sandbox and nothing asked
+ * (`FULL_ACCESS`); its workspace sandbox, asking the member before a
+ * command runs outside it (`ASK`); or that sandbox, each such command left to
+ * Codex's automatic review (`AUTO`).
+ */
+export const PERMISSION_MODE = {
+  FULL_ACCESS: "full_access",
+  ASK: "ask",
+  AUTO: "auto",
+} as const;
+export type PermissionMode = (typeof PERMISSION_MODE)[keyof typeof PERMISSION_MODE];
+const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
+
+/**
+ * The built-in tools a launch whose mode asks runs unasked, by the names the
+ * CLI gives them: those that only read, the checkout or the web, load a
+ * skill's instructions or a deferred tool, or keep the agent's own to-do
+ * list. Every MCP server the launch hands the CLI, ours and each
+ * integration's, runs unasked beside them by its `mcp__<server>` rule, so
+ * what asks is a file edit, a shell command, and a server the checkout adds.
+ */
+export const CLAUDE_CODE_UNASKED_TOOLS = [
+  "Read",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "Skill",
+  "ToolSearch",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskList",
+  "TaskGet",
+] as const;
 
 /** The harness a launch runs, spelled as `conversations.runtime` spells it. */
 export const RUNNER_HARNESS = {
@@ -209,14 +232,47 @@ export const INPUT_LINE = {
   MODEL: "model",
   RETIRE: "retire",
   WARM: "warm",
+  APPROVAL: "approval",
 } as const;
 
 /**
- * The argument that starts the runner's bundle as a host's Codex token command
- * rather than as a launch: `node <bundle> codex-token <tokenUrl>`, which prints
- * the plan's access token the service answers, and nothing else, on stdout.
+ * The member's answers to a tool call's ask: allow the call; allow it and,
+ * for as long as the launch's CLI runs, every call its rule covers, as the
+ * CLI suggested it, kept in the session alone so nothing is written to the
+ * checkout (`ALLOW_FOR_AGENT`); or deny it.
  */
-export const CODEX_TOKEN_COMMAND = "codex-token";
+export const APPROVAL_DECISION = {
+  ALLOW: "allow",
+  ALLOW_FOR_AGENT: "allow_for_agent",
+  DENY: "deny",
+} as const;
+export type ApprovalDecision = (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+const ApprovalDecisionSchema = Schema.Literals(Object.values(APPROVAL_DECISION));
+
+/** What settled a tool call's ask, as APPROVAL_RESOLVED names it. */
+export const APPROVAL_BY = {
+  /** The member's answer, an `approval` line. */
+  MEMBER: "member",
+  /** A message the member sent while it waited, which denied it with the message's words. */
+  MESSAGE: "message",
+  /** The harness withdrew it, as Claude Code does on a stop's interrupt and Codex as it settles the ask itself: denied. */
+  ABORTED: "aborted",
+  /** The launch ended while it waited: denied. */
+  ENDED: "ended",
+} as const;
+export type ApprovalBy = (typeof APPROVAL_BY)[keyof typeof APPROVAL_BY];
+const ApprovalBySchema = Schema.Literals(Object.values(APPROVAL_BY));
+
+/**
+ * How much of a call's input its APPROVAL_REQUESTED event carries: each
+ * string cut to `TEXT_MAX` characters and each list to `ITEMS_MAX` items, an
+ * ellipsis ending a cut string, since a write's whole file can be its input,
+ * and the call stands whole in the transcript beside the ask.
+ */
+export const APPROVAL_INPUT = {
+  TEXT_MAX: 2_000,
+  ITEMS_MAX: 50,
+} as const;
 
 /**
  * What the service's token route answers a runner: the plan's access token,
@@ -263,17 +319,63 @@ export type RunnerLinesAnswer = typeof RunnerLinesAnswerSchema.Type;
  * names `transcriptsUrl`: Anthropic's reference `SessionStore`'s five calls
  * (the Agent SDK's `append`, `load`, `listSessions`, `delete`,
  * `listSubkeys`), each one POST under the runner's bearer, run against the
- * agent's own rows.
+ * agent's own rows. A runner loads a transcript a page at a time
+ * (`LOAD_PAGE`), so no one answer must hold a large session whole under the
+ * platform's bound on a function's response; `LOAD` is still answered for a
+ * runner from before pages, which a Mac may bundle.
  */
 export const RUNNER_TRANSCRIPTS = {
   CALL: {
     APPEND: "append",
     LOAD: "load",
+    LOAD_PAGE: "loadPage",
     LIST_SESSIONS: "listSessions",
     DELETE: "delete",
     LIST_SUBKEYS: "listSubkeys",
   },
+  /** The project Codex's threads are kept under (`codex-rollout.ts`), which names no checkout. */
+  CODEX_PROJECT: "codex",
 } as const;
+
+/**
+ * Whether a Codex rollout's subpath, as the store keeps it, names a file
+ * inside `CODEX_HOME`: a relative path of plain segments, none of them `.`
+ * or `..`, ending in `.jsonl`, as the mirror keys every rollout Codex
+ * writes. Note that a transcript is copied from agent to agent, a sandbox's
+ * onto a Mac among them, so a subpath its runner appended is never trusted
+ * as a place to write.
+ */
+export function rolloutSubpathContained(subpath: string): boolean {
+  if (!subpath.endsWith(".jsonl") || subpath.includes("\\") || subpath.includes("\0")) {
+    return false;
+  }
+  return subpath
+    .split("/")
+    .every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
+/** How long a Claude Code project key runs before the SDK cuts it and adds the path's hash. */
+const CLAUDE_PROJECT_KEY_CHARS = 200;
+
+/**
+ * The project the Agent SDK keys a Claude Code session's transcript under
+ * for the checkout given, as it keys it from the session's resolved working
+ * folder: each character but an ASCII letter or digit as `-`, and past 200
+ * characters cut there with the path's 32-bit string hash after it in base
+ * 36. Note that a path is read as the SDK reads it on a Mac, composed (NFC),
+ * which changes no ASCII path.
+ */
+export function claudeProjectKey(checkoutPath: string): string {
+  const path = checkoutPath.normalize("NFC");
+  const key = path.replace(/[^a-zA-Z0-9]/g, "-");
+  if (key.length <= CLAUDE_PROJECT_KEY_CHARS) return key;
+  let hash = 0;
+  for (let index = 0; index < path.length; index += 1) {
+    hash = (hash << 5) - hash + path.charCodeAt(index);
+    hash |= 0;
+  }
+  return `${key.slice(0, CLAUDE_PROJECT_KEY_CHARS)}-${Math.abs(hash).toString(36)}`;
+}
 
 /** The SDK's `SessionKey`: a project, a session, and a subpath, absent for the main transcript. */
 const TranscriptKeySchema = Schema.Struct({
@@ -285,6 +387,12 @@ const TranscriptKeySchema = Schema.Struct({
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const TranscriptEntrySchema = Schema.Record(Schema.String, Schema.Unknown);
 
+/** Where a transcript's next page starts: after the entry the last page ended on. */
+const TranscriptCursorSchema = Schema.Number.check(
+  Schema.isInt(),
+  Schema.isGreaterThanOrEqualTo(0),
+);
+
 /** One call of a runner's transcript store. */
 export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
@@ -295,6 +403,11 @@ export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD),
     key: TranscriptKeySchema,
+  }),
+  Schema.Struct({
+    call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE),
+    key: TranscriptKeySchema,
+    after: Schema.NullOr(TranscriptCursorSchema),
   }),
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS),
@@ -313,6 +426,13 @@ export const RunnerTranscriptLoadSchema = Schema.Struct({
   entries: Schema.NullOr(Schema.Array(TranscriptEntrySchema)),
 });
 export type RunnerTranscriptLoad = typeof RunnerTranscriptLoadSchema.Type;
+
+/** What a page's load is answered: its entries in order, and the cursor the next is read after, none past the last. */
+export const RunnerTranscriptPageSchema = Schema.Struct({
+  entries: Schema.Array(TranscriptEntrySchema),
+  next: Schema.NullOr(TranscriptCursorSchema),
+});
+export type RunnerTranscriptPage = typeof RunnerTranscriptPageSchema.Type;
 
 /** What a listing of a project's sessions is answered: each with its last append, in epoch milliseconds. */
 export const RunnerTranscriptSessionsSchema = Schema.Struct({
@@ -390,11 +510,19 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   /** Absent in a config written before Codex mode, which is Claude Code's. */
   harness: Schema.optionalKey(Schema.Literal(RUNNER_HARNESS.CLAUDE_CODE)),
   cwd: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`); none in a config written before it, whose turns take no snapshot. */
+  agentId: Schema.optionalKey(Schema.String),
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(EffortSchema),
   /** Whether Claude Code's own fast mode is on, for an agent on a model's fast version. */
   fast: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether the CLI keeps the main conversation's prompt cache for an hour
+   * rather than five minutes (`CLAUDE_CODE_PROMPT_CACHE_TTL`), for an agent
+   * of the half the service runs it on; a runner from before this key ignores it.
+   */
+  promptCacheHour: Schema.optionalKey(Schema.Boolean),
   /** Our coder instructions, appended to Claude Code's own system prompt. */
   append: Schema.String,
   /** The CLI's session id to resume, where this launch continues one. */
@@ -410,6 +538,12 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   linesUrl: Schema.optionalKey(Schema.String),
   /** Our MCP server's streamable-HTTP endpoint. */
   mcpUrl: Schema.String,
+  /**
+   * Our MCP server's tools the worker subagent (`CLAUDE_CODE_WORKER`) may not
+   * call, by name: every one that does more than read. Absent in a config
+   * written before it, where the worker is denied the whole server.
+   */
+  workerDenied: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the CLI's transcript is kept at the service (`RUNNER_TRANSCRIPTS`), handed to the SDK as its `sessionStore`; none where the CLI's own files are all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
@@ -429,6 +563,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   trace: Schema.optionalKey(RunnerTraceSchema),
   /** How long a warm launch stays warm before it ends itself (`RUNNER_WARM`); `RUNNER_WARM.IDLE_CAP_MS` where absent. */
   warmForMs: Schema.optionalKey(Schema.Number),
+  /** How the launch answers its agent's tool calls (`PERMISSION_MODE`); full access where absent, as in a config written before modes. */
+  permissionMode: Schema.optionalKey(PermissionModeSchema),
 });
 export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 
@@ -442,6 +578,8 @@ export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 export const CodexConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CODEX),
   cwd: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`); none in a config written before it, whose turns take no snapshot. */
+  agentId: Schema.optionalKey(Schema.String),
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(CodexEffortSchema),
@@ -477,11 +615,11 @@ export const CodexConfigSchema = Schema.Struct({
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
   /**
    * Where the runner asks the service for the plan's access token, under its bearer
-   * (`/api/agents/runner-token`). App-server takes its token from the
-   * runner's `codex-token` command (Codex's provider `auth`), which Codex runs
-   * again as its cached token ages and after a 401, so a turn outlives any
-   * one token. Not asked where the launch's environment holds
-   * `OPENAI_API_KEY`: the account's API key pays, and app-server reads it.
+   * (`/api/agents/runner-token`), in the cloud's sandbox, as it signs
+   * app-server in and again after a 401, so a turn outlives any one token.
+   * Not asked where the launch's environment holds `OPENAI_API_KEY`, the
+   * account's API key paying, nor on a host, whose app-server runs on the
+   * machine's own login.
    */
   tokenUrl: Schema.String,
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), whose `skills/` is set as an extra skills root where it is there. */
@@ -492,6 +630,8 @@ export const CodexConfigSchema = Schema.Struct({
   trace: Schema.optionalKey(RunnerTraceSchema),
   /** How long a warm launch stays warm before it ends itself (`RUNNER_WARM`); `RUNNER_WARM.IDLE_CAP_MS` where absent. */
   warmForMs: Schema.optionalKey(Schema.Number),
+  /** How the launch answers its agent's tool calls (`PERMISSION_MODE`), as the Codex app means each; full access where absent, as in a config written before modes. */
+  permissionMode: Schema.optionalKey(PermissionModeSchema),
 });
 export type CodexConfig = typeof CodexConfigSchema.Type;
 
@@ -520,12 +660,23 @@ const UuidSchema = Schema.String.check(
  * A message for the session, in the Messages API's own block shapes. `uuid`
  * is the service's id for the message, handed to the SDK as the prompt's own, so
  * the ACCEPTED event and the `result` that answers it name it; the runner
- * mints one where a line names none.
+ * mints one where a line names none. `resent` marks a message handed again
+ * to a session that already holds it, as a turn its plan's limit cut short
+ * is on the next payer: Claude Code drops a resumed session's prompt under
+ * a uuid the session holds, answering nothing, so the runner hands the SDK
+ * the prompt under a uuid of its own, and ACCEPTED still names the service's.
+ * `compact` asks for the session's compaction in the message's place: Codex
+ * compacts its thread (`thread/compact/start`), which takes no words, once no
+ * turn of its own runs, and Claude Code, whose CLI runs the message's bare
+ * `/compact` as its own command, needs no mark. A runner from before the mark
+ * hands the message on as words.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
   uuid: Schema.optionalKey(UuidSchema),
   content: Schema.Array(ContentBlockSchema),
+  resent: Schema.optionalKey(Schema.Boolean),
+  compact: Schema.optionalKey(Schema.Boolean),
 });
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its
@@ -577,12 +728,26 @@ const WarmLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.WARM),
 });
 
+/**
+ * The member's answer to a tool call's ask, naming the APPROVAL_REQUESTED
+ * event's `requestId`; `message` tells the agent why a call was denied, "The
+ * member denied this." where absent. A launch with no such ask waiting skips
+ * it, as one already settled has none.
+ */
+const ApprovalLineSchema = Schema.Struct({
+  type: Schema.Literal(INPUT_LINE.APPROVAL),
+  requestId: Schema.String,
+  decision: ApprovalDecisionSchema,
+  message: Schema.optionalKey(Schema.String),
+});
+
 export const InputLineSchema = Schema.Union([
   MessageLineSchema,
   StopLineSchema,
   ModelLineSchema,
   RetireLineSchema,
   WarmLineSchema,
+  ApprovalLineSchema,
 ]);
 export type InputLine = typeof InputLineSchema.Type;
 
@@ -595,18 +760,34 @@ export type InputLine = typeof InputLineSchema.Type;
  * it: the CLI never echoes a prompt back. WAITING follows a `result` the run
  * outlives, because the Stop hook before it reported background work or a
  * scheduled wakeup still to come: the agent is waiting, not done, and the
- * sandbox must stay up. IDLE follows a `result`, or Codex's
+ * sandbox must stay up. CONNECTION_LOST follows a model turn the harness gave
+ * up on because it could not reach its provider after its own retries: the
+ * launch stays up and probes the provider's host (`reconnect.ts`), and
+ * CONNECTION_RESTORED follows once the host answers, saying whether the
+ * service should send the agent a carry-on line, or nothing where a line the
+ * service sent meanwhile goes next instead; a launch whose host never
+ * answers within `RUNNER_RECONNECT.GIVE_UP_MS` ends `FAILED` with
+ * `connectionLostFailure`'s words. IDLE follows a `result`, or Codex's
  * `turn/completed`, that leaves nothing in flight or unanswered: the agent's
  * turn is over, as a `turn_ended` END says, but the launch stays warm
  * (`RUNNER_WARM`), so the service's next message is a line on its stdin rather than
  * a resumed sandbox and a relaunched CLI. END is the last event a launch
  * posts, with why it ended.
+ *
+ * APPROVAL_REQUESTED is posted as a launch whose mode asks
+ * (`PERMISSION_MODE`) holds a tool call for the member's answer, and
+ * APPROVAL_RESOLVED once the ask is settled, whatever settled it, so each
+ * ask a launch posts is resolved before its END.
  */
 export const RUNNER_EVENT = {
   ACCEPTED: "vespin_runner_accepted",
   WAITING: "vespin_runner_waiting",
+  CONNECTION_LOST: "vespin_runner_connection_lost",
+  CONNECTION_RESTORED: "vespin_runner_connection_restored",
   IDLE: "vespin_runner_idle",
   END: "vespin_runner_end",
+  APPROVAL_REQUESTED: "vespin_runner_approval_requested",
+  APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
 } as const;
 
 /** Why a launch ended. */
@@ -664,10 +845,32 @@ export interface RunnerIdle {
   readonly type: typeof RUNNER_EVENT.IDLE;
 }
 
-/** The ACCEPTED event: the message line, by its `uuid`, handed to the SDK, or taken by Codex's app-server. */
+/** Where a checkout keeps the snapshots taken before each turn (`checkout-snapshot.ts`): under the agent's id, each under a stamp of when it was taken and the line's id, in the clone's own refs beside an archived agent's (`refs/vespin/archive/`). */
+export const CHECKOUT_SNAPSHOT = {
+  REF_PREFIX: "refs/vespin/turns/",
+  /** How many snapshots a checkout keeps: the oldest beyond go as a new one is taken. */
+  KEEP: 20,
+} as const;
+
+/** The checkout as it stood before a turn: the snapshot commit, `HEAD` where the checkout had commits, and the branch checked out where one was. */
+export interface CheckoutSnapshot {
+  readonly commit: string;
+  /** `HEAD` at the snapshot, the snapshot's parent; none in a repository with no commits yet. */
+  readonly head?: string | undefined;
+  /** The branch checked out at the snapshot; none on a detached `HEAD`. */
+  readonly branch?: string | undefined;
+}
+
+/**
+ * The ACCEPTED event: the message line, by its `uuid`, handed to the SDK, or
+ * taken by Codex's app-server, with the checkout as it stood before the turn
+ * the line opens (`checkout-snapshot.ts`); no snapshot where the line joined
+ * a turn under way, or where the checkout could not be snapshotted.
+ */
 export interface RunnerAccepted {
   readonly type: typeof RUNNER_EVENT.ACCEPTED;
   readonly uuid: string;
+  readonly snapshot?: CheckoutSnapshot | undefined;
 }
 
 /** The WAITING event: what the Stop hook before the `result` reported still in flight, as the SDK spells it. */
@@ -675,6 +878,64 @@ export interface RunnerWaiting {
   readonly type: typeof RUNNER_EVENT.WAITING;
   readonly background_tasks: readonly BackgroundTaskSummary[];
   readonly session_crons: readonly SessionCronSummary[];
+}
+
+/** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
+export interface RunnerConnectionLost {
+  readonly type: typeof RUNNER_EVENT.CONNECTION_LOST;
+  readonly host: string;
+}
+
+/**
+ * The CONNECTION_RESTORED event: the host answers again. `carryOn` asks the
+ * service to send the agent a carry-on line, since the model turn the loss
+ * cut off left its work where it stood; it is false where a line the service
+ * sent during the wait goes next instead.
+ */
+export interface RunnerConnectionRestored {
+  readonly type: typeof RUNNER_EVENT.CONNECTION_RESTORED;
+  readonly host: string;
+  readonly carryOn: boolean;
+}
+
+/**
+ * How a launch waits for its provider's host to answer again after the
+ * harness gave up reaching it: a TCP connect to the host on 443, through the
+ * `HTTPS_PROXY` when one is set, asked again after a wait that doubles from
+ * the first to the longest, for at most `GIVE_UP_MS` in all, each connect
+ * given `PROBE_TIMEOUT_MS` to answer. The bound guards two costs: a sandbox
+ * kept up for a provider that stays down, and the turn's progress lease on
+ * the service, which the sweep fails a silent turn at fifteen minutes past
+ * its last progress (`@repo/features/turn-deadline`'s `PROGRESS_MS`): a Mac
+ * cut off from the provider is cut off from the service too, so the runner's
+ * own end, with why, must come before the sweep's does.
+ */
+export const RUNNER_RECONNECT = {
+  FIRST_WAIT_MS: 5 * 1_000,
+  LONGEST_WAIT_MS: 60 * 1_000,
+  GIVE_UP_MS: 10 * 60 * 1_000,
+  PROBE_TIMEOUT_MS: 5 * 1_000,
+} as const;
+
+/**
+ * The words a launch ends `FAILED` with over its provider's connection, which
+ * the service reads as the agent's connection-lost failure
+ * (`coder-host/status.ts`), each after the host's name and the same in every
+ * such end: the host never answered within `RUNNER_RECONNECT.GIVE_UP_MS`, or
+ * it was lost again before the model answered anything since the last
+ * carry-on, where probing again would only loop.
+ */
+export const CONNECTION_LOST_DETAIL = {
+  GAVE_UP: " could not be reached, and did not answer again within the wait",
+  LOST_AGAIN: " could not be reached again before the model answered",
+} as const;
+
+/** What a launch ends with where its provider's connection failed it, by which way (`CONNECTION_LOST_DETAIL`). */
+export function connectionLostFailure(
+  host: string,
+  detail: (typeof CONNECTION_LOST_DETAIL)[keyof typeof CONNECTION_LOST_DETAIL],
+): string {
+  return `${host}${detail}`;
 }
 
 /**
@@ -701,6 +962,37 @@ export interface RunnerEndEvent {
   readonly reason: RunnerEnd;
   readonly detail?: string;
 }
+
+/**
+ * The APPROVAL_REQUESTED event: a tool call held for the member's answer, an
+ * `approval` line naming its `requestId`, the CLI's id for the ask on
+ * Claude Code and one the runner makes on Codex. `toolUseId` is the call's
+ * `tool_use` block's id, or the id of the Codex item that asks, so the ask
+ * stands on the call in the transcript; `agentId` the subagent's that made it, absent for
+ * the agent's own; `title` the CLI's sentence for the ask, or the tool's
+ * name where it gave none; `description` its subtitle, where it gave one;
+ * `input` the call's input, cut as `APPROVAL_INPUT` says.
+ */
+export const RunnerApprovalRequestedSchema = Schema.Struct({
+  type: Schema.Literal(RUNNER_EVENT.APPROVAL_REQUESTED),
+  requestId: Schema.String,
+  toolUseId: Schema.String,
+  agentId: Schema.optionalKey(Schema.String),
+  toolName: Schema.String,
+  title: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  input: Schema.Record(Schema.String, Schema.Unknown),
+});
+export type RunnerApprovalRequested = typeof RunnerApprovalRequestedSchema.Type;
+
+/** The APPROVAL_RESOLVED event: the ask by its `requestId` settled, with what was decided and what decided it. */
+export const RunnerApprovalResolvedSchema = Schema.Struct({
+  type: Schema.Literal(RUNNER_EVENT.APPROVAL_RESOLVED),
+  requestId: Schema.String,
+  decision: ApprovalDecisionSchema,
+  by: ApprovalBySchema,
+});
+export type RunnerApprovalResolved = typeof RunnerApprovalResolvedSchema.Type;
 
 /**
  * One notification `codex app-server` sent, as it wrote it (the pinned
@@ -764,8 +1056,12 @@ export type RunnerMessage =
   | CodexNotification
   | RunnerAccepted
   | RunnerWaiting
+  | RunnerConnectionLost
+  | RunnerConnectionRestored
   | RunnerIdle
-  | RunnerEndEvent;
+  | RunnerEndEvent
+  | RunnerApprovalRequested
+  | RunnerApprovalResolved;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {

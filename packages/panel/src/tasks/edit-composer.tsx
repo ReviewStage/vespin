@@ -8,6 +8,7 @@ import {
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
+  Checkbox,
   CONFIRM_LOSS,
   ConfirmDialog,
   type DialogQuestion,
@@ -26,7 +27,11 @@ import {
 import { confirmFailure } from "../failure-report.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type LineAttachment, useLineAttachments } from "./agent-pictures.js";
-import type { PublishedDoors } from "./agent-published.js";
+import {
+  FILES_RESTORED_WORDS,
+  RESTORE_FILES_SHORT_WORDS,
+  RESTORE_FILES_WORDS,
+} from "./rewind-action.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 
@@ -47,7 +52,7 @@ import type { AgentComposerControl } from "./use-agent-composer.js";
  * switch away keeps what was written, which Edit opens on again; Send lets
  * it go, and so does writing the line back as it was. The line's files
  * join the box again as it opens on a draft, but for those it took off,
- * since a relaunch keeps a draft's words alone. Where messages follow the line, Send asks first, as Revert to here
+ * since a relaunch keeps a draft's words alone. Where messages follow the line, Send asks first, as Rewind conversation to here
  * does, since the send drops them and what it drops is gone.
  */
 
@@ -55,13 +60,25 @@ import type { AgentComposerControl } from "./use-agent-composer.js";
 const CANCEL_WORDS = "Cancel";
 
 /**
- * What Send asks before it drops the messages after the line. Where `takes`
- * names another member's messages among them, the body says so.
+ * What Send asks before it drops the messages after the line, or puts the
+ * files back. Where `takes` names another member's messages among those
+ * dropped, the body says so; where `restoring` the files go back too, it
+ * says that in place of their staying, and where nothing follows the line
+ * (`cuts` false), that alone.
  */
-function sendQuestion(takes: string | undefined): DialogQuestion {
+function sendQuestion(
+  takes: string | undefined,
+  restoring: boolean,
+  cuts: boolean,
+): DialogQuestion {
+  const dropped = `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the conversation, and the agent stopped if it is working.`;
   return {
     title: "Send the edited message?",
-    body: `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the conversation, and the agent stopped if it is working. Changes the agent made to its files stay as they are.`,
+    body: !cuts
+      ? `The agent is stopped if it is working. ${FILES_RESTORED_WORDS}`
+      : restoring
+        ? `${dropped} ${FILES_RESTORED_WORDS}`
+        : `${dropped} Changes the agent made to its files stay as they are.`,
     verb: "Send message",
     running: "Sending",
     loss: CONFIRM_LOSS.IRREVERSIBLE,
@@ -71,18 +88,23 @@ function sendQuestion(takes: string | undefined): DialogQuestion {
   };
 }
 
-/** What the box hands on as it sends, and the doors it is drawn with beside the tab's own box. */
+/** What the box hands on as it sends, and what it is drawn with beside the tab's own box. */
 export interface EditComposerDoors {
   readonly agentId: string;
-  readonly doors: PublishedDoors;
   readonly keywords?: readonly string[] | undefined;
   readonly skills?: SkillSource | undefined;
   /** Whether messages follow the line, which its send drops, so Send asks first. */
   readonly cuts: boolean;
   /** What the send drops of other members' messages, as "2 messages from Sam"; none where it drops none of theirs. */
   readonly takes?: string | undefined;
+  /** Whether the box offers to put the agent's files back to before the line too, which its send then asks for. */
+  readonly restorable: boolean;
   readonly onCancel: () => void;
-  readonly onSend: (words: string, attachments: readonly AgentAttachment[]) => void;
+  readonly onSend: (
+    words: string,
+    attachments: readonly AgentAttachment[],
+    restoreFiles: boolean,
+  ) => void;
 }
 
 const noop = () => undefined;
@@ -183,13 +205,18 @@ export function EditComposer({
     setAttachments(files);
     keep(held.current.text, files);
   });
+  // Note that the choice to put the files back is off each time the box opens, so an edit never puts them back unasked.
+  const [restoreFiles, setRestoreFiles] = useState(false);
+  const restoring = edit.restorable && restoreFiles;
+  // A send that drops what follows, or puts the files back, is asked first, since neither comes back.
+  const asks = edit.cuts || restoring;
   const send = () => {
     writer.update(place, () => EMPTY_DRAFT);
-    edit.onSend(draft, attachments);
+    edit.onSend(draft, attachments, restoring);
   };
   // Note that the send answers at once: the tab takes it in turn behind any send, and says there if it did not go.
   const confirm = useConfirmDialog(
-    { subject: edit.cuts, surfaceOpen: true },
+    { subject: asks, surfaceOpen: true },
     neverBusyAct(send),
     confirmFailure(FAILURE_SURFACE.MESSAGE_EDIT),
   );
@@ -211,7 +238,7 @@ export function EditComposer({
     // Note that the box sends nothing while one of the line's pictures is still read, which it would leave behind.
     send: () => {
       if (line.reading) return;
-      if (edit.cuts) confirm.ask();
+      if (asks) confirm.ask();
       else send();
     },
     retry: noop,
@@ -230,21 +257,31 @@ export function EditComposer({
         readModels={noop}
         usage={undefined}
         servers={undefined}
-        published={undefined}
-        doors={edit.doors}
         onStop={() => Promise.resolve(false)}
         followsUp
         keywords={edit.keywords}
         skills={edit.skills}
         sendable={!line.reading}
         onLeave={edit.onCancel}
+        // The choice to put the files back stands at the foot's left, where it wraps as the box narrows, so Cancel and Send stay together at its right.
+        tools={(narrow) =>
+          edit.restorable ? (
+            <Checkbox checked={restoreFiles} onChange={setRestoreFiles}>
+              {narrow ? RESTORE_FILES_SHORT_WORDS : RESTORE_FILES_WORDS}
+            </Checkbox>
+          ) : undefined
+        }
         beforeSend={() => (
           <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={edit.onCancel}>
             {CANCEL_WORDS}
           </Button>
         )}
       />
-      <ConfirmDialog open confirm={confirm} question={sendQuestion(edit.takes)} />
+      <ConfirmDialog
+        open
+        confirm={confirm}
+        question={sendQuestion(edit.takes, restoring, edit.cuts)}
+      />
     </>
   );
 }

@@ -1,18 +1,3 @@
-import type { TaskSummary } from "@repo/features/task-wire";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
-import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { useCallback, useMemo, useState } from "react";
-import { useAppCommand } from "../app-commands.js";
-import { type AutomationsDoor, useAutomationsDoor } from "../places/routed-doors.js";
-import { useInboxResolver } from "../tasks/inbox-close.js";
-import {
-  INBOX_COLUMNS,
-  INBOX_VIEW,
-  INBOX_VIEW_ITEMS,
-  useInboxColumns,
-} from "../tasks/inbox-columns.js";
-import { InboxList, InboxListNote, InboxPaneEmpty, NOTHING_HERE } from "../tasks/inbox-list.js";
 import {
   EVERYONES,
   INBOX_SHOW,
@@ -21,8 +6,23 @@ import {
   inboxCounts,
   inboxGroup,
   listedItems,
+  NOTHING_HERE,
   taskHolder,
-} from "../tasks/inbox-model.js";
+} from "@repo/features/inbox-list-model";
+import type { TaskSummary } from "@repo/features/task-wire";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { useCallback, useMemo, useState } from "react";
+import { useAppCommand } from "../app-commands.js";
+import { useInboxResolver } from "../tasks/inbox-close.js";
+import {
+  INBOX_COLUMNS,
+  INBOX_VIEW,
+  INBOX_VIEW_ITEMS,
+  useInboxColumns,
+} from "../tasks/inbox-columns.js";
+import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
 import { useHeldInboxList } from "../tasks/use-held-inbox-list.js";
@@ -91,13 +91,10 @@ function agentPaneDoors(
   listed: InboxListed,
   agentId: string,
   onBack: () => void,
-  openAutomations: AutomationsDoor["open"],
 ): InboxPaneDoors {
   const doors = paneDoors(tasks, listed.holder, {
     panelFor: tasks.activeTaskId,
     openPlace: (_place, elsewhere) => elsewhere(),
-    place: undefined,
-    openAutomations,
   });
   return {
     ...doors,
@@ -153,7 +150,6 @@ export function AgentThreads({
   onBack: () => void;
 }): React.JSX.Element {
   const { agents, me } = tasks;
-  const automations = useAutomationsDoor(tasks);
   const { open, settled } = inbox.board;
   // Note that a reminder is weighed on the window's clock, as the Inbox weighs it.
   const now = useMinute();
@@ -193,7 +189,7 @@ export function AgentThreads({
   };
   const pager = useInboxPager(steps, list, chosen, step, { shown: active });
   useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, active ? onBack : undefined);
-  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id });
+  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: me });
   const resolveItems = useInboxResolver();
   // The item shown is read as it opens, as the Inbox reads it, only while the card holds the keys.
   const opened = active && columns.shown !== INBOX_COLUMNS.LIST ? listed : undefined;
@@ -201,7 +197,7 @@ export function AgentThreads({
     shown: opened?.item,
     chosen: listed?.item,
     active,
-    onMark: marks.onMark,
+    marks,
   });
   // Note that the task's page holds its read with its cards' drafts, so the pane takes it whole.
   useNodOnOpen({ shown: opened, readerId: me, control: inbox });
@@ -269,7 +265,7 @@ export function AgentThreads({
                 : undefined
             }
             doors={{
-              ...agentPaneDoors(tasks, listed, agentId, onBack, automations.open),
+              ...agentPaneDoors(tasks, listed, agentId, onBack),
               onMark: marks.onMark,
               onClose: resolveItems,
               onRemind: marks.onRemind,

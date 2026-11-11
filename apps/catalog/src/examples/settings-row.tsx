@@ -14,18 +14,17 @@ import {
   PlusIcon,
   PROVIDER_MARK_SIZE,
   ProviderMark,
+  RepositoryLines,
   SETTINGS_ROW_DENSITY,
   SETTINGS_ROW_INDENT,
   SETTINGS_ROW_STATE,
   SettingsAttentionMark,
-  SettingsChangedMark,
   SettingsFacts,
-  SettingsFoldFoot,
-  SettingsFoldLine,
   SettingsFoldRow,
   SettingsRow,
   SettingsRowActSlot,
   type SettingsRowControl,
+  SettingsRowControlHold,
   SettingsRowMark,
   SettingsRowStateLine,
   SettingsRowsFold,
@@ -34,14 +33,11 @@ import {
   SettingsSection,
   Shortcut,
   Switch,
-  TEXT_BUTTON_TONE,
   TEXT_ELEMENT,
   TEXT_FIELD_TYPE,
   TEXT_FONT,
-  TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  TextButton,
   TextField,
 } from "@repo/ui";
 import { ExternalLinkIcon, GLYPH } from "@repo/ui/icons";
@@ -59,11 +55,11 @@ import { CatalogSection } from "../section";
  * words, beside a row whose one press still fits; compact rows in a
  * popover narrower than 380px, whose controls stay beside their words; and
  * list rows, a reference list's lines in a card, each a command and its chord;
- * and the slots: a Modified word riding a label, a key's field grown under
+ * and the slots: a mark riding a label, a key's field grown under
  * its row with a refusal under that, and accounts indented under their
  * provider's row; and accounts that fold their repositories open under
  * their words, one open from the start with a long name among them, one
- * folded with Show all at its foot, one with a ⋯ before its chevron, at a page's measure and
+ * of 24 that scrolls its list, one with a ⋯ before its chevron whose repositories its token reaches, at a page's measure and
  * narrower than 380px; and integrations that fold the rows they own under
  * their own row, closed until pressed, beside one that owns none.
  */
@@ -153,11 +149,7 @@ function SlottedRows(): React.JSX.Element {
     <SettingsSection>
       <SettingsRow
         label="Show captions"
-        adornment={
-          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} as={TEXT_ELEMENT.SPAN}>
-            Modified
-          </Text>
-        }
+        adornment={<SettingsAttentionMark note="Needs a microphone" />}
       >
         {(control) => <HeldSwitch label="Show captions" control={control} />}
       </SettingsRow>
@@ -230,7 +222,7 @@ function PressRows(): React.JSX.Element {
   );
 }
 
-/** What a row's line says about its subject, a mark led by its own box, and a value ending in a column. */
+/** What a row's line says about its subject, a mark led by its own box, a value ending in a column, and a line held a control tall for presses an edit will bring. */
 function StateRows(): React.JSX.Element {
   return (
     <SettingsSection>
@@ -264,25 +256,17 @@ function StateRows(): React.JSX.Element {
       >
         {() => <Button variant={BUTTON_VARIANT.OUTLINE}>Reconnect</Button>}
       </SettingsRow>
-      <SettingsRow
-        label="Voice"
-        adornment={
-          <>
-            <SettingsChangedMark />
-            <SettingsAttentionMark note="Needs an API key" />
-          </>
-        }
-      >
+      <SettingsRow label="Voice" adornment={<SettingsAttentionMark note="Needs an API key" />}>
         {() => null}
       </SettingsRow>
-      <SettingsRow label="Ada Lovelace" description="ada@example.com">
-        {() => (
-          <>
-            <SettingsRowValue>Admin</SettingsRowValue>
-            <SettingsRowActSlot />
-          </>
-        )}
+      <SettingsRow
+        label="Ada Lovelace"
+        description="ada@example.com"
+        end={() => <SettingsRowActSlot />}
+      >
+        {() => <SettingsRowValue>Admin</SettingsRowValue>}
       </SettingsRow>
+      <SettingsRow label="Install script">{() => <SettingsRowControlHold />}</SettingsRow>
     </SettingsSection>
   );
 }
@@ -363,11 +347,18 @@ function FoldRows(): React.JSX.Element {
         foldLabel="ada-lovelace's repositories"
         defaultOpen
       >
-        <SettingsFoldLine>dotfiles</SettingsFoldLine>
-        <SettingsFoldLine>ada-lovelace.github.io</SettingsFoldLine>
-        <SettingsFoldLine>
-          notes-on-the-analytical-engine-and-the-sketch-of-its-operation
-        </SettingsFoldLine>
+        <RepositoryLines
+          label="ada-lovelace's repositories"
+          repositories={[
+            { repository: "ada-lovelace/dotfiles" },
+            { repository: "ada-lovelace/ada-lovelace.github.io" },
+            {
+              repository:
+                "ada-lovelace/notes-on-the-analytical-engine-and-the-sketch-of-its-operation",
+            },
+          ]}
+          pictures={false}
+        />
       </SettingsFoldRow>
       <SettingsFoldRow
         indent={SETTINGS_ROW_INDENT.MARK}
@@ -376,13 +367,13 @@ function FoldRows(): React.JSX.Element {
         leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
         foldLabel="analytical-engine's repositories"
       >
-        <SettingsFoldLine>mill</SettingsFoldLine>
-        <SettingsFoldLine>store</SettingsFoldLine>
-        <SettingsFoldFoot>
-          <TextButton tone={TEXT_BUTTON_TONE.ACCENT} onClick={() => undefined}>
-            Show all 24
-          </TextButton>
-        </SettingsFoldFoot>
+        <RepositoryLines
+          label="analytical-engine's repositories"
+          repositories={Array.from({ length: 24 }, (_, at) => ({
+            repository: `analytical-engine/part-${at + 1}`,
+          }))}
+          pictures={false}
+        />
       </SettingsFoldRow>
       <SettingsFoldRow
         indent={SETTINGS_ROW_INDENT.MARK}
@@ -393,8 +384,14 @@ function FoldRows(): React.JSX.Element {
         defaultOpen
         actions={() => <MoreButton thing="byron" />}
       >
-        <SettingsFoldLine>poems</SettingsFoldLine>
-        <SettingsFoldLine>letters</SettingsFoldLine>
+        <RepositoryLines
+          label="byron's repositories"
+          repositories={[
+            { repository: "byron/poems", token: true },
+            { repository: "byron/letters", token: true },
+          ]}
+          pictures={false}
+        />
       </SettingsFoldRow>
     </SettingsSection>
   );
@@ -415,16 +412,19 @@ function RowsFoldRows(): React.JSX.Element {
               </SettingsRowStateLine>
             }
             leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
+            end={() => chevron}
           >
             {() => (
               <>
+                <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />}>
+                  Add repository
+                </Button>
                 <Button
                   variant={BUTTON_VARIANT.OUTLINE}
                   icon={<ExternalLinkIcon aria-hidden="true" />}
                 >
                   Manage on GitHub
                 </Button>
-                {chevron}
               </>
             )}
           </SettingsRow>
@@ -437,9 +437,15 @@ function RowsFoldRows(): React.JSX.Element {
             leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
             foldLabel="analytical-engine's repositories"
           >
-            <SettingsFoldLine>mill</SettingsFoldLine>
-            <SettingsFoldLine>store</SettingsFoldLine>
-            <SettingsFoldLine>cards</SettingsFoldLine>
+            <RepositoryLines
+              label="analytical-engine's repositories"
+              repositories={[
+                { repository: "analytical-engine/mill" },
+                { repository: "analytical-engine/store" },
+                { repository: "analytical-engine/cards" },
+              ]}
+              pictures={false}
+            />
           </SettingsFoldRow>
         }
       />
@@ -454,15 +460,17 @@ function RowsFoldRows(): React.JSX.Element {
               </SettingsRowStateLine>
             }
             leading={<Mark provider={MARK_PROVIDER.SLACK} />}
-          >
-            {() => (
+            end={() => (
               <>
-                <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />}>
-                  Add channel
-                </Button>
                 <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
                 {chevron}
               </>
+            )}
+          >
+            {() => (
+              <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />}>
+                Add channel
+              </Button>
             )}
           </SettingsRow>
         )}
@@ -491,14 +499,13 @@ function RowsFoldRows(): React.JSX.Element {
               </SettingsRowStateLine>
             }
             leading={<Mark provider={MARK_PROVIDER.SENTRY} />}
-          >
-            {() => (
+            end={() => (
               <>
                 <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
                 {chevron}
               </>
             )}
-          </SettingsRow>
+          />
         )}
       />
     </SettingsSection>

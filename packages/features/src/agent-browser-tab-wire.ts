@@ -4,7 +4,7 @@
  * Each coding agent, whose workers share its sandbox, runs one browser in
  * its own sandbox, and the service keeps a line for each tab open in it, so
  * every window of a member who sees the agent lists them, on any client and
- * across a relaunch, whether the agent is on a task or on none. A tab says
+ * across a relaunch. A tab says
  * whose browser it is in, who opened it, and the member driving it, where
  * one took it over: a takeover is held until an instant the member's window
  * keeps moving on, so one whose window went away lapses on its own, and two
@@ -14,7 +14,8 @@
  * `GET /api/agents/{id}/browser-tabs` lists one agent's tabs, and `GET
  * /api/plans/{id}/browser-tabs` a task's, every one of its agents' tabs
  * together; `POST` on either opens one. `POST
- * /api/plans/{id}/browser-tabs/{tab}/driver` takes one over or renews the
+ * /api/agents/{id}/browser-tabs/{tab}/driver`, or the same under the task,
+ * takes one over or renews the
  * caller's own takeover, and `DELETE` on that path hands it back, each
  * answering the tab as it then stands, so a takeover another member holds
  * answers their name as the driver rather than a refusal.
@@ -181,8 +182,7 @@ export const agentBrowserTabAddressRequestSchema = EffectSchema.Struct({
 /**
  * What a list of Browser tabs is read for, as a window names it: one coding
  * agent's browser, or every browser of a task's agents together, by its id
- * alone, the field naming which. An agent's tabs are its own wherever it
- * works, so an agent on no task lists them as well as one on a task.
+ * alone, the field naming which.
  */
 export const browserTabsPlaceSchema = EffectSchema.Union([
   EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),

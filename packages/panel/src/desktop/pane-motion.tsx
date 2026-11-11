@@ -82,7 +82,7 @@ const REACH = {
 /** How far a sheet's frame stands out past its card: the card's hairline. */
 const HAIRLINE = 1;
 
-/** How far a sheet's frame reaches above its row and below its card, so its row and the shadow under it are drawn whole. */
+/** How far a sheet's frame reaches above and below its box, so its row is drawn whole. */
 const BLEED = 48;
 
 /** The name every pane motion plays under, so the window can find them all. */
@@ -115,11 +115,12 @@ interface Drawn {
 /** Where each glider and the pane stood before a change. */
 type Snapshot = Map<Element, Drawn>;
 
-/** A sheet's frame on its way from one pair of edges to another. */
+/** A sheet's frame on its way from one pair of edges to another: what it holds, and its card. */
 interface SheetMotion {
   from: Edges;
   to: Edges;
   motion: Animation;
+  card: Animation;
 }
 
 /** The sheets whose frames are moving, each by its own motion. */
@@ -208,7 +209,9 @@ function running(element: Element): Animation[] {
  */
 function stop(element: Element, sheets: SheetMotions): void {
   for (const motion of running(element)) motion.cancel();
-  if (!sheets.has(element) || !(element instanceof HTMLElement)) return;
+  const moving = sheets.get(element);
+  if (moving === undefined || !(element instanceof HTMLElement)) return;
+  moving.card.cancel();
   sheets.delete(element);
   element.style.removeProperty(REACH.LEFT);
   element.style.removeProperty(REACH.RIGHT);
@@ -261,40 +264,40 @@ function playPane(
 }
 
 /**
- * The clip a sheet's frame draws, as a path over its box of `width` and
- * `height`: its left side `left` in from the box's, and its right side
- * `right` in, each out past it where negative, with its card's top at `top`
- * rounded by `radius` at each side, and its row above the card whole. Note
- * that the corners are cut by a notch rather than drawn as the card's top
- * edge, because the row above stands in the same frame, and that the frame
- * is a `path()` rather than an `inset()`, which rounds only the box's own
- * corners, or a `shape()`, whose arcs Chromium does not play on the
- * compositor, which would let the frame fall behind what it holds.
+ * The clip a sheet's frame draws over what it holds: its left side `left` in
+ * from its box's and its right side `right` in, each out past it where
+ * negative, its row above the card and what stands below the card whole.
+ * Note that it is a plain `inset()` rather than a `path()` that also rounds
+ * the card's corners, because Chromium clips a rectangle, or a rounded one,
+ * on the compositor as it is, but draws any other clip as a mask the size of
+ * the sheet, one for each layer beneath it, again on every frame of the
+ * motion: a sheet holding a scroller or a glider then asks for more tile
+ * memory than the GPU gives the window, and parts of it go undrawn.
  */
-function framePath(
-  width: number,
-  height: number,
-  left: number,
-  right: number,
-  top: number,
-  radius: number,
-): string {
+function frameClip(left: number, right: number): string {
+  return `inset(${-BLEED}px ${right}px ${-BLEED}px ${left}px)`;
+}
+
+/**
+ * The clip a sheet's card (its `::before`, reaching `reach` past the sheet's
+ * box at either side) draws: its sides `left` and `right` in from the
+ * sheet's box as its frame's are, with its corners rounded by `radius`, so
+ * they ride the moving edge. Note that the card alone is rounded, since a
+ * rounded rectangle over the row above it would cut the row's corners too,
+ * and that the faint shadow under the card is held off for the motion.
+ */
+function cardClip(left: number, right: number, reach: Edges, radius: number): string {
   const corner = radius + HAIRLINE;
-  const cardTop = top - HAIRLINE;
-  const notch = cardTop - 2 * HAIRLINE;
-  const bottom = height + HAIRLINE;
-  const start = left;
-  const end = width - right;
-  const arc = `A ${corner} ${corner} 0 0 1`;
-  return `path("M ${start} ${-BLEED} H ${end} V ${notch} H ${end - corner} V ${cardTop} ${arc} ${end} ${cardTop + corner} V ${bottom - corner} ${arc} ${end - corner} ${bottom} V ${height + BLEED} H ${start + corner} V ${bottom} ${arc} ${start} ${bottom - corner} V ${cardTop + corner} ${arc} ${start + corner} ${cardTop} V ${notch} H ${start} Z")`;
+  return `inset(${-HAIRLINE}px ${right + reach.right}px ${-HAIRLINE}px ${left + reach.left}px round ${corner}px)`;
 }
 
 /**
  * A sheet's part: its frame from the edges it stood at to its box, each
- * side riding from its old place to its new one. Note that a side that does
- * not move is held at its card's hairline too, rather than clear of its
- * shadow, because what glides inside the sheet would otherwise be drawn past
- * its edge into the gap beside it. A sheet the change narrowed
+ * side riding from its old place to its new one, what it holds clipped
+ * square and its card clipped round, on the one timing. Note that a side
+ * that does not move is held at its card's hairline too, rather than clear
+ * of its shadow, because what glides inside the sheet would otherwise be
+ * drawn past its edge into the gap beside it. A sheet the change narrowed
  * draws its card out to its old edges first (`REACH`), and lets them go
  * with the clip once the motion ends, in the one task, so no frame shows
  * the card past its frame.
@@ -310,19 +313,28 @@ function playSheet(
   const right = now.right - was.right;
   if (Math.abs(left) < STILL && Math.abs(right) < STILL) return;
   if (!(sheet instanceof HTMLElement)) return;
-  const card = getComputedStyle(sheet, "::before");
-  const top = Number.parseFloat(card.top);
-  const radius = Number.parseFloat(card.borderTopLeftRadius);
-  if (card.content === "none" || !Number.isFinite(top) || !Number.isFinite(radius)) return;
-  const frame = (from: number, to: number) =>
-    framePath(now.width, now.height, from - HAIRLINE, to - HAIRLINE, top, radius);
-  if (left < 0) sheet.style.setProperty(REACH.LEFT, `${-left}px`);
-  if (right < 0) sheet.style.setProperty(REACH.RIGHT, `${-right}px`);
-  const motion = sheet.animate([{ clipPath: frame(left, right) }, { clipPath: frame(0, 0) }], {
-    ...timing,
-    fill: "forwards",
-  });
-  sheets.set(sheet, { from: was, to: { left: now.left, right: now.right }, motion });
+  const style = getComputedStyle(sheet, "::before");
+  const radius = Number.parseFloat(style.borderTopLeftRadius);
+  if (style.content === "none" || !Number.isFinite(radius)) return;
+  const reach = { left: Math.max(0, -left), right: Math.max(0, -right) };
+  if (reach.left > 0) sheet.style.setProperty(REACH.LEFT, `${reach.left}px`);
+  if (reach.right > 0) sheet.style.setProperty(REACH.RIGHT, `${reach.right}px`);
+  const options = { ...timing, fill: "forwards" } as const;
+  const motion = sheet.animate(
+    [
+      { clipPath: frameClip(left - HAIRLINE, right - HAIRLINE) },
+      { clipPath: frameClip(-HAIRLINE, -HAIRLINE) },
+    ],
+    options,
+  );
+  const card = sheet.animate(
+    [
+      { clipPath: cardClip(left - HAIRLINE, right - HAIRLINE, reach, radius) },
+      { clipPath: cardClip(-HAIRLINE, -HAIRLINE, reach, radius) },
+    ],
+    { ...options, pseudoElement: "::before" },
+  );
+  sheets.set(sheet, { from: was, to: { left: now.left, right: now.right }, motion, card });
   motion.onfinish = () => stop(sheet, sheets);
 }
 

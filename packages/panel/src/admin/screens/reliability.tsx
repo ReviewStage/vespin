@@ -102,6 +102,7 @@ const AGENT_FAILURE_LABEL = {
   [AGENT_FAILURE.GITHUB]: "GitHub",
   [AGENT_FAILURE.ABANDONED]: "Abandoned by the sweep",
   [AGENT_FAILURE.PROVIDER_KEY]: "Account's own API key",
+  [AGENT_FAILURE.MACHINE_SIGN_IN]: "Machine not signed in",
   [AGENT_FAILURE.NOT_STARTED]: "Never started",
   [AGENT_FAILURE.FAST_ON_OWN_KEY]: "Fast on own key",
   [AGENT_FAILURE.FAST_NOT_ENABLED]: "Fast not enabled",
@@ -110,6 +111,9 @@ const AGENT_FAILURE_LABEL = {
   [AGENT_FAILURE.RUNNER_LOST]: "Runner lost",
   [AGENT_FAILURE.NO_PROGRESS]: "No progress",
   [AGENT_FAILURE.LINE_UNTAKEN]: "Never picked up",
+  [AGENT_FAILURE.PLAN_LIMIT]: "Plan limit, never relaunched",
+  [AGENT_FAILURE.REFUSAL]: "Model refused",
+  [AGENT_FAILURE.CONNECTION_LOST]: "Provider connection lost, never back",
   [AGENT_FAILURE.OTHER]: "Other",
 } as const satisfies Record<AgentFailure, string>;
 

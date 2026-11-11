@@ -1,14 +1,7 @@
 import { Schema as EffectSchema } from "effect";
 import { browserTabsPlaceSchema } from "./agent-browser-tab-wire.js";
 import { agentAgentAnswerSchema } from "./agent-view.js";
-import {
-  AGENT_STATUS,
-  type ListedAgent,
-  listedAgentSchema,
-  localAgentRefusalSchema,
-  type TasklessAgent,
-  tasklessAgentSchema,
-} from "./agent-wire.js";
+import { AGENT_STATUS, listedAgentSchema, localAgentRefusalSchema } from "./agent-wire.js";
 import { agentBrowserTabsContract } from "./contract/agent-browser-tabs.js";
 import { descriptionCommentsContract } from "./contract/description-comments.js";
 import { githubContract } from "./contract/github.js";
@@ -90,8 +83,8 @@ import {
 import {
   formerMemberSchema,
   workspaceCreateRequestSchema,
-  workspaceExperimentSetRequestSchema,
   workspaceDeleteRequestSchema,
+  workspaceExperimentSetRequestSchema,
   workspaceGithubRequestSchema,
   workspaceLeaveRequestSchema,
   workspaceMemberRemovalSchema,
@@ -174,8 +167,6 @@ export type CodeLines = typeof codeLinesSchema.Type;
 export const tasksViewSchema = EffectSchema.Struct({
   /** The account's tasks, newest started first, as the last list read answered. */
   tasks: EffectSchema.Array(taskSummarySchema),
-  /** The agents with no plan in the account's workspaces, newest started first, as the last list read answered; absent before the first that carried them. */
-  tasklessAgents: EffectSchema.optionalKey(EffectSchema.Array(tasklessAgentSchema)),
   /**
    * Every agent on a plan, the archived ones among them, each as its plan's
    * own list names it, with the workspace and repository its own row names,
@@ -239,20 +230,13 @@ export const IDLE_TASKS_VIEW: TasksView = {
 
 /**
  * How many of the agents the view lists are working, starting or running a
- * turn, on a plan or with none. Note that the agents on plans are listed
- * only while the list is followed live, so before then this counts the
- * agents with no plan alone.
+ * turn. Note that the agents are listed only while the list is followed
+ * live, so before then this counts none.
  */
 export function workingAgentCount(view: TasksView): number {
-  const listed = [...(view.taskAgents ?? []), ...(view.tasklessAgents ?? [])];
-  return listed.filter(
+  return (view.taskAgents ?? []).filter(
     (agent) => agent.status === AGENT_STATUS.STARTING || agent.status === AGENT_STATUS.RUNNING,
   ).length;
-}
-
-/** An agent with no plan as a plan's agents are named, with its workspace and repository, which names an automation only where one started it. */
-export function summaryOfTaskless({ automationId, ...agent }: TasklessAgent): ListedAgent {
-  return automationId === null ? agent : { ...agent, automationId };
 }
 
 /**
@@ -343,6 +327,8 @@ export const tasksSetStandingParamsSchema = EffectSchema.Struct({
   assigneeId: EffectSchema.optionalKey(EffectSchema.NullOr(taskAssigneeIdSchema)),
   /** The name the window knows the member assigned by, which the host draws them by until the list carries them; never sent to the service. */
   assigneeName: EffectSchema.optionalKey(EffectSchema.String),
+  /** With a move to Done or Canceled the member confirmed, whether the task's running agents are stopped and archived with it. */
+  stopAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
 }).check(EffectSchema.makeFilter(namesAStanding));
 
 export type TasksSetStandingParams = typeof tasksSetStandingParamsSchema.Type;
@@ -808,19 +794,12 @@ export const tasksPictureKeepAnswerSchema = EffectSchema.Union([
 
 export type TasksPictureKeepAnswer = typeof tasksPictureKeepAnswerSchema.Type;
 
-/** One version of one page, of a plan or of a coding agent on no task, as the frame drawing it names it. */
-export const tasksPageParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    taskId: EffectSchema.NonEmptyString,
-    pageId: EffectSchema.NonEmptyString,
-    version: pageVersionNumberSchema,
-  }),
-  EffectSchema.Struct({
-    agentId: EffectSchema.NonEmptyString,
-    pageId: EffectSchema.NonEmptyString,
-    version: pageVersionNumberSchema,
-  }),
-]);
+/** One version of one page of a task, as the frame drawing it names it. */
+export const tasksPageParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  pageId: EffectSchema.NonEmptyString,
+  version: pageVersionNumberSchema,
+});
 
 export type TasksPageParams = typeof tasksPageParamsSchema.Type;
 
@@ -832,7 +811,7 @@ export const tasksPageAnswerSchema = EffectSchema.Union([
 
 export type TasksPageAnswer = typeof tasksPageAnswerSchema.Type;
 
-/** One plan's pages, or one coding agent's on no task, held by a window while a surface of it draws them. */
+/** One task's pages, held by a window while a surface of it draws them. */
 export const taskPagesFollowSchema = pagePlaceSchema;
 
 /** A page tab's read of one version's source, as the window hears it: its HTML line by line, colored as HTML, or that the service did not answer. */

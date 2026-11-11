@@ -1,8 +1,9 @@
-// [id].tsx -- one task.
+// [id].tsx -- one task's Overview, named by its id or its number, as a link names it.
 
-import { TASKS_PLACEHOLDER } from "../../../placeholders.js";
-import { CollectionDetailScreen } from "../../../screens/collection-screens.js";
+import { TaskScreen } from "../../../screens/task-screens.js";
 
-export default function TaskScreen() {
-  return <CollectionDetailScreen collection={TASKS_PLACEHOLDER} />;
+export { ScreenBoundary as ErrorBoundary } from "../../../screen-boundary.js";
+
+export default function TaskRoute() {
+  return <TaskScreen />;
 }

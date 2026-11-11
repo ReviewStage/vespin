@@ -3,6 +3,7 @@ import { ACCOUNT_WORDS_EXAMPLE } from "./examples/account-words";
 import { ADDRESS_FIELDS_EXAMPLE } from "./examples/address-fields";
 import { ANCHORED_POPOVER_EXAMPLE } from "./examples/anchored-popover";
 import { ANNOUNCER_EXAMPLE } from "./examples/announcer";
+import { APPROVAL_ACTIONS_EXAMPLE } from "./examples/approval-actions";
 import { ARRIVALS_EXAMPLE } from "./examples/arrivals";
 import { ARTWORK_EXAMPLE } from "./examples/artwork";
 import { ATTACHMENT_CHIPS_EXAMPLE } from "./examples/attachment-chips";
@@ -20,6 +21,7 @@ import { CALENDAR_EXAMPLE } from "./examples/calendar";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
 import { CHECKBOXES_EXAMPLE } from "./examples/checkboxes";
+import { CHIP_POPOVERS_EXAMPLE } from "./examples/chip-popovers";
 import { CHIPS_EXAMPLE } from "./examples/chips";
 import { CHOICE_BAR_EXAMPLE } from "./examples/choice-bar";
 import { CHOICE_LIST_EXAMPLE } from "./examples/choice-list";
@@ -44,6 +46,7 @@ import { DEVICE_CODE_STEPS_EXAMPLE } from "./examples/device-code-steps";
 import { DIALOG_ACTIONS_EXAMPLE } from "./examples/dialog-actions";
 import { DIALOGS_EXAMPLE } from "./examples/dialogs";
 import { DISCLOSURES_EXAMPLE } from "./examples/disclosures";
+import { DRAFT_CARDS_EXAMPLE } from "./examples/draft-cards";
 import { DRAWER_SWIPES_EXAMPLE } from "./examples/drawer-swipes";
 import { DROP_SLOTS_EXAMPLE } from "./examples/drop-slots";
 import { EDITABLE_DOCUMENT_EXAMPLE } from "./examples/editable-document";
@@ -76,7 +79,6 @@ import { LIST_ROW_EXAMPLE } from "./examples/list-row";
 import { LOADING_INDICATORS_EXAMPLE } from "./examples/loading-indicators";
 import { MARKDOWN_EXAMPLE } from "./examples/markdown";
 import { MENU_EXAMPLE } from "./examples/menu";
-import { MENU_KEYS_EXAMPLE } from "./examples/menu-keys";
 import { MENU_SECTIONS_EXAMPLE } from "./examples/menu-sections";
 import { MESSAGES_EXAMPLE } from "./examples/messages";
 import { MORE_BUTTONS_EXAMPLE } from "./examples/more-buttons";
@@ -107,6 +109,7 @@ import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
 import { REPOSITORIES_EXAMPLE } from "./examples/repositories";
 import { RESIZE_EDGES_EXAMPLE } from "./examples/resize-edges";
+import { RESOURCES_POPOVERS_EXAMPLE } from "./examples/resources-popovers";
 import { REVEALS_EXAMPLE } from "./examples/reveals";
 import { ROLLING_NUMBER_EXAMPLE } from "./examples/rolling-number";
 import { ROVING_KEYS_EXAMPLE } from "./examples/roving-keys";
@@ -118,6 +121,7 @@ import { SEARCH_MATCHES_EXAMPLE } from "./examples/search-matches";
 import { SEARCHABLE_MENU_EXAMPLE } from "./examples/searchable-menu";
 import { SECRET_FIELDS_EXAMPLE } from "./examples/secret-fields";
 import { SELECTION_EXAMPLE } from "./examples/selection";
+import { SETTINGS_ORDERED_ROWS_EXAMPLE } from "./examples/settings-ordered-rows";
 import { SETTINGS_PAGE_EXAMPLE } from "./examples/settings-page";
 import { SETTINGS_ROW_EXAMPLE } from "./examples/settings-row";
 import { SETTINGS_SECTION_EXAMPLE } from "./examples/settings-section";
@@ -163,6 +167,7 @@ export const EXAMPLES: readonly Example[] = [
   ARTWORK_EXAMPLE,
   ANCHORED_POPOVER_EXAMPLE,
   ANNOUNCER_EXAMPLE,
+  APPROVAL_ACTIONS_EXAMPLE,
   ARRIVALS_EXAMPLE,
   TYPOGRAPHY_EXAMPLE,
   LAYOUT_EXAMPLE,
@@ -188,8 +193,9 @@ export const EXAMPLES: readonly Example[] = [
   BLOCK_LISTS_EXAMPLE,
   COMPOSER_FRAMES_EXAMPLE,
   COMPOSER_FOOTS_EXAMPLE,
+  CHIP_POPOVERS_EXAMPLE,
+  RESOURCES_POPOVERS_EXAMPLE,
   CHIPS_EXAMPLE,
-  MENU_KEYS_EXAMPLE,
   BAR_ITEMS_EXAMPLE,
   CHOICE_BAR_EXAMPLE,
   CHOICE_LIST_EXAMPLE,
@@ -209,6 +215,7 @@ export const EXAMPLES: readonly Example[] = [
   DIALOGS_EXAMPLE,
   DIALOG_ACTIONS_EXAMPLE,
   DISCLOSURES_EXAMPLE,
+  DRAFT_CARDS_EXAMPLE,
   DRAWER_SWIPES_EXAMPLE,
   DROP_SLOTS_EXAMPLE,
   EMAIL_CHIPS_EXAMPLE,
@@ -294,6 +301,7 @@ export const EXAMPLES: readonly Example[] = [
   SKELETONS_EXAMPLE,
   SLIDER_EXAMPLE,
   VIDEO_PLAYER_EXAMPLE,
+  SETTINGS_ORDERED_ROWS_EXAMPLE,
   SETTINGS_ROW_EXAMPLE,
   ACCOUNT_WORDS_EXAMPLE,
   AUTH_PAGE_EXAMPLE,

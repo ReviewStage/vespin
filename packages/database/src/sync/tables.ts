@@ -23,12 +23,15 @@
  * declared logged once for every read that follows it by deltas.
  */
 
+import { accountSound, accountSoundChoice } from "../schemas/account-sound.js";
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
+import { agentApproval } from "../schemas/agent-approval.js";
+import { agentBootTable } from "../schemas/agent-boot.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentQueue } from "../schemas/agent-queue.js";
-import { agentRead } from "../schemas/agent-read.js";
+import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { attachment } from "../schemas/attachment.js";
 import { invitation, member, organization, user } from "../schemas/auth.js";
 import { automation, automationRun } from "../schemas/automation.js";
@@ -60,7 +63,7 @@ import { taskBlock } from "../schemas/task-block.js";
 import { taskPageVersion } from "../schemas/task-page.js";
 import { taskPin } from "../schemas/task-pin.js";
 import { taskRead } from "../schemas/task-read.js";
-import { agentSectionEntry, taskSection, taskSectionEntry } from "../schemas/task-section.js";
+import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
 import { TOPIC } from "./notification.js";
@@ -138,6 +141,69 @@ export const agentPullRequestSync = defineSyncTable(agentPullRequest, {
       through: agentTable,
       key: agentTable.id,
       by: agentPullRequest.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/**
+ * A tool call an agent's runner held for a member's answer, on its agent's
+ * topic and, through its agent, that agent's task's and workspace's, so the
+ * task list hears an ask arrive and settle as it hears the agent move. Note
+ * that what the ask says is watched though it is written once as the ask
+ * lands, because the task list's live read carries it.
+ */
+export const agentApprovalSync = defineSyncTable(agentApproval, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentApproval.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentApproval.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/**
+ * A cloud agent's sandbox, on its agent's topic and, through its agent, that
+ * agent's task's and workspace's, so the task list hears it boot, come up,
+ * and go as it hears the agent move. A sandbox in use moves its last use at
+ * most once a minute (`../models/agent-sandboxes.ts`), so every write is
+ * logged.
+ */
+export const agentSandboxSync = defineSyncTable(agentSandboxTable, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentSandboxTable.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentSandboxTable.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/** An agent's first launch, on the agent's topic, its task's, and its workspace's, as its sandbox's row is. */
+export const agentBootSync = defineSyncTable(agentBootTable, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentBootTable.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentBootTable.agentId,
       topics: [
         { kind: TOPIC.TASK, column: agentTable.taskId },
         { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
@@ -301,11 +367,6 @@ export const taskSectionEntrySync = defineSyncTable(taskSectionEntry, {
   topics: [{ kind: TOPIC.ACCOUNT, column: taskSectionEntry.userId }],
 });
 
-/** An agent with no task an account keeps in one of its sections, on the account's topic. */
-export const agentSectionEntrySync = defineSyncTable(agentSectionEntry, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: agentSectionEntry.userId }],
-});
-
 /** A repository an account pinned to its sidebar, on the account's topic. */
 export const repositoryPinSync = defineSyncTable(repositoryPin, {
   topics: [{ kind: TOPIC.ACCOUNT, column: repositoryPin.userId }],
@@ -317,7 +378,7 @@ export const taskPinSync = defineSyncTable(taskPin, {
   log: LOG.EVERY,
 });
 
-/** An agent with no task an account pinned, on the account's topic. */
+/** An agent an account pinned, on the account's topic. */
 export const agentPinSync = defineSyncTable(agentPin, {
   topics: [{ kind: TOPIC.ACCOUNT, column: agentPin.userId }],
   log: LOG.EVERY,
@@ -326,12 +387,6 @@ export const agentPinSync = defineSyncTable(agentPin, {
 /** How far an account read a task, or that it marked it unread, on the account's topic. */
 export const taskReadSync = defineSyncTable(taskRead, {
   topics: [{ kind: TOPIC.ACCOUNT, column: taskRead.userId }],
-  log: LOG.EVERY,
-});
-
-/** How far an account read an agent with no task, or that it marked it unread, on the account's topic. */
-export const agentReadSync = defineSyncTable(agentRead, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: agentRead.userId }],
   log: LOG.EVERY,
 });
 
@@ -361,6 +416,23 @@ export const accountPreferenceSync = defineSyncTable(accountPreference, {
     accountPreference.runsOnDeviceId,
     accountPreference.updatedAt,
   ],
+});
+
+/**
+ * A sound the account keeps of its own, on the account's topic, which the
+ * account's preferences read is woken on, so a sound added, renamed, or
+ * removed on one device is listed on every other. Note that its bytes are
+ * ignored, because they are written only with the row, whose arrival
+ * notifies, and never change after.
+ */
+export const accountSoundSync = defineSyncTable(accountSound, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountSound.userId }],
+  ignore: [accountSound.bytes, accountSound.byteCount],
+});
+
+/** Which sound one of the account's two sounds plays, on the account's topic, which the same read is woken on. */
+export const accountSoundChoiceSync = defineSyncTable(accountSoundChoice, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountSoundChoice.userId }],
 });
 
 /**
@@ -502,9 +574,9 @@ export const inboxItemReadSync = defineSyncTable(inboxItemRead, {
 
 /**
  * A file or a picture, on its task's topic and, for an inbox item's, the
- * item's agent's. Note that its bytes are ignored, because only what the
- * row says of them is read live, and an update comparing them would weigh
- * every row's bytes.
+ * item's agent's. Note that its bytes, and a recording's MP4 copy, are
+ * ignored, because only what the row says of them is read live, and an
+ * update comparing them would weigh every row's bytes.
  */
 export const attachmentSync = defineSyncTable(attachment, {
   topics: [
@@ -516,7 +588,7 @@ export const attachmentSync = defineSyncTable(attachment, {
       topics: [{ kind: TOPIC.AGENT, column: inboxItem.agentId }],
     },
   ],
-  ignore: [attachment.bytes],
+  ignore: [attachment.bytes, attachment.mp4Bytes],
   log: LOG.EVERY,
 });
 
@@ -753,6 +825,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskBlockSync,
   agentSync,
   agentPullRequestSync,
+  agentApprovalSync,
   memberSync,
   userSync,
   deviceSync,
@@ -767,17 +840,19 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   githubRepositoryReadSync,
   taskSectionSync,
   taskSectionEntrySync,
-  agentSectionEntrySync,
   repositoryPinSync,
   taskPinSync,
   agentPinSync,
   taskReadSync,
-  agentReadSync,
   macCommandSync,
   accountPreferenceSync,
+  accountSoundSync,
+  accountSoundChoiceSync,
   integrationConnectionSync,
   runnerLineSync,
   agentQueueSync,
+  agentSandboxSync,
+  agentBootSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

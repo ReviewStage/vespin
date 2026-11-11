@@ -352,6 +352,14 @@ export const turns = pgTable(
      */
     leaseUntil: timestamptz("lease_until"),
     /**
+     * When the usage limit an open turn waits on resets: it hit a limit with
+     * every subscription of its starter's at one and no API key to pay, so it
+     * is held open until then, its deadline pushed past it, and the minute
+     * sweep clears it and runs the turn again once it has passed
+     * (`../models/turn-state.ts`). Null for a turn waiting on nothing.
+     */
+    waitsUntil: timestamptz("waits_until"),
+    /**
      * The attempt the turn runs under: the launch of the runner that took it
      * (`agent.runner_launch`), set as it starts, 0 until then and for a turn
      * no launch runs. Every move of an open turn compares it, so a runner a
@@ -377,6 +385,20 @@ export const turns = pgTable(
     fastRefused: boolean("fast_refused").notNull().default(false),
     /** How many notes a native coding agent's turn has taken on its plan over our MCP server, reserved before each save (`edit_description`'s per-turn cap); the retired runtime kept its own count in its session. */
     descriptionNotesTaken: integer("description_notes_taken").notNull().default(0),
+    /**
+     * The agent's checkout as it stood before the turn, recorded by its
+     * runner as it took the turn's first line (`@repo/agent-runner`'s
+     * `checkout-snapshot.ts`): the snapshot commit, under a ref of the
+     * checkout's own named for that line, `HEAD` then, and the branch
+     * checked out then. Null for a turn a running turn's line joined, one
+     * whose checkout could not be recorded, and one from before the columns;
+     * `snapshot_head` null too in a repository with no commits yet, and
+     * `snapshot_branch` on a detached `HEAD`. A rewind to before the turn
+     * puts the checkout back to it (`coder-host/rewind.ts`).
+     */
+    snapshotCommit: text("snapshot_commit"),
+    snapshotHead: text("snapshot_head"),
+    snapshotBranch: text("snapshot_branch"),
   },
   (table) => [
     index("turns_by_user").on(table.userId),

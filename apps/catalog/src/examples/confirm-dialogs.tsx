@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { archiveStopWords, SETTLED_STATUS, settleStopWords } from "@repo/features/tasks-model";
 import {
   BUTTON_VARIANT,
   Button,
@@ -30,7 +31,8 @@ import { CatalogSection } from "../section";
  * lands, one in the accent for an act that can be undone but reaches someone
  * else, a long one, one that asks for a field to be filled, and one gated on
  * the subject's name, and one offering an other way on between Cancel and
- * the act. Only an act past undoing is red. A question asked
+ * the act, and those that stop running agents: a task set at Done or
+ * Canceled, and an agent archived. Only an act past undoing is red. A question asked
  * inside a dialog about what it holds asks at that dialog's foot instead
  * (`FootQuestion`): a key's Remove, refused the first time.
  */
@@ -302,6 +304,30 @@ function ConfirmDialogs(): React.JSX.Element {
           <ConfirmConsequences lines={["Grace Hopper and Alan Turing joined it."]} />
         </Asking>
         <KeyInADialog />
+        <Asking
+          label="Mark done…"
+          question={{
+            ...settleStopWords(SETTLED_STATUS.DONE),
+            running: "Stopping agents",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
+          }}
+        />
+        <Asking
+          label="Cancel task…"
+          question={{
+            ...settleStopWords(SETTLED_STATUS.CANCELED),
+            running: "Stopping agents",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
+          }}
+        />
+        <Asking
+          label="Archive agent…"
+          question={{
+            ...archiveStopWords(false),
+            running: "Stopping and archiving",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
+          }}
+        />
       </Inline>
     </CatalogSection>
   );

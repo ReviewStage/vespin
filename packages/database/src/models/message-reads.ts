@@ -4,6 +4,7 @@ import {
   type SchemaPath,
   type SchemaRead,
   type SchemaRefusal,
+  TURN_OPEN,
   TURN_ORIGIN,
   TURN_STATUS,
   unparsedWire,
@@ -12,6 +13,7 @@ import {
 } from "@repo/wire";
 import {
   readStoredUIMessages,
+  SESSION_CLEARED_PART,
   type StoredUIMessage,
   UNREGISTERED_TOOL_PART,
 } from "@repo/wire/ui-messages";
@@ -22,6 +24,7 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
   isNotNull,
   lt,
@@ -410,6 +413,57 @@ export function listMessagesBefore(
   );
 }
 
+const findMessagesFrom = SqlSchema.findAll({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    userId: Schema.String,
+    from: Schema.Number,
+    limit: Schema.Number,
+  }),
+  Result: SelectedMessageRowSchema,
+  execute: (options) =>
+    Database.use((db) =>
+      db
+        .select(MESSAGE_FIELDS)
+        .from(messages)
+        .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
+        .where(
+          and(
+            eq(messages.conversationId, options.conversationId),
+            eq(messages.userId, options.userId),
+            gte(messages.seq, options.from),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(options.limit),
+    ),
+});
+
+/**
+ * The oldest messages at or above a sequence, every role and finished or
+ * not, as each now stands, oldest first: a page of a transcript read on
+ * from a place in it, `from` the sequence to start at. A page holds at most
+ * `limit` rows, and fewer only once nothing more stands above. A
+ * conversation that no longer stands, or another account's, answers none.
+ */
+export function listMessagesFrom(
+  userId: string,
+  conversationId: string,
+  tools: ToolSet,
+  from: number,
+  limit?: number,
+): Effect.Effect<MessageListRead, StoreFailure, DatabaseServices> {
+  return Effect.flatMap(
+    findMessagesFrom({
+      conversationId,
+      userId,
+      from,
+      limit: pageLimit({ ...(limit === undefined ? undefined : { limit }) }),
+    }),
+    (selected) => readSelected(selected, tools),
+  );
+}
+
 const findMessageSeq = SqlSchema.findOneOption({
   Request: Schema.Struct({
     conversationId: Schema.String,
@@ -651,7 +705,7 @@ const findRunningChildTurns = SqlSchema.findAll({
           and(
             eq(conversations.parentConversationId, options.parentConversationId),
             eq(conversations.userId, options.userId),
-            inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+            inArray(turns.status, [...TURN_OPEN]),
           ),
         )
         .orderBy(asc(turns.id)),
@@ -668,56 +722,28 @@ export function runningChildTurns(
   );
 }
 
-const findNewestJournals = SqlSchema.findAll({
-  Request: Schema.Struct({
-    conversationId: Schema.String,
-    userId: Schema.String,
-    limit: Schema.Number,
-  }),
-  Result: SelectedMessageRowSchema,
-  execute: (options) =>
-    Database.use((db) =>
-      db
-        .select(MESSAGE_FIELDS)
-        .from(messages)
-        .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
-        .where(
-          and(
-            eq(messages.conversationId, options.conversationId),
-            eq(messages.userId, options.userId),
-            eq(messages.role, MESSAGE_ROLE.ASSISTANT),
-          ),
-        )
-        .orderBy(desc(messages.seq))
-        .limit(options.limit),
-    ),
-});
-
-/**
- * The newest turn journals of a conversation, answered oldest first: each
- * turn's assistant message, a journal still being written included, which is
- * how a subagent's session is read while it runs. Answers an empty page for
- * a conversation that has none or does not stand.
- */
-export function listJournals(
-  userId: string,
-  conversationId: string,
-  tools: ToolSet,
-  limit: number,
-): Effect.Effect<MessageListRead, StoreFailure, DatabaseServices> {
-  return Effect.flatMap(
-    findNewestJournals({ conversationId, userId, limit: pageLimit({ limit }) }),
-    (selected) => readSelected([...selected].reverse(), tools),
+/** The last `tail` of a message's parts, in order, cut out of the jsonb where it is stored, so a reader after the newest parts alone never carries the whole array out. */
+function partsTail(tail: number) {
+  return sql`(select coalesce(jsonb_agg(tail.part order by tail.place), '[]'::jsonb) from jsonb_array_elements(${messages.parts}) with ordinality as tail(part, place) where tail.place > jsonb_array_length(${messages.parts}) - ${tail})`.mapWith(
+    messages.parts,
   );
 }
 
 const findNewestJournalOf = SqlSchema.findAll({
-  Request: Schema.Struct({ conversationIds: Schema.Array(Schema.String) }),
+  Request: Schema.Struct({
+    conversationIds: Schema.Array(Schema.String),
+    tailParts: Schema.optional(Schema.Int),
+  }),
   Result: SelectedMessageRowSchema,
-  execute: ({ conversationIds }) =>
+  execute: ({ conversationIds, tailParts }) =>
     Database.use((db) =>
       db
-        .selectDistinctOn([messages.conversationId], MESSAGE_FIELDS)
+        .selectDistinctOn(
+          [messages.conversationId],
+          tailParts === undefined
+            ? MESSAGE_FIELDS
+            : { ...MESSAGE_FIELDS, parts: partsTail(tailParts) },
+        )
         .from(messages)
         .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
         .where(
@@ -732,26 +758,30 @@ const findNewestJournalOf = SqlSchema.findAll({
 
 /**
  * The newest turn journal of each conversation named, whoever owns it, keyed
- * by conversation: `listJournals`' newest for many at once. A conversation
- * with none, or whose journal does not read, is absent. Only for ids a gate
- * already read, as `latestTurnsOfReached`.
+ * by conversation: `listJournals`' newest for many at once, or only the last
+ * `tailParts` of each one's parts where that is all its reader looks at. A
+ * conversation with none, or whose journal does not read, is absent. Only for
+ * ids a gate already read, as `latestTurnsOfReached`.
  */
 export function newestJournalsOfReached(
   conversationIds: readonly string[],
   tools: ToolSet,
+  tailParts?: number,
 ): Effect.Effect<ReadonlyMap<string, StoredMessageRecord>, StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.succeed(new Map());
-  return Effect.flatMap(findNewestJournalOf({ conversationIds }), (selected) =>
-    // Note that each row is read on its own, so one unreadable journal leaves out its conversation alone.
-    Effect.map(
-      Effect.forEach(selected, (row) => readSelected([row], tools)),
-      (reads) =>
-        new Map(
-          reads
-            .flatMap((read) => (read.ok ? read.value : []))
-            .map((record) => [record.conversationId, record]),
-        ),
-    ),
+  return Effect.flatMap(
+    findNewestJournalOf({ conversationIds, ...optionalField("tailParts", tailParts) }),
+    (selected) =>
+      // Note that each row is read on its own, so one unreadable journal leaves out its conversation alone.
+      Effect.map(
+        Effect.forEach(selected, (row) => readSelected([row], tools)),
+        (reads) =>
+          new Map(
+            reads
+              .flatMap((read) => (read.ok ? read.value : []))
+              .map((record) => [record.conversationId, record]),
+          ),
+      ),
   );
 }
 
@@ -854,6 +884,8 @@ export interface LatestTurn {
   readonly settledAt: Date | null;
   /** The deadline of the state it stands in while it is queued or runs (`turn-state.ts`); null for a turn from before the deadline. Optional, so a turn built by hand in a test need not name it. */
   readonly leaseUntil?: Date | null;
+  /** When the usage limit an open turn is held for resets (`turns.waits_until`); null where it waits on none. Optional as `leaseUntil` is. */
+  readonly waitsUntil?: Date | null;
   /** What the turn ran under and what it cost, as the row holds them; null where the row names no model, and until the turn settles. */
   readonly model: string | null;
   readonly usage: StoredTurnUsage | null;
@@ -874,6 +906,7 @@ const LatestTurnRowSchema = Schema.Struct({
   settledAt: Schema.NullOr(InstantColumnSchema),
   /** The deadline of the state it stands in while it is open (`turn-state.ts`); null for a turn from before the deadline. */
   leaseUntil: Schema.NullOr(InstantColumnSchema),
+  waitsUntil: Schema.NullOr(InstantColumnSchema),
   model: Schema.NullOr(Schema.String),
   usage: Schema.NullOr(TurnUsageColumnSchema),
   fastRefused: Schema.Boolean,
@@ -904,6 +937,7 @@ const findLatestTurns = SqlSchema.findAll({
           startedAt: turns.startedAt,
           settledAt: turns.settledAt,
           leaseUntil: turns.leaseUntil,
+          waitsUntil: turns.waitsUntil,
           model: turns.model,
           usage: turns.usage,
           fastRefused: turns.fastRefused,
@@ -1023,6 +1057,38 @@ export function turnStoppedUnderReached(
   key: string,
 ): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
   return Effect.map(findTurnStoppedUnder({ conversationId, key }), (rows) => rows.length > 0);
+}
+
+const findSessionClearedMark = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.userId, userId),
+            eq(messages.conversationId, conversationId),
+            sql`${messages.parts} @> ${JSON.stringify([{ type: SESSION_CLEARED_PART }])}::jsonb`,
+          ),
+        )
+        .limit(1),
+    ),
+});
+
+/**
+ * Whether the account's conversation holds the mark of a session let go
+ * (`/clear`, `markSessionCleared`): past it, the conversation's harness
+ * session is its own, never the one a continued or forked agent started
+ * from.
+ */
+export function holdsSessionClearedMark(target: {
+  readonly userId: string;
+  readonly conversationId: string;
+}): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
+  return Effect.map(findSessionClearedMark(target), (rows) => rows.length > 0);
 }
 
 /**

@@ -15,7 +15,9 @@ import { ANNOUNCE } from "../announcer/announcer.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
+import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
 /**
@@ -28,9 +30,16 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * that was refused is one the developer believes landed. The row is its own inline-size
  * container, so where its controls stand is decided by the row's width and
  * not the window's: at any width they stay on the name's line while the
- * words keep a legible stretch beside them, and drop below the words to the
- * row's end wherever they would leave the words less; under 380px the name
- * keeps to one line, fading where it is cut, so only the description wraps.
+ * words keep a legible stretch beside them, and drop below the words,
+ * starting where the words start, wherever they would leave the words less;
+ * under 380px the name keeps to one line, fading where it is cut, so only
+ * the description wraps.
+ *
+ * What the row ends in, its ⋯, a fold's chevron, a dismiss, is its `end`:
+ * quiet presses a glyph wide that stand last on the name's line at any
+ * width, centered on the row, as a phone's list keeps a cell's chevron, so
+ * a row whose controls drop keeps its end where every other row's stands
+ * rather than carrying it down with them.
  * The row owns its padding, the least height its profile gives a row (the
  * window's rows stand even whether or not they carry a description), and the
  * room between its parts; its edges and the rules between rows are its
@@ -54,7 +63,7 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * narrow as a card's row does, but at a list's tighter block inset and least
  * height and with its label at body weight.
  *
- * What rides the label's line without being its name, a Modified word or a
+ * What rides the label's line without being its name, a Saved tick or a
  * mark that something needs a hand, is the row's `adornment`: it stands after
  * the label, a short step off it, and the label alone still names the
  * control. What the row itself grows under its line, a control that needs
@@ -157,6 +166,24 @@ export interface SettingsRowControl {
 const ADORNED_TITLE_CLASS = "[&>.ui-badge:not([data-fill])]:flex-none";
 
 /**
+ * The line of a row with no end, which holds its words and controls itself,
+ * and the box that holds them beside a row's end; each wrapping where the
+ * row is compact. Note that a row with no end stands its words and controls
+ * straight in its line rather than in a box of their own, because a level
+ * more under every row is a level more that every ancestor walk, a reader's
+ * and a test's, climbs through for each control.
+ */
+const LINE_CLASS = {
+  WRAPPING: "ui-settings-row-line ui-settings-row-main flex flex-wrap items-center",
+  PLAIN: "ui-settings-row-line ui-settings-row-main flex items-center",
+} as const;
+
+const MAIN_CLASS = {
+  WRAPPING: "ui-settings-row-main flex min-w-0 flex-1 flex-wrap items-center",
+  PLAIN: "ui-settings-row-main flex min-w-0 flex-1 items-center",
+} as const;
+
+/**
  * The label's type at each density: a setting's name at a label's weight, a
  * reference list's line at the body's, since it is read rather than set.
  */
@@ -209,13 +236,14 @@ export function SettingsRow({
   controls = SETTINGS_ROW_CONTROLS.DROP,
   landed = false,
   children,
+  end,
   below,
 }: {
   label: ReactNode;
   description?: ReactNode;
   /** The face or mark the row leads with, before its words, where it stands for something of its own. */
   leading?: ReactNode;
-  /** What rides the label's line after it without naming the control: a Modified word, a mark. */
+  /** What rides the label's line after it without naming the control: a Saved tick, a mark. */
   adornment?: ReactNode;
   /** What went wrong with the last write, and the failure beneath it, or nothing while none did. */
   error?: ShownError | undefined;
@@ -231,8 +259,10 @@ export function SettingsRow({
   controls?: SettingsRowControls | undefined;
   /** Whether the row just arrived, which lights it once. */
   landed?: boolean | undefined;
-  /** The row's controls at its end, handed the row's ids to name and describe them by. */
+  /** The row's controls, handed the row's ids to name and describe them by; they drop below the words where they would leave them less than a legible stretch. */
   children?: ((control: SettingsRowControl) => ReactNode) | undefined;
+  /** What the row ends in at any width, on its name's line after its controls: its ⋯, a fold's chevron, a dismiss. */
+  end?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** What the row grows under its words and owns alone, handed the same ids; never a page's layout. */
   below?: ((control: SettingsRowControl) => ReactNode) | undefined;
 }): React.JSX.Element {
@@ -258,6 +288,31 @@ export function SettingsRow({
       {label}
     </RowLabel>
   );
+  // Note that a compact row's controls wrap below its words only where they cannot fit at all, so its line wraps as plainly as it can.
+  const wraps = density === SETTINGS_ROW_DENSITY.COMPACT;
+  const words = (
+    <>
+      <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
+        {led ? (
+          <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
+            {leading}
+          </ItemMedia>
+        ) : null}
+        <ItemContent>
+          {said(adornment) ? (
+            <ItemTitle className={ADORNED_TITLE_CLASS}>
+              {name}
+              {adornment}
+            </ItemTitle>
+          ) : (
+            name
+          )}
+          {described ? <ItemDescription id={descriptionId}>{description}</ItemDescription> : null}
+        </ItemContent>
+      </div>
+      <ItemActions>{children?.(control)}</ItemActions>
+    </>
+  );
   return (
     <div
       className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent"
@@ -266,38 +321,20 @@ export function SettingsRow({
       data-indent={indent}
       data-labels-control={labelsControl}
       data-controls={controls}
+      data-led={led}
       {...landedMark(landed, LANDED.WITHIN)}
     >
       <Item size={density} className={indent === SETTINGS_ROW_INDENT.MARK ? "ps-0" : undefined}>
-        <div
-          className={
-            density === SETTINGS_ROW_DENSITY.COMPACT
-              ? "ui-settings-row-line flex flex-wrap items-center"
-              : "ui-settings-row-line flex items-center"
-          }
-        >
-          <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
-            {led ? (
-              <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
-                {leading}
-              </ItemMedia>
-            ) : null}
-            <ItemContent>
-              {said(adornment) ? (
-                <ItemTitle className={ADORNED_TITLE_CLASS}>
-                  {name}
-                  {adornment}
-                </ItemTitle>
-              ) : (
-                name
-              )}
-              {described ? (
-                <ItemDescription id={descriptionId}>{description}</ItemDescription>
-              ) : null}
-            </ItemContent>
+        {end === undefined ? (
+          <div className={wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN}>{words}</div>
+        ) : (
+          <div className="ui-settings-row-line flex items-center">
+            <div className={wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN}>{words}</div>
+            <div className="ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden">
+              {end(control)}
+            </div>
           </div>
-          <ItemActions>{children?.(control)}</ItemActions>
-        </div>
+        )}
         {below === undefined ? null : (
           <div
             className={
@@ -321,6 +358,48 @@ export function SettingsRowMark({ children }: { children: ReactNode }): React.JS
   return (
     <span className="ui-settings-row-mark grid size-settings-row-mark flex-none place-items-center">
       {children}
+    </span>
+  );
+}
+
+/**
+ * How much of a whole a row's subject has used, as a thin bar under its
+ * state line in its description: a plan's share of its usage window. The
+ * words beside it say the same, so the bar is their picture alone. It hangs
+ * below the words into room the row keeps for it (`settings-row.css`), so
+ * the row's mark and end stay centered on its name and state as on every
+ * other row, and its padding below the bar matches its padding above the
+ * name.
+ */
+export function SettingsRowMeter({
+  value,
+  tone,
+}: {
+  /** The share used, in percent. */
+  value: number;
+  tone?: ProgressTone | undefined;
+}): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-meter mt-ui-8 block">
+      <Progress value={value} tone={tone} size={PROGRESS_SIZE.THIN} />
+    </span>
+  );
+}
+
+/** How much of each of its usage windows a row's plan has used, as meters under its state line (`UsageMeters`). */
+export function SettingsRowUsage({
+  rows,
+  heard,
+  alignWith,
+}: {
+  rows: readonly UsageMeterRow[];
+  heard?: string | undefined;
+  /** Every row of the meters in the rows around it, which these line up with as one table (`UsageMeters`). */
+  alignWith?: readonly UsageMeterRow[] | undefined;
+}): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-usage mt-ui-6 block">
+      <UsageMeters rows={rows} heard={heard} alignWith={alignWith} />
     </span>
   );
 }
@@ -397,6 +476,17 @@ export function SettingsRowActSlot(): React.JSX.Element {
   return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;
 }
 
+/**
+ * A row's control standing in for presses not yet shown: no wider than
+ * nothing, but as tall as a control, so the row's line already stands as tall
+ * as the Discard and Save an edit will bring, and their arrival moves nothing.
+ */
+export function SettingsRowControlHold(): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-control-hold h-control w-0 flex-none" aria-hidden="true" />
+  );
+}
+
 /** What is true of a saved credential, on one muted line beside its presses: its hint, its login, its status, wrapping between facts, never inside one. */
 export function SettingsFacts({
   gap = GAP.CONTROL,
@@ -417,15 +507,6 @@ export function SettingsSavedMark(): React.JSX.Element {
   return (
     <span className="ui-settings-saved-mark inline-flex text-complete in-[.ui-button]:ml-ui-4">
       <CheckIcon />
-    </span>
-  );
-}
-
-/** The word beside a row's name while its value differs from the default: a fact about a preference, never an urgency. */
-export function SettingsChangedMark(): React.JSX.Element {
-  return (
-    <span className="ui-settings-changed-mark text-caption leading-tag font-tag text-muted-foreground">
-      Modified
     </span>
   );
 }

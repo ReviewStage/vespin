@@ -1,6 +1,7 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import type { Workspace } from "@repo/features/workspace-wire";
+import { workspaceExperimentChoices } from "@repo/host/app-state-reads";
 import {
   EXPERIMENT,
   type Experiment,
@@ -18,7 +19,6 @@ import {
 } from "@repo/settings/settings-views";
 import type { AppSettingsView } from "@repo/settings/wire";
 import type { SettingsSearchInput } from "../settings-search.js";
-import { workspaceExperimentChoices } from "../workspace-experiments.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
@@ -38,14 +38,13 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  */
 const PAGE_CAPABILITY = {
   [SETTINGS_VIEW.ACCOUNT]: null,
+  [SETTINGS_VIEW.PREFERENCES]: null,
   [SETTINGS_VIEW.WORKSPACE]: null,
   [SETTINGS_VIEW.ENVIRONMENT]: null,
-  [SETTINGS_VIEW.CLOUD_SETUP]: null,
   [SETTINGS_VIEW.AGENTS]: null,
   [SETTINGS_VIEW.HOSTS]: null,
   [SETTINGS_VIEW.INTEGRATIONS]: null,
   [SETTINGS_VIEW.MCP]: null,
-  [SETTINGS_VIEW.CLI]: null,
   [SETTINGS_VIEW.SKILLS]: null,
   [SETTINGS_VIEW.MEMORY]: null,
   [SETTINGS_VIEW.APPEARANCE]: null,

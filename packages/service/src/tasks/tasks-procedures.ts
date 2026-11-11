@@ -17,7 +17,7 @@
  * a link naming it by its number in its workspace (`task-number-store.ts`). Its
  * `DELETE` stops every coding agent of the plan first, through the one Stop
  * (`packages/service/src/agents/coder-host/stop.ts`), and only then deletes
- * the plan.
+ * the plan, as every door deletes one (`task-delete.ts`).
  * Each row of the list carries what the plan's coding agents are doing and
  * what they published, in brief, where it has any
  * (`packages/service/src/agents/task-agents.ts`). A pin is a change like a
@@ -53,7 +53,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { listAgents, readAgentByKey } from "@repo/database/models/agent-store";
+import { readAgentByKey } from "@repo/database/models/agent-store";
 import { listRevisions, readRevision } from "@repo/database/models/description-revisions";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { keepRunsOnPick } from "@repo/database/models/runs-on-pick";
@@ -69,7 +69,6 @@ import {
 } from "@repo/database/models/task-block-store";
 import { taskIdOfNumber } from "@repo/database/models/task-number-store";
 import {
-  deleteTaskCommitted,
   listTasks,
   readTask,
   readTaskDescription,
@@ -97,13 +96,11 @@ import {
 import { Effect, Option } from "effect";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import { type StartReach, startRequestedAgent } from "../agents/coder-host/start.js";
-import { everyStoppedForGood, summaryOf } from "../agents/coder-host/stop.js";
+import { summaryOf } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { retiredBeforeDelete, retiringReach } from "../agents/retire-sessions.js";
 import type { SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import type { TypedTurn } from "../agents/sessions/agent-sessions.js";
-import { listTasklessAgents, withTaskAgents } from "../agents/task-agents.js";
-import { TASK_LIST_ARCHIVED } from "../core.js";
+import { withTaskAgents } from "../agents/task-agents.js";
 import { SERVER_TASK_SOURCE } from "../events/server-events.js";
 import { refreshRepositoryReads } from "../github/repository-reads.js";
 import {
@@ -123,6 +120,7 @@ import {
 } from "./description-notes.js";
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "./task-change.js";
 import { createTaskAsked, type TaskCreateRelationRefused } from "./task-create-relation.js";
+import { deleteTaskStoppingAgents } from "./task-delete.js";
 import { moveTaskRelation, type TaskRelationRefused } from "./task-relation.js";
 
 export interface TasksProcedureSeams extends SandboxDeleteReach {
@@ -168,7 +166,7 @@ const startingWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* (
  * The plan and the agent a start's earlier request made under the agent's
  * key: a retry after a lost answer is answered with them rather than with a
  * second plan. A key already spent on an agent anywhere else, on another
- * workspace's plan, on no plan, or on a plan the account no longer reaches,
+ * workspace's plan, or on a plan the account no longer reaches,
  * is no retry of this start, and is refused as invalid with nothing written.
  */
 const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -178,10 +176,7 @@ const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<Option.Option<TaskStartAnswer>, HostedRefusal, DatabaseServices> {
   const made = yield* hostedStoreOrUnavailable(readAgentByKey(userId, idempotencyKey));
   if (Option.isNone(made)) return Option.none();
-  const task =
-    made.value.taskId === null
-      ? Option.none()
-      : yield* hostedStoreOrUnavailable(readTaskDescription(userId, made.value.taskId));
+  const task = yield* hostedStoreOrUnavailable(readTaskDescription(userId, made.value.taskId));
   if (Option.isNone(task) || task.value.workspaceId !== organizationId) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
@@ -394,26 +389,22 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
   const plans = hosted.plans.use(accountMiddleware(seams.resolveUserId));
   return {
     /**
-     * The account's plans, and beside them the agents with no plan in its
-     * workspaces; a teammate's plan or agent on their own GitHub token among
+     * The account's plans; a teammate's plan on their own GitHub token among
      * them where the account's own token reads its repository, asked of
-     * GitHub first where the answer kept is older than the hour. The query's
-     * `archived=include`, which an older build still sends, lists the
-     * archived agents with no plan among the rest, as it did, and no plan
-     * more: a plan is archived no longer.
+     * GitHub first where the answer kept is older than the hour. Every agent
+     * stands on a task, so the answer carries no `planlessAgents`, which a
+     * released desktop reads as none, and the query's `archived=include`,
+     * which an older build still sends, changes nothing: a plan is archived
+     * no longer.
      */
-    list: plans.list.effect(function* ({ input, context }) {
-      const includeArchived = input.archived === TASK_LIST_ARCHIVED.INCLUDE;
+    list: plans.list.effect(function* ({ context }) {
       yield* refreshRepositoryReads(context.userId);
       const tasks = yield* hostedStoreOrUnavailable(
         Effect.flatMap(listTasks(context.userId), (listed) =>
           withTaskAgents(context.userId, listed),
         ),
       );
-      const tasklessAgents = yield* hostedStoreOrUnavailable(
-        listTasklessAgents(context.userId, { includeArchived }),
-      );
-      return { plans: tasks, planlessAgents: tasklessAgents };
+      return { plans: tasks };
     }),
 
     /**
@@ -581,42 +572,11 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       return txid === undefined ? { plan: opened.value } : { plan: opened.value, txid };
     }),
 
-    /**
-     * Every coding agent of the plan stopped for good first, as a Stop stops
-     * one, so none works on for a plan that is gone; then the
-     * plan's sessions and its agents' retired (`retire-sessions.ts`),
-     * with no transaction open; then the plan, under its lock, which reads
-     * again which agents stand. A harness that refuses a Stop, an agent with a turn still
-     * coming that no Stop can name yet, or an agent started while the others
-     * were stopped, leaves the plan standing and refused.
-     *
-     * The Stops and the retires reach the agents' sessions for the account
-     * the request resolved to (`coder-host/runtime-sessions.ts`), the
-     * retires a courtesy the delete does not wait on.
-     */
+    /** The plan deleted as every door deletes one (`task-delete.ts`): its agents stopped for good first. */
     delete: plans.delete.effect(function* ({ input, context }) {
-      const { userId } = context;
       const taskId = yield* pathUuid(input.id);
-      const retiring = yield* retiringReach(userId);
-      const agents = yield* hostedStoreOrUnavailable(
-        listAgents(userId, taskId, { includeArchived: true }),
-      );
-      yield* everyStoppedForGood(writer, userId, agents);
-      // The stopped agents' sessions are retired before the delete's transaction, so no lock waits on a harness;
-      // an agent started meanwhile is none of these, keeps its session, and refuses the delete below.
-      yield* hostedStoreOrUnavailable(
-        retiredBeforeDelete(retiring)(agents.map(({ conversationId }) => conversationId)),
-      );
-      const stopped = new Set(agents.map(({ id }) => id));
-      const deleted = yield* hostedStoreOrUnavailable(
-        deleteTaskCommitted(userId, taskId, { stoppedAgentIds: stopped }).pipe(
-          Effect.catchTag("TaskAgentUnstopped", () => Effect.succeed(undefined)),
-        ),
-      );
-      // An agent started while the others were stopped is one this delete has not stopped yet.
-      if (deleted === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-      if (Option.isNone(deleted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { deleted: true as const, txid: deleted.value.txid };
+      const { txid } = yield* deleteTaskStoppingAgents(writer, context.userId, taskId);
+      return { deleted: true as const, txid };
     }),
 
     /**

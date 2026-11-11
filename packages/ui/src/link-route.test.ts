@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { test } from "vitest";
@@ -25,7 +25,7 @@ const WINDOW = { workspaces: [ACME], adminOn: false };
 test("a link to a page of Settings opens it on the workspace its slug names, where the account is in it", () => {
   assert.deepEqual(
     linkRoute(
-      { workspace: "acme", place: { kind: LINK_PLACE.SETTINGS, page: "workspace" } },
+      { workspace: "acme", place: { kind: LINK_DESTINATION.SETTINGS, page: "workspace" } },
       WINDOW,
     ),
     {
@@ -35,7 +35,7 @@ test("a link to a page of Settings opens it on the workspace its slug names, whe
   );
   assert.deepEqual(
     linkRoute(
-      { workspace: "someone-elses", place: { kind: LINK_PLACE.SETTINGS, page: "workspace" } },
+      { workspace: "someone-elses", place: { kind: LINK_DESTINATION.SETTINGS, page: "workspace" } },
       WINDOW,
     ),
     { kind: LINK_ROUTE.SETTINGS, settings: { page: SETTINGS_VIEW.WORKSPACE } },
@@ -44,8 +44,8 @@ test("a link to a page of Settings opens it on the workspace its slug names, whe
 
 test("a link to Settings with no page, or a page this window does not know, opens Settings on its page list, at its first page", () => {
   for (const place of [
-    { kind: LINK_PLACE.SETTINGS },
-    { kind: LINK_PLACE.SETTINGS, page: "billing" },
+    { kind: LINK_DESTINATION.SETTINGS },
+    { kind: LINK_DESTINATION.SETTINGS, page: "billing" },
   ] as const) {
     assert.deepEqual(linkRoute({ workspace: "acme", place }, WINDOW), {
       kind: LINK_ROUTE.SETTINGS,
@@ -54,8 +54,20 @@ test("a link to Settings with no page, or a page this window does not know, open
   }
 });
 
+test("a link to a page since folded into another opens the page that holds it now", () => {
+  for (const [page, home] of [
+    ["cli", SETTINGS_VIEW.MCP],
+    ["cloud-setup", SETTINGS_VIEW.ENVIRONMENT],
+  ] as const) {
+    assert.deepEqual(
+      linkRoute({ workspace: "acme", place: { kind: LINK_DESTINATION.SETTINGS, page } }, WINDOW),
+      { kind: LINK_ROUTE.SETTINGS, settings: { page: home, workspaceId: ACME.id } },
+    );
+  }
+});
+
 test("an automation, no experiment now, opens on the Plans tab", () => {
-  const automation = { kind: LINK_PLACE.AUTOMATION, automationId: "a1" } as const;
+  const automation = { kind: LINK_DESTINATION.AUTOMATION, automationId: "a1" } as const;
 
   assert.deepEqual(linkRoute({ workspace: "acme", place: automation }, WINDOW), {
     kind: LINK_ROUTE.TASKS,
@@ -64,9 +76,9 @@ test("an automation, no experiment now, opens on the Plans tab", () => {
 
 test("a link to the Admin place or one of its views opens nowhere for a reader who is no admin, and on the Plans tab for an admin", () => {
   for (const place of [
-    { kind: LINK_PLACE.ADMIN },
-    { kind: LINK_PLACE.ADMIN, section: "cost" },
-    { kind: LINK_PLACE.ADMIN, userId: "u1" },
+    { kind: LINK_DESTINATION.ADMIN },
+    { kind: LINK_DESTINATION.ADMIN, section: "cost" },
+    { kind: LINK_DESTINATION.ADMIN, userId: "u1" },
   ] as const) {
     assert.deepEqual(linkRoute({ workspace: "acme", place }, WINDOW), {
       kind: LINK_ROUTE.NOT_PERMITTED,
@@ -79,9 +91,9 @@ test("a link to the Admin place or one of its views opens nowhere for a reader w
 
 test("a task, an agent, or an Inbox item opens on the Plans tab, whatever workspace its slug names", () => {
   for (const place of [
-    { kind: LINK_PLACE.TASK, planId: "p1" },
-    { kind: LINK_PLACE.AGENT, agentId: "a1" },
-    { kind: LINK_PLACE.INBOX_ITEM, agentId: "a1", itemId: "i1" },
+    { kind: LINK_DESTINATION.TASK, planId: "p1" },
+    { kind: LINK_DESTINATION.AGENT, agentId: "a1" },
+    { kind: LINK_DESTINATION.INBOX_ITEM, agentId: "a1", itemId: "i1" },
   ] as const) {
     assert.deepEqual(linkRoute({ workspace: "someone-elses", place }, WINDOW), {
       kind: LINK_ROUTE.TASKS,

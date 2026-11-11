@@ -1,5 +1,5 @@
 /**
- * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions and Memory an agent or a member's call is offered, handed, and told.
+ * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions, Memory, and Done and follow-ups an agent or a member's call is offered, handed, and told.
  *
  * Every gate of a workspace experiment asks here, for the workspace the work
  * stands in: an agent's own (`agent.organizationId`), a task's
@@ -64,18 +64,21 @@ export function experimentOnSinceIn(
 export interface ExperimentsOn {
   readonly descriptionsOn: boolean;
   readonly memoryOn: boolean;
+  readonly turnEndOn: boolean;
 }
 
 /** Every workspace experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
 export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: true,
   memoryOn: true,
+  turnEndOn: true,
 };
 
 /** Every workspace experiment off. */
 export const NO_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: false,
   memoryOn: false,
+  turnEndOn: false,
 };
 
 /**
@@ -93,6 +96,7 @@ export function experimentsReadIn(
       return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         memoryOn: on(EXPERIMENT.MEMORY),
+        turnEndOn: on(EXPERIMENT.TURN_END),
       });
     }),
     Effect.tapError(logStoreFailure),

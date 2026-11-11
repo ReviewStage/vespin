@@ -5,8 +5,8 @@
  * show, its address naming the task alone, so its step holds the rest in its
  * entry's typed history state (`window-history.ts`): the column's tab,
  * the side panel's, and, in a narrow room, which shows one pane at a time,
- * the panel as a pane of its own, its sub-step. An Inbox item's step and an
- * agent page's hold the side panel beside them the same way.
+ * the panel as a pane of its own, its sub-step. An Inbox item's step holds
+ * the side panel beside it the same way.
  *
  * Choosing another thing within the page standing is a step of its own only
  * where the developer led to it: another column tab chosen by a press or a
@@ -20,7 +20,7 @@
  * turned takes the standing step in place.
  */
 
-import { type LinkPlace, taskLinkStep } from "@repo/features/link-grammar";
+import { type LinkDestination, taskLinkStep } from "@repo/features/link-grammar";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { type StripTab, sameTab } from "@repo/ui/tab-strip-model";
 import type { MainTab } from "../tasks/use-main-tabs.js";
@@ -53,7 +53,7 @@ export interface TaskStep extends StepShown {
 /** A side panel's tab a link opens, and the link that names it, which a narrow room's step stands at; none for a tab no link names. */
 interface LinkSide {
   readonly tab: SidePanelTab;
-  readonly link: LinkPlace | undefined;
+  readonly link: LinkDestination | undefined;
 }
 
 /** What a link opens on a task's own place, which its step holds before the window stands there: the column's tab, and the side panel's, each where it opens one. */

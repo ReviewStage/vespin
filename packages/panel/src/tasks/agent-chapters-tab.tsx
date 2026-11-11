@@ -1,5 +1,6 @@
 import type { AgentChangedFile } from "@repo/features/agent-wire";
 import { chaptersProviderOf } from "@repo/features/chapters-model-choice";
+import { fileName } from "@repo/features/code-ref-words";
 import { formatCount } from "@repo/features/number-format";
 import {
   type Chapter,
@@ -123,7 +124,6 @@ import {
 import type { ChaptersRead } from "./chapters-read.js";
 import { drawnIn, useFloatsOver } from "./drawn-in.js";
 import { FileCard } from "./file-ref.js";
-import { fileName } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import type { TreeShown } from "./file-view.js";
 import type { PullRequestSource } from "./pull-request-source.js";
@@ -197,7 +197,8 @@ import { TranscriptWords } from "./transcript-blocks.js";
  * → step to the previous and the next chapter, and ⇧V marks the chapter
  * viewed (`CHAPTERS_SHORTCUTS`), each answering only past the list's own
  * keys, none of which they share. Every word here is the repository's or
- * a model's about it, so the view stands inside the tab's `ph-no-capture`.
+ * a model's about it, which the recording masks, and the diff's lines are
+ * left out of it whole (`file-diff.tsx`).
  */
 
 /** The view's own words. */

@@ -1,6 +1,7 @@
 import { TASK_STATUS, TASK_STATUS_ORDER, type TaskStatus } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { type MenuRow, TaskStatusMark } from "@repo/ui";
+import type { ShortcutSubject } from "../shortcut-target.js";
 import { STATUS_ROWS } from "../tasks/task-standing.js";
 import type { StandingWrites } from "../tasks/use-standing-writes.js";
 import type { MenuAction, MenuSubmenu } from "./action-menu.js";
@@ -78,15 +79,15 @@ export function statusSubmenu(
   );
 }
 
-/** Status for one task's row, printing S where the key opens it there (`useFocusedRowKeys`). */
+/** Status for one task's row, printing S where the key opens it on `subject`, a focused sidebar row's (`useFocusedRowKeys`). */
 export function keyedStatusSubmenu(
   standing: Pick<StandingWrites, "onSettleTasks">,
   taskId: string,
   current: TaskStatus,
-  keyed: boolean,
+  subject: ShortcutSubject,
 ): MenuSubmenu {
   const submenu = statusSubmenu(standing, [taskId], current);
-  return keyed ? { ...submenu, command: APP_COMMAND.SET_STATUS } : submenu;
+  return { ...submenu, command: APP_COMMAND.SET_STATUS, subject };
 }
 
 /** The status every task given stands at, Todo for one from a service before statuses; none where they stand apart or none is given. */

@@ -4,15 +4,20 @@
  * It stands at the process boundary the runner drives the real CLI across,
  * so a test sees what the CLI would have: the options it was started with,
  * every prompt in order, the interrupts, the model, effort, and fast mode
- * changes, and
+ * changes, the host's answer to each tool call it asked about, and
  * whether it was closed. It runs the runner's own Stop hook where the CLI
  * would, before the `result` it precedes.
  */
 
-import type { Options, SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  Options,
+  PermissionResult,
+  SDKMessage,
+  SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import { Deferred, Effect, Exit, Layer, Queue, Stream } from "effect";
 import { ClaudeCode, type ClaudeCodeSession, type StartedClaudeCode } from "../claude-code.js";
-import type { Step, StopReport } from "./recorded-stream.js";
+import type { PermissionAsk, Step, StopReport } from "./recorded-stream.js";
 
 /** An effort the CLI was set to, as `applyFlagSettings` takes it. */
 type EffortSetting = Parameters<ClaudeCodeSession["applyFlagSettings"]>[0]["effortLevel"];
@@ -26,6 +31,8 @@ interface CliRecord {
   readonly efforts: EffortSetting[];
   /** Each fast mode the flag settings were set to. */
   readonly fastModes: (boolean | null | undefined)[];
+  /** The host's answer to each tool call the CLI asked about. */
+  readonly permissions: (PermissionResult | null)[];
   closed: boolean;
 }
 
@@ -42,12 +49,14 @@ function stopHookOf(options: Options) {
  * Each `result` names the prompts its turn took, as the CLI's does, but one
  * whose step says it names none. `chain`
  * is the stored session's entries, which every session it is asked for
- * reads as. A CLI that stops `answering` records each control request
+ * reads as, or none where the read is refused; a resumed session drops a
+ * prompt under a uuid its entries hold, answering nothing, as the CLI
+ * (2.1.304) does. A CLI that stops `answering` records each control request
  * (a model change, an interrupt) and never answers it.
  */
 export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function* (
   steps: readonly Step[],
-  chain: readonly string[] = [],
+  chain: readonly string[] | null = [],
   answering = true,
 ) {
   const prompted = yield* Queue.unbounded<SDKUserMessage>();
@@ -62,6 +71,7 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
     models: [],
     efforts: [],
     fastModes: [],
+    permissions: [],
     closed: false,
   };
 
@@ -71,10 +81,12 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
   }): ClaudeCodeSession => {
     // The prompts the running turn has taken, which its `result` names.
     const taken: string[] = [];
+    const held = new Set(params.options.resume === undefined ? [] : (chain ?? []));
 
     // Note that the prompts are read for as long as the service sends them, as the
     // CLI reads its stdin, while the script plays beside them.
     const prompts = Stream.fromAsyncIterable(params.prompt, (cause) => cause).pipe(
+      Stream.filter((prompt) => prompt.uuid === undefined || !held.has(prompt.uuid)),
       Stream.tap((prompt) =>
         Effect.sync(() => record.prompts.push(prompt)).pipe(
           Effect.andThen(Queue.offer(prompted, prompt)),
@@ -100,7 +112,28 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
         ),
       );
     };
+    // The CLI asks its host where its mode would, through the callback it was handed, and goes
+    // on once the host answers. A stop withdraws the ask, as the CLI cancels its request on an
+    // interrupt, aborting the call's signal; the host's answer is still awaited, so a test reads it.
+    const askHost = (ask: PermissionAsk) =>
+      Effect.gen(function* () {
+        if (params.options.permissionMode === "bypassPermissions") return;
+        const canUseTool = params.options.canUseTool;
+        if (canUseTool === undefined)
+          return yield* Effect.die("canUseTool callback is not provided.");
+        const answer = yield* Deferred.make<PermissionResult | null>();
+        const asked = Effect.callback<void>((resume, signal) => {
+          void canUseTool(ask.toolName, { ...ask.input }, { ...ask, signal }).then((result) => {
+            Deferred.doneUnsafe(answer, Exit.succeed(result));
+            resume(Effect.void);
+          });
+        });
+        yield* Effect.raceFirst(asked, Deferred.await(interrupted));
+        record.permissions.push(yield* Deferred.await(answer));
+      });
     const play = (step: Step): Stream.Stream<SDKMessage> => {
+      if ("askPermission" in step)
+        return Stream.drain(Stream.fromEffect(askHost(step.askPermission)));
       if ("emit" in step) {
         // Note that the message crosses as a line of JSON, which the SDK takes
         // as an `SDKMessage` unchecked, just as it reads the CLI's stdout.
@@ -169,7 +202,10 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
 
   /** Lets a script held at `untilReleased` go on. */
   const release = Deferred.succeed(released, undefined);
-  const sessionChain = async () => chain;
+  const sessionChain = async () => {
+    if (chain === null) throw new Error("the session could not be read");
+    return chain;
+  };
   return {
     layer: Layer.succeed(ClaudeCode, { startup, sessionChain }),
     record,

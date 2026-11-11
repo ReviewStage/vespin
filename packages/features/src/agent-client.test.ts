@@ -19,7 +19,6 @@ import {
 } from "./provider-key-wire.js";
 import { PULL_REQUEST_CHAPTERS_CALL_FAILURE } from "./pull-request-chapters-view.js";
 import { PULL_REQUEST_CHAPTERS_STATE } from "./pull-request-chapters-wire.js";
-import { READ_MARK } from "./read-mark.js";
 import { REPOSITORY_UNREACHED } from "./repository-reach-wire.js";
 import { HOSTED_API_ERROR, IDEMPOTENCY_KEY } from "./service-wire.js";
 
@@ -326,12 +325,11 @@ it.effect(
 );
 
 it.effect(
-  "reads one agent as its own page by its id, an agent with no plan among them, and one the account does not reach as not found",
+  "reads one agent as its own page by its id, and one the account does not reach as not found",
   () =>
     Effect.gen(function* () {
       const page = {
         ...AGENT,
-        planId: null,
         automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
         workspaceId: "workspace-1",
         repository: "acme/relay",
@@ -521,11 +519,6 @@ const KEYED_WRITES: readonly KeyedWrite[] = [
     write: "an agent pinned",
     route: `PATCH /api/agents/${AGENT_ID}`,
     retried: (key: string) => client().pin(AGENT_ID, { pinned: true }, key),
-  },
-  {
-    write: "an agent marked read",
-    route: `PATCH /api/agents/${AGENT_ID}`,
-    retried: (key: string) => client().markRead(AGENT_ID, { readMark: READ_MARK.READ }, key),
   },
 ];
 

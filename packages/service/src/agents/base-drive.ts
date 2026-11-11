@@ -38,6 +38,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import {
   deletedFilledDrive,
   deletedIfStill,
@@ -50,7 +51,6 @@ import {
 } from "@repo/sandbox";
 import { Clock, Duration, Effect, type Redacted } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
-import { CODER } from "./coder-host/bounds.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import {
   cloneRepository,
@@ -88,7 +88,11 @@ const DIFFERS_EXIT = 1;
  * The dependencies installed in the checkout: with pnpm where its lockfile
  * is pnpm's, with npm where it has a `package.json` and no such lockfile,
  * and nothing in a repository that has neither, which has none to install;
- * written group-writable, as the clone is (`GROUP_WRITES`).
+ * written group-writable, as the clone is (`GROUP_WRITES`). Note that it is
+ * the default user's, pnpm's store at the drive's root among it, which each
+ * agent's launch hands to its `agent` user (`machine/sandbox-machine.ts`'s
+ * readying), because an install chmods what it installed and only a file's
+ * owner may.
  */
 const INSTALL_SCRIPT = [
   "set -e",
@@ -306,7 +310,7 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
       drive: name,
       at: BASE_DRIVE.MOUNT,
       image,
-      vcpus: CODER.SANDBOX_VCPUS,
+      vcpus: SANDBOX_SIZE.VCPUS,
     },
     (running) =>
       Effect.gen(function* () {

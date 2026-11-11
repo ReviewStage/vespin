@@ -8,8 +8,12 @@
  *
  * An agent that runs on its starter's own GitHub token is reached by the
  * members who see it (`@repo/database/models/workspace-store`), but steered,
- * given a shell, or started from by its starter alone (`controlsAgent`),
- * since all of that acts on GitHub as them.
+ * given a shell, or started from by its starter alone (`controlsAgent`,
+ * `startsFromAgent`), since all of that acts on GitHub as them. One on its
+ * starter's own Mac is steered and given a shell by its starter alone, since
+ * the Mac is theirs to drive, but started from by any member who reaches it:
+ * the Start reads its session from the service and its work from the branch
+ * it pushed, and runs nothing on the Mac but the stop a continue sends.
  *
  * An agent its starter's Claude or ChatGPT plan pays for is read and forked
  * by every member who reaches it, a fork running on the forker's own payer,
@@ -53,7 +57,7 @@ export interface ReachedAgent {
 }
 
 /**
- * The agent the path names, on a task or with none, where the account may
+ * The agent the path names, where the account may
  * read it (`readVisibleAgent`), its task included, or not found; its
  * conversation is targeted under the member who started it, which is whom
  * the conversation belongs to.
@@ -97,6 +101,20 @@ export function controlsAgent(
 ): boolean {
   if (agent.userId === userId) return true;
   return agent.githubAccess !== GITHUB_ACCESS.TOKEN && agent.machine !== AGENT_MACHINE.DEVICE;
+}
+
+/**
+ * Whether the account may continue or fork the agent: any member who
+ * reaches it, but only its starter for one that runs on the starter's own
+ * GitHub token, whose work is copied on that token. One on its starter's own
+ * Mac is started from by any member, unlike `controlsAgent`, since the Start
+ * acts on nothing of the Mac's but the stop a continue sends.
+ */
+export function startsFromAgent(
+  userId: string,
+  agent: Pick<Agent, "userId" | "githubAccess">,
+): boolean {
+  return agent.userId === userId || agent.githubAccess !== GITHUB_ACCESS.TOKEN;
 }
 
 /** The name of the member who alone controls the agent, as a refusal says it: their name now, or who they were where their account is gone. */

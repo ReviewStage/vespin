@@ -49,7 +49,12 @@ import {
  * `below` under them, controls of its own that the card holds. The head alone
  * is the radio, so a key pressed in the controls under it is theirs. A card
  * whose option gives a detail steps back whole, as an unavailable one, its
- * detail saying why.
+ * detail saying why. A `rows` list holds the same as a card list, each
+ * option a settings card's row rather than a card of its own: ruled from the
+ * row above it, ringed by nothing, and what it holds under its head starting
+ * where its mark does, past the radio, so a list of credentials reads as the
+ * settings rows around it. An option's `state` says under its label how it
+ * stands, a credential's Connected, and steps nothing back.
  *
  * A settled list is the record of a choice made: the same rows as a list a
  * reader cannot press, the picked ones in the checked look with a check and
@@ -89,12 +94,13 @@ export const CHOICE_SELECT = {
 
 export type ChoiceSelect = (typeof CHOICE_SELECT)[keyof typeof CHOICE_SELECT];
 
-/** How an open list's rows are drawn: rows of words alone, rows led by the radio or checkbox each behaves as, pills that wrap, a check in the picked one, or cards holding controls of their own. */
+/** How an open list's rows are drawn: rows of words alone, rows led by the radio or checkbox each behaves as, pills that wrap, a check in the picked one, cards holding controls of their own, or the same as a settings card's rows. */
 export const CHOICE_LOOK = {
   PLAIN: "plain",
   MARKED: "marked",
   PILL: "pill",
   CARD: "card",
+  ROWS: "rows",
 } as const;
 
 export type ChoiceLook = (typeof CHOICE_LOOK)[keyof typeof CHOICE_LOOK];
@@ -122,6 +128,7 @@ const LIST_LOOK = {
   marked: "flex gap-1",
   pill: "flex flex-row flex-wrap gap-1.5",
   card: "flex gap-2",
+  rows: "flex",
 } as const satisfies Record<ChoiceLook, string>;
 
 /**
@@ -148,6 +155,7 @@ const ROW_LOOK = {
   marked: "",
   pill: "gap-icon-gap min-h-control py-1 px-3 rounded-[calc(var(--ui-control-height)/2)] text-caption leading-body",
   card: "p-0 flex-auto",
+  rows: "p-0 flex-auto",
 } as const satisfies Record<ChoiceLook, string>;
 
 /** A row standing beside the others shares the width, each as tall as the tallest. */
@@ -188,6 +196,16 @@ const CONTROL_INK = {
  */
 const CARD = "ui-choice-card flex flex-col gap-2 p-3 rounded-control";
 
+/**
+ * A settings row holding an option, as a card does but in a settings card's
+ * own padding, the rule between rows `choice-list.css`'s; what it holds
+ * under its head starts past the radio and the gap after it, where the
+ * option's mark does.
+ */
+const ROWS_ROW = "ui-choice-card flex flex-col gap-2 px-settings-row-inline py-settings-row-block";
+
+const ROWS_BODY_INSET = "ps-[calc(var(--ui-space-16)+var(--ui-space-12))]";
+
 const CARD_RING = {
   rest: "[box-shadow:inset_0_0_0_1px_var(--ui-color-border)]",
   picked: "[box-shadow:inset_0_0_0_1px_var(--ui-color-border-selected)]",
@@ -209,6 +227,8 @@ export interface ChoiceOption<Value extends string> {
   aside?: ReactNode;
   /** A card list's controls under its head, which the card holds. */
   below?: ReactNode;
+  /** A line under the label saying how the option stands, a credential's Connected, which steps nothing back as a detail does. */
+  state?: ReactNode;
   /** Whether this option alone cannot be picked. */
   disabled?: boolean | undefined;
   /** What a marked row's control fills with once checked; the accent where none is given. */
@@ -349,6 +369,9 @@ function ChoiceWords({
           </span>
         )}
       </span>
+      {option.state === undefined || option.state === null ? null : (
+        <span className="ui-choice-state text-caption">{option.state}</span>
+      )}
       {option.detail === undefined ? null : (
         <span className="ui-choice-detail text-caption">
           <ReplayWords masked={option.replayMasked}>{option.detail}</ReplayWords>
@@ -412,13 +435,8 @@ function RowInside({
       {look === CHOICE_LOOK.PILL ? (
         <PickedCheck className={cn("flex-none m-0", checked ? "block" : "hidden")} />
       ) : null}
-      {look === CHOICE_LOOK.MARKED || look === CHOICE_LOOK.CARD ? (
-        <ChoiceControl
-          radio={radio}
-          checked={checked}
-          tone={option.tone}
-          inCard={look === CHOICE_LOOK.CARD}
-        />
+      {look === CHOICE_LOOK.MARKED || held(look) ? (
+        <ChoiceControl radio={radio} checked={checked} tone={option.tone} inCard={held(look)} />
       ) : null}
       {option.mark === undefined ? null : (
         <span
@@ -431,6 +449,11 @@ function RowInside({
       <ChoiceWords option={option} look={look} number={number} />
     </>
   );
+}
+
+/** Whether a look holds each option in a box of its own, with an aside and controls under its head: a card's, or a settings row's. */
+function held(look: ChoiceLook): boolean {
+  return look === CHOICE_LOOK.CARD || look === CHOICE_LOOK.ROWS;
 }
 
 /** One row a reader presses: a radio where the list picks one, a checkbox where it picks several. */
@@ -471,7 +494,7 @@ function ChoiceRow({
   focusRef: React.RefObject<HTMLButtonElement | null> | undefined;
   onPress: () => void;
 }): React.JSX.Element {
-  const card = look === CHOICE_LOOK.CARD;
+  const card = held(look);
   const attributes = {
     ref: focusRef,
     render: <button type="button" />,
@@ -523,11 +546,12 @@ function ChoiceRow({
     <Checkbox.Root {...attributes}>{inside}</Checkbox.Root>
   );
   if (!card) return row;
+  const rows = look === CHOICE_LOOK.ROWS;
   return (
     <div
       className={cn(
-        CARD,
-        checked ? CARD_RING.picked : CARD_RING.rest,
+        rows ? ROWS_ROW : CARD,
+        !rows && (checked ? CARD_RING.picked : CARD_RING.rest),
         option.detail !== undefined && "opacity-55",
       )}
       data-checked={checked}
@@ -540,7 +564,9 @@ function ChoiceRow({
         )}
       </div>
       {option.below === undefined || option.below === null ? null : (
-        <div className="ui-choice-card-body flex flex-col gap-1.5">{option.below}</div>
+        <div className={cn("ui-choice-card-body flex flex-col gap-1.5", rows && ROWS_BODY_INSET)}>
+          {option.below}
+        </div>
       )}
     </div>
   );
@@ -610,7 +636,7 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
       tabStop={!one}
       disabled={disabled || option.disabled === true}
       readOnly={readOnly}
-      dims={!readOnly && look !== CHOICE_LOOK.CARD}
+      dims={!readOnly && !held(look)}
       look={look}
       across={flow === CHOICE_FLOW.ACROSS}
       number={numbered && index < CHOICE_NUMBERED_ROWS ? index + 1 : undefined}

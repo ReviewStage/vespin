@@ -41,7 +41,9 @@ type ResolvedSettingField =
   | "diffFontSize"
   | "diffLineHeight"
   | "linkOpen"
-  | "commitAuthor";
+  | "pullRequestOpen"
+  | "commitAuthor"
+  | "agentPermissionMode";
 export type AppSettingsView = Omit<StoredAppSettings, ResolvedSettingField> & {
   [Field in ResolvedSettingField]-?: NonNullable<StoredAppSettings[Field]>;
 } & { experiments: ExperimentChoices; accountRead: boolean };
@@ -62,7 +64,10 @@ export function appSettingsView(settings: AppSettings): AppSettingsView {
     diffFontSize: settings.stored.diffFontSize ?? APP_SETTING_DEFAULTS.diffFontSize,
     diffLineHeight: settings.stored.diffLineHeight ?? APP_SETTING_DEFAULTS.diffLineHeight,
     linkOpen: settings.stored.linkOpen ?? APP_SETTING_DEFAULTS.linkOpen,
+    pullRequestOpen: settings.stored.pullRequestOpen ?? APP_SETTING_DEFAULTS.pullRequestOpen,
     commitAuthor: settings.stored.commitAuthor ?? APP_SETTING_DEFAULTS.commitAuthor,
+    agentPermissionMode:
+      settings.stored.agentPermissionMode ?? APP_SETTING_DEFAULTS.agentPermissionMode,
   };
 }
 

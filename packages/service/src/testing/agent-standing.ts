@@ -2,11 +2,12 @@
 import { Option } from "effect";
 import { type AgentStanding, TOOL_GATE, type ToolGate } from "../agents/tool-catalog/gates.js";
 
-/** What a test names of an agent beside its repository: a local agent's machine, and its workspace's Memory and Task descriptions. */
+/** What a test names of an agent beside its repository: a local agent's machine, its workspace's Memory, Task descriptions, and Done and follow-ups. */
 interface StandingFor {
   readonly local?: boolean;
   readonly memory?: boolean;
   readonly descriptions?: boolean;
+  readonly turnEnd?: boolean;
 }
 
 /**
@@ -17,18 +18,24 @@ interface StandingFor {
  */
 export function standingFor(
   repository: string | null,
-  { local = false, memory = false, descriptions = true }: StandingFor = {},
+  {
+    local = false,
+    memory = false,
+    descriptions = true,
+    turnEnd = false,
+  }: StandingFor = {},
 ): AgentStanding {
   const opens: { readonly [G in ToolGate]: boolean } = {
     [TOOL_GATE.REPOSITORY]: repository !== null,
     [TOOL_GATE.SANDBOX]: !local,
     [TOOL_GATE.MEMORY]: memory,
     [TOOL_GATE.DESCRIPTIONS]: descriptions,
+    [TOOL_GATE.TURN_END]: turnEnd,
   };
   const open = Object.values(TOOL_GATE).filter((gate) => opens[gate]);
   return {
     agent: Option.none(),
     open: new Set(open),
-    experiments: { descriptionsOn: descriptions, memoryOn: memory },
+    experiments: { descriptionsOn: descriptions, memoryOn: memory, turnEndOn: turnEnd },
   };
 }

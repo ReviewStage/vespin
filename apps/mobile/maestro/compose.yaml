@@ -1,0 +1,54 @@
+# compose.yaml -- an agent's composer: the message queued behind its turn listed over the field with Steer and Delete, a follow-up typed and sent, a photo's + offered, and the turn stopped.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its agent still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
+---
+# Launched on the host's Inbox fixture, opened on its invitations agent's page
+# as `agent.yaml` is, whose turn still runs and whose queue holds one message
+# of the account's; the fixture takes each message, queue change, and Stop as
+# the service would (`@repo/host/fixture-inbox`), so nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- assertVisible: "Then add a Resend button beside each pending invite."
+- assertVisible: "Steer"
+- assertVisible: "Stop"
+- assertVisible: "Add"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-idle
+# A follow-up typed lights Send in Stop's place; sent, the field empties and
+# no refusal stands over it.
+- tapOn:
+    id: "composer-field"
+- inputText: "Show the invite's expiry in the email too."
+- assertVisible: "Send"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-typed
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Stop"
+    timeout: 5000
+- assertNotVisible:
+    id: "ask-note"
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-sent
+# The queued message steered into the turn under way.
+- tapOn: "Steer"
+- assertNotVisible:
+    id: "ask-note"
+# Stop, with nothing typed, stands as the system's spinner until the agent stops.
+- tapOn: "Stop"
+- assertVisible: "Stopping"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-stopping

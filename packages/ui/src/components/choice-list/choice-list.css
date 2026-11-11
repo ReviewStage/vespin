@@ -70,11 +70,16 @@
     }
   }
 
+  /* A rows list's options are a settings card's rows, each ruled from the one above. */
+  .ui-choice-list[data-look="rows"] > .ui-choice-card + .ui-choice-card {
+    border-top: 1px solid var(--ui-color-border);
+  }
+
   .ui-choice-detail {
     color: var(--ui-color-text-muted);
   }
 
-  /* A finger picks a row by pressing it, so its key says nothing there, as a menu's keys do not (`menu-keys.css`). */
+  /* A finger picks a row by pressing it, so its key says nothing there. */
   @media (pointer: coarse) {
     .ui-choice-number {
       display: none;

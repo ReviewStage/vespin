@@ -6,7 +6,6 @@ import {
   moreLabel,
   opensMenu,
   SettingsFoldRow,
-  type SettingsFoldRun,
   SettingsRow,
   type SettingsRowControl,
   type SettingsRowControls,
@@ -37,7 +36,8 @@ import { replayMaskedError } from "./marks.js";
  *
  * Its acts may come in groups, a rule between each. The ⋯ is `@repo/ui`'s
  * quiet `IconButton`. A row given its words (`row`) stands in `@repo/ui`'s
- * `SettingsRow`, its control and the ⋯ at the row's end, or, where it folds
+ * `SettingsRow`, its control among the row's controls and the ⋯ in the
+ * row's `end`, which keeps to the name's line at any width, or, where it folds
  * lines open under its words, in `SettingsFoldRow`, its ⋯ before the chevron;
  * one given `children` still draws them in the window's own row, until its
  * page moves.
@@ -49,7 +49,7 @@ type MenuRowActions = readonly MenuAction[] | readonly (readonly MenuAction[])[]
 /** A row's words as the shared row draws them, and the control standing before its ⋯. */
 interface MenuRowWords {
   label: ReactNode;
-  /** What rides the label's line without naming the row: a Modified word, a mark. */
+  /** What rides the label's line without naming the row: a Saved tick, a mark. */
   adornment?: ReactNode;
   description?: ReactNode;
   /** What went wrong with the row's last act, and the failure beneath it, or nothing while none did. */
@@ -67,10 +67,10 @@ interface MenuRowWords {
   controls?: SettingsRowControls;
   /** Whether the row stands inset under the row above, one of its things, as GitHub's accounts stand under GitHub's. */
   indent?: SettingsRowIndent;
-  /** What the row folds open under its words from a chevron after its ⋯ (`SettingsFoldRow`), its lines, or many drawn only near the view (`run`) with its foot as `lines`, the chevron's name, and whether it starts open. */
-  fold?: { lines?: ReactNode; run?: SettingsFoldRun; label: string; defaultOpen: boolean };
-  /** The chevron of the rows the row folds under it (`SettingsRowsFold`), last at its end. */
-  chevron?: ReactNode;
+  /** What the row folds open under its words from a chevron after its ⋯ (`SettingsFoldRow`), the chevron's name, and whether it starts open. */
+  fold?: { body: ReactNode; label: string; defaultOpen: boolean };
+  /** What stands last in the row's end, after its ⋯: the chevron of the rows it folds (`SettingsRowsFold`), or the room of a ⋯ or a chevron it lacks, so its column lines up with the rows around it. */
+  end?: ReactNode;
 }
 
 /** What the row draws: its words for the shared row, or its own children in the window's row. */
@@ -166,9 +166,8 @@ export function MenuRow({
             foldLabel={row.fold.label}
             defaultOpen={row.fold.defaultOpen}
             actions={() => more}
-            run={row.fold.run}
           >
-            {row.fold.lines}
+            {row.fold.body}
           </SettingsFoldRow>
         ) : (
           <SettingsRow
@@ -181,11 +180,8 @@ export function MenuRow({
             landed={row.landed}
             controls={row.controls}
             below={row.below === undefined || row.below === null ? undefined : () => row.below}
-          >
-            {(control) => (
+            end={(control) => (
               <>
-                {row.control}
-                {row.describedControl?.(control)}
                 {only === undefined ? (
                   more
                 ) : (
@@ -195,7 +191,14 @@ export function MenuRow({
                     {more}
                   </div>
                 )}
-                {row.chevron}
+                {row.end}
+              </>
+            )}
+          >
+            {(control) => (
+              <>
+                {row.control}
+                {row.describedControl?.(control)}
               </>
             )}
           </SettingsRow>

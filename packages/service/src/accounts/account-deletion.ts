@@ -39,10 +39,7 @@ import { forgetPosthogPersonEffect } from "../providers/posthog.js";
 import { readAccountPerson } from "./account-person.js";
 import { onboardingForgotten } from "./onboarding-events.js";
 
-/**
- * Without both halves of the analytics configuration there is no person to
- * erase and nothing to erase it with, so the erasure is simply skipped.
- */
+/** Erases the account's analytics person, where the deployment holds both halves of the analytics configuration. */
 const forgetAnalytics = /* @__PURE__ */ Effect.fn("web/forgetAnalytics")(function* (
   userId: string,
 ): Effect.fn.Return<void, never, HostedEnvironment | HttpClient.HttpClient> {

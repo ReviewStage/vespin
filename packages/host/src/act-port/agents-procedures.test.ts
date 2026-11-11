@@ -20,7 +20,6 @@ import {
 } from "@repo/features/agent-view";
 import { AGENT_CURSOR_START, AGENT_STATUS, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
-import { READ_MARK } from "@repo/features/read-mark";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Effect } from "effect";
 import { AGENT_ACT_KIND, AGENT_ACTS, type PortActKind } from "../contract/index.js";
@@ -78,18 +77,28 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_CHOOSE]: "Could not change the agent's model on this system.",
   [AGENT_ACT_KIND.AGENTS_RENAME]: "Could not rename the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_SERVERS]: "Could not switch the agent's MCP servers on this system.",
+  [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]:
+    "Could not change the agent's permission mode on this system.",
+  [AGENT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: "Could not answer the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY]: "Could not add a repository to the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_REWIND]: "Could not rewind the agent on this system.",
+  [AGENT_ACT_KIND.AGENTS_CLEAR]: "Could not start a new session for the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_WARM]: "Could not keep the agent warm on this system.",
+  [AGENT_ACT_KIND.AGENTS_PORTS]: "Could not read the agent's ports on this system.",
+  [AGENT_ACT_KIND.AGENTS_PORT_SHARED]: "Could not read the agent's shared link on this system.",
+  [AGENT_ACT_KIND.AGENTS_PORT_SHARE]: "Could not share this port.",
+  [AGENT_ACT_KIND.AGENTS_PORT_UNSHARE]: "Could not stop sharing this port.",
+  [AGENT_ACT_KIND.AGENTS_RUN_ACTION]: "Could not run that action on this system.",
+  [AGENT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: "Could not stop that action on this system.",
   [AGENT_ACT_KIND.AGENTS_ARCHIVE]: "Could not archive the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_PIN]: "Could not pin the agent on this system.",
-  [AGENT_ACT_KIND.AGENTS_MARK_READ]: "Could not mark the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_DELETE]: "Could not delete the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_SHOWN]: "Could not note which agent is shown on this system.",
   [AGENT_ACT_KIND.AGENTS_PAGE]: "Could not read the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_CHANGES]: "Could not read the agent's changes on this system.",
+  [AGENT_ACT_KIND.AGENTS_TURN_CHANGES]: "Could not read the turn's changes on this system.",
   [AGENT_ACT_KIND.AGENTS_GITHUB_IMAGE]: "Could not read the pull request's image on this system.",
   [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: "Could not change the pull request on this system.",
   [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]:
@@ -116,6 +125,12 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   AGENTS_CHOOSE: { agentId: AGENT_ID, model: "anthropic/claude-opus-5.5", effort: "high" },
   AGENTS_RENAME: { agentId: AGENT_ID, title: "Sign-out button" },
   AGENTS_SERVERS: { agentId: AGENT_ID, disabledServers: ["linear"] },
+  AGENTS_PERMISSION_MODE: { agentId: AGENT_ID, permissionMode: "ask" },
+  AGENTS_ANSWER_APPROVAL: {
+    agentId: AGENT_ID,
+    approvalId: "0b1c4a39-3b5e-4f7c-9a52-8d4f0e7c2a11",
+    answer: "allow",
+  },
   AGENTS_ADD_REPOSITORY: { agentId: AGENT_ID, addRepository: { repository: "acme/app" } },
   AGENTS_QUEUE: {
     agentId: AGENT_ID,
@@ -123,13 +138,20 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   },
   AGENTS_STOP: { agentId: AGENT_ID },
   AGENTS_REWIND: { agentId: AGENT_ID, messageId: "m-1" },
+  AGENTS_CLEAR: { agentId: AGENT_ID },
   AGENTS_WARM: { agentId: AGENT_ID },
+  AGENTS_PORTS: { agentId: AGENT_ID },
+  AGENTS_PORT_SHARED: { agentId: AGENT_ID },
+  AGENTS_PORT_SHARE: { agentId: AGENT_ID, port: 3000 },
+  AGENTS_PORT_UNSHARE: { agentId: AGENT_ID },
+  AGENTS_RUN_ACTION: { agentId: AGENT_ID, actionId: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01" },
+  AGENTS_RUN_ACTION_STOP: { agentId: AGENT_ID, actionId: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01" },
   AGENTS_ARCHIVE: { agentId: AGENT_ID, archived: true },
   AGENTS_PIN: { agentId: AGENT_ID, pinned: true },
-  AGENTS_MARK_READ: { agentId: AGENT_ID, readMark: READ_MARK.READ },
   AGENTS_DELETE: { agentId: AGENT_ID },
   AGENTS_PAGE: { agentId: AGENT_ID },
   AGENTS_CHANGES: { agentId: AGENT_ID },
+  AGENTS_TURN_CHANGES: { agentId: AGENT_ID, messageId: "line-1" },
   AGENTS_GITHUB_IMAGE: {
     agentId: AGENT_ID,
     src: "https://github.com/user-attachments/assets/0f1e2d3c",
@@ -152,12 +174,13 @@ const NOTED_ACTS = [
   "AGENTS_CHOOSE",
   "AGENTS_RENAME",
   "AGENTS_SERVERS",
+  "AGENTS_PERMISSION_MODE",
   "AGENTS_ADD_REPOSITORY",
   "AGENTS_STOP",
   "AGENTS_REWIND",
+  "AGENTS_CLEAR",
   "AGENTS_ARCHIVE",
   "AGENTS_PIN",
-  "AGENTS_MARK_READ",
 ] as const satisfies readonly (keyof NotedActs)[];
 
 const ports: TestActPort<unknown>[] = [];

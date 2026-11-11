@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { addSound } from "@repo/database/models/account-sounds";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
+import { beginAgentBoot } from "@repo/database/models/agent-boot-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
+import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
 import { createAgent } from "@repo/database/models/agent-store";
 import { startDescriptionCommentThread } from "@repo/database/models/description-comments";
 import { approveHostPairing, openHostPairing } from "@repo/database/models/host-pairing-store";
@@ -26,7 +29,7 @@ import {
   writeSlackDefaultRepository,
 } from "@repo/database/models/slack-installation-store";
 import { writePage } from "@repo/database/models/task-pages";
-import { createTaskCommitted, deleteTask } from "@repo/database/models/task-store";
+import { createTask, createTaskCommitted, deleteTask } from "@repo/database/models/task-store";
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -43,9 +46,11 @@ import {
 import {
   ACCOUNT_PREFERENCES_READ,
   accountPreferencesOfLiveRows,
+  accountSoundsOfLiveRows,
 } from "@repo/features/account-preferences-live";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { AGENT_ORIGIN_READ, agentOriginOfLive } from "@repo/features/agent-origin-live";
+import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import { AGENT_CURSOR_START } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
@@ -83,6 +88,7 @@ import {
   pullRequestChaptersOfLive,
 } from "@repo/features/pull-request-chapters-live";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
+import { SOUND_CLIP_SLOT, SOUND_CLIP_TYPE } from "@repo/features/sound-clip-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
@@ -114,6 +120,7 @@ import {
 } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
+import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import {
@@ -145,6 +152,7 @@ import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-confi
 import { liveProcedures } from "./live-procedures.js";
 import { pollSealer } from "./poll-sealer.js";
 import { agentOriginRead } from "./reads/agent-origin.js";
+import { agentTranscriptRead } from "./reads/agent-transcript.js";
 
 /**
  * The reads the desktop follows, answered by the procedure the way the
@@ -162,6 +170,12 @@ import { agentOriginRead } from "./reads/agent-origin.js";
 
 const ORIGIN = "https://app.test";
 const LIVE_INBOX = "/api/live/inbox";
+
+/** A sound clip whose bytes open as a WAV's, its last byte a mark that tells two apart. */
+const clipOf = (mark: number) => ({
+  contentType: SOUND_CLIP_TYPE.WAV,
+  bytes: new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, mark]),
+});
 
 /** A live read's address, naming the account it is for where one is named (`LIVE_USER_QUERY`). */
 function readOf(path: string, forUser: string | undefined): URL {
@@ -327,21 +341,34 @@ it.layer(getTestDB())("the account's live reads", (it) => {
           chaptersModel: CHAPTERS_MODEL.OPUS,
         });
 
+        const danaSound = yield* addSound(dana, "Glass", clipOf(1), SOUND_CLIP_SLOT.ASK);
+        yield* addSound(eli, "Knock", clipOf(2), SOUND_CLIP_SLOT.FINISH);
+
         const answered = yield* ask({ bearer: dana, path: "/api/live/account-preferences" });
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.answer)(answered.body);
-        const rows = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.rows)({
+        const {
+          preferences: rows,
+          sounds,
+          soundChoices,
+        } = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.rows)({
           preferences: answer.queries.preferences.rows,
-        }).preferences;
+          sounds: answer.queries.sounds.rows,
+          soundChoices: answer.queries.soundChoices.rows,
+        });
         assert.equal(rows.length, 1, "one row, the account's own");
         assert.deepEqual(
-          accountPreferencesOfLiveRows(rows),
+          accountPreferencesOfLiveRows(rows, accountSoundsOfLiveRows(sounds, soundChoices)),
           {
             agent: { model: "openai/gpt-6.1-sol", effort: "medium" },
             chaptersModel: CHAPTERS_MODEL.SONNET,
             slackNotifications: true,
+            sounds: {
+              list: [danaSound],
+              choices: { [SOUND_CLIP_SLOT.FINISH]: undefined, [SOUND_CLIP_SLOT.ASK]: danaSound.id },
+            },
           },
-          "dana's own row alone",
+          "dana's own row and clip alone",
         );
       }),
   );
@@ -626,9 +653,12 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const stranger = yield* openUser;
         const workspaceId = yield* openWorkspace(dana);
         yield* joinWorkspace(workspaceId, teammate);
-        const started = yield* createAgent(dana, {
-          taskId: null,
+        const { id: taskId } = yield* createTask(dana, {
           organizationId: workspaceId,
+          name: "Triage",
+        });
+        const started = yield* createAgent(dana, {
+          taskId,
           descriptionSnapshot: null,
           prompt: "Triage the inbox.",
           idempotencyKey: randomUUID(),
@@ -1010,6 +1040,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         assert.equal(answer.url, LIVE_POLL_URL);
         assert.deepEqual(Object.keys(answer.queries).toSorted(), [
           "agent",
+          "boot",
           "conversation",
           "launch",
           "messages",
@@ -1048,6 +1079,49 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
           }),
           { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
         );
+      }),
+  );
+
+  it.effect(
+    "an agent's first launch is delivered on its transcript to a member of its workspace, and to no account outside it",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const stranger = yield* openUser;
+        const task = yield* startTask(owner, { name: "Teammate invitations" });
+        yield* joinWorkspace(task.workspaceId, teammate);
+        const started = yield* createAgent(owner, {
+          taskId: task.id,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: "acme/relay",
+          descriptionSnapshot: "# Teammate invitations\n",
+          prompt: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        });
+        const { agent } = Option.getOrThrow(started);
+        yield* beginAgentBoot(agent.id, new Date(0), undefined);
+        const sql = yield* SqlClient.SqlClient;
+        // The boot's statement as Realtime runs it for `reader`, the agent's own transcript followed.
+        const bootRowsFor = (reader: string) => {
+          const statement = Option.getOrThrow(
+            agentTranscriptRead.statements({
+              userId: reader,
+              id: agent.id,
+              call: "",
+              ownerId: owner,
+              conversationId: agent.conversationId,
+              parentConversationId: agent.conversationId,
+              agentId: agent.id,
+            }),
+          ).boot;
+          return sql.unsafe(statement.sql, [...statement.params]);
+        };
+
+        assert.equal((yield* bootRowsFor(teammate)).length, 1);
+        assert.deepEqual(yield* bootRowsFor(stranger), []);
       }),
   );
 
@@ -2012,7 +2086,7 @@ const messageWritten = (userId: string, agentId: string) =>
 /** The agent's row among a part's rows, as the task list reads it. */
 const agentRowOf = (part: { readonly rows?: readonly unknown[] }, agentId: string) =>
   (part.rows ?? []).find((row) => (row as { readonly id: string }).id === agentId) as
-    | { readonly sandboxOpen?: boolean }
+    | { readonly sandboxOpen?: boolean; readonly sandboxState?: string | null }
     | undefined;
 
 it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
@@ -2084,6 +2158,35 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
 
         assert.deepEqual(idsOf(moved.agents), [agentId]);
         assert.equal(agentRowOf(moved.agents, agentId)?.sandboxOpen, true);
+      }),
+  );
+
+  it.effect(
+    "a boot of the agent's current sandbox written alone moves its agent in the next delta, which reads it booting",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const started = yield* startTask(dana, { name: "Teammate invitations" });
+        const agentId = yield* openTaskAgent(dana, started.workspaceId, started.id);
+        const now = new Date(yield* Clock.currentTimeMillis);
+        yield* claimRuntimeSession(
+          { userId: dana, conversationId: yield* conversationOf(agentId) },
+          "session-1",
+          now,
+        );
+        const whole = yield* askTasks(dana, "");
+        const past = whole.agents.sync?.next;
+        assert.ok(past !== undefined);
+        assert.equal(agentRowOf(whole.agents, agentId)?.sandboxState, null);
+
+        yield* recordAgentSandboxBooting(agentId, agentSandboxName("session-1"), now);
+        // Note that the hold is let run to its end, so a write no log row records answers nothing moved rather than holding the test.
+        const asked = yield* Effect.forkChild(askTasks(dana, past));
+        yield* TestClock.adjust(Duration.seconds(25));
+        const moved = yield* Fiber.join(asked);
+
+        assert.deepEqual(idsOf(moved.agents), [agentId]);
+        assert.equal(agentRowOf(moved.agents, agentId)?.sandboxState, SANDBOX_STATE.BOOTING);
       }),
   );
 

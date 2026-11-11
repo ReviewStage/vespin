@@ -50,8 +50,9 @@ provider verified the invited address
 (`requireEmailVerificationOnInvitation`), and the
 team and role endpoints this deployment does not mount. An owner or admin
 makes, lists, and cancels invitations through Vespin's own procedures
-(`src/accounts/workspace-invitations-procedures.ts`), which call the plugin
-server-side and mail the invitee the link through Resend where
+(`src/accounts/workspace-invitations-procedures.ts`), which write the
+plugin's `invitation` rows through the store (`invitation-store.ts`), since
+the plugin's own invitation calls take a session, and mail the invitee the link through Resend where
 `RESEND_API_KEY` and `INVITE_FROM` are set (`src/accounts/invitation-mail.ts`),
 or leave the owner to copy it where they are not. `disabledPaths` is
 read by the HTTP router alone, so the server-only `auth.api` calls a hosted
@@ -169,26 +170,19 @@ through its task's workspace, read afresh at each use, so an installation
 suspended, removed, or reinstalled decides the very next read.
 
 An agent on a member's own machine (a host) reaches GitHub without the
-sandbox's firewall. Where the App reaches its repository, its host asks
-`POST /api/agents/runner-token` on its device secret for an installation
-token, which lasts an hour and is cut to that one repository
-(`src/agents/native-events/runner-token-app.ts`). That endpoint never answers
-a member's own token, which may never expire and reaches every repository the
-member can reach. So an agent whose repository only that token reaches
-(`githubAccess` is `token`) gets no token from the service. Its launch line
-says so (`deviceAgentLaunchPayloadSchema`'s `githubAccess`), and its host runs
-it on the machine's own GitHub sign-in: the machine user's `gh` login, Git
-credential helper and settings, and SSH keys and agent. **Such an agent acts as
-whoever is signed in on that machine, with everything that sign-in reaches, not
-one repository.** Before the repository is made, the host checks that the
-sign-in reaches it. Where it doesn't, the host settles the launch unstarted
-with the reason `github-sign-in` (`DEVICE_LAUNCH_UNSTARTED`), which the
-transcript words as signing in with `gh auth login` or setting up SSH. Only a
-host that registered `DEVICE_CAPABILITY.GITHUB_SIGN_IN`, which a Mac's host
-alone does, is started on (refused
-as `LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN` by `agentMachineChoice`) or launched
-(`device-machine.ts`'s `launchRunner`) such an agent, since an older host would
-ask for a token the service refuses.
+sandbox's firewall, and the service hands it no GitHub token: its host runs
+every agent in a repository on the machine's own GitHub sign-in, the machine
+user's `gh` login, Git credential helper and settings, and SSH keys and agent.
+**Such an agent acts as whoever is signed in on that machine, with everything
+that sign-in reaches, not one repository.** Before the repository is made, the
+host checks that the sign-in reaches it. Where it doesn't, the host settles the
+launch unstarted with the reason `github-sign-in` (`DEVICE_LAUNCH_UNSTARTED`),
+which the transcript words as signing in with `gh auth login` or setting up
+SSH. Only a host that registered `DEVICE_CAPABILITY.GITHUB_SIGN_IN`, which every
+host does now, is started on (refused as `LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN` by
+`agentMachineChoice`) or launched (`device-machine.ts`'s `launchRunner`) an
+agent in a repository, since an older host would ask for a token the service
+never hands a device.
 
 `GET /api/github/repositories` (`src/github/github-procedures.ts`, on the
 hosted oRPC router) is that
@@ -594,6 +588,28 @@ Anthropic and OpenAI directly on the account's own keys, or Vespin's for a title
 catalog's after its prefix. `src/providers/model-catalog.test.ts` reads the catalog
 through a scripted gateway and the test clock; `src/accounts/models-procedures.test.ts`
 answers the route over a fixed catalog, byte for byte as the old group did.
+
+## Accounts' own sounds
+
+`src/accounts/sounds-procedures.ts` answers `/api/account/sounds` on the
+hosted oRPC router, the sounds an account keeps of its own, each a clip
+under a name it gave (`@repo/database/models/account-sounds`, the
+`account_sound` table, deleted with the account): `GET ?id=` answers one's
+bytes in base64 under its type with their SHA-256, or null; `POST` adds one
+sent as a `data:` URL under its name, whose label must be the type its bytes
+open as (`@repo/features/audio-signature`: WAV, MP3, M4A, AAC, or Ogg), and
+chooses it at once for the sound its body names, if any; `PATCH` renames one;
+and `DELETE ?id=` removes one with every choice of it.
+`/api/account/sounds/choice` (`PUT`) sets which of them one of the account's
+two sounds plays (`finish` or `ask`; the `account_sound_choice` table, which
+names a sound by its account and id together, so it can name no other
+account's). No bound is set on how many sounds an account keeps or how long
+one plays; a clip is held only to the 3.3 MB a request sent as base64 can
+carry and answer. No file name is sent or kept, and nothing of a sound is
+traced, logged, or counted. The account's preferences live read
+(`/api/live/account-preferences`) carries each sound's id, name, and hash,
+never its bytes, and the choices, so a client fetches a sound again only once
+its hash changed.
 
 ## Accounts' own provider keys
 
@@ -1339,8 +1355,9 @@ Beside them stand
 the agent tools (`src/agents/agent-tools.ts`): `list_agents`, every other agent on
 any task and by any member, each with its task, narrowed to one task or its
 own where asked, archived ones marked; `read_agent`, one agent of the
-workspace by its id, with what its branch published and a tail of its
-transcript, as many entries as asked, to a bound; `message_agent`, which
+workspace by its id, with what its branch published, the messages waiting
+in its queue by id, and a tail of its transcript, as many entries as asked,
+to a bound; `message_agent`, which
 sends another agent of the workspace, on any task, a message by its id that
 lands in its conversation under the caller's name, opening with the caller's
 mention and closing with how to answer it, which the service writes, seen in
@@ -1421,27 +1438,27 @@ conversations under the agent's, which its transcript still reads.
 
 The model and effort are the agent's row's, handed to the harness at each
 launch and again ahead of every message, so a change to them is the next
-model call's. The credential is settled at the Start as its payer
+model call's. A cloud agent's credential is settled at the Start as its payer
 (`AGENT_PAYER`): the developer's Claude or ChatGPT plan where Settings has
 it on for agents, otherwise the account's own API key for the model's
-provider, and a Start with neither is refused; an agent recorded with the
-older Mac sign-in payer launches on the account's saved credential as one
-would. Each is opened from its sealed row under
-`PROVIDER_KEY_ENCRYPTION_KEYS`. In a sandbox it is set at the sandbox's
+provider, and a Start with neither is refused. Each is opened from its sealed row under
+`PROVIDER_KEY_ENCRYPTION_KEYS` and set at the sandbox's
 firewall as a placeholder swap (`src/agents/sandbox-firewall.ts`), as the
 runner's bearer is, the runner's environment holding only the placeholder
-minted for the launch; on a host it is in the runner's environment. A Codex
+minted for the launch. A Codex
 agent on a ChatGPT plan asks the service for the plan's access token as it
-needs one (`src/agents/native-events/runner-token-app.ts`): on a host through
-its token command, and in a sandbox to sign Codex in on host-supplied ChatGPT
-tokens and to answer Codex's refresh after a 401, so in a sandbox app-server
-holds the access token, and the sign-in that renews it stays with the
-service. Neither harness runs a
+needs one (`src/agents/native-events/runner-token-app.ts`), to sign Codex in
+on host-supplied ChatGPT tokens and to answer Codex's refresh after a 401, so
+app-server holds the access token, and the sign-in that renews it stays with
+the service. A local agent runs on its machine's own Claude Code or Codex login
+(`AGENT_PAYER.MAC_SIGN_IN`), so its Start needs no saved credential and its
+launch carries none; a turn that login refused fails as
+`AGENT_FAILURE.MACHINE_SIGN_IN`, which says to sign in on that machine.
+Neither harness runs a
 command sandbox of its own, in a sandbox or on a host, so in a sandbox the
 firewall is what keeps a credential from the agent's commands: they can read
 the placeholders, each good only through that sandbox's firewall, and never
-the value it swaps in; on a host a Claude Code agent's commands can read its
-credential. Codex's commands inherit neither the bearer nor its credential's
+the value it swaps in. Codex's commands inherit neither the bearer nor its credential's
 variable (`shell_environment_policy`). The deployment holds one model key of
 its own, Vespin's Anthropic key for titles (`TITLE_ANTHROPIC_API_KEY`), and
 every title, an agent's, its task's, or an inbox thread's, runs on it, on
@@ -1554,21 +1571,26 @@ and the erasure call itself runs over the ambient
 `HttpClient` rather than an injected transport, so nothing in `AccountProcedureSeams`
 carries one — a test provides its own fake `HttpClient` layer instead.
 
-The preferences snapshot carries thirteen parts. `preferences` is the settings
+The preferences snapshot carries sixteen parts. `preferences` is the settings
 snapshot the desktop syncs, replaced whole by a write that names it.
 `linkOpen`, where the account's app links open (null reads as the browser),
-`agentEnter`, what Enter does in an agent's box while it works (`steer`
+`pullRequestOpen`, where its pull requests open (`app` or `github`, null
+reads as the app), `agentEnter`, what Enter does in an agent's box while it works (`steer`
 or `queue`, null reads as steer), `commitAuthor`, who authors an agent's
-commits, `setupFinished`, whether the account
+commits, `agentPermissionMode`, the mode a new Claude Code agent starts on
+(`ask`, `auto`, or `full_access`, null reads as full access),
+`setupFinished`, whether the account
 finished setup after sign-in (null reads as not yet), `setupPlace`, where
 it stands in setup as its JSON (null until setup starts), `soundWhen`, when a
 sound plays as an agent finishes (`off`, `background`, or `always`, null
 reads as off), `completionSound`, which sound (null reads as `chime`),
+`askSound`, which sound plays as something new needs the account (null
+reads as `knock`),
 `turnNotifications`, whether a notification is posted then (null reads as
 off), and `onboardingSurvey`, what the account answered in setup's survey as
 its JSON (null until it answers), are synced settings kept as parts of their
-own (`link_open`, `agent_enter`, `commit_author`, `setup_finished`,
-`setup_place`, `sound_when`, `completion_sound`, `turn_notifications`,
+own (`link_open`, `pull_request_open`, `agent_enter`, `commit_author`, `agent_permission_mode`, `setup_finished`,
+`setup_place`, `sound_when`, `completion_sound`, `ask_sound`, `turn_notifications`,
 `onboarding_survey`), so a build that predates them neither
 refuses the snapshot nor clears them by writing `preferences` back whole.
 `agent` is the account's default model and effort for an agent —
@@ -1674,6 +1696,28 @@ whether or not the account still holds the token. The rows are
 `packages/database/src/models/push-device-store.ts`'s effects over the ambient
 `SqlClient`, in the `push_device` table, which is apart from `device`, the Macs
 and Linux hosts that run local agents.
+
+The `liveActivities` resource (`live-activities-procedures.ts`, on the paths
+`@repo/features/contract`'s `live-activities.ts` declares) registers the
+tokens of the one Live Activity a phone shows for its member's running
+agents: the push-to-start token, and the update token of the activity that
+stands, each beside the phone's device token and gateway, which the account
+must already hold or the register answers not found. The app says the
+activity ended on the phone, which forgets its update token. The rows are
+`packages/database/src/models/live-activity-store.ts`'s, in the
+`live_activity` table, one per `push_device` row and leaving with it; a phone
+that moves to another account leaves its activity behind.
+
+`live-activities.ts` pushes that activity: it refreshes a member's activity
+whole on each of their phones whenever one of their agents starts or settles
+a turn (`StartedTurnListener`, `SettledTurnListener`), a thread that waits on
+them takes a post or settles, and once a minute from the sweep for every
+member with one standing. A push-to-start goes when agents run and none
+stands, an update when the state moved, and an end, with a dismissal date,
+once none runs. Only a start, an end, and an ask starting to wait go at high
+priority; every other update is low priority, at most one per phone per 30
+seconds, with a `stale-date`. A token Apple says is gone is forgotten, as is
+an activity's update token once it ends.
 
 `ApnsSender` is the one door to a phone: a notification names the phone, its
 push type (`alert`, `background`, or `liveactivity`), the JSON Apple delivers,
@@ -1907,14 +1951,11 @@ and revokes them through `src/member-mcp/clients-procedures.ts`, at
 client but the desktop's through Drizzle on the account's bearer
 (`@repo/database/models/oauth-grants`), since every endpoint of the
 provider's that lists them takes a session, with the server's address a
-client is pointed at. A revoke runs under the Mac's Better Auth session: it
-deletes the member's access and refresh tokens for the client first, a
-store operation of our own since the provider exports none for one member
-and one client and a refresh never checks the consent, then the consent
-through the provider's own `get-consents` and `delete-consent`
-(`src/member-mcp/client-consents.ts`). A revoke that fails between the two
-answers a failure and leaves the consent, so the client stays listed with
-its Revoke rather than signing back in unasked. A JWT access token already
+client is pointed at. A revoke runs on the same bearer
+(`src/member-mcp/mcp-client-operations.ts`): it deletes the member's access
+and refresh tokens for the client and then their consent, in one
+transaction, a store operation of our own since the provider exports none
+for one member and one client and its `delete-consent` takes a session. A JWT access token already
 minted is verified against the key set alone, so it keeps working for the
 rest of its fifteen minutes, which the row says.
 
@@ -2520,9 +2561,11 @@ every module may import it. The tools eve injected of its own (`task_wait`,
 are not listed.
 
 An agent's harness finds the skills its repository keeps in its own
-checkout, as Claude Code and Codex look for them, and the skills its member
-installed into the app in a folder of its sandbox written as it opens
-(`src/agents/coder-host/native-skills.ts`, `src/agents/coder-host/skills.ts`).
+checkout, as Claude Code and Codex look for them, and, in the cloud, the
+skills its member installed into the app in a folder of its sandbox written
+as it opens (`src/agents/coder-host/native-skills.ts`,
+`src/agents/coder-host/skills.ts`). A local agent is handed none of those, and
+its harness finds whatever skills the machine's own home holds.
 
 A search and a page read are the harness's own tools (Claude Code's
 WebSearch and WebFetch, or Codex's own web search), run on the agent's own

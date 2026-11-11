@@ -1,5 +1,7 @@
+import { repositoryLabel } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
+  type GroupFold,
   SKELETON_SHAPE,
   Skeleton,
   SkeletonRegion,
@@ -11,7 +13,6 @@ import {
   useMinute,
 } from "@repo/ui";
 import { assigneeFace } from "@repo/ui/actor-model";
-import { repositoryLabel } from "@repo/ui/task-list-model";
 import { type ListColumn, TASK_PROPERTY } from "@repo/ui/tasks-page-model";
 import { type ReactNode, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -140,37 +141,40 @@ export function RecentTasks({
 }): React.JSX.Element {
   const now = useMinute();
   const directory = useMemberDirectory();
-  const setStanding = useStandingDoor(tasks);
+  const standing = useStandingDoor(tasks);
   const rowTab = taskRowTab(tasks);
   const opened = openedTaskOf(tasks);
   const workspaceName = tasks.workspace?.name ?? "";
   return (
-    <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
-      {(cells, more) =>
-        listed.map((task) => (
-          <TaskListRow
-            key={task.id}
-            tasks={rowTab}
-            task={task}
-            opened={opened}
-            workspaceName={workspaceName}
-            cells={cells}
-            repositoryName={
-              task.repository === null ? undefined : repositoryLabel(task.repository, listed)
-            }
-            // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
-            assigneeHeld={face && assigneeFace(task, directory) === undefined}
-            chosen={undefined}
-            more={more}
-            edges={TASK_ROW_EDGES.UNCHOSEN}
-            unread={unread(task)}
-            card={taskCardOf(tasks, task, now)}
-            onOpen={() => onOpen(task.id)}
-            onStanding={(standing) => setStanding(task, standing)}
-          />
-        ))
-      }
-    </GlanceRows>
+    <>
+      <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
+        {(cells, more) =>
+          listed.map((task) => (
+            <TaskListRow
+              key={task.id}
+              tasks={rowTab}
+              task={task}
+              opened={opened}
+              workspaceName={workspaceName}
+              cells={cells}
+              repositoryName={
+                task.repository === null ? undefined : repositoryLabel(task.repository, listed)
+              }
+              // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
+              assigneeHeld={face && assigneeFace(task, directory) === undefined}
+              chosen={undefined}
+              more={more}
+              edges={TASK_ROW_EDGES.UNCHOSEN}
+              unread={unread(task)}
+              card={taskCardOf(tasks, task, now)}
+              onOpen={() => onOpen(task.id)}
+              onStanding={(asked) => standing.set(task, asked)}
+            />
+          ))
+        }
+      </GlanceRows>
+      {standing.dialog}
+    </>
   );
 }
 
@@ -182,9 +186,12 @@ export function RecentTasks({
 export function RecentTasksSkeleton({
   label,
   face = true,
+  fold,
 }: {
   label: string;
   face?: boolean | undefined;
+  /** How the section it stands for folds; left out, it folds nothing. */
+  fold?: GroupFold | undefined;
 }): React.JSX.Element {
   const blocks: Partial<Record<TaskRowCell, ReactNode>> = {
     [TASK_ROW_CELL.STATUS]: <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_MARK} />,
@@ -192,7 +199,7 @@ export function RecentTasksSkeleton({
     [TASK_ROW_CELL.UPDATED]: <Skeleton width={SKELETON_TIME} />,
   };
   return (
-    <SectionSkeleton>
+    <SectionSkeleton fold={fold}>
       <SkeletonRegion label={label}>
         <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={false} moves={false}>
           {(cells) =>

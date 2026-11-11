@@ -47,7 +47,8 @@ const KEY_ROW: SettingsRowSkeletonShape = {
 const MEMBER_ROW: SettingsRowSkeletonShape = {
   described: true,
   mark: "32px",
-  controls: [SETTINGS_SKELETON_CONTROL.VALUE, SETTINGS_SKELETON_CONTROL.MORE],
+  controls: [SETTINGS_SKELETON_CONTROL.VALUE],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
 };
 
 /** A described row ending in each control a placeholder stands. */

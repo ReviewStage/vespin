@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import {
-  AGENT_BOUNDS,
-  type AgentSummary,
-  type ListedAgent,
-  type TasklessAgent,
-} from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
 import {
   AUTOMATION_CALL_FAILURE,
   AUTOMATION_FOLLOW,
@@ -46,9 +41,11 @@ import type { Experiment } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { PROFILE } from "@repo/ui";
 import { createMemoryHistory, useRouter } from "@tanstack/react-router";
+import type { TiptapEditorHTMLElement } from "@tiptap/core";
+import { Effect } from "effect";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { useAutomationsRoute } from "../automations-route.js";
 import { OpenFeedbackProvider } from "../open-feedback.js";
@@ -65,6 +62,13 @@ import {
   holdIntegrations,
   stateWith,
 } from "../testing/app-state.js";
+import {
+  composerEditor,
+  editorBundleLanded,
+  installEditorLayout,
+  pressInComposer,
+  typeInComposer,
+} from "../testing/composer.js";
 import { layContainersAt, shown } from "../testing/container-width.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
@@ -148,10 +152,13 @@ const CATALOG = [
 /** The account's default model, which a new agent runs on until another is chosen. */
 const DEFAULT_CHOICE = { model: "anthropic/claude-opus-5.5", effort: "high" };
 
+/** The task the workspace's same-agent automation agents stand on, which the window does not list. */
+const DIGEST_TASK = "2b4d6f8a-0c1e-4a3b-9d5f-7a9c1e3b5d7f";
+
 /** One agent of the workspace's on the repository, which a same-agent automation's runs may go to. */
 const CI_DIGEST = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: null,
+  planId: DIGEST_TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "CI digest",
@@ -160,26 +167,22 @@ const CI_DIGEST = {
   turnId: null,
 } as const;
 
-/** An agent on no task in the workspace, working in the automations' repository, as the task list carries it. */
-function onLedger(agent: AgentSummary): TasklessAgent {
-  return {
-    ...agent,
-    automationId: null,
-    workspaceId: WORKSPACE.id,
-    repository: "acme/ledger",
-    activityAt: agent.createdAt,
-  };
+/** A task of the workspace's the window does not list, which the workspace's agents work on. */
+const LEDGER_TASK = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
+
+/** An agent on a task in the workspace, working in the automations' repository, as the task list carries it. */
+function onLedger(agent: AgentSummary): ListedAgent {
+  return { ...agent, planId: LEDGER_TASK, workspaceId: WORKSPACE.id, repository: "acme/ledger" };
 }
 
-/** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents on no task. */
+/** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents. */
 function tasksView(): TasksView {
   const listed: TasksView = agentListRefused
     ? { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.FAILED }
     : {
         ...IDLE_TASKS_VIEW,
         listStatus: TASKS_READ.READY,
-        taskAgents: [],
-        tasklessAgents: workspaceAgents,
+        taskAgents: workspaceAgents,
       };
   return workspacesRefused ? { ...listed, workspacesStatus: TASKS_READ.FAILED } : listed;
 }
@@ -223,8 +226,8 @@ let creates: AutomationCreateParams[] = [];
 let deletes: string[] = [];
 /** Every search of a workspace's agents, as the act carried it. */
 let agentsAsked: unknown[] = [];
-/** Every agent on no task the task list carries, as the host lays it. */
-let workspaceAgents: readonly TasklessAgent[] = [];
+/** Every agent of the workspace the task list carries, as the host lays it. */
+let workspaceAgents: readonly ListedAgent[] = [];
 /** The agents a search for `words` finds, as the service answers it. */
 let agentsFound: (words: string) => readonly AgentSummary[] = () => [];
 /** The service's runs of every automation, newest first, as a read of one's runs answers them. */
@@ -287,6 +290,7 @@ function holdChoices(): void {
             agent: DEFAULT_CHOICE,
             chaptersModel: CHAPTERS_MODEL_DEFAULT,
             slackNotifications: true,
+            sounds: { list: [], choices: { finish: undefined, ask: undefined } },
           },
         },
   }).deliverModels;
@@ -341,8 +345,12 @@ let copied: string[] = [];
 /** The experiments a Send feedback was about, in order. */
 let feedbackAbout: Experiment[] = [];
 
+// Landed before any page renders, as the panel lands it after its first paint.
+beforeAll(() => Effect.runPromise(editorBundleLanded));
+
 beforeEach(() => {
   installScrollIntoView();
+  installEditorLayout();
   secretsAsked = [];
   copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
@@ -409,7 +417,8 @@ beforeEach(() => {
       }
       if (request.kind === ACT_KIND.AUTOMATIONS_CREATE) {
         creates.push(request.payload);
-        const { workspaceId, name, trigger, action, scope, repositories } = request.payload;
+        const { workspaceId, name, trigger, action, scope, repositories, archiveSuccessful } =
+          request.payload;
         const hooked = trigger.kind === AUTOMATION_TRIGGER.WEBHOOK;
         const made = automation(42, {
           workspaceId: workspaceId ?? WORKSPACE.id,
@@ -418,6 +427,7 @@ beforeEach(() => {
           action,
           scope: scope ?? AUTOMATION_SCOPE.PERSONAL,
           repositories: repositories ?? [],
+          archiveSuccessful: archiveSuccessful ?? true,
           ...(hooked
             ? { webhookUrl: "https://vespin.dev/api/automations/made/webhook" }
             : undefined),
@@ -1136,14 +1146,24 @@ function dialogButton(name: string): HTMLButtonElement {
   return found;
 }
 
+/** The prompt's editor, the composer's field the prompt is written in. */
+function promptEditor(page: HTMLElement): TiptapEditorHTMLElement {
+  return composerEditor(page.querySelector(".automation-prompt") ?? assert.fail("no prompt"));
+}
+
+/** Writes the prompt's words whole over what it held, as typing over all of it selected does. */
+function writePrompt(page: HTMLElement, words: string): void {
+  const { editor } = promptEditor(page);
+  assert.ok(editor, "the prompt's editor is running");
+  act(() => {
+    editor.view.dispatch(editor.state.tr.insertText(words, 1, editor.state.doc.content.size - 1));
+  });
+}
+
 /** Types into a field as a developer would, so React hears the change. */
-function type(field: HTMLInputElement | HTMLTextAreaElement | null, value: string): void {
+function type(field: HTMLInputElement | null, value: string): void {
   assert.ok(field, "the field is drawn");
-  const prototype =
-    field instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype;
-  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   act(() => {
     setter?.call(field, value);
     field.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1320,13 +1340,13 @@ test("a new automation is created only once it is named and told its task, and t
   assert.match(page.textContent ?? "", /Name the automation\./u);
   assert.match(page.textContent ?? "", /Tell the agent what to do\./u);
   assert.equal(
-    page.querySelector("textarea[aria-label='Prompt']")?.getAttribute("aria-invalid"),
+    promptEditor(page).getAttribute("aria-invalid"),
     "true",
     "the prompt is marked as what stops the save",
   );
 
   type(page.querySelector("input[aria-label='Automation name']"), "Morning triage");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Triage the issues opened overnight.");
+  writePrompt(page, "Triage the issues opened overnight.");
   act(() => button("Create automation").click());
   await settle();
 
@@ -1342,7 +1362,7 @@ test("a new automation is created only once it is named and told its task, and t
     action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage the issues opened overnight." },
     scope: AUTOMATION_SCOPE.PERSONAL,
     target: { kind: AUTOMATION_TARGET.NEW_AGENT },
-    archiveSuccessful: false,
+    archiveSuccessful: true,
     slackDelivery: false,
     repositories: ["acme/ledger"],
   });
@@ -1354,7 +1374,7 @@ test("an edit says it is unsaved and saves only what moved", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
 
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the two flakiest tests.");
+  writePrompt(page, "Fix the two flakiest tests.");
   assert.equal(page.querySelector(".automation-editor-status")?.textContent, "Unsaved changes");
   act(() => button("Save").click());
   await settle();
@@ -1497,7 +1517,7 @@ test("a new automation with something written asks before any way out leaves it,
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
 
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Triage the issues opened overnight.");
+  writePrompt(page, "Triage the issues opened overnight.");
   act(() => button("Automations").click());
   await settle();
   assert.equal(places.length, 1, "the crumb waits on the question");
@@ -1519,7 +1539,7 @@ test("the shell hears the page's ask only while an edit is unsaved, and asking t
   await settle();
   assert.equal(shellAsk, undefined, "a page with nothing unsaved holds nothing back");
 
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the two flakiest tests.");
+  writePrompt(page, "Fix the two flakiest tests.");
   const left: string[] = [];
   act(() => shellAsk?.(() => left.push("sign-in")));
   assert.ok(leaveAsked(), "the shell's way out asks the page's question");
@@ -1545,7 +1565,7 @@ test("a new automation with nothing written leaves at once, and one just created
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
   type(page.querySelector("input[aria-label='Automation name']"), "Morning triage");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Triage the issues opened overnight.");
+  writePrompt(page, "Triage the issues opened overnight.");
   act(() => button("Create automation").click());
   await settle();
   assert.equal(places.at(-1)?.kind, AUTOMATIONS_PAGE.EDIT);
@@ -1894,14 +1914,11 @@ test("what is typed while a save is out stands, unsaved, once the save lands", a
   type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
   act(() => button("Save").click());
   await settle();
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the two flakiest tests.");
+  writePrompt(page, "Fix the two flakiest tests.");
   heldChanges[0]?.();
   await settle();
 
-  assert.equal(
-    page.querySelector<HTMLTextAreaElement>("textarea[aria-label='Prompt']")?.value,
-    "Fix the two flakiest tests.",
-  );
+  assert.equal(promptEditor(page).textContent, "Fix the two flakiest tests.");
   assert.equal(page.querySelector(".automation-editor-status")?.textContent, "Unsaved changes");
 });
 
@@ -1960,7 +1977,7 @@ test("a new automation's page moved to another workspace starts afresh in that w
   act(() => moveTo({ ...WORKSPACE, id: "workspace-beta", name: "Beta" }));
   await settle();
   type(page.querySelector("input[aria-label='Automation name']"), "Beta triage");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Triage Beta's issues.");
+  writePrompt(page, "Triage Beta's issues.");
   act(() => button("Create automation").click());
   await settle();
 
@@ -1986,7 +2003,7 @@ test("an automation fired by an event says its trigger in one sentence, and a sa
   );
   assert.equal(picked(page, "Event"), "Issue opened");
   assert.equal(page.querySelector("button[aria-label^='Time zone: ']") === null, true);
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Reproduce the bug first.");
+  writePrompt(page, "Reproduce the bug first.");
   act(() => button("Save").click());
   await settle();
 
@@ -2015,7 +2032,7 @@ async function mountNewScheduled(): Promise<HTMLElement> {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
   type(page.querySelector("input[aria-label='Automation name']"), "Weekly sweep");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Update the dependencies.");
+  writePrompt(page, "Update the dependencies.");
   return page;
 }
 
@@ -2144,10 +2161,8 @@ test("a custom cron is saved as written, in the zone the schedule already had", 
 test("Escape while writing the prompt lets go of the caret and reaches the window marked taken, composing or not", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
-  const prompt =
-    page.querySelector<HTMLTextAreaElement>("textarea[aria-label='Prompt']") ??
-    assert.fail("no prompt");
-  type(prompt, "Triage the issues opened overnight.");
+  writePrompt(page, "Triage the issues opened overnight.");
+  const prompt = promptEditor(page);
   act(() => prompt.focus());
 
   const reached: boolean[] = [];
@@ -2172,7 +2187,7 @@ test("Escape while writing the prompt lets go of the caret and reaches the windo
   // Note that both reach the window, whose live call Escape stops first, marked taken, so neither leaves the page.
   assert.deepEqual(reached, [true, true]);
   assert.equal(document.activeElement === prompt, false);
-  assert.equal(prompt.value, "Triage the issues opened overnight.");
+  assert.equal(prompt.textContent, "Triage the issues opened overnight.");
 });
 
 test("a new automation with no repository is created to work in none, but not on a GitHub event, whose refusal describes the repository chip", async () => {
@@ -2180,7 +2195,7 @@ test("a new automation with no repository is created to work in none, but not on
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
   type(page.querySelector("input[aria-label='Automation name']"), "Morning triage");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Triage the issues opened overnight.");
+  writePrompt(page, "Triage the issues opened overnight.");
   pick(page, "Type", "GitHub event");
   act(() => button("Create automation").click());
   await settle();
@@ -2396,8 +2411,8 @@ test("the Agent picker draws each agent as every agent menu does: its glyph, its
   act(() => picker(page, "Agent").click());
   assert.deepEqual(agentRows(), [
     { glyph: false, name: "Started by its first run", detail: null, ends: [] },
-    { glyph: true, name: "Nightly sweep", detail: "No task", ends: ["Failed"] },
-    { glyph: true, name: "CI digest", detail: "No task", ends: [] },
+    { glyph: true, name: "Nightly sweep", detail: "Another task", ends: ["Failed"] },
+    { glyph: true, name: "CI digest", detail: "Another task", ends: [] },
   ]);
 
   const row = [...document.querySelectorAll<HTMLElement>("[role=option]")][2];
@@ -2758,6 +2773,38 @@ test("a Run now the service refuses says why under the name, and a new automatio
   assert.match(fresh.textContent ?? "", /No runs yet\./u);
 });
 
+test("a Run now refused while a save is out leaves the save's check to land, and its own refusal standing", async () => {
+  heldChanges = [];
+  runRefusal = AUTOMATION_CALL_FAILURE.NOT_PERMITTED;
+  // The check's motion never finishes, so a check that landed stands to be read.
+  Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+    configurable: true,
+    value(this: HTMLElement) {
+      return this.classList.contains("ui-button-done") ? [new EventTarget()] : [];
+    },
+  });
+  onTestFinished(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
+  });
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+  type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
+  const save = button("Save");
+
+  act(() => save.click());
+  await settle();
+  act(() => button("Run now").click());
+  await settle();
+  heldChanges[0]?.();
+  await settle();
+
+  assert.ok(save.querySelector(".ui-button-done"), "Save shows its check");
+  assert.equal(
+    page.querySelector("[role='alert']")?.textContent,
+    "Only its creator, or the workspace's owners and admins, can run it.",
+  );
+});
+
 /** A run of the sweep that started the CI digest agent, which a press on its row opens. */
 const SWEEP_RUN = {
   id: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
@@ -2894,7 +2941,7 @@ test("a new automation set to a GitHub event takes its settings as switches in t
     "When a pull request by people or Vespin's agents is opened, marked ready, or pushed to in acme/ledger",
   );
   type(page.querySelector("input[aria-label='Automation name']"), "Code review");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Review this pull request.");
+  writePrompt(page, "Review this pull request.");
   act(() => button("Create automation").click());
   await settle();
 
@@ -2921,7 +2968,7 @@ test("a schedule Vespin cannot read is not created, and the refusal is announced
   await settle();
 
   type(page.querySelector("input[aria-label='Automation name']"), "Nightly sweep");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Sweep the stale branches.");
+  writePrompt(page, "Sweep the stale branches.");
   pick(page, "Repeats", "Custom");
   type(page.querySelector("input[aria-label='Cron']"), "every night");
   act(() => button("Create automation").click());
@@ -2959,7 +3006,7 @@ test("a webhook made in the window shows its secret once, with Copy, left out of
 
   pick(page, "Type", "Webhook");
   type(page.querySelector("input[aria-label='Automation name']"), "Fix Sentry alerts");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the error the alert names.");
+  writePrompt(page, "Fix the error the alert names.");
   act(() => button("Create automation").click());
   await settle();
 
@@ -2987,7 +3034,7 @@ test("a new secret shown after one was copied says nothing was copied of it yet"
   await settle();
   pick(page, "Type", "Webhook");
   type(page.querySelector("input[aria-label='Automation name']"), "Fix Sentry alerts");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the error the alert names.");
+  writePrompt(page, "Fix the error the alert names.");
   act(() => button("Create automation").click());
   await settle();
   act(() => button("Copy secret").click());
@@ -3013,7 +3060,7 @@ test("a shown secret is let go of once the automation is saved as anything but a
   await settle();
   pick(page, "Type", "Webhook");
   type(page.querySelector("input[aria-label='Automation name']"), "Fix Sentry alerts");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the error the alert names.");
+  writePrompt(page, "Fix the error the alert names.");
   act(() => button("Create automation").click());
   await settle();
   assert.equal(copyFieldValue(page, "secret")?.textContent, MADE_SECRET);
@@ -3554,7 +3601,7 @@ test("a new Sentry automation is made on the event, filters, levels, and cooldow
 
   type(page.querySelector("input[aria-label='Hours before the same issue runs again']"), "0");
   type(page.querySelector("input[aria-label='Automation name']"), "Fix new issues");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the issue Sentry opened.");
+  writePrompt(page, "Fix the issue Sentry opened.");
   act(() => button("Create automation").click());
   await settle();
   assert.equal(creates.length, 0);
@@ -3588,7 +3635,7 @@ test("a Sentry filter over its bounds says so under its own row, never under Typ
     Array.from({ length: 11 }, (_, n) => `project-${n}`).join(", "),
   );
   type(page.querySelector("input[aria-label='Automation name']"), "Fix new issues");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the issue Sentry opened.");
+  writePrompt(page, "Fix the issue Sentry opened.");
   act(() => button("Create automation").click());
   await settle();
 
@@ -3696,7 +3743,7 @@ test("Sentry chosen before the read says the deployment holds no Sentry integrat
 
   await vi.waitFor(() => assert.match(page.textContent ?? "", /Sentry isn't available/u));
   type(page.querySelector("input[aria-label='Automation name']"), "Fix new issues");
-  type(page.querySelector("textarea[aria-label='Prompt']"), "Fix the issue Sentry opened.");
+  writePrompt(page, "Fix the issue Sentry opened.");
   act(() => button("Create automation").click());
   await settle();
   assert.equal(creates.length, 0);
@@ -3848,4 +3895,50 @@ test("a search of the Agent picker that failed says it failed rather than that n
   await vi.waitFor(() => assert.match(dialog.textContent ?? "", /No agents match/u));
 
   assert.equal(dialog.querySelector("[role=alert]") === null, true);
+});
+
+test("the prompt offers what an @ may mention, a pick created into the prompt as its link, and a bare Enter writes a new line where ⌘Enter creates", async () => {
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
+  await settle();
+  type(page.querySelector("input[aria-label='Automation name']"), "Morning triage");
+  const prompt = page.querySelector(".automation-prompt") ?? assert.fail("no prompt");
+  typeInComposer(prompt, "Ask @lin");
+  await settle();
+  const offered = [...document.querySelectorAll('.mention-menu [role="option"]')].map(
+    (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+  );
+  pressInComposer(prompt, "Enter");
+  await settle();
+  pressInComposer(prompt, "Enter");
+  typeInComposer(prompt, "Then triage.");
+  await settle();
+  const created = creates.length;
+  pressInComposer(prompt, "Enter", { metaKey: true });
+  await settle();
+
+  assert.deepEqual(offered[0], "Linear");
+  assert.equal(created, 0, "Enter wrote a line rather than creating");
+  assert.equal(creates[0]?.action.prompt, "Ask [@Linear](mention://mcp/linear) \nThen triage.");
+});
+
+test("⌘Enter in the prompt pressed again while its save is out sends no second save, and saves again once the first lands", async () => {
+  heldChanges = [];
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+  const prompt = page.querySelector(".automation-prompt") ?? assert.fail("no prompt");
+  writePrompt(page, "Fix the two flakiest tests.");
+  pressInComposer(prompt, "Enter", { metaKey: true });
+  await settle();
+  // The words move while the save is out, so a second ⌘Enter has a change of its own to send.
+  writePrompt(page, "Fix the three flakiest tests.");
+  pressInComposer(prompt, "Enter", { metaKey: true });
+  await settle();
+  const whileOut = changes.length;
+  heldChanges[0]?.();
+  await settle();
+  pressInComposer(prompt, "Enter", { metaKey: true });
+  await settle();
+
+  assert.equal(whileOut, 1, "one save while the first is out");
+  assert.equal(changes.length, 2, "a save once the first has landed");
 });

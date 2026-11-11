@@ -1,5 +1,7 @@
 import { PRODUCT_SEARCH_SURFACE, PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { INTEGRATION_NAME, INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
+import { searchHit } from "@repo/features/search-score";
+import { type MatchRange, searchTokens } from "@repo/features/search-tokens";
 import { noMatchWords, TERM } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
@@ -62,8 +64,6 @@ import {
 } from "@repo/ui";
 import { integrationLines } from "@repo/ui/integration-search";
 import { land } from "@repo/ui/landed";
-import { searchHit } from "@repo/ui/search-score";
-import { type MatchRange, searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import { useEffect, useRef } from "react";
@@ -269,14 +269,14 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           }
         : undefined,
     ),
-    // The product MCP page's two groups, drawn once an account is signed in: the outside agents it let in, and how to connect one.
+    // The product MCP & CLI page's rows, drawn once an account is signed in: the MCP section's agents let in and Connect an app, and the CLI section's sign-in and install.
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CLIENTS,
-          label: "Connected agents",
+          label: "Connected apps",
           page: SETTINGS_VIEW.MCP,
           haystack: [
-            "Connected agents",
+            "Connected apps",
             "mcp server clients oauth allowed agents with access revoke disconnect external outside",
           ],
         }
@@ -284,34 +284,33 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CONNECT,
-          label: "Connect an agent",
+          label: "Connect an app",
           page: SETTINGS_VIEW.MCP,
           haystack: [
-            "Connect an agent",
-            "mcp server url address claude code codex cursor vs code chatgpt connector external outside",
+            "Connect an app",
+            "agent mcp server url address claude code codex cursor vs code chatgpt connector external outside",
           ],
         }
       : undefined,
-    // The CLI page's two groups, drawn once an account is signed in: the command's install, and its sign-in.
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.CLI_INSTALL,
           label: "Install the vespin command",
-          page: SETTINGS_VIEW.CLI,
+          page: SETTINGS_VIEW.MCP,
           haystack: [
             "Install the vespin command",
-            "cli command-line tool terminal shell npm path reinstall",
+            "cli set up setup command-line tool terminal shell npm path reinstall",
           ],
         }
       : undefined,
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.CLI_SIGN_IN,
-          label: "Sign in from your terminal",
-          page: SETTINGS_VIEW.CLI,
+          label: "CLI sign-in",
+          page: SETTINGS_VIEW.MCP,
           haystack: [
-            "Sign in from your terminal",
-            "cli command-line tool vespin login sign out everywhere logout",
+            "CLI sign-in",
+            "sign in from your terminal signed in command-line tool vespin login sign out everywhere logout",
           ],
         }
       : undefined,
@@ -348,9 +347,9 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.AGENT_MODEL,
-          label: "Default model",
+          label: "Model",
           page: SETTINGS_VIEW.AGENTS,
-          haystack: ["Default model", "model agent claude gpt start"],
+          haystack: ["Model", "default model new agents agent claude gpt start"],
         }
       : undefined,
     input.accountDrawn
@@ -392,13 +391,16 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           ],
         }
       : undefined,
-    // The Hosts page's Add hosts button, drawn once an account is signed in, under the machines the service lists.
+    // The Machines page's Add a machine button, drawn once an account is signed in, under the machines the service lists.
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.ADD_HOSTS,
-          label: "Add hosts",
+          label: "Add a machine",
           page: SETTINGS_VIEW.HOSTS,
-          haystack: ["Add hosts", "machine host server linux mac install vespin-host"],
+          haystack: [
+            "Add a machine",
+            "machines machine hosts host server linux mac install vespin-host",
+          ],
         }
       : undefined,
     // The Workspace page's groups, as it draws them for the workspace it
@@ -451,23 +453,23 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Rename workspace", "rename name change workspace photo"],
         }
       : undefined,
-    // The workspace's link, which its owner alone changes from Change slug in the identity row's ⋯.
+    // The workspace's link, which its owner alone changes from Change URL in the identity row's ⋯.
     input.workspace?.role === WORKSPACE_ROLE.OWNER
       ? {
           id: SETTINGS_SEARCH_ROW.WORKSPACE_SLUG,
-          label: "Workspace link",
+          label: "Workspace URL",
           page: SETTINGS_VIEW.WORKSPACE,
-          haystack: ["Workspace link", "Change slug link address url workspace"],
+          haystack: ["Workspace URL", "Change URL slug link address workspace"],
         }
       : undefined,
-    // The Skills page's one standing row, drawn once the page has the workspace it lists the skills of: the skills themselves are read from the service and listed under it.
+    // The Skills page's Add skill, on its first group's heading, drawn once the page has the workspace it lists the skills of.
     input.workspace
       ? {
           id: SETTINGS_SEARCH_ROW.ADD_SKILL,
-          label: "Add a skill",
+          label: "Add skill",
           page: SETTINGS_VIEW.SKILLS,
           haystack: [
-            "Add a skill",
+            "Add skill",
             "skills skill install import github repository SKILL.md instructions agents",
           ],
         }
@@ -617,7 +619,7 @@ export interface SettingsSearchOutcome {
  * find nothing, so "thm" is not Theme. A blank query is no search at all.
  *
  * A page is found by its own name as well as through the rows it holds, so
- * "hosts" finds the Hosts page itself. The kept rows come back under their
+ * "machines" finds the Machines page itself. The kept rows come back under their
  * page, because that is how the results are drawn, each page's rows best
  * first and equals in the corpus's order; and the pages come back best
  * first, each as good as the best of its own name and its rows, equals in

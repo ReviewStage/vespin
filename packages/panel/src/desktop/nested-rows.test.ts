@@ -1,5 +1,5 @@
+import { drawnTaskRows } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { drawnTaskRows, type TaskRow, taskRow, taskRowName } from "@repo/ui/task-list-model";
 import { expect, test } from "vitest";
 import { listedSlot, movedBeside, nestsOf, siblingsAt, storedSlot } from "./nested-rows.js";
 
@@ -24,19 +24,17 @@ function task(name: string, parentTaskId?: string): TaskSummary {
 }
 
 /** A section kept as Parent, Other, Child, Parent opened, so it is drawn Parent, Child, Other. */
-const KEPT: readonly TaskRow[] = [task("Parent"), task("Other"), task("Child", "Parent")].map(
-  taskRow,
-);
+const KEPT: readonly TaskSummary[] = [task("Parent"), task("Other"), task("Child", "Parent")];
 const DRAWN = drawnTaskRows(
   KEPT,
   () => true,
   () => false,
   new Map(),
 );
-const at = (name: string) => DRAWN.findIndex(({ row }) => taskRowName(row) === name);
+const at = (name: string) => DRAWN.findIndex((drawn) => drawn.task.name === name);
 
 test("a row moved up past a parent's child tasks lands beside the parent, never between it and them", () => {
-  expect(DRAWN.map(({ row }) => taskRowName(row))).toEqual(["Parent", "Child", "Other"]);
+  expect(DRAWN.map((drawn) => drawn.task.name)).toEqual(["Parent", "Child", "Other"]);
   expect(movedBeside(DRAWN, at("Other"), at("Child"))).toBe(at("Parent"));
   expect(movedBeside(DRAWN, at("Parent"), at("Child"))).toBe(at("Other"));
   expect(movedBeside(DRAWN, at("Child"), at("Parent"))).toBeUndefined();

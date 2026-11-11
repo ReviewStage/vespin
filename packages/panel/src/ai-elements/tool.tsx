@@ -1,3 +1,15 @@
+import { GLYPH_STATE } from "@repo/features/glyph-state";
+import {
+  BLOCK_TITLE,
+  COMMAND_PROMPT,
+  NO_OUTPUT,
+  readableBlock,
+  shownOutput,
+  TOOL_BLOCK,
+  TOOL_STATE,
+  type ToolBlock,
+  type ToolState,
+} from "@repo/features/tool-call-block";
 import {
   Badge,
   CARD_CORNER,
@@ -25,7 +37,7 @@ import {
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import type { ReactNode } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
-import { GLYPH_STATE, StateGlyph, stateEndMark } from "../state-glyph.js";
+import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { Fold, type FoldProps } from "./fold.js";
 
 /**
@@ -38,6 +50,9 @@ import { Fold, type FoldProps } from "./fold.js";
  * cut moves when the mark goes: the working mark while it runs and the
  * failed mark if it failed, each as an agent's tab draws it
  * (`state-glyph.tsx`); a call that ended well keeps no seat for one. A
+ * call that says where it stands in words (`status`), as one held for an
+ * answer says it waits and then how it was answered, says them muted at
+ * the line's end, the working mark giving way to them while it is held. A
  * subject the body says whole, as a command's input is the command and a
  * read's its path, is the closed row's preview, and the open row says its
  * verb alone (`blockSays`), even while a find draws the body hidden. The
@@ -58,67 +73,6 @@ import { Fold, type FoldProps } from "./fold.js";
  * block of each kind is drawn is this file's. Its look is `.tool`'s
  * (tasks.css).
  */
-
-/** The states a tool part may stand in, as the AI SDK spells them. */
-export const TOOL_STATE = {
-  INPUT_STREAMING: "input-streaming",
-  INPUT_AVAILABLE: "input-available",
-  OUTPUT_AVAILABLE: "output-available",
-  OUTPUT_ERROR: "output-error",
-} as const;
-
-export type ToolState = (typeof TOOL_STATE)[keyof typeof TOOL_STATE];
-
-/** How a block of the body is drawn: a command behind its prompt, a patch with its lines colored, words as they are, or JSON. */
-export const TOOL_BLOCK = {
-  COMMAND: "command",
-  PATCH: "patch",
-  TEXT: "text",
-  JSON: "json",
-} as const;
-
-type ToolBlockKind = (typeof TOOL_BLOCK)[keyof typeof TOOL_BLOCK];
-
-export interface ToolBlock {
-  readonly kind: ToolBlockKind;
-  readonly text: string;
-}
-
-/** The prompt a command is drawn behind. */
-const COMMAND_PROMPT = "$ ";
-
-/** What a block's header says it is. */
-const BLOCK_TITLE = {
-  INPUT: "Input",
-  OUTPUT: "Output",
-  TERMINAL: "Terminal",
-} as const;
-
-/** What an answer of nothing says in its card's place. */
-const NO_OUTPUT = "No output";
-
-/** What an empty list reads as. */
-const NONE = "(none)";
-
-/** The words that only acknowledge a call, which tell a reader nothing the row does not. */
-const ACKNOWLEDGMENTS: ReadonlySet<unknown> = new Set(["accepted", "Done.", "done", "ok"]);
-
-/** The keys whose `true` only acknowledges a call, as `{ "ok": true }` does; `true` under any other key is an answer. */
-const ACKNOWLEDGING_KEYS: ReadonlySet<string> = new Set(["ok", "success"]);
-
-/**
- * Whether a block says a call's subject whole, so the row previewing it
- * gives way while the body is drawn: a block that is the subject, as a
- * read's input is its path, or JSON holding it as one of its values, as a
- * search's input holds its pattern. Note that words made from the input
- * rather than copied from it, as a page's name is made from its address,
- * are not said by it, so they stay.
- */
-export function blockSays(block: ToolBlock, subject: string | undefined): boolean {
-  if (subject === undefined || subject === "") return false;
-  if (block.text === subject) return true;
-  return block.kind === TOOL_BLOCK.JSON && block.text.includes(`: ${JSON.stringify(subject)}`);
-}
 
 /** What a patch's line does, by its first characters: a line added, one removed, or one that stands. */
 function patchRow(line: string): CodeRow {
@@ -189,6 +143,10 @@ export interface ToolHeaderProps {
   subjectInBody?: boolean;
   /** Where the call ran, as a quiet tag at the line's end, for a call that ran somewhere other than its tab says ("On your Mac", or whose Mac by their disc and name); none for the rest. */
   place?: ReactNode | undefined;
+  /** Where the call stands in a word or two of the muted ink at the line's end, as a held call's "Waiting for approval" and its answer's "Allowed"; none for the rest. */
+  status?: string | undefined;
+  /** Whether the call is held, not working, so the working mark gives way to its status. */
+  paused?: boolean | undefined;
 }
 
 /**
@@ -208,9 +166,11 @@ export function ToolLine({
   chip,
   subjectIsCode = true,
   place,
+  status,
+  paused = false,
 }: Pick<
   ToolHeaderProps,
-  "state" | "icon" | "label" | "subject" | "chip" | "subjectIsCode" | "place"
+  "state" | "icon" | "label" | "subject" | "chip" | "subjectIsCode" | "place" | "status" | "paused"
 >): ReactNode {
   const trailing = subject !== undefined || chip !== undefined;
   const failed = state === TOOL_STATE.OUTPUT_ERROR;
@@ -253,7 +213,13 @@ export function ToolLine({
           <Badge>{place}</Badge>
         </span>
       )}
-      {failed ? null : <ToolStateMark state={state} />}
+      {status === undefined ? null : (
+        <span className="tool-status flex-none whitespace-nowrap text-muted-foreground">
+          {" "}
+          {status}
+        </span>
+      )}
+      {failed || paused ? null : <ToolStateMark state={state} />}
     </>
   );
 }
@@ -288,6 +254,8 @@ export function ToolHeader({
   subjectIsCode = true,
   subjectInBody = false,
   place,
+  status,
+  paused,
 }: ToolHeaderProps): ReactNode {
   const previewed = useDisclosurePreviewShown(subjectInBody);
   return (
@@ -300,6 +268,8 @@ export function ToolHeader({
         chip={chip}
         subjectIsCode={subjectIsCode}
         place={place}
+        status={status}
+        paused={paused}
       />
     </ToolSummary>
   );
@@ -363,104 +333,6 @@ function BlockCard({
       copy={copyThroughShell}
     />
   );
-}
-
-/** A JSON block's value, or its text where it is no JSON, as a string answer is drawn as it is. */
-function blockValue(block: ToolBlock): unknown {
-  try {
-    return JSON.parse(block.text);
-  } catch {
-    return block.text;
-  }
-}
-
-function isContainer(value: unknown): value is object {
-  return value !== null && typeof value === "object";
-}
-
-/** A value that stands on its key's line: a scalar, its later lines set in under the first, or an empty list or record as "(none)". */
-function leafWords(value: unknown, indent: string): string {
-  if (isContainer(value)) return NONE;
-  return String(value).replaceAll("\n", `\n${indent}  `);
-}
-
-/** A JSON value as indented `key: value` lines and `- item` lines, with no braces or quotes. */
-function readableLines(value: unknown, indent: string): string[] {
-  if (Array.isArray(value) && value.length === 0) return [`${indent}${NONE}`];
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => {
-      const [first = "", ...rest] = readableLines(item, `${indent}  `);
-      return [`${indent}- ${first.trimStart()}`, ...rest];
-    });
-  }
-  if (!isContainer(value)) return [`${indent}${leafWords(value, indent)}`];
-  return Object.entries(value).flatMap(([key, item]) =>
-    isContainer(item) && Object.keys(item).length > 0
-      ? [`${indent}${key}:`, ...readableLines(item, `${indent}  `)]
-      : [`${indent}${key}: ${leafWords(item, indent)}`],
-  );
-}
-
-/**
- * A block as a reader reads it: JSON as indented words, a record holding
- * one string as that string, and every other kind as it is. Note that it
- * knows no tool: what one tool's answer means is `tool-call-model.ts`'s.
- */
-function readableBlock(block: ToolBlock): ToolBlock {
-  if (block.kind !== TOOL_BLOCK.JSON) return block;
-  const value = blockValue(block);
-  if (!isContainer(value)) return block;
-  const [only, ...more] = Object.values(value);
-  if (!Array.isArray(value) && typeof only === "string" && more.length === 0) {
-    return { kind: TOOL_BLOCK.TEXT, text: only };
-  }
-  return { kind: TOOL_BLOCK.TEXT, text: readableLines(value, "").join("\n") };
-}
-
-/**
- * Whether a JSON answer only acknowledges the call, as "accepted",
- * `{ "status": "accepted" }` or `{ "ok": true }` does. Note that `true`
- * acknowledges only under `ok` or `success`, because `{ "exists": true }`
- * is the call's answer.
- */
-function acknowledges(block: ToolBlock): boolean {
-  if (block.kind !== TOOL_BLOCK.JSON) return false;
-  const value = blockValue(block);
-  if (!isContainer(value) || Array.isArray(value)) return ACKNOWLEDGMENTS.has(value);
-  const entries = Object.entries(value);
-  return (
-    entries.length > 0 &&
-    entries.every(
-      ([key, item]) => ACKNOWLEDGMENTS.has(item) || (item === true && ACKNOWLEDGING_KEYS.has(key)),
-    )
-  );
-}
-
-/** The block an answer's card draws, read as words; nothing where the answer only acknowledges the call. */
-function shownOutput(block: ToolBlock): ToolBlock | undefined {
-  return acknowledges(block) ? undefined : readableBlock(block);
-}
-
-/**
- * The words a call's body draws, as a find counts them before the body is
- * drawn: a command's line and what it printed, then its error; or the
- * input read as words, then the error or else the answer as its card or
- * its "No output" line says it. Note that it reads each block as the cards
- * below do, so a find counts what a reader sees.
- */
-export function bodyWords(
-  input: ToolBlock | undefined,
-  output: ToolBlock | undefined,
-  errorText: string | undefined,
-): readonly string[] {
-  if (input?.kind === TOOL_BLOCK.COMMAND) {
-    const printed = output === undefined ? "" : readableBlock(output).text;
-    return [input.text, printed, errorText ?? ""].filter((words) => words !== "");
-  }
-  const shown = output === undefined ? undefined : shownOutput(output);
-  const answer = shown === undefined || shown.text.trim() !== "" ? shown?.text : NO_OUTPUT;
-  const inputWords = input === undefined ? "" : readableBlock(input).text;
-  return [inputWords, errorText ?? answer ?? ""].filter((words) => words !== "");
 }
 
 /** What the call was given, read as words; nothing where it was given nothing. */

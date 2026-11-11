@@ -1,19 +1,16 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import type {
-  AccountFailedRun,
-  AccountInboxEntry,
-  AccountTasklessEntry,
-} from "@repo/features/account-inbox-wire";
+import type { AccountFailedRun, AccountInboxEntry } from "@repo/features/account-inbox-wire";
 import { AGENT_CALL_FAILURE, type AgentAccountInboxAnswerView } from "@repo/features/agent-view";
 import {
+  AGENT_FAILURE,
   AGENT_STATUS,
   type AgentStatus,
   type AgentSummary,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
 import { AUTOMATION_RUN_REASON } from "@repo/features/automation-wire";
 import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
+import { TURN_STATUS } from "@repo/wire";
 import { COMPLETION_SOUND, type CompletionSound } from "@repo/wire/app-settings";
 import { Duration, Effect, Layer, Queue, Stream } from "effect";
 import { TestClock } from "effect/testing";
@@ -81,8 +78,6 @@ function fixture() {
   let inboxFollows = 0;
   const waiting: (readonly AppInboxTask[])[] = [];
   const holding: (readonly AppInboxTaskHolding[])[] = [];
-  const taskless: AppInboxSlice["taskless"][] = [];
-  const agents: AppInboxSlice["agents"][] = [];
   const failedRuns: AppInboxSlice["failedRuns"][] = [];
   let inboxAnswers: Queue.Queue<AgentAccountInboxAnswerView> | undefined;
   let accounts: Queue.Queue<string | undefined> | undefined;
@@ -121,11 +116,13 @@ function fixture() {
       onInboxChanged: (next) => {
         waiting.push(next.waiting);
         holding.push(next.tasks);
-        taskless.push(next.taskless);
-        agents.push(next.agents);
         failedRuns.push(next.failedRuns);
       },
-      sound: () => ({ when: soundWhen, sound: COMPLETION_SOUND.MARIMBA }),
+      sound: () => ({
+        when: soundWhen,
+        sound: COMPLETION_SOUND.MARIMBA,
+        askSound: COMPLETION_SOUND.KNOCK,
+      }),
       notify: () => notifying,
       taskName: (taskId) => (taskId === TASK_ID ? TASK_NAME : undefined),
       open: () => undefined,
@@ -165,8 +162,6 @@ function fixture() {
     inboxFollows: () => inboxFollows,
     waiting,
     holding,
-    taskless,
-    agents,
     badges,
     failedRuns,
     /** The signed-in account's id as its identity now holds it: none for one stored without it. */
@@ -331,6 +326,7 @@ const READ_AT = 1_800_000_000_000;
 const ITEM_A = "5e2d7c3a-1b4f-4e6a-8c9d-0f1e2d3c4b5a";
 const ITEM_B = "6f3e8d4b-2c5a-4f7b-9d0e-1a2b3c4d5e6f";
 const ITEM_C = "7a4f9e5c-3d6b-4a8c-8e1f-2b3c4d5e6f7a";
+const ITEM_D = "8b5a0f6d-4e7c-4b9d-9f2a-3c4d5e6f7a8b";
 
 const DAY = Duration.toMillis(Duration.days(1));
 it.effect(
@@ -452,49 +448,12 @@ it.effect(
       ]);
     }),
 );
-/** The automation the planless agents below were started by. */
-const AUTOMATION_NAME = "Morning Sentry triage";
-
-/** An agent an automation started with no plan, as the plan list carries it, started by the signed-in account unless a test says. */
-function tasklessAgent(status: AgentStatus, patch: Partial<TasklessAgent> = {}): TasklessAgent {
-  return {
-    ...agent(status, { title: "Triage overnight issues" }),
-    planId: null,
-    automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-    automationName: AUTOMATION_NAME,
-    workspaceId: "workspace-acme",
-    repository: "acme/relay",
-    startedBy: { userId: ACCOUNT_ID, name: "Dean" },
-    activityAt: 1_800_000_000_000,
-    ...patch,
-  };
-}
-
-it.effect(
-  "an automation's agent with no plan, held from the plan list, is dotted as its turn ends",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      const notices = yield* f.notices;
-      f.focus(false);
-
-      notices.observeAgents([tasklessAgent(AGENT_STATUS.RUNNING)]);
-      notices.observeAgents([tasklessAgent(AGENT_STATUS.COMPLETED)]);
-      yield* settled;
-
-      assert.deepEqual(f.unseen.at(-1), [AGENT_ID]);
-    }),
-);
-it.effect.each([
-  { held: "on a plan", planId: TASK_ID },
-  { held: "with no plan", planId: null },
-])("a teammate's agent $held is dotted as its turn ends, as the account's own is", ({ planId }) =>
+it.effect("a teammate's agent is dotted as its turn ends, as the account's own is", () =>
   Effect.gen(function* () {
     const f = fixture();
     const notices = yield* f.notices;
     f.focus(false);
     const theirs = agent(AGENT_STATUS.RUNNING, {
-      planId,
       startedBy: { userId: "user-sam", name: "Sam" },
     });
 
@@ -505,134 +464,6 @@ it.effect.each([
     assert.deepEqual(f.unseen.at(-1), [AGENT_ID]);
   }),
 );
-/** An item of an agent with no task waiting on the developer, as the account's inbox read carries it. */
-/** An agent with no task a teammate started. */
-const TEAMMATES_AGENT = "a1b2c3d4-0000-4000-8000-0000000000aa";
-
-function tasklessItem(id: string, patch: Partial<AccountTasklessEntry> = {}): AccountTasklessEntry {
-  return {
-    id,
-    agentId: AGENT_ID,
-    agentTitle: "Sweep the flaky tests",
-    agentModel: MODEL,
-    automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-    automationName: "Nightly flake sweep",
-    repository: "acme/relay",
-    title: "Quarantine the flaky test?",
-    revision: 1,
-    postedAt: READ_AT,
-    updatedAt: READ_AT,
-    ...patch,
-  };
-}
-it.effect(
-  "an item of an agent with no plan waits beside the plans' with its workspace and counts on the badge",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      f.focus(false);
-      f.answerInbox({ items: [waitingItem(ITEM_A)], cursor: "1", readAt: READ_AT });
-      yield* settled;
-
-      f.answerInbox({
-        items: [waitingItem(ITEM_A)],
-        planless: [
-          tasklessItem(ITEM_B, { updatedAt: READ_AT + 1, workspaceId: "workspace-acme" }),
-          // A teammate's agent's question, which waits on the teammate.
-          tasklessItem(ITEM_C, {
-            agentId: TEAMMATES_AGENT,
-            startedBy: "user-sam",
-            workspaceId: "workspace-acme",
-          }),
-        ],
-        automations: [
-          {
-            automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-            items: 2,
-            updatedAt: READ_AT + 1,
-          },
-        ],
-        cursor: "2",
-        readAt: READ_AT + 2,
-      });
-      yield* settled;
-
-      assert.equal(
-        f.badges.at(-1),
-        2,
-        "the badge counts a plan's item and an agent's with no plan alike",
-      );
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => item.workspaceId),
-        ["workspace-acme", "workspace-acme"],
-        "the window is told whose workspace's list each item stands in",
-      );
-      assert.deepEqual(
-        f.agents.at(-1)?.map((held) => [held.agentId, held.items, held.toDo, held.updatedAt]),
-        [
-          [AGENT_ID, 1, 1, READ_AT + 1],
-          [TEAMMATES_AGENT, 1, 0, READ_AT],
-        ],
-        "a service before the agents holding items leaves the window to list each agent its open items name, counting only the questions that wait on the reader",
-      );
-    }),
-);
-
-it.effect(
-  "an automation renamed with nothing waiting moving is written as the item's new name, its cursor the same",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      const answer = (automationName: string) => ({
-        items: [],
-        planless: [tasklessItem(ITEM_A, { automationName })],
-        automations: [],
-        cursor: "4",
-        readAt: READ_AT,
-      });
-      f.answerInbox(answer("Nightly flake sweep"));
-      yield* settled;
-
-      f.answerInbox(answer("Flake sweep, nightly"));
-      yield* settled;
-
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => item.automationName),
-        ["Flake sweep, nightly"],
-      );
-    }),
-);
-
-it.effect(
-  "a workspace first named for an item, its cursor the same, as a service newly naming it answers, is written to the window",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      const answer = (workspaceId: string | undefined) => ({
-        items: [],
-        planless: [
-          workspaceId === undefined ? tasklessItem(ITEM_A) : tasklessItem(ITEM_A, { workspaceId }),
-        ],
-        automations: [],
-        cursor: "5",
-        readAt: READ_AT,
-      });
-      f.answerInbox(answer(undefined));
-      yield* settled;
-
-      f.answerInbox(answer("workspace-acme"));
-      yield* settled;
-
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => item.workspaceId),
-        ["workspace-acme"],
-      );
-    }),
-);
-
 it.effect(
   "only the items of agents the account started wait on it: a teammate's agent's questions are neither counted nor badged, while its plan is still listed",
   () =>
@@ -773,55 +604,6 @@ it.effect(
     }),
 );
 
-it.effect(
-  "a question from a teammate's agent with no plan is neither counted nor badged for the account, while its own is",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      f.focus(false);
-      f.answerInbox({ items: [], planless: [], cursor: "1", readAt: READ_AT });
-      yield* settled;
-      f.answerInbox({
-        items: [],
-        planless: [
-          tasklessItem(ITEM_A, { startedBy: ACCOUNT_ID, updatedAt: READ_AT + 1 }),
-          tasklessItem(ITEM_B, { startedBy: "user-charles", updatedAt: READ_AT + 1 }),
-        ],
-        cursor: "2",
-        readAt: READ_AT + 1,
-      });
-      yield* settled;
-
-      assert.equal(f.badges.at(-1), 1);
-    }),
-);
-
-it.effect(
-  "a question from a teammate's agent with no plan is written for the window's Inbox with who started it, as every member's Inbox lists it, though it is not badged",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      f.focus(false);
-      f.answerInbox({ items: [], planless: [], cursor: "1", readAt: READ_AT });
-      yield* settled;
-      f.answerInbox({
-        items: [],
-        planless: [tasklessItem(ITEM_B, { startedBy: "user-charles", updatedAt: READ_AT + 1 })],
-        cursor: "2",
-        readAt: READ_AT + 1,
-      });
-      yield* settled;
-
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => [item.id, item.startedBy]),
-        [[ITEM_B, "user-charles"]],
-      );
-      assert.equal(f.badges.at(-1), 0);
-    }),
-);
-
 const RUN_ID = "4b5c6d7e-8f90-4a1b-8c2d-3e4f5a6b7c8d";
 const AUTOMATION_ID = "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04";
 
@@ -913,7 +695,7 @@ it.effect(
       yield* f.notices;
       const teammate = "user-charles";
       const question = waitingItem(ITEM_A, { waitsOn: ACCOUNT_ID, asking: true });
-      const snoozed = tasklessItem(ITEM_C, {
+      const snoozed = waitingItem(ITEM_D, {
         startedBy: teammate,
         waitsOn: ACCOUNT_ID,
         asking: true,
@@ -921,11 +703,7 @@ it.effect(
       });
       const answer = (cursor: string, items: readonly AccountInboxEntry[]) =>
         f.answerInbox({
-          items: [...items, waitingItem(ITEM_C, { waitsOn: teammate, asking: true })],
-          planless: [
-            snoozed,
-            tasklessItem(ITEM_B, { startedBy: ACCOUNT_ID, waitsOn: teammate, asking: true }),
-          ],
+          items: [...items, snoozed, waitingItem(ITEM_C, { waitsOn: teammate, asking: true })],
           cursor,
           readAt: READ_AT,
         });
@@ -1013,7 +791,7 @@ it.effect.each([
 );
 
 it.effect(
-  "an item newly asking the account chimes, while what the first answer holds and a notice that asks nothing do not",
+  "an item newly asking the account chimes the ask sound, while what the first answer holds and a notice that asks nothing do not",
   () =>
     Effect.gen(function* () {
       const f = fixture();
@@ -1034,7 +812,7 @@ it.effect(
       });
       yield* settled;
 
-      assert.deepEqual([before, f.chimes.length], [0, 1]);
+      assert.deepEqual([before, f.chimes], [0, [COMPLETION_SOUND.KNOCK]]);
     }),
 );
 
@@ -1062,21 +840,62 @@ it.effect("ends inside one burst chime once, and an end after it chimes again", 
 );
 
 it.effect(
-  "a turn of the account's own agent ending in the background posts a notification naming the agent, once the burst closes",
+  "an ask inside a finish's burst chimes the ask sound, and a finish inside an ask's burst chimes nothing",
   () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const notices = yield* f.notices;
+      f.playSound(SOUND_WHEN.ALWAYS);
+      f.answerInbox({ items: [], cursor: "1", readAt: READ_AT });
+      yield* settled;
+
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING)]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED)]);
+      yield* TestClock.adjust(Duration.millis(300));
+      f.answerInbox({
+        items: [waitingItem(ITEM_A, { waitsOn: ACCOUNT_ID, asking: true })],
+        cursor: "2",
+        readAt: READ_AT,
+      });
+      yield* settled;
+      const id = "a1b2c3d4-0000-4000-8000-000000000021";
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { id })]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED, { id })]);
+
+      assert.deepEqual(f.chimes, [COMPLETION_SOUND.MARIMBA, COMPLETION_SOUND.KNOCK]);
+    }),
+);
+
+it.effect.each([
+  { why: "failed", failure: AGENT_FAILURE.MODEL, body: "Your agent failed." },
+  // One its plan's usage limit stopped is told so, not that it failed.
+  {
+    why: "stopped at its usage limit",
+    failure: AGENT_FAILURE.PLAN_LIMIT,
+    body: "Usage limit reached",
+  },
+])(
+  "a turn of the account's own agent that $why in the background posts a notification naming the agent, once the burst closes",
+  ({ failure, body }) =>
     Effect.gen(function* () {
       const f = fixture();
       const notices = yield* f.notices;
       f.showNotifications(true);
       f.focus(false);
 
-      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { title: "Ship the chime" })]);
-      notices.observeAgents([ownAgent(AGENT_STATUS.FAILED, { title: "Ship the chime" })]);
+      const running = ownAgent(AGENT_STATUS.RUNNING, { title: "Ship the chime" });
+      notices.observeAgents([running]);
+      notices.observeAgents([
+        ownAgent(AGENT_STATUS.FAILED, {
+          title: "Ship the chime",
+          turn: { id: "turn-1", queuedAt: 1, status: TURN_STATUS.FAILED, failure },
+        }),
+      ]);
       yield* TestClock.adjust(Duration.seconds(2));
 
       assert.deepEqual(
-        f.posted.map(({ title, body }) => ({ title, body })),
-        [{ title: "Ship the chime", body: "Your agent failed." }],
+        f.posted.map((posted) => ({ title: posted.title, body: posted.body })),
+        [{ title: "Ship the chime", body }],
       );
     }),
 );

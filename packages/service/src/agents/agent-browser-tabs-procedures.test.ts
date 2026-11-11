@@ -55,10 +55,8 @@ import {
   fakeSandboxApi,
   noSandboxBrowserLayer,
 } from "../testing/agent-browser-fake.js";
-import {
-  agentBrowserTabsProcedures,
-  BROWSER_TAKEOVER_HOLD_MS,
-} from "./agent-browser-tabs-procedures.js";
+import { BROWSER_TAKEOVER_HOLD_MS } from "./agent-browser-tabs.js";
+import { agentBrowserTabsProcedures } from "./agent-browser-tabs-procedures.js";
 import { AgentBrowser, agentBrowserOver } from "./browser/agent-browser.js";
 
 /**
@@ -546,68 +544,6 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
           opened,
         );
         assert.deepEqual(toolsCounted(starter, workspace), [SERVER_AGENT_TOOL.BROWSER]);
-      }),
-  );
-
-  it.effect(
-    "an agent on no task lists and opens its tabs under its own path, and a teammate who does not see it is refused",
-    () =>
-      Effect.gen(function* () {
-        const { starter, teammate, reader, workspace, ask } = yield* openTask;
-        const loose = Option.getOrThrow(
-          yield* createAgent(starter, {
-            taskId: null,
-            organizationId: workspace,
-            descriptionSnapshot: null,
-            prompt: "Sign in to the side project.",
-            idempotencyKey: randomUUID(),
-            model: "anthropic/claude-opus-5.5",
-            effort: "high",
-            repository: TOKEN_REPOSITORY,
-            githubAccess: GITHUB_ACCESS.TOKEN,
-            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-          }),
-        ).agent;
-        const kept = yield* upsertBrowserTab({
-          conversationId: loose.conversationId,
-          targetId: randomUUID(),
-          address: "https://side.test/",
-          title: "Side",
-          openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
-        });
-        yield* runAgent(loose);
-        const { peer, layer } = yield* runningBrowser;
-        const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
-
-        for (const member of [starter, reader]) {
-          assert.deepEqual(
-            tabsOf(yield* ask(request(member, agentTabsPath(loose.id)))).map((tab) => tab.id),
-            [kept.id],
-          );
-          const live = yield* liveTabsOf(member, { agentId: loose.id });
-          assert.deepEqual(
-            live.tabs.map((tab) => tab.id),
-            [kept.id],
-          );
-        }
-        assert.deepEqual(yield* ask(request(teammate, agentTabsPath(loose.id))), notFound);
-        assert.deepEqual((yield* liveTabsOf(teammate, { agentId: loose.id })).tabs, []);
-        assert.deepEqual(
-          yield* ask(agentOpenRequest(teammate, loose.id, "https://side.test/login"), layer),
-          notFound,
-        );
-        assert.deepEqual(yield* openedAddresses(peer), []);
-
-        yield* TestClock.adjust("1 second");
-        const opened = tabOf(
-          yield* ask(agentOpenRequest(starter, loose.id, "https://side.test/login"), layer),
-        );
-        assert.equal(opened.agentId, loose.id);
-        assert.equal(opened.driver?.userId, starter);
-        assert.deepEqual(
-          tabsOf(yield* ask(request(reader, agentTabsPath(loose.id)))).map((tab) => tab.id),
-          [kept.id, opened.id],
-        );
       }),
   );
 

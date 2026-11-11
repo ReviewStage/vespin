@@ -1,0 +1,17 @@
+{
+  "helpers": [
+    "deleteFor",
+    "consumeSandboxRelease",
+    "deletedWithWorkspace",
+    "deletedBaseDrive",
+    "deletedFilledDrive",
+    "deletedIfStill"
+  ],
+  "deleters": {
+    "packages/sandbox/": "The sandbox package itself: `Sandbox`'s `delete` and `deleteDrive` over the provider, and the drive helpers built on them.",
+    "packages/service/src/agents/session-sandboxes.ts": "The one place an agent's sandbox is deleted: an unused one's release, a session's sandboxes, and a deleted workspace's.",
+    "packages/service/src/agents/base-drive.ts": "A repository's base drive, which no agent owns, and the fill's sandbox under its name.",
+    "packages/service/src/accounts/workspace-deletion.ts": "A deleted workspace's agents' sandboxes and base drives, deleted through `session-sandboxes.ts`'s `deletedWithWorkspace`.",
+    "packages/service/src/agents/machine/sandbox-machine.ts": "The sandbox machine's `discard`, which a session's reset and a launch whose agent is gone ask of it."
+  }
+}

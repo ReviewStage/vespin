@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { inPinOrder } from "@repo/features/pin-order";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
 import { applySectionWrite } from "@repo/features/task-section-writes";
+import { NO_TASK_SECTIONS } from "@repo/features/task-sections-model";
 import {
   TASK_PRIORITY,
   TASK_STATUS,
@@ -12,6 +13,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import {
   WORKSPACE_ROLE,
@@ -21,8 +23,6 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { NO_TASK_SECTIONS } from "@repo/ui/task-sections-model";
-import { type PinMove, TASK_MARK, type TaskMark } from "@repo/ui/tasks-model";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";

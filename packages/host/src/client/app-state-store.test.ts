@@ -160,7 +160,6 @@ it("a slice that moved keeps every part of it that did not, so what a reader hel
     [PAGE_OWNER.TASK]: {
       "plan-1": { rows: [page(PAGE_ONE, "Invites", AGENT), page(PAGE_TWO, second, AGENT)] },
     },
-    [PAGE_OWNER.AGENT]: {},
   });
   const rowsOf = () => app.snapshot()[LIVE_READ.PAGES][PAGE_OWNER.TASK]["plan-1"]?.rows;
   app.update({ [LIVE_READ.PAGES]: held("Billing") });

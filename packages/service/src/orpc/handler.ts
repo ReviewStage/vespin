@@ -31,11 +31,12 @@ import { OpenAPIMatcher } from "@orpc/openapi/standard";
 import { ORPCError, type Router } from "@orpc/server";
 import { ResponseHeadersHandlerPlugin } from "@orpc/server/plugins";
 import type { StandardHandlerInterceptor } from "@orpc/server/standard";
+import { presentedClient } from "@repo/features/client-identity";
 import { getBodyCap, RETIRED_TASK_PATHS } from "@repo/features/contract";
 import { HTTP_METHOD } from "@repo/wire";
 import type { Context } from "effect";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
-import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
+import { HOSTED_REFUSAL, type HostedRefusal, hostUpgradeNeeded } from "../http/http-effect.js";
 import type { WebServices } from "../runtime.js";
 import type { HostedContext } from "./base.js";
 import { encodeHostedError, HOSTED_ERROR_STATUS, hostedRefusalWrap } from "./errors.js";
@@ -69,10 +70,21 @@ const SAME_ORIGIN_ANSWER = {
 /**
  * The most any request's body may carry, in bytes: Vercel's own limit on a
  * function's request body (4.5 MB), which no hosted request passes anyway,
- * and above the largest cap any hosted endpoint holds (a task's Start, about
- * 4.2 MB, which carries an agent's Start with its files).
+ * and above the largest cap any hosted endpoint holds (a member's message on
+ * an inbox thread, about 4.42 MB, which carries a form's values with its
+ * files).
  */
 export const HOSTED_BODY_CEILING_BYTES = 4_500_000;
+
+/**
+ * The oldest hosted API version the service still serves
+ * (`HOSTED_API_VERSION`, which every build sends): a build that names a
+ * lower one is refused every procedure as needing an update, the refusal a
+ * host daemon below its own floor gets. Moved up when the wire changes in
+ * a way a build before the move cannot read. A request that names no
+ * version, a build from before the headers, is served.
+ */
+const HOSTED_API_FLOOR = 1;
 
 const HTTP_METHOD_HEAD = "HEAD";
 
@@ -200,6 +212,16 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
   };
   return async (incoming, services) => {
     const request = counted(incoming);
+    const client = presentedClient(request.headers);
+    if (client !== undefined && client.apiVersion < HOSTED_API_FLOOR) {
+      return sameOriginOnly(
+        refusalResponse(
+          request,
+          HOSTED_HTTP_STATUS.UPGRADE_REQUIRED,
+          hostUpgradeNeeded(String(HOSTED_API_FLOOR)),
+        ),
+      );
+    }
     const { matched, response } = await handler.handle(request, {
       context: { "effect/context": services, "effect/wrap": hostedRefusalWrap(services), request },
     });

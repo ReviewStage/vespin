@@ -13,7 +13,6 @@ import { dayText } from "@repo/features/time-format";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ANNOUNCE,
-  BUTTON_TYPE,
   BUTTON_VARIANT,
   Button,
   CONFIRM_LOSS,
@@ -23,21 +22,17 @@ import {
   FootQuestion,
   Inline,
   JUSTIFY,
-  LAYOUT_ELEMENT,
+  OutsideLink,
+  PasteSteps,
   SETTINGS_ROW_STATE,
-  SecretField,
   SettingsFacts,
   SettingsRowStateLine,
-  Stack,
   TEXT_ELEMENT,
   TEXT_FONT,
-  TEXT_LINK_LOOK,
   TEXT_VARIANT,
   Text,
-  TextLink,
   useConfirmDialog,
 } from "@repo/ui";
-import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -51,12 +46,12 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 /**
  * github-dialog.tsx -- Settings › Profile › GitHub personal access token: the member's own classic token, added, shown, and removed.
  *
- * The dialog holds the token alone: a password field with Save, or once a token is saved its hint, login, expiry, and Disconnect, which asks
- * first at the dialog's own foot (`FootQuestion`), and at its foot Create token, which opens
- * GitHub's page for a new classic token in the browser. Every refusal and status says what to do
- * next, in a line.
+ * The dialog holds the token alone: its paste, setup's own (`GitHubTokenPaste`), whose first step
+ * opens GitHub's page for a new classic token in the browser, or once a token is saved its hint,
+ * login, expiry, and Disconnect, which asks first at the dialog's own foot (`FootQuestion`). Every
+ * refusal and status says what to do next, in a line.
  *
- * The token stands in the open field alone, is sent once on Save, and is
+ * The token stands in the open field alone, is sent once as it is pasted or on Enter, and is
  * cleared as soon as the service keeps it; the service never answers one.
  * The dialog is kept out of the screen recording, which masks a field's
  * characters but not their count, as Settings › Agents' keys are.
@@ -65,13 +60,21 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 /** The class PostHog's recorder leaves out of a recording, element and children alike. */
 const NO_CAPTURE = "ph-no-capture";
 
+/** What the token's paste says: its steps, its field, and the check while a save is out. */
+const PASTE_WORDS = {
+  CREATE: "Create a classic token with repo ticked",
+  OPEN: "Open GitHub",
+  LABEL: "Paste the token",
+  RUNNING: "Checking the token",
+} as const;
+
 const LINE = {
   SAVE_FAILED: "The token could not be saved. Try again.",
   REMOVE_FAILED: "The token could not be removed. Try again.",
 } as const;
 
 /** Why a save kept nothing, and what to do next, as one short line. */
-export function rejectionLabel(rejection: GitHubTokenRejection): ReactNode {
+function rejectionLabel(rejection: GitHubTokenRejection): ReactNode {
   switch (rejection) {
     case GITHUB_TOKEN_REJECTION.FINE_GRAINED:
       return "This isn't a classic token. Create a classic token and paste that.";
@@ -198,62 +201,80 @@ function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element
   );
 }
 
-/** The field a token is pasted into, with Save, and why a save kept nothing under it. */
-function TokenForm({
+/**
+ * Sends a pasted token once, answering why GitHub or the service kept
+ * nothing, or nothing where the token was kept. Note that a paste no token
+ * could be is answered as GitHub's invalid one, unsent.
+ */
+export function useGitHubTokenSave(): (pasted: string) => Promise<ReactNode> {
+  const { mutateAsync: sendGithubTokenSave } = useMutation(actMutation(ACT_KIND.GITHUB_TOKEN_SAVE));
+  return (pasted) =>
+    !pastedTokenFits(pasted)
+      ? Promise.resolve(rejectionLabel(GITHUB_TOKEN_REJECTION.INVALID))
+      : sendGithubTokenSave({ token: pasted })
+          .catch(() => undefined)
+          .then((answer) => {
+            if (answer === undefined || "failure" in answer) return LINE.SAVE_FAILED;
+            return answer.rejected === undefined ? undefined : rejectionLabel(answer.rejected);
+          });
+}
+
+/**
+ * A classic token's paste, setup's and the dialog's alike, drawn as an
+ * agent key's is: two steps, making the token on GitHub's own page and
+ * pasting it. The first checks off once its link is opened; the second is
+ * the field, which a paste saves as it lands, as Enter saves what was typed,
+ * saying it checks the token while the save is out and why one kept nothing
+ * under it, the paste kept. The token leaves the field as soon as it is kept.
+ */
+export function GitHubTokenPaste({
   field,
   onSave,
 }: {
-  /** The dialog's way to the field, which takes focus as the card opens and as a removal brings the form back. */
-  field: React.RefObject<HTMLInputElement | null>;
+  /** The way to the field, for a surface that hands it focus. */
+  field?: React.RefObject<HTMLInputElement | null> | undefined;
+  /** Saves the token, answering why it was refused, or nothing where it was kept. */
   onSave: (token: string) => Promise<ReactNode>;
 }): React.JSX.Element {
+  const openLink = useOpenLink();
   const [pasted, setPasted] = useState("");
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<ReactNode>(undefined);
-  const save = () => {
-    const token = pasted.trim();
+  const save = (value: string) => {
+    const token = value.trim();
     if (token === "" || saving) return;
     setSaving(true);
     setProblem(undefined);
     void onSave(token).then((refused) => {
       setSaving(false);
       setProblem(refused);
-      // Kept: the token leaves the field, and the panel draws the service's word for it.
+      // Kept: the token leaves the field, and the surface draws the service's word for it.
       if (refused === undefined) setPasted("");
     });
   };
   return (
-    <Stack
-      as={LAYOUT_ELEMENT.FORM}
-      onSubmit={(event) => {
-        event.preventDefault();
-        save();
+    <PasteSteps
+      first={{
+        title: PASTE_WORDS.CREATE,
+        body: (done) => (
+          <OutsideLink href={GITHUB_TOKEN_CREATE_URL} open={openLink} onOpened={done}>
+            {PASTE_WORDS.OPEN}
+          </OutsideLink>
+        ),
       }}
-    >
-      <SecretField
-        ref={field}
-        label="Personal access token"
-        error={refusedShown(problem, FAILURE_SURFACE.GITHUB_TOKEN_SAVE)}
-        placeholder="ghp_…"
-        disabled={saving}
-        value={pasted}
-        onChange={(value) => {
-          setPasted(value);
-          setProblem(undefined);
-        }}
-      />
-      <Inline justify={JUSTIFY.END}>
-        <Button
-          type={BUTTON_TYPE.SUBMIT}
-          variant={BUTTON_VARIANT.PRIMARY}
-          disabled={pasted.trim() === ""}
-          busy={saving}
-          busyLabel="Checking the token"
-        >
-          Save
-        </Button>
-      </Inline>
-    </Stack>
+      fieldRef={field}
+      label={PASTE_WORDS.LABEL}
+      placeholder="ghp_…"
+      busy={saving}
+      busyWords={PASTE_WORDS.RUNNING}
+      error={refusedShown(problem, FAILURE_SURFACE.GITHUB_TOKEN_SAVE)}
+      value={pasted}
+      onChange={(value) => {
+        setPasted(value);
+        setProblem(undefined);
+      }}
+      onSave={save}
+    />
   );
 }
 
@@ -274,8 +295,7 @@ export function GitHubTokenDialog({
   onClose: () => void;
   onExited: () => void;
 }): React.JSX.Element {
-  const { mutateAsync: sendGithubTokenSave } = useMutation(actMutation(ACT_KIND.GITHUB_TOKEN_SAVE));
-  const openLink = useOpenLink();
+  const save = useGitHubTokenSave();
   const field = useRef<HTMLInputElement | null>(null);
   // Note that a token leaving while the card stands puts focus in the form it brings back, since its read can land after Disconnect's question handed focus back.
   const held = token !== null;
@@ -284,17 +304,6 @@ export function GitHubTokenDialog({
     if (open && wasHeld.current && !held) field.current?.focus();
     wasHeld.current = held;
   }, [open, held]);
-
-  // Note that a paste no token could be is answered as GitHub's invalid one, unsent.
-  const save = (pasted: string): Promise<ReactNode> =>
-    !pastedTokenFits(pasted)
-      ? Promise.resolve(rejectionLabel(GITHUB_TOKEN_REJECTION.INVALID))
-      : sendGithubTokenSave({ token: pasted })
-          .catch(() => undefined)
-          .then((answer) => {
-            if (answer === undefined || "failure" in answer) return LINE.SAVE_FAILED;
-            return answer.rejected === undefined ? undefined : rejectionLabel(answer.rejected);
-          });
 
   return (
     <Dialog
@@ -305,23 +314,14 @@ export function GitHubTokenDialog({
       initialFocus={field}
       onDismiss={onClose}
       onExited={onExited}
-      actionsStart={
-        <TextLink
-          look={TEXT_LINK_LOOK.UNDERLINED}
-          href={GITHUB_TOKEN_CREATE_URL}
-          external
-          onClick={(event) => {
-            event.preventDefault();
-            openLink(GITHUB_TOKEN_CREATE_URL);
-          }}
-        >
-          <ReplayUnmask>Create token</ReplayUnmask>
-        </TextLink>
-      }
       actions={<DialogActions onDone={onClose} />}
     >
       <div className={NO_CAPTURE}>
-        {token === null ? <TokenForm field={field} onSave={save} /> : <SavedToken token={token} />}
+        {token === null ? (
+          <GitHubTokenPaste field={field} onSave={save} />
+        ) : (
+          <SavedToken token={token} />
+        )}
       </div>
     </Dialog>
   );

@@ -18,7 +18,7 @@ import {
   expectTopicsFire,
   getTestDB,
   joinWorkspace,
-  openTaskAgent,
+  openAgentOnOwnTask,
   openWorkspace,
 } from "@repo/database/testing";
 import {
@@ -73,7 +73,7 @@ const openAccount = Effect.gen(function* () {
 });
 
 /**
- * An owner and a teammate in one workspace, the owner's agent on no task in
+ * An owner and a teammate in one workspace, the owner's agent on a task in
  * it, and the id the owner's workspace automation will be made under.
  */
 const openAutomationWorld = Effect.gen(function* () {
@@ -81,14 +81,22 @@ const openAutomationWorld = Effect.gen(function* () {
   const teammate = yield* openAccount;
   const workspaceId = yield* openWorkspace(owner);
   yield* joinWorkspace(workspaceId, teammate);
-  const agentId = yield* openTaskAgent(owner, workspaceId, null);
+  const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
   const db = yield* Database;
   const [row] = yield* db
-    .select({ conversationId: agentTable.conversationId })
+    .select({ conversationId: agentTable.conversationId, taskId: agentTable.taskId })
     .from(agentTable)
     .where(eq(agentTable.id, agentId));
-  const conversationId = row?.conversationId ?? assert.fail("the agent has no conversation");
-  return { owner, teammate, workspaceId, agentId, conversationId, automationId: randomUUID() };
+  const { conversationId, taskId } = row ?? assert.fail("the agent has no conversation");
+  return {
+    owner,
+    teammate,
+    workspaceId,
+    taskId,
+    agentId,
+    conversationId,
+    automationId: randomUUID(),
+  };
 });
 
 type AutomationWorld = Effect.Success<typeof openAutomationWorld>;
@@ -203,6 +211,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
         const run = { conversationId: sessionKey(world.conversationId), turnId };
         const agent: readonly SyncTopic[] = [
           [TOPIC.AGENT, world.agentId],
+          [TOPIC.TASK, world.taskId],
           [TOPIC.WORKSPACE, world.workspaceId],
         ];
         const turn: readonly SyncTopic[] = [[TOPIC.CONVERSATION, world.conversationId], ...agent];

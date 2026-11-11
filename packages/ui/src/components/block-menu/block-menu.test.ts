@@ -136,13 +136,3 @@ test("a menu with nothing left in it says so", () => {
   expect(rows(menu)).toEqual([]);
   expect(menu.textContent).toContain("No blocks match");
 });
-
-test("its foot names the keys it hears, and is read by nobody", () => {
-  const { menu } = mount(GROUPS);
-  const foot = menu.querySelector('.ui-menu-keys[aria-hidden="true"]');
-  expect([...(foot?.children ?? [])].map((key) => key.textContent)).toEqual([
-    "↑↓Move",
-    "⏎⇥Insert",
-    "EscClose",
-  ]);
-});

@@ -13,8 +13,11 @@
  * A run stops `SANDBOX_IDLE` after its last touch: every open and create
  * runs for that long, and whatever holds a sandbox in use touches it
  * (`touch`, `touchSandbox`) about every `SANDBOX_TOUCH_EVERY`, which no
- * caller times any other way. A stopped sandbox keeps its disk as a
- * snapshot, so an idle one bills nothing but that.
+ * caller times any other way. Only agent or terminal activity touches a
+ * sandbox (`SANDBOX_IDLE`); a terminal touches it only once it was used
+ * since its last touch (`touchedWhileUsed`), never for standing open
+ * alone. A stopped sandbox keeps its disk as a snapshot, so an idle one
+ * bills nothing but that.
  *
  * A sandbox may open with a drive (`SandboxDrive`): a base drive it fills,
  * or a drive of its own forked from one. Every drive call is the package's,
@@ -24,7 +27,7 @@
  * fill's sandbox that holds it (`deletedFilledDrive`).
  */
 
-import { Context, Duration, Effect, Option, Schedule, type Scope } from "effect";
+import { Clock, Context, Duration, Effect, Option, Ref, Schedule, type Scope } from "effect";
 import type { WebSocket } from "ws";
 import {
   type CommandAsk,
@@ -195,8 +198,13 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/s
 /**
  * How long a sandbox runs past its last touch: what every open and create
  * runs for, and how far ahead of now each touch puts its end, so this alone
- * decides when an idle sandbox stops. Five minutes, because an idle sandbox
- * bills its memory until it stops, and a resume from its snapshot is quick.
+ * decides when an idle sandbox stops. Five minutes with no agent or
+ * terminal activity, the one rule every sandbox follows, with no
+ * exceptions: activity is an agent's turn running, a terminal typed in or
+ * printing, or the agent open in a focused window of the app
+ * (`use-warm-agent.ts`), and nothing else touches a sandbox. A run also
+ * ends at the provider's longest, 24 hours from its start, however active
+ * (`vercel/vercel-sdk.ts`'s `TOUCH`).
  */
 export const SANDBOX_IDLE = Duration.minutes(5);
 
@@ -209,6 +217,15 @@ export const SANDBOX_TOUCH_EVERY = Duration.minutes(1);
 
 /** How a resumed sandbox is waited on until it runs (`resumedRunning`). */
 const RESUME_WAIT = { POLL: Duration.seconds(1) } as const;
+
+/** A touch the sandbox did not confirm, logged in its own words and let be. */
+function loggedIfUnconfirmed<R>(
+  touch: Effect.Effect<void, SandboxError, R>,
+): Effect.Effect<void, never, R> {
+  return Effect.catch(touch, (failure) =>
+    Effect.logWarning(`a sandbox was not touched: ${failure.message}`),
+  );
+}
 
 /** Whether two reads of a name are of one sandbox: the same creation and the same run. */
 function sameSandbox(one: ListedSandbox, other: ListedSandbox): boolean {
@@ -236,9 +253,36 @@ export const deletedIfStill = (read: ListedSandbox) =>
  * be, since the next one comes well before the sandbox would stop.
  */
 export const touchSandbox = (name: string): Effect.Effect<void, never, Sandbox> =>
-  Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(name)).pipe(
-    Effect.catch((failure) => Effect.logWarning(`a sandbox was not touched: ${failure.message}`)),
-  );
+  loggedIfUnconfirmed(Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(name)));
+
+/**
+ * A sandbox a connection holds touched only while the connection is used:
+ * every `SANDBOX_TOUCH_EVERY`, from at once, where `lastUsedAt` (an epoch
+ * millisecond the caller moves on every sign of use) is no older than the
+ * last touch the sandbox confirmed, for the caller's scope. A touch it did
+ * not confirm is logged and tried again at the next interval, since no
+ * later use may come to ask it. A connection left open and unused so lets
+ * its sandbox stop `SANDBOX_IDLE` after its last use, or at most one touch
+ * interval later, as every sandbox does.
+ */
+export const touchedWhileUsed = (
+  touch: Effect.Effect<void, SandboxError>,
+  lastUsedAt: Effect.Effect<number>,
+): Effect.Effect<void, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const touchedAt = yield* Ref.make(Number.NEGATIVE_INFINITY);
+    const touchIfUsed = Effect.gen(function* () {
+      if ((yield* lastUsedAt) <= (yield* Ref.get(touchedAt))) return;
+      const at = yield* Clock.currentTimeMillis;
+      yield* touch;
+      yield* Ref.set(touchedAt, at);
+    });
+    yield* Effect.forkScoped(
+      Effect.repeat(loggedIfUnconfirmed(touchIfUsed), {
+        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
+      }),
+    );
+  });
 
 /**
  * What a base drive is filled as: the fill's sandbox's name, which is its

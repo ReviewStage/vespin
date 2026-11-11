@@ -147,7 +147,7 @@ async function landed(container: HTMLElement): Promise<void> {
   );
 }
 
-test("a set the agent showed stays out of the finished turn's fold, each picture read once and drawn at its own shape", async () => {
+test("a set the agent showed in a finished turn is drawn, each picture read once and drawn at its own shape", async () => {
   const pictures = [picture(1200, 720), picture(390, 700)];
   const { container, read } = await drawn(
     finished([
@@ -164,7 +164,7 @@ test("a set the agent showed stays out of the finished turn's fold, each picture
   );
 
   const tiles = [...container.querySelectorAll<HTMLElement>(SHOWN_TILES)];
-  assert.equal(tiles.length, 2, "the set is drawn though the work before it folded");
+  assert.equal(tiles.length, 2, "the set is drawn");
   assert.deepEqual(
     tiles.map((tile) => tile.style.getPropertyValue("--ui-picture-ratio")),
     [String(1200 / 720), String(390 / 700)],
@@ -176,11 +176,6 @@ test("a set the agent showed stays out of the finished turn's fold, each picture
   assert.deepEqual(
     read,
     pictures.map((each) => each.id),
-  );
-  assert.match(
-    container.textContent ?? "",
-    /1 tool call/u,
-    "the fold counts the command, not the set",
   );
 });
 
@@ -871,6 +866,65 @@ test("an image a line's row names by the picture it was kept as is read through 
     ),
   );
   assert.deepEqual(read, [kept.id]);
+});
+
+test.each([
+  { words: "Make this [Picture 1] bigger.", inWords: ["Open Picture 1"], inRow: [] },
+  { words: "Name it `[Picture 1]` in the code.", inWords: [], inRow: ["Picture 1"] },
+])(
+  "a line's picture is its chip where its words name it, and stays among its files where only code names it: $words",
+  async ({ words, inWords, inRow }) => {
+    const { container } = await drawn({
+      id: "line",
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        text(words),
+        {
+          type: "file",
+          mediaType: INBOX_IMAGE_TYPE.PNG,
+          filename: "Picture 1",
+          url: "data:image/png;base64,AAAA",
+        },
+      ],
+    });
+
+    assert.deepEqual(
+      [...container.querySelectorAll('[aria-label^="Open Picture"]')]
+        .filter((chip) => chip.closest('ul[aria-label="Attached files"]') === null)
+        .map((chip) => chip.getAttribute("aria-label")),
+      inWords,
+    );
+    assert.deepEqual(
+      [...container.querySelectorAll('ul[aria-label="Attached files"] > li')].map((chip) =>
+        chip.querySelector("img")?.getAttribute("alt"),
+      ),
+      inRow,
+    );
+  },
+);
+
+test("a line carrying two pictures of one name, as queued messages joined do, draws the first where its words name it and the second among its files", async () => {
+  const shot = (url: string) => ({
+    type: "file" as const,
+    mediaType: INBOX_IMAGE_TYPE.PNG,
+    filename: "Picture 1",
+    url,
+  });
+  const { container } = await drawn({
+    id: "line",
+    role: MESSAGE_ROLE.USER,
+    parts: [
+      text("Make this [Picture 1] bigger."),
+      shot("data:image/png;base64,AAAA"),
+      shot("data:image/png;base64,BBBB"),
+    ],
+  });
+
+  const row = [...container.querySelectorAll('ul[aria-label="Attached files"] > li')];
+  assert.deepEqual(
+    row.map((chip) => chip.querySelector("img")?.getAttribute("src")),
+    ["data:image/png;base64,BBBB"],
+  );
 });
 
 test("a line still on its way draws its files going up with no share, each taking its check as the line lands", () => {

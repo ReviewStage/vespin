@@ -1,5 +1,6 @@
+import { ENTITY_KIND, ENTITY_WORD } from "@repo/features/entity-kind";
+import { skillWord } from "@repo/features/skill-word";
 import { TASK_SKILL_SOURCE, type TaskSkillSource } from "@repo/features/task-wire";
-import { THING_KIND, THING_WORD } from "@repo/features/thing-kind";
 import {
   type ComboboxOption,
   HOVER_CARD_ROW_LOOK,
@@ -9,10 +10,11 @@ import {
   HoverCardRow,
   HoverCardSkeleton,
   INLINE_REF_LOOK,
+  INLINE_REF_NAME,
   InlineRef,
 } from "@repo/ui";
-import { type SkillOption, skillWord } from "@repo/ui/skill-mention";
-import { BookOpenIcon } from "lucide-react";
+import type { SkillOption } from "@repo/ui/skill-mention";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { SkillSourceBadge } from "./skill-source-badge.js";
 
@@ -41,7 +43,7 @@ import { SkillSourceBadge } from "./skill-source-badge.js";
 
 /** The book every skill leads with, in a menu's row, a settings row, and its card's head. */
 export function SkillMark(): React.JSX.Element {
-  return <BookOpenIcon aria-hidden="true" />;
+  return <EntityGlyph kind={ENTITY_KIND.SKILL} />;
 }
 
 /** A skill of the repository's, which names its `SKILL.md`. */
@@ -105,10 +107,11 @@ export function skillOption(skill: SkillOption): ComboboxOption {
 }
 
 /**
- * A skill named in place: the book and its `/name` as a mention's pill, which
- * hangs its card and, handed `onOpen`, is one button that opens its file. Note
- * that a skill not yet read (`skill` none) still stands as its name and hangs
- * the card's placeholder, which the read fills in.
+ * A skill named in place: the book and its `/name` as a mention's pill, kept
+ * whole in words as one thing, which hangs its card and, handed `onOpen`, is
+ * one button that opens its file. Note that a skill not yet read (`skill`
+ * none) still stands as its name and hangs the card's placeholder, which the
+ * read fills in.
  */
 export function SkillRef({
   name,
@@ -124,8 +127,9 @@ export function SkillRef({
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
       glyph={<SkillMark />}
-      kind={THING_WORD[THING_KIND.SKILL]}
+      kind={ENTITY_WORD[ENTITY_KIND.SKILL]}
       label={skillWord(name)}
+      name={INLINE_REF_NAME.WHOLE}
       onPress={onOpen === undefined ? undefined : () => onOpen()}
       hintLabel={skill?.path}
       card={

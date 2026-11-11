@@ -17,8 +17,8 @@ import {
   patchHunks,
 } from "@repo/features/diff-hunks";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { repositoryParts } from "@repo/features/task-list-model";
 import { isSecretFile } from "@repo/features/task-wire";
-import { repositoryParts } from "@repo/ui/task-list-model";
 import {
   DIFF_SELECTION_SIDE,
   type DiffFileTexts,
@@ -93,6 +93,7 @@ export const CHANGES_WORDS = {
   OMITTED: {
     [PATCH_OMITTED.BINARY]: "Binary file not shown.",
     [PATCH_OMITTED.TOO_LARGE]: "This file's diff is too large to show.",
+    [PATCH_OMITTED.SECRET]: "This file is kept secret.",
   },
   UNCHANGED_CONTENTS: "File renamed without changes to its contents.",
   NO_HUNKS: "No changes to show in this file.",

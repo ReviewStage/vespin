@@ -4,34 +4,43 @@ import {
   type AgentTodos,
 } from "@repo/features/agent-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { readLink } from "@repo/features/link-grammar";
-import {
-  decodeMention,
-  encodeMention,
-  MENTION_KIND,
-  mayNameMention,
-} from "@repo/features/mention-link";
+import { mayNameMention } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
+import { cardTitle } from "@repo/features/plain-words";
+import {
+  blockSays,
+  TOOL_BLOCK,
+  TOOL_STATE,
+  type ToolBlock,
+  type ToolState,
+} from "@repo/features/tool-call-block";
+import { type SentWords, todosCount } from "@repo/features/tool-call-model";
 import {
   agentCallLine,
   CALL_KIND,
   CALL_WORDS,
   type CallKind,
   type CallLine,
+  calledFile,
   callLine,
   callPlace,
   isAgentCallKind,
   isCommandKind,
   type MadeCallKind,
   madeCallLine,
+  moreFiles,
   sameFieldsBy,
   sameTurnRow,
+  siteName,
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
-import { keySpansIn } from "@repo/features/workspace-key";
+import { keyWordsIn } from "@repo/features/workspace-key";
 import {
   DISCLOSURE_BODY,
   DISCLOSURE_LOOK,
@@ -59,10 +68,12 @@ import {
   Shimmer,
   Stack,
   TEXT_ELEMENT,
+  TEXT_LINK_LOOK,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
   Tooltip,
+  TextLink as UiTextLink,
   useDisclosurePreviewShown,
   useDisclosureState,
 } from "@repo/ui";
@@ -75,11 +86,10 @@ import {
   wholeRendering,
 } from "@repo/ui/github-html";
 import {
-  AppWindowIcon,
+  AlarmClockCheckIcon,
+  AlarmClockOffIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
-  BookOpenIcon,
-  BotIcon,
   CalendarCheckIcon,
   CalendarClockIcon,
   CalendarCogIcon,
@@ -104,23 +114,24 @@ import {
   InboxIcon,
   LaptopIcon,
   LayoutListIcon,
+  LinkIcon,
   type LucideIcon,
   PencilLineIcon,
   PlayIcon,
+  PlugIcon,
   ScrollTextIcon,
   SearchIcon,
   SendIcon,
   TerminalIcon,
   TimerIcon,
+  UnlinkIcon,
   WrenchIcon,
 } from "@repo/ui/icons";
-import { siteName } from "@repo/ui/link-face";
 import {
   MARKDOWN_HTML_STEP,
   type MarkdownComponents,
   type MarkdownNodeProps,
   type MarkdownSteps,
-  markdownStep,
   TRANSCRIPT_REMARK_STEPS,
 } from "@repo/ui/markdown";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
@@ -140,7 +151,7 @@ import {
   useState,
 } from "react";
 import remarkBreaks from "remark-breaks";
-import { ACTOR_SIZE, ActorLine, ActorMark, ActorRef } from "../actor-ref.js";
+import { ActorGlyph, ActorLine, ActorRef } from "../actor-ref.js";
 import { FoldBody } from "../ai-elements/fold.js";
 import { MessageResponse } from "../ai-elements/message.js";
 import {
@@ -151,34 +162,34 @@ import {
   ReasoningTrigger,
 } from "../ai-elements/reasoning.js";
 import {
-  blockSays,
-  TOOL_BLOCK,
-  TOOL_STATE,
   Tool,
-  type ToolBlock,
   ToolContent,
   ToolHeader,
   type ToolHeaderProps,
   ToolInput,
   ToolLine,
   ToolOutput,
-  type ToolState,
   ToolStateMark,
   ToolSummary,
   ToolTerminal,
 } from "../ai-elements/tool.js";
 import { useDrawnDark } from "../drawn-dark.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
-import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
+import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
 import { useDescriptionPictureDrawer } from "./description-pictures.js";
 import { useInboxPictureDrawer } from "./inbox-pictures.js";
+import {
+  INLINE_CODE_TARGET,
+  type InlineCodeTarget,
+  inlineCodeTarget,
+} from "./inline-code-target.js";
 import { LoneLinkCard } from "./lone-link-card.js";
-import { linkChip, type MentionDoors } from "./mention-chip.js";
+import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { cardTitle, type SentWords, todosCount } from "./tool-call-model.js";
 import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
@@ -281,6 +292,12 @@ const MENTION_ELEMENT = {
   TARGET: "to",
 } as const;
 
+/** The element a task's key written among the words is drawn as, and the attribute that carries the key to its chip. */
+const TASK_KEY_ELEMENT = {
+  TAG: "app-task-key",
+  KEY: "named",
+} as const;
+
 /** The element a picture's Markdown is drawn as, and the attributes that carry its address, its words, and its caption. */
 const PICTURE_ELEMENT = {
   TAG: "app-picture",
@@ -302,9 +319,10 @@ const PICTURE_ROW_ELEMENT = {
   CLASS: "transcript-pictures",
 } as const;
 
-/** The mention's element and the picture's, and a document's paragraphs of either, let through the drawing's sanitizer with what each carries. */
+/** The mention's element, a task key's, and the picture's, and a document's paragraphs of either, let through the drawing's sanitizer with what each carries. */
 const MENTION_TAGS = {
   [MENTION_ELEMENT.TAG]: [MENTION_ELEMENT.TARGET],
+  [TASK_KEY_ELEMENT.TAG]: [TASK_KEY_ELEMENT.KEY],
   [PICTURE_ELEMENT.TAG]: [PICTURE_ELEMENT.ADDRESS, PICTURE_ELEMENT.WORDS, PICTURE_ELEMENT.CAPTION],
   [LONE_LINK_ELEMENT.TAG]: [LONE_LINK_ELEMENT.TARGET, LONE_LINK_ELEMENT.WORDS],
   [PICTURE_ROW_ELEMENT.TAG]: [],
@@ -466,7 +484,7 @@ function markLoneLinks(tree: MarkdownNode, definitions: ReadonlyMap<string, Mark
 /**
  * What a task's key written among the words stands as once it is marked:
  * a node of its own rather than a link of markdown's, so it is drawn as its
- * task's chip (`MentionElement`) and held with its punctuation as a mention
+ * task's chip (`TaskKeyElement`) and held with its punctuation as a mention
  * is, yet never read as a link standing alone in its paragraph, which a
  * document draws as a card.
  */
@@ -485,10 +503,10 @@ const KEYLESS_NODES: ReadonlySet<string> = new Set([
   KEY_NODE,
 ]);
 
-/** A run of text with each key `targets` holds in it marked as its task's chip, the words between left as they were. */
-function keyedRun(text: MarkdownNode, targets: ReadonlyMap<string, string>): MarkdownNode[] {
+/** A run of text with each word shaped like a task's key marked as its task's chip, the words between left as they were. */
+function keyedRun(text: MarkdownNode): MarkdownNode[] {
   const value = text.value ?? "";
-  const spans = keySpansIn(value, targets);
+  const spans = keyWordsIn(value);
   if (spans.length === 0) return [text];
   const run: MarkdownNode[] = [];
   let from = 0;
@@ -496,7 +514,7 @@ function keyedRun(text: MarkdownNode, targets: ReadonlyMap<string, string>): Mar
     if (span.start > from) run.push({ type: "text", value: value.slice(from, span.start) });
     run.push({
       type: KEY_NODE,
-      data: { hName: MENTION_ELEMENT.TAG, hProperties: { [MENTION_ELEMENT.TARGET]: span.known } },
+      data: { hName: TASK_KEY_ELEMENT.TAG, hProperties: { [TASK_KEY_ELEMENT.KEY]: span.key } },
       children: [{ type: "text", value: span.key }],
     });
     from = span.end;
@@ -506,45 +524,29 @@ function keyedRun(text: MarkdownNode, targets: ReadonlyMap<string, string>): Mar
 }
 
 /**
- * Marks each listed task's key written among the words (`ACME-42`) to be
- * drawn as that task's chip, which says the key as written, wears the
- * task's status, and hangs its card. Note that the words themselves are
- * left as written, so an agent reading them reads the key, and that a key
- * in code, a link, or a picture's words is left alone.
+ * Marks each word shaped like a task's key among the words (`ACME-42`) to
+ * be drawn as its task's chip, which says the key as written, wears the
+ * task's status, and hangs its card, where the window lists a task by it.
+ * Note that which task a key names is read as it is drawn
+ * (`TaskKeyElement`), never here, because its library reads each block of
+ * words once, so a key read here would never follow the tasks listed after
+ * it, and words drawn again whole as they are listed would load every page
+ * drawn among them again. The words themselves are left as written, so an
+ * agent reading them reads the key, and a key in code, a link, or a
+ * picture's words is left alone.
  */
-function markTaskKeys(node: MarkdownNode, targets: ReadonlyMap<string, string>): void {
+function markTaskKeys(node: MarkdownNode): void {
   if (node.children === undefined || KEYLESS_NODES.has(node.type)) return;
   node.children = node.children.flatMap((child) => {
-    if (child.type === "text") return keyedRun(child, targets);
-    markTaskKeys(child, targets);
+    if (child.type === "text") return keyedRun(child);
+    markTaskKeys(child);
     return [child];
   });
 }
 
-/** A serial for each set of keys the words were read with, which a transcript is drawn again under once the set changes. */
-const keySerials = new WeakMap<ReadonlyMap<string, string>, number>();
-
-/** How many sets of keys have been seen, the last one's serial. */
-let keySetsSeen = 0;
-
-/**
- * The serial of a set of keys, counted from one as each is first seen.
- * Note that a transcript is drawn again under it, because its library reads
- * each block of words once and does not read it again for a change of
- * steps alone, so words drawn before the tasks were listed would never
- * chip a key; the set changes only as a key does (`useWordTargets`).
- */
-function keySerial(targets: ReadonlyMap<string, string>): number {
-  const held = keySerials.get(targets);
-  if (held !== undefined) return held;
-  keySetsSeen += 1;
-  keySerials.set(targets, keySetsSeen);
-  return keySetsSeen;
-}
-
-/** The step that marks the listed tasks' keys among the words, named apart as every step is. */
-function markTaskKeysStep(targets: ReadonlyMap<string, string>): (tree: MarkdownNode) => void {
-  return (tree) => markTaskKeys(tree, targets);
+/** The step that marks the words shaped like tasks' keys, named apart as every step is. */
+function markTaskKeysStep(): (tree: MarkdownNode) => void {
+  return markTaskKeys;
 }
 
 /** The step that marks a transcript's links and its pictures, a reference's read through its definition. */
@@ -612,23 +614,19 @@ function markDocumentStep(): (tree: MarkdownNode) => void {
 
 /**
  * The steps words are read with: the library's own; for words a person
- * typed, each line break typed kept as one; the listed tasks' keys, where
- * any are known; then the marks on its links, a document's own marks among
+ * typed, each line break typed kept as one; the words shaped like tasks'
+ * keys; then the marks on its links, a document's own marks among
  * them where the words are drawn as one. Note that Markdown joins two lines
  * with no blank line between them into one, which is right for words a
  * model wrote and wrong for words a person typed line by line into a box
  * whose Enter is a new line, as GitHub keeps a comment's line breaks for the
  * same reason.
  */
-function remarkPluginsFor(
-  typed: boolean,
-  asDocument: boolean,
-  keyTargets: ReadonlyMap<string, string>,
-): MarkdownSteps {
+function remarkPluginsFor(typed: boolean, asDocument: boolean): MarkdownSteps {
   return [
     ...TRANSCRIPT_REMARK_STEPS,
     ...(typed ? [remarkBreaks] : []),
-    ...(keyTargets.size === 0 ? [] : [markdownStep(markTaskKeysStep, keyTargets)]),
+    markTaskKeysStep,
     asDocument ? markDocumentStep : markLinksStep,
   ];
 }
@@ -656,6 +654,23 @@ function MentionElement({
   );
 }
 
+/**
+ * A task's key written in a transcript's words: its task's chip where the
+ * window lists a task by it (`useWordTargets`), as a link to the task is
+ * drawn (`MentionElement`), and the key as written where it lists none. It
+ * is read as it is drawn, so the chip follows the tasks as they are listed
+ * while the words around it stand.
+ */
+function TaskKeyElement({
+  node,
+  children,
+}: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
+  const doors = useMentionDoors();
+  const key = String(node?.properties[TASK_KEY_ELEMENT.KEY] ?? "");
+  const target = useWordTargets().get(key);
+  return (target === undefined ? undefined : linkChip(target, key, doors)) ?? children;
+}
+
 /** A link standing alone in its paragraph of a document: the card of what it names, or the paragraph as it was where it earns none (`lone-link-card.tsx`). */
 function LoneLinkElement({
   node,
@@ -678,9 +693,85 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
   );
 }
 
+/*
+ * An inline span of code whose whole words are a file's path or a web
+ * address opens what it names (`inline-code-target.ts`), its code drawn as
+ * it is and a link only under the pointer: a file in its File tab, at the
+ * line it names, through the place's one door for a file, as a mention of
+ * the file opens it; a page as every link in the words opens one
+ * (`use-open-link.ts`).
+ */
+
+/** A file's address on GitHub, at its line, which its link carries for the reader's link menu; the press opens its File tab. */
+function fileAddress(repository: string, path: string, line: number | undefined): string {
+  const page = new URL(`https://github.com/${repository}/blob/HEAD/${path}`);
+  if (line !== undefined) page.hash = `L${line}`;
+  return page.href;
+}
+
+/**
+ * An inline span of code that opens a file of the checkout: its File tab,
+ * at the line it names, through the place's door for a file. Note that a
+ * file the checkout does not hold opens a File tab saying so, as a mention
+ * of a file gone does, rather than a toast or nothing, and that where the
+ * place opens no file the span is plain code.
+ */
+function InlineFileCode({
+  target,
+  children,
+}: {
+  target: Extract<InlineCodeTarget, { kind: typeof INLINE_CODE_TARGET.FILE }>;
+  children: ReactNode;
+}): ReactNode {
+  const { onOpenFile, place } = useMentionDoors();
+  const { repository } = place;
+  if (onOpenFile === undefined || repository === null) return children;
+  const { path, line } = target;
+  return (
+    <UiTextLink
+      href={fileAddress(repository, path, line)}
+      look={TEXT_LINK_LOOK.CODE}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenFile(path, line === undefined ? undefined : { startLine: line, endLine: line });
+      }}
+    >
+      {children}
+    </UiTextLink>
+  );
+}
+
+/** An inline span of code that is a web address: a link to it, opened as every link in the words is. */
+function InlineWebCode({ href, children }: { href: string; children: ReactNode }): ReactNode {
+  const openLink = useOpenLink();
+  return (
+    <TextLink href={href} words={undefined} onOpen={openLink} look={TEXT_LINK_LOOK.CODE}>
+      {children}
+    </TextLink>
+  );
+}
+
+/** An inline span of code on its subtle fill, opening the file or the page its whole words name, where they name one. */
+function TranscriptInlineCode({
+  children,
+  node,
+}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+  const words = node === undefined ? "" : wordsOf(node);
+  const target = useMemo(() => inlineCodeTarget(words), [words]);
+  const code = <code className="transcript-inline-code">{children}</code>;
+  if (target === undefined) return code;
+  return target.kind === INLINE_CODE_TARGET.FILE ? (
+    <InlineFileCode target={target}>{code}</InlineFileCode>
+  ) : (
+    <InlineWebCode href={target.href}>{code}</InlineWebCode>
+  );
+}
+
 /**
  * How a transcript's markdown is drawn: at the panel's scale, its code and
- * tables as `transcript-markdown.tsx` draws them, its links as
+ * tables as `transcript-markdown.tsx` draws them, an inline span of code
+ * naming a file or a page as {@link TranscriptInlineCode}, its links as
  * {@link TranscriptLink}, and its pictures as links to where they point
  * ({@link PictureElement}), never as an image, because an image is a
  * request to wherever its address points the moment the tab opens, and
@@ -688,12 +779,14 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
  */
 const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
   ...TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
+  inlineCode: TranscriptInlineCode,
   a: ({ href, children, node }) => (
     <TranscriptLink href={href} words={node === undefined ? "" : wordsOf(node)}>
       {children}
     </TranscriptLink>
   ),
   [MENTION_ELEMENT.TAG]: MentionElement,
+  [TASK_KEY_ELEMENT.TAG]: TaskKeyElement,
   [PICTURE_ELEMENT.TAG]: PictureElement,
   [LONE_LINK_ELEMENT.TAG]: LoneLinkElement,
   [PICTURE_ROW_ELEMENT.TAG]: PictureRowElement,
@@ -836,38 +929,39 @@ export function GitHubWords({
 }
 
 /**
- * An element of the transcript's own the words are drawn with, as a skill
- * named in a sent message is drawn as its chip (`skill-chip.tsx`): the words
- * with the element written in where it stands, its tag and the attributes it
- * carries, and what draws it. Its words are taken as they are, never as
- * markdown.
+ * The elements of the transcript's own the words are drawn with, as a skill
+ * named in a sent message is drawn as its chip and a picture it names as
+ * the picture's (`skill-chip.tsx`): the words with each element written in
+ * where it stands, each element's tag and the attributes it carries, and
+ * what draws them. Their words are taken as they are, never as markdown.
  */
 export interface TranscriptElement {
   readonly markdown: string;
-  readonly tag: string;
-  readonly attributes: readonly string[];
+  readonly tags: Readonly<Record<string, readonly string[]>>;
   readonly components: MarkdownComponents;
 }
 
-/** The components and tags an element of the transcript's own is drawn with beside the transcript's own, the same objects while the element names the same. */
+/** The components and tags the elements of the transcript's own are drawn with beside the transcript's own, the same objects while the elements hand the same components and tags, which their caller keeps as constants. */
 function useElementDraw(element: TranscriptElement | undefined): {
   components: MarkdownComponents;
   allowedTags: Record<string, string[]>;
   literal: string[] | undefined;
 } {
   const extra = element?.components;
-  const tag = element?.tag;
-  const attributes = element?.attributes.join(" ");
+  const tags = element?.tags;
   return useMemo(
     () =>
-      extra === undefined || tag === undefined || attributes === undefined
+      extra === undefined || tags === undefined
         ? { components: TRANSCRIPT_COMPONENTS, allowedTags: MENTION_TAGS, literal: undefined }
         : {
             components: { ...TRANSCRIPT_COMPONENTS, ...extra },
-            allowedTags: { ...MENTION_TAGS, [tag]: attributes === "" ? [] : attributes.split(" ") },
-            literal: [tag],
+            allowedTags: {
+              ...MENTION_TAGS,
+              ...Object.fromEntries(Object.entries(tags).map(([tag, names]) => [tag, [...names]])),
+            },
+            literal: Object.keys(tags),
           },
-    [extra, tag, attributes],
+    [extra, tags],
   );
 }
 
@@ -896,17 +990,12 @@ export function TranscriptWords({
   /** Whether the words are drawn on one line, as a queued message's row draws them. */
   line?: boolean | undefined;
 }): ReactNode {
-  const keyTargets = useWordTargets();
-  const remarkPlugins = useMemo(
-    () => remarkPluginsFor(typed, asDocument, keyTargets),
-    [typed, asDocument, keyTargets],
-  );
+  const remarkPlugins = useMemo(() => remarkPluginsFor(typed, asDocument), [typed, asDocument]);
   const { components, allowedTags, literal } = useElementDraw(element);
   // Note that the source stays the words as written, because a code block's copy reads it.
   return (
     <TranscriptMarkdownSource markdown={text}>
       <MessageResponse
-        key={keySerial(keyTargets)}
         words={element === undefined ? text : element.markdown}
         streaming={streaming}
         line={line}
@@ -1020,7 +1109,7 @@ const CALL_ICON = {
   [CALL_KIND.SEARCH]: SearchIcon,
   [CALL_KIND.WEB_SEARCH]: SearchIcon,
   [CALL_KIND.WEB_PAGE]: GlobeIcon,
-  [CALL_KIND.LOAD_SKILL]: BookOpenIcon,
+  [CALL_KIND.LOAD_SKILL]: () => <EntityGlyph kind={ENTITY_KIND.SKILL} />,
   [CALL_KIND.LOOK_AT_PICTURE]: ImageIcon,
   [CALL_KIND.EDIT_DESCRIPTION]: FilePenIcon,
   [CALL_KIND.TODOS]: () => <GLYPH.TODOS />,
@@ -1029,7 +1118,7 @@ const CALL_ICON = {
   [CALL_KIND.INBOX_READ]: InboxIcon,
   [CALL_KIND.INBOX_REPLY]: InboxIcon,
   [CALL_KIND.INBOX_WITHDRAW]: InboxIcon,
-  [CALL_KIND.WORKER]: BotIcon,
+  [CALL_KIND.WORKER]: () => <EntityGlyph kind={ENTITY_KIND.WORKER} />,
   [CALL_KIND.WORKER_WAIT]: HourglassIcon,
   [CALL_KIND.WORKER_CANCEL]: CircleStopIcon,
   [CALL_KIND.WORKER_MESSAGE]: SendIcon,
@@ -1042,6 +1131,9 @@ const CALL_ICON = {
   [CALL_KIND.UNARCHIVE_AGENT]: ArchiveRestoreIcon,
   [CALL_KIND.LIST_MODELS]: CpuIcon,
   [CALL_KIND.STOP_AGENT]: CircleStopIcon,
+  [CALL_KIND.LIST_PORTS]: PlugIcon,
+  [CALL_KIND.SHARE_PORT]: LinkIcon,
+  [CALL_KIND.UNSHARE_PORT]: UnlinkIcon,
   [CALL_KIND.UPDATE_AGENT]: PencilLineIcon,
   [CALL_KIND.READ_TASK]: FileTextIcon,
   [CALL_KIND.CREATE_SECTION]: FolderPlusIcon,
@@ -1058,20 +1150,23 @@ const CALL_ICON = {
   [CALL_KIND.CREATE_ISSUE]: CirclePlusIcon,
   [CALL_KIND.UPDATE_ISSUE]: FilePenIcon,
   [CALL_KIND.CREATE_TASK]: FilePlusIcon,
-  [CALL_KIND.SHOW_PAGE]: AppWindowIcon,
-  [CALL_KIND.READ_PAGE]: AppWindowIcon,
+  [CALL_KIND.SHOW_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
+  [CALL_KIND.READ_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
   [CALL_KIND.SHOW_IMAGE]: ImageIcon,
-  [CALL_KIND.OPEN_PULL_REQUEST]: () => <GLYPH.PULL_REQUEST />,
+  [CALL_KIND.OPEN_PULL_REQUEST]: () => <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />,
   [CALL_KIND.SLEEP]: TimerIcon,
-  [CALL_KIND.LIST_TASKS]: () => <GLYPH.TASK />,
+  [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
+  [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
+  [CALL_KIND.END_TURN]: () => <GLYPH.DONE />,
+  [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
   [CALL_KIND.READ_COMMENTS]: () => <GLYPH.COMMENT />,
   [CALL_KIND.REPLY_TO_COMMENT]: () => <GLYPH.COMMENT />,
   [CALL_KIND.RESOLVE_THREAD]: () => <GLYPH.RESOLVED />,
   [CALL_KIND.REOPEN_THREAD]: () => <GLYPH.COMMENT />,
-  [CALL_KIND.SEARCH_TOOLS]: () => <GLYPH.MCP_SERVER />,
-  [CALL_KIND.MCP_TOOL]: () => <GLYPH.MCP_SERVER />,
+  [CALL_KIND.SEARCH_TOOLS]: () => <EntityGlyph kind={ENTITY_KIND.SERVER} />,
+  [CALL_KIND.MCP_TOOL]: () => <EntityGlyph kind={ENTITY_KIND.TOOL} />,
   [CALL_KIND.OTHER]: WrenchIcon,
 } as const satisfies Record<CallKind, ComponentType<{ "aria-hidden"?: "true" }>>;
 
@@ -1102,7 +1197,7 @@ function AgentCallChip({
     return (
       <InlineRef
         look={INLINE_REF_LOOK.PILL}
-        glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+        glyph={<ActorGlyph actor={agent} />}
         label={actorName(agent)}
         hint={card === undefined ? false : undefined}
         card={card}
@@ -1119,7 +1214,7 @@ function AgentCallChip({
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
-      glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+      glyph={<ActorGlyph actor={agent} />}
       label={actorName(agent)}
       onPress={press}
       hintLabel={opens.hint}
@@ -1160,13 +1255,6 @@ function chippedLine(
   };
 }
 
-/** The kinds of call that name files, which a row names by the first one's chip. */
-const FILE_CALLS: ReadonlySet<CallKind> = new Set([
-  CALL_KIND.READ_FILE,
-  CALL_KIND.WRITE_FILE,
-  CALL_KIND.EDIT,
-]);
-
 /**
  * The chip a call's row names what it read or wrote by: the first file's,
  * of the task's repository, with its hover card, or the website chip of the
@@ -1185,18 +1273,8 @@ function calledChip(
       <SiteChip href={page} />
     );
   }
-  const first = FILE_CALLS.has(kind) ? files?.[0] : undefined;
-  const repository = doors.place.repository;
-  if (first === undefined || repository === null) return undefined;
-  const target = encodeMention({ kind: MENTION_KIND.FILE, path: first }, doors.place);
-  // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
-  if (decodeMention(target, repository)?.kind !== MENTION_KIND.FILE) return undefined;
-  return linkChip(target, target, doors);
-}
-
-/** How many files a call named past the first, which its row says after the first one's chip; none for one file. */
-function moreFiles(files: readonly string[] | undefined): string | undefined {
-  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1}`;
+  const first = calledFile(kind, files);
+  return first === undefined ? undefined : fileChip(first, doors);
 }
 
 /** Whose Mac a transcript's Mac commands ran on, its agent's starter, the reader's own among them (`macOwnerOf`); none where the window cannot tell, whose ran on the reader's own as far as it knows. */
@@ -1230,7 +1308,34 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     errorText: string | undefined;
     /** For a call whose answer its page carried cut, its ends and its whole read, which its body asks for as it opens. */
     cut?: CutBody | undefined;
+    /** For a call the agent holds for an answer: where the ask stands in words, on the line; what the body says of who asks and why, over the input; and the answers' presses, under the row while it waits. None for the rest. */
+    held?: HeldCall | undefined;
   };
+
+/** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
+export interface HeldCall {
+  readonly status: string;
+  /** Whether it still waits on an answer, which holds the call rather than working it. */
+  readonly waiting: boolean;
+  readonly about: string | undefined;
+  readonly actions: ReactNode;
+}
+
+/**
+ * Whether a held call's row stands open, and its toggle: open while the call
+ * waits, so what it would do stands above its answers without a press, and
+ * closed again as it is answered, as a finished row stands; a press opens
+ * and closes it between.
+ */
+function useHeldOpen(waiting: boolean): { open: boolean; onOpenChange: (open: boolean) => void } {
+  const [open, setOpen] = useState(waiting);
+  const [was, setWas] = useState(waiting);
+  if (was !== waiting) {
+    setWas(waiting);
+    setOpen(waiting);
+  }
+  return { open, onOpenChange: setOpen };
+}
 
 /**
  * One tool call: its row saying what it did, closed until clicked, and its
@@ -1241,7 +1346,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
  * subject the input says whole, a read's path or a search's pattern
  * (`blockSays`); a description stays, since the body does not say it. A
  * call that made something names it by its chip, as a call about an agent
- * names the agent by its own; one that read, wrote, or edited files names
+ * names the agent by its own; a call the agent holds for an answer stands
+ * open while it waits (`useHeldOpen`); one that read, wrote, or edited files names
  * the first by its chip, and one that fetched a page names it by its
  * website chip (`calledChip`), which stays as the row opens.
  */
@@ -1261,6 +1367,7 @@ export function TranscriptTool({
   output,
   errorText,
   cut,
+  held,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
@@ -1273,8 +1380,9 @@ export function TranscriptTool({
         : { line: { ...callLine(kind, moreFiles(files), undefined), code: false }, chip: called };
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
-  return (
-    <Tool {...props}>
+  const opened = useHeldOpen(held?.waiting === true);
+  const row = (
+    <Tool {...props} {...(held === undefined ? undefined : opened)}>
       <ToolHeader
         state={state}
         icon={
@@ -1300,8 +1408,13 @@ export function TranscriptTool({
             callPlace(kind, server)
           )
         }
+        status={held?.status}
+        paused={held?.waiting}
       />
       <ToolContent bare>
+        {held?.about === undefined ? null : (
+          <NoteLine look={NOTE_LINE_LOOK.INSET}>{held.about}</NoteLine>
+        )}
         {input.kind === TOOL_BLOCK.COMMAND ? (
           cut === undefined ? (
             <ToolTerminal input={input} block={output} errorText={errorText} />
@@ -1331,6 +1444,14 @@ export function TranscriptTool({
         )}
       </ToolContent>
     </Tool>
+  );
+  // A held call's answers stand under its row, set in to its words, as long as it waits.
+  if (held?.actions === undefined || held.actions === null) return row;
+  return (
+    <>
+      {row}
+      <div className="tool-held ml-transcript-gutter">{held.actions}</div>
+    </>
   );
 }
 
@@ -1817,7 +1938,7 @@ function TurnFold({
   );
 }
 
-/** One row of a turn: a block drawn by its tab, a run of calls, or a folded lead. */
+/** One row of a turn: a block drawn by its tab, or a run of calls. */
 function TurnRowView<B>({
   row,
   children,
@@ -1834,12 +1955,6 @@ function TurnRowView<B>({
           {row.blocks.map((block, index) => (
             <Fragment key={index}>{children(block)}</Fragment>
           ))}
-        </TurnFold>
-      );
-    case TURN_ROW.FOLDED:
-      return (
-        <TurnFold summary={row.summary} running={false}>
-          <TranscriptRows rows={row.rows}>{children}</TranscriptRows>
         </TurnFold>
       );
   }

@@ -61,12 +61,11 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
- * coder-start.test.ts -- an agent started in a workspace with no task, as an automation's run starts one, and one started on a task.
+ * coder-start.test.ts -- an agent started on a task, by hand or as an automation's run starts one.
  *
- * The Start opens one agent on no task, in the workspace named, on the
- * repository named, handed the task, and a retry under its key is that
- * agent and opens nothing again; a member who did not make the workspace
- * starts one as well, an account outside it starts nothing, and a
+ * The Start opens one agent on the task, on its repository, handed the
+ * prompt, and a retry under its key is that agent and opens nothing again;
+ * a member who did not make the task starts one as well, an account outside it starts nothing, and a
  * repository the workspace's installation does not reach is refused before
  * the harness is asked, and a Start whose session never opened leaves no agent. An agent started on a task moves it into progress from the
  * backlog or to do, and on a task stored in pilot mode it is a coder. The
@@ -128,17 +127,17 @@ const openConnectedWorkspace = Effect.gen(function* () {
   return { owner, workspaceId };
 });
 
-/** A Start in the workspace with no task, under a fresh key unless one is given. */
-function workspaceAsk(workspaceId: string, repository = RELAY_REPOSITORY, key?: string): StartAsk {
-  return {
-    taskId: null,
-    organizationId: workspaceId,
-    repository,
-    prompt: TASK,
-    idempotencyKey: key ?? randomUUID(),
-    choice: undefined,
-  };
-}
+/** A Start handed the prompt on a task the owner makes in the workspace on the repository, under a fresh key. */
+const promptAsk = (owner: string, workspaceId: string, repository = RELAY_REPOSITORY) =>
+  Effect.map(
+    createTask(owner, { organizationId: workspaceId, repository }),
+    (made): StartAsk => ({
+      taskId: made.id,
+      prompt: TASK,
+      idempotencyKey: randomUUID(),
+      choice: undefined,
+    }),
+  );
 
 /**
  * The agent's lines once its first turn took the first message its Start
@@ -185,14 +184,14 @@ const openedLineTaken = (
     return { lines, heard: yield* heardFromAnotherAccount(target) };
   });
 
-it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
+it.layer(SUITE)("an agent started on a prompt", (it) => {
   it.effect(
-    "a Start opens one agent on no plan in the workspace, on the repository, handed the task, and a retry under its key opens nothing again",
+    "a Start opens one agent on the task, on its repository, handed the prompt, and a retry under its key opens nothing again",
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
         const { opened, agentSessions } = fakeAgentSessions();
-        const ask = workspaceAsk(workspaceId);
+        const ask = yield* promptAsk(owner, workspaceId);
 
         const first = yield* startAgent(agentSessions, owner, ask).pipe(Effect.provide(services));
         const again = yield* startAgent(agentSessions, owner, ask).pipe(Effect.provide(services));
@@ -208,7 +207,7 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
             agent.prompt,
             agent.descriptionSnapshot,
           ],
-          [null, workspaceId, RELAY_REPOSITORY, TASK, null],
+          [ask.taskId, workspaceId, RELAY_REPOSITORY, TASK, null],
         );
         assert.deepEqual(
           opened.map((message) => message.conversationId),
@@ -218,10 +217,11 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
   );
 
   it.effect(
-    "a member who did not make the workspace starts one, and an account outside it starts nothing and opens no session",
+    "a member who did not make the task starts one on it, and an account outside its workspace starts nothing and opens no session",
     () =>
       Effect.gen(function* () {
-        const { workspaceId } = yield* openConnectedWorkspace;
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const ask = yield* promptAsk(owner, workspaceId);
         const teammate = yield* openGithubUser();
         yield* connectAgentApiKeys(teammate);
         yield* joinWorkspace(workspaceId, teammate);
@@ -230,11 +230,11 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
         yield* openWorkspace(outsider);
         const { opened, agentSessions } = fakeAgentSessions();
 
-        const theirs = yield* startAgent(agentSessions, teammate, workspaceAsk(workspaceId)).pipe(
+        const theirs = yield* startAgent(agentSessions, teammate, ask).pipe(
           Effect.provide(services),
         );
         const refused = yield* Effect.result(
-          startAgent(agentSessions, outsider, workspaceAsk(workspaceId)).pipe(
+          startAgent(agentSessions, outsider, { ...ask, idempotencyKey: randomUUID() }).pipe(
             Effect.provide(services),
           ),
         );
@@ -269,14 +269,14 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
         const started = yield* startAgent(
           opening({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: "claude-session" }),
           owner,
-          workspaceAsk(workspaceId),
+          yield* promptAsk(owner, workspaceId),
         ).pipe(Effect.provide(Layer.merge(services, listening)));
         const heardOnce = [...queued];
         const refused = yield* Effect.result(
           startAgent(
             opening({ outcome: SESSION_SEND_OUTCOME.FAILED, status: 503 }),
             owner,
-            workspaceAsk(workspaceId),
+            yield* promptAsk(owner, workspaceId),
           ).pipe(Effect.provide(Layer.merge(services, listening))),
         );
 
@@ -298,9 +298,11 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
         const { opened, agentSessions } = fakeAgentSessions();
 
         const refused = yield* Effect.result(
-          startAgent(agentSessions, owner, workspaceAsk(workspaceId, "Acme/Elsewhere")).pipe(
-            Effect.provide(services),
-          ),
+          startAgent(
+            agentSessions,
+            owner,
+            yield* promptAsk(owner, workspaceId, "Acme/Elsewhere"),
+          ).pipe(Effect.provide(services)),
         );
 
         assert.ok(Result.isFailure(refused));
@@ -313,7 +315,7 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
-        const unreached = workspaceAsk(workspaceId);
+        const unreached = yield* promptAsk(owner, workspaceId);
         const refused = yield* Effect.result(
           startAgent(Effect.fail(HOSTED_REFUSAL.UNAVAILABLE), owner, unreached).pipe(
             Effect.provide(services),
@@ -327,7 +329,7 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
         ) =>
           Effect.gen(function* () {
             const reached = yield* Deferred.make<void>();
-            const ask = workspaceAsk(workspaceId);
+            const ask = yield* promptAsk(owner, workspaceId);
             const starting = yield* startAgent(agentSessions(reached), owner, ask).pipe(
               Effect.provide(services),
               Effect.forkChild,
@@ -376,9 +378,11 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
             open: () => Effect.succeed(failed),
           });
         const started = (failed: SessionFailed) =>
-          Effect.result(
-            startAgent(refusing(failed), owner, workspaceAsk(workspaceId)).pipe(
-              Effect.provide(Layer.merge(services, reporting)),
+          Effect.flatMap(promptAsk(owner, workspaceId), (ask) =>
+            Effect.result(
+              startAgent(refusing(failed), owner, ask).pipe(
+                Effect.provide(Layer.merge(services, reporting)),
+              ),
             ),
           );
 
@@ -413,12 +417,16 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
             );
             return yield* openedLineTaken(owner, agent.conversationId, opened);
           });
-        const ranFor = (firing: AutomationFiring): StartAsk => ({
-          ...workspaceAsk(workspaceId),
-          automationOrigin: { name: "Triage", firing, prompt: TASK },
-        });
+        const ranFor = (firing: AutomationFiring) =>
+          Effect.map(
+            promptAsk(owner, workspaceId),
+            (ask): StartAsk => ({
+              ...ask,
+              automationOrigin: { name: "Triage", firing, prompt: TASK },
+            }),
+          );
 
-        const byHand = yield* openedTaken(workspaceAsk(workspaceId));
+        const byHand = yield* openedTaken(yield* promptAsk(owner, workspaceId));
         assert.deepEqual(
           byHand.lines,
           [
@@ -433,10 +441,12 @@ it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
         );
         assert.equal(byHand.heard, false, "by hand");
         const scheduled = yield* openedTaken(
-          ranFor({ kind: AUTOMATION_FIRING.SCHEDULE, dueAt: 0 }),
+          yield* ranFor({ kind: AUTOMATION_FIRING.SCHEDULE, dueAt: 0 }),
         );
         assert.equal(scheduled.heard, false, "a schedule's run, its owner's prompt alone");
-        const hooked = yield* openedTaken(ranFor({ kind: AUTOMATION_FIRING.WEBHOOK, bytes: 2 }));
+        const hooked = yield* openedTaken(
+          yield* ranFor({ kind: AUTOMATION_FIRING.WEBHOOK, bytes: 2 }),
+        );
         assert.equal(hooked.heard, true, "a webhook's run, its caller's body beside the prompt");
       }),
   );
@@ -607,7 +617,7 @@ it.layer(SUITE)("an agent started in several repositories", (it) => {
         const { agentSessions } = fakeAgentSessions();
 
         const started = yield* startAgent(agentSessions, owner, {
-          ...workspaceAsk(workspaceId),
+          ...(yield* promptAsk(owner, workspaceId)),
           alsoRepositories: [{ repository: "acme/web" }],
         }).pipe(Effect.provide(severalServices));
 
@@ -625,14 +635,16 @@ it.layer(SUITE)("an agent started in several repositories", (it) => {
         const { owner, workspaceId } = yield* openSeveralWorkspace();
         const { agentSessions } = fakeAgentSessions();
         const web = `${WEB.owner}/${WEB.name}`;
+        const ask = yield* promptAsk(owner, workspaceId);
         const source = yield* startAgent(agentSessions, owner, {
-          ...workspaceAsk(workspaceId),
+          ...ask,
           alsoRepositories: [{ repository: web }],
         }).pipe(Effect.provide(severalServices));
         yield* recordAgentRepositoryHead(owner, source.agent.id, web, "agent/invite");
 
         const continued = yield* startAgent(agentSessions, owner, {
-          ...workspaceAsk(workspaceId),
+          ...ask,
+          idempotencyKey: randomUUID(),
           prompt: undefined,
           from: { agentId: source.agent.id },
         }).pipe(Effect.provide(severalServices));
@@ -651,7 +663,7 @@ it.layer(SUITE)("an agent started in several repositories", (it) => {
       yield* registerDevice(owner, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
 
       const refused = yield* refusedStart(owner, {
-        ...workspaceAsk(workspaceId),
+        ...(yield* promptAsk(owner, workspaceId)),
         alsoRepositories: [{ repository: `${WEB.owner}/${WEB.name}` }],
         runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
       });
@@ -665,7 +677,7 @@ it.layer(SUITE)("an agent started in several repositories", (it) => {
       const { owner, workspaceId } = yield* openSeveralWorkspace();
 
       const refused = yield* refusedStart(owner, {
-        ...workspaceAsk(workspaceId),
+        ...(yield* promptAsk(owner, workspaceId)),
         alsoRepositories: [{ repository: `${SECRET.owner}/${SECRET.name}` }],
       });
 
@@ -682,7 +694,7 @@ it.layer(SUITE)("an agent started in several repositories", (it) => {
       yield* connectWorkspaceGitHub(workspaceId, ELSEWHERE);
 
       const refused = yield* refusedStart(owner, {
-        ...workspaceAsk(workspaceId),
+        ...(yield* promptAsk(owner, workspaceId)),
         alsoRepositories: [{ repository: `${DOCS.owner}/${DOCS.name}` }],
       });
 

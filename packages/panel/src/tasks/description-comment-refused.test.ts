@@ -17,13 +17,22 @@ import {
   type DescriptionCommentsControl,
   DescriptionCommentsProvider,
 } from "@repo/ui/description-comments";
+import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, test } from "vitest";
+import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer } from "../testing/app-bridge.js";
 import { writeExperiments } from "../testing/app-state.js";
 import { attachmentChipName } from "../testing/attachment-chip.js";
+import {
+  composerEditor,
+  composerWords,
+  editorBundleLanded,
+  installEditorLayout,
+  pressInComposer,
+  writeInComposer,
+} from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { DescriptionBody } from "./description-body.js";
@@ -72,7 +81,11 @@ const PLAN: Task = {
 
 const roots: Root[] = [];
 
+// Landed before any field renders, as the panel lands it after its first paint.
+beforeAll(() => Effect.runPromise(editorBundleLanded));
+
 beforeEach(() => {
+  installEditorLayout();
   Object.defineProperty(window, "luke", {
     configurable: true,
     value: {
@@ -167,24 +180,17 @@ function drawn(
 /** Draws the last tab drawn again in place, as `account` reads it. */
 let redrawAs: (account: Identity) => void = () => assert.fail("nothing drawn");
 
-/** Types `words` into the plain field, as a keyboard's input lands. */
-function typeInto(field: HTMLTextAreaElement, words: string): void {
+/** Hands a text file named `name` to the card's field through its +, as a member picks one, and waits for it to be read. Note that a file, not a picture, since a picture goes into the words as its chip rather than the field's row. */
+async function attachFile(card: HTMLElement, name: string): Promise<void> {
+  const picker =
+    card.querySelector<HTMLInputElement>('.comment-field input[type="file"]') ??
+    assert.fail("no file picker");
+  Object.defineProperty(picker, "files", {
+    configurable: true,
+    value: [new File([`${name}\n`], name, { type: "text/plain" })],
+  });
   act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-    setter?.call(field, words);
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-}
-
-/** Pastes a picture named `name` into the plain field, and waits for it to be read. */
-async function pastePicture(field: HTMLTextAreaElement, name: string): Promise<void> {
-  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7]);
-  const paste = new Event("paste", { bubbles: true, cancelable: true });
-  Object.defineProperty(paste, "clipboardData", {
-    value: { files: [new File([png], name, { type: "image/png" })] },
-  });
-  await act(async () => {
-    field.dispatchEvent(paste);
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
   });
   // Note that a file is read off the disk before it lands in the field.
   for (let round = 0; round < 4; round += 1) await act(() => Promise.resolve());
@@ -193,43 +199,45 @@ async function pastePicture(field: HTMLTextAreaElement, name: string): Promise<v
 /** The files the card's field holds, by name. */
 function heldFiles(card: HTMLElement): (string | null)[] {
   const field = card.querySelector(".comment-field") ?? assert.fail("no reply field");
-  return [...field.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName);
+  const row = [...field.querySelectorAll('[aria-label="Attached files"] > li')];
+  // Note that a file the words name stands there as its chip, which opens it by its name.
+  const inWords = [...field.querySelectorAll('[data-chip="fileChip"] [aria-label^="Open "]')];
+  return [
+    ...row.map(attachmentChipName),
+    ...inWords.map((chip) => chip.getAttribute("aria-label")?.slice("Open ".length) ?? null),
+  ];
 }
 
 test("a refused reply goes back above the words typed while it was out, and neither is dropped", async () => {
   const answer = Promise.withResolvers<boolean>();
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const card = drawn(() => answer.promise);
-  const field = card.querySelector("textarea") ?? assert.fail("no textarea");
-  typeInto(field, "Not for v1.");
-  act(() => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-  assert.equal(field.value, "", "the field empties as the words are sent");
+  const field = composerEditor(card);
+  writeInComposer(field, "Not for v1.");
+  pressInComposer(field, "Enter");
+  assert.equal(composerWords(field), "", "the field empties as the words are sent");
 
-  typeInto(field, "Ask Charles first.");
+  writeInComposer(field, "Ask Charles first.");
   await act(async () => answer.resolve(false));
 
-  assert.equal(field.value, "Not for v1.\n\nAsk Charles first.");
+  assert.equal(composerWords(field), "Not for v1.\n\nAsk Charles first.");
 });
 
-test("a refused reply's files go back before the files pasted while it was out", async () => {
+test("a refused reply's files go back before the files added while it was out", async () => {
   const answer = Promise.withResolvers<boolean>();
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const card = drawn(() => answer.promise);
-  const field = card.querySelector("textarea") ?? assert.fail("no textarea");
-  await pastePicture(field, "before.png");
-  typeInto(field, "Like this.");
-  act(() => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
+  const field = composerEditor(card);
+  writeInComposer(field, "Like this.");
+  await attachFile(card, "before.txt");
+  pressInComposer(field, "Enter");
   assert.deepEqual(heldFiles(card), [], "the files go with the words");
 
-  await pastePicture(field, "after.png");
+  await attachFile(card, "after.txt");
   await act(async () => answer.resolve(false));
 
-  assert.deepEqual(heldFiles(card), ["before.png", "after.png"]);
-  assert.equal(field.value, "Like this.");
+  assert.deepEqual(heldFiles(card), ["before.txt", "after.txt"]);
+  assert.equal(composerWords(field), "Like this. [File: before.txt]\n\n[File: after.txt] ");
 });
 
 /** Draws the thread, sends `refused`, types `newer` while it is out, and has the service refuse it; later sends land. */
@@ -239,12 +247,10 @@ async function refusedBesideNewer(refused: string, newer: string, account: Ident
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const landing = () => (asked.length === 1 ? answer.promise : Promise.resolve(true));
   const card = drawn(landing, asked, account);
-  const field = card.querySelector("textarea") ?? assert.fail("no textarea");
-  typeInto(field, refused);
-  act(() => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-  typeInto(field, newer);
+  const field = composerEditor(card);
+  writeInComposer(field, refused);
+  pressInComposer(field, "Enter");
+  writeInComposer(field, newer);
   await act(async () => answer.resolve(false));
   return {
     card,
@@ -266,7 +272,11 @@ const TOO_LONG = {
 
 test("a refused reply too long to go back beside the newer words stands apart as not sent, outlasting its field, its Retry sending it under its key", async () => {
   const drawnFirst = await refusedBesideNewer(TOO_LONG.REFUSED, TOO_LONG.NEWER);
-  assert.equal(drawnFirst.field.value, TOO_LONG.NEWER, "the newer words stay in the box as typed");
+  assert.equal(
+    composerWords(drawnFirst.field),
+    TOO_LONG.NEWER,
+    "the newer words stay in the box as typed",
+  );
   assert.ok(drawnFirst.card.querySelector("[data-unsent]"), "the refused reply is marked not sent");
 
   // Note that the field goes with its thread, as a press away closes it, and comes back as it opens again.
@@ -293,7 +303,7 @@ test("a refused reply too long to go back beside the newer words stands apart as
     true,
     "and the line goes once it is sent",
   );
-  assert.equal(card.querySelector("textarea")?.value, TOO_LONG.NEWER);
+  assert.equal(composerWords(card), TOO_LONG.NEWER);
 });
 
 test("words written again after a not-sent reply is discarded go under a new key", async () => {
@@ -313,17 +323,15 @@ test("words written again after a not-sent reply is discarded go under a new key
   await act(async () => confirm.click());
   assert.equal(card.querySelector("[data-unsent]") === null, true, "the line goes once discarded");
 
-  typeInto(field, TOO_LONG.REFUSED);
-  act(() => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
+  writeInComposer(field, TOO_LONG.REFUSED);
+  pressInComposer(field, "Enter");
   await act(async () => undefined);
   const [first, again] = keys(asked);
   assert.ok(first !== undefined && again !== undefined);
   assert.notEqual(again, first);
 });
 
-test("a reply refused while only the reader's address was known stands with its picture and its Retry once their identity learns its id", async () => {
+test("a reply refused while only the reader's address was known stands with its file and its Retry once their identity learns its id", async () => {
   const answer = Promise.withResolvers<boolean>();
   const asked: DescriptionCommentActionRequest[] = [];
   const landing = () => (asked.length === 1 ? answer.promise : Promise.resolve(true));
@@ -331,23 +339,19 @@ test("a reply refused while only the reader's address was known stands with its 
   const card = drawn(landing, asked, {
     email: DEAN.email,
   });
-  const field = card.querySelector("textarea") ?? assert.fail("no textarea");
-  await pastePicture(field, "invite.png");
-  typeInto(field, TOO_LONG.REFUSED);
-  act(() => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-  typeInto(field, TOO_LONG.NEWER);
+  const field = composerEditor(card);
+  writeInComposer(field, TOO_LONG.REFUSED);
+  await attachFile(card, "invite.txt");
+  pressInComposer(field, "Enter");
+  writeInComposer(field, TOO_LONG.NEWER);
   await act(async () => answer.resolve(false));
   assert.ok(card.querySelector("[data-unsent]"), "the refused reply is marked not sent");
 
   redrawAs(DEAN);
   const line = card.querySelector("[data-unsent]") ?? assert.fail("no line marked as not sent");
   assert.ok(line.textContent?.includes("Not for v1."));
-  assert.deepEqual(
-    [...line.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
-    ["invite.png"],
-  );
+  // Note that the file its words name stands in them as its chip, as a posted comment's does.
+  assert.ok(line.querySelector('[aria-label="Open invite.txt"]'), "the file stands in its words");
   const retry = [...line.querySelectorAll("button")].find((each) => each.textContent === "Retry");
   assert.ok(retry, "the line offers Retry");
   await act(async () => retry.click());

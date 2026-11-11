@@ -1,9 +1,9 @@
+import { searchHit } from "@repo/features/search-score";
 import { noMatchWords, TERM } from "@repo/features/words";
 import { Command } from "cmdk";
 import { memo, type ReactNode, type Ref, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "../../cn.js";
 import { SearchIcon } from "../../icons/lucide-glyphs.js";
-import { searchHit } from "../../search-score.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { COMBOBOX_HEADING } from "../../shadcn/combobox.js";
 import { DialogContent, Dialog as ShadcnDialog } from "../../shadcn/dialog.js";
@@ -13,6 +13,7 @@ import {
   type ComboboxOption,
   ComboboxOptionItem,
 } from "../combobox/combobox.js";
+import { closesCard } from "../dialog/close-chord.js";
 import { useHeldFocus } from "../dialog/held-focus.js";
 import { NoteLine } from "../note-line/note-line.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
@@ -334,8 +335,13 @@ export function CommandDialog({
         initialFocus={field}
         // Note that focus goes back to what opened the palette as it starts to close, not once its fade ends.
         finalFocus={false}
-        // Note that no key pressed in the card goes on to the window, as no dialog's does.
-        onKeyDown={(event) => event.stopPropagation()}
+        // Note that no key pressed in the card goes on to the window, as no dialog's does, and ⌘W closes it as a dialog's does.
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (!closesCard(event)) return;
+          event.preventDefault();
+          onOpenChange(false);
+        }}
         viewport={{
           className: ROOM,
           // Note that a press goes no further than the dialog, because the surface that opened it is its parent in React's tree and may take presses of its own.

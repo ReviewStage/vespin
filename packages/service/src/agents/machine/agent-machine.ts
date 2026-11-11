@@ -13,7 +13,8 @@
  * the agent's place with its checkout, find it again and record the runner
  * it runs, set and take off what stands at its firewall, resume, stop,
  * and discard it, write files into it, launch the runner there and write
- * its stdin, read whether it ended, end it, and read one file. A runner on a
+ * its stdin, read whether it ended, end it, read one file, and make an MP4
+ * of a recording for a phone (`phone-video.ts`). A runner on a
  * machine whose layout says it reads its lines takes them from our store
  * instead (`../coder-host/runner-sessions.ts`), and its stdin carries only
  * its config. What a
@@ -37,8 +38,11 @@
 import type { LaunchPath } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
+import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
+import type { CheckoutDiffRange } from "@repo/features/checkout-diff";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
   type Brand,
@@ -81,22 +85,24 @@ export interface MachinePlace {
  * Where a machine keeps an agent's things, decided from the agent alone, so
  * a launch names them before the machine is asked anything: its checkout,
  * where the harness starts and the instructions name, where the member's
- * installed skills are installed and where they are written for that, the
- * folder a message's files are written under, the Claude Code CLI and the
+ * installed skills are installed and where they are written for that, none
+ * on a machine whose agents are handed none, the folder a message's files are written under, the Claude Code CLI and the
  * Codex a launch runs, none where the harness's own default stands, and the
  * home Codex keeps its threads in.
  */
 export interface MachineLayout {
   readonly checkoutPath: string;
-  readonly installedSkills: string;
-  readonly skillsUpload: string;
+  /** Where the member's installed skills are installed, which a launch's config names: a sandbox's; none on a device, whose harnesses find whatever skills the machine's own home holds. */
+  readonly installedSkills: string | undefined;
+  /** Where the member's installed skills are written for that; none where they are not installed. */
+  readonly skillsUpload: string | undefined;
   readonly attachments: string;
   /** Where the agent saves a file the service reads back, a screenshot it shows or a page it posts: a folder the service's reads reach on that machine. */
   readonly sharedFiles: string;
   readonly claudeExecutable: string | undefined;
   /** The image's Codex in a sandbox, and on a Mac the one it checked against the pin; none on a Mac that checked none yet, which runs no Codex agent. */
   readonly codexExecutable: string | undefined;
-  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk; none on a Mac, whose Codex keeps its default under the agent's own home. */
+  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk; none on a Mac, whose Codex keeps its own default under the machine's home, which its runner finds by itself. */
   readonly codexHome: string | undefined;
   /**
    * Whether the runner reads its lines past its config from the service
@@ -108,10 +114,27 @@ export interface MachineLayout {
   /**
    * Whether the runner keeps the CLI's transcript at the service
    * (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS`), as a sandbox's does, so
-   * a place made anew still resumes the CLI's session; a Mac's CLI keeps
-   * its own files on the Mac.
+   * a place made anew still resumes the CLI's session, and a continue or
+   * fork elsewhere carries it; a Mac's whose release bundles a runner that
+   * keeps it (`MAC_MACHINE.TRANSCRIPTS_SINCE`), and none on an older Mac,
+   * whose CLI keeps its own files on the Mac alone.
    */
   readonly transcriptsKept: boolean;
+  /**
+   * Whether a session the store does not hold whole still resumes from the
+   * CLI's own files where the place was not made anew, the store left out
+   * of that launch: a Mac's, whose sessions begun before it kept
+   * transcripts stand on its disk alone; a sandbox's such session is let go.
+   */
+  readonly diskSessions: boolean;
+  /**
+   * Whether the runner runs the agent in the mode its config names
+   * (`@repo/agent-runner`'s `PERMISSION_MODE`): a sandbox's, and a device's
+   * whose host registered that its runner does
+   * (`DEVICE_CAPABILITY.PERMISSION_MODES`); an older device's runs every
+   * agent with full access whatever mode it is handed.
+   */
+  readonly permissionModes: boolean;
 }
 
 /** What a later call reads of a launch: its first event number, and what it was started with, as a digest (`runner-sessions.ts`'s `launchFingerprint`). */
@@ -119,6 +142,8 @@ export interface RunnerMark {
   readonly firstSequence: number;
   /** None for a launch from before fingerprints were recorded. */
   readonly fingerprint?: string;
+  /** The permission mode the launch runs its agent in; none for a launch from before it was recorded, and for a Mac's, whose sends never pass it by. */
+  readonly permissionMode?: AgentPermissionMode;
   /** Whether the launch reads its lines from the service (`MachineLayout`'s `linesRead`); none for one the service writes them to the stdin of, a launch from before the read among them. */
   readonly linesRead?: boolean;
 }
@@ -214,6 +239,34 @@ export interface DeliveredCredentials {
   readonly swaps: LaunchSwaps;
 }
 
+/** What a checkout's restore came to: put back, the snapshot not in the checkout any more, a failure, or a machine that restores none, a Mac whose host predates the line. */
+export const RESTORE_OUTCOME = {
+  RESTORED: "restored",
+  MISSING: "missing",
+  FAILED: "failed",
+  UNSUPPORTED: "unsupported",
+} as const;
+
+export type RestoreOutcome = (typeof RESTORE_OUTCOME)[keyof typeof RESTORE_OUTCOME];
+
+/** What a diff of a session's checkout came to: diffed, a commit it was handed missing from the checkout, the diff failed, or a machine that diffs none. */
+export const CHECKOUT_DIFF_OUTCOME = {
+  DIFFED: "diffed",
+  MISSING: "missing",
+  FAILED: "failed",
+  UNSUPPORTED: "unsupported",
+} as const;
+
+/** The outcome of a diff: the diff git printed where it diffed, and why not otherwise. */
+export type CheckoutDiffOutcome =
+  | { readonly outcome: typeof CHECKOUT_DIFF_OUTCOME.DIFFED; readonly diff: string }
+  | {
+      readonly outcome: Exclude<
+        (typeof CHECKOUT_DIFF_OUTCOME)[keyof typeof CHECKOUT_DIFF_OUTCOME],
+        typeof CHECKOUT_DIFF_OUTCOME.DIFFED
+      >;
+    };
+
 /** A runner launched in a place: the place, and the machine's own id for the runner's process. */
 export interface RunnerHandle extends MachinePlace {
   readonly command: string;
@@ -235,12 +288,14 @@ export class LaunchRefused extends Data.TaggedError("LaunchRefused")<{
   readonly deviceRemoved?: true | undefined;
   /** Whether the agent's device has not beaten lately, so nothing it is sent would be taken until it is back. */
   readonly deviceAway?: true | undefined;
+  /** Whether the agent's mode asks before it acts and its device's runner would run it with full access (`MachineLayout`'s `permissionModes`). */
+  readonly modesUnsupported?: true | undefined;
 }> {}
 
 /** What an open asks: the session the place is opened under, the agent whose repository it checks out, and the reads run beside it. */
 /**
  * The workspace's cloud setup scripts as an open hands them to a sandbox
- * it creates (Settings › Cloud setup): its install script and the agent's
+ * it creates (Settings › Cloud environment): its install script and the agent's
  * repository's setup script, each where one is saved, and the workspace's
  * variables the setup script runs with, every one of them secret.
  */
@@ -435,6 +490,31 @@ export interface AgentMachineService {
    * false.
    */
   readonly wrote: (handle: RunnerHandle, text: string) => Effect.Effect<boolean, SandboxError>;
+  /**
+   * The session's checkout put back to the snapshot its runner took before
+   * a turn, by the one restore script both machines run
+   * (`@repo/features/checkout-restore`), once the runner is ended: in a
+   * sandbox, woken where it stopped; on a Mac, by a restore line its host
+   * follows and settles with the script's exit. Refused (`LaunchRefused`)
+   * where the Mac is away or removed, as a line to it is. A sandbox's
+   * restore is a use of it, recorded in the store (`../sandbox-use.ts`).
+   */
+  readonly restoreCheckout: (
+    session: string,
+    snapshot: TurnCheckoutSnapshot,
+  ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices>;
+  /**
+   * The diff of the session's checkout between two snapshots its runner
+   * recorded, or one and the working tree, by the one diff script both
+   * machines run (`@repo/features/checkout-diff`): in a sandbox, woken where
+   * it stopped; on a Mac, asked of its host. Refused (`LaunchRefused`) where
+   * the Mac is away or removed, as a line to it is. A sandbox's diff is a
+   * use of it, recorded in the store (`../sandbox-use.ts`).
+   */
+  readonly diffCheckout: (
+    session: string,
+    range: CheckoutDiffRange,
+  ) => Effect.Effect<CheckoutDiffOutcome, SandboxError | LaunchRefused, DatabaseServices>;
   /** The runner's exit code, null while it runs, or gone where the machine no longer knows it; waiting at most `within` for the exit. */
   readonly runnerExit: (
     handle: RunnerHandle,
@@ -451,6 +531,16 @@ export interface AgentMachineService {
     session: string,
     path: string,
     bound: number,
+  ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+  /**
+   * An H.264 MP4 of the WebM recording at the path, made on the session's
+   * place as the agent's own user (`phone-video.ts`), for a player that
+   * plays no WebM; nothing where the place has no encoder, as a Mac and a
+   * sandbox on an older image have none, or the copy would not fit.
+   */
+  readonly phoneVideo: (
+    session: string,
+    path: string,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
 }
 

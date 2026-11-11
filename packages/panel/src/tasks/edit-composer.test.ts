@@ -71,8 +71,9 @@ async function opened(
   door?: AgentPictureDoor,
   words = "Also email the inviter.",
   cut: { cuts: boolean; takes?: string | undefined } = { cuts: false },
+  restorable = false,
 ) {
-  const ended: { words: string; files: readonly AgentAttachment[] }[] = [];
+  const ended: { words: string; files: readonly AgentAttachment[]; restoreFiles?: true }[] = [];
   let canceled = 0;
   const container = document.createElement("div");
   document.body.append(container);
@@ -89,12 +90,13 @@ async function opened(
             words,
             edit: {
               agentId: "agent-1",
-              doors: { openGitHub: () => undefined, copy: () => undefined },
+              restorable,
               ...cut,
               onCancel: () => {
                 canceled += 1;
               },
-              onSend: (words, files) => ended.push({ words, files }),
+              onSend: (words, files, restoreFiles) =>
+                ended.push({ words, files, ...(restoreFiles ? { restoreFiles } : undefined) }),
             },
           }),
         ),
@@ -315,5 +317,50 @@ test("Send asks what it drops where messages follow, naming a teammate's among t
       "Everything after it, including 2 messages from Sam, will be removed from the conversation",
     ),
     String(named),
+  );
+});
+
+test("it offers the files back beside Cancel where the line's turn recorded them, off until ticked, and Send hands the choice on", async () => {
+  const plain = await opened();
+  assert.equal(
+    plain.container.querySelector('[role="checkbox"]'),
+    null,
+    "no choice where the turn recorded nothing",
+  );
+  await plain.close();
+
+  const box = await opened(LINE, undefined, "Also email the inviter.", { cuts: false }, true);
+  const choice = box.container.querySelector<HTMLElement>('[role="checkbox"]');
+  assert.ok(choice, "the choice stands beside Cancel");
+  assert.equal(choice.getAttribute("aria-checked"), "false");
+  typeInComposer(box.container, " today");
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.deepEqual(
+    box.ended.map(({ words, restoreFiles }) => ({ words, restoreFiles })),
+    [{ words: "Also email the inviter. today", restoreFiles: undefined }],
+  );
+  await box.close();
+
+  const ticked = await opened(LINE, undefined, "Also email the inviter.", { cuts: false }, true);
+  const tick = ticked.container.querySelector<HTMLElement>('[role="checkbox"]');
+  assert.ok(tick);
+  await act(async () => tick.click());
+  await settle();
+  assert.equal(tick.getAttribute("aria-checked"), "true");
+  pressInComposer(ticked.container, "Enter");
+  await settle();
+  assert.deepEqual(ticked.ended, [], "putting the files back is asked about first");
+  const question = document.querySelector('[role="alertdialog"]')?.textContent;
+  assert.ok(question?.includes("files also go back"), String(question));
+  const send =
+    [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find(
+      (each) => each.textContent === "Send message",
+    ) ?? assert.fail("the question offers Send message");
+  await act(async () => send.click());
+  await settle();
+  assert.deepEqual(
+    ticked.ended.map(({ words, restoreFiles }) => ({ words, restoreFiles })),
+    [{ words: "Also email the inviter.", restoreFiles: true }],
   );
 });

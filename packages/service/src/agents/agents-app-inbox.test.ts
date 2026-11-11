@@ -37,6 +37,7 @@ import {
   AUTOMATION_RUN_STATUS,
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import {
   INBOX_ANSWER_LEAD,
   INBOX_APPROVAL_OPTION,
@@ -48,6 +49,7 @@ import {
   INBOX_MESSAGE_LEAD,
   INBOX_REPLY,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   type InboxItem,
   inboxAnsweredSchema,
   inboxAnswerSchema,
@@ -55,10 +57,13 @@ import {
   inboxMessagedSchema,
   inboxReadAllSchema,
   inboxReadStateSchema,
+  inboxTakenBackSchema,
 } from "@repo/features/inbox-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import { MP4_TYPE, WEBM_TYPE } from "@repo/features/video-signature";
 import type { WireBoundaryInput } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import { webmBytes } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
 import { eq } from "drizzle-orm";
 import { Clock, DateTime, Duration, Effect, Fiber, Option, Result } from "effect";
@@ -87,6 +92,7 @@ import {
   INBOX_CLOSE,
   INBOX_ITEM,
   INBOX_ITEM_READ,
+  INBOX_ITEM_TAKE_BACK,
   INBOX_MESSAGES,
   INBOX_READ,
   openAskOf,
@@ -142,6 +148,18 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
       /** A member's close of an item without an answer, as the route answers it. */
       const close = (itemId: string, body: WireBoundaryInput, bearer = opened.owner) =>
         opened.ask(request(INBOX_CLOSE, bearer, { method: "POST", id: itemId, body }));
+      /** A member's own nod or close taken back by its key, as the route answers it. */
+      const takeBack = (itemId: string, clientKey: string, bearer = opened.owner) =>
+        Effect.map(
+          opened.ask(
+            request(INBOX_ITEM_TAKE_BACK, bearer, {
+              method: "POST",
+              id: itemId,
+              body: { clientKey },
+            }),
+          ),
+          (answered) => readAnswer(inboxTakenBackSchema, HOSTED_HTTP_STATUS.OK, answered),
+        );
       /** What waits across the account, as the bearer reads it past the cursor. */
       const waiting = (after?: string, bearer = opened.owner) =>
         Effect.map(
@@ -169,6 +187,7 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
         read,
         answer,
         close,
+        takeBack,
         waiting,
         message,
         transcript,
@@ -840,6 +859,66 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
         );
         assert.equal(agentSessions.sent.length, before + 1, "and tells the agent nothing");
         assert.deepEqual((yield* waiting()).items, [], "nothing waits on the developer");
+      }),
+  );
+
+  it.effect(
+    "a member's own Got it and close are taken back by their keys, the notice and the question waiting on them again, however long since; one the agent was told of is refused as told, and one taken back already, or a teammate's, as moved on",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { other, task, post, answer, close, takeBack, waiting } =
+          yield* openInbox(agentSessions);
+        const notice = yield* post({
+          key: "merged",
+          title: "The refresh fix merged",
+          body: "It went into main.",
+          needsReply: false,
+        });
+        const quiet = yield* post(TODO("flag"));
+        const heard = yield* post(QUESTION);
+        assert.ok(Result.isSuccess(notice) && Result.isSuccess(quiet) && Result.isSuccess(heard));
+        const nodKey = randomUUID();
+        yield* answer(notice.success.id, {
+          revision: notice.success.revision,
+          reply: INBOX_REPLY.ACKNOWLEDGED,
+          clientKey: nodKey,
+        });
+        const closeKey = randomUUID();
+        yield* close(quiet.success.id, { revision: quiet.success.revision, clientKey: closeKey });
+        const toldKey = randomUUID();
+        yield* close(heard.success.id, { revision: heard.success.revision, clientKey: toldKey });
+        assert.deepEqual((yield* waiting()).items, [], "nothing waits once each is settled");
+        const told = agentSessions.sent.length;
+        yield* TestClock.adjust("1 hour");
+
+        yield* joinWorkspace(task.workspaceId, other);
+        const theirs = yield* takeBack(notice.success.id, nodKey, other);
+        assert.equal(theirs.outcome, INBOX_TAKE_BACK.MOVED_ON, "a teammate takes back nothing");
+
+        const nod = yield* takeBack(notice.success.id, nodKey);
+        assert.deepEqual(
+          [nod.outcome, nod.item.status],
+          [INBOX_TAKE_BACK.TAKEN, INBOX_STATUS.OPEN],
+        );
+        const closed = yield* takeBack(quiet.success.id, closeKey);
+        assert.deepEqual(
+          [closed.outcome, closed.item.status, closed.item.thread?.[0]?.ask?.status],
+          [INBOX_TAKE_BACK.TAKEN, INBOX_STATUS.OPEN, INBOX_ASK_STATUS.OPEN],
+        );
+        const again = yield* takeBack(quiet.success.id, closeKey);
+        assert.equal(again.outcome, INBOX_TAKE_BACK.MOVED_ON);
+        const refused = yield* takeBack(heard.success.id, toldKey);
+        assert.deepEqual(
+          [refused.outcome, refused.item.status],
+          [INBOX_TAKE_BACK.TOLD, INBOX_STATUS.CLOSED],
+        );
+        assert.equal(agentSessions.sent.length, told, "a take-back messages no agent");
+        assert.deepEqual(
+          (yield* waiting()).items.map(({ id }) => id).toSorted(),
+          [notice.success.id, quiet.success.id].toSorted(),
+          "the two taken back wait on the developer again",
+        );
       }),
   );
 
@@ -1783,6 +1862,49 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
             }),
           ),
           refusal(HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, HOSTED_API_ERROR.METHOD_NOT_ALLOWED),
+        );
+      }),
+  );
+
+  it.effect(
+    "a recording is served as the MP4 its sandbox made of it to a caller that plays MP4, as the iOS app asks, as its WebM to one that asks nothing, and to no other account",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, fetch, ask, post, read } = yield* openInbox();
+        const webm = webmBytes(1280, 800);
+        const mp4 = Uint8Array.from([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]);
+        yield* post({ key: "flow", title: "The invite flow", body: "![The flow](flow.webm)" }, [
+          {
+            path: "flow.webm",
+            name: "flow.webm",
+            contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+            bytes: webm,
+            mp4Bytes: mp4,
+          },
+        ]);
+        const item = (yield* read()).items.find((each) => each.key === "flow");
+        const file = item?.thread?.[0]?.files?.[0];
+        assert.ok(item && file);
+        const at = (bearer: string, accept?: string) =>
+          request(INBOX_ATTACHMENT, bearer, {
+            id: item.id,
+            attachment: file.attachmentId,
+            ...(accept === undefined ? {} : { accept }),
+          });
+        const body = (served: Response) =>
+          Effect.promise(() => served.arrayBuffer()).pipe(
+            Effect.map((bytes) => new Uint8Array(bytes)),
+          );
+
+        const phone = yield* fetch(at(owner, `${MP4_TYPE}, ${WEBM_TYPE};q=0.5`));
+        assert.equal(phone.headers.get("content-type"), MP4_TYPE);
+        assert.deepEqual(yield* body(phone), mp4);
+        const desk = yield* fetch(at(owner));
+        assert.equal(desk.headers.get("content-type"), WEBM_TYPE);
+        assert.deepEqual(yield* body(desk), webm);
+        assert.deepEqual(
+          yield* ask(at(other, MP4_TYPE)),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
         );
       }),
   );

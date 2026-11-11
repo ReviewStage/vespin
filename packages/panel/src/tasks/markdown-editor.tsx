@@ -21,7 +21,9 @@ import {
   type DescriptionEditorProps,
   type EditorAnchor,
   type EditorAnchors,
+  type EditorCodeBlock,
   type EditorDiagram,
+  type EditorDrawing,
   type EditorTaskBox,
   type Finish,
   type HeadingsChange,
@@ -32,9 +34,9 @@ import {
 } from "../description-editor/contract.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { type OwnBlock, useBlockPicker } from "./block-picker.js";
+import { EditorCodeHeader } from "./code-fence-heading.js";
 import type { EditorPictures } from "./editor-pictures.js";
 import { type MentionDoors, MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { MENTION_MENU_SIDE, type MentionSource, useMentionPicker } from "./mention-picker.js";
 import { useSelectionToolbar } from "./selection-toolbar.js";
 import { useKnownNames } from "./use-known-names.js";
@@ -63,8 +65,8 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
  * rows of its own blocks in the `/` menu, with rows that do not apply to it
  * dropped. The `/` menu stands aside while the `@` list stands, as the
  * toolbar stands aside for either. The editor stands in a room of its own
- * that the toolbar and the menus float in, under `ph-no-capture`, its words
- * document text the recording masks; focus leaving the room for anywhere
+ * that the toolbar and the menus float in, its text left out of the
+ * recording (`ph-no-capture`); focus leaving the room for anywhere
  * but its own toolbar and menus is the document's to hear (`onLeave`). A
  * finish or a leaving waits for a picture still being kept, since only the
  * open editor can lay in its address; it goes once none is.
@@ -251,6 +253,7 @@ export function MarkdownEditor({
   const chips = useEditorDrawings<DrawnMention>();
   const previews = useEditorDrawings<EditorDiagram>();
   const taskBoxes = useEditorDrawings<EditorTaskBox>();
+  const codeHeaders = useEditorDrawings<EditorCodeBlock>();
   // Note that a finish or a leaving waits for a picture still being kept, since only the open editor can lay in its address; it goes once none is.
   const held = useRef<(() => void) | undefined>(undefined);
   const sending = pictures?.sending === true;
@@ -299,10 +302,7 @@ export function MarkdownEditor({
   });
   // While the toolbar stands, its Comment's command starts the thread as a press on it does.
   useAppCommand(APP_COMMAND.COMMENT_ON_SELECTION, toolbar.standing ? onComment : undefined);
-  const roomClass =
-    roomClassName === undefined
-      ? `${ROOM_CLASS} ph-no-capture`
-      : `${ROOM_CLASS} ${roomClassName} ph-no-capture`;
+  const roomClass = roomClassName === undefined ? ROOM_CLASS : `${ROOM_CLASS} ${roomClassName}`;
   useAnnounceShown(ANNOUNCE.ALERT, module.isError ? EDITOR_LOAD_FAILED : "");
   if (!module.isSuccess) {
     return (
@@ -319,7 +319,8 @@ export function MarkdownEditor({
     focus,
     label,
     placeholder,
-    className,
+    // Note that the text itself is left out of the recording, because its masked words would still record the rhythm of the typing.
+    className: `${className} ph-no-capture`,
     onDraft,
     onFinish: (section, how) => once(() => onFinish(section, how)),
     sendsOnEnter,
@@ -336,7 +337,7 @@ export function MarkdownEditor({
               pastedMentionNode(words, mentions.doors.place, {
                 known,
                 taskIdOf,
-                taskId: holderTaskId(mentions.source.holder),
+                taskId: mentions.source.holder?.taskId,
                 text,
               }),
             namesMention: (target) =>
@@ -344,6 +345,7 @@ export function MarkdownEditor({
           },
     drawDiagram: diagrams ? previews.draw : undefined,
     drawTaskBox: taskBoxes.draw,
+    drawCodeHeader: codeHeaders.keep,
     pictures: pictures?.pictures,
     format: toolbar.doors,
     blocks: { onTrigger: blocks.onTrigger, onKey: blocks.onKey },
@@ -387,6 +389,9 @@ export function MarkdownEditor({
           each.key,
         ),
       )}
+      {codeHeaders.drawn.map((each) =>
+        createPortal(<EditorCodeHeader block={each.what} />, each.element, each.key),
+      )}
       {taskBoxes.drawn.map((each) =>
         createPortal(
           <Checkbox
@@ -415,25 +420,43 @@ interface DrawnInEditor<A> {
   readonly key: number;
 }
 
-/** What the editor holds as drawn, and the door the editor asks to draw one through. */
+/** What the editor holds as drawn, the door the editor asks to draw one through, and the door to one it draws again as it changes. */
 interface EditorDrawings<A> {
   readonly drawn: readonly DrawnInEditor<A>[];
   readonly draw: (element: HTMLElement, what: A) => () => void;
+  readonly keep: (element: HTMLElement, what: A) => EditorDrawing<A>;
 }
 
 /**
- * What the editor asks the panel to draw, a mention, a diagram, or a task
- * item's box, each drawn into its own element while it stands, as the
- * composer draws its chips.
+ * What the editor asks the panel to draw, a mention, a diagram, a task
+ * item's box, or a code block's header, each drawn into its own element
+ * while it stands, as the composer draws its chips; one it keeps is drawn
+ * again in place as its subject changes.
  */
 function useEditorDrawings<A>(): EditorDrawings<A> {
   const [drawn, setDrawn] = useState<readonly DrawnInEditor<A>[]>([]);
   const counted = useRef(0);
-  const draw = (element: HTMLElement, what: A) => {
+  const draw = (element: HTMLElement, what: A): number => {
     counted.current += 1;
     const key = counted.current;
     setDrawn((was) => [...was, { element, what, key }]);
-    return () => setDrawn((was) => was.filter((each) => each.key !== key));
+    return key;
   };
-  return { drawn, draw };
+  const undraw = (key: number) => setDrawn((was) => was.filter((each) => each.key !== key));
+  return {
+    drawn,
+    draw: (element, what) => {
+      const key = draw(element, what);
+      return () => undraw(key);
+    },
+    // Note that a drawing kept is drawn again under its own key, so what it holds open, a menu, stays open.
+    keep: (element, what) => {
+      const key = draw(element, what);
+      return {
+        redraw: (next) =>
+          setDrawn((was) => was.map((each) => (each.key === key ? { ...each, what: next } : each))),
+        undraw: () => undraw(key),
+      };
+    },
+  };
 }

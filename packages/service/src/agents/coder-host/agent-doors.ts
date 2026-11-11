@@ -20,7 +20,7 @@ import {
 import { readTaskHeader } from "@repo/database/models/task-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
-import { PAGE_OWNER, PAGE_SHOWER } from "@repo/features/page-wire";
+import { PAGE_SHOWER } from "@repo/features/page-wire";
 import { Effect, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import type { UnparsedWireValue, WireRecord } from "../../core.js";
@@ -213,7 +213,7 @@ export function runAgentComment(
   );
 }
 
-/** Runs one `show_page` call on the agent's task, or on the agent itself where it works on none, a page's path read from its sandbox through the door given. */
+/** Runs one `show_page` call on the agent's task, a page's path read from its sandbox through the door given. */
 export function runAgentShowPage(
   admitted: AdmittedConversation,
   input: UnparsedWireValue,
@@ -225,10 +225,7 @@ export function runAgentShowPage(
     const { id: agentId, taskId } = found.success;
     const binding = {
       userId: admitted.target.userId,
-      owner:
-        taskId === null
-          ? ({ kind: PAGE_OWNER.AGENT, agentId } as const)
-          : ({ kind: PAGE_OWNER.TASK, taskId } as const),
+      taskId,
       sandbox: { door: sandbox, checkout: CODER.CHECKOUT_PATH },
     };
     return yield* runShowPage(binding, input, {

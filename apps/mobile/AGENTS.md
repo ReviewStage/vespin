@@ -13,13 +13,16 @@ and `expo prebuild` generates it on every build.
 
 The app's agents run on the developer's own Mac, which has Xcode 27 and the
 simulators; the cloud sandboxes have no Xcode and see the app only through
-CI's macOS job below. Every command here runs from `apps/mobile`.
+the macOS run below. Every command here runs from `apps/mobile`.
 
 | Command | What it does |
 | --- | --- |
 | `pnpm ios -- --device "iPhone 18 Pro"` | Generate `ios/` if it is missing, build a Debug app, install it on that simulator, and start Metro for it |
 | `pnpm start` | Metro alone, for a Debug app already installed |
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
+| `xcrun simctl launch booted dev.vespin.ios -authServer stub` | Launch it signed out against the stubbed account service, as `maestro/sign-in.yaml` does |
+| `xcrun simctl launch booted dev.vespin.ios -fixture inbox -agent 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5` | Launch it on the Inbox fixture, opened on its invitations agent's page, as `maestro/agent.yaml` does |
+| `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
@@ -53,31 +56,41 @@ with it. Touch nothing of the developer's outside the checkout.
 
 ## CI
 
-Two jobs in `.github/workflows/ci.yml` cover the app.
+- **Linux** (`.github/workflows/ci.yml`) runs the typecheck, the lint, the
+  vitest tests, and `export:ios` on every pull request, through the same turbo
+  tasks as every workspace. It is the pull request's only gate.
+- **macOS** (`.github/workflows/ios-simulators.yml`, on GitHub's `xcode-27`
+  image) runs only by hand, on any branch. It generates
+  the native project, builds the Release simulator app, runs the Maestro flows
+  on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad Pro 11-inch,
+  and uploads their screenshots as the `mobile-screenshots` artifact, kept
+  whether or not the flows passed.
 
-- **Linux** runs the typecheck, the lint, the vitest tests, and `export:ios`
-  on every pull request, through the same turbo tasks as every workspace.
-- **macOS** (`mobile`, on GitHub's `xcode-27` image) runs only on a pull
-  request that changes `apps/mobile/**`, `packages/ui-native/**`, or the
-  workflow itself, never in the merge queue, whose 30-minute status check
-  timeout the job outlasts; a run that skips it keeps the `CI` gate green. It
-  generates the native project, builds the Release simulator app, runs the
-  Maestro flows on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad
-  Pro 11-inch, and uploads their screenshots as the `mobile-screenshots`
-  artifact, kept whether or not the flows passed.
-
-Look at CI's screenshots before calling a pull request done, since the gate
-is the macOS job and not your own Mac:
+A pull request merges on the Linux checks alone, with no device check first;
+device problems show in the TestFlight builds. For screenshots, ask for a run
+on your branch: Vespin's GitHub App cannot dispatch a workflow, so it is
+started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
+<branch>`). Each simulator takes about an hour, every flow in the light
+appearance and the dark, after a 20-minute build, so name fewer for a quicker
+look (`-f simulators="iPhone 18 Pro"`).
+Then read its screenshots:
 
 ```
-gh run list --branch <your branch> --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId'
+gh run list --branch <your branch> --workflow "iOS simulators" --limit 1 --json databaseId --jq '.[0].databaseId'
 gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 ```
 
 Each simulator's pictures, in each appearance, are under
 `/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
-screenshot is under `debug/<flow>/screenshots/` beside them.
+screenshot is under `debug/<flow>/screenshots/` beside them. A flow that
+failed runs once more, alone, its second run under `<light|dark>/retry/`
+laid out the same way. The notification flow, whose push Maestro cannot
+send, runs apart: the script installs the app afresh, lets it notify through
+the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
+notifications), runs `maestro/notification/background.yaml`, pushes
+`ask.apns` with `xcrun simctl push`, and runs `open.yaml`, its output under
+`<light|dark>/notification/`.
 
 ## The host
 
@@ -93,22 +106,68 @@ build time. The screens read the document as the panel does, with
 `useQuery({ ...appStateQuery, select })` (`src/host/app-state-query.ts`) and
 the selects of `@repo/host/app-state-reads`, and send acts on the host's act
 port, served in-process over `src/host/in-process-channel.ts` in place of a
-`MessageChannel`. Until the sign-in task lands the host runs signed out.
+`MessageChannel`.
+
+The account is the desktop's OAuth source signed in as the `ios` client
+(`OAUTH_ACCOUNT_CLIENT.IOS`), whose bearer every v1 write and the socket
+take, so no session is handed off. Its consent is the system's
+authentication session (`src/host/auth-session.ts`, under
+`@repo/credentials`' `authSessionConsent`), which catches the sign-in's
+HTTPS callback on `vespin.dev` through the `webcredentials:` associated
+domain, and its tokens are sealed in the settings file under a key the
+Keychain keeps (`src/host/keychain-cipher.ts`). The
+root layout stands the tabs and Settings behind the account and the
+sign-in screen in front of them otherwise. A `vespin.dev` link the app
+draws is routed by `src/app/+native-intent.tsx` through
+`@repo/features/ios-app-links`, the same list the host's association file
+claims for the app; any other opens in Safari.
 
 A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the
-Inbox profile's threads among it (`@repo/host/fixture-inbox`), which is how
-the Maestro flows run with no server. What Hermes lacks of the web platform
+Inbox profile's threads and the tasks holding them among it
+(`@repo/host/fixture-inbox`), the acts the profile stages, such as a mark,
+a thread's file read, a reply or a resolve, an agent's message, queue
+change, Stop, or change of model, or a New agent or New task start, answered by the fixture,
+the models and repositories those sheets pick among staged, the
+migration's approval refused so a flow sees a refused answer taken back
+(`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
+flows run with no server. A change to one of the fixture agent's pull
+requests is taken as GitHub would take it and moves it on the document,
+merged or out of the queue (`pullRequestPartsAppState`), so a flow sees its
+press land. A `-authServer stub` launch argument
+instead signs in against an account service the app answers itself
+(`src/host/stub-auth-server.ts`), whose authorization page grants at once,
+which is how `maestro/sign-in.yaml` signs in, relaunches signed in, and
+signs out. A `-agent <id>` launch argument opens the app on
+that agent's page, as `maestro/agent.yaml` reaches the Inbox fixture's
+invitations agent, whose transcript the fixture holds, and `-pullRequest
+<number>` beside it opens that agent's pull request on its own screen, as
+`maestro/pull-request.yaml` reaches the fixture's failing and queued ones. What Hermes lacks of the web platform
 the host stands on is polyfilled in one place, `src/host/polyfills.ts`, each
 with a line on why; Shiki stays out of the app, and a fenced block is drawn
 plain.
+
+## The Live Activity
+
+The member's running agents stand in one Live Activity, which the service
+starts, updates, and ends by push (`@repo/features/live-activity-wire`).
+`app.config.ts` adds the widget extension that draws it as a native target,
+as it adds the Notification Service Extension: its Swift is under
+`live-activity/`, the presentations with a preview each and the Stop
+button's `LiveActivityIntent`, which iOS runs in the app's process, so the
+app builds it too. The app's own native module, autolinked from
+`modules/live-activity/`, holds the activity's attributes, which the widget
+builds as well, since ActivityKit matches the two by the type's name, and
+hands the app's JavaScript the tokens, an activity's end, and each Stop
+(`src/live-activity/`). Xcode's canvas draws the previews; on a simulator,
+`-liveActivity true` beside `-fixture inbox` starts an activity of the
+fixture's own, which `maestro/live-activity.yaml` shoots.
 
 ## Tests
 
 Logic is tested with vitest, under `src/**/*.test.ts`, as root `AGENTS.md`'s
 Testing section says. Screens are not unit-tested: each is checked by a Maestro
-flow under `maestro/` that drives the simulator and takes a screenshot, which
-CI keeps. A new screen adds its steps to a flow, or a flow of its own, and a
+flow under `maestro/` that drives the simulator and takes a screenshot. A new screen adds its steps to a flow, or a flow of its own, and a
 pull request with UI shows its screenshots to the developer in a thread.
 
 ## Conventions
@@ -123,6 +182,10 @@ pull request with UI shows its screenshots to the developer in a thread.
   `List`, `Section`, `Form`, `NavigationSplitView`, and the rest), the
   developer's choice of Nov 8, 2026. A React Native view draws only what
   SwiftUI has no piece for: message markdown and the agent transcript.
+  The transcript is the app's one React Native list (`AgentTranscript`), lazy
+  and anchored at its newest row, and a page an agent showed is its one web
+  view (`SealedPage`, through `react-native-webview`), handed the page's HTML
+  with no network and no navigation.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
   screen composes its components and imports neither `@expo/ui` nor

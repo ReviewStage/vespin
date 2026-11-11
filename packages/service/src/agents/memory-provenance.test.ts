@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
 import { listMemories, MEMORY_OUTCOME } from "@repo/database/models/memory-store";
+import { createTask } from "@repo/database/models/task-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import type { StoredAutomationOrigin } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -56,8 +57,7 @@ const openAgent = (automationOrigin?: StoredAutomationOrigin) =>
       by: userId,
     });
     const started = yield* createAgent(userId, {
-      taskId: null,
-      organizationId: workspaceId,
+      taskId: (yield* createTask(userId, { organizationId: workspaceId })).id,
       descriptionSnapshot: null,
       prompt: "Tidy the docs.",
       idempotencyKey: randomUUID(),

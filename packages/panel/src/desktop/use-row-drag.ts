@@ -377,6 +377,11 @@ function liftCopy(row: HTMLElement, list: HTMLElement, scope: Element | null): H
   if (copy instanceof HTMLElement) {
     copy.setAttribute(LIFTED_ATTRIBUTE, "true");
     copy.style.transform = "";
+    // Note that a row of a list drawing only those near the view stands at its own top in the list (`VirtualRows`),
+    // which the copy, alone in its shell, must not keep, or it is carried that far below the pointer.
+    copy.style.position = "";
+    copy.style.insetInline = "";
+    copy.style.top = "";
   }
   const shell = document.createElement(list.tagName);
   shell.className = list.className;

@@ -1,6 +1,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -15,6 +16,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   ANNOUNCE,
+  BUTTON_VARIANT,
+  Button,
   Checkbox,
   CONFIRM_LOSS,
   COPY_FIELD_PROMPT,
@@ -22,8 +25,11 @@ import {
   ConfirmDialog,
   CopyField,
   type DialogConfirm,
+  ExternalIcon,
+  OutsideSteps,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
+  SettingsBlock,
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
@@ -33,8 +39,11 @@ import {
   SettingsRowsSkeleton,
   SettingsSection,
   STATUS_TONE,
+  STEP_STATE,
+  Step,
   Switch,
   TEXT_TONE,
+  TEXT_VARIANT,
   Text,
   useAnnounce,
   useConfirmDialog,
@@ -45,10 +54,9 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { actMutation } from "../act-mutations.js";
+import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { DEVICE_PLATFORM_NAME } from "../device-platform.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { confirmFailure } from "../failure-report.js";
 import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
@@ -60,7 +68,7 @@ import {
   useThisMac,
 } from "../machine-name.js";
 import { DeviceGlyph } from "../tasks/runs-on.js";
-import { showToast, TOAST_HOLD } from "../toast.js";
+import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import { ReadFailed } from "./marks.js";
@@ -122,26 +130,27 @@ import { MenuRow } from "./menu-row.js";
  */
 
 const SECTION_TITLE = {
-  HOSTS: "Your hosts",
-  ADD: "Add a host",
+  HOSTS: "Your machines",
+  ADD: "Add a machine",
 } as const;
 
 const WORDS = {
-  NONE: "No hosts yet.",
+  NONE: "No machines yet.",
   ONLINE: "Online",
   OFFLINE: "Offline",
   SETTING_UP: "Setting up…",
   UPDATING: "Updating…",
   INSTALL_LABEL: "Run this on a Mac or Linux server",
-  INSTALL_NEXT:
-    "Then open the link it prints, and approve its code. A Mac runs your agents only while its user is logged in.",
+  APPROVE: "Open the link it prints, and approve its code",
+  LOGGED_IN: "A Mac runs your agents only while its user is logged in.",
   INSTALL_FIELD: "Install command",
+  WAITING: "Waiting for a machine to connect",
   CONNECTED: "is connected.",
 } as const;
 
 /** The row that stands while the machines are read: a machine with its ⋯. */
 const HOSTS_SKELETON: readonly SettingsRowSkeletonShape[] = [
-  { described: true, controls: [SETTINGS_SKELETON_CONTROL.MORE] },
+  { described: true, controls: [], end: [SETTINGS_SKELETON_CONTROL.MORE] },
 ];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
@@ -153,7 +162,7 @@ const UNREACHED: ActionResult = {
 /** A remove the service answered with a refusal, said in the dialog that asked. */
 const REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: "Could not remove this host. Try again.",
+  reason: "Could not remove this machine. Try again.",
 };
 /** Turning This Mac off, refused by the service, said in the dialog that asked. */
 const TURN_OFF_REFUSED: ActionResult = {
@@ -239,12 +248,16 @@ const THIS_MAC_WORDS = {
   SWITCH: "Run agents on this Mac",
   OFF: "Run your agents on this Mac instead of the cloud.",
   TURN_ON_FAILED: "Could not turn on this Mac. Try again.",
+  NEEDS_APPROVAL: `macOS won't run agents on this Mac until you allow ${PRODUCT_NAME} in System Settings › General › Login Items.`,
+  OPEN_LOGIN_ITEMS: "Open Login Items",
+  STILL_LISTED: `This Mac is off, but ${PRODUCT_NAME} couldn't remove it from your machines. Remove it from the list below.`,
+  FOLDER_LEFT: "This Mac is off, but an agent's folder couldn't be deleted.",
 } as const;
 
 /** What turning This Mac off asks first: it takes the host off this Mac, and its agents' folders where the member leaves that checked. */
 const THIS_MAC_OFF = {
   title: "Turn off agents on this Mac?",
-  body: `${PRODUCT_NAME} removes its host from this Mac, and any agent running here stops. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
+  body: `This Mac stops running your agents, and any agent running here stops. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
   verb: "Turn off",
   running: "Turning off",
 } as const;
@@ -258,7 +271,7 @@ function deleteFoldersWords(count: number): { readonly label: string; readonly d
 }
 
 /** What Remove says goes, whatever the machine: the host removes itself from the machine as it hears so (`apps/host`'s `removeItself`). */
-const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, its agents' folders included. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
+const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, keeping its agents' folders in ~/.vespin/agents. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
 
 /** What Remove adds for a host that reads offline, which hears it was removed only once it is online again, and the command for one that never is. */
 const REMOVED_OFFLINE =
@@ -317,14 +330,18 @@ function ThisMacRow({
   host,
   book,
   on,
+  needsApproval,
   onChange,
 }: {
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
   book: PresenceBook;
   on: boolean;
+  /** Whether macOS holds its host until the member allows the app in Login Items. */
+  needsApproval: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
+  const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
   const description = !on ? (
     THIS_MAC_WORDS.OFF
   ) : host === undefined ? (
@@ -335,22 +352,45 @@ function ThisMacRow({
     <StandingLine host={host} book={book} joined={false} />
   );
   return (
-    <SettingsRow
-      leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
-      label={THIS_MAC}
-      description={description}
-      labelsControl
-    >
-      {(control) => (
-        <Switch
-          id={control.controlId}
-          checked={on}
-          label={THIS_MAC_WORDS.SWITCH}
-          describedBy={control["aria-describedby"]}
-          onChange={(next) => onChange(next)}
-        />
-      )}
-    </SettingsRow>
+    <>
+      <SettingsRow
+        leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
+        label={THIS_MAC}
+        description={description}
+        labelsControl
+      >
+        {(control) => (
+          <Switch
+            id={control.controlId}
+            checked={on}
+            label={THIS_MAC_WORDS.SWITCH}
+            describedBy={control["aria-describedby"]}
+            onChange={(next) => onChange(next)}
+          />
+        )}
+      </SettingsRow>
+      {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
+      {on && needsApproval ? (
+        <SettingsRow
+          label={null}
+          description={
+            <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+              {THIS_MAC_WORDS.NEEDS_APPROVAL}
+            </SettingsRowStateLine>
+          }
+        >
+          {() => (
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<ExternalIcon />}
+              onClick={() => openLoginItems()}
+            >
+              {THIS_MAC_WORDS.OPEN_LOGIN_ITEMS}
+            </Button>
+          )}
+        </SettingsRow>
+      ) : null}
+    </>
   );
 }
 
@@ -377,7 +417,7 @@ function RemoveHostDialog({
       question={{
         title: `Remove ${asked?.label ?? ""}?`,
         body: REMOVED,
-        verb: "Remove host",
+        verb: "Remove",
         running: "Removing",
         loss: CONFIRM_LOSS.IRREVERSIBLE,
         replayUnmasked: true,
@@ -402,8 +442,9 @@ function RemoveHostDialog({
 }
 
 /**
- * Add a host: the install command and what comes after it, and the host
- * that just joined, once one has; a reader is told as it does.
+ * Add a host: the install command, then the link it prints, as steps, and
+ * under them the wait for a host to join, until one has: then the host that
+ * joined, which a reader is told of as it does.
  */
 function AddHostSection({
   installScriptUrl,
@@ -416,20 +457,25 @@ function AddHostSection({
   useAnnounce(ANNOUNCE.POLITE, joined === undefined ? "" : `${joined} ${WORDS.CONNECTED}`);
   return (
     <SettingsSection title={SECTION_TITLE.ADD} anchor={SETTINGS_SEARCH_ROW.ADD_HOSTS}>
-      <SettingsRow
-        label={WORDS.INSTALL_LABEL}
-        description={WORDS.INSTALL_NEXT}
-        below={() => (
-          <CopyField
-            label={WORDS.INSTALL_FIELD}
-            value={hostInstallCommand(installScriptUrl)}
-            what="command"
-            copy={copyThroughShell}
-            width={COPY_FIELD_WIDTH.FULL}
-            prompt={COPY_FIELD_PROMPT.SHELL}
-          />
-        )}
-      />
+      <SettingsBlock>
+        <OutsideSteps waiting={joined === undefined ? WORDS.WAITING : undefined}>
+          <Step number={1} title={WORDS.INSTALL_LABEL} state={STEP_STATE.CURRENT}>
+            <CopyField
+              label={WORDS.INSTALL_FIELD}
+              value={hostInstallCommand(installScriptUrl)}
+              what="command"
+              copy={copyThroughShell}
+              width={COPY_FIELD_WIDTH.FULL}
+              prompt={COPY_FIELD_PROMPT.SHELL}
+            />
+          </Step>
+          <Step number={2} title={WORDS.APPROVE} state={STEP_STATE.CURRENT}>
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {WORDS.LOGGED_IN}
+            </Text>
+          </Step>
+        </OutsideSteps>
+      </SettingsBlock>
       {joined === undefined ? null : (
         <SettingsLine>
           <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
@@ -504,7 +550,6 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
           words: THIS_MAC_WORDS.TURN_ON_FAILED,
           replayUnmasked: true,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
         });
       });
@@ -518,7 +563,26 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         on: false,
         deleteFolders: deleteFolders || agentFolders === 0,
       }),
-    answered: (answer) => ("failure" in answer ? TURN_OFF_REFUSED : ACCEPTED),
+    answered: (answer) => {
+      if ("failure" in answer) return TURN_OFF_REFUSED;
+      // Note that the host's state is gone either way, so what of its removal did not land is said beside the turn off rather than refusing it.
+      if (answer.stillListed === true) {
+        showToast({
+          words: THIS_MAC_WORDS.STILL_LISTED,
+          replayUnmasked: true,
+          tone: STATUS_TONE.ATTENTION,
+        });
+      }
+      if (answer.folderLeft !== undefined) {
+        showToast({
+          words: THIS_MAC_WORDS.FOLDER_LEFT,
+          detail: answer.folderLeft,
+          tone: STATUS_TONE.DANGER,
+          failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
+        });
+      }
+      return ACCEPTED;
+    },
     failed: () => UNREACHED,
   });
   const turningOff = useConfirmDialog(
@@ -560,7 +624,13 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       ) : loaded ? (
         <>
           {thisMac === undefined ? null : (
-            <ThisMacRow host={listedMac} book={book} on={thisMacOn} onChange={switchThisMac} />
+            <ThisMacRow
+              host={listedMac}
+              book={book}
+              on={thisMacOn}
+              needsApproval={thisMac.needsApproval === true}
+              onChange={switchThisMac}
+            />
           )}
           {others.map((host) => {
             const label = machineName(machineOf(host), listed, naming);
@@ -579,12 +649,12 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         </>
       ) : read.isError ? (
         <ReadFailed
-          line={readFailedWords("your hosts")}
+          line={readFailedWords("your machines")}
           surface={FAILURE_SURFACE.HOSTS_READ}
           onRetry={() => retry.mutate()}
         />
       ) : (
-        <SettingsRowsSkeleton label={readingWords("your hosts")} rows={HOSTS_SKELETON} />
+        <SettingsRowsSkeleton label={readingWords("your machines")} rows={HOSTS_SKELETON} />
       )}
     </SettingsSection>
   );

@@ -12,12 +12,8 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
+import { NO_TASK_SECTIONS, SECTION_WRITE_FAILED_NOTE } from "@repo/features/task-sections-model";
 import type { RepositoryPin, TaskAgentPin } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
-import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { STATUS_TONE } from "@repo/ui";
-import { NO_TASK_SECTIONS, SECTION_WRITE_FAILED_NOTE } from "@repo/ui/task-sections-model";
 import {
   AGENT_PIN_FAILED_NOTES,
   MARK_FAILED_NOTES,
@@ -26,12 +22,16 @@ import {
   REPOSITORY_PIN_FAILED_NOTES,
   TASK_MARK,
   type TaskMark,
-} from "@repo/ui/tasks-model";
+} from "@repo/features/tasks-model";
+import type { TasksView } from "@repo/features/tasks-view";
+import { ACT_KIND } from "@repo/host/acts";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { STATUS_TONE } from "@repo/ui";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { pressRows, ROW_WRITE } from "../undo-stack.js";
 import {
   appStateIn,
@@ -185,7 +185,6 @@ export function useSectionWrites(): PinWrites["onWriteSections"] {
         replayUnmasked: true,
         words: SECTION_WRITE_FAILED_NOTE,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.SECTION_WRITE, cause: changed.cause },
       });
     });
@@ -227,7 +226,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: MARK_FAILED_NOTES[mark],
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.TASK_MARK, cause: changed.cause, about: { taskId } },
       });
       return false;
@@ -242,7 +240,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: pinned ? REPOSITORY_PIN_FAILED_NOTES.PIN : REPOSITORY_PIN_FAILED_NOTES.UNPIN,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.REPOSITORY_PIN, cause: changed.cause },
       });
     });
@@ -291,7 +288,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: pinned ? AGENT_PIN_FAILED_NOTES.PIN : AGENT_PIN_FAILED_NOTES.UNPIN,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.AGENT_PIN, cause: asked.refused, about: { agentId } },
       });
     });
@@ -332,7 +328,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: PIN_MOVE_FAILED_NOTE,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.PIN_MOVE, cause: firstRefusal(asked) },
       });
     });

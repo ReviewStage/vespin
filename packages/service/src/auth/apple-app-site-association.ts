@@ -6,11 +6,11 @@
  * at exactly that path and under no redirect
  * (developer.apple.com/documentation/xcode/supporting-associated-domains).
  * The document names the app by its Team ID and bundle ID: under `applinks`
- * for the one path the sign-in returns to
- * (`@repo/features/ios-sign-in-wire`), which is what lets
- * `ASWebAuthenticationSession`'s HTTPS callback catch the authorization's
- * redirect before any page loads, and under `webcredentials`, which that
- * callback requires of its host besides. The web service rewrites the
+ * for the path the sign-in returns to (`@repo/features/ios-sign-in-wire`),
+ * which is what lets `ASWebAuthenticationSession`'s HTTPS callback catch the
+ * authorization's redirect before any page loads, and for the links the app
+ * draws a screen for (`@repo/features/ios-app-links`), and under
+ * `webcredentials`, which that callback requires of its host besides. The web service rewrites the
  * well-known path onto this group's route (`apps/web/server/function-rewrites.ts`).
  *
  * The Team ID is the deployment's to configure, and the bundle ID is the
@@ -19,7 +19,7 @@
  * nothing, and Apple reads a missing file as no association.
  */
 
-import { IOS_OAUTH_CALLBACK_PATH } from "@repo/features/ios-sign-in-wire";
+import { type AppLinkComponent, IOS_APP_LINK_COMPONENTS } from "@repo/features/ios-app-links";
 import { HTTP_METHOD } from "@repo/wire";
 import { Config, Effect, Layer, Option } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -64,7 +64,7 @@ interface AppleAppSiteAssociation {
   readonly applinks: {
     readonly details: readonly {
       readonly appIDs: readonly string[];
-      readonly components: readonly { readonly "/": string; readonly comment: string }[];
+      readonly components: readonly AppLinkComponent[];
     }[];
   };
   readonly webcredentials: { readonly apps: readonly string[] };
@@ -75,7 +75,7 @@ function appId(app: AssociatedApp): string {
   return `${app.teamId}.${app.bundleId}`;
 }
 
-/** The document naming the app: the sign-in's callback as its one universal link, and the app as the one the host's credentials go to. */
+/** The document naming the app: the sign-in's callback and the links the app draws as its universal links, and the app as the one the host's credentials go to. */
 function appleAppSiteAssociation(app: AssociatedApp): AppleAppSiteAssociation {
   const id = appId(app);
   return {
@@ -83,7 +83,7 @@ function appleAppSiteAssociation(app: AssociatedApp): AppleAppSiteAssociation {
       details: [
         {
           appIDs: [id],
-          components: [{ "/": IOS_OAUTH_CALLBACK_PATH, comment: "The sign-in's return." }],
+          components: IOS_APP_LINK_COMPONENTS,
         },
       ],
     },

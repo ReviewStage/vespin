@@ -60,11 +60,12 @@ export const SNAPSHOT = {
   STDERR_TAIL: 600,
 } as const;
 
-/** Why the source's work was not copied: the Start already made its agent, the task moved repository since the source started, the source never opened a sandbox, the copy failed, or it ran past its bound. */
+/** Why the source's work was not copied: the Start already made its agent, the task moved repository since the source started, the source never opened a sandbox, it runs on a Mac, whose checkout a Start never reads, the copy failed, or it ran past its bound. */
 export const SNAPSHOT_MISS = {
   STARTED: "started",
   MOVED: "moved",
   NO_SANDBOX: "no-sandbox",
+  ON_DEVICE: "on-device",
   FAILED: "failed",
   TIMED_OUT: "timed-out",
 } as const;
@@ -250,8 +251,7 @@ export type SourceCopyServices = DatabaseServices | HttpClient.HttpClient | GitH
  * never opened a sandbox. The token the push goes through is the one a
  * coding agent's checkout is minted, through the installation of the
  * source's workspace as the account reaches it. `repository` is the one the
- * new agent clones: its task's as it stands now, or the workspace place's
- * own for an agent with no task; none where the task names none.
+ * new agent clones: its task's as it stands now; none where the task names none.
  */
 export const copySourceWork = /* @__PURE__ */ Effect.fn("web/copySourceWork")(function* (
   userId: string,

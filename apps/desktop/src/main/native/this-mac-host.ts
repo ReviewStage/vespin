@@ -1,38 +1,65 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEVICE_ARCH } from "@repo/features/device-agent-wire";
+import { buildCarriesDeveloperIdSigning } from "@repo/host/app-identity";
 import { DARWIN_HOST } from "@repo/host/daemon";
-import { ThisMacHost, type ThisMacHostSeam } from "@repo/host/effect";
-import { Duration, Effect, Layer, Option, Result, Stream } from "effect";
-import { ChildProcess, type ChildProcessSpawner } from "effect/process";
+import { THIS_MAC_AGENT_STATUS, ThisMacHost, type ThisMacHostSeam } from "@repo/host/effect";
+import { Duration, Effect, Layer, Option, Result, Schedule, Stream } from "effect";
+import { ChildProcess } from "effect/process";
 import { app } from "electron";
 
 /**
- * this-mac-host.ts -- This Mac's host as the host asks it (`@repo/host/effect`'s `ThisMacHost`): the account install the install command puts on a Mac, its LaunchAgent started or stopped through launchd, and the install script run.
+ * this-mac-host.ts -- This Mac's host as the host asks it (`@repo/host/effect`'s `ThisMacHost`): the host daemon the app carries in its own bundle, run by the LaunchAgent the bundle holds, registered, unregistered, and read through `SMAppService` alone.
  *
- * The install lives under the member's own home, by the names the install
- * script gives it (`apps/web/install/install.sh`): its state, holding the
- * record its host runs on, in `~/.local/state/vespin-host`, and its
- * LaunchAgent, `dev.vespin.host.standalone`, which runs its host at login.
- * Every build of the app, a development run among them, acts on that one
- * install, never a state folder of its own. Stopping it boots the
- * LaunchAgent out and disables it, which keeps it from starting at the next
- * login with its plist and files left in place; the install script enables
- * it again before it runs, since launchd starts no disabled job.
+ * The agent is `Contents/Library/LaunchAgents/dev.vespin.host.plist`
+ * (`BUNDLED_HOST` in `scripts/package-layout.mjs`), which Electron's
+ * `setLoginItemSettings` and `getLoginItemSettings` reach as an
+ * `agentService` by that name: `SMAppService.agent(plistName:)`. Its
+ * `register()` bootstraps it at once and at every login, and its
+ * `unregister()` terminates it; macOS may hold a registered agent until the
+ * member allows it in System Settings › Login Items (`requires-approval`).
+ * Its state stays where the daemon keeps it, under the member's own home
+ * (`DARWIN_HOST.stateRoot`).
+ *
+ * Only a build signed for release registers or unregisters the agent, since
+ * its plist and the program it names are that build's: a development run,
+ * a named instance, and a Test build read its status and leave it as it
+ * stands.
+ *
+ * An app update replaces the bundle in place, and a running agent goes on
+ * running the program it started from until it is started again, which
+ * `register()` on an agent already registered does not do. So the version
+ * that registered it is kept in the app's own data, and a launch of another
+ * version unregisters it, waits for its daemon to exit, and registers it
+ * again. Each installed app has its own data, so a Test build never reads
+ * the release's.
+ *
+ * The one `launchctl` call left is for the job the app ran before it
+ * carried the host, `dev.vespin.host.standalone`, which `SMAppService` never
+ * registered: before the agent is registered, that job is disabled where
+ * its plist stands and booted out where launchd holds it, its files left
+ * where they stand, so two daemons never run on
+ * one Mac.
  */
 
-/** The account install's LaunchAgent, by its label (`MAC_LABEL` in the install script). */
-const LABEL = "dev.vespin.host.standalone";
+/** The agent's plist, by its name under `Contents/Library/LaunchAgents` (`BUNDLED_HOST.plistPath`). */
+const SERVICE = { type: "agentService", serviceName: "dev.vespin.host.plist" } as const;
 
-/** The oldest macOS the install script installs on (`MAC_MIN_VERSION` in the install script): the release's Node needs 13.5. */
-const MAC_MIN_VERSION = [13, 5] as const;
+/** The job the account install loaded before the app carried the host (`MAC_LABEL` in the install script), and its plist under the home, which launchd loads at login while the job is enabled. */
+const STANDALONE_LABEL = "dev.vespin.host.standalone";
+const STANDALONE_PLIST = ["Library", "LaunchAgents", `${STANDALONE_LABEL}.plist`] as const;
 
-/** How long launchd may take to answer; the install script, which downloads a release, longer. */
-const ANSWER_WITHIN = {
-  LAUNCHD: Duration.seconds(30),
-  INSTALL: Duration.minutes(10),
-} as const;
+/** The daemon's script inside the bundle, and the arguments the agent's plist starts it with: how its process reads in the process table. */
+const DAEMON_RUN = { script: "host/lib/vespin-host.mjs", args: "run --bundled" } as const;
+
+/** Where the app keeps the version that last registered the agent, in its own data. */
+const REGISTERED_FILE = "this-mac-host-registered";
+
+/** How long launchctl and ps may take to answer, and how long and how often the agent's daemon is waited on to exit once it was unregistered. */
+const ANSWER_WITHIN = Duration.seconds(30);
+const EXIT_WITHIN = Duration.seconds(30);
+const EXIT_READ_EVERY = Duration.millis(250);
 
 /** The Mac as its host registers it (`DARWIN_HOST`), on Apple silicon alone. */
 const machine = Effect.sync(() => ({
@@ -42,102 +69,142 @@ const machine = Effect.sync(() => ({
   ...DARWIN_HOST.machine(),
 }));
 
-/** Whether macOS, as Electron reads its version, is the install script's oldest or later. */
-function macOsTakesHost(version: string): boolean {
-  const [major = 0, minor = 0] = version.split(".").map(Number);
-  const [needMajor, needMinor] = MAC_MIN_VERSION;
-  return major > needMajor || (major === needMajor && minor >= needMinor);
-}
-
-/**
- * The command given run once, its input on stdin where it is given some: what
- * it printed where it exited 0, or the words it failed with. Note that the
- * `vespin` command's install runs through this too (`./cli-install.ts`), so
- * both installs run their script the same way.
- */
-export const printed = (
-  command: string,
-  args: readonly string[],
-  within: Duration.Duration,
-  input?: string,
-): Effect.Effect<Result.Result<string, string>, never, ChildProcessSpawner.ChildProcessSpawner> =>
+/** How the command given exited and what it printed; none where it could not start or did not answer in time. */
+const ran = (command: string, args: readonly string[]) =>
   Effect.scoped(
     Effect.gen(function* () {
-      const handle = yield* ChildProcess.make(command, [...args], {
-        stdin: input === undefined ? "ignore" : Stream.make(new TextEncoder().encode(input)),
-      });
-      const [out, said] = yield* Effect.all(
-        [
-          Stream.mkString(Stream.decodeText(handle.stdout)),
-          Stream.mkString(Stream.decodeText(handle.stderr)),
-        ],
+      const handle = yield* ChildProcess.make(command, [...args]);
+      const [out, code] = yield* Effect.all(
+        [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
         { concurrency: "unbounded" },
       );
-      const code = Number(yield* handle.exitCode);
-      return code === 0
-        ? Result.succeed(out)
-        : Result.fail(said.trim() || `${command} ${args.join(" ")} exited ${code}`);
+      return { code: Number(code), out };
     }),
   ).pipe(
-    Effect.timeoutOption(within),
-    Effect.map(
-      Option.getOrElse(() =>
-        Result.fail<string>(`${command} did not answer in ${Duration.format(within)}`),
-      ),
-    ),
-    Effect.catch((failure) => Effect.succeed(Result.fail(`${command}: ${String(failure)}`))),
+    Effect.timeoutOption(ANSWER_WITHIN),
+    Effect.orElseSucceed(() => Option.none<{ readonly code: number; readonly out: string }>()),
   );
 
-/** The command given run once, as `printed` runs it: nothing where it exited 0, or the words it failed with. */
-const ran = (command: string, args: readonly string[], within: Duration.Duration, input?: string) =>
+/** What the command given printed where it exited 0; none where it failed, could not start, or did not answer in time. */
+const output = (command: string, args: readonly string[]) =>
   Effect.map(
-    printed(command, args, within, input),
-    Result.map((): void => undefined),
+    ran(command, args),
+    Option.flatMap((done) => (done.code === 0 ? Option.some(done.out) : Option.none())),
   );
 
-const launchctl = (args: readonly string[]) => ran("launchctl", args, ANSWER_WITHIN.LAUNCHD);
+interface ThisMacHostFacts {
+  /** The app's own data folder, where it keeps the version that registered the agent. */
+  readonly stateRoot: string;
+  /** This app's version. */
+  readonly appVersion: string;
+  /** Whether this process runs from a packaged bundle. */
+  readonly packaged: boolean;
+}
 
-/** The install's own command, by the link the install script makes under the home (`HOST_COMMAND`). */
-const INSTALL_COMMAND = ".local/bin/vespin-host";
+/** The bundled host as This Mac's host, for the user the app runs as. */
+function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
+  const standalone = `gui/${process.getuid?.() ?? 0}/${STANDALONE_LABEL}`;
+  const registeredFile = path.join(facts.stateRoot, REGISTERED_FILE);
+  const daemonRun = `${path.join(process.resourcesPath, DAEMON_RUN.script)} ${DAEMON_RUN.args}`;
 
-/** The account install as This Mac's host, for the user the app runs as. */
-function thisMacHost(): ThisMacHostSeam {
-  const agent = `gui/${process.getuid?.() ?? 0}/${LABEL}`;
-  const loaded = Effect.map(launchctl(["print", agent]), Result.isSuccess);
+  const status = Effect.sync(() => app.getLoginItemSettings(SERVICE).status);
+
+  const standalonePlist = path.join(os.homedir(), ...STANDALONE_PLIST);
+
+  /** Whether launchd holds the standalone job, as `launchctl print` exits; none where launchctl could not be asked, which is never read as not. */
+  const standaloneLoaded = Effect.map(
+    ran("launchctl", ["print", standalone]),
+    Option.map((done) => done.code === 0),
+  );
+
+  /**
+   * The standalone job kept from running beside the agent: disabled where
+   * its plist stands or launchd holds it, so login loads it no more, and
+   * booted out where launchd holds it. Note that a bootout of a job launchd
+   * holds no longer fails, so it is read past and the job read again.
+   */
+  const standaloneGone = Effect.gen(function* () {
+    const loaded = yield* standaloneLoaded;
+    if (Option.isNone(loaded))
+      return Result.fail(`could not ask launchd about ${STANDALONE_LABEL}`);
+    if (!loaded.value && !existsSync(standalonePlist)) return Result.succeed<void>(undefined);
+    const disabled = yield* output("launchctl", ["disable", standalone]);
+    if (Option.isNone(disabled)) return Result.fail(`could not disable ${STANDALONE_LABEL}`);
+    if (!loaded.value) return Result.succeed<void>(undefined);
+    yield* ran("launchctl", ["bootout", standalone]);
+    const still = yield* standaloneLoaded;
+    return Option.isSome(still) && !still.value
+      ? Result.succeed<void>(undefined)
+      : Result.fail(`launchd still holds ${STANDALONE_LABEL}`);
+  });
+
+  /** Whether the agent's daemon still runs, as the process table lists it; a table that could not be read counts as running. */
+  const daemonRuns = Effect.map(output("ps", ["-A", "-o", "command="]), (table) =>
+    Option.match(table, {
+      onNone: () => true,
+      onSome: (lines) => lines.split("\n").some((line) => line.trimEnd().endsWith(daemonRun)),
+    }),
+  );
+
+  const daemonExited = Effect.repeat(daemonRuns, {
+    schedule: Schedule.spaced(EXIT_READ_EVERY),
+    until: (runs) => !runs,
+  }).pipe(
+    Effect.timeoutOption(EXIT_WITHIN),
+    Effect.map((exited) =>
+      Option.isSome(exited)
+        ? Result.succeed<void>(undefined)
+        : Result.fail(`its daemon did not exit in ${Duration.format(EXIT_WITHIN)}`),
+    ),
+  );
+
   return {
     stateRoot: DARWIN_HOST.stateRoot(os.homedir()),
+    home: os.homedir(),
     runsHost:
       process.platform === "darwin" &&
-      (process.arch === "arm64" || app.runningUnderARM64Translation) &&
-      macOsTakesHost(process.getSystemVersion()),
+      (process.arch === "arm64" || app.runningUnderARM64Translation),
+    registers: facts.packaged && buildCarriesDeveloperIdSigning(),
     machine,
-    loaded,
-    install: (script) =>
-      Effect.flatMap(launchctl(["enable", agent]), (enabled) =>
-        Result.isFailure(enabled)
-          ? Effect.succeed(enabled)
-          : ran("/bin/sh", ["-s"], ANSWER_WITHIN.INSTALL, script),
-      ),
-    // Note that a bootout of a job launchd holds no longer fails, so it is read past and the job read again.
-    stop: Effect.gen(function* () {
-      const disabled = yield* launchctl(["disable", agent]);
-      if (Result.isFailure(disabled)) return disabled;
-      yield* launchctl(["bootout", agent]);
-      return (yield* loaded)
-        ? Result.fail(`launchd still holds ${LABEL}`)
-        : Result.succeed<void>(undefined);
+    status,
+    registeredHere: Effect.sync(() => {
+      try {
+        return readFileSync(registeredFile, "utf8") === facts.appVersion;
+      } catch {
+        return false;
+      }
     }),
-    // Note that its input is no terminal, so it asks nothing, and that a Mac enrolled whose install never landed has no command and nothing to uninstall.
-    uninstall: Effect.suspend(() => {
-      const command = path.join(os.homedir(), INSTALL_COMMAND);
-      return existsSync(command)
-        ? ran(command, ["uninstall"], ANSWER_WITHIN.INSTALL)
-        : Effect.succeed(Result.succeed<void>(undefined));
+    register: Effect.gen(function* () {
+      const gone = yield* standaloneGone;
+      if (Result.isFailure(gone)) return gone;
+      yield* Effect.sync(() => app.setLoginItemSettings({ ...SERVICE, openAtLogin: true }));
+      const now = yield* status;
+      if (
+        now !== THIS_MAC_AGENT_STATUS.ENABLED &&
+        now !== THIS_MAC_AGENT_STATUS.REQUIRES_APPROVAL
+      ) {
+        return Result.fail(`macOS did not register it: ${now}`);
+      }
+      // Note that a version that could not be kept only means the next launch registers it again.
+      yield* Effect.ignore(Effect.try(() => writeFileSync(registeredFile, facts.appVersion)));
+      return Result.succeed<void>(undefined);
+    }),
+    unregister: Effect.gen(function* () {
+      yield* Effect.sync(() => app.setLoginItemSettings({ ...SERVICE, openAtLogin: false }));
+      yield* Effect.ignore(Effect.try(() => rmSync(registeredFile, { force: true })));
+      const now = yield* status;
+      if (
+        now === THIS_MAC_AGENT_STATUS.ENABLED ||
+        now === THIS_MAC_AGENT_STATUS.REQUIRES_APPROVAL
+      ) {
+        return Result.fail(`macOS did not unregister it: ${now}`);
+      }
+      return yield* daemonExited;
     }),
   };
 }
 
-/** This Mac's host for the host: the account install, whichever build of the app runs. */
-export function thisMacHostLayer() {
-  return Layer.sync(ThisMacHost, thisMacHost);
+/** This Mac's host for the host: the agent this app's bundle carries. */
+export function thisMacHostLayer(facts: ThisMacHostFacts) {
+  return Layer.sync(ThisMacHost, () => thisMacHost(facts));
 }

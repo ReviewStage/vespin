@@ -119,7 +119,7 @@ test("Integrations finds the Workspace page's group as Workspace connections, un
   );
 });
 
-test("searching GitHub while signed in finds Integrations' GitHub row and Profile's token and commit author rows, and a personal access token finds Profile's alone", () => {
+test("searching GitHub while signed in finds Integrations' GitHub row, Account's token row, and Preferences' pull request and commit author rows, and a personal access token finds Account's alone", () => {
   const entries = settingsSearchCorpus({
     settings: settingsView(),
     accountDrawn: true,
@@ -135,7 +135,13 @@ test("searching GitHub while signed in finds Integrations' GitHub row and Profil
   );
   assert.deepEqual(
     groups.find((group) => group.page === SETTINGS_VIEW.ACCOUNT)?.items.map((entry) => entry.id),
-    [SETTINGS_SEARCH_ROW.GITHUB_ACCESS, APP_SETTING_ID.COMMIT_AUTHOR],
+    [SETTINGS_SEARCH_ROW.GITHUB_ACCESS],
+  );
+  assert.deepEqual(
+    groups
+      .find((group) => group.page === SETTINGS_VIEW.PREFERENCES)
+      ?.items.map((entry) => entry.id),
+    [APP_SETTING_ID.PULL_REQUEST_OPEN, APP_SETTING_ID.COMMIT_AUTHOR],
   );
   assert.deepEqual(
     (searchSettings(entries, "personal access token")?.groups ?? []).map((group) =>
@@ -183,11 +189,23 @@ function experimentalFound(
 
 test("an experiment is found by its name, what it brings, and what other apps call the page, while signed in", () => {
   assert.deepEqual(experimentalFound("on a schedule", true), [], "Automations is no experiment");
-  for (const query of ["settled facts", "recall them in later work"]) {
+  for (const query of ["how your team works", "later tasks"]) {
     assert.deepEqual(experimentalFound(query, true), ["Memory"], query);
   }
-  assert.deepEqual(experimentalFound("hosts", true), ["Bring your own host"], "the page it holds");
-  const experiments = ["Task descriptions", "Bring your own host", "Skills", "Memory"];
+  assert.deepEqual(
+    experimentalFound("machines", true),
+    ["Bring your own machine"],
+    "the page it holds",
+  );
+  const experiments = [
+    "Rewind restores files",
+    "Done and follow-ups",
+    "Run actions",
+    "Task descriptions",
+    "Bring your own machine",
+    "Skills",
+    "Memory",
+  ];
   for (const query of ["beta", "labs"]) {
     assert.deepEqual(experimentalFound(query, true), experiments, query);
   }
@@ -273,24 +291,34 @@ function labelsFound(query: string, input: SettingsSearchInput = FULL_INPUT): re
 }
 
 test("skills and rename each find the row the page draws", () => {
-  assert.ok(labelsFound("skills").includes("Add a skill"));
+  assert.ok(labelsFound("skills").includes("Add skill"));
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
 });
 
-test("mcp finds the Vespin MCP page's two groups and none of the integrations", () => {
+test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", () => {
   const groups = searchSettings(settingsSearchCorpus(FULL_INPUT), "mcp")?.groups ?? [];
   assert.deepEqual(
     groups.map((group) => group.page),
     [SETTINGS_VIEW.MCP],
   );
-  assert.deepEqual(labelsFound("mcp"), ["Connected agents", "Connect an agent"]);
+  assert.deepEqual(labelsFound("mcp"), [
+    "Connected apps",
+    "Connect an app",
+    "Install the vespin command",
+    "CLI sign-in",
+  ]);
+});
+
+test("cli sign-in and set up the cli each find the CLI section's row", () => {
+  assert.deepEqual(labelsFound("cli sign-in"), ["CLI sign-in"]);
+  assert.deepEqual(labelsFound("set up the cli"), ["Install the vespin command"]);
 });
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {
   assert.equal(
-    labelsFound("add a skill", { ...FULL_INPUT, workspace: undefined }).includes("Add a skill"),
+    labelsFound("add skill", { ...FULL_INPUT, workspace: undefined }).includes("Add skill"),
     false,
-    "the Skills page draws no Add a skill row while its workspace is unread or failed",
+    "the Skills page draws no Add skill while its workspace is unread or failed",
   );
   assert.deepEqual(labelsFound("rename", { ...FULL_INPUT, workspace: TEAM }), []);
   assert.deepEqual(
@@ -299,11 +327,12 @@ test("renaming needs a workspace the reader manages that is not their own first"
   );
 });
 
-test("model finds the default model under a label no other page's row wears", () => {
+test("model and default model both find the Model row, under a label no other page's row wears", () => {
   assert.deepEqual(
     labelsFound("model").filter((label) => label.toLowerCase().includes("model")),
-    ["Default model"],
+    ["Model"],
   );
+  assert.ok(labelsFound("default model").includes("Model"));
 });
 
 test("no two rows on different pages wear the same label", () => {
@@ -364,19 +393,21 @@ test("letters typed in order do not find a row: thm no longer finds Theme", () =
 });
 
 test("a page is found by its own name and leads its rows, the best page first, each page then the rows under it", () => {
-  const found = searchSettings(settingsSearchCorpus(FULL_INPUT), "hosts");
+  const found = searchSettings(settingsSearchCorpus(FULL_INPUT), "machines");
   const stops = found === undefined ? [] : settingsSearchStops(found);
 
-  assert.deepEqual(found?.groups[0]?.marks, [{ start: 0, end: 5 }]);
+  assert.deepEqual(found?.groups[0]?.marks, [{ start: 0, end: 8 }]);
   assert.deepEqual(
     stops.slice(0, 2).map((stop) => [stop.page, stop.entry?.label]),
     [
       [SETTINGS_VIEW.HOSTS, undefined],
-      [SETTINGS_VIEW.HOSTS, "Add hosts"],
+      [SETTINGS_VIEW.HOSTS, "Add a machine"],
     ],
   );
   assert.ok(
     stops.some((stop) => stop.page === SETTINGS_VIEW.EXPERIMENTAL && stop.entry === undefined),
     "a page found only through a row it holds still leads that row",
   );
+  // Note that the page's old name still finds its row, for readers who learned it as Hosts.
+  assert.ok(labelsFound("hosts").includes("Add a machine"));
 });

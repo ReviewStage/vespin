@@ -35,15 +35,18 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { DEVICE_LAYOUT, expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
+import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
+import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
+  DEVICE_AGENT_LINE_KIND,
   DEVICE_AGENT_REQUEST_KIND,
+  DEVICE_CAPABILITY,
   DEVICE_LAUNCH_STEP,
   DEVICE_LAUNCH_UNSTARTED,
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
   deviceAgentLaunchPayloadSchema,
 } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { SandboxUnavailable } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -80,8 +83,8 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
-import { LaunchRefused } from "./agent-machine.js";
-import { deviceMachine } from "./device-machine.js";
+import { CHECKOUT_DIFF_OUTCOME, LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
+import { deviceMachine, MAC_MACHINE } from "./device-machine.js";
 
 const RING = `1:${Buffer.alloc(32, 7).toString("base64")}`;
 const BEARER = "fixture-runner-bearer-0123456789";
@@ -144,6 +147,14 @@ const untilAsked = (userId: string, deviceId: string) =>
       yield* Effect.yieldNow;
     const [request] = yield* deviceAgentRequestsWaiting(userId, deviceId);
     return Option.getOrThrow(Option.fromNullishOr(request));
+  });
+
+/** The first line waiting for the agent's Mac, once one does. */
+const untilQueued = (userId: string, deviceId: string) =>
+  Effect.gen(function* () {
+    while ((yield* deviceAgentLinesWaiting(userId, deviceId)).length === 0) yield* Effect.yieldNow;
+    const [line] = yield* deviceAgentLinesWaiting(userId, deviceId);
+    return Option.getOrThrow(Option.fromNullishOr(line));
   });
 
 /** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches. */
@@ -278,21 +289,122 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
     );
 
     it.effect(
-      "a launch of an agent on its starter's own token to a host from before it works in one on its own GitHub sign-in is refused, queuing nothing",
+      "a launch of an agent in a repository to a host from before it works in every repository on its own GitHub sign-in is refused, queuing nothing",
       () =>
         Effect.gen(function* () {
           // Note that an installation of its own is linked, since another test linked the first.
           const installation = { ...RELAY_INSTALLATION, id: RELAY_INSTALLATION.id + 1 };
-          const opened = yield* openLocalAgent({
-            installation,
-            githubAccess: GITHUB_ACCESS.TOKEN,
-          });
+          const opened = yield* openLocalAgent({ installation, hostPredatesOwnSignIn: true });
           const github = githubReaching([installation]);
           const refused = yield* Effect.flip(launched(opened).pipe(Effect.provide(github.layer)));
 
           assert.ok(refused instanceof LaunchRefused);
           assert.equal(refused.reason, "host predates its own github sign-in");
           assert.deepEqual(yield* deviceAgentLinesWaiting(opened.userId, opened.deviceId), []);
+        }),
+    );
+
+    it.effect(
+      "a restore queues a restore line with the snapshot for the agent's Mac and answers as the Mac settles it, and a Mac whose host takes no such line restores nothing, queuing none",
+      () =>
+        Effect.gen(function* () {
+          const { userId, deviceId, session } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const snapshot = {
+            commit: "0123456789abcdef0123456789abcdef01234567",
+            head: "89abcdef0123456789abcdef0123456789abcdef",
+            branch: "feat/invitations",
+          };
+
+          assert.equal(
+            yield* machine.restoreCheckout(session, snapshot),
+            RESTORE_OUTCOME.UNSUPPORTED,
+          );
+          assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+
+          // The Mac's host registers that it takes the line, as a newer release does.
+          yield* registerDevice(userId, {
+            id: deviceId,
+            name: "Studio",
+            ...DEVICE_LAYOUT,
+            capabilities: [DEVICE_CAPABILITY.RESTORE_CHECKOUT],
+          });
+          const restoring = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
+          const line = yield* untilQueued(userId, deviceId);
+          assert.equal(line.kind, DEVICE_AGENT_LINE_KIND.RESTORE);
+          assert.deepEqual(line.payload, snapshot);
+          yield* claimedDeviceAgentLine(userId, deviceId, line.id);
+          yield* settleDeviceAgentLine(userId, deviceId, line.id, CHECKOUT_RESTORE_EXIT.MISSING);
+          yield* TestClock.adjust("1 second");
+          assert.equal(yield* Fiber.join(restoring), RESTORE_OUTCOME.MISSING);
+
+          const again = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
+          const second = yield* untilQueued(userId, deviceId);
+          yield* claimedDeviceAgentLine(userId, deviceId, second.id);
+          yield* settleDeviceAgentLine(userId, deviceId, second.id, 0);
+          yield* TestClock.adjust("1 second");
+          assert.equal(yield* Fiber.join(again), RESTORE_OUTCOME.RESTORED);
+
+          // A line the Mac never takes fails the restore once the wait ends, and is withdrawn with it.
+          const unclaimed = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
+          const third = yield* untilQueued(userId, deviceId);
+          yield* TestClock.adjust(MAC_MACHINE.RESTORE_WAIT);
+          assert.equal(yield* Fiber.join(unclaimed), RESTORE_OUTCOME.FAILED);
+          assert.deepEqual(
+            (yield* deviceAgentLinesWaiting(userId, deviceId)).map((line) => line.id),
+            [],
+            `the line ${third.id} is withdrawn`,
+          );
+        }),
+    );
+
+    it.effect(
+      "a diff asks the agent's Mac for it with the two sides and answers what the script printed, and a Mac whose host takes no such request diffs nothing, asking none",
+      () =>
+        Effect.gen(function* () {
+          const { userId, deviceId, session } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const range = { from: "0123456789abcdef0123456789abcdef01234567", to: null };
+
+          assert.deepEqual(yield* machine.diffCheckout(session, range), {
+            outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED,
+          });
+          assert.deepEqual(yield* deviceAgentRequestsWaiting(userId, deviceId), []);
+
+          yield* registerDevice(userId, {
+            id: deviceId,
+            name: "Studio",
+            ...DEVICE_LAYOUT,
+            capabilities: [DEVICE_CAPABILITY.DIFF_CHECKOUT],
+          });
+          const diffing = yield* Effect.forkChild(machine.diffCheckout(session, range));
+          const request = yield* untilAsked(userId, deviceId);
+          assert.deepEqual(
+            [request.kind, request.args],
+            [DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, range],
+          );
+          yield* claimDeviceAgentRequest(userId, deviceId, request.id);
+          yield* answerDeviceAgentRequest(userId, deviceId, request.id, {
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            exit: 0,
+            diff: "diff --git a/x b/x\n",
+          });
+          yield* TestClock.adjust("1 second");
+          assert.deepEqual(yield* Fiber.join(diffing), {
+            outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
+            diff: "diff --git a/x b/x\n",
+          });
+
+          const gone = yield* Effect.forkChild(machine.diffCheckout(session, range));
+          const again = yield* untilAsked(userId, deviceId);
+          yield* claimDeviceAgentRequest(userId, deviceId, again.id);
+          yield* answerDeviceAgentRequest(userId, deviceId, again.id, {
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            exit: CHECKOUT_DIFF_EXIT.MISSING,
+            diff: "",
+          });
+          yield* TestClock.adjust("1 second");
+          assert.deepEqual(yield* Fiber.join(gone), { outcome: CHECKOUT_DIFF_OUTCOME.MISSING });
         }),
     );
 

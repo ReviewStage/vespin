@@ -45,6 +45,14 @@ export {
   workspaceExperimentChoicesFrom,
 } from "./experiments.js";
 export {
+  isKeepAwake,
+  KEEP_AWAKE,
+  KEEP_AWAKE_DEFAULT,
+  KEEP_AWAKE_LABEL,
+  KEEP_AWAKE_LIST,
+  type KeepAwake,
+} from "./keep-awake.js";
+export {
   isMacCommandMode,
   MAC_COMMAND_MODE,
   MAC_COMMAND_MODE_LABEL,
@@ -70,6 +78,20 @@ export {
   type SurveyReferral,
   type SurveyRole,
 } from "./onboarding-survey.js";
+export {
+  isPermissionMode,
+  PERMISSION_MODE_HINT,
+  PERMISSION_MODE_LABEL,
+  PERMISSION_MODE_LIST,
+} from "./permission-mode.js";
+export {
+  isPullRequestOpen,
+  PULL_REQUEST_OPEN,
+  PULL_REQUEST_OPEN_DEFAULT,
+  PULL_REQUEST_OPEN_LABEL,
+  PULL_REQUEST_OPEN_LIST,
+  type PullRequestOpen,
+} from "./pull-request-open.js";
 export {
   APP_SETTING_ID,
   APP_SETTING_SCHEMA,

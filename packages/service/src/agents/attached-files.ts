@@ -20,6 +20,7 @@ import {
   CONVERSATION_PICTURE_BOUNDS,
   PICTURE_OMISSION,
 } from "@repo/features/conversation-picture-wire";
+import { placedFiles } from "@repo/features/file-marker";
 import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import { MENTION_KIND, memberMentionOf } from "@repo/features/mention-link";
 import type { FileUIPart, UserContent } from "ai";
@@ -61,6 +62,9 @@ import { Effect, Option } from "effect";
 
 /** A text file as a message inlines it and a receipt carries it: the heading's name, a fence, the file, and the same fence. */
 const INLINED_FILE = /^Attached file: ([^\n]+)\n(`{3,})\n([\s\S]*)\n\2$/u;
+
+/** One part of what a session is handed for a message. */
+type ContentPart = Exclude<UserContent, string>[number];
 
 /** The types an attached file is a picture under, which a conversation keeps. */
 const IMAGE_TYPES: ReadonlySet<string> = new Set([
@@ -134,6 +138,61 @@ function isSenderLabel(text: string): boolean {
   return link.startsWith("[@") && memberMentionOf(link)?.kind === MENTION_KIND.PERSON;
 }
 
+/** An image or PDF as a session is handed it: its file part, and after an image, the line naming what was kept of it. */
+function handedFileParts(file: HandedFile): ContentPart[] {
+  return [
+    {
+      type: "file" as const,
+      data: dataUrl(file.mediaType, file.data),
+      mediaType: file.mediaType,
+      filename: file.name,
+    },
+    ...(file.kept === undefined
+      ? []
+      : [{ type: "text" as const, text: keptImageLine(file.name, file.kept) }]),
+  ];
+}
+
+/** Any file as a session is handed it: a text file inlined as its own text part, headed by its name and fenced, and an image or PDF as its file part. */
+function attachedFileParts(file: HandedFile): ContentPart[] {
+  return file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT
+    ? [{ type: "text" as const, text: inlinedFile(file.name, textOf(file.data)) }]
+    : handedFileParts(file);
+}
+
+/**
+ * The words and the files they name, as a session is handed them: each
+ * file right after the first marker naming it (`@repo/features/file-marker`),
+ * and of the files no marker names, the images ahead of the words and the
+ * text files and PDFs after them as ever; nothing where the words name none
+ * of the files, which are handed as they always were. Note that a run of
+ * words that is blank is left out, so a model is never handed an empty text
+ * part.
+ */
+function placedContent(
+  text: string,
+  attachments: readonly HandedFile[],
+):
+  | {
+      readonly lead: ContentPart[];
+      readonly words: ContentPart[];
+      readonly rest: readonly HandedFile[];
+    }
+  | undefined {
+  const placed = placedFiles(text, attachments, (file) => file.name);
+  if (placed === undefined) return undefined;
+  return {
+    lead: placed.unplaced
+      .filter((file) => IMAGE_TYPES.has(file.mediaType))
+      .flatMap(handedFileParts),
+    words: placed.runs.flatMap((run) => [
+      ...(run.words.trim() === "" ? [] : [{ type: "text" as const, text: run.words }]),
+      ...(run.file === undefined ? [] : attachedFileParts(run.file)),
+    ]),
+    rest: placed.unplaced.filter((file) => !IMAGE_TYPES.has(file.mediaType)),
+  };
+}
+
 /**
  * What a session is handed for a message: the words alone where nothing is
  * attached, nothing mentioned, and no teammate named, as every message went
@@ -142,7 +201,10 @@ function isSenderLabel(text: string): boolean {
  * for itself (`mentioned-context.ts`), the text files inlined, and the images
  * and PDFs as file parts, each image followed by the line naming what was
  * kept of it where it was kept or refused, so a model is never handed an
- * empty text part.
+ * empty text part. Where the words carry a marker naming one of the files
+ * (`placedContent`), each file is handed right after its marker instead,
+ * the images no marker names ahead of the words, and the other files no
+ * marker names where they always went.
  */
 export function turnContent(
   text: string,
@@ -151,32 +213,18 @@ export function turnContent(
   sender?: string,
 ): string | UserContent {
   if (attachments.length === 0 && mentioned === undefined && sender === undefined) return text;
-  const texts = attachments.flatMap((file) =>
-    file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT
-      ? [{ type: "text" as const, text: inlinedFile(file.name, textOf(file.data)) }]
-      : [],
-  );
-  const files = attachments.flatMap((file) =>
-    file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT
-      ? []
-      : [
-          {
-            type: "file" as const,
-            data: dataUrl(file.mediaType, file.data),
-            mediaType: file.mediaType,
-            filename: file.name,
-          },
-          ...(file.kept === undefined
-            ? []
-            : [{ type: "text" as const, text: keptImageLine(file.name, file.kept) }]),
-        ],
-  );
+  const placed = placedContent(text, attachments);
+  // Note that the files no marker placed go where every file went before markers.
+  const rest = placed?.rest ?? attachments;
+  const texts = rest.filter((file) => file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT);
+  const others = rest.filter((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT);
   return [
     ...(sender === undefined ? [] : [{ type: "text" as const, text: sender }]),
-    ...(text === "" ? [] : [{ type: "text" as const, text }]),
+    ...(placed?.lead ?? []),
+    ...(placed?.words ?? (text === "" ? [] : [{ type: "text" as const, text }])),
     ...(mentioned === undefined ? [] : [{ type: "text" as const, text: mentioned }]),
-    ...texts,
-    ...files,
+    ...texts.flatMap(attachedFileParts),
+    ...others.flatMap(handedFileParts),
   ];
 }
 

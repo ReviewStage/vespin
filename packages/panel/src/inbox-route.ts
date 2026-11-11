@@ -12,9 +12,8 @@
  * stands behind (`places/narrow-backs.ts`), and another
  * workspace listed under it, take the step in place.
  *
- * An address names an item by its id alone. Where it stands, on a task or
- * on an agent with no task, whose side panel stands beside it, is what the
- * door that chose it said, held by item for as long as the window lives;
+ * An address names an item by its id alone. Where it stands, on the task
+ * whose side panel stands beside it, is what the door that chose it said, held by item for as long as the window lives;
  * an item no door chose here, as a reloaded address names one, is found as
  * a link naming it by its id alone is (`inboxItemHomeQueryOptions`).
  */
@@ -99,21 +98,19 @@ function itemAt(itemId: string, at: InboxAt): NavigateOptions {
   };
 }
 
-/** The task an Inbox choice stands on; none for one on no task, or named by its id alone. */
+/** The task an Inbox choice stands on; none for one named by its id alone. */
 function choiceTaskOf(choice: InboxChoice): string | undefined {
   return "taskId" in choice ? choice.taskId : undefined;
 }
 
 /** Whether a choice is an item still being found by its address, chosen without being opened (`useFoundChoice`). */
 function beingFound(choice: InboxChoice): boolean {
-  return !("taskId" in choice) && !("agentId" in choice) && choice.opened !== true;
+  return !("taskId" in choice) && choice.opened !== true;
 }
 
-/** The item `itemId` where the service says it stands: under its task, or its agent where it has none. */
+/** The item `itemId` under the task the service says it stands on. */
 function choiceAt(itemId: string, home: InboxItemHome): InboxChoice {
-  return home.planId === null
-    ? { agentId: home.agentId, itemId, opened: true }
-    : { taskId: home.planId, itemAgentId: home.agentId, itemId, opened: true };
+  return { taskId: home.planId, itemAgentId: home.agentId, itemId, opened: true };
 }
 
 /** The item `itemId` where nothing the window chose holds it: where the service says it stands, or missing where it says nothing, waiting on it meanwhile. */
@@ -164,7 +161,7 @@ export function useInboxRoute(): InboxRoute {
   const onGoTo = (chosen: InboxChoice, at?: InboxAt) => {
     const to = at ?? standingAt;
     if (to === undefined) return;
-    // An item of another task, or of an agent on no task, leaves the task the list is narrowed to, so the list it opens in holds it.
+    // An item of another task leaves the task the list is narrowed to, so the list it opens in holds it.
     const keeps = to.narrowed === undefined || to.narrowed === choiceTaskOf(chosen);
     visit(itemAt(chosen.itemId, keeps ? to : { ...to, narrowed: undefined }));
   };
@@ -211,8 +208,8 @@ export function useInboxRoute(): InboxRoute {
 /**
  * The item `chosen` as the listed workspace's Inbox holds it: the Inbox lists
  * the listed workspace's items alone, so a choice another workspace's list
- * made gives way with it. Note that an agent's with no task, or one named by
- * its id alone, is held to the listed workspace by the list itself.
+ * made gives way with it. Note that one named by its id alone is held to the
+ * listed workspace by the list itself.
  */
 export function listedInboxChoice(
   chosen: InboxChoice | undefined,

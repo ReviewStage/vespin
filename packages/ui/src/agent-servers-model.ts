@@ -9,9 +9,9 @@ import {
   type IntegrationStatus,
   integrationAccountNames,
 } from "@repo/features/integration-wire";
-import { MCP_SERVER_LABEL, readFailedWords } from "@repo/features/words";
+import { searchTokens } from "@repo/features/search-tokens";
+import { MCP_SERVER_LABEL, readFailedWords, VERB } from "@repo/features/words";
 import { integrationFound } from "./integration-search.js";
-import { searchTokens } from "./search-tokens.js";
 
 /**
  * agent-servers-model.ts -- what the MCP servers popover at an agent's composer says of each server: whether this agent has it on, or how to connect it; which section it stands under; and what a search of it finds.
@@ -66,7 +66,7 @@ type ServerRowKind = (typeof SERVER_ROW)[keyof typeof SERVER_ROW];
 /** What a row offers at its end where it offers a press but no switch. */
 export const SERVER_ACTION = {
   CONNECT: "Connect",
-  RECONNECT: "Reconnect",
+  RECONNECT: VERB.RECONNECT,
   RETRY: "Retry",
 } as const;
 

@@ -1,21 +1,27 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
 import { MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { and, asc, eq } from "drizzle-orm";
 import { Duration, Effect, Fiber, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
+import { agentApproval } from "../../schemas/agent-approval.js";
 import { user } from "../../schemas/auth.js";
 import { conversations, messages, turns } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
+import { recordApprovalAsked } from "../agent-approvals.js";
 import { createAgent, readNativeHanded, recordNativeHanded } from "../agent-store.js";
 import {
   clearNativeRewindHanded,
   REWIND_REFUSAL,
+  readForkCut,
   readNativeRewind,
   readRewindable,
+  readRewindSnapshot,
+  readTurnCheckoutRange,
   rewindConversation,
 } from "../conversation-rewind.js";
 
@@ -90,6 +96,17 @@ const rowAt = (
     return id;
   });
 
+/** The id of the conversation's row at the sequence given. */
+const rowOf = (target: Target, seq: number) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const [row] = yield* db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(eq(messages.conversationId, target.conversationId), eq(messages.seq, seq)));
+    return row?.id ?? assert.fail(`no row stands at ${seq}`);
+  });
+
 /** Two answered lines and a third awaiting its turn. */
 const threeLines = (target: Target) =>
   Effect.gen(function* () {
@@ -132,6 +149,64 @@ const standing = (target: Target) =>
   });
 
 it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
+  it.effect(
+    "reads the checkout the runner recorded before the turn a line opened, and none for a line whose turn recorded none or that awaits its turn",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const { first, firstLine, secondLine } = yield* threeLines(target);
+        const snapshot = {
+          commit: "0123456789abcdef0123456789abcdef01234567",
+          head: "89abcdef0123456789abcdef0123456789abcdef",
+          branch: null,
+        };
+        yield* (yield* Database)
+          .update(turns)
+          .set({ snapshotCommit: snapshot.commit, snapshotHead: snapshot.head })
+          .where(eq(turns.id, first));
+
+        assert.deepEqual(
+          Option.getOrUndefined(yield* readRewindSnapshot(target, firstLine)),
+          snapshot,
+        );
+        assert.ok(Option.isNone(yield* readRewindSnapshot(target, secondLine)));
+        assert.ok(Option.isNone(yield* readRewindSnapshot(target, yield* rowOf(target, 5))));
+      }),
+  );
+
+  it.effect(
+    "reads the checkouts a turn's changes stand between: its own snapshot and the next one recorded, the checkout as it stands where none follows, and none for a turn that recorded none",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const { first, firstLine, second, secondLine } = yield* threeLines(target);
+        const db = yield* Database;
+        const [before, after] = [
+          "0123456789abcdef0123456789abcdef01234567",
+          "89abcdef0123456789abcdef0123456789abcdef",
+        ];
+
+        const unrecorded = yield* readTurnCheckoutRange(target, firstLine);
+        yield* db.update(turns).set({ snapshotCommit: before }).where(eq(turns.id, first));
+        const lastRecorded = yield* readTurnCheckoutRange(target, firstLine);
+        // A later turn that recorded no checkout, as one that never started, is passed over for the next that did.
+        yield* turnAt(target, 1_500);
+        yield* db.update(turns).set({ snapshotCommit: after }).where(eq(turns.id, second));
+
+        assert.ok(Option.isNone(unrecorded), "a turn that recorded no checkout has no range");
+        assert.deepEqual(Option.getOrUndefined(lastRecorded), { from: before, to: null });
+        assert.deepEqual(Option.getOrUndefined(yield* readTurnCheckoutRange(target, firstLine)), {
+          from: before,
+          to: after,
+        });
+        assert.deepEqual(Option.getOrUndefined(yield* readTurnCheckoutRange(target, secondLine)), {
+          from: after,
+          to: null,
+        });
+        assert.ok(Option.isNone(yield* readTurnCheckoutRange(target, yield* rowOf(target, 5))));
+      }),
+  );
+
   it.effect("drops the line named and everything after it, and keeps what came before", () =>
     Effect.gen(function* () {
       const target = yield* openConversation;
@@ -148,20 +223,38 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
   );
 
   it.effect(
-    "cuts at the first line, leaving the conversation empty for the words sent in its place",
+    "cuts at the first line, leaving the conversation empty for the words sent in its place, with no ask of its first turn left pending",
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation;
         const { first, firstLine } = yield* threeLines(target);
+        yield* recordApprovalAsked({
+          conversationId: target.conversationId,
+          turnId: first,
+          requestId: "request-1",
+          toolUseId: "toolu_request-1",
+          subagentId: null,
+          toolName: "Bash",
+          title: "Run pnpm test?",
+          description: null,
+          input: { command: "pnpm test" },
+          at: new Date(1_000),
+        });
 
         const rewound = yield* rewindConversation(target, firstLine);
         const after = yield* standing(target);
+        const asks = yield* (yield* Database)
+          .select({ status: agentApproval.status })
+          .from(agentApproval)
+          .where(eq(agentApproval.conversationId, target.conversationId));
 
         assert.equal(Result.getOrThrow(rewound).clientId, "client-1");
         assert.deepEqual(after.seqs, []);
         // The first turn's row stands, settled and empty, so the agent reads as one that ran rather than one that never started.
         assert.deepEqual(after.turns, [first]);
         assert.deepEqual(after.statuses, [TURN_STATUS.SETTLED]);
+        // Its ask expired with it, since no runner holds it to hear an answer.
+        assert.deepEqual(asks, [{ status: APPROVAL_STATUS.EXPIRED }]);
         assert.deepEqual(yield* readNativeRewind(target), Option.some("client-1"));
       }),
   );
@@ -313,6 +406,53 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
         assert.deepEqual(
           rows.map((row) => row.id),
           [kept],
+        );
+      }),
+  );
+
+  it.effect(
+    "cuts a fork before the line that opened the next turn, or else before a rewind still waiting, and nowhere past the last",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const rewound = yield* openConversation;
+        const { answer } = yield* threeLines(target);
+        const kept = yield* threeLines(rewound);
+        yield* rewindConversation(rewound, kept.secondLine);
+
+        assert.deepEqual(
+          yield* readForkCut(target, yield* rowOf(target, 2)),
+          Result.succeed("client-3"),
+        );
+        // The awaiting line past the last answer never reached the session, so nothing is cut.
+        assert.deepEqual(yield* readForkCut(target, answer), Result.succeed(undefined));
+        assert.deepEqual(
+          yield* readForkCut(rewound, yield* rowOf(rewound, 2)),
+          Result.succeed("client-3"),
+        );
+      }),
+  );
+
+  it.effect(
+    "refuses to cut a fork through a turn under way, or in another account's conversation",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const stranger = yield* openConversation;
+        const { second, secondLine } = yield* threeLines(target);
+        const steeredAt = yield* rowAt(target, 6, MESSAGE_ROLE.ASSISTANT, second, 2_002);
+        yield* rowAt(target, 7, MESSAGE_ROLE.USER, second, 2_003, 1);
+
+        assert.deepEqual(
+          yield* readForkCut(target, steeredAt),
+          Result.fail(REWIND_REFUSAL.INSIDE_TURN),
+        );
+        assert.deepEqual(
+          yield* readForkCut(
+            { userId: stranger.userId, conversationId: target.conversationId },
+            secondLine,
+          ),
+          Result.fail(REWIND_REFUSAL.NOT_FOUND),
         );
       }),
   );

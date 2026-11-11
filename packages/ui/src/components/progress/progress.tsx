@@ -8,7 +8,12 @@ import { Progress as ShadcnProgress } from "../../shadcn/progress.js";
  * it already say the same in numbers ("12 of 40 MB"), the bar is their
  * picture and says nothing to a reader; given a `label`, it is a progress bar
  * of its own, named by it and read as a percentage. A wait with no known end
- * is a spinner's, never an empty bar.
+ * is a spinner's, never an empty bar. A count that needs a person, such as a
+ * plan at its usage limit, fills in the attention ink instead
+ * (`PROGRESS_TONE.ATTENTION`). A bar under a line of words in a list of
+ * them, such as a settings row's meter, is drawn thinner
+ * (`PROGRESS_SIZE.THIN`), so it reads as their underline rather than a row
+ * of its own.
  *
  * The bar is shadcn/ui's progress over Base UI (`../../shadcn/progress.tsx`),
  * drawn in Tailwind utilities over the theme. Base UI's root would name
@@ -18,6 +23,36 @@ import { Progress as ShadcnProgress } from "../../shadcn/progress.js";
  * bar's role, label, bounds, and share rounded to a whole percent, and no
  * role or value at all on one hidden beside its words.
  */
+
+/** The ink a bar fills in: the working ink, or the attention ink where what it counts needs a person. */
+export const PROGRESS_TONE = {
+  WORKING: "working",
+  ATTENTION: "attention",
+} as const;
+
+export type ProgressTone = (typeof PROGRESS_TONE)[keyof typeof PROGRESS_TONE];
+
+/** How thick a bar is drawn: the hairline, or thinner still under a row's words. */
+export const PROGRESS_SIZE = {
+  REGULAR: "regular",
+  THIN: "thin",
+} as const;
+
+export type ProgressSize = (typeof PROGRESS_SIZE)[keyof typeof PROGRESS_SIZE];
+
+/** How long a bar runs: a meter's length beside a line of words, or the whole of the room it is given, as a column of meters lines up. */
+export const PROGRESS_WIDTH = {
+  METER: "meter",
+  FILL: "fill",
+} as const;
+
+export type ProgressWidth = (typeof PROGRESS_WIDTH)[keyof typeof PROGRESS_WIDTH];
+
+/** What each width draws over the bar's own meter length. */
+const WIDTH_CLASS = {
+  [PROGRESS_WIDTH.METER]: undefined,
+  [PROGRESS_WIDTH.FILL]: "max-w-none",
+} as const satisfies Record<ProgressWidth, string | undefined>;
 
 /** The share of the work done, as a percentage held to 0–100, a value that is not a number read as none. */
 function percentOf(value: number): number {
@@ -29,11 +64,20 @@ function percentOf(value: number): number {
 export function Progress({
   value,
   label,
+  tone = PROGRESS_TONE.WORKING,
+  size = PROGRESS_SIZE.REGULAR,
+  width = PROGRESS_WIDTH.METER,
 }: {
   /** How far the work has come, in percent. */
   value: number;
   /** What the bar measures, where no words beside it say it ("Downloading the update"). */
   label?: string | undefined;
+  /** The ink it fills in; the working ink where none is named. */
+  tone?: ProgressTone | undefined;
+  /** How thick it is drawn; the hairline where none is named. */
+  size?: ProgressSize | undefined;
+  /** How long it runs; a meter's length where none is named. */
+  width?: ProgressWidth | undefined;
 }): React.JSX.Element {
   const percent = percentOf(value);
   // Note that each attribute Base UI's root sets is named here, undefined where the bar never said it, because a prop given overrides the root's own.
@@ -55,5 +99,13 @@ export function Progress({
           "aria-valuenow": Math.round(percent),
           "aria-valuetext": undefined,
         } as const);
-  return <ShadcnProgress value={percent} {...read} />;
+  return (
+    <ShadcnProgress
+      value={percent}
+      data-tone={tone}
+      data-size={size}
+      className={WIDTH_CLASS[width]}
+      {...read}
+    />
+  );
 }

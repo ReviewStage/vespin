@@ -13,6 +13,7 @@ import type {
   DeviceMachine,
   DevicePlatform,
 } from "@repo/features/device-agent-wire";
+import type { ListenOnLoopback, OpenTerminalSocket } from "@repo/features/relay-socket";
 import {
   type ConfigProvider,
   Context,
@@ -29,7 +30,6 @@ import type { FileSystem } from "effect/FileSystem";
 import type { HttpClient } from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
-import type { ListenOnLoopback, OpenTerminalSocket } from "../relay-socket.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
 
@@ -268,7 +268,13 @@ export interface LocalAgentPlatformSeam {
     readonly home: string;
     readonly repository: string;
     readonly worktree: string;
+    readonly agentId: string;
     readonly branch: string | null;
+  }) => string;
+  /** The script that saves an archived agent's work in its worktree as a snapshot its next launch rebuilds from, exiting 0 only where nothing is left unsaved (`node/open-on-mac.ts`'s `agentSnapshotScript`). */
+  readonly snapshotScript: (input: {
+    readonly worktree: string;
+    readonly agentId: string;
   }) => string;
   /** The script that exits 0 only where the Git it runs as reaches the repository given, as `owner/name`, prompting for nothing: the check of the box's own GitHub sign-in an agent on its starter's own token launches on. */
   readonly repositoryReachedScript: (repository: string) => string;
@@ -281,19 +287,35 @@ export class LocalAgentPlatform extends Context.Service<
   LocalAgentPlatformSeam
 >()("@repo/host/LocalAgentPlatform") {}
 
+/** Where macOS stands on the host's agent, as `SMAppService`'s `status` reads it. */
+export const THIS_MAC_AGENT_STATUS = {
+  NOT_REGISTERED: "not-registered",
+  ENABLED: "enabled",
+  /** Registered, but held until the member allows it in System Settings › Login Items. */
+  REQUIRES_APPROVAL: "requires-approval",
+  /** The bundle carries no such agent, as a development run's does not. */
+  NOT_FOUND: "not-found",
+} as const;
+
+export type ThisMacAgentStatus = (typeof THIS_MAC_AGENT_STATUS)[keyof typeof THIS_MAC_AGENT_STATUS];
+
 /**
  * This Mac's host as the desktop keeps it (`compose-this-mac-host.ts`): the
- * account install the install command puts on a Mac, under the member's own
- * home, whose LaunchAgent launchd runs at login, which every build of the
- * app reads and controls alike. Each act answers, never fails: what it
+ * host daemon the app carries in its bundle, run by the bundle's LaunchAgent,
+ * which `SMAppService` registers, unregisters, and reads. Its state stays
+ * under the member's own home. Each act answers, never fails: what it
  * answered, or the words it could not with. Only the This Mac host concern
  * asks for it.
  */
 export interface ThisMacHostSeam {
-  /** The install's state folder, `~/.local/state/vespin-host`, holding the record its host runs on. */
+  /** The host's state folder, `~/.local/state/vespin-host`, holding the record its host runs on. */
   readonly stateRoot: string;
-  /** Whether this Mac can run the host: Apple silicon, on the oldest macOS the install script takes or later. */
+  /** The home the host runs with, under which its agents' folders stand. */
+  readonly home: string;
+  /** Whether this Mac can run the host: Apple silicon. */
   readonly runsHost: boolean;
+  /** Whether this build registers and unregisters the agent: a build signed for release alone; any other reads its status and leaves it as it stands. */
+  readonly registers: boolean;
   /** The Mac as its host registers it, which its enroll names so the service creates the device where it never saw this Mac, and which machine it is where it was read. */
   readonly machine: Effect.Effect<
     {
@@ -302,20 +324,18 @@ export interface ThisMacHostSeam {
       readonly arch: DeviceArch;
     } & DeviceMachine
   >;
-  /** Whether launchd holds the host's LaunchAgent now. */
-  readonly loaded: Effect.Effect<boolean, never, ChildProcessSpawner.ChildProcessSpawner>;
-  /** The install script given run with `/bin/sh`, the LaunchAgent let start first: the release installed or upgraded, and the host started. */
-  readonly install: (
-    script: string,
-  ) => Effect.Effect<Result.Result<void, string>, never, ChildProcessSpawner.ChildProcessSpawner>;
-  /** The host stopped and kept from starting at the next login, its files kept. */
-  readonly stop: Effect.Effect<
+  /** Where macOS stands on the agent now. */
+  readonly status: Effect.Effect<ThisMacAgentStatus>;
+  /** Whether this app's own version registered the agent; another's leaves it running the bundle an update replaced until it is registered again. */
+  readonly registeredHere: Effect.Effect<boolean>;
+  /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run. */
+  readonly register: Effect.Effect<
     Result.Result<void, string>,
     never,
     ChildProcessSpawner.ChildProcessSpawner
   >;
-  /** The install's own `vespin-host uninstall` run: the host leaves the account and is removed from this Mac, its LaunchAgent, agents' folders, state and releases with it. */
-  readonly uninstall: Effect.Effect<
+  /** The agent unregistered, which stops the host and keeps it from starting at the next login, its files kept; answered once its daemon has exited. */
+  readonly unregister: Effect.Effect<
     Result.Result<void, string>,
     never,
     ChildProcessSpawner.ChildProcessSpawner

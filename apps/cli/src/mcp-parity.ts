@@ -1,0 +1,137 @@
+/**
+ * mcp-parity.ts -- the `vespin` command that does what each member MCP tool does, or why there is none, so the CLI stays level with the member MCP server.
+ *
+ * The member MCP server and this command are two front ends over the same
+ * hosted procedures (the service's `coverage.ts` names a tool's), one written
+ * for a model and one for a terminal. Neither calls the other, so this table
+ * is what keeps them level: every tool named in `MEMBER_MCP_TOOL` has a row,
+ * and a tool added without one does not build. A row names the command path
+ * as typed after `vespin`, which `mcp-parity.test.ts` holds to a command that
+ * exists; a command may answer in other words and take several calls where
+ * the tool takes one. A row with no command names why: `NOT_YET_BUILT` is the
+ * backlog, reached today only through `vespin api`, and each leaf that adds
+ * the command replaces its row. A reason by design, a tool that cannot make
+ * sense in a terminal, is added to `MCP_CLI_GAP` with the first row it holds.
+ */
+
+import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
+
+/** Why a tool has no command of its own. */
+export const MCP_CLI_GAP = {
+  /** Not written yet: `vespin api` reaches its procedures until a typed command does. */
+  NOT_YET_BUILT: "not-yet-built",
+} as const;
+
+export type McpCliGap = (typeof MCP_CLI_GAP)[keyof typeof MCP_CLI_GAP];
+
+/** One tool's row: the command path after `vespin`, or why there is none. */
+type McpCliRow = { readonly command: readonly [string, ...string[]] } | { readonly gap: McpCliGap };
+
+/** Each tool's command, or its gap. */
+export const MEMBER_MCP_CLI_PARITY = {
+  [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { command: ["workspace", "list"] },
+  [MEMBER_MCP_TOOL.CREATE_WORKSPACE]: { command: ["workspace", "create"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { command: ["workspace", "members"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { command: ["workspace", "slug"] },
+  [MEMBER_MCP_TOOL.RENAME_WORKSPACE]: { command: ["workspace", "rename"] },
+  [MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER]: { command: ["workspace", "remove"] },
+  [MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE]: { command: ["workspace", "role"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS]: { command: ["workspace", "invitations"] },
+  [MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE]: { command: ["workspace", "invite"] },
+  [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { command: ["workspace", "uninvite"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { command: ["workspace", "photo"] },
+  [MEMBER_MCP_TOOL.LIST_TASKS]: { command: ["task", "list"] },
+  [MEMBER_MCP_TOOL.READ_TASK]: { command: ["task", "view"] },
+  [MEMBER_MCP_TOOL.FIND_TASK]: { command: ["task", "view"] },
+  [MEMBER_MCP_TOOL.LIST_AGENTS]: { command: ["agent", "list"] },
+  [MEMBER_MCP_TOOL.READ_AGENT]: { command: ["agent", "view"] },
+  [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { command: ["agent", "diff"] },
+  [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: { command: ["agent", "logs"] },
+  [MEMBER_MCP_TOOL.LIST_MODELS]: { command: ["models"] },
+  [MEMBER_MCP_TOOL.UPDATE_PREFERENCES]: { command: ["preferences", "set"] },
+  [MEMBER_MCP_TOOL.READ_PAGE]: { command: ["page", "show"] },
+  [MEMBER_MCP_TOOL.READ_TASK_FILE]: { command: ["task", "cat"] },
+  [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { command: ["task", "ls"] },
+  [MEMBER_MCP_TOOL.CREATE_TASK]: { command: ["task", "create"] },
+  [MEMBER_MCP_TOOL.UPDATE_TASK]: { command: ["task", "update"] },
+  [MEMBER_MCP_TOOL.CHANGE_TASK_RELATION]: { command: ["task", "relate"] },
+  [MEMBER_MCP_TOOL.DELETE_TASK]: { command: ["task", "delete"] },
+  [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { command: ["description", "edit"] },
+  [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS]: { command: ["description", "history"] },
+  [MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION]: { command: ["description", "show"] },
+  [MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION]: { command: ["description", "restore"] },
+  [MEMBER_MCP_TOOL.CREATE_SECTION]: { command: ["section", "create"] },
+  [MEMBER_MCP_TOOL.DELETE_SECTION]: { command: ["section", "delete"] },
+  [MEMBER_MCP_TOOL.START_AGENT]: { command: ["agent", "start"] },
+  [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { command: ["agent", "send"] },
+  [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { command: ["agent", "queue"] },
+  [MEMBER_MCP_TOOL.STOP_AGENT]: { command: ["agent", "stop"] },
+  [MEMBER_MCP_TOOL.UPDATE_AGENT]: { command: ["agent", "update"] },
+  [MEMBER_MCP_TOOL.REWIND_AGENT]: { command: ["agent", "rewind"] },
+  [MEMBER_MCP_TOOL.DELETE_AGENT]: { command: ["agent", "delete"] },
+  [MEMBER_MCP_TOOL.WAKE_AGENT]: { command: ["agent", "wake"] },
+  [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { command: ["agent", "ports"] },
+  [MEMBER_MCP_TOOL.SHARE_AGENT_PORT]: { command: ["agent", "share"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORIES]: { command: ["repo", "list"] },
+  [MEMBER_MCP_TOOL.SET_TOKEN_REPOSITORY]: { command: ["repo", "add"] },
+  [MEMBER_MCP_TOOL.READ_REPOSITORY_FILE]: { command: ["repo", "cat"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORY_FOLDER]: { command: ["repo", "ls"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORY_SKILLS]: { command: ["repo", "skills"] },
+  [MEMBER_MCP_TOOL.READ_GITHUB_ISSUE]: { command: ["repo", "issue"] },
+  [MEMBER_MCP_TOOL.READ_GITHUB_CONNECTION]: { command: ["github", "status"] },
+  [MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS]: { command: ["agent", "tabs"] },
+  [MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB]: { command: ["agent", "tabs", "open"] },
+  [MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB]: { command: ["agent", "tabs", "take"] },
+  [MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB]: { command: ["agent", "tabs", "hand-back"] },
+  [MEMBER_MCP_TOOL.READ_INBOX]: { command: ["inbox", "list"] },
+  [MEMBER_MCP_TOOL.ANSWER_ASK]: { command: ["inbox", "answer"] },
+  [MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD]: { command: ["inbox", "answer"] },
+  [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { command: ["inbox", "reply"] },
+  [MEMBER_MCP_TOOL.CLOSE_THREAD]: { command: ["inbox", "close"] },
+  [MEMBER_MCP_TOOL.MARK_THREAD_READ]: { command: ["inbox", "read"] },
+  [MEMBER_MCP_TOOL.MARK_INBOX_READ]: { command: ["inbox", "read-all"] },
+  [MEMBER_MCP_TOOL.REMIND_THREAD]: { command: ["inbox", "remind"] },
+  [MEMBER_MCP_TOOL.START_THREAD]: { command: ["inbox", "start"] },
+  [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { command: ["agent", "pr"] },
+  [MEMBER_MCP_TOOL.READ_PULL_REQUEST]: { command: ["pr", "view"] },
+  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: { command: ["pr", "viewed"] },
+  [MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS]: { command: ["pr", "chapters"] },
+  [MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS]: { command: ["pr", "chapters"] },
+  [MEMBER_MCP_TOOL.READ_COMMENTS]: { command: ["comment", "list"] },
+  [MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION]: { command: ["comment", "add"] },
+  [MEMBER_MCP_TOOL.REPLY_TO_COMMENT]: { command: ["comment", "reply"] },
+  [MEMBER_MCP_TOOL.UPDATE_COMMENT]: { command: ["comment", "resolve"] },
+  [MEMBER_MCP_TOOL.SEARCH_MEMORY]: { command: ["memory", "search"] },
+  [MEMBER_MCP_TOOL.SAVE_MEMORY]: { command: ["memory", "save"] },
+  [MEMBER_MCP_TOOL.LIST_MEMORIES]: { command: ["memory", "list"] },
+  [MEMBER_MCP_TOOL.FORGET_MEMORY]: { command: ["memory", "forget"] },
+  [MEMBER_MCP_TOOL.LIST_AUTOMATIONS]: { command: ["automation", "list"] },
+  [MEMBER_MCP_TOOL.CREATE_AUTOMATION]: { command: ["automation", "create"] },
+  [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { command: ["automation", "update"] },
+  [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { command: ["automation", "run"] },
+  [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { command: ["automation", "delete"] },
+  [MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES]: { command: ["env", "list"] },
+  [MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE]: { command: ["env", "set"] },
+  [MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE]: { command: ["env", "delete"] },
+  [MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS]: { command: ["skills", "list"] },
+  [MEMBER_MCP_TOOL.READ_INSTALLED_SKILL]: { command: ["skills", "view"] },
+  [MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL]: { command: ["skills", "install"] },
+  [MEMBER_MCP_TOOL.INSTALL_SKILL]: { command: ["skills", "install"] },
+  [MEMBER_MCP_TOOL.REMOVE_INSTALLED_SKILL]: { command: ["skills", "remove"] },
+  [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP]: { command: ["setup", "show"] },
+  [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { command: ["setup", "edit"] },
+  [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { command: ["integrations", "list"] },
+  [MEMBER_MCP_TOOL.CONNECT_INTEGRATION]: { command: ["integrations", "connect"] },
+  [MEMBER_MCP_TOOL.LIST_INTEGRATION_TOOLS]: { command: ["integrations", "tools"] },
+  [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { command: ["integrations", "rename"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { command: ["integrations", "disconnect"] },
+  [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { command: ["mcp", "clients"] },
+  [MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT]: { command: ["mcp", "revoke"] },
+  [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS]: { command: ["sentry", "list"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_SENTRY]: { command: ["sentry", "disconnect"] },
+  [MEMBER_MCP_TOOL.READ_SLACK_BOT]: { command: ["slack", "show"] },
+  [MEMBER_MCP_TOOL.UPDATE_SLACK_BOT]: { command: ["slack", "set"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_SLACK_BOT]: { command: ["slack", "disconnect"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORY_PINS]: { command: ["repo", "pins"] },
+  [MEMBER_MCP_TOOL.PIN_REPOSITORY]: { command: ["repo", "pin"] },
+} as const satisfies Record<MemberMcpToolName, McpCliRow>;

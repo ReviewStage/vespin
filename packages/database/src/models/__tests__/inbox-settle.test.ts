@@ -1,25 +1,17 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { INBOX_ASK_STATUS, INBOX_STATUS } from "@repo/features/inbox-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
-import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { inboxItem } from "../../schemas/inbox.js";
 import { inboxMessage } from "../../schemas/inbox-message.js";
-import {
-  getTestDB,
-  openedPullRequest,
-  openInboxItem,
-  openTaskAgent,
-  openWorkspace,
-} from "../../testing/index.js";
+import { getTestDB, openInboxItem, openTaskAgent, openWorkspace } from "../../testing/index.js";
 import { archiveAgent, readAgent, unarchiveAgentFrom } from "../agent-store.js";
-import { beginTaskWork, createTask, finishTaskWork, updateTask } from "../task-store.js";
+import { beginTaskWork, createTask, updateTask } from "../task-store.js";
 
 /**
  * An inbox item settles on its own once its reason is gone: its task moved
@@ -27,10 +19,9 @@ import { beginTaskWork, createTask, finishTaskWork, updateTask } from "../task-s
  * through the stores' public writes over a real dialect. Every open item of
  * the task or the agent that holds an ask closes with why and its ask stands
  * withdrawn with the same why; a notice of theirs, and an item of another
- * task, agent, or account, stands open. The
- * act's opposite, the agent brought back or a member moving the task off
- * Done or Canceled, opens again exactly the items that act settled, its asks
- * open again; the task reopened by us as a turn starts on it opens nothing.
+ * task, agent, or account, stands open. Nothing undoes a settle: the agent
+ * brought back, or the task moved off Done or Canceled by a member or by a
+ * turn starting on it, leaves every item it settled closed.
  *
  * Synthetic accounts, workspaces, tasks, and agents throughout.
  */
@@ -144,55 +135,26 @@ it.layer(getTestDB())("an inbox item settling with its task", (it) => {
   );
 
   it.effect(
-    "opens again exactly the items a move settled when a member moves the task off it, and nothing when a turn reopens it",
+    "leaves the items a move settled closed when a member or a turn moves the task off done or canceled",
     () =>
       Effect.gen(function* () {
         const dean = yield* openAccount;
         const workspace = yield* openWorkspace(dean);
-        const { taskId, agentId, items: first } = yield* openTaskWithItems(dean, workspace);
+        const done = yield* openTaskWithItems(dean, workspace);
+        const canceled = yield* openTaskWithItems(dean, workspace);
+        const taken = yield* openTaskWithItems(dean, workspace);
 
-        // Done, then taken up again by a turn: the first move's items stay settled.
-        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE });
-        assert.equal(yield* beginTaskWork(dean, taskId), true);
-        yield* assertSettled(first, "Its task is done.");
+        yield* updateTask(dean, done.taskId, { status: TASK_STATUS.DONE });
+        yield* updateTask(dean, done.taskId, { status: TASK_STATUS.IN_PROGRESS });
+        yield* updateTask(dean, canceled.taskId, { status: TASK_STATUS.CANCELED });
+        yield* updateTask(dean, canceled.taskId, { status: TASK_STATUS.TODO });
+        yield* updateTask(dean, taken.taskId, { status: TASK_STATUS.DONE });
+        assert.equal(yield* beginTaskWork(dean, taken.taskId), true);
 
-        // Done again over a later question, then moved back by a member: only that move's item opens.
-        yield* TestClock.adjust("1 minute");
-        const later = yield* openInboxItem(dean, workspace, taskId, agentId, true);
-        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE });
-        yield* updateTask(dean, taskId, { status: TASK_STATUS.IN_PROGRESS });
-        yield* assertOpen([later]);
-        yield* assertSettled(first, "Its task is done.");
-
-        // Canceled and put back to do, the same way.
-        yield* updateTask(dean, taskId, { status: TASK_STATUS.CANCELED });
-        yield* assertSettled([later], "Its task was canceled.");
-        yield* updateTask(dean, taskId, { status: TASK_STATUS.TODO });
-        yield* assertOpen([later]);
+        yield* assertSettled(done.items, "Its task is done.");
+        yield* assertSettled(canceled.items, "Its task was canceled.");
+        yield* assertSettled(taken.items, "Its task is done.");
       }),
-  );
-
-  it.effect("leaves a task's open notices open when Vespin finishes its work", () =>
-    Effect.gen(function* () {
-      const dean = yield* openAccount;
-      const workspace = yield* openWorkspace(dean);
-      const { id: taskId } = yield* createTask(dean, { organizationId: workspace });
-      const agentId = yield* openTaskAgent(dean, workspace, taskId);
-      yield* openedPullRequest(dean, agentId, {
-        number: 42,
-        title: "Teammate invitations",
-        url: "https://github.com/acme/api/pull/42",
-        state: PULL_REQUEST_STATE.MERGED,
-        checks: "passing",
-        additions: 10,
-        deletions: 2,
-        changedFiles: 1,
-      });
-      const notice = yield* openInboxItem(dean, workspace, taskId, agentId, false);
-
-      assert.equal(yield* finishTaskWork(dean, taskId, () => Effect.succeed(true)), true);
-      yield* assertOpen([notice]);
-    }),
   );
 });
 
@@ -222,7 +184,7 @@ const ARCHIVES = [
 
 it.layer(getTestDB())("an inbox item settling with its agent", (it) => {
   it.effect.each(ARCHIVES)(
-    "$name closes the agent's open questions and opens again only those, and no notice of its own or other agent's or account's item",
+    "$name closes the agent's open questions and leaves them closed once it is back, and no notice of its own or other agent's or account's item",
     ({ archive, unarchive }) =>
       Effect.gen(function* () {
         const dean = yield* openAccount;
@@ -233,48 +195,13 @@ it.layer(getTestDB())("an inbox item settling with its agent", (it) => {
         const teammate = yield* openTaskAgent(dean, workspace, archived.taskId);
         const besides = yield* openInboxItem(dean, workspace, archived.taskId, teammate, true);
         const theirs = yield* openTaskWithItems(outsider, elsewhere);
-        // An item of the agent's that its task's move settled before, which bringing the agent back leaves settled.
-        const shipped = yield* openTaskWithItems(dean, workspace);
-        yield* updateTask(dean, shipped.taskId, { status: TASK_STATUS.DONE });
 
         yield* archive(dean, archived.agentId);
         yield* assertSettled(archived.items, "Its agent was archived.");
         yield* assertOpen([archived.notice, besides, ...theirs.items]);
 
         yield* unarchive(dean, archived.agentId);
-        yield* assertOpen(archived.items);
-        yield* assertSettled(shipped.items, "Its task is done.");
-      }),
-  );
-});
-
-it.layer(getTestDB())("an inbox item settled by both its task and its agent", (it) => {
-  it.effect(
-    "stays settled while the other act stands, handed to it, and opens once both are undone, in either order",
-    () =>
-      Effect.gen(function* () {
-        const dean = yield* openAccount;
-        const workspace = yield* openWorkspace(dean);
-
-        // Done, then the agent archived: moving the task back leaves the item to the archive.
-        const doneFirst = yield* openTaskWithItems(dean, workspace);
-        yield* updateTask(dean, doneFirst.taskId, { status: TASK_STATUS.DONE });
-        yield* archiveAgent(dean, doneFirst.agentId, true);
-        yield* updateTask(dean, doneFirst.taskId, { status: TASK_STATUS.IN_PROGRESS });
-        yield* assertSettled(doneFirst.items, "Its agent was archived.");
-        yield* archiveAgent(dean, doneFirst.agentId, false);
-        yield* assertOpen(doneFirst.items);
-
-        // The agent archived, then done: bringing the agent back leaves the item to the task.
-        yield* TestClock.adjust("1 minute");
-        const archivedFirst = yield* openTaskWithItems(dean, workspace);
-        yield* archiveAgent(dean, archivedFirst.agentId, true);
-        yield* TestClock.adjust("1 minute");
-        yield* updateTask(dean, archivedFirst.taskId, { status: TASK_STATUS.DONE });
-        yield* archiveAgent(dean, archivedFirst.agentId, false);
-        yield* assertSettled(archivedFirst.items, "Its task is done.");
-        yield* updateTask(dean, archivedFirst.taskId, { status: TASK_STATUS.IN_PROGRESS });
-        yield* assertOpen(archivedFirst.items);
+        yield* assertSettled(archived.items, "Its agent was archived.");
       }),
   );
 });

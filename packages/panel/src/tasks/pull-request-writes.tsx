@@ -1,3 +1,4 @@
+import { REPOSITORY_UNREACHED_NOTE } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
@@ -12,6 +13,12 @@ import {
 import { saidWords } from "@repo/features/integration-health";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  PULL_REQUEST_STATE_LABEL,
+  PULL_REQUEST_WRITE_WORDS,
+  QUEUE_WARNING,
+  queuedLabel,
+} from "@repo/features/pull-request-model";
+import {
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_BOUNDS,
   PULL_REQUEST_WRITE_OUTCOME,
@@ -23,27 +30,26 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
-  BUTTON_SIZE,
   CHIP_LOOK,
   Chip,
   ChipName,
   CONFIRM_LOSS,
   ConfirmDialog,
-  cn,
   type DialogQuestion,
   dropBelowStart,
+  EDITABLE_BLOCK_KIND,
+  EDITABLE_HEADING_LEAVE,
+  EditableBlock,
+  EditableHeading,
   ErrorState,
   FailureNote,
+  headingCaretAtEnd,
   IconButton,
-  INLINE_EDIT_LOOK,
-  InlineEdit,
-  type InlineEditEnd,
   STATUS_TONE,
   StaticChip,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
-  Tooltip,
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
@@ -61,7 +67,9 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -71,7 +79,6 @@ import { confirmFailure, failureShown } from "../failure-report.js";
 import { useGitHubConnection } from "../github-connect.js";
 import { OPEN_SETTINGS_LABEL, useOpenSettings } from "../open-settings.js";
 import { useToast, useWithdrawToast } from "../toast.js";
-import { PULL_REQUEST_STATE_LABEL, queuedLabel, REPOSITORY_UNREACHED_NOTE } from "./agent-model.js";
 import { PULL_REQUEST_TONE, PullRequestMark } from "./pull-request-mark.js";
 import { usePullRequestNumber } from "./pull-request-number.js";
 import { agentPullRequestWrite, usePullRequestSource } from "./pull-request-source.js";
@@ -145,13 +152,11 @@ const ACTION_WORDS = {
 
 /** The line's own words. */
 const WRITE_WORDS = {
-  SIGN_IN: "Sign in with GitHub to make this change as you.",
+  SIGN_IN: PULL_REQUEST_WRITE_WORDS.SIGN_IN,
   SIGN_IN_PRESS: "Sign in with GitHub",
   DISMISS: "Dismiss",
-  /** Our sentence on a change GitHub refused, which GitHub's own words follow on a line of their own. */
-  REFUSED: "GitHub refused this change.",
-  /** Who said the words quoted under a refusal. */
-  SOURCE: "GitHub",
+  REFUSED: PULL_REQUEST_WRITE_WORDS.REFUSED,
+  SOURCE: PULL_REQUEST_WRITE_WORDS.SOURCE,
   /** A repository out of the workspace's reach, and where it is given back: the workspace's GitHub in Settings, whose Manage on GitHub chooses the App's repositories. */
   UNREACHED: `${REPOSITORY_UNREACHED_NOTE} Choose which repositories ${PRODUCT_NAME} can see.`,
 } as const;
@@ -160,11 +165,11 @@ const WRITE_WORDS = {
 function failureWords(failure: AgentCallFailure): string {
   switch (failure) {
     case AGENT_CALL_FAILURE.NOT_FOUND:
-      return "This pull request can no longer be found.";
+      return PULL_REQUEST_WRITE_WORDS.NOT_FOUND;
     case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
       return WRITE_WORDS.UNREACHED;
     default:
-      return "GitHub could not be reached. Try again in a moment.";
+      return PULL_REQUEST_WRITE_WORDS.UNREACHED;
   }
 }
 
@@ -187,10 +192,9 @@ export type WriteNote =
       readonly remedy?: WriteRemedy | undefined;
     };
 
-/** Where the agent whose pull request a tab shows stands: its task, or, for an agent on none, the workspace its page belongs to. */
+/** Where the agent whose pull request a tab shows stands: its task, or none where the surface names no task. */
 export interface WritePlace {
   readonly taskId: string | null;
-  readonly workspaceId?: string | undefined;
 }
 
 const WritePlaceContext = createContext<WritePlace | undefined>(undefined);
@@ -398,10 +402,6 @@ const ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.REOPEN]: <GitPullRequestIcon aria-hidden="true" />,
 } as const satisfies Record<StateAction, React.JSX.Element>;
 
-/** What leaving GitHub's merge queue costs the pull requests behind it, said as the merge box's Remove from queue and a queued Close each ask. */
-export const QUEUE_WARNING =
-  "Removing this pull request from the queue could impact other pull requests in the queue.";
-
 /** The question Close asks of a pull request in the merge queue, since reopening it does not queue it again. */
 const CLOSE_QUEUED_QUESTION: DialogQuestion = {
   title: "Close this pull request?",
@@ -588,13 +588,12 @@ export function PullRequestWriteNote({
   const openSettings = useOpenSettings();
   const openWorkspaceGitHub = useOpenWorkspaceGitHub();
   const place = useContext(WritePlaceContext);
-  // Note that a task's workspace is the task's to name, and an agent on none names its page's.
+  // Note that a task's workspace is the task's to name, and a place on none is the listed workspace's.
   const openAccess = () =>
     place?.taskId === null || place?.taskId === undefined
       ? openSettings({
           page: SETTINGS_VIEW.WORKSPACE,
           section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
-          ...(place?.workspaceId === undefined ? undefined : { workspaceId: place.workspaceId }),
         })
       : openWorkspaceGitHub(place.taskId);
   const { note, dismiss } = writes;
@@ -637,30 +636,29 @@ export function PullRequestWriteNote({
 
 /** The title's own words. */
 const TITLE_WORDS = {
-  EDIT: "Edit title",
+  BLOCK: "Title",
   FIELD: "Pull request title",
+  SEND_AGAIN: "Send again",
 } as const;
 
-/** The title's line in the dialog's type, holding its field while it is edited, its words and pencil while they may be, or the blocks of a title still being read. */
-export function PullRequestTitleLine({
-  field = false,
-  editable = false,
-  children,
-}: {
-  field?: boolean;
-  editable?: boolean;
-  children: ReactNode;
-}): React.JSX.Element {
+/** Where the title's edit stands once its words are left: nothing out, sent and waiting on GitHub, or held because another change was out. */
+const TITLE_EDIT = {
+  VIEWING: "viewing",
+  SENDING: "sending",
+  HELD: "held",
+} as const;
+
+/** The title's edit, the words it drew where they are not the pull request's own; while they are typed in, the words are the field's. */
+type TitleEdit =
+  | { readonly kind: typeof TITLE_EDIT.VIEWING }
+  | { readonly kind: typeof TITLE_EDIT.SENDING | typeof TITLE_EDIT.HELD; readonly title: string };
+
+const TITLE_VIEWING: TitleEdit = { kind: TITLE_EDIT.VIEWING };
+
+/** The title's line in the dialog's type, holding its words or the blocks of a title still being read. */
+export function PullRequestTitleLine({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <Text
-      as={TEXT_ELEMENT.H2}
-      variant={TEXT_VARIANT.DIALOG}
-      className={cn(
-        "pull-request-title",
-        field && "pull-request-title-field",
-        editable && "pull-request-title-editable",
-      )}
-    >
+    <Text as={TEXT_ELEMENT.H2} variant={TEXT_VARIANT.DIALOG} className="pull-request-title">
       {children}
     </Text>
   );
@@ -668,11 +666,15 @@ export function PullRequestTitleLine({
 
 /**
  * The pull request's title and number, the number wrapping with the
- * title's last word, its pencil opening a field over the
- * title where its words may be changed: kept on Enter, or as the focus
- * leaves, where they changed and are not empty, and given up on Escape.
- * The title stands as it was until GitHub answers with the new one, its
- * pencil unavailable while the write is out.
+ * title's last word, its words edited where they stand, as a task's title
+ * is: nothing marks them editable, a click in them puts the caret there,
+ * and Return on the title selected puts it at their end. Return or the
+ * focus leaving keeps them where they changed and are not empty; Escape
+ * puts the title back. The words stand as typed until GitHub answers,
+ * whatever a read lands meanwhile, and where it refuses, the title as it
+ * was comes back. Where they were not sent because another change was out,
+ * they stand as typed and a toast says why, offering to send them again;
+ * dismissing it puts the title back.
  */
 export function PullRequestTitle({
   title,
@@ -684,46 +686,102 @@ export function PullRequestTitle({
   number: string;
   writes: PullRequestWrites;
 }): React.JSX.Element {
-  const [editing, setEditing] = useState(false);
-  const busy = writes.pending !== undefined;
-  const end = ({ value }: InlineEditEnd) => {
-    setEditing(false);
-    if (value === undefined) return;
-    void writes.write({ action: PULL_REQUEST_ACTION.EDIT_TITLE, title: value });
+  const block = useRef<HTMLDivElement | null>(null);
+  const text = useRef<HTMLElement | null>(null);
+  const standing = useRef(title);
+  standing.current = title;
+  // Read as a press lands, so the toast's Send again, which outlives this render, sends through the newest writes.
+  const newestWrites = useRef(writes);
+  newestWrites.current = writes;
+  const toast = useToast();
+  const withdrawToast = useWithdrawToast();
+  const toastSubject = useId();
+  // Note that the edit is held in a ref as well, so an answer landing before the next render reads the edit it answers.
+  const edit = useRef<TitleEdit>(TITLE_VIEWING);
+  const [drawn, setDrawn] = useState<TitleEdit>(TITLE_VIEWING);
+  const move = (next: TitleEdit) => {
+    edit.current = next;
+    setDrawn(next);
   };
-  if (editing) {
-    return (
-      <PullRequestTitleLine field>
-        <InlineEdit
-          value={title}
-          label={TITLE_WORDS.FIELD}
-          editing
-          maxLength={PULL_REQUEST_WRITE_BOUNDS.MAX_TITLE_CHARS}
-          look={INLINE_EDIT_LOOK.INPUT}
-          onEnd={end}
-        />
-      </PullRequestTitleLine>
-    );
-  }
+  // The words follow the edit, or the title where none stands, wherever they are not being typed in.
+  useLayoutEffect(() => {
+    const element = text.current;
+    if (element === null || element === document.activeElement) return;
+    element.textContent = drawn.kind === TITLE_EDIT.VIEWING ? title : drawn.title;
+  }, [title, drawn]);
+  useEffect(() => () => withdrawToast(toastSubject), [withdrawToast, toastSubject]);
+  const send = (typed: string) => {
+    const sent: TitleEdit = { kind: TITLE_EDIT.SENDING, title: typed };
+    move(sent);
+    void newestWrites.current
+      .write({ action: PULL_REQUEST_ACTION.EDIT_TITLE, title: typed })
+      .then((outcome) => {
+        // Note that words left again while this one was out are a newer edit, which this answer does not settle.
+        if (edit.current !== sent) return;
+        if (outcome !== NOT_SENT) {
+          move(TITLE_VIEWING);
+          return;
+        }
+        move({ kind: TITLE_EDIT.HELD, title: typed });
+        toast({
+          words: NOT_SENT_WORDS,
+          tone: STATUS_TONE.ATTENTION,
+          subject: toastSubject,
+          replayUnmasked: true,
+          persists: true,
+          action: {
+            label: TITLE_WORDS.SEND_AGAIN,
+            replayUnmasked: true,
+            onPress: () => send(typed),
+          },
+          onDismiss: () => move(TITLE_VIEWING),
+        });
+      });
+  };
+  const keep = (element: HTMLElement) => {
+    withdrawToast(toastSubject);
+    const typed = element.textContent.trim();
+    if (typed === "" || typed === standing.current) {
+      element.textContent = standing.current;
+      move(TITLE_VIEWING);
+      return;
+    }
+    send(typed);
+  };
   return (
-    <PullRequestTitleLine editable>
-      {title}
-      {/* Note that the space before the number stands inside the end that never wraps, so the number and the pencil keep to the title's last word, and the number never stands alone on a line. */}
-      <span className="pull-request-title-end">
-        {" "}
-        <span className="pull-request-number">{number}</span>
-        <span className="pull-request-title-edit">
-          <Tooltip label={TITLE_WORDS.EDIT}>
-            <IconButton
-              icon={<GLYPH.RENAME />}
-              label={TITLE_WORDS.EDIT}
-              size={BUTTON_SIZE.COMPACT}
-              disabled={busy}
-              onClick={() => setEditing(true)}
-            />
-          </Tooltip>
+    <EditableBlock
+      ref={block}
+      label={TITLE_WORDS.BLOCK}
+      kind={EDITABLE_BLOCK_KIND.TITLE}
+      entry
+      onOpen={() => {
+        if (text.current !== null) headingCaretAtEnd(text.current);
+      }}
+      onPress={({ target }) => {
+        // Note that a press past the words, on the number or the line's end, puts the caret at their end.
+        if (text.current !== null && !text.current.contains(target)) {
+          headingCaretAtEnd(text.current);
+        }
+      }}
+    >
+      <PullRequestTitleLine>
+        <EditableHeading
+          ref={text}
+          label={TITLE_WORDS.FIELD}
+          maxLength={PULL_REQUEST_WRITE_BOUNDS.MAX_TITLE_CHARS}
+          onBlur={(event) => keep(event.currentTarget)}
+          onLeave={(way, heading) => {
+            // Note that the focus going to the block keeps the words as it leaves them, so Escape puts the title back first.
+            if (way === EDITABLE_HEADING_LEAVE.BACK) heading.textContent = standing.current;
+            block.current?.focus();
+          }}
+        />
+        {/* Note that the space before the number stands inside the end that never wraps, so the number keeps to the title's last word and never stands alone on a line. */}
+        <span className="pull-request-title-end">
+          {" "}
+          <span className="pull-request-number">{number}</span>
         </span>
-      </span>
-    </PullRequestTitleLine>
+      </PullRequestTitleLine>
+    </EditableBlock>
   );
 }

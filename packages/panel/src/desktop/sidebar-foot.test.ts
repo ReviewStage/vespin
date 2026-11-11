@@ -20,6 +20,7 @@ import {
   stateWith,
 } from "../testing/app-state.js";
 import { settleQueries, startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
+import { STANDING_TOAST } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { useReadyToast } from "../update-toast.js";
 import { SidebarFoot } from "./sidebar-foot.js";
@@ -461,9 +462,8 @@ test("an update ready to install offers Restart in the sidebar once its toast is
   await footWith(DESKTOP_CAPABILITIES);
   const dismiss = await vi.waitFor(
     () =>
-      document.querySelector<HTMLButtonElement>(
-        '.ui-toast:not([data-leaving]) button[aria-label="Dismiss"]',
-      ) ?? assert.fail("the release's toast stands"),
+      document.querySelector<HTMLButtonElement>(`${STANDING_TOAST} button[aria-label="Dismiss"]`) ??
+      assert.fail("the release's toast stands"),
   );
   assert.equal(sidebarRestart(), false);
   act(() => dismiss.click());

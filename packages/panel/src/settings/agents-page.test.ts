@@ -34,7 +34,7 @@ import { ToastHost } from "../toast.js";
 import { AgentsPage } from "./agents-page.js";
 
 /**
- * Settings › Coding agents' Default model over a bridge answering as the host
+ * Settings › Agents' New agents section over a bridge answering as the host
  * would: Fast is a settings switch like every other, resting while its write
  * is out and saying a refusal under its own row with the switch left where
  * it stood, and Effort and Context are each a radio group a reader hears the
@@ -164,7 +164,12 @@ const modelsHeld = () => (refuseModels ? { failed: true as const } : { rows: { m
 
 /** The account's row as the host holds it from what the test's service stores. */
 const preferencesHeld = () => ({
-  rows: { agent: stored, chaptersModel: CHAPTERS_MODEL.HAIKU, slackNotifications: true },
+  rows: {
+    agent: stored,
+    chaptersModel: CHAPTERS_MODEL.HAIKU,
+    slackNotifications: true,
+    sounds: { list: [], choices: { finish: undefined, ask: undefined } },
+  },
 });
 
 /** The account's keys, models, and row as they stand, laid where the host holds them. */
@@ -220,11 +225,9 @@ const rowOf = (page: HTMLElement, label: string) =>
     row.textContent?.startsWith(label),
   ) ?? assert.fail(`no ${label} row`);
 
-/** What stands beside a row's name: its Saved tick and its Modified word. */
+/** What stands beside a row's name: its Saved tick. */
 const marksIn = (row: HTMLElement) =>
-  [...row.querySelectorAll(".ui-saved-tick, .ui-settings-changed-mark")].map(
-    (each) => each.textContent ?? "",
-  );
+  [...row.querySelectorAll(".ui-saved-tick")].map((each) => each.textContent ?? "");
 
 /** What a row says under itself about its last write. */
 const errorsIn = (row: HTMLElement) =>
@@ -353,11 +356,11 @@ test("a refused Effort or Context says so under its own row until that row's nex
   assert.equal(fastSwitch(page).getAttribute("aria-checked"), "false");
 });
 
-test("the model, Effort and Context rows each tick Saved once their write lands, Modified while they differ from a new account's default, and a refusal ticks nothing", async () => {
+test("the model, Effort and Context rows each tick Saved once their write lands, and a refusal ticks nothing", async () => {
   models = [OPUS, OPUS_FAST, SONNET];
   const page = await mount();
   const marks = () => [
-    marksIn(rowOf(page, "Default model")),
+    marksIn(rowOf(page, "Model")),
     marksIn(rowOf(page, "Effort")),
     marksIn(rowOf(page, "Context")),
   ];
@@ -372,49 +375,27 @@ test("the model, Effort and Context rows each tick Saved once their write lands,
   act(() => segment(segmentedGroup(page, "Effort"), "Low").click());
   await settle();
   // Note that each row ticks once the default the host lays after its write reaches the preferences' query.
-  await vi.waitFor(() => assert.deepEqual(marks(), [[], ["Modified", "Saved"], []]));
+  await vi.waitFor(() => assert.deepEqual(marks(), [[], ["Saved"], []]));
 
   act(() => segment(segmentedGroup(page, "Context"), "200K").click());
   await settle();
-  await vi.waitFor(() =>
-    assert.deepEqual(marks(), [[], ["Modified", "Saved"], ["Modified", "Saved"]]),
-  );
+  await vi.waitFor(() => assert.deepEqual(marks(), [[], ["Saved"], ["Saved"]]));
 
   act(() => motion.finish());
   act(() =>
     (
-      page.querySelector<HTMLButtonElement>('button[aria-label^="Default model: "]') ??
-      assert.fail("no Default model chip")
+      page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ??
+      assert.fail("no Model chip")
     ).click(),
   );
-  const menu =
-    document.querySelector('[role="dialog"][aria-label="Default model"]') ?? assert.fail();
+  const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
   const option = [...menu.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     (each.textContent ?? "").startsWith("Sonnet 5.5"),
   );
   act(() => option?.click());
   await settle();
-  await vi.waitFor(() =>
-    assert.deepEqual(marksIn(rowOf(page, "Default model")), ["Modified", "Saved"]),
-  );
+  await vi.waitFor(() => assert.deepEqual(marksIn(rowOf(page, "Model")), ["Saved"]));
   assert.deepEqual(written().at(-1), { model: SONNET.id, effort: "low" });
-});
-
-test("on an OpenAI key alone, the GPT-6.1 Sol default the account never chose reads as no change", async () => {
-  const sol: CatalogModel = {
-    id: "openai/gpt-6.1-sol",
-    name: "GPT-6.1 Sol",
-    provider: MODEL_PROVIDER.OPENAI,
-    efforts: ["low", "high"],
-  };
-  models = [{ ...OPUS, credentialMissing: true }, sol];
-  stored = { model: sol.id, effort: "high" };
-  const page = await mount();
-
-  assert.deepEqual(
-    [marksIn(rowOf(page, "Default model")), marksIn(rowOf(page, "Effort"))],
-    [[], []],
-  );
 });
 
 /** The Fast row's words under its name, which describe its switch. */
@@ -490,19 +471,21 @@ test("replacing the account's own Anthropic key moves the models the host holds,
   const page = await mount();
   assert.equal(fastSwitch(page).disabled, true);
 
-  const row =
-    [...page.querySelectorAll<HTMLButtonElement>("button")].find(
-      (each) =>
-        each.textContent === "Manage" &&
-        each.closest(".ui-settings-row")?.textContent?.startsWith("Claude"),
-    ) ?? assert.fail("no Claude row button");
-  act(() => row.click());
   act(() =>
     (
-      document.querySelector<HTMLButtonElement>('[aria-label="Replace Anthropic API key"]') ??
-      assert.fail("no Replace")
+      page.querySelector<HTMLButtonElement>('[aria-label="API key · sk-ant-…wxyz actions"]') ??
+      assert.fail("no key's ⋯")
     ).click(),
   );
+  await settle();
+  act(() =>
+    (
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (each) => each.textContent === "Replace key",
+      ) ?? assert.fail("no Replace key")
+    ).click(),
+  );
+  await settle();
   const label =
     [...document.querySelectorAll("label")].find((each) => each.textContent === "Paste the key") ??
     assert.fail("no key field");
@@ -521,20 +504,19 @@ test("replacing the account's own Anthropic key moves the models the host holds,
   await vi.waitFor(() => assert.equal(fastSwitch(page).disabled, false));
 });
 
-test("a catalog that could not be read says so in the Default model menu with Retry, and Retry reads it again", async () => {
+test("a catalog that could not be read says so in the Model menu with Retry, and Retry reads it again", async () => {
   refuseModels = true;
   const page = await mount();
-  // Note that the Default model row stands once the failed read reaches its query.
+  // Note that the Model row stands once the failed read reaches its query.
   const control = await vi.waitFor(
     () =>
-      page.querySelector<HTMLButtonElement>('button[aria-label^="Default model: "]') ??
-      assert.fail("no Default model control"),
+      page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ??
+      assert.fail("no Model control"),
   );
   assert.equal(placeholders(page).length, 0, "the page does not read for ever");
 
   act(() => control.click());
-  const menu =
-    document.querySelector('[role="dialog"][aria-label="Default model"]') ?? assert.fail();
+  const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
   assert.equal(
     menu.querySelector('[role="alert"]')?.textContent,
     "The models could not be read.Retry",
@@ -578,7 +560,7 @@ test("a default nothing pays for, as Claude on an OpenAI key alone, says it cann
   };
 
   const picker =
-    page.querySelector<HTMLButtonElement>('button[aria-label^="Default model: "]') ?? assert.fail();
+    page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ?? assert.fail();
   const row = picker.closest(".ui-settings-row") ?? assert.fail("no Model row");
   assert.match(
     row.textContent ?? "",
@@ -592,8 +574,7 @@ test("a default nothing pays for, as Claude on an OpenAI key alone, says it cann
   assert.deepEqual(opened, [claudeRow]);
 
   act(() => picker.click());
-  const menu =
-    document.querySelector('[role="dialog"][aria-label="Default model"]') ?? assert.fail();
+  const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
   const option = [...menu.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     (each.textContent ?? "").startsWith("Sonnet 5.5"),
   );

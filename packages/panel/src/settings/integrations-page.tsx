@@ -5,6 +5,7 @@ import {
   INTEGRATION_STATUS,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
+import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
@@ -32,7 +33,6 @@ import {
   serverGroups,
   serverRows,
 } from "@repo/ui/agent-servers-model";
-import { searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
@@ -138,7 +138,8 @@ const INTEGRATIONS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
     rows: INTEGRATION_PROVIDER_LIST.slice(0, CONNECTED_SKELETON_ROWS).map(() => ({
       described: true,
       mark: SETTINGS_ROW_MARK_WIDTH,
-      controls: [SETTINGS_SKELETON_CONTROL.MORE],
+      controls: [],
+      end: [SETTINGS_SKELETON_CONTROL.MORE],
     })),
   },
   {

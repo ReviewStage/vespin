@@ -29,6 +29,10 @@ interface Recorded {
   turns: number[];
   republished: number[];
   keptUp: number[];
+  resumed: number[];
+  heldPushes: number[];
+  liveActivities: number[];
+  sandboxReleases: number[];
 }
 
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
@@ -37,6 +41,10 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     turns: [],
     republished: [],
     keptUp: [],
+    resumed: [],
+    heldPushes: [],
+    liveActivities: [],
+    sandboxReleases: [],
   };
   const options: MaintenanceSweepOptions = {
     request: sweepRequest(),
@@ -61,6 +69,26 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
       Effect.sync(() => {
         recorded.keptUp.push(now);
         return 0;
+      }),
+    resumeWaitedTurns: (now) =>
+      Effect.sync(() => {
+        recorded.resumed.push(now);
+        return 0;
+      }),
+    releaseHeldPushes: (now) =>
+      Effect.sync(() => {
+        recorded.heldPushes.push(now);
+        return 0;
+      }),
+    refreshLiveActivities: (now) =>
+      Effect.sync(() => {
+        recorded.liveActivities.push(now);
+        return 0;
+      }),
+    releaseSandboxes: (now) =>
+      Effect.sync(() => {
+        recorded.sandboxReleases.push(now);
+        return { due: 0, published: 0 };
       }),
     ...overrides,
   };
@@ -88,6 +116,10 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
       turns: [],
       republished: [],
       keptUp: [],
+      resumed: [],
+      heldPushes: [],
+      liveActivities: [],
+      sandboxReleases: [],
     });
   }),
 );
@@ -107,12 +139,20 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       turns: [],
       republished: [],
       keptUp: [],
+      resumed: [],
+      heldPushes: [],
+      liveActivities: [],
+      sandboxReleases: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
       turns: [],
       republished: [],
       keptUp: [],
+      resumed: [],
+      heldPushes: [],
+      liveActivities: [],
+      sandboxReleases: [],
     });
   }),
 );
@@ -133,6 +173,10 @@ it.effect(
         turns: [instant],
         republished: [instant],
         keptUp: [instant],
+        resumed: [instant],
+        heldPushes: [instant],
+        liveActivities: [instant],
+        sandboxReleases: [instant],
       });
     }),
 );

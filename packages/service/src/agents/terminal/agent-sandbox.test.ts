@@ -125,7 +125,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         }).pipe(Effect.provide(api.layer));
 
         assert.deepEqual(listed, { sandbox: SANDBOX_STATE.STOPPED, terminals: [] });
-        assert.deepEqual(ports, { running: false, ports: [] });
+        assert.deepEqual(ports, { running: false, ports: [], labels: [] });
         assert.deepEqual(
           started,
           Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
@@ -167,7 +167,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
   );
 
   it.effect(
-    "a running sandbox's ports are the ones its servers listen on, each once, never root's or the browser's, and tables it could not read are an outage",
+    "a running sandbox's ports are the ones its servers listen on, each once, never root's or the browser's, each with what serves it, and tables it could not read are an outage",
     () =>
       Effect.gen(function* () {
         // The kernel's tables as `cat` prints them, by hand: the sandbox's init on 23456 as root,
@@ -183,7 +183,23 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           "   0: 00000000000000000000000000000000:0BB8 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1002        0 4500 1",
           "   1: 00000000000000000000000000000000:1435 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 4600 1",
         ];
-        const api = standing(SANDBOX_STATUS.RUNNING, tables);
+        // Then the listeners the script printed as root: both servers started by one `pnpm dev`, as a
+        // monorepo's are, so each is named by what listens on it, and a line it could not have printed.
+        const listeners = [
+          "vespin-listeners",
+          JSON.stringify({
+            inode: "4200",
+            command: ["pnpm", "dev"],
+            listener: ["node", "/w/node_modules/next/dist/bin/next", "dev"],
+          }),
+          JSON.stringify({
+            inode: "4600",
+            command: ["pnpm", "dev"],
+            listener: ["/w/node_modules/.bin/vite", "--port", "5173"],
+          }),
+          "not a listener",
+        ];
+        const api = standing(SANDBOX_STATUS.RUNNING, [...tables, ...listeners]);
         const unread = standing(SANDBOX_STATUS.RUNNING, [], 1);
 
         const ports = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
@@ -195,7 +211,14 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           ),
         );
 
-        assert.deepEqual(ports, { running: true, ports: [3000, 5173] });
+        assert.deepEqual(ports, {
+          running: true,
+          ports: [3000, 5173],
+          labels: [
+            { port: 3000, label: "next dev" },
+            { port: 5173, label: "vite" },
+          ],
+        });
         assert.equal(api.state.commands[0]?.running, RUNNING_SESSION);
         assert.ok(outage instanceof SandboxUnavailable);
       }),
@@ -227,6 +250,159 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           }),
         );
         assert.deepEqual(renamedOther, Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND }));
+      }),
+  );
+
+  it.effect(
+    "a run action starts one shell, and a second press while it runs starts nothing, while one in an idle shell is typed there again; a stopped sandbox is refused, never woken",
+    () =>
+      Effect.gen(function* () {
+        const action = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
+        const run = { actionId: action, label: "Dev server", command: "pnpm dev", environment: {} };
+        // tmux as the run leaves it: the shell it starts lists as running the command, marked with its action.
+        let shells: string[] = [];
+        let foreground = "node";
+        const sandbox = memorySandbox({
+          run: ({ ask }) => {
+            const scriptAt = ask.args.indexOf("-c") + 1;
+            const tmuxArgs = ask.args.slice(scriptAt + 2);
+            if (tmuxArgs.length === 0) return ran(0, shells.join("\n"));
+            if (tmuxArgs[0] === "new-session") {
+              const id = (tmuxArgs[tmuxArgs.indexOf("-s") + 1] ?? "").replace("terminal-", "");
+              shells = [
+                [
+                  `terminal-${id}`,
+                  "100",
+                  field("Dev server"),
+                  field(foreground),
+                  field("/workspace/repository"),
+                  field(action),
+                ].join(" "),
+              ];
+            }
+            return ran(0);
+          },
+        });
+        sandbox.stand({
+          name: SANDBOX,
+          status: SANDBOX_STATUS.RUNNING,
+          running: RUNNING_SESSION,
+          tags: { sessionId: SESSION },
+        });
+        const layer = Layer.provide(
+          agentSandboxLayer,
+          Layer.mergeAll(
+            LOCAL_AGENT_ENVIRONMENT,
+            Layer.succeed(AgentImage, FIXTURE_IMAGE),
+            sandbox.layer,
+          ),
+        );
+        const stopped = standing(SANDBOX_STATUS.STOPPED);
+        const other = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
+
+        const { first, again } = yield* Effect.gen(function* () {
+          const agentSandbox = yield* AgentSandbox;
+          const first = yield* agentSandbox.run(SESSION, SHELL, run);
+          const again = yield* agentSandbox.run(SESSION, other, run);
+          return { first, again };
+        }).pipe(Effect.provide(layer));
+        const startedBefore = sandbox.state.commands.length;
+        foreground = "bash";
+        shells = shells.map((line) => line.replace(field("node"), field("bash")));
+        const idle = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, other, run),
+        ).pipe(Effect.provide(layer));
+        const refused = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, SHELL, run),
+        ).pipe(Effect.provide(stopped.layer));
+
+        assert.deepEqual(
+          first,
+          Result.succeed({
+            id: SHELL,
+            title: "Dev server",
+            command: "node",
+            cwd: "/workspace/repository",
+            running: true,
+            runAction: action,
+          }),
+        );
+        assert.deepEqual(again, first);
+        const started = sandbox.state.commands.filter((command) =>
+          command.ask.args.includes("new-session"),
+        );
+        assert.equal(started.length, 1);
+        const typed = sandbox.state.commands
+          .slice(startedBefore)
+          .filter((command) => command.ask.args.includes("send-keys"));
+        assert.equal(typed.length, 1);
+        assert.ok(typed[0]?.ask.args.includes("pnpm dev"));
+        assert.equal(Result.isSuccess(idle) && idle.success.id, SHELL);
+        assert.deepEqual(
+          refused,
+          Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
+        );
+        assert.deepEqual(stopped.state.resumed, []);
+      }),
+  );
+
+  it.effect(
+    "a run action pressed twice at once answers the one shell the first press started, its session the action's own",
+    () =>
+      Effect.gen(function* () {
+        const action = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
+        const run = { actionId: action, label: "Dev server", command: "pnpm dev", environment: {} };
+        // tmux as two presses at once leave it: both list no shell, the other press's start lands first, and this one's start is refused, its name taken.
+        let shells: string[] = [];
+        const sandbox = memorySandbox({
+          run: ({ ask }) => {
+            const scriptAt = ask.args.indexOf("-c") + 1;
+            const tmuxArgs = ask.args.slice(scriptAt + 2);
+            if (tmuxArgs.length === 0) return ran(0, shells.join("\n"));
+            if (tmuxArgs[0] !== "new-session") return ran(0);
+            shells = [
+              [
+                `terminal-${action}`,
+                "100",
+                field("Dev server"),
+                field("node"),
+                field("/workspace/repository"),
+                field(action),
+              ].join(" "),
+            ];
+            return ran(1);
+          },
+        });
+        sandbox.stand({
+          name: SANDBOX,
+          status: SANDBOX_STATUS.RUNNING,
+          running: RUNNING_SESSION,
+          tags: { sessionId: SESSION },
+        });
+        const layer = Layer.provide(
+          agentSandboxLayer,
+          Layer.mergeAll(
+            LOCAL_AGENT_ENVIRONMENT,
+            Layer.succeed(AgentImage, FIXTURE_IMAGE),
+            sandbox.layer,
+          ),
+        );
+
+        const raced = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, action, run),
+        ).pipe(Effect.provide(layer));
+
+        assert.deepEqual(
+          raced,
+          Result.succeed({
+            id: action,
+            title: "Dev server",
+            command: "node",
+            cwd: "/workspace/repository",
+            running: true,
+            runAction: action,
+          }),
+        );
       }),
   );
 

@@ -6,7 +6,6 @@ import { PAGE_THEME_VARIABLE, PAGE_WIDE_CLASS } from "@repo/features/page-theme"
 import {
   PAGE_BOUNDS,
   PAGE_OWNER,
-  type PageOwner,
   type PageShower,
   type PageWrite,
   pageTitleSchema,
@@ -14,7 +13,6 @@ import {
 import { isSecretFile } from "@repo/features/task-wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
-import { writtenPageMention } from "../agents/written-mentions.js";
 import {
   ACTION_RESULT_STATUS,
   type UnparsedWireValue,
@@ -24,7 +22,7 @@ import {
 import { logStoreFailure } from "../http/store-failure.js";
 
 /**
- * page-tool.ts -- `show_page`, every agent's one tool for a page: an interactive HTML document shown in the developer's side panel, the task's or, for an agent on no task, its own.
+ * page-tool.ts -- `show_page`, every agent's one tool for a page: an interactive HTML document shown in the developer's side panel, its task's.
  *
  * A page is one self-contained HTML document, its scripts and styles inline
  * or from cdnjs, which the Mac draws in a sandbox that reaches no network
@@ -33,14 +31,13 @@ import { logStoreFailure } from "../http/store-failure.js";
  * through the same door its own file tools reach the sandbox by, bounded and
  * never read whole past the bound. Naming a page shown before writes its next version, and naming
  * none makes a new page, so an agent revises a page rather than piling up
- * copies of it. The answer carries the page's id and version, and its
- * mention ready to write (`../agents/written-mentions.ts`), and never the
- * HTML, which the model wrote and need not read again.
+ * copies of it. The answer carries the page's id and version, and the id of
+ * the task it stands on, which its link is built from
+ * (`../agents/link-rule.ts`), and never the HTML, which the model wrote and
+ * need not read again.
  *
- * Note that the account and what the page stands on are the binding the
- * service built from the conversation, never an argument: the
- * conversation's task, or, for a coding agent on no task, the agent itself,
- * whose pages are its own. Every outcome is a result the model reads, never a failure of the
+ * Note that the account and the task the page stands on are the binding the
+ * service built from the conversation, never an argument. Every outcome is a result the model reads, never a failure of the
  * call, and a refusal says how to mend the call.
  */
 
@@ -51,10 +48,10 @@ interface PageSandbox {
   }) => PromiseLike<ReadableStream<Uint8Array> | null>;
 }
 
-/** Where a call's page is written: the account and what the page stands on that the service bound, and, for an agent with one, its sandbox, opened on first use, and the checkout a relative path is read from. */
+/** Where a call's page is written: the account and the task that the service bound, and, for an agent with one, its sandbox, opened on first use, and the checkout a relative path is read from. */
 export interface PageToolBinding {
   readonly userId: string;
-  readonly owner: PageOwner;
+  readonly taskId: string;
   readonly sandbox?: {
     readonly door: () => Promise<PageSandbox>;
     readonly checkout: string;
@@ -71,10 +68,7 @@ export const SHOW_PAGE_REFUSAL = {
   TOO_LARGE: `Not shown: the page is larger than ${PAGE_BOUNDS.MAX_HTML_CHARS / 1024} KB. Inline less data, or load a library from cdnjs rather than inlining it.`,
   NO_PAGE:
     "Not shown: this task has no page with that id. Leave `page` out to make a new page, or name one you showed on this task.",
-  NO_OWN_PAGE:
-    "Not shown: you have no page with that id. Leave `page` out to make a new page, or name one you showed yourself.",
   NO_TASK: "Not shown: this task no longer exists.",
-  NO_AGENT: "Not shown: you could not be read just now as an agent of this workspace.",
   UNAVAILABLE: "Not shown: the page could not be saved just now. The call may be made again.",
 } as const;
 
@@ -127,8 +121,7 @@ const PAGE_LAYOUT_WORDS =
 export const CODER_SHOW_PAGE_TOOL = {
   name: AGENT_TOOL.SHOW_PAGE,
   description:
-    "Show the developer an interactive HTML page in your transcript, your task's or, on no task, " +
-    "your own: a chart, a table to " +
+    "Show the developer an interactive HTML page in your transcript, your task's: a chart, a table to " +
     "sort, a mockup of a screen, or a comparison they can click through, when it says more than " +
     "a diagram or words would. Write the page as one self-contained HTML file in your sandbox, " +
     "its scripts and styles inline and libraries only from https://cdnjs.cloudflare.com, then " +
@@ -143,8 +136,8 @@ export const CODER_SHOW_PAGE_TOOL = {
     `of a page set side by side, those pictures with \`${AGENT_TOOL.SHOW_IMAGE}\` and not the page. ` +
     "Call it again with the `page` it answered to " +
     "replace that page with a new version rather than making another. Answers `accepted` with the " +
-    "page's id, its version, and its mention, the `[@title](link)` to name it by in your words, " +
-    "or `rejected` and why nothing was shown.",
+    "page's id, its version, and the taskId or agentId it stands on, or `rejected` and why " +
+    "nothing was shown.",
   inputSchema: CODER_SHOW_PAGE_INPUT,
 } as const;
 
@@ -217,26 +210,6 @@ function htmlRefusal(html: string): string | undefined {
   return html.length > PAGE_BOUNDS.MAX_HTML_CHARS ? SHOW_PAGE_REFUSAL.TOO_LARGE : undefined;
 }
 
-/**
- * The page's mention as the agent writes it, its title as its name; none
- * where its task's workspace cannot be read just now, since the page was
- * shown all the same.
- */
-const pageMentionOf = (binding: PageToolBinding, pageId: string, title: string) =>
-  writtenPageMention(binding.userId, binding.owner, pageId, title).pipe(
-    Effect.tapError(logStoreFailure),
-    Effect.option,
-    Effect.map((mention) => Option.getOrUndefined(Option.flatten(mention))),
-  );
-
-/** Why a write found nothing to write on: no such page of the owner where one was named, else no owner. */
-function missedRefusal(owner: PageOwner, named: boolean): string {
-  if (owner.kind === PAGE_OWNER.AGENT) {
-    return named ? SHOW_PAGE_REFUSAL.NO_OWN_PAGE : SHOW_PAGE_REFUSAL.NO_AGENT;
-  }
-  return named ? SHOW_PAGE_REFUSAL.NO_PAGE : SHOW_PAGE_REFUSAL.NO_TASK;
-}
-
 /** One call of `show_page` on what the service bound the page to, by the agent that makes it, answered as the result the model reads. */
 export function runShowPage(
   binding: PageToolBinding,
@@ -255,19 +228,24 @@ export function runShowPage(
       page === undefined
         ? { title, html: html.success }
         : { title, html: html.success, pageId: page };
-    const written = yield* writePage(binding.userId, binding.owner, write, shownBy).pipe(
-      Effect.tapError(logStoreFailure),
-      Effect.option,
-    );
+    const { userId, taskId } = binding;
+    const written = yield* writePage(
+      userId,
+      { kind: PAGE_OWNER.TASK, taskId },
+      write,
+      shownBy,
+    ).pipe(Effect.tapError(logStoreFailure), Effect.option);
     if (Option.isNone(written)) return showPageRejected(SHOW_PAGE_REFUSAL.UNAVAILABLE);
     if (Option.isNone(written.value)) {
-      return showPageRejected(missedRefusal(binding.owner, page !== undefined));
+      // Note that a write that finds nothing names no such page where it named one, else no task.
+      return showPageRejected(
+        page === undefined ? SHOW_PAGE_REFUSAL.NO_TASK : SHOW_PAGE_REFUSAL.NO_PAGE,
+      );
     }
     const { id, version } = written.value.value;
-    const mention = yield* pageMentionOf(binding, id, title);
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
-      page: { id, version, ...(mention === undefined ? undefined : { mention }) },
+      page: { id, version, taskId },
     } satisfies WireRecord;
   });
 }

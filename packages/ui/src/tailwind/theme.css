@@ -329,6 +329,9 @@
   /* How far in from a compact chip's start a box stands centered on the
      chip's mark, as a board card's box stands over its status chip. */
   --spacing-select-box-inset: calc((var(--spacing-chip-compact) - var(--spacing-select-box)) / 2);
+  /* A draft under rows that keep that gutter starts at it, its hairline taken
+     out as from the inset (`--spacing-task-row-draft`). */
+  --spacing-task-row-draft-gutter: calc(var(--spacing-select-gutter) - 1px);
   --grid-template-columns-tasks-list: var(--tasks-list-columns);
   --spacing-dialog-action-gap: var(--ui-dialog-action-gap);
   --spacing-dialog-action: var(--ui-dialog-action-width);
@@ -387,6 +390,8 @@
   --spacing-popover-room: var(--ui-popover-room, none);
   --spacing-hover-card-glyph: var(--ui-hover-card-glyph);
   --spacing-hover-card-list: var(--ui-hover-card-list-height);
+  /* A repository list stands six of its lines and half a seventh, so a list that scrolls shows it does. */
+  --spacing-repository-lines: calc(6.5 * var(--ui-space-24));
   --container-dialog-confirm: min(var(--ui-dialog-confirm-width), 100%);
   --container-dialog-wide: min(var(--ui-dialog-wide-width), 100%);
   --container-dialog-composer: min(var(--ui-dialog-composer-width), 100%);
@@ -607,7 +612,12 @@
   --spacing-spinner-region: 22px; /* off-scale: a ring alone in a region */
   --spacing-spinner-region-inset: var(--ui-space-24);
   --spacing-progress-height: 3px; /* off-scale: a hairline bar */
+  --spacing-progress-thin-height: var(--ui-space-2);
   --container-progress: 160px; /* off-scale: a meter's length beside a line of words */
+  /* A plan's usage rows: each window's name, its bar a meter's length, the share used, and when it resets. */
+  --grid-template-columns-usage-meters: auto minmax(0, var(--container-progress)) auto auto;
+  /* The same rows where they run the whole width they are given, their bars taking what the words leave. */
+  --grid-template-columns-usage-meters-fill: auto minmax(0, 1fr) auto auto;
   --spacing-toast-gap: var(--ui-space-8);
   --spacing-toast-inset: var(--ui-space-12);
   --spacing-toast-line-gap: var(--ui-space-2);
@@ -774,10 +784,24 @@
   --spacing-choice-fill-compact: calc(var(--ui-control-height) - var(--ui-space-4));
   --spacing-choice-segment: calc(var(--ui-control-height) - 2 * var(--ui-space-2));
   --spacing-choice-segment-compact: calc(var(--ui-control-height) - 2 * var(--ui-space-4));
+  /* The room a trough keeps above and below itself on a coarse pointer, so
+     its segments' presses reach a finger's height inside its scroll box: the
+     touch target's height less the trough's, halved, which is the control's
+     height, or a compact trough's two pixels shorter; and its corner, round
+     where it is drawn, the room's height under it left unpainted. */
+  --spacing-choice-reach: max(0px, calc((var(--ui-touch-target) - var(--ui-control-height)) / 2));
+  --spacing-choice-reach-compact: max(
+    0px,
+    calc((var(--ui-touch-target) - var(--ui-control-height)) / 2 + var(--ui-space-2))
+  );
   --spacing-caption-glyph: var(--ui-type-caption-size);
   /* A glyph at the size of the words it stands in (`ListRow`'s lead). */
   --spacing-words-glyph: 1em;
   --radius-choice-segment: calc(var(--ui-control-radius) - var(--ui-space-2));
+  --radius-choice-trough:
+    var(--ui-control-radius) / calc(var(--ui-control-radius) + var(--spacing-choice-reach));
+  --radius-choice-trough-compact:
+    var(--ui-control-radius) / calc(var(--ui-control-radius) + var(--spacing-choice-reach-compact));
   --color-choice-thumb: var(--ui-color-thumb);
   --color-tone-ink: var(--ui-tone-ink);
 
@@ -845,6 +869,7 @@
   --spacing-menu-label: calc(var(--ui-row-inset) + var(--ui-menu-glyph) + var(--ui-icon-gap));
   --spacing-submenu-reach: calc(100% + 9px - var(--ui-submenu-shift, 0px));
   --spacing-submenu: 200px; /* off-scale: a submenu's width */
+  --spacing-submenu-hinted: 280px; /* off-scale: a submenu whose rows wear a hint under their names */
   --spacing-ui-32: var(--ui-space-32);
   --spacing-disclosure-row: 36px; /* off-scale: a file row's height */
   /* A place in a column standing tall enough for a face. */
@@ -896,6 +921,11 @@
   --spacing-attachment-chip-remove-out: 9px; /* off-scale: half the disc past the corner */
   --spacing-attachment-chip-check: 10px; /* off-scale: the landed check's glyph */
   --spacing-attachment-chip-meter: 2px; /* off-scale: a hairline bar */
+  /* A picture named in a line of words (`components/attachment-ref/`): its
+     thumbnail on the line, a hair taller than the words' glyphs, and the
+     preview its card hangs, no wider and no taller than this. */
+  --spacing-attachment-ref-thumb: 1.25em;
+  --spacing-attachment-ref-preview: 240px; /* off-scale: a preview's longest side */
   --radius-attachment-chip-face: calc(var(--ui-radius-8) - 1px);
   --shadow-attachment-chip-disc: inset 0 0 0 1px var(--ui-color-border-strong);
   /* A video played in place (`components/video-player/`): no taller than a
@@ -1073,6 +1103,11 @@
     var(--ui-popover-room, 100vh)
   );
   --spacing-popover-narrow: var(--ui-popover-width-narrow);
+  /* The Resources popover's card, a table of three columns wide, and a
+     process's name stepped in a short way for each process above it
+     (`--resource-depth`), so a deep tree still leaves its names room. */
+  --spacing-popover-wide: var(--ui-popover-width-wide);
+  --spacing-resource-nest: calc(var(--resource-depth, 0) * var(--ui-space-12));
   --spacing-page-versions-end: calc(var(--ui-control-gap) - var(--ui-space-2));
   --spacing-image-diff-side: 200px; /* off-scale: a side's least before two stop fitting to a row */
   --spacing-snippet-pending: calc(var(--snippet-rows) * var(--snippet-row));
@@ -1092,14 +1127,12 @@
   );
   --spacing-chapter-rail: min(calc(var(--ui-space-64) * 4), 40%);
   --spacing-review-badge: 10px; /* off-scale: a standing's disc at a face's corner */
-  /* A pull request's conversation (`agent-pull-request-tab.tsx`): the
-     words' field growing from a few lines' height; a branch's chip at its
-     widest; a label's dot in its GitHub color (`--label-dot`); a line
+  /* A pull request's conversation (`agent-pull-request-tab.tsx`): a
+     branch's chip at its widest; a label's dot in its GitHub color (`--label-dot`); a line
      comment's measure; a boxed entry's inset, its hairline counted
      (`--boxed-inset`); a check's glyph and a deployment's door; and the
      annotation card's measure and columns, which its sheet sets
      (`.annotation-card`). */
-  --spacing-comment-editor: calc(3lh + 2 * var(--ui-space-6));
   --spacing-branch-chip: 22rem; /* off-scale: a branch's name before it is cut */
   --spacing-branch-base: min(22rem, 50%); /* off-scale: the base's, at most half its row */
   --spacing-label-dot: 10px; /* off-scale: a label's swatch */
@@ -1177,6 +1210,13 @@
     auto-fit,
     minmax(min(220px, 100%), 1fr)
   ); /* off-scale: a video's bar, its play, time, scrubber, Expand, and Full screen */
+  /* An option's media on its card (`components/option-media/`): equal
+     tiles, two to a phone's card, and at most four to a wide one so each
+     stays big enough to compare, the rest wrapping under them. */
+  --grid-template-columns-option-media: repeat(
+    auto-fill,
+    minmax(max(min(112px, 100%), 22%), 1fr)
+  ); /* off-scale: two thumbnails to a phone's card, four to a wide one */
   /* The description's comments (`description-comments.tsx`): the margin past the column
      its cards stand in at their own width, a reply's line set in under the
      name past the writer's mark, and the quote's edge, struck where its

@@ -8,6 +8,8 @@ import type { SoundWhen } from "./sound-when.js";
 export const SETTINGS_PAGE = {
   /** Who is signed in and the ways out, the page Settings opens on. */
   ACCOUNT: "account",
+  /** How the app works for the account wherever it signs in: where links and new tasks open, how agents send and commit, and how a finished agent tells the account. */
+  PREFERENCES: "preferences",
   APPEARANCE: "appearance",
   /** The window's own shortcuts, listed to be found rather than changed. */
   SHORTCUTS: "shortcuts",
@@ -22,18 +24,14 @@ export const SETTINGS_PAGE = {
   HOSTS: "hosts",
   /** The services the account connects for its agents, each the account's on the service rather than a stored setting. */
   INTEGRATIONS: "integrations",
-  /** The outside agents the account lets into its MCP server and how to connect one, each the account's on the service rather than a stored setting. */
+  /** The outside agents the account lets into its MCP server and how to connect one, and the `vespin` command's install and sign-in, each the account's on the service rather than a stored setting. */
   MCP: "mcp",
-  /** The `vespin` command: how to install it, and its sign-in, each the account's on the service rather than a stored setting. */
-  CLI: "cli",
   /** The skills the account installs into the app for its agents, its own and its workspace's, each the service's rather than a stored setting. */
   SKILLS: "skills",
   /** A workspace the account is in: its name and the account's role, its members, and its GitHub repositories, each the service's rather than a stored setting. */
   WORKSPACE: "workspace",
-  /** The environment variables the workspace hands every member's cloud agents, the service's rather than a stored setting, their values never shown. */
+  /** What the workspace's cloud agents start with: the environment variables it hands them, their values never shown, its install script, and each repository's setup and archive scripts, the service's rather than a stored setting. */
   ENVIRONMENT: "environment",
-  /** How the workspace's cloud agent sandboxes are set up, its install script and each repository's setup script, the service's rather than a stored setting. */
-  CLOUD_SETUP: "cloud-setup",
   /** What this Mac lets agents do on it, the stored switch for running commands here, and whether the app opens as it starts. */
   THIS_MAC: "this-mac",
   /** The features the account can turn on before they are finished, each the account's on the service rather than a stored setting. */
@@ -59,22 +57,20 @@ export const SETTING_SECTION = {
   LINES: "lines",
   /** How code looks, the third: the syntax themes, the type, its size and line height, and ligatures. */
   TEXT: "text",
-  /** Where the account's app links open, a group of its own on Account, under who is signed in. */
-  LINKS: "links",
-  /** What New task does once a task starts, a group of its own on Account, under Links. */
-  TASKS: "tasks",
-  /** Whether this copy of the app counts how its features are used, a group of its own on Account, under Tasks. */
+  /** Where the account's app links open, and whether a task New task starts opens, the first group on Preferences. */
+  GENERAL: "general",
+  /** Whether this copy of the app counts how its features are used, a group of its own on Account, under who is signed in. */
   PRIVACY: "privacy",
   /** Whether the app opens as this Mac starts, a group of its own on This Mac, under its own rows. */
   STARTUP: "startup",
   /** The microphone dictation listens on, a group of its own on This Mac, under the permission that lets the app listen. */
   MICROPHONE: "microphone",
-  /** How an agent's message box sends while its turn runs, a group of its own on Agents, under the default model. */
-  COMPOSER: "composer",
-  /** Who authors an agent's commits, a group of its own on Account, under the message box. */
-  COMMITS: "commits",
-  /** Whether and which sound plays, and whether a notification is posted, as an agent finishes, a group of its own on Account, under Commits. */
-  SOUNDS: "sounds",
+  /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */
+  AGENTS: "agents",
+  /** How a new agent's actions are approved, under the default model's rows in Settings › Agents' New agents group. */
+  NEW_AGENTS: "new-agents",
+  /** Whether and which sound plays, and whether a notification is posted, as an agent finishes, a group of its own on Preferences, under Agents. */
+  NOTIFICATIONS: "notifications",
 } as const;
 
 export type SettingSection = (typeof SETTING_SECTION)[keyof typeof SETTING_SECTION];
@@ -139,6 +135,8 @@ export interface SettingsVisibility {
 export interface SettingOption {
   value: string;
   label: string;
+  /** What the option does, said under its name; none where its name says it. */
+  hint?: string | undefined;
 }
 
 /**

@@ -1,0 +1,86 @@
+/* settings-ordered-rows.css -- a run of settings rows the reader orders
+   (`settings-ordered-rows.tsx`): ruled as its card's own rows, each led by
+   the grip it is dragged by, sliding aside on the motion tokens while
+   another is dragged past it, and faded where it stands while it is the one
+   carried. */
+
+@layer components {
+  .ui-settings-ordered-rows {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ui-settings-ordered-rows[data-dragging="true"] {
+    cursor: grabbing;
+  }
+
+  /* A card that holds a run with grips keeps a gutter for them before every
+     row's own inset, its header's too, so every mark and
+     every name in the card stand in one column whether or not a grip leads
+     them; as does a card whose run keeps it without grips (`gutter`), so
+     its marks line up with those of a card with grips beside it. Note that
+     a row's own rows, such as its steps', take none. */
+  .ui-settings-section-card:has(.ui-settings-ordered-rows[data-gutter="true"]) {
+    --ui-settings-order-gutter: calc(var(--ui-space-12) + var(--ui-space-12));
+  }
+
+  .ui-settings-section-card:has(.ui-settings-ordered-rows[data-gutter="true"])
+    .ui-settings-row:not(.ui-settings-row *) {
+    padding-inline-start: var(--ui-settings-order-gutter);
+  }
+
+  .ui-settings-ordered-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    transition:
+      transform var(--ui-duration-fast) var(--ui-spring-fast),
+      opacity var(--ui-duration-quick) var(--ui-motion-exit);
+  }
+
+  .ui-settings-ordered-row + .ui-settings-ordered-row {
+    border-top: 1px solid var(--ui-color-border);
+  }
+
+  .ui-settings-ordered-row[data-dragging="true"] {
+    opacity: 0.4;
+  }
+
+  /* The grip stands at the card's own inset, in the gutter the card keeps
+     before every row, a mark's gap from the row's mark, and centered on the
+     row's name and state as the mark is. */
+  .ui-settings-ordered-grip {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--ui-settings-row-inline);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ui-space-12);
+    color: var(--ui-color-text-muted);
+    cursor: grab;
+    touch-action: none;
+  }
+
+  /* A row's meter hangs below its words into room the row keeps for it
+     (`settings-row.css`), which the grip's centering leaves out as the
+     mark's does. */
+  .ui-settings-ordered-row:has(.ui-settings-row-meter) .ui-settings-ordered-grip {
+    inset-block-end: calc(var(--ui-space-8) + var(--ui-space-2));
+  }
+
+  .ui-settings-ordered-grip > svg {
+    width: var(--ui-space-12);
+    height: var(--ui-space-12);
+  }
+
+  .ui-settings-ordered-body {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

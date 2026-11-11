@@ -2,9 +2,9 @@
  * invitation-mail.ts -- a workspace invitation emailed to the address it was made for, through Resend.
  *
  * An invitation an owner or an admin makes from Settings is mailed to the
- * invited address as it is made (`workspace-invitations-procedures.ts`), as
- * ReviewStage/stage mailed its teammate invitations: one POST to Resend's
- * `/emails` (https://resend.com/docs/api-reference/emails/send-email) from
+ * invited address as it is made (`workspace-invitations-procedures.ts`):
+ * one POST to Resend's `/emails`
+ * (https://resend.com/docs/api-reference/emails/send-email) from
  * the sender the deployment names, to the invited address alone, saying who
  * invited them to which workspace, the role they join as, and the day the
  * link stops working, with a button to the accept page, whose bare link the
@@ -12,12 +12,12 @@
  * or its initial where it has none, a heading, the inviter's line with their
  * picture or initial, the button, and the expiry. Nothing is mailed when an
  * invitation is canceled, and an address already invited is refused before
- * anything is sent, as stage did.
+ * anything is sent.
  *
  * The deployment holds the Resend key (`RESEND_API_KEY`, the one the
  * feedback form sends with) and the sender (`INVITE_FROM`, such as
  * `Name <invites@…>` on a domain Resend has verified). Without either,
- * nothing is mailed and the invitation is made as before, its link copied by
+ * nothing is mailed and the invitation is still made, its link copied by
  * hand; the build says so once, by the variables' names. A send Resend
  * refuses or never answers leaves the invitation standing, since the link
  * the owner can copy is the one the email carries, and is logged by its
@@ -54,10 +54,8 @@ const MAIL_UNSET = `${INVITATION_MAIL_ENVIRONMENT.RESEND_API_KEY} or ${INVITATIO
  * The email's colors, light and dark: the brand's own, read off the brand
  * table `@repo/brand` generates `@repo/ui`'s palette from, so a change of
  * brand reaches the letter with no second copy to forget. Each is spelled as
- * a plain hex because an email client reads no custom property. The page is
- * the sidebar's ground, the letter's card the overlay, and the button the
- * accent's fill under its own words. The inviter's initial sits on the chip's
- * edge, and the footer is the quiet ink, which still reads at AA on the page.
+ * a plain hex because an email client reads no custom property. The footer's
+ * quiet ink still reads at AA on the page.
  */
 const MAIL_PALETTE = {
   LIGHT: {
@@ -93,9 +91,7 @@ const PICTURE_DENSITY = 2;
  * The email's look, inline, since an email client takes inline styles alone:
  * a light letter by default, which the dark-mode block below turns dark where
  * the client honors `prefers-color-scheme`. The layout is tables, which
- * every client, Outlook's Word engine among them, draws the same. One card
- * holds the workspace's picture, the heading, the inviter's line, the button,
- * and the expiry; the footer stands under it on the page.
+ * every client, Outlook's Word engine among them, draws the same.
  */
 const EMAIL_STYLE = {
   BODY: `background-color:${LIGHT.GROUND};margin:0;padding:0;-webkit-text-size-adjust:100%`,
@@ -146,7 +142,6 @@ interface InvitationLetter {
   readonly workspaceName: string;
   /** Who invited them: their name, or their address where their account has no name. */
   readonly inviterLabel: string;
-  /** The role they join as. */
   readonly role: WorkspaceInvitation["role"];
   /** When the link stops working, as the invitation's ISO time. */
   readonly expiresAt: string;
@@ -176,10 +171,10 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** How the letter names the role an invitee joins as. */
+/** How the letter names the role an invitee joins as: an admin alone, since a member is what joining makes anyone. */
 const ROLE_WORDS = {
-  [INVITATION_ROLE.MEMBER]: "a member",
-  [INVITATION_ROLE.ADMIN]: "an admin",
+  [INVITATION_ROLE.MEMBER]: "",
+  [INVITATION_ROLE.ADMIN]: " as an admin",
 } as const satisfies Record<WorkspaceInvitation["role"], string>;
 
 /** The day an invitation expires, in words that name no time zone, since the reader's is unknown. */
@@ -228,7 +223,7 @@ function invitationEmail(letter: InvitationLetter) {
   const subject = `You're invited to join ${workspaceName} on ${PRODUCT_NAME}`;
   const preheader = `${inviterLabel} invited you to join ${workspaceName} on ${PRODUCT_NAME}.`;
   const heading = `Join ${workspaceName} on ${PRODUCT_NAME}`;
-  const byline = `${inviterLabel} invited you as ${ROLE_WORDS[role]}.`;
+  const byline = `${inviterLabel} invited you${ROLE_WORDS[role]}.`;
   const expiry = `Expires ${EXPIRY_DAY.format(Date.parse(expiresAt))}.`;
   const footnote = `Sent to ${email}. Not expecting it? You can ignore this email.`;
   const font = EMAIL_STYLE.FONT;

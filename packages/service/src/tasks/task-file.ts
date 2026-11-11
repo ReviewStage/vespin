@@ -102,8 +102,8 @@ export function readTaskFile(
  * The window of the file the request names, of a repository the
  * workspace's installation reaches, as GitHub holds it now or at the commit
  * it names, or why it is not shown: a task's file read by the place its
- * task names, and the read of a place no task names, such as an agent with
- * no task, whose caller has already confirmed the account is a member of
+ * task names, and the read of a place no task names, such as a New task's
+ * repository, whose caller has already confirmed the account is a member of
  * the workspace.
  */
 export function readRepositoryFileWindow(

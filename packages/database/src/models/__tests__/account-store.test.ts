@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { AGENT_ENTER, COMMIT_AUTHOR, EXPERIMENT, SOUND_WHEN } from "@repo/settings";
@@ -145,11 +146,13 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
         assert.equal(chosen.updatedAt, undefined);
         yield* writeAccountPreferences(userId, { agentEnter: AGENT_ENTER.QUEUE });
         yield* writeAccountPreferences(userId, { commitAuthor: COMMIT_AUTHOR.APP });
+        yield* writeAccountPreferences(userId, { agentPermissionMode: AGENT_PERMISSION_MODE.ASK });
         yield* writeAccountPreferences(userId, { setupFinished: true });
         // Note that the place is written by one machine and read by another, as setup resumed elsewhere reads it.
         yield* writeAccountPreferences(userId, { setupPlace: SETUP_PLACE });
         yield* writeAccountPreferences(userId, { soundWhen: SOUND_WHEN.BACKGROUND });
         yield* writeAccountPreferences(userId, { completionSound: COMPLETION_SOUND.QUACK });
+        yield* writeAccountPreferences(userId, { askSound: COMPLETION_SOUND.QUESTION });
         yield* writeAccountPreferences(userId, { turnNotifications: true });
         yield* writeAccountPreferences(userId, { onboardingSurvey: ONBOARDING_SURVEY });
 
@@ -159,10 +162,12 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
           linkOpen: LINK_OPEN.MAC_APP,
           agentEnter: AGENT_ENTER.QUEUE,
           commitAuthor: COMMIT_AUTHOR.APP,
+          agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
           setupFinished: true,
           setupPlace: SETUP_PLACE,
           soundWhen: SOUND_WHEN.BACKGROUND,
           completionSound: COMPLETION_SOUND.QUACK,
+          askSound: COMPLETION_SOUND.QUESTION,
           turnNotifications: true,
           onboardingSurvey: ONBOARDING_SURVEY,
         });

@@ -1,16 +1,3 @@
-import { Database } from "@repo/database/core/query";
-import { WORKSPACE_NAME } from "@repo/database/models/workspace-store";
-import { invitation, member, organization, user } from "@repo/database/schemas/auth";
-import {
-  INVITATION_OFFER_REFUSAL,
-  INVITATION_ROLE,
-  type InvitationOfferAnswer,
-  type WorkspaceInvitation,
-} from "@repo/features/workspace-invitation-wire";
-import { and, eq } from "drizzle-orm";
-import { Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
-
 /**
  * invitation-offers.ts -- one invitation as its recipient is offered it on the accept page, read off the organization plugin's own rows.
  *
@@ -25,6 +12,19 @@ import { SqlSchema } from "effect/sql";
  * The workspace is named as its members read it (`WORKSPACE_NAME`), an
  * account's first workspace by its owner's name as it stands now.
  */
+
+import { Database } from "@repo/database/core/query";
+import { WORKSPACE_NAME } from "@repo/database/models/workspace-store";
+import { invitation, member, organization, user } from "@repo/database/schemas/auth";
+import {
+  INVITATION_OFFER_REFUSAL,
+  INVITATION_ROLE,
+  type InvitationOfferAnswer,
+  type WorkspaceInvitation,
+} from "@repo/features/workspace-invitation-wire";
+import { and, eq } from "drizzle-orm";
+import { Effect, Option, Schema } from "effect";
+import { SqlSchema } from "effect/sql";
 
 /** The plugin's status for an invitation still waiting on its recipient. */
 const PENDING = "pending";

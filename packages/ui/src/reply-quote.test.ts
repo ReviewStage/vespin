@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
-  MAX_REPLY_CHARS,
   MESSAGE_BLOCK,
   type MessageBlock,
   messageBlocks,
@@ -11,9 +10,9 @@ import {
 
 /**
  * reply-quote.test.ts -- words picked out of an agent's message are kept
- * tidy and bounded; a message holds them as blockquotes set apart from the
+ * tidy; a message holds them as blockquotes set apart from the
  * developer's lines by a blank line, and reads back as the same quotes and
- * lines. Synthetic words.
+ * lines, a fenced block's lines read as its code. Synthetic words.
  */
 
 const quote = (words: string): MessageBlock => ({ kind: MESSAGE_BLOCK.QUOTE, words });
@@ -27,10 +26,8 @@ test("words picked across a message's blocks keep one blank line between them, a
   assert.equal(replyOf(" \n\t\n"), "", "nothing but space picked is no reply");
 });
 
-test("a long pick is cut to the bound and says so", () => {
-  const reply = replyOf("word ".repeat(1000));
-  assert.ok(reply.length <= MAX_REPLY_CHARS);
-  assert.ok(reply.endsWith("word…"));
+test("a fenced block's blank lines are kept as its code holds them", () => {
+  assert.equal(replyOf("Run:\n\n\n```\na\n\n\nb\n```"), "Run:\n\n```\na\n\n\nb\n```");
 });
 
 test("quotes and the developer's lines between them are written apart by a blank line, every quoted line marked", () => {
@@ -65,4 +62,9 @@ test("a > line that runs into the lines beside it is words, as Markdown would no
     lines("Above", "> not apart", "Below"),
   ]);
   assert.deepEqual(messageBlocks(">no space"), [lines(">no space")]);
+});
+
+test("a > line set apart inside a fenced block is the block's code, not a quote", () => {
+  const code = "```md\n\n> keep ``hi``\n\n```";
+  assert.deepEqual(messageBlocks(`Run:\n${code}`), [lines("Run:", ...code.split("\n"))]);
 });

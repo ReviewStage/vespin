@@ -11,7 +11,9 @@ import {
   type DevicePlatform,
   type DeviceSetup,
 } from "@repo/features/device-agent-wire";
+import { devicePlatformOf } from "@repo/features/device-platform";
 import type { MacOffer } from "@repo/features/models-wire";
+import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import {
   CHIP_LOOK,
@@ -31,7 +33,6 @@ import {
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { Schema } from "effect";
-import { devicePlatformOf } from "../device-platform.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { machineName, type ThisMac, useThisMac } from "../machine-name.js";
 import { Picker } from "../settings/picker-row.js";
@@ -79,20 +80,8 @@ const DEVICE_SETUP_WORDS = {
   [DEVICE_SETUP.FAILED]: "Couldn't set up",
 } as const satisfies Record<DeviceSetup, string>;
 
-/** What the menu and its chips say. */
-export const RUNS_ON_WORDS = {
-  LABEL: "Runs on",
-  CLOUD: "Cloud",
-  ONLINE: "Online",
-  OFFLINE: "Offline",
-  UNKNOWN: "Can't check status",
-  CHECKING: "Checking",
-  REMOVED: "Removed device",
-  NO_MATCH: "No devices match",
-} as const;
-
 /** The id the Cloud row is picked by, which no device's id is. */
-const CLOUD_ROW = "cloud";
+export const CLOUD_ROW = "cloud";
 
 /** Where New task keeps the member's last pick: Cloud's id, or a device's. */
 const KEPT = { PICK: keptKey("app.newTaskRunsOn", Schema.String) } as const;
@@ -190,8 +179,8 @@ function offerMarks(
   return unready === undefined ? { icon } : { icon, disabled: unready, why: MENU_ROW_WHY.MARK };
 }
 
-/** Cloud, then each device by what the list calls it, its platform's glyph wearing its standing's dot, one that takes no agent muted and unpicked. */
-function runsOnRows(
+/** Cloud, then each device by what the list calls it, its platform's glyph wearing its standing's dot, one that takes no agent muted and unpicked; an agent's place chip lists the same (`agent-place.tsx`). */
+export function runsOnRows(
   devices: readonly MacOffer[],
   book: PresenceBook,
   thisMac: ThisMac,
@@ -236,7 +225,7 @@ function placeRow(agent: Pick<AgentSummary, "machine" | "mac">): string | undefi
 }
 
 /** A Start's place by its Runs on row's id: the cloud, or the device it names. */
-function rowRequest(row: string): AgentRunsOnRequest {
+export function rowRequest(row: string): AgentRunsOnRequest {
   return row === CLOUD_ROW ? RUNS_ON_CLOUD : { machine: AGENT_MACHINE.DEVICE, deviceId: row };
 }
 
@@ -378,11 +367,9 @@ export function RunsOnPlace({
   const { mac } = agent;
   const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
   // Note that the agent names its device alone, so This Mac is told by its device and no name is twinned.
-  const words = cloud
-    ? RUNS_ON_WORDS.CLOUD
-    : mac === undefined
-      ? RUNS_ON_WORDS.REMOVED
-      : machineName({ deviceId: mac.deviceId, name: mac.name }, [], thisMac);
+  const words = agentRunsOnWords(agent, (named) =>
+    machineName({ deviceId: named.deviceId, name: named.name }, [], thisMac),
+  );
   const device = devices?.find(
     (each) => mac?.deviceId !== undefined && each.deviceId === mac.deviceId,
   );

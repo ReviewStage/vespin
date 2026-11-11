@@ -16,6 +16,7 @@ import {
   Banner,
   BUTTON_VARIANT,
   Button,
+  ConnectionLostNotice,
   GAP,
   PauseIcon,
   PlayIcon,
@@ -24,8 +25,10 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  UsageLimitNotice,
   ViewingAsBanner,
 } from "@repo/ui";
+import { CONNECTION_LOST_PROVIDER, USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -80,7 +83,7 @@ function Looks(): React.JSX.Element {
             </>
           }
         >
-          <Text>Sam archived this agent: superseded by the new flow</Text>
+          <Text>This agent is archived</Text>
         </Banner>
       </div>
       <div className="catalog-frame">
@@ -120,6 +123,41 @@ function Banners(): React.JSX.Element {
             cannot push to.
           </Banner>
         </div>
+      </CatalogSection>
+      <CatalogSection id="banner-usage-limit" title="Usage limit">
+        <Stack gap={GAP.FIELD}>
+          <UsageLimitNotice
+            notice={{ agent: USAGE_LIMIT_AGENT.CLAUDE, resetsAt: Date.UTC(2026, 10, 9, 23) }}
+          />
+          <UsageLimitNotice notice={{ agent: USAGE_LIMIT_AGENT.CODEX, resetsAt: null }} />
+          <UsageLimitNotice
+            notice={{
+              agent: USAGE_LIMIT_AGENT.CLAUDE,
+              resetsAt: null,
+              moved: { from: "Work plan", to: "Personal plan" },
+            }}
+          />
+          <UsageLimitNotice
+            notice={{
+              agent: USAGE_LIMIT_AGENT.CODEX,
+              resetsAt: null,
+              moved: { from: "dean@acme.dev", to: "API key · sk-…a91F" },
+            }}
+          />
+        </Stack>
+      </CatalogSection>
+      <CatalogSection id="banner-connection-lost" title="Connection lost">
+        <Stack gap={GAP.FIELD}>
+          <ConnectionLostNotice
+            notice={{ provider: CONNECTION_LOST_PROVIDER.ANTHROPIC, restoredAt: null }}
+          />
+          <ConnectionLostNotice
+            notice={{
+              provider: CONNECTION_LOST_PROVIDER.OPENAI,
+              restoredAt: Date.UTC(2026, 10, 9, 23, 40),
+            }}
+          />
+        </Stack>
       </CatalogSection>
       <CatalogSection id="banner-viewing-as" title="Viewing as a member">
         <Stack gap={GAP.FIELD}>

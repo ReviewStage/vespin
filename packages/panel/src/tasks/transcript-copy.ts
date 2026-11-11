@@ -1,3 +1,12 @@
+import {
+  AGENT_PART,
+  type AgentPart,
+  agentRows,
+  isDelegation,
+  messageWords,
+  placedMessages,
+  turnStretches,
+} from "@repo/features/agent-parts";
 import type { Replay } from "@repo/features/agent-replay";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
@@ -10,6 +19,9 @@ import {
   applyMessagesPage,
 } from "@repo/features/agent-wire";
 import { threadLineTitle, threadLineWords } from "@repo/features/inbox-wire";
+import { cardTitle, plainWords } from "@repo/features/plain-words";
+import { blockSays, bodyWords, TOOL_BLOCK, type ToolBlock } from "@repo/features/tool-call-block";
+import { delegationView, toolCallView } from "@repo/features/tool-call-model";
 import {
   CALL_KIND,
   CALL_WORDS,
@@ -22,22 +34,14 @@ import {
 } from "@repo/features/turn-rows";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { unreachedAs } from "../act.js";
-import { blockSays, bodyWords, TOOL_BLOCK, type ToolBlock } from "../ai-elements/tool.js";
 import {
-  AGENT_PART,
-  type AgentPart,
   agentMessageOf,
-  agentRows,
   commentLineOf,
   commentLineWords,
   githubLineOf,
   githubLineWords,
-  isDelegation,
-  messageWords,
-  placedMessages,
   slackLineOf,
   threadLineOf,
-  turnStretches,
   workerLines,
 } from "./agent-model.js";
 import {
@@ -56,7 +60,6 @@ import {
   stepLine,
   summaryLine,
 } from "./replay-card-model.js";
-import { cardTitle, delegationView, plainWords, toolCallView } from "./tool-call-model.js";
 import type { TranscriptReader } from "./use-agent-transcript.js";
 
 /**
@@ -205,12 +208,9 @@ function textBlock(text: string): ToolBlock {
   return { kind: TOOL_BLOCK.TEXT, text };
 }
 
-/** The blocks of a turn's rows in order, with every run of calls and every folded lead opened. */
+/** The blocks of a turn's rows in order, with every run of calls opened. */
 function rowBlocks<B>(rows: readonly TurnRow<B>[]): readonly B[] {
-  return rows.flatMap((row) => {
-    if (row.kind === TURN_ROW.BLOCK) return [row.block];
-    return row.kind === TURN_ROW.GROUP ? row.blocks : rowBlocks(row.rows);
-  });
+  return rows.flatMap((row) => (row.kind === TURN_ROW.BLOCK ? [row.block] : row.blocks));
 }
 
 /** One part of an agent's turn as a copy reads it: a delegation as the worker's call, the task its input and the worker's answer its output. */

@@ -1,0 +1,181 @@
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press menu, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it and its status changed from its ⋯, the list in landscape, and its search.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that the window is turned back upright however the flow ends, because
+# a run left in landscape fails every flow after it.
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+# Launched on the host's Inbox fixture, as `inbox.yaml` is, so the tree holds
+# the fixture's tasks, pinned, sectioned, and in two repositories, and no
+# server is reached; the fixture takes each status set
+# (`@repo/host/fixture-inbox`), which the list draws at once.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- tapOn: "Tasks"
+- assertVisible: "Pinned"
+- assertVisible: "Weekly digest email"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-list
+# A group folds under its header, heard with its count and whether it is
+# folded, and opens again.
+- tapOn: "Launch, [0-9]+, unfolded"
+- assertNotVisible: "Launch checklist"
+- tapOn: "Launch, [0-9]+, folded"
+- assertVisible: "Launch checklist"
+# A long press offers Mark done in the row's menu, and a swipe from the
+# trailing edge marks it done at once; either way the row leaves the list.
+# Note that a row may stand below the fold of a short window, the folded
+# iPhone Duo's, so the list is scrolled to it.
+- scrollUntilVisible:
+    element: "Launch checklist"
+    direction: DOWN
+- waitForAnimationToEnd
+- longPressOn: "Launch checklist"
+- assertVisible: "Mark done"
+- takeScreenshot: tasks-menu
+- tapOn: "Mark done"
+- assertNotVisible: "Launch checklist"
+- scrollUntilVisible:
+    element: "Usage alerts"
+    direction: DOWN
+- waitForAnimationToEnd
+# Note that a swipe on a split view's sidebar reads as a tap under Maestro's
+# driver, so a regular window, which stands "Select a task" beside its list,
+# marks the task done from its menu instead.
+- runFlow:
+    when:
+      notVisible: "Select a task"
+    commands:
+      - swipe:
+          from: "Usage alerts"
+          direction: LEFT
+      - tapOn:
+          text: "Mark done"
+          optional: true
+- runFlow:
+    when:
+      visible: "Select a task"
+    commands:
+      - longPressOn: "Usage alerts"
+      - tapOn: "Mark done"
+- assertNotVisible: "Usage alerts"
+- takeScreenshot: tasks-marked-done
+# A long press on a task offers the panel's row menu: Mark done, Status,
+# Mark as unread, Unpin on a pinned task, and Open in browser. The pinned
+# Weekly digest email's agent is at work.
+- scrollUntilVisible:
+    element: "Weekly digest email"
+    direction: UP
+- waitForAnimationToEnd
+- longPressOn: "Weekly digest email"
+- assertVisible: "Status"
+- assertVisible: "Mark as unread"
+- assertVisible: "Unpin"
+- assertVisible: "Open in browser"
+- takeScreenshot: tasks-row-menu
+# Mark as unread draws the row's dot.
+- tapOn: "Mark as unread"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-row-unread
+# Mark done on a task whose agent is at work asks first, as the panel does,
+# and Cancel leaves the task where it stands.
+- longPressOn: "Weekly digest email"
+- tapOn: "Mark done"
+- assertVisible: "Mark as Done?"
+- assertVisible: "Stop agents"
+- takeScreenshot: tasks-mark-done-ask
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- assertVisible: "Weekly digest email"
+# Opening the task reads it, so its dot is gone once the list shows again.
+- tapOn: "Weekly digest email"
+- assertVisible: "Created by .*"
+- tapOn: "Tasks"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-row-read
+# A task opens on its Overview: its path in the bar, its name, its chips, and
+# who created it,
+# its relations, its agents with their pull request, its pages, and its
+# description.
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: UP
+- waitForAnimationToEnd
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- assertVisible: "Agents"
+- waitForAnimationToEnd
+- takeScreenshot: task-overview
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Goal"
+    direction: DOWN
+- takeScreenshot: task-description
+# A page in its Pages opens whole on the app's own page screen, its ⋯
+# offering Open in browser, and back leads to the Overview. A tap off the
+# menu closes it.
+# Note that the wait is long, because the first web view a freshly booted
+# simulator opens launches WebKit's processes, as `agent.yaml` says.
+- scrollUntilVisible:
+    element: "Invite funnel"
+    direction: UP
+- tapOn: "Invite funnel"
+- extendedWaitUntil:
+    visible: "Invites sent in the staging workspace.*"
+    timeout: 90000
+- takeScreenshot: task-page
+- tapOn: "More"
+- assertVisible: "Open in browser"
+- takeScreenshot: task-page-menu
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Goal"
+    direction: DOWN
+# Its ⋯ sets its status, which its chip says at once.
+- tapOn: "More"
+- tapOn: "Status"
+- takeScreenshot: task-status-menu
+- tapOn: "Todo"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Created by .*"
+    direction: UP
+- assertVisible: "Todo"
+- takeScreenshot: task-status-set
+# Back on the list, a landscape window stands it as a split view: two
+# columns, or on an iPad three, its groups beside the group's tasks.
+- tapOn: "Tasks"
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd
+- takeScreenshot: tasks-wide
+- setOrientation: PORTRAIT
+- waitForAnimationToEnd
+# Last, the search, a round glass button in the bar, finds the workspace's
+# tasks whatever their status, a done one among them, by every word typed. It
+# comes last, since its keyboard stands over the rows. A compact window's
+# search is the bar's round button, named as the Search tab is, so the one
+# above the tab bar is pressed, which the two's order in the tree does not
+# say once the window has turned; a split view's sidebar holds the field
+# itself.
+- runFlow:
+    when:
+      notVisible: "Search tasks"
+    commands:
+      - tapOn:
+          text: "Search"
+          above: "Tab Bar"
+- tapOn: "Search tasks"
+- inputText: "rounding"
+- assertVisible: "Ledger rounding"
+- assertNotVisible: "Weekly digest email"
+- takeScreenshot: tasks-search

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { accountBearer, type CallCredential } from "@repo/features";
+import type {
+  TerminalSocket,
+  TerminalSocketArrival,
+  TerminalSocketFrame,
+  TerminalSocketOpening,
+} from "@repo/features/relay-socket";
 import {
   TERMINAL_CONNECTION,
   TERMINAL_REFUSAL,
@@ -30,12 +36,6 @@ import {
   TERMINAL_RECONNECT,
   type TerminalClient,
 } from "./compose-terminals.js";
-import type {
-  TerminalSocket,
-  TerminalSocketArrival,
-  TerminalSocketFrame,
-  TerminalSocketOpening,
-} from "./relay-socket.js";
 
 /**
  * A coding agent's terminals as the host answers the desktop for them, over
@@ -338,7 +338,7 @@ it.effect("a shell's exit, a stopped sandbox, and an archived agent each end the
 );
 
 it.effect(
-  "a connection ends as idle ten minutes after its last typing, output, or word that its tab is shown, its reopens no use, and its socket is let go",
+  "a connection ends as idle five minutes after its last typing, output, or word that its tab is shown, its reopens no use, and its socket is let go",
   () =>
     Effect.gen(function* () {
       const { call, hand, opened, states, printed } = yield* subject();
@@ -354,11 +354,11 @@ it.effect(
       yield* call(GATEWAY_METHOD.TERMINALS_CONNECT, connected());
       yield* hand(first.opening);
       yield* first.attached;
-      yield* minutes(9);
+      yield* minutes(4);
       yield* call(GATEWAY_METHOD.TERMINALS_INPUT, { connectionId: CONNECTION_ID, data: "ls\r" });
-      yield* minutes(9);
+      yield* minutes(4);
       yield* first.push({ bytes: encode("GET / 200\r\n") });
-      yield* minutes(9);
+      yield* minutes(4);
       yield* call(GATEWAY_METHOD.TERMINALS_SHOWN, { connectionId: CONNECTION_ID });
       // The relay function's bound drops the socket a minute on, and it is opened again.
       yield* minutes(1);
@@ -367,7 +367,7 @@ it.effect(
       yield* TestClock.adjust(TERMINAL_RECONNECT.FIRST);
       yield* hand(second.opening);
       yield* second.attached;
-      yield* minutes(8);
+      yield* minutes(3);
       const beforeBound = states().at(-1);
       yield* minutes(1);
       yield* second.push({ bytes: encode("after\r\n") });

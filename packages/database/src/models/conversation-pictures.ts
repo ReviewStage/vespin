@@ -5,11 +5,17 @@ import {
   conversationMediaTypeSchema,
   type KeptPicture,
 } from "@repo/features/conversation-picture-wire";
+import {
+  MP4_TYPE,
+  PLAYABLE_VIDEO_TYPE,
+  type PlayableVideoType,
+  playableVideoTypeSchema,
+} from "@repo/features/video-signature";
 import { and, eq, inArray, sum } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
-import { attachment } from "../schemas/attachment.js";
+import { attachment, servedColumns } from "../schemas/attachment.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import type { ConversationTarget } from "./writer.js";
 
@@ -29,12 +35,13 @@ import type { ConversationTarget } from "./writer.js";
  * that conversation, as every transcript read does.
  */
 
-/** A picture to keep, or a video shown as one: its bytes, the type they were sniffed to be, and the size their header states. */
+/** A picture to keep, or a video shown as one: its bytes, the type they were sniffed to be, the size their header states, and a recording's MP4 copy where its sandbox made one. */
 export interface PictureToKeep {
   readonly bytes: Uint8Array;
   readonly contentType: ConversationMediaType;
   readonly width: number;
   readonly height: number;
+  readonly mp4Bytes?: Uint8Array | undefined;
 }
 
 /** A kept picture as a read answers it: the type it is served under, and its bytes. */
@@ -93,6 +100,7 @@ const PictureRowSchema = Schema.Struct({
   width: Schema.Int,
   height: Schema.Int,
   bytes: Schema.Uint8Array,
+  mp4Bytes: Schema.optional(Schema.Uint8Array),
 });
 
 const insertPictures = SqlSchema.findAll({
@@ -108,11 +116,12 @@ const insertPictures = SqlSchema.findAll({
       db
         .insert(attachment)
         .values(
-          pictures.map(({ bytes, ...row }) => ({
+          pictures.map(({ bytes, mp4Bytes, ...row }) => ({
             ...row,
             userId,
             conversationId,
             bytes,
+            mp4Bytes: mp4Bytes ?? null,
             byteCount: bytes.byteLength,
             createdAt: now,
           })),
@@ -129,19 +138,38 @@ const StoredPictureSchema = Schema.Struct({
   bytes: Schema.Uint8Array,
 });
 
+/** A kept picture as a reader is served it: a recording's MP4 copy where the reader plays MP4 and the row keeps one. */
+export type ServedPicture = typeof ServedPictureSchema.Type;
+
+const ServedPictureSchema = Schema.Struct({
+  contentType: Schema.Union([conversationMediaTypeSchema, Schema.Literal(MP4_TYPE)]),
+  bytes: Schema.Uint8Array,
+});
+
+/** The picture's row, served as the reader plays a video. */
+function pictureQuery(conversationId: string, id: string, playable: PlayableVideoType) {
+  return Database.use((db) =>
+    db
+      .select(servedColumns(playable))
+      .from(attachment)
+      .where(and(eq(attachment.conversationId, conversationId), eq(attachment.id, id))),
+  );
+}
+
 const findPicture = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, id: Schema.String }),
   Result: StoredPictureSchema,
-  execute: ({ conversationId, id }) =>
-    Database.use((db) =>
-      db
-        .select({
-          contentType: attachment.contentType,
-          bytes: attachment.bytes,
-        })
-        .from(attachment)
-        .where(and(eq(attachment.conversationId, conversationId), eq(attachment.id, id))),
-    ),
+  execute: ({ conversationId, id }) => pictureQuery(conversationId, id, PLAYABLE_VIDEO_TYPE.WEBM),
+});
+
+const findServedPicture = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    id: Schema.String,
+    playable: playableVideoTypeSchema,
+  }),
+  Result: ServedPictureSchema,
+  execute: ({ conversationId, id, playable }) => pictureQuery(conversationId, id, playable),
 });
 
 /** A kept row as a stored output names it. */
@@ -241,4 +269,13 @@ export function readConversationPicture(
   id: string,
 ): TaskStoreEffect<Option.Option<StoredPicture>> {
   return findPicture({ conversationId, id });
+}
+
+/** One kept picture of the conversation as a reader that plays the video given is served it: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise; nothing where the conversation keeps no such picture. */
+export function readServedConversationPicture(
+  conversationId: string,
+  id: string,
+  playable: PlayableVideoType,
+): TaskStoreEffect<Option.Option<ServedPicture>> {
+  return findServedPicture({ conversationId, id, playable });
 }

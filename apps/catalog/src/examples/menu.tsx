@@ -52,7 +52,8 @@ import { CatalogSection } from "../section";
 
 /**
  * menu.tsx -- a menu dropped from a ⋯ with glyphs, shortcuts, a dimmed item
- * and a red one ruled apart; one of settings in submenus; one with a heading
+ * and a red one ruled apart; one of settings in submenus, each naming its
+ * choice beside it; one with a heading
  * and a footer, its long words fading where cut; people whose items hang
  * their cards beside them; a + whose item opens a searchable list beside
  * the menu as its submenu, a panel its owner draws; one a right-click hangs at the pointer; a searchable menu's pinned rows, steered from its field: one
@@ -97,7 +98,7 @@ function TaskMenu(): React.JSX.Element {
 const GROUPINGS = ["Repository", "Status", "None"] as const;
 const ORDERS = ["Last updated", "Created", "Name"] as const;
 
-/** View options: two submenus of settings, each a check on the one chosen. */
+/** View options: two submenus of settings, each a check on the one chosen and naming it beside its label. */
 function ViewMenu(): React.JSX.Element {
   const menu = useMenu(true);
   const [grouping, setGrouping] = useState<string>("Repository");
@@ -116,8 +117,12 @@ function ViewMenu(): React.JSX.Element {
           menu={menu.drawn}
           groups={[
             [
-              { label: "Group by", items: choices(GROUPINGS, grouping, setGrouping) },
-              { label: "Order by", items: choices(ORDERS, order, setOrder) },
+              {
+                label: "Group by",
+                detail: grouping,
+                items: choices(GROUPINGS, grouping, setGrouping),
+              },
+              { label: "Order by", detail: order, items: choices(ORDERS, order, setOrder) },
             ],
             [{ label: "Show archived", checked: archived, onSelect: () => setArchived(!archived) }],
           ]}
@@ -252,6 +257,39 @@ function PeopleMenu(): React.JSX.Element {
   );
 }
 
+/** A choice of mode: each item's hint wraps under its label rather than fading where the menu cuts it, the chosen one checked. */
+function ModeMenu(): React.JSX.Element {
+  const menu = useMenu(true);
+  const [mode, setMode] = useState("ask");
+  const choice = (value: string, label: string, detail: string) => ({
+    key: value,
+    label,
+    detail,
+    detailPlace: MENU_DETAIL.WRAPPED,
+    checked: mode === value,
+    onSelect: () => setMode(value),
+  });
+  return (
+    <>
+      <Button {...menu.trigger(dropBelowStart)}>Permission mode</Button>
+      {menu.drawn && (
+        <Menu
+          label="Permission mode"
+          menu={menu.drawn}
+          groups={[
+            [
+              choice("full", "Full access", "Runs commands and edits without asking"),
+              choice("ask", "Ask before edits", "Asks before it edits a file or runs a command"),
+              choice("auto", "Auto", "Claude decides; asks when unsure"),
+            ],
+          ]}
+          onClose={menu.close}
+        />
+      )}
+    </>
+  );
+}
+
 /**
  * A row's menu: its ⋯, a right-click or a touch held on it, and the menu key
  * open the one menu of the task's acts.
@@ -353,6 +391,7 @@ function MenuExample(): React.JSX.Element {
           <ViewMenu />
           <AccountMenu />
           <PeopleMenu />
+          <ModeMenu />
         </Inline>
       </CatalogSection>
       <CatalogSection id="menu-panel" title="A panel as a submenu">

@@ -1,0 +1,98 @@
+# new-task.yaml -- New task from the tab bar's round +: Home's composer as a sheet, the task described, its repository and model picked, and the task started with its agent, the agent's page opened; then a draft that Cancel asks before discarding; then a picture attached through the sheet's +, which keeps the sheet as a draft too.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose models and repositories are
+# staged and whose task start is answered with the task made and its agent
+# starting (`@repo/host/fixture-inbox`), so nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Inbox"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- assertVisible: "Repository"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-sheet
+- inputText: "Let a workspace owner revoke a pending invite."
+# Note that iOS's hideKeyboard is a short drag at the screen's middle, which
+# lowers the keyboard because the sheet's form lowers it on a drag
+# (`SettingsForm`); the words field's return key types a new line.
+- hideKeyboard
+# The repository's menu offers what the workspace's GitHub reaches. Note
+# that the row is pressed by its words with its value, "Repository,
+# ada/relay", because its section's heading is named "Repository" too.
+- tapOn: "Repository, .*"
+- assertVisible: "ada/ledger"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-repositories
+- tapOn: "ada/ledger"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-filled
+- tapOn: "Start"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: new-task-started
+# A sheet with words typed keeps them: Cancel asks before discarding the
+# draft, as Mail does, and the swipe down is held. Note that the app is
+# launched again for it, so the round + stands in the tab bar.
+- launchApp:
+    arguments:
+      fixture: inbox
+- assertVisible: "Inbox"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- inputText: "Show who sent each pending invite."
+- tapOn: "Cancel"
+- assertVisible: "Discard draft?"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-discard
+- tapOn: "Discard draft"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
+    timeout: 5000
+# A picture attaches through the sheet's +, which opens the system's photo
+# picker on the library `media/invite-bug.png` was added to. Note that the
+# picker's grid names its photos differently by iOS version, so it is tried
+# by each name, as Maestro's own gallery recipe does; and that a sheet with
+# a picture and no words keeps it as a draft too.
+- launchApp:
+    arguments:
+      fixture: inbox
+- addMedia:
+    - "media/invite-bug.png"
+- assertVisible: "Inbox"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- hideKeyboard
+- waitForAnimationToEnd
+- takeScreenshot: new-task-add
+- tapOn:
+    id: "new-task-attach"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-picker
+- tapOn:
+    id: "PXGGridLayout-Info"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Photo, .*"
+    index: 0
+    optional: true
+- tapOn: "Add"
+- extendedWaitUntil:
+    visible: "Picture 1"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: new-task-picture
+- tapOn: "Cancel"
+- assertVisible: "Discard draft?"
+- tapOn: "Discard draft"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
+    timeout: 5000

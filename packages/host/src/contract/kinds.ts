@@ -41,6 +41,10 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_REMOVE: "providerKeys.remove",
   /** A connected plan's default for the account's coding agents turned on or off, from beside its row in Settings. */
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
+  /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
+  SUBSCRIPTION_RENAME: "providerKeys.rename",
+  /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
+  SUBSCRIPTIONS_REORDER: "providerKeys.reorder",
   /**
    * Settings › Agents › Codex › Connect: Codex's device-code login, run by
    * the service, begun, waited on while the host asks after it on its
@@ -79,11 +83,51 @@ export const ACCOUNT_ASK_ACT_KIND = {
   MEMORIES_RETRY: "memories.retry",
   MEMORIES_FORGET: "memories.forget",
   /**
+   * Settings › Preferences › Notifications: the sounds the account keeps of
+   * its own, one's clip read so the window's player can play it, one added
+   * under a name from a file picked there, renamed, or removed, and which
+   * of them one of its two sounds plays. An add's payload is the clip as a
+   * `data:` URL and the name given, never its file's name; nothing on the
+   * way keeps it, and a read's bytes reach the window that asked alone,
+   * never app state.
+   */
+  SOUND_READ: "sound.read",
+  SOUND_ADD: "sound.add",
+  SOUND_RENAME: "sound.rename",
+  SOUND_REMOVE: "sound.remove",
+  SOUND_CHOOSE: "sound.choose",
+  /**
    * A clip dictated into a message box, carried once from the panel that
    * recorded it to the service and answered with its words. Nothing on the
    * way keeps it.
    */
   DICTATION_TRANSCRIBE: "dictation.transcribe",
+  /**
+   * The member used this window just now: a key, a press, or a move of the
+   * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
+   * service stamps so their phone holds its pushes (`presence-wire.ts`).
+   * Carries nothing.
+   */
+  ACCOUNT_ACTIVE: "account.active",
+  /**
+   * The phone the iOS app runs on, as it registers itself for pushes once
+   * iOS lets it notify, unregisters before a sign-out, and reads and sets
+   * its "Notify me" in Settings: its APNs token and gateway pass through to
+   * the service and are kept nowhere on the way.
+   */
+  PUSH_DEVICE_REGISTER: "pushDevice.register",
+  PUSH_DEVICE_UNREGISTER: "pushDevice.unregister",
+  PUSH_DEVICE_STATUS: "pushDevice.status",
+  PUSH_DEVICE_NOTIFY: "pushDevice.notify",
+  /**
+   * The tokens of the phone's Live Activity of its member's running agents,
+   * as ActivityKit hands them to the app, and the activity's end on the
+   * phone: each passes through to the service beside the phone's APNs token
+   * and gateway, and is kept nowhere on the way.
+   */
+  LIVE_ACTIVITY_START_TOKEN: "liveActivity.startToken",
+  LIVE_ACTIVITY_TOKEN: "liveActivity.token",
+  LIVE_ACTIVITY_ENDED: "liveActivity.ended",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -184,17 +228,29 @@ export const AGENT_ACT_KIND = {
   AGENTS_CHOOSE: "agents.choose",
   AGENTS_RENAME: "agents.rename",
   AGENTS_SERVERS: "agents.servers",
+  /** One agent's permission mode changed, which reaches it from its next turn (`agent-approval-wire.ts`). */
+  AGENTS_PERMISSION_MODE: "agents.permissionMode",
+  /** One tool call an agent holds answered: allowed, allowed for the agent, or denied with words (`agent-approval-wire.ts`). */
+  AGENTS_ANSWER_APPROVAL: "agents.answerApproval",
   /** A repository added to one agent beside the ones it works in (`agent-repository-add.ts`). */
   AGENTS_ADD_REPOSITORY: "agents.addRepository",
   AGENTS_QUEUE: "agents.queue",
   AGENTS_STOP: "agents.stop",
   AGENTS_REWIND: "agents.rewind",
+  /** One agent's harness started on a fresh session in the same agent, its transcript kept (`/clear`, `coder-host/clear.ts`). */
+  AGENTS_CLEAR: "agents.clear",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
+  AGENTS_PORTS: "agents.ports",
+  /** The agent's port shared by public link now, asked of the service beside its ports. */
+  AGENTS_PORT_SHARED: "agents.portShared",
+  AGENTS_PORT_SHARE: "agents.portShare",
+  AGENTS_PORT_UNSHARE: "agents.portUnshare",
+  AGENTS_RUN_ACTION: "agents.runAction",
+  AGENTS_RUN_ACTION_STOP: "agents.runActionStop",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
-  /** The reader's own read mark of an agent with no task moved, kept on the account (`read-mark.ts`). */
-  AGENTS_MARK_READ: "agents.markRead",
   AGENTS_DELETE: "agents.delete",
   /**
    * Which agent's tab the panel shows, or none: what an agent's end leaves no
@@ -228,6 +284,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_PULL_REQUEST_PART_RETRY: "agents.pullRequestPartRetry",
   /** One agent's changes, its pull request's files with their patches, which its Changes tab draws. */
   AGENTS_CHANGES: "agents.changes",
+  /** The files one of an agent's turns changed, read on its machine between the checkouts its runner recorded, which the turn's Changes tab draws. */
+  AGENTS_TURN_CHANGES: "agents.turnChanges",
   /**
    * Our own tools one agent is offered, held for the window while it holds
    * the stream open and a while after among those let go lately, asked again
@@ -254,21 +312,21 @@ export const AGENT_ACT_KIND = {
  */
 export const AGENT_INBOX_ACT_KIND = {
   /**
-   * A task's inbox, or one agent's, held followed while the window holds
+   * A task's inbox, held followed while the window holds
    * the stream open, and a while after among those let go lately: what it
    * holds reaches the panel on app state (`LIVE_READ.HOLDER_INBOX`), so the
    * stream carries nothing.
    */
   AGENTS_INBOX_FOLLOW: "agents.inboxFollow",
-  /** A held task's or agent's inbox, which the panel reads on app state, read again at once, as Try again asks. */
+  /** A held task's inbox, which the panel reads on app state, read again at once, as Try again asks. */
   AGENTS_INBOX_RETRY: "agents.inboxRetry",
   /** Every inbox item the account reaches, which the panel reads on app state, read again at once, as Try again asks. */
   AGENTS_INBOX_ITEMS_RETRY: "agents.inboxItemsRetry",
   AGENTS_INBOX_ANSWER: "agents.inboxAnswer",
   /** One open item closed without an answer against the revision the panel drew, under the panel's own key. */
   AGENTS_INBOX_CLOSE: "agents.inboxClose",
-  /** A held close let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
-  AGENTS_INBOX_CLOSE_RELEASE: "agents.inboxCloseRelease",
+  /** The reader's own nod or close taken back by the key it went under, as its Undo asks. */
+  AGENTS_INBOX_TAKE_BACK: "agents.inboxTakeBack",
   /** A message on one item's thread, open or settled, under the panel's own key; it never answers the item. */
   AGENTS_INBOX_MESSAGE: "agents.inboxMessage",
   /** A new thread with one agent, its subject and first message, under the panel's own key. */
@@ -371,7 +429,7 @@ export const INTEGRATION_ACT_KIND = {
   MCP_CLIENTS_FOLLOW: "mcpClients.follow",
   /** The held outside MCP clients read again at once, as Try again asks. */
   MCP_CLIENTS_RETRY: "mcpClients.retry",
-  /** One outside MCP client revoked under the Mac's session, answering the clients as they then stand, or that the revoke did not finish. */
+  /** One outside MCP client revoked, answering the clients as they then stand, or that the revoke did not finish. */
   MCP_CLIENTS_REVOKE: "mcpClients.revoke",
 } as const;
 
@@ -454,6 +512,8 @@ export const TASKS_ACT_KIND = {
   TASKS_FILE: "tasks.file",
   /** A File tab's tree listing one folder of the open task's repository, read from GitHub through the service; answered to the tree, never on the document. */
   TASKS_TREE: "tasks.tree",
+  /** What a web page a plain link names says of itself, for the card the link hangs: fetched as the card shows, and kept by the window alone. */
+  TASKS_LINK_PREVIEW: "tasks.linkPreview",
   /** The skills a developer may choose of a task's repository, read from GitHub through the service; answered to the asker, never on the document. */
   TASKS_SKILLS: "tasks.skills",
   /**
@@ -486,6 +546,8 @@ export const TASKS_ACT_KIND = {
   TASKS_RESTORE: "tasks.restore",
   /** A page tab's source of one version of one of the plan's pages, read from the service as its frame's is and colored by main as HTML; answered to the tab, never on the document. */
   TASKS_PAGE_SOURCE: "tasks.pageSource",
+  /** One version of one of the plan's pages, or an agent's on no task, its HTML whole, read from the service as its frame's is, for a client that draws the page itself, the iPhone's sealed page; answered to the client, never on the document. */
+  TASKS_PAGE_HTML: "tasks.pageHtml",
   /**
    * One plan's pages, or one agent's on no task, held followed while the
    * window holds the stream open for a surface that draws them, the open
@@ -549,6 +611,15 @@ export const BROWSER_LIVE_ACT_KIND = {
 export const MAC_TERMINAL_ACT_KIND = {
   /** A local agent's own worktree, which the Mac's host made under `~/.vespin/agents`, opened in the Mac's Terminal. */
   MAC_TERMINAL_LOCAL_AGENT: "macTerminal.localAgent",
+} as const;
+
+/**
+ * What this Mac spends on the app (`mac-resources.ts`): each of its
+ * processes' CPU and memory now, read from the process table by the
+ * desktop's main, which a panel asks every few seconds while it shows them.
+ */
+export const MAC_RESOURCES_ACT_KIND = {
+  MAC_RESOURCES_READ: "macResources.read",
 } as const;
 
 /**
@@ -709,20 +780,21 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_TOKEN_REPOSITORIES_FOLLOW: "workspace.tokenRepositoriesFollow",
   WORKSPACE_TOKEN_REPOSITORIES_RETRY: "workspace.tokenRepositoriesRetry",
   WORKSPACE_TOKEN_REPOSITORY_SET: "workspace.tokenRepositorySet",
-  /** A workspace's environment variables by name, read once as Settings › Environment opens and again after each write; no answer carries a value. */
+  /** A workspace's environment variables by name, read once as Settings › Cloud environment opens and again after each write; no answer carries a value. */
   WORKSPACE_ENVIRONMENT_LIST: "workspace.environmentList",
   WORKSPACE_ENVIRONMENT_PUT: "workspace.environmentPut",
   WORKSPACE_ENVIRONMENT_DELETE: "workspace.environmentDelete",
-  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud setup opens; a save answers the setup as it then stands. */
+  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud environment opens; a save answers the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
+  WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
 } as const;
 
 /**
  * What a window asks of the system it is drawn on: the microphone asked for
- * and its route read afresh, the microphone's and the notifications' settings
- * opened, a new mail to the people who make the app, the panel focused, words
+ * and its route read afresh, the microphone's, the notifications', and the
+ * login items' settings opened, a new mail to the people who make the app, the panel focused, words
  * copied, a file saved, a build's label shown or hidden, and feedback sent.
  */
 export const WINDOW_SURFACE_ACT_KIND = {
@@ -736,12 +808,16 @@ export const WINDOW_SURFACE_ACT_KIND = {
   MICROPHONE_ROUTE: "microphone.route",
   MICROPHONE_OPEN_SETTINGS: "microphone.openSettings",
   NOTIFICATIONS_OPEN_SETTINGS: "notifications.openSettings",
+  /** System Settings opened at Login Items, where the member allows the host's agent macOS holds for them. */
+  LOGIN_ITEMS_OPEN_SETTINGS: "loginItems.openSettings",
   /** A new message to the people who make the app, in the system's mail app, to the address main holds. */
   CONTACT_EMAIL: "contact.email",
   WINDOW_FOCUS_PANEL: "window.focusPanel",
   WINDOW_COPY_TEXT: "window.copyText",
   /** A picture put on the clipboard as a PNG, as a copy from Preview puts one. */
   WINDOW_COPY_IMAGE: "window.copyImage",
+  /** Words put on the clipboard as rich text, their HTML and their plain text together, as a copy from Mail puts them. */
+  WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
    * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
@@ -776,6 +852,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_COMMAND_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...PORT_FORWARD_ACT_KIND,
@@ -835,6 +912,8 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_SAVE: ACT_USE.WRITE,
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
+  SUBSCRIPTION_RENAME: ACT_USE.WRITE,
+  SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,
   CHATGPT_DEVICE_WAIT: ACT_USE.WRITE,
   CHATGPT_DEVICE_CANCEL: ACT_USE.WRITE,
@@ -845,7 +924,20 @@ export const PORT_ACT_USE = {
   MEMORIES_FOLLOW: ACT_USE.READ,
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,
+  SOUND_READ: ACT_USE.FETCH,
+  SOUND_ADD: ACT_USE.WRITE,
+  SOUND_RENAME: ACT_USE.WRITE,
+  SOUND_REMOVE: ACT_USE.WRITE,
+  SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
+  ACCOUNT_ACTIVE: ACT_USE.WRITE,
+  PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_STATUS: ACT_USE.FETCH,
+  PUSH_DEVICE_NOTIFY: ACT_USE.WRITE,
+  LIVE_ACTIVITY_START_TOKEN: ACT_USE.WRITE,
+  LIVE_ACTIVITY_TOKEN: ACT_USE.WRITE,
+  LIVE_ACTIVITY_ENDED: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
@@ -873,14 +965,22 @@ export const PORT_ACT_USE = {
   AGENTS_CHOOSE: ACT_USE.WRITE,
   AGENTS_RENAME: ACT_USE.WRITE,
   AGENTS_SERVERS: ACT_USE.WRITE,
+  AGENTS_PERMISSION_MODE: ACT_USE.WRITE,
+  AGENTS_ANSWER_APPROVAL: ACT_USE.WRITE,
   AGENTS_ADD_REPOSITORY: ACT_USE.WRITE,
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,
+  AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_PORTS: ACT_USE.FETCH,
+  AGENTS_PORT_SHARED: ACT_USE.FETCH,
+  AGENTS_PORT_SHARE: ACT_USE.WRITE,
+  AGENTS_PORT_UNSHARE: ACT_USE.WRITE,
+  AGENTS_RUN_ACTION: ACT_USE.WRITE,
+  AGENTS_RUN_ACTION_STOP: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
-  AGENTS_MARK_READ: ACT_USE.WRITE,
   AGENTS_DELETE: ACT_USE.WRITE,
   AGENTS_SHOWN: ACT_USE.WRITE,
   AGENTS_SEEN: ACT_USE.WRITE,
@@ -890,6 +990,7 @@ export const PORT_ACT_USE = {
   AGENTS_PULL_REQUEST_PART_FOLLOW: ACT_USE.READ,
   AGENTS_PULL_REQUEST_PART_RETRY: ACT_USE.READ,
   AGENTS_CHANGES: ACT_USE.FETCH,
+  AGENTS_TURN_CHANGES: ACT_USE.FETCH,
   AGENTS_WORKSPACE_TOOLS_FOLLOW: ACT_USE.READ,
   AGENTS_WORKSPACE_TOOLS_RETRY: ACT_USE.READ,
   AGENTS_GITHUB_IMAGE: ACT_USE.FETCH,
@@ -900,7 +1001,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_ITEMS_RETRY: ACT_USE.READ,
   AGENTS_INBOX_ANSWER: ACT_USE.WRITE,
   AGENTS_INBOX_CLOSE: ACT_USE.WRITE,
-  AGENTS_INBOX_CLOSE_RELEASE: ACT_USE.WRITE,
+  AGENTS_INBOX_TAKE_BACK: ACT_USE.WRITE,
   AGENTS_INBOX_MESSAGE: ACT_USE.WRITE,
   AGENTS_INBOX_START: ACT_USE.WRITE,
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,
@@ -948,6 +1049,8 @@ export const PORT_ACT_USE = {
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
 
+  MAC_RESOURCES_READ: ACT_USE.FETCH,
+
   MAC_SHELL_MIRROR: ACT_USE.WRITE,
   MAC_SHELL_OPEN: ACT_USE.WRITE,
   MAC_SHELL_ATTACH: ACT_USE.WRITE,
@@ -991,6 +1094,7 @@ export const PORT_ACT_USE = {
   TASKS_SET_STANDING: ACT_USE.WRITE,
   TASKS_FILE: ACT_USE.FETCH,
   TASKS_TREE: ACT_USE.FETCH,
+  TASKS_LINK_PREVIEW: ACT_USE.FETCH,
   TASKS_SKILLS: ACT_USE.FETCH,
   TASKS_LINK_STANDING_FOLLOW: ACT_USE.READ,
   TASKS_BROWSER_TAB_OPEN: ACT_USE.WRITE,
@@ -1001,6 +1105,7 @@ export const PORT_ACT_USE = {
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
+  TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_RETRY: ACT_USE.READ,
@@ -1030,10 +1135,12 @@ export const PORT_ACT_USE = {
   MICROPHONE_ROUTE: ACT_USE.FETCH,
   MICROPHONE_OPEN_SETTINGS: ACT_USE.WRITE,
   NOTIFICATIONS_OPEN_SETTINGS: ACT_USE.WRITE,
+  LOGIN_ITEMS_OPEN_SETTINGS: ACT_USE.WRITE,
   CONTACT_EMAIL: ACT_USE.WRITE,
   WINDOW_FOCUS_PANEL: ACT_USE.WRITE,
   WINDOW_COPY_TEXT: ACT_USE.WRITE,
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
+  WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
   WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
@@ -1078,6 +1185,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_SANDBOX_SETUP_READ: ACT_USE.FETCH,
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
+  WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**
@@ -1088,6 +1196,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...TERMINAL_ACT_KIND,

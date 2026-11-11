@@ -206,6 +206,7 @@ const openAgent = (userId: string, organizationId: string, prompt: string | null
   Effect.gen(function* () {
     const db = yield* Database;
     const [id, conversationId] = [randomUUID(), randomUUID()];
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Mac commands" });
     yield* db
       .insert(conversations)
       .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
@@ -213,6 +214,7 @@ const openAgent = (userId: string, organizationId: string, prompt: string | null
       id,
       organizationId,
       userId,
+      taskId,
       conversationId,
       prompt,
       model: "anthropic/claude-opus-5.5",
@@ -329,7 +331,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
         const db = yield* Database;
         const agent = yield* openAgent(starter, workspace);
         const target = { userId: starter, conversationId: agent.conversationId };
-        assert.equal(yield* macOwnerOf(target), starter, "no task");
+        assert.equal(yield* macOwnerOf(target), starter, "no one assigned");
         const handed = yield* createTask(starter, {
           organizationId: workspace,
           assigneeId: teammate,

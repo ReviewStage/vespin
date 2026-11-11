@@ -1,3 +1,24 @@
+/**
+ * workspace-members.ts -- who is in a workspace, read off the organization plugin's own rows.
+ *
+ * A member is the plugin's `member` row, read here through Drizzle as
+ * `workspace-store.ts` reads it, since the list is read under the Mac's
+ * OAuth token, which no plugin call takes. Removing a member and leaving
+ * are the store's (`organization-store.ts`).
+ * A member's sign-in picture is listed only where it is an address the
+ * renderer may draw (`pinnedPictureUrl`), so the window shows a teammate's
+ * face as it shows the account's own, and a picture anywhere else is left out
+ * rather than handed to a renderer whose image policy would refuse it.
+ *
+ * The plugin keeps no row for a membership that ended, so who left is read
+ * off the workspace's own work (`formerOf`): an account its work names that
+ * is no longer a member. Each is named by the name and picture their
+ * account holds now, which the window draws grayed wherever their work
+ * names them; nobody the
+ * workspace's work does not name is ever listed, and an account that is
+ * gone is not named at all.
+ */
+
 import { Database, queryBuilder } from "@repo/database/core/query";
 import type { WorkspaceStoreEffect } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
@@ -11,31 +32,8 @@ import { AUTOMATION_SCOPE } from "@repo/features/automation-wire";
 import type { FormerMember, WorkspaceMember, WorkspaceRole } from "@repo/features/workspace-wire";
 import { roleOf, WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { and, asc, eq, inArray, isNotNull, notInArray, or, type SQL } from "drizzle-orm";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-
-/**
- * workspace-members.ts -- who is in a workspace, read off the organization plugin's own rows.
- *
- * A member is the plugin's `member` row, read here through Drizzle as
- * `workspace-store.ts` reads it, since the list is read under the Mac's
- * OAuth token, which no plugin call takes. Removing a member and leaving
- * are the plugin's own calls under the Mac's session (`workspace-seams.ts`);
- * the one thing read here for them is the member id the plugin removes by.
- * A member's sign-in picture is listed only where it is an address the
- * renderer may draw (`pinnedPictureUrl`), so the window shows a teammate's
- * face as it shows the account's own, and a picture anywhere else is left out
- * rather than handed to a renderer whose image policy would refuse it.
- *
- * The plugin keeps no row for a membership that ended, so who left is read
- * off the workspace's own work: an account that created one of its tasks,
- * is still assigned to one, started one of its agents, saved a version of
- * one of its tasks, or answered one of its Inbox items, and is no longer a
- * member. Each is named by the name and picture their account holds now,
- * which the window draws grayed wherever their work names them; nobody the
- * workspace's work does not name is ever listed, and an account that is
- * gone is not named at all.
- */
 
 /** The order roles are listed in: owners, then admins, then members. */
 const ROLE_ORDER: readonly WorkspaceRole[] = [
@@ -132,7 +130,7 @@ export function formerOf(organizationId: string): SQL | undefined {
         queryBuilder
           .select({ id: inboxItem.answeredBy })
           .from(inboxItem)
-          // Note that an item is the workspace's by its own column, since an agent with no task holds items too.
+          // Note that an item is the workspace's by its own column.
           .where(
             and(eq(inboxItem.organizationId, organizationId), isNotNull(inboxItem.answeredBy)),
           ),
@@ -165,19 +163,6 @@ const findFormer = SqlSchema.findAll({
     ),
 });
 
-const findMemberId = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, organizationId: Schema.String }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ userId, organizationId }) =>
-    Database.use((db) =>
-      db
-        .select({ id: member.id })
-        .from(member)
-        .where(and(eq(member.userId, userId), eq(member.organizationId, organizationId)))
-        .limit(1),
-    ),
-});
-
 /** A workspace's members, owners first, then admins, then members, each by name. */
 export function listMembers(
   organizationId: string,
@@ -201,16 +186,5 @@ export function listFormerMembers(
       const pictureUrl = pinnedPictureUrl(image);
       return pictureUrl === undefined ? row : { ...row, pictureUrl };
     }),
-  );
-}
-
-/** The plugin's member id for the account in the workspace, or none where it is not a member. */
-export function memberIdOf(
-  userId: string,
-  organizationId: string,
-): WorkspaceStoreEffect<Option.Option<string>> {
-  return Effect.map(
-    findMemberId({ userId, organizationId }),
-    Option.map((row) => row.id),
   );
 }

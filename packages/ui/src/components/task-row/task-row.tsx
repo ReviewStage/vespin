@@ -56,7 +56,8 @@ import {
  * Blocked by, its status, its name.
  *
  * The row's press reaches every edge of it (`CardPress`), opening the task,
- * its name on one line in the label's weight, what the eye reads in the
+ * or, on a middle-click, opening it in a tab of its own where the window can
+ * (`onOpenInTab`), its name on one line in the label's weight, what the eye reads in the
  * cells said after the name to a reader (`said`). The cells that hold a control stand over the
  * press, and the rest let the pointer through to it, a related task's kind
  * leading the row among the first; a cell of its owner's, the pull requests
@@ -320,8 +321,12 @@ const PLACED_ROW = {
   [TASK_ROW_EDGES.BARE]: `${PLACED_FRAME} px-row-inset`,
 } as const satisfies Record<TaskRowEdges, string>;
 
-/** A draft's row, raised as a card, its hairline taken out of its inset so its cells stand on the rows' lines. */
-const DRAFT_ROW = `${ROW_FRAME} px-task-row-draft ui-task-row-draft`;
+/** A draft's row, raised as a card, its hairline taken out of its inset so its cells stand on the rows' lines: at the gutter of rows that keep one for their box, at the inset otherwise. */
+const DRAFT_ROW = {
+  [TASK_ROW_EDGES.LIST]: `${ROW_FRAME} px-task-row-draft ps-task-row-draft-gutter ui-task-row-draft`,
+  [TASK_ROW_EDGES.UNCHOSEN]: `${ROW_FRAME} px-task-row-draft ui-task-row-draft`,
+  [TASK_ROW_EDGES.BARE]: `${ROW_FRAME} px-task-row-draft ui-task-row-draft`,
+} as const satisfies Record<TaskRowEdges, string>;
 
 /** The name's cell, the one that takes the row's press, in the text's ink. */
 const NAME_CELL =
@@ -611,8 +616,10 @@ export function TaskRow({
   menu,
   more = true,
   edges = TASK_ROW_EDGES.LIST,
+  choosable = true,
   disabled = false,
   onOpen,
+  onOpenInTab,
   pressRef,
   depth = 0,
   nest,
@@ -645,9 +652,13 @@ export function TaskRow({
   more?: boolean | undefined;
   /** What room it keeps at its edges, its list's (`TaskRows`'s `edges`): a bare row keeps no gutter for a box and draws no ⋯, its menu still a right-click and the menu key away. */
   edges?: TaskRowEdges | undefined;
+  /** Whether a choosing list may choose it; a start the list offers after its rows may not, its gutter still standing so its cells line up with theirs. */
+  choosable?: boolean | undefined;
   /** Whether its press is unavailable, as while the task is deleted. */
   disabled?: boolean | undefined;
   onOpen: () => void;
+  /** Opens the task in a tab of its own, which a middle-click on its press does; none where the window opens no tab. */
+  onOpenInTab?: (() => void) | undefined;
   /** The press, for what focuses it again once an edit ends. */
   pressRef?: RefObject<HTMLButtonElement | null> | undefined;
   /** How deep it stands nested under other rows: 0, at the top, unless said. */
@@ -697,7 +708,7 @@ export function TaskRow({
     <CardPress
       ref={press}
       disabled={disabled}
-      selectKey={taskId}
+      selectKey={choosable ? taskId : undefined}
       selectBox={edges === TASK_ROW_EDGES.LIST ? SELECT_BOX_PLACE.GUTTER : undefined}
       roving
       onKeyDown={fold === undefined ? undefined : foldKeys}
@@ -705,6 +716,7 @@ export function TaskRow({
         rowMenu.close(false);
         onOpen();
       }}
+      onOpenInTab={onOpenInTab}
     >
       <span id={nameId} className={`${PRESS} ${unread ? NAME_WEIGHT.UNREAD : NAME_WEIGHT.REST}`}>
         {/* A task's name is always a person's words, so a screen recording masks it whatever stands round the row. */}
@@ -829,6 +841,8 @@ export function TaskRowDraft({
   note,
   drafting,
   pending,
+  placed = false,
+  edges = TASK_ROW_EDGES.UNCHOSEN,
 }: {
   /** The cells its list draws, the same as its rows'. */
   cells: readonly TaskRowCell[];
@@ -842,6 +856,10 @@ export function TaskRowDraft({
   drafting: boolean;
   /** Whether an add is still out. */
   pending: boolean;
+  /** Whether it stands after a run drawing only the rows near the view (`VirtualTaskRows`' `after`), holding each column as wide as the run's placed rows hold it. */
+  placed?: boolean | undefined;
+  /** What room the rows it stands under keep at their edges, whose first cell it starts at: a list's gutter for their box, or their inset. */
+  edges?: TaskRowEdges | undefined;
 }): React.JSX.Element {
   return (
     <Card
@@ -849,7 +867,7 @@ export function TaskRowDraft({
       corner={CARD_CORNER.CONTROL}
       padding={CARD_PADDING.NONE}
       shadow={CARD_SHADOW.SOFT}
-      className={DRAFT_ROW}
+      className={DRAFT_ROW[edges]}
       data-quick-add={drafting ? "" : undefined}
       data-pending={pending ? "true" : undefined}
     >
@@ -862,7 +880,7 @@ export function TaskRowDraft({
           <span className={NOTE}>{note}</span>
         )}
       </NameCell>
-      <RowCells cells={cells} content={content} underMore={undefined} />
+      <RowCells cells={cells} content={content} underMore={undefined} placed={placed} />
     </Card>
   );
 }
@@ -950,7 +968,9 @@ const ROW_ESTIMATE_PX = 36;
  * is not drawn (`reachInRun`), the row holding the keyboard staying drawn
  * wherever the scroller stands; and, where it is asked to (`selection`),
  * they are chosen together as `TaskRows`' are, across the rows left
- * undrawn, each row's key its task's id.
+ * undrawn, each row's key its task's id. What follows the run (`after`),
+ * such as a quick add's draft, stands under it on the same columns, its
+ * cells as wide as the run's.
  */
 export function VirtualTaskRows({
   id,
@@ -965,6 +985,7 @@ export function VirtualTaskRows({
   keys,
   overscan,
   fit,
+  after,
   children,
 }: {
   /** The id a `SelectionBar` over it names; one is made where none is given. */
@@ -980,6 +1001,8 @@ export function VirtualTaskRows({
   selection?: ListSelection | undefined;
   /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion`. */
   moves?: boolean | undefined;
+  /** Lines standing after the run in a list of the run's own columns, named `after.label`: a quick add's draft (`TaskRowDraft`), say; none where nothing follows. */
+  after?: { readonly label: string; readonly lines: ReactNode } | undefined;
   /** The element that scrolls, which the rows stand in. */
   scroller: RefObject<HTMLElement | null>;
   /** A box whose resizing moves where the list stands in its scroller. */
@@ -1022,6 +1045,12 @@ export function VirtualTaskRows({
       >
         {children}
       </VirtualRows>
+      {/* Note that what follows the run stands in a grid of its own on the run's columns, since a run draws only its rows. */}
+      {after === undefined ? null : (
+        <ul className={ROWS} aria-label={after.label} {...motionRows()}>
+          {after.lines}
+        </ul>
+      )}
     </div>
   );
   return selection === undefined || edges !== TASK_ROW_EDGES.LIST ? (

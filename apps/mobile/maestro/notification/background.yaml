@@ -1,0 +1,16 @@
+# background.yaml -- the first half of the notification flow: the app launched on the Inbox fixture with notifications allowed, then sent to the background, where `ask.apns` is pushed to it.
+#
+# Maestro pushes nothing itself, so `scripts/simulator-screenshots.sh` runs
+# this flow, pushes `ask.apns` with `xcrun simctl push`, and runs `open.yaml`.
+# The payload is a decide on the fixture's "Who can withdraw an invite?"
+# thread, as the service writes one (`@repo/features/inbox-push-wire`).
+# Note that the script installs the app afresh and lets it notify first, so
+# the launch clears nothing: Maestro's clear reinstalls the app, which takes
+# the permission back, and its `permissions` cannot grant notifications.
+appId: dev.vespin.ios
+---
+- launchApp:
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- pressKey: Home

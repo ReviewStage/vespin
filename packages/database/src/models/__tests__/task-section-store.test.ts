@@ -12,11 +12,8 @@ import { eq } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
-import { agentTable } from "../../schemas/agent.js";
 import { organization, user } from "../../schemas/auth.js";
-import { conversations } from "../../schemas/storage.js";
-import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
-import { getTestDB, joinWorkspace, leaveWorkspace, openWorkspace } from "../../testing/index.js";
+import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
 import { setRepositoryPin } from "../repository-pin-store.js";
 import { deleteTaskSectionIn, listTaskSections, writeTaskSections } from "../task-section-store.js";
 import { createTask, deleteTask, updateTask } from "../task-store.js";
@@ -27,8 +24,7 @@ import { createTask, deleteTask, updateTask } from "../task-store.js";
  * in them, through the store's public reads and writes, over a real
  * dialect. A task stands in one section at a time, deleting a section
  * deletes none of its tasks, and nobody puts a task in a section that is
- * not theirs or a task of another workspace in one. An agent with no task
- * is kept on the same terms beside the tasks.
+ * not theirs or a task of another workspace in one.
  *
  * Synthetic accounts, workspaces, sections, and tasks throughout.
  */
@@ -50,30 +46,6 @@ const openSharedWorkspace = Effect.gen(function* () {
   const { id: second } = yield* createTask(dean, { name: "Billing", organizationId: workspace });
   return { dean, charles, workspace, first, second };
 });
-
-/** An agent with no task the account started in the workspace, or on the task given. */
-const openAgent = (userId: string, organizationId: string, taskId?: string) =>
-  Effect.gen(function* () {
-    const db = yield* Database;
-    const id = randomUUID();
-    const conversationId = randomUUID();
-    yield* db
-      .insert(conversations)
-      .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
-    yield* db.insert(agentTable).values({
-      id,
-      organizationId,
-      userId,
-      conversationId,
-      ...(taskId === undefined ? undefined : { taskId, planId: taskId }),
-      model: "anthropic/claude-opus-5.5",
-      effort: "high",
-      prompt: "Sweep the flaky tests.",
-      repository: "acme/api",
-      idempotencyKey: randomUUID(),
-    });
-    return id;
-  });
 
 /** A write the test expects taken, answering the sections as they then stand and the transaction it wrote them in. */
 const writtenWithTxid = (userId: string, write: TaskSectionWrite) =>
@@ -101,17 +73,6 @@ const create = (workspaceId: string, title: string, id = randomUUID()): TaskSect
 const place = (taskId: string, sectionId: string | null, position?: string): TaskSectionWrite => ({
   kind: TASK_SECTION_WRITE.PLACE,
   taskId,
-  sectionId,
-  ...(position === undefined ? undefined : { position }),
-});
-
-const placeAgent = (
-  agentId: string,
-  sectionId: string | null,
-  position?: string,
-): TaskSectionWrite => ({
-  kind: TASK_SECTION_WRITE.PLACE_AGENT,
-  agentId,
   sectionId,
   ...(position === undefined ? undefined : { position }),
 });
@@ -376,102 +337,6 @@ it.layer(getTestDB())("an account's task sections", (it) => {
           Option.getOrThrow(pinnedAgain).pins.map((pin) => pin.repository),
           ["acme/relay"],
         );
-      }),
-  );
-
-  it.effect(
-    "an agent with no task stands in one of its reader's sections, and no other account reads or moves it",
-    () =>
-      Effect.gen(function* () {
-        const { dean, charles, workspace } = yield* openSharedWorkspace;
-        const outsider = yield* openAccount;
-        const agent = yield* openAgent(dean, workspace);
-        const launch = randomUUID();
-        const later = randomUUID();
-        yield* written(dean, create(workspace, "Launch", launch));
-        yield* written(dean, create(workspace, "Later", later));
-        const addedAt = yield* Clock.currentTimeMillis;
-
-        const placed = yield* written(dean, placeAgent(agent, launch));
-        assert.deepEqual(placed.agentEntries, [{ agentId: agent, sectionId: launch, addedAt }]);
-        yield* TestClock.adjust("1 minute");
-        const reordered = yield* written(dean, placeAgent(agent, launch, "a1"));
-        assert.deepEqual(reordered.agentEntries, [
-          { agentId: agent, sectionId: launch, position: "a1", addedAt },
-        ]);
-
-        // A teammate who reaches the agent still reads none of Dean's entries, nor puts it in his section.
-        assert.deepEqual((yield* listTaskSections(charles)).agentEntries, []);
-        assert.equal(yield* refused(charles, placeAgent(agent, launch)), true);
-        assert.equal(yield* refused(outsider, placeAgent(agent, launch)), true);
-        const charlesSection = randomUUID();
-        yield* written(charles, create(workspace, "Mine", charlesSection));
-        yield* written(charles, placeAgent(agent, charlesSection));
-        assert.deepEqual(
-          (yield* listTaskSections(dean)).agentEntries.map(({ sectionId }) => sectionId),
-          [launch],
-        );
-
-        const movedAt = yield* Clock.currentTimeMillis;
-        const moved = yield* written(dean, placeAgent(agent, later));
-        assert.deepEqual(moved.agentEntries, [
-          { agentId: agent, sectionId: later, addedAt: movedAt },
-        ]);
-        const out = yield* written(dean, placeAgent(agent, null));
-        assert.deepEqual(out.agentEntries, []);
-      }),
-  );
-
-  it.effect(
-    "an agent on a task, of another workspace, or one its reader no longer reaches is put in no section",
-    () =>
-      Effect.gen(function* () {
-        const { dean, charles, workspace, first } = yield* openSharedWorkspace;
-        const elsewhere = yield* openWorkspace(dean);
-        const onTask = yield* openAgent(dean, workspace, first);
-        const away = yield* openAgent(dean, elsewhere);
-        const id = randomUUID();
-        yield* written(dean, create(workspace, "Launch", id));
-
-        assert.equal(yield* refused(dean, placeAgent(onTask, id)), true);
-        assert.equal(yield* refused(dean, placeAgent(away, id)), true);
-
-        const shared = yield* openAgent(dean, workspace);
-        const mine = randomUUID();
-        yield* written(charles, create(workspace, "Mine", mine));
-        yield* written(charles, placeAgent(shared, mine));
-        assert.equal((yield* listTaskSections(charles)).agentEntries.length, 1);
-        // Once Charles leaves, he reads neither the section nor the agent kept in it.
-        yield* leaveWorkspace(workspace, charles);
-        assert.deepEqual(yield* listTaskSections(charles), {
-          sections: [],
-          entries: [],
-          agentEntries: [],
-        });
-      }),
-  );
-
-  it.effect(
-    "deleting a section puts its agents back under Tasks, and an entry goes with its agent",
-    () =>
-      Effect.gen(function* () {
-        const { dean, workspace, first } = yield* openSharedWorkspace;
-        const agent = yield* openAgent(dean, workspace);
-        const doomed = yield* openAgent(dean, workspace);
-        const launch = randomUUID();
-        yield* written(dean, create(workspace, "Launch", launch));
-        yield* written(dean, place(first, launch));
-        yield* written(dean, placeAgent(agent, launch));
-        yield* written(dean, placeAgent(doomed, launch));
-
-        yield* Database.use((db) => db.delete(agentTable).where(eq(agentTable.id, doomed)));
-        assert.deepEqual(
-          (yield* listTaskSections(dean)).agentEntries.map(({ agentId }) => agentId),
-          [agent],
-        );
-
-        const answer = yield* written(dean, { kind: TASK_SECTION_WRITE.DELETE, id: launch });
-        assert.deepEqual(answer, { sections: [], entries: [], agentEntries: [] });
       }),
   );
 });

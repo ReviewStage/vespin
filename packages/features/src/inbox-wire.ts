@@ -2,6 +2,7 @@ import {
   isWireBoolean,
   isWireNumber,
   isWireString,
+  literalsReadingUnknown,
   THREAD_LINE_EVENT,
   type ThreadLineMetadata,
 } from "@repo/wire";
@@ -16,6 +17,7 @@ import {
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
 import { linkLabels } from "./mention-link.js";
+import { pagePlaceSchema, pageVersionNumberSchema } from "./page-wire.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { CODE_PATH_MAX_CHARS, codeLineSchema, workspaceIdSchema } from "./task-wire.js";
 import { boundedText, filledText } from "./text-schema.js";
@@ -127,16 +129,21 @@ export const INBOX_BOUNDS = {
   MAX_OPTIONS: 6,
   /** The most characters an option's detail may spell: the trade-off in a sentence or two. */
   MAX_OPTION_DETAIL_CHARS: 600,
-  /** The most fields a form may ask: what a person fills in at a glance. */
-  MAX_FIELDS: 8,
+  /**
+   * The most fields a form may hold as a read or an answer carries it: a
+   * bound on a stored row and a request body, never on how much an agent
+   * may ask, and wider than an agent may post (`MAX_POSTED_FIELDS`), so a
+   * build reads a form a later service lets an agent ask.
+   */
+  MAX_FIELDS: 50,
+  /** The most fields an agent's `answer` ask may name for now, until the builds that read `MAX_FIELDS` are out. */
+  MAX_POSTED_FIELDS: 8,
   /** The most characters a form's text field may take. */
   MAX_FIELD_VALUE_CHARS: 1_000,
   /** The most characters the developer's note may spell. */
   MAX_NOTE_CHARS: 4_000,
   /** The most characters the agent's reason for closing an item may spell. */
   MAX_REASON_CHARS: 600,
-  /** The most items one agent keeps open at once: what a person works through, never a log. */
-  MAX_OPEN_PER_AGENT: 20,
   /** The most settled items a read of a task's inbox carries beside every open one, the latest changed first. */
   MAX_ITEMS_READ: 200,
   /** The most settled items an agent's inbox tool answers with beside every open one: enough to hear what was answered lately. */
@@ -151,12 +158,34 @@ export const INBOX_BOUNDS = {
   MAX_MESSAGES_READ: 50,
   /** The most pictures the agent's message on a thread may carry, each held to the image bound: as many as a post's image blocks once could be. */
   MAX_MESSAGE_PICTURES: 8,
-  /** The most steps a `do` ask may list: a to-do a person works through at a glance. */
-  MAX_STEPS: 8,
+  /**
+   * The most steps a `do` ask may hold as a read or an answer carries it: a
+   * bound on a stored row and a request body, never on how long a to-do
+   * may be, and wider than an agent may post (`MAX_POSTED_STEPS`), so a
+   * build reads a to-do a later service lets an agent post.
+   */
+  MAX_STEPS: 50,
+  /** The most steps an agent's `do` ask may list for now, until the builds that read `MAX_STEPS` are out. */
+  MAX_POSTED_STEPS: 8,
   /** The most characters one step of a `do` ask may spell, in Markdown. */
   MAX_STEP_CHARS: 600,
   /** The most characters a post's addressee may spell: a member's mention link written whole. */
   MAX_ADDRESSEE_CHARS: 512,
+  /**
+   * The most pieces of media one option of a `decide` may carry as a read
+   * carries it: a bound on a stored row, never on how much an agent may
+   * post, and wider than an agent may post (`MAX_POSTED_OPTION_MEDIA`), so a
+   * build reads an option a later service lets an agent post.
+   */
+  MAX_OPTION_MEDIA: 12,
+  /** The most pieces of media an agent may give one option for now: what a card shows at a glance. */
+  MAX_POSTED_OPTION_MEDIA: 4,
+  /**
+   * The most files a message ending in a `decide` may keep, its own pictures
+   * and its options' together, and the most pieces of media its options may
+   * carry between them.
+   */
+  MAX_ASK_MEDIA: 12,
 } as const;
 
 /**
@@ -251,6 +280,29 @@ export const INBOX_STATUS = {
 
 export type InboxStatus = (typeof INBOX_STATUS)[keyof typeof INBOX_STATUS];
 
+/**
+ * The statuses an item may move to from each it stands in: a post opens it
+ * whatever it stands in; a member's answer or nod, a close, and a settle
+ * take only an open one; an answer or a member's close taken back opens
+ * it again, and nothing undoes a settle. Every write of an item's status guards on
+ * the statuses this lists as moving to the one it writes (`statusesMovingTo`).
+ */
+export const INBOX_STATUS_MOVES = {
+  [INBOX_STATUS.OPEN]: [INBOX_STATUS.OPEN, INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED],
+  [INBOX_STATUS.ANSWERED]: [INBOX_STATUS.OPEN],
+  [INBOX_STATUS.CLOSED]: [INBOX_STATUS.OPEN],
+} as const satisfies Record<InboxStatus, readonly InboxStatus[]>;
+
+/**
+ * The words a pick of no option is named by, which a choice whose options
+ * carry media offers as one more card after them (`optionsCarryMedia`).
+ * Note that it travels as a pick naming none (`INBOX_REPLY.CHOSE` with no
+ * choices), never a reply of its own, because a released client reads an
+ * answer's reply as one it knows and would refuse the whole inbox over a
+ * new one.
+ */
+export const NONE_OF_THESE = "None of these";
+
 /** How the developer answered an item. */
 export const INBOX_REPLY = {
   /** Picked one or more of a choice's options. */
@@ -305,6 +357,39 @@ export const INBOX_ASK_STATUS = {
   WITHDRAWN: "withdrawn",
 } as const;
 
+export type InboxAskStatus = (typeof INBOX_ASK_STATUS)[keyof typeof INBOX_ASK_STATUS];
+
+/**
+ * The statuses an ask may move to from each it stands in: an open one is
+ * answered, replaced by a later post, or withdrawn; an answer taken back,
+ * and a withdrawal undone, open it again; a replaced one stays so. Every
+ * write of an ask's status guards on the statuses this lists as moving to
+ * the one it writes (`statusesMovingTo`).
+ */
+export const INBOX_ASK_STATUS_MOVES = {
+  [INBOX_ASK_STATUS.OPEN]: [
+    INBOX_ASK_STATUS.ANSWERED,
+    INBOX_ASK_STATUS.REPLACED,
+    INBOX_ASK_STATUS.WITHDRAWN,
+  ],
+  [INBOX_ASK_STATUS.ANSWERED]: [INBOX_ASK_STATUS.OPEN],
+  [INBOX_ASK_STATUS.REPLACED]: [],
+  [INBOX_ASK_STATUS.WITHDRAWN]: [INBOX_ASK_STATUS.OPEN],
+} as const satisfies Record<InboxAskStatus, readonly InboxAskStatus[]>;
+
+/**
+ * The statuses among `from`, every one by default, that the moves table
+ * lets move to `to`: what a write moving a row to `to` holds the row's
+ * status to, so a move the table does not list matches no row.
+ */
+export function statusesMovingTo<Status extends string>(
+  moves: Readonly<Record<Status, readonly Status[]>>,
+  to: Status,
+  from: readonly Status[] = Object.keys(moves) as Status[],
+): Status[] {
+  return from.filter((status) => moves[status].includes(to));
+}
+
 /**
  * The options a version 4 approval stands for as a `decide` ask, and the
  * picks an older desktop's Approve and Decline are read as.
@@ -323,6 +408,9 @@ const inboxKeySchema = EffectSchema.String.check(
 
 /** A link's address: a web page, and nothing a desktop would hand to another scheme. */
 const WEB_ADDRESS = /^https?:\/\/\S+$/u;
+
+/** A live address an option points at: a page over https alone, since a plain one would show its address to the network. */
+const SECURE_WEB_ADDRESS = /^https:\/\/\S+$/u;
 
 /**
  * The blocks an agent writes as they are kept: words in Markdown, a link
@@ -398,11 +486,144 @@ const inboxPostBlocksSchema = EffectSchema.Array(inboxPostBlockSchema).check(
   EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_BLOCKS),
 );
 
-/** One option of a choice: its label, and the trade-off in a sentence where the agent wrote one. */
+/**
+ * The media an option of a `decide` may carry, which the reader looks at
+ * beside its label: a file the agent made in its sandbox, kept as a file of
+ * its message, a picture or a WebM recording; a page the agent showed on its
+ * task; or a live web address, drawn as a link that opens in the browser and
+ * never as a frame in the Inbox.
+ */
+export const INBOX_OPTION_MEDIA = {
+  FILE: "file",
+  PAGE: "page",
+  LINK: "link",
+} as const;
+
+/** An option's media as a read carries it: a file by the attachment its message keeps it as, a page by its id on the place it stands, or a link. */
+const KNOWN_OPTION_MEDIA = [
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(INBOX_OPTION_MEDIA.FILE),
+    attachmentId: wireUuidSchema,
+    /** The type it is served under, read as words, as a message's file's is (`inboxAnswerFileSchema`). */
+    mediaType: EffectSchema.String,
+    caption: EffectSchema.optionalKey(EffectSchema.String),
+  }),
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(INBOX_OPTION_MEDIA.PAGE),
+    pageId: wireUuidSchema,
+    /** The version the agent showed as it asked, which the card draws. */
+    version: pageVersionNumberSchema,
+    title: EffectSchema.String,
+    place: pagePlaceSchema,
+  }),
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(INBOX_OPTION_MEDIA.LINK),
+    url: EffectSchema.String.check(EffectSchema.isPattern(WEB_ADDRESS)),
+    label: EffectSchema.optionalKey(EffectSchema.String),
+  }),
+] as const;
+
+/** An option's media this build draws. */
+export type InboxOptionMedia = (typeof KNOWN_OPTION_MEDIA)[number]["Type"];
+
+/**
+ * An option's media as a read carries it: a kind this build knows, or the
+ * type alone of one a newer service wrote, so a client behind it draws the
+ * rest of the option rather than refusing the whole inbox.
+ */
+const inboxOptionMediaSchema = EffectSchema.Union([
+  ...KNOWN_OPTION_MEDIA,
+  EffectSchema.Struct({ type: unknownTypeOf(Object.values(INBOX_OPTION_MEDIA)) }),
+]);
+
+export type InboxReadOptionMedia = typeof inboxOptionMediaSchema.Type;
+
+/** Whether an option's media is of a kind this build draws. */
+const isKnownOptionMedia = EffectSchema.is(EffectSchema.Union(KNOWN_OPTION_MEDIA));
+
+/**
+ * The files a message's ask hands its options, by attachment: those its
+ * options' cards draw, which the message draws nowhere else; none where it
+ * asks no `decide` this build knows.
+ */
+export function optionFileIds(ask: InboxReadAsk | undefined): ReadonlySet<string> {
+  if (ask === undefined || ask.type !== INBOX_ASK.DECIDE || !("options" in ask)) return new Set();
+  return new Set(
+    ask.options.flatMap((option) =>
+      knownOptionMedia(option).flatMap((media) =>
+        media.type === INBOX_OPTION_MEDIA.FILE ? [media.attachmentId] : [],
+      ),
+    ),
+  );
+}
+
+/** The media of an option this build draws, in order: every kind but one a newer service wrote. */
+export function knownOptionMedia(option: {
+  readonly media?: readonly InboxReadOptionMedia[] | undefined;
+}): readonly InboxOptionMedia[] {
+  return (option.media ?? []).filter(isKnownOptionMedia);
+}
+
+/** An option's file, kept as a file of the message whose ask offers it. */
+export type InboxOptionFile = Extract<InboxOptionMedia, { type: typeof INBOX_OPTION_MEDIA.FILE }>;
+
+/** An option's page, shown on the agent's task. */
+export type InboxOptionPage = Extract<InboxOptionMedia, { type: typeof INBOX_OPTION_MEDIA.PAGE }>;
+
+/** One option of a choice: its label, the trade-off in a sentence where the agent wrote one, and the media it carries. */
 const inboxOptionSchema = EffectSchema.Struct({
   label: filledText(INBOX_BOUNDS.MAX_LABEL_CHARS),
   detail: EffectSchema.optionalKey(boundedText(INBOX_BOUNDS.MAX_OPTION_DETAIL_CHARS)),
+  media: EffectSchema.optionalKey(
+    EffectSchema.Array(inboxOptionMediaSchema).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_OPTION_MEDIA),
+    ),
+  ),
 });
+
+export type InboxOption = typeof inboxOptionSchema.Type;
+
+/**
+ * One piece of an option's media as the agent posts it: a file by its path
+ * in the agent's sandbox, which the service reads and keeps as a file of the
+ * message, with the words that say what it shows; a page it showed, by the
+ * id and the version `show_page` answered, its newest where it names none;
+ * or an https address, with the words it is named by.
+ */
+const inboxPostOptionMediaSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    path: filledText(INBOX_BOUNDS.MAX_PATH_CHARS),
+    caption: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_ALT_CHARS)),
+  }),
+  EffectSchema.Struct({
+    page: wireUuidSchema,
+    version: EffectSchema.optionalKey(pageVersionNumberSchema),
+  }),
+  EffectSchema.Struct({
+    url: EffectSchema.String.check(
+      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_URL_CHARS),
+      EffectSchema.isPattern(SECURE_WEB_ADDRESS),
+    ),
+    label: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_LABEL_CHARS)),
+  }),
+]);
+
+export type InboxPostOptionMedia = typeof inboxPostOptionMediaSchema.Type;
+
+/** One option of a choice as the agent posts it: those it is kept by, its media named as the agent names them. */
+const inboxPostOptionSchema = EffectSchema.Struct({
+  label: inboxOptionSchema.fields.label,
+  detail: inboxOptionSchema.fields.detail,
+  media: EffectSchema.optionalKey(
+    EffectSchema.Array(inboxPostOptionMediaSchema).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_POSTED_OPTION_MEDIA),
+    ),
+  ),
+});
+
+export type InboxPostOption = typeof inboxPostOptionSchema.Type;
 
 /** One field of a form: its type, its label, which names its value in the answer, whether it must be filled, and a select's options, one perhaps recommended. */
 const inboxFieldSchema = EffectSchema.Struct({
@@ -605,35 +826,60 @@ const DECIDE_FIELDS = {
   ...RECOMMENDED_FIELDS,
 };
 
-/** A `decide` ask's own keys as the agent posts it: those it is kept by, but its recommendation one label or a list of them. */
+/** A `decide` ask's own keys as the agent posts it: those it is kept by, but its options' media named as the agent names them and its recommendation one label or a list of them. */
 const DECIDE_INPUT_FIELDS = {
   type: DECIDE_FIELDS.type,
-  options: DECIDE_FIELDS.options,
+  options: EffectSchema.Array(inboxPostOptionSchema).check(
+    EffectSchema.isMinLength(2),
+    EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_OPTIONS),
+  ),
   multiple: DECIDE_FIELDS.multiple,
   recommended: EffectSchema.optionalKey(recommendedInputSchema),
 };
 
+/** A `do` ask's steps in Markdown, in order, at most `most`. */
+function doSteps(most: number) {
+  return EffectSchema.Array(filledText(INBOX_BOUNDS.MAX_STEP_CHARS)).check(
+    EffectSchema.isMaxLength(most),
+  );
+}
+
+/** An `answer` ask's fields, one to `most`, where it asks typed values. */
+function answerFields(most: number) {
+  return EffectSchema.optionalKey(
+    EffectSchema.Array(inboxFieldSchema).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(most),
+    ),
+  );
+}
+
 /**
- * A `do` ask's own keys: its steps in Markdown, in order, few. Note that
- * none is a `do` ask too, because a version 4 to-do named no step and its
- * item's words say what to do; marking it done ticks nothing.
+ * A `do` ask's own keys as it is kept and read: its steps in Markdown, in
+ * order. Note that none is a `do` ask too, because a version 4 to-do named
+ * no step and its item's words say what to do; marking it done ticks nothing.
  */
 const DO_FIELDS = {
   type: EffectSchema.Literal(INBOX_ASK.DO),
-  steps: EffectSchema.Array(filledText(INBOX_BOUNDS.MAX_STEP_CHARS)).check(
-    EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_STEPS),
-  ),
+  steps: doSteps(INBOX_BOUNDS.MAX_STEPS),
 };
 
-/** An `answer` ask's own keys: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
+/** A `do` ask's own keys as the agent posts it: those it is kept by, its steps held to what an agent may post. */
+const DO_INPUT_FIELDS = {
+  type: DO_FIELDS.type,
+  steps: doSteps(INBOX_BOUNDS.MAX_POSTED_STEPS),
+};
+
+/** An `answer` ask's own keys as it is kept and read: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
 const ANSWER_FIELDS = {
   type: EffectSchema.Literal(INBOX_ASK.ANSWER),
-  fields: EffectSchema.optionalKey(
-    EffectSchema.Array(inboxFieldSchema).check(
-      EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_FIELDS),
-    ),
-  ),
+  fields: answerFields(INBOX_BOUNDS.MAX_FIELDS),
+};
+
+/** An `answer` ask's own keys as the agent posts it: those it is kept by, its fields held to what an agent may post. */
+const ANSWER_INPUT_FIELDS = {
+  type: ANSWER_FIELDS.type,
+  fields: answerFields(INBOX_BOUNDS.MAX_POSTED_FIELDS),
 };
 
 /** What a message asks of its reader, one of three: decide among options, do steps, or answer. */
@@ -645,20 +891,41 @@ const inboxAskSchema = EffectSchema.Union([
 
 export type InboxAsk = typeof inboxAskSchema.Type;
 
-/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them. */
+/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them, and its steps or fields held to what an agent may post. */
 const inboxAskInputSchema = EffectSchema.Union([
   EffectSchema.Struct(DECIDE_INPUT_FIELDS),
-  EffectSchema.Struct(DO_FIELDS),
-  EffectSchema.Struct(ANSWER_FIELDS),
+  EffectSchema.Struct(DO_INPUT_FIELDS),
+  EffectSchema.Struct(ANSWER_INPUT_FIELDS),
 ]);
 
 export type InboxAskInput = typeof inboxAskInputSchema.Type;
 
-/** A posted ask as a message keeps it: a `decide`'s recommendation its first label and, where several, every one. */
-export function keptInboxAsk(ask: InboxAskInput): InboxAsk {
+/**
+ * A posted ask as a message keeps it: a `decide`'s recommendation its first
+ * label and, where several, every one, and each option's media as the
+ * service kept it, by the option's place (`media`); an option it names none
+ * for keeps none.
+ */
+export function keptInboxAsk(
+  ask: InboxAskInput,
+  media: readonly (readonly InboxOptionMedia[] | undefined)[] = [],
+): InboxAsk {
   if (ask.type !== INBOX_ASK.DECIDE) return ask;
-  const { recommended: _recommended, ...rest } = ask;
-  return { ...rest, ...keptRecommendation(ask) };
+  const { recommended: _recommended, options, ...rest } = ask;
+  const kept = options.map(({ media: _posted, ...option }, at) => {
+    const own = media[at];
+    return own === undefined || own.length === 0 ? option : { ...option, media: own };
+  });
+  return { ...rest, options: kept, ...keptRecommendation(ask) };
+}
+
+/**
+ * Whether a choice's options carry media, which a reader looks at as cards
+ * and may answer with none of them, a pick of no option, since a choice
+ * among designs is as often a choice of none.
+ */
+export function optionsCarryMedia(choice: { readonly options: readonly InboxOption[] }): boolean {
+  return choice.options.some((option) => (option.media ?? []).length > 0);
 }
 
 /**
@@ -697,7 +964,7 @@ export const inboxWithdrawInputSchema = EffectSchema.Struct({
  * closers were kept on the ask.
  */
 const ASK_STANDING_FIELDS = {
-  status: EffectSchema.Literals(Object.values(INBOX_ASK_STATUS)),
+  status: literalsReadingUnknown(Object.values(INBOX_ASK_STATUS), INBOX_ASK_STATUS.REPLACED),
   withdrawnReason: EffectSchema.optionalKey(EffectSchema.String),
   withdrawnAt: EffectSchema.optionalKey(countedNumber),
   withdrawnBy: EffectSchema.optionalKey(EffectSchema.String),
@@ -729,7 +996,7 @@ export type InboxReadAsk = typeof inboxReadAskSchema.Type;
  */
 export const inboxAnswersSchema = EffectSchema.Struct({
   ask: wireUuidSchema,
-  reply: EffectSchema.Literals(Object.values(INBOX_REPLY)),
+  reply: literalsReadingUnknown(Object.values(INBOX_REPLY), INBOX_REPLY.ANSWERED),
   choices: inboxReplySchema.fields.choices,
   values: EffectSchema.optionalKey(inboxFormValuesSchema),
   steps: EffectSchema.optionalKey(
@@ -776,7 +1043,7 @@ export type InboxMessageAuthor = (typeof INBOX_MESSAGE_AUTHOR)[keyof typeof INBO
  */
 export const inboxMessageSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  author: EffectSchema.Literals(Object.values(INBOX_MESSAGE_AUTHOR)),
+  author: literalsReadingUnknown(Object.values(INBOX_MESSAGE_AUTHOR), INBOX_MESSAGE_AUTHOR.AGENT),
   /** The member who wrote it, on a member's message whose account still stands. */
   member: EffectSchema.optionalKey(memberRefSchema),
   /** The words in Markdown; empty where the files carry the message alone. */
@@ -817,7 +1084,7 @@ export const inboxItemSchema = EffectSchema.Struct({
   title: EffectSchema.String,
   /** Whether the agent hears an answer to the item as a message, rather than reading it in its own time: true for every ask but a `do` posted before every answer was heard, and false for a notice. */
   needsReply: EffectSchema.Boolean,
-  status: EffectSchema.Literals(Object.values(INBOX_STATUS)),
+  status: literalsReadingUnknown(Object.values(INBOX_STATUS), INBOX_STATUS.CLOSED),
   /**
    * The member who started the agent that posted the item, whose question it
    * is, as the account's read names it (`account-inbox-wire.ts`); absent from
@@ -828,7 +1095,7 @@ export const inboxItemSchema = EffectSchema.Struct({
   /**
    * The member the item waits on: the member its agent addressed it to, or,
    * where it names none, its task's assignee, or, where the task has nobody
-   * assigned or the agent works on no task, the member who started the agent
+   * assigned, the member who started the agent
    * (`startedBy`). Absent from a service before it, which the desktop reads
    * as waiting on `startedBy`.
    */
@@ -922,7 +1189,7 @@ export function openAskOf(thread: readonly InboxMessage[]): InboxAsking | undefi
 /**
  * The member an item waits on: the member its agent addressed it to, else
  * its task's assignee, or its agent's starter where the task has nobody
- * assigned or the agent works on no task, as the service resolves it
+ * assigned, as the service resolves it
  * (`inbox-store.ts`'s `WAITS_ON`); its starter from a service before it
  * said; none where it names neither.
  */
@@ -1034,6 +1301,36 @@ export const inboxCloseRequestSchema = EffectSchema.Struct({
 });
 
 export type InboxCloseRequest = typeof inboxCloseRequestSchema.Type;
+
+/**
+ * A member's own nod or close taken back, by the key it was sent under, so
+ * the item waits on them again as it did before: Undo's inverse of Got it
+ * and of Resolve, which the member may ask for whenever they like.
+ */
+export const inboxTakeBackRequestSchema = EffectSchema.Struct({
+  clientKey: filledText(INBOX_BOUNDS.MAX_CLIENT_KEY_CHARS),
+});
+
+export type InboxTakeBackRequest = typeof inboxTakeBackRequestSchema.Type;
+
+/**
+ * What came of a take-back: the nod or close taken back, the item open
+ * again; refused because its agent was told of it, a message to it that
+ * nothing takes back; or refused because the item no longer stands as that
+ * nod or close left it, answered, closed, or posted over since, or the key
+ * named none.
+ */
+export const INBOX_TAKE_BACK = {
+  TAKEN: "taken",
+  TOLD: "told",
+  MOVED_ON: "moved-on",
+} as const;
+
+/** What a take-back comes back as: the item as it then stands, and what came of the take-back. */
+export const inboxTakenBackSchema = EffectSchema.Struct({
+  item: inboxItemSchema,
+  outcome: EffectSchema.Literals(Object.values(INBOX_TAKE_BACK)),
+});
 
 /** How a member's close opens, in the message that tells the agent of it. */
 export const INBOX_CLOSE_LEAD = "Thread closed";
@@ -1158,12 +1455,11 @@ export function inboxStartTitle(
 
 /**
  * Where one item stands, as a link naming it by its id alone is opened
- * (`link-grammar.ts`): the agent that posted it, its task, null for an
- * agent with no task, and its workspace.
+ * (`link-grammar.ts`): the agent that posted it, its task, and its workspace.
  */
 export const inboxItemHomeSchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
-  planId: EffectSchema.NullOr(wireUuidSchema),
+  planId: wireUuidSchema,
   workspaceId: EffectSchema.NonEmptyString,
 });
 
@@ -1287,8 +1583,11 @@ function valueLines(values: InboxFormValues): string {
 /** The answer's own words, as the agent reads them. */
 function replyWords(reply: InboxReply): string {
   switch (reply.reply) {
-    case INBOX_REPLY.CHOSE:
-      return `Chose ${(reply.choices ?? []).map((choice) => `"${choice}"`).join(", ")}.`;
+    case INBOX_REPLY.CHOSE: {
+      const choices = reply.choices ?? [];
+      if (choices.length === 0) return `Chose ${NONE_OF_THESE.toLowerCase()}.`;
+      return `Chose ${choices.map((choice) => `"${choice}"`).join(", ")}.`;
+    }
     case INBOX_REPLY.APPROVED:
       return "Approved.";
     case INBOX_REPLY.DECLINED:
@@ -1451,7 +1750,7 @@ function choiceRefusal(
   choices: readonly string[] | undefined,
 ): string | undefined {
   const picked = choices ?? [];
-  if (picked.length === 0) return "A pick names no option.";
+  if (picked.length === 0) return optionsCarryMedia(choice) ? undefined : "A pick names no option.";
   if (picked.length > 1 && choice.multiple !== true) return "The choice takes one option.";
   if (new Set(picked).size !== picked.length) return "A pick names an option twice.";
   const offered = new Set(choice.options.map((option) => option.label));

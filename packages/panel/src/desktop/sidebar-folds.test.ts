@@ -12,7 +12,6 @@ import { writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import {
-  agentHoldingsOf,
   agentsControl,
   handInbox,
   newTaskControl,
@@ -24,8 +23,7 @@ import { ArchivedAgents } from "./agent-archive.js";
  * sidebar-folds.test.ts -- every group that folds folds under one
  * header, `GroupHeader`: the sidebar's Pinned and repositories, and the summary's archived
  * agents, alike but for what each counts, each unrolling as it opens, and a
- * folded group leaving the task open, and a repository's the tasks that need
- * the reader, standing.
+ * folded group leaving the task open standing.
  */
 
 const roots: Root[] = [];
@@ -138,7 +136,7 @@ test("Pinned folds on its name, counts its pins folded, and leaves the pin that 
   assert.deepEqual(names(), ["Invite expiry", "Retry audit"]);
 });
 
-test("a folded repository leaves the task that is open and the task that needs you standing, and unfolds to every task", () => {
+test("a folded repository leaves only the task that is open standing, one that needs you folded away with the rest, and unfolds to every task", () => {
   handInbox({
     waiting: [
       {
@@ -165,7 +163,7 @@ test("a folded repository leaves the task that is open and the task that needs y
   assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);
 
   act(() => fold(sidebar, "relay").click());
-  assert.deepEqual(names(), ["Billing export", "Invite expiry", "Webhook retries"]);
+  assert.deepEqual(names(), ["Billing export", "Invite expiry"]);
 
   act(() => fold(sidebar, "relay").click());
   assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);
@@ -209,58 +207,6 @@ test("a repository's header folds on its name, says it is kept at top, counts it
   );
   const ellipsis = sidebar.querySelector('button[aria-label="relay actions"]');
   assert.equal(ellipsis?.getAttribute("aria-expanded"), "true");
-});
-
-test("the Inbox row counts what waits on a plan and what waits from an agent with no plan alike, and not a teammate's agent's with no plan, which waits on them", () => {
-  const taskless = [
-    {
-      id: "item-2",
-      agentId: "agent-2",
-      title: "Quarantine the flaky test?",
-      postedAt: 2,
-      updatedAt: 2,
-      agentTitle: null,
-      agentModel: "anthropic/claude-opus-5.5",
-      automationId: null,
-      automationName: null,
-      repository: "acme/relay",
-      startedBy: "user-dean",
-    },
-    {
-      id: "item-3",
-      agentId: "agent-3",
-      title: "Bump the Node image?",
-      postedAt: 3,
-      updatedAt: 3,
-      agentTitle: null,
-      agentModel: "anthropic/claude-opus-5.5",
-      automationId: null,
-      automationName: null,
-      repository: "acme/relay",
-      startedBy: "user-charles",
-    },
-  ];
-  handInbox({
-    waiting: [
-      {
-        taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
-        items: [{ id: "item-1", agentId: "agent-1", title: "Retry?", postedAt: 1 }],
-      },
-    ],
-    taskless,
-    agents: agentHoldingsOf(taskless),
-  });
-  const page = mountSidebar(
-    tasksControl({
-      me: "user-dean",
-      tasks: [task("7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10", "Webhook retries", "acme/relay")],
-    }),
-  );
-
-  const inbox = [...page.querySelectorAll("aside.desktop-sidebar button")].find((button) =>
-    button.textContent?.startsWith("Inbox"),
-  );
-  assert.match(inbox?.textContent ?? "", /^Inbox2 /u);
 });
 
 test("a child task stands under its parent, folded until the parent's chevron opens it, to any depth, and stays opened across launches", () => {

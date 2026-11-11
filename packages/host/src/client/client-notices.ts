@@ -3,7 +3,7 @@
  */
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentAccountInboxAnswerView } from "@repo/features/agent-view";
-import type { LinkPlace } from "@repo/features/link-grammar";
+import type { LinkDestination } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { Effect, FiberSet, Queue, type Scope, Stream } from "effect";
@@ -23,7 +23,7 @@ interface NoticePresenter {
   /** Brings the app's window forward, where the prompt for a command stands: a command ask's notification's click. */
   openMacCommandAsk: () => void;
   /** Brings the app's window forward on a place, an agent's tab or an Inbox item: the click of a notification of news. */
-  openPlace: (place: LinkPlace) => void;
+  openPlace: (place: LinkDestination) => void;
 }
 
 /** What the notification of a command waiting says: nothing of the command, which the prompt shows. */
@@ -151,6 +151,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
       return {
         when: stored?.soundWhen ?? APP_SETTING_DEFAULTS.soundWhen,
         sound: stored?.completionSound ?? APP_SETTING_DEFAULTS.completionSound,
+        askSound: stored?.askSound ?? APP_SETTING_DEFAULTS.askSound,
       };
     },
     notify: () =>
@@ -159,25 +160,6 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     open: presenter.openPlace,
     report,
   });
-  // A note that throws is reported rather than left to end the fiber, which would never resume.
-  yield* Effect.forkScoped(
-    Stream.runForEach(
-      Stream.changes(Stream.map(state.changes, (document) => document.tasks.tasklessAgents)),
-      (agents) =>
-        Effect.catchDefect(
-          Effect.withErrorReporting(
-            Effect.sync(() => notices.observeAgents(agents ?? [])),
-            { defectsOnly: true },
-          ),
-          (defect) =>
-            Effect.sync(() =>
-              report(
-                `the agents with no task could not be noted: ${defect instanceof Error ? defect.message : String(defect)}`,
-              ),
-            ),
-        ),
-    ),
-  );
   // Every agent on a task, the archived left out, while the list is followed
   // live, is the notices' to hold in place of the watch's own reads, and a
   // task the list no longer holds takes its agents with it.

@@ -5,11 +5,13 @@ import {
   Chip,
   ChipName,
   type ChipWidth,
+  type FootRow,
   type MenuRow,
   POPOVER_ALIGN,
   POPOVER_WIDTH,
   type PopoverAlign,
   type PopoverWidth,
+  SavedTick,
   SearchableMenu,
   SettingsRow,
   type SettingsRowDensity,
@@ -20,7 +22,7 @@ import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useEffect, useId, useRef, useState } from "react";
-import { replayMaskedError, SettingMarks } from "./marks.js";
+import { replayMaskedError } from "./marks.js";
 
 /**
  * picker-row.tsx -- the one control a settings row picks a value with: a chip naming the value, and the app's own menu under it.
@@ -64,6 +66,8 @@ interface PickerProps {
   /** Whether its menu's words are the app's own, which a screen recording shows as they read, but for a row that is `replayMasked` (`SearchableMenu`'s `replayUnmasked`). */
   replayUnmasked?: boolean | undefined;
   rows: readonly MenuRow[];
+  /** Rows pinned under the list that act rather than pick, such as a sound's Upload; the menu closes as one is pressed, as it does on a row's act. */
+  foot?: readonly FootRow[] | undefined;
   /** Present, the menu opens on a search over the rows; absent, the list is short enough to read whole. */
   placeholder?: string | undefined;
   noMatch: string;
@@ -74,6 +78,8 @@ interface PickerProps {
   disabled?: boolean | undefined;
   /** What the chip's hover says beyond its value, such as when a change takes; none where its name says enough. */
   hint?: string | undefined;
+  /** The card the chip's hover hangs in its pill's place while the menu is shut, `hint` its one-line summary, as an agent's place chip hangs where it runs. */
+  card?: React.ReactNode;
   /** The chip's edge the menu hangs from; the trailing one where none is named. */
   align?: PopoverAlign | undefined;
   /** How wide the chip stands; the settings column where none is named. */
@@ -109,12 +115,14 @@ export function Picker({
   iconOnly = false,
   replayUnmasked,
   rows,
+  foot,
   placeholder,
   noMatch,
   note,
   anchor,
   disabled,
   hint,
+  card,
   align = POPOVER_ALIGN.END,
   width = CHIP_WIDTH.FIELD,
   look = CHIP_LOOK.FIELD,
@@ -150,7 +158,10 @@ export function Picker({
       className="settings-picker relative inline-flex min-w-0 flex-initial items-center"
       ref={row}
     >
-      <Tooltip label={open ? undefined : (hint ?? (iconOnly ? valueLabel : undefined))}>
+      <Tooltip
+        label={open ? undefined : (hint ?? (iconOnly ? valueLabel : undefined))}
+        card={open ? undefined : card}
+      >
         <Chip
           ref={chip}
           look={look}
@@ -183,7 +194,6 @@ export function Picker({
           id={menuId}
           label={label}
           placeholder={placeholder}
-          rows={rows}
           value={value}
           note={note}
           noMatch={noMatch}
@@ -191,6 +201,33 @@ export function Picker({
           width={menuWidth}
           replayUnmasked={replayUnmasked}
           onSearch={onSearch}
+          // Note that a row's act closes the menu as a pinned row's press does, since each hands on to a dialog.
+          rows={rows.map((listed) =>
+            listed.actions === undefined
+              ? listed
+              : {
+                  ...listed,
+                  actions: {
+                    ...listed.actions,
+                    onPick: (id) => {
+                      close();
+                      listed.actions?.onPick(id);
+                    },
+                  },
+                },
+          )}
+          foot={foot?.map((pinned) => {
+            const press = pinned.onPress;
+            return press === undefined
+              ? pinned
+              : {
+                  ...pinned,
+                  onPress: () => {
+                    close();
+                    press();
+                  },
+                };
+          })}
           onPick={(id) => {
             close();
             onPick(id);
@@ -213,7 +250,6 @@ export function Picker({
  */
 export function PickerRow({
   detail,
-  changed,
   saves = 0,
   error,
   density,
@@ -226,8 +262,6 @@ export function PickerRow({
   labelReplayUnmasked?: boolean | undefined;
   /** The why under the row's name: words, and where a row needs one, a link among them. */
   detail?: React.ReactNode;
-  /** Whether the stored value differs from the default, which earns the mark. */
-  changed?: boolean | undefined;
   /** How many of the row's writes have landed, which its Saved tick confirms each of. */
   saves?: number | undefined;
   /** What the last write was refused with, or nothing while none was. */
@@ -244,7 +278,7 @@ export function PickerRow({
       density={density}
       indent={indent}
       label={<ReplayWords unmasked={labelReplayUnmasked}>{picker.label}</ReplayWords>}
-      adornment={<SettingMarks changed={changed} saves={saves} />}
+      adornment={<SavedTick saves={saves} />}
       description={detail}
       error={replayMaskedError(error)}
     >

@@ -13,6 +13,7 @@
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { isUnread } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -25,7 +26,6 @@ import { KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { type PressedRows, pressRows, type RowWrite } from "../undo-stack.js";
 import { appStateIn } from "../use-app-state.js";
-import { isUnread } from "./inbox-model.js";
 
 /** What one toast says of read marks given to several items: how many the service took, and how many not. */
 export function markedNote(unread: boolean, landed: number, refused: number): string {
@@ -33,6 +33,12 @@ export function markedNote(unread: boolean, landed: number, refused: number): st
   if (landed === 0) return `Could not mark ${countWords(refused, TERM.INBOX_ITEM)} ${state}`;
   const kept = `${countWords(landed, TERM.INBOX_ITEM)} marked ${state}`;
   return refused === 0 ? kept : `${kept}, ${refused} could not be`;
+}
+
+/** What one toast says of a Got it on several notices the service refused some of: how many it took, and how many not. */
+export function acknowledgedNote(landed: number, refused: number): string {
+  if (landed === 0) return `Could not acknowledge ${countWords(refused, TERM.INBOX_ITEM)}`;
+  return `${countWords(landed, TERM.INBOX_ITEM)} acknowledged, ${refused} could not be`;
 }
 
 /** What a toast says of a reminder set, or canceled, that the service did not take. */
@@ -58,10 +64,12 @@ interface RemindFields {
 function inboxItemIn(rows: InboxRows, itemId: string): InboxItem | undefined {
   const fed = rows?.[LIVE_READ.INBOX_ITEMS].rows;
   const held = rows?.[LIVE_READ.HOLDER_INBOX];
-  const lists = Object.values(INBOX_SCOPE_KIND).flatMap((kind) => [
-    ...Object.values(fed?.[kind] ?? {}),
-    ...Object.values(held?.[kind] ?? {}).map((read) => read.rows ?? []),
-  ]);
+  const lists = [
+    ...Object.values(fed?.[INBOX_SCOPE_KIND.PLAN] ?? {}),
+    ...Object.values(INBOX_SCOPE_KIND).flatMap((kind) =>
+      Object.values(held?.[kind] ?? {}).map((read) => read.rows ?? []),
+    ),
+  ];
   for (const items of lists) {
     const item = items.find((each) => each.id === itemId);
     if (item !== undefined) return item;

@@ -1,6 +1,6 @@
 import { RUN_EVENT, RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
-import { TURN_STATUS } from "@repo/wire";
+import { TURN_OPEN } from "@repo/wire";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { Effect, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -83,7 +83,7 @@ const endedSessionTurns = SqlSchema.findAll({
           and(
             eq(conversations.runtimeSessionId, request.runtimeSessionId),
             eq(conversations.kind, CONVERSATION_KIND.AGENT),
-            inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+            inArray(turns.status, [...TURN_OPEN]),
           ),
         )
         .orderBy(asc(turns.queuedAt), asc(turns.id))
@@ -105,13 +105,14 @@ export type LostTurnEnd =
       readonly failureDetail: string;
     };
 
-/** The words a turn whose runner went away fails with: lost, past its deadline as its state, or as a run its launch said failed. */
+/** The words a turn whose runner went away fails with: lost, past its deadline as its state, as a run its launch said failed, or as one its plan's limit cut short that no launch took up again. */
 export type LostRunnerFailure =
   | typeof TURN_FAILURE.MODEL
   | typeof TURN_FAILURE.LINE_UNTAKEN
   | typeof TURN_FAILURE.NO_PROGRESS
   | typeof TURN_FAILURE.RUNNER_LOST
-  | typeof TURN_FAILURE.DEADLINE;
+  | typeof TURN_FAILURE.DEADLINE
+  | typeof TURN_FAILURE.PLAN_LIMIT;
 
 /** What a native agent's turn whose runner went away says it failed of, as a runner's own failed end says why; a caller that knows how the runner ended appends that after it. */
 export const RUNNER_LOST_DETAIL = "the agent's runner stopped before its turn ended";
@@ -130,7 +131,7 @@ const agentRunningTurns = SqlSchema.findAll({
           and(
             eq(turns.conversationId, conversationId),
             eq(conversations.kind, CONVERSATION_KIND.AGENT),
-            inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+            inArray(turns.status, [...TURN_OPEN]),
           ),
         )
         .orderBy(asc(turns.queuedAt), asc(turns.id)),

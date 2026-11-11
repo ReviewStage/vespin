@@ -11,8 +11,10 @@ import {
   DESCRIPTION_ATTACHMENT_KEEP,
   keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
+import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { user } from "@repo/database/schemas/auth";
+import { organization, user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
@@ -25,6 +27,7 @@ import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { BROWSER_AGENT_ACTION } from "@repo/features/browser-agent-actions";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
+import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
@@ -37,7 +40,7 @@ import {
 } from "@repo/wire";
 import { webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Layer, Option } from "effect";
+import { Clock, Effect, Layer, Option, Redacted } from "effect";
 import { Base64 } from "effect/encoding";
 import { type HttpClient, HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -50,6 +53,7 @@ import {
   completeIntegrationSignIn,
 } from "../../integrations/integration-store.js";
 import { INTEGRATION } from "../../integrations/integrations.js";
+import { PageLinks } from "../../pages/page-links.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import type { CommentToolName } from "../../tasks/comment-tools.js";
 import { PICTURE_LOOK_REFUSAL, pictureNotLooked } from "../../tasks/picture-look.js";
@@ -86,6 +90,7 @@ import { postToInbox } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
+import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import {
   isServedTool,
   listedTool,
@@ -98,6 +103,7 @@ import {
   WORKSPACE_INTEGRATION_MCP_PATH,
   WORKSPACE_MCP_PATH,
   WORKSPACE_MCP_PROTOCOL_VERSIONS,
+  type WorkspaceMcpAgentSandbox,
   type WorkspaceMcpBrowser,
   workspaceMcpApp,
 } from "./app.js";
@@ -150,6 +156,18 @@ const NO_INTEGRATIONS = integrationConnectOf(() => ({
   configured: false,
 }));
 
+/** A deployment with no page sandbox, as a Preview is, whose shared port's link is its sandbox's own route. */
+const NO_PAGE_SANDBOX = Layer.succeed(PageLinks, { sandbox: undefined });
+
+/** A deployment with the page sandbox, whose shared port's link is the agent's members-only preview host. */
+const PAGE_SANDBOX = Layer.succeed(PageLinks, {
+  sandbox: {
+    origin: PAGE_SANDBOX_ORIGIN,
+    key: Redacted.make("synthetic-preview-key-for-tests-only-00000"),
+    appOrigins: [ORIGIN],
+  },
+});
+
 /** The services the doors run against, over the test's database: GitHub, the catalog, and Linear none of them reach. */
 const doorServices = Effect.gen(function* () {
   return Layer.mergeAll(
@@ -162,6 +180,7 @@ const doorServices = Effect.gen(function* () {
     NO_INTEGRATIONS,
     Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
     Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+    NO_PAGE_SANDBOX,
   );
 });
 
@@ -190,17 +209,36 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
 /** A sandbox no call opens: a tool that reads no file never asks for it. */
 const NO_SANDBOX: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
 
-/** The server's group over the test's database, the sandbox door and the browser given, and any services that stand in for the ones given, as a fetch a client is handed. */
+/** An agent's sandbox whose every ask dies: a tool that touches no port never asks it. */
+const NO_AGENT_SANDBOX: WorkspaceMcpAgentSandbox = Layer.mock(AgentSandbox)({});
+
+/** An agent's sandbox that shares one port at a time by a link named for its session, the port shared kept by session; its every other ask dies. */
+function sharingSandbox() {
+  const shared = new Map<string, number>();
+  const layer = Layer.mock(AgentSandbox)({
+    share: (sessionId, port) =>
+      Effect.sync(() => {
+        shared.set(sessionId, port);
+        return `https://${sessionId}-${port}.sandbox.test`;
+      }),
+    unshare: (sessionId) => Effect.sync(() => void shared.delete(sessionId)),
+  });
+  return { layer, shared };
+}
+
+/** The server's group over the test's database, the sandbox door, the browser, the agent's sandbox, and the page links given, and any services that stand in for the ones given, as a fetch a client is handed. */
 const standingOver = (
   sandbox: InboxSandboxDoor = NO_SANDBOX,
   instead?: Layer.Layer<IntegrationConnect | HttpClient.HttpClient>,
   browser: WorkspaceMcpBrowser = noSandboxBrowserLayer,
+  agentSandbox: WorkspaceMcpAgentSandbox = NO_AGENT_SANDBOX,
+  pageLinks: Layer.Layer<PageLinks> = NO_PAGE_SANDBOX,
 ) =>
   Effect.gen(function* () {
-    const base = yield* doorServices;
+    const base = Layer.merge(yield* doorServices, pageLinks);
     const services = instead === undefined ? base : Layer.merge(base, instead);
     const web = HttpRouter.toWebHandler(
-      workspaceMcpApp({ sandbox: () => ({ files: sandbox }), browser }).pipe(
+      workspaceMcpApp({ sandbox: () => ({ files: sandbox }), browser, agentSandbox }).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },
@@ -241,15 +279,14 @@ const agentWithBearer = Effect.gen(function* () {
   };
 });
 
-/** A Codex agent on no task and in no repository, as an automation's run starts one, with a runner's bearer recorded for its conversation. */
-const agentOnNoTaskWithBearer = Effect.gen(function* () {
+/** A Codex agent on a task in no repository, with a runner's bearer recorded for its conversation. */
+const agentInNoRepositoryWithBearer = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const organizationId = yield* openWorkspace(userId);
   const started = yield* createAgent(userId, {
-    taskId: null,
-    organizationId,
+    taskId: (yield* createTask(userId, { organizationId })).id,
     descriptionSnapshot: null,
     prompt: "Chart the funnel",
     idempotencyKey: randomUUID(),
@@ -364,6 +401,8 @@ const AGENT_TOOLS = [
   "run_automation",
   "save_memory",
   "search_memory",
+  "schedule_wakeup",
+  "end_turn",
 ] as const;
 
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
@@ -382,6 +421,8 @@ const SERVED_TOOLS = [
   "update_comment",
   "run_on_mac",
   "browser",
+  "list_ports",
+  "share_port",
 ] as const;
 
 type ServedTool = (typeof SERVED_TOOLS)[number];
@@ -401,12 +442,18 @@ const commentTool =
 /**
  * Each tool's own door, called directly as the catalog calls it: the server's answer to
  * a tool is to be this one's, so a tool routed to any other door, or to
- * none, answers otherwise. The agent tools are left out, since each one's
+ * none, answers otherwise. The agent tools and the ports' are left out, since each one's
  * catalog entry names its run itself, and no door of theirs stands apart
  * from the catalog to call.
  */
 const DOOR_OF: Readonly<
-  Record<Exclude<ServedTool, "run_on_mac" | "browser" | (typeof AGENT_TOOLS)[number]>, DirectCall>
+  Record<
+    Exclude<
+      ServedTool,
+      "run_on_mac" | "browser" | "list_ports" | "share_port" | (typeof AGENT_TOOLS)[number]
+    >,
+    DirectCall
+  >
 > = {
   post_thread: (admitted, input) =>
     runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox: NO_SANDBOX }),
@@ -604,6 +651,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const fetch = yield* standing;
         const agent = yield* agentWithBearer;
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.MEMORY);
+        yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.TURN_END);
         yield* descriptionsOn(agent.userId);
         const client = yield* connected(fetch, agent.bearer);
 
@@ -616,7 +664,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const standingOn = {
           agent: Option.none(),
           open: new Set<ToolGate>(),
-          experiments: { descriptionsOn: true, memoryOn: true },
+          experiments: { descriptionsOn: true, memoryOn: true, turnEndOn: true },
         };
         for (const tool of listed.tools) {
           const served = isServedTool(tool.name) ? TOOL_CATALOG.get(tool.name) : undefined;
@@ -645,13 +693,12 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
   it.effect.each([
     {
-      // An agent on no task is listed the description's tools all the same.
       why: "in no repository, the checkout's",
-      agent: agentOnNoTaskWithBearer,
+      agent: agentInNoRepositoryWithBearer,
       withheld: ["open_pull_request"],
     },
     {
-      why: "on a device, the browser and run_on_mac",
+      why: "on a device, the browser, run_on_mac, and the sandbox's ports",
       agent: Effect.gen(function* () {
         const agent = yield* agentWithBearer;
         yield* Database.use((db) =>
@@ -662,10 +709,10 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         return agent;
       }),
-      withheld: ["browser", "run_on_mac"],
+      withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
     },
   ])(
-    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory and the description's tools where its starter has Memory and Task descriptions off",
+    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, and the turn's end tools where its starter has Memory, Task descriptions, and Done and follow-ups off",
     ({ agent: made, withheld }) =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -681,6 +728,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "search_memory",
           "edit_description",
           "look_at_picture",
+          "end_turn",
         ];
         assert.deepEqual(
           listed.tools.map((tool) => tool.name).sort(),
@@ -1141,5 +1189,50 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         reason: BROWSER_TOOL_REFUSAL.NO_SANDBOX,
       });
     }),
+  );
+
+  it.effect(
+    "share_port shares a port of the agent's own sandbox at its members-only preview host, never the sandbox's route, and null stops sharing",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        const admitted = Option.getOrThrow(yield* admitRunnerBearer(agent.bearer));
+        const sessionId = `wrun_${randomUUID()}`;
+        const now = new Date(yield* Clock.currentTimeMillis);
+        yield* claimRuntimeSession(admitted.target, sessionId, now);
+        const sandbox = sharingSandbox();
+        const fetch = yield* standingOver(
+          NO_SANDBOX,
+          undefined,
+          undefined,
+          sandbox.layer,
+          PAGE_SANDBOX,
+        );
+        const client = yield* connected(fetch, agent.bearer);
+
+        const share = yield* Effect.promise(() =>
+          client.callTool({ name: "share_port", arguments: { port: 3000 } }),
+        );
+        const sharedThen = [...sandbox.shared];
+        const stop = yield* Effect.promise(() =>
+          client.callTool({ name: "share_port", arguments: { port: null } }),
+        );
+        yield* Effect.promise(() => client.close());
+
+        // The agent's preview host is its workspace's slug, its task's number, and its id's head, under the page sandbox's domain.
+        const [workspace] = yield* (yield* Database)
+          .select({ slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, agent.organizationId));
+        const host = `${workspace?.slug}-1-${agent.agentId.slice(0, 6)}.vespin.page`;
+        assert.deepEqual(firstJson(share), {
+          status: "accepted",
+          port: 3000,
+          url: `https://${host}/`,
+        });
+        assert.deepEqual(sharedThen, [[sessionId, 3000]]);
+        assert.deepEqual(firstJson(stop), { status: "accepted", shared: null });
+        assert.deepEqual([...sandbox.shared], []);
+      }),
   );
 });

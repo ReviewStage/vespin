@@ -1,4 +1,4 @@
-import { type LINK_PLACE, type LinkPlace, linkOf } from "./link-grammar.js";
+import { type LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
 import { isLinkHome, LINK_HOME_PATTERN } from "./link-home.js";
 import { insideCode } from "./mention-link.js";
 import { parsedUrl } from "./parsed-url.js";
@@ -11,8 +11,8 @@ import { parsedUrl } from "./parsed-url.js";
  * link (`link-grammar.ts`) with `/files/<attachment>` after it, as a description's
  * picture stands under its plan's (`description-attachment-link.ts`):
  * `https://vespin.dev/<workspace>/task/<task>/inbox/<item>/files/<attachment>`,
- * or `/agent/<agent>/inbox/<item>/files/<attachment>` for an item of an
- * agent with no task. The address is a real one on purpose: opened in a
+ * or `/agent/<agent>/inbox/<item>/files/<attachment>`, found by its agent,
+ * as the service writes a picture's address. The address is a real one on purpose: opened in a
  * browser it lands on the item, which opens to its readers alone, and
  * pasted anywhere else it names a picture only the item's readers can
  * fetch. The item and the attachment are what the picture is read by;
@@ -25,7 +25,7 @@ import { parsedUrl } from "./parsed-url.js";
 /** The step the picture's id follows in its address. */
 const FILES_STEP = "files";
 
-/** The steps a holder of an item is named under: a task, by either spelling, or an agent with no task. */
+/** The steps a holder of an item is named under: a task, by either spelling, or its agent. */
 const HOLDER_STEPS: ReadonlySet<string> = new Set(["plan", "task", "agent"]);
 
 /** The step an item's id follows. */
@@ -62,8 +62,11 @@ export const INBOX_PICTURE_IN_WORDS =
 /** A destination that names a scheme, `https:`, `data:`, or our own, and so no file in the agent's sandbox. */
 const SCHEMED = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
 
-/** An item of the Inbox as its link names it: under its task, or under its agent with no task. */
-export type InboxItemPlace = Extract<LinkPlace, { readonly kind: typeof LINK_PLACE.INBOX_ITEM }>;
+/** An item of the Inbox as its link names it: under its task, or under its agent. */
+export type InboxItemPlace = Extract<
+  LinkDestination,
+  { readonly kind: typeof LINK_DESTINATION.INBOX_ITEM }
+>;
 
 /** One picture of one Inbox item. */
 export interface InboxAttachmentRef {

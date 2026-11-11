@@ -4,6 +4,12 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
+import {
+  nextPictureName,
+  unusedName,
+  writableName,
+  writtenMarkers,
+} from "@repo/features/file-marker";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
 import { reportShownFailure } from "./failure-report.js";
@@ -37,6 +43,18 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * is held to its type's bound, a message to ten files and to 3 MB
  * together, and the first file that cannot come says why in the box's
  * note while the ones that can still come.
+ *
+ * A box that takes files into its words (`inWords`) attaches each image
+ * under a picture's name, "Picture 1" and on, and every other file under its
+ * own name made one a marker can spell and no other file of the box holds
+ * (`@repo/features/file-marker`), and has each one's marker put in as a chip
+ * where the caret stood as the files were handed, once they are read, as a
+ * long paste taken as a file is put in where it was pasted. A file whose
+ * marker was in the words goes with it: deleting its chip takes the file
+ * off, and undo bringing the chip back brings the file back (`follow`),
+ * until the message goes (`settle`). A file the words could not take, the
+ * box's editor not loaded or its bound reached, stays attached beside the
+ * words, as every file stood before markers.
  */
 
 /** Why a file did not come, in the words the box's note says. */
@@ -69,10 +87,10 @@ function longPaste(words: string): boolean {
   return false;
 }
 
-/** The next pasted file's name: one past the highest the box holds, so a chip taken off frees no number a later paste reuses beside its neighbor. */
-function pastedName(held: readonly AgentAttachment[]): string {
-  const highest = held.reduce((most, file) => {
-    const number = PASTED_NAME.exec(file.name)?.[1];
+/** The next pasted file's name: one past the highest the box has used, so a chip taken off frees no number a later paste reuses beside its neighbor. */
+function pastedName(used: readonly string[]): string {
+  const highest = used.reduce((most, name) => {
+    const number = PASTED_NAME.exec(name)?.[1];
     return number === undefined ? most : Math.max(most, Number(number));
   }, 0);
   return `Pasted text ${String(highest + 1)}.txt`;
@@ -184,6 +202,11 @@ interface AttachedFilesHolder {
   readonly update: (next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[]) => void;
 }
 
+/** Where a box puts its files' markers: a place marked as files are handed, which once they are read puts in the files named and answers whether it did; nothing where the words take none now. */
+export interface AttachedInWords {
+  readonly place: () => ((names: readonly string[]) => boolean) | undefined;
+}
+
 /** What a box takes and where its files and its note go. */
 export interface AttachedFilesOptions {
   /** Says the box's note: why the last files handed did not all come, or nothing once they did. */
@@ -194,6 +217,10 @@ export interface AttachedFilesOptions {
   readonly most?: number | undefined;
   /** Whether the box takes no files now, as the agent box while a send holds it. */
   readonly held?: boolean | undefined;
+  /** Where the box puts the files it takes into its words; none where it takes them beside the words alone. */
+  readonly inWords?: AttachedInWords | undefined;
+  /** The box's words as it opens, whose markers name the files its chips hold already, as a draft kept or a message opened for editing does. */
+  readonly words?: string | undefined;
 }
 
 /** The files a box holds and the ways it takes more and lets them go. */
@@ -214,6 +241,10 @@ export interface AttachedFiles {
   readonly set: (attachments: readonly AgentAttachment[]) => void;
   /** The drop target the box's card spreads, and whether files are over it. */
   readonly drop: FileDrop;
+  /** The box's words as they now stand, which take off a file whose marker they no longer hold and bring back one whose marker came back. */
+  readonly follow: (words: string) => void;
+  /** The box's message sent: once the box stands empty after it, the files taken off with their chips, which undo can no longer bring back, are let go, and the next picture is "Picture 1" again; a send that leaves the words standing lets go of nothing. */
+  readonly settle: () => void;
 }
 
 /** The files a box holds, read as they are handed to it on the terms `options` sets. */
@@ -234,18 +265,54 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   const holderNow = () => latest.current.holder ?? ownHolder;
   const heldNow = () => latest.current.holder?.attachments ?? ownNow.current;
   const [reading, setReading] = useState(0);
+  // The files whose markers the words have held, the files taken off with their markers, by name, and every name handed out, all until the box empties.
+  // Note that the words the box opens on name files too, since its editor hands back no words it opened on.
+  const [opened] = useState(
+    () => new Set(writtenMarkers(options.words ?? "").map((marker) => marker.name)),
+  );
+  const placed = useRef(opened);
+  const stashed = useRef(new Map<string, AgentAttachment>());
+  const minted = useRef(new Set<string>());
+  // Whether the box's message went, so the next time its words and files stand empty its files are let go.
+  const settling = useRef(false);
 
-  const take = (read: FilesRead) => {
+  /** Every name held, taken off, or handed out, which no file the box takes is named again. */
+  const usedNames = () =>
+    new Set([...heldNow().map((file) => file.name), ...stashed.current.keys(), ...minted.current]);
+  /** The files read named as their markers name them: an image as the next picture, any other file by its own name written so a marker can carry it, each past every name used, so no two files of the box share one. */
+  const renamed = (read: FilesRead): FilesRead => {
+    const used = usedNames();
+    const attachments = read.attachments.map((file) => {
+      const picture = file.mediaType.startsWith("image/");
+      const name = picture ? nextPictureName(used) : unusedName(writableName(file.name), used);
+      used.add(name);
+      minted.current.add(name);
+      return { ...file, name };
+    });
+    return { ...read, attachments };
+  };
+  const take = (read: FilesRead, place: ((names: readonly string[]) => boolean) | undefined) => {
     const { most = AGENT_BOUNDS.MAX_ATTACHMENTS, onRefusal } = latest.current;
-    const taken = withFiles(heldNow(), read, most);
-    holderNow().update((now) => withFiles(now, read, most).attachments);
+    const kept = place === undefined ? read : renamed(read);
+    const taken = withFiles(heldNow(), kept, most);
+    holderNow().update((now) => withFiles(now, kept, most).attachments);
     onRefusal(taken.refusal);
+    // Note that the markers go in once the files are held, so the words never name a file the box does not hold.
+    const names = kept.attachments
+      .filter((file) => taken.attachments.includes(file))
+      .map((file) => file.name);
+    // Note that the place is answered even with no file to put in, so its mark is let go.
+    if (place?.(names) === true) {
+      for (const name of names) placed.current.add(name);
+    }
   };
   const attach = (files: readonly File[]) => {
     if (files.length === 0 || latest.current.held === true) return;
+    // Note that the place is marked as the files are handed, so their markers land where the caret stood then.
+    const place = latest.current.inWords?.place();
     setReading((count) => count + 1);
     void readFiles(files)
-      .then(take)
+      .then((read) => take(read, place))
       .finally(() => setReading((count) => count - 1));
   };
   const drop = useFileDrop((files) => attach(Array.from(files)), { over: options.held !== true });
@@ -266,14 +333,17 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
       if (bytes.length > AGENT_BOUNDS.MAX_TEXT_BYTES) return false;
       // Note that the words are read here and now rather than through `attach`, so a box with no room for them keeps them as words.
       const file: AgentAttachment = {
-        name: pastedName(heldNow()),
+        name: pastedName([...usedNames()]),
         mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
         data: base64Of(bytes),
       };
       const read = { attachments: [file], refusal: undefined };
       if (withFiles(heldNow(), read, most).refusal !== undefined) return false;
       latest.current.onRefusal(undefined);
+      minted.current.add(file.name);
       holderNow().update((now) => withFiles(now, read, most).attachments);
+      // Note that the pasted file goes in where the words would have, as a file handed to the box does.
+      if (latest.current.inWords?.place()?.([file.name]) === true) placed.current.add(file.name);
       return true;
     },
     remove: (index) => {
@@ -286,5 +356,36 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
       holderNow().update(() => next);
     },
     drop,
+    settle: () => {
+      settling.current = true;
+    },
+    follow: (words) => {
+      if (latest.current.inWords === undefined) return;
+      const held = heldNow();
+      // Note that a message is let go only once the box stands empty after it, because a send that
+      // leaves its words standing, a queued edit refused, still holds its files and what undo brings back.
+      if (settling.current && words === "" && held.length === 0) {
+        settling.current = false;
+        placed.current.clear();
+        stashed.current.clear();
+        minted.current.clear();
+        return;
+      }
+      if (words !== "") settling.current = false;
+      // Note that a marker in code still holds its file, which the box then draws beside its words.
+      const marked = new Set(writtenMarkers(words).map((marker) => marker.name));
+      const gone = held.filter((file) => placed.current.has(file.name) && !marked.has(file.name));
+      const back = [...stashed.current.values()].filter(
+        (file) => marked.has(file.name) && !held.some((each) => each.name === file.name),
+      );
+      for (const file of gone) stashed.current.set(file.name, file);
+      for (const file of back) stashed.current.delete(file.name);
+      for (const name of marked) placed.current.add(name);
+      if (gone.length === 0 && back.length === 0) return;
+      holderNow().update((now) => [
+        ...now.filter((file) => !gone.includes(file)),
+        ...back.filter((file) => !now.some((each) => each.name === file.name)),
+      ]);
+    },
   };
 }

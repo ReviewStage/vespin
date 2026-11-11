@@ -24,7 +24,20 @@ import {
 } from "@repo/features/automation-wire";
 import type { SentryTriggerEvent, TriggerProvider } from "@repo/features/trigger-catalog";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import { and, asc, desc, eq, exists, gte, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -34,10 +47,8 @@ import { agentTable } from "../schemas/agent.js";
 import { member } from "../schemas/auth.js";
 import { automation, automationRun } from "../schemas/automation.js";
 import { conversations } from "../schemas/storage.js";
-import { task } from "../schemas/task.js";
 import { noOpenInboxItem, noOpenPullRequest } from "./agent-store.js";
 import { InstantColumnSchema } from "./columns.js";
-import { taskMadeByRun } from "./run-tasks.js";
 import type { TaskStoreEffect, TaskStoreFailure } from "./task-store.js";
 import { isWorkspaceMember, roleAmong } from "./workspace-store.js";
 
@@ -728,7 +739,12 @@ const writeClaim = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(automationRun)
-        .set({ status: AUTOMATION_RUN_STATUS.STARTED, claimedAgentId, settledAt: now })
+        .set({
+          status: AUTOMATION_RUN_STATUS.STARTED,
+          claimedAgentId,
+          claimedAt: now,
+          settledAt: now,
+        })
         .where(
           and(eq(automationRun.id, id), eq(automationRun.status, AUTOMATION_RUN_STATUS.QUEUED)),
         )
@@ -736,10 +752,14 @@ const writeClaim = SqlSchema.findAll({
     ),
 });
 
-/** A run claimed for its start and not yet holding the agent it started: started, with no agent. */
+/**
+ * A run claimed for its start and not yet holding the agent it started:
+ * started, with its claim standing. Note that a started run with no agent is
+ * no claim, because its agent may have been deleted since.
+ */
 const CLAIMED = and(
   eq(automationRun.status, AUTOMATION_RUN_STATUS.STARTED),
-  isNull(automationRun.agentId),
+  isNotNull(automationRun.claimedAt),
 );
 
 const writeAgent = SqlSchema.findAll({
@@ -754,7 +774,13 @@ const writeAgent = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(automationRun)
-        .set({ status: AUTOMATION_RUN_STATUS.STARTED, agentId, reason, settledAt: now })
+        .set({
+          status: AUTOMATION_RUN_STATUS.STARTED,
+          agentId,
+          reason,
+          claimedAt: null,
+          settledAt: now,
+        })
         .where(
           and(
             eq(automationRun.id, id),
@@ -800,7 +826,7 @@ const writeClaimFailed = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(automationRun)
-        .set({ status: AUTOMATION_RUN_STATUS.FAILED, reason, settledAt: now })
+        .set({ status: AUTOMATION_RUN_STATUS.FAILED, reason, claimedAt: null, settledAt: now })
         .where(and(eq(automationRun.id, id), CLAIMED))
         .returning({ id: automationRun.id }),
     ),
@@ -1052,7 +1078,7 @@ export function createAutomationCommitted(
       scope: made.scope ?? AUTOMATION_SCOPE.PERSONAL,
       targetKind: made.targetKind ?? AUTOMATION_TARGET.NEW_AGENT,
       targetAgentId: made.targetAgentId ?? null,
-      archiveSuccessful: made.archiveSuccessful ?? false,
+      archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
       now,
     });
@@ -1446,28 +1472,6 @@ const writeRunTask = SqlSchema.void({
 /** Records the task the run's agent works on, before the agent is started, so a run whose start then fails still names the task it made. */
 export function attachRunTask(runId: string, taskId: string): TaskStoreEffect<void> {
   return writeRunTask({ runId, taskId });
-}
-
-const findRunMadeTask = SqlSchema.findOneOption({
-  Request: Schema.Struct({ taskId: Schema.String }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ taskId }) =>
-    Database.use((db) =>
-      db
-        .select({ id: task.id })
-        .from(task)
-        .where(and(eq(task.id, taskId), taskMadeByRun(task.id)))
-        .limit(1),
-    ),
-});
-
-/**
- * Whether the task is one a run made for itself alone (`run-tasks.ts`); a
- * same-agent automation's standing task is every run's, and no one run's to
- * finish.
- */
-export function isRunTask(taskId: string): TaskStoreEffect<boolean> {
-  return Effect.map(findRunMadeTask({ taskId }), Option.isSome);
 }
 
 /**

@@ -6,13 +6,12 @@
  * intent as its `state`, which the connect's callback spends
  * (`github-install-app.ts`), adding the installation beside any the
  * workspace holds; it takes an owner or admin of the workspace, and a
- * workspace the account is not in answers as none does. Which
- * installations and repositories a workspace holds is managed on GitHub,
- * so `.../disconnect`, which a Mac from before several installations still
- * sends, is refused as not permitted to every signed-in account and removes
- * nothing: a workspace's installations are now managed on GitHub, where
- * uninstalling one reaches the webhook, so the old press must not remove
- * every installation the workspace holds.
+ * workspace the account is not in answers as none does. `.../disconnect`,
+ * which a Mac from before several installations still sends, is refused as
+ * not permitted to every signed-in account and removes nothing: a
+ * workspace's installations are managed on GitHub, where uninstalling one
+ * reaches the webhook, so the old press must not remove every installation
+ * the workspace holds.
  *
  * The bearer is resolved before the body is read, by the middleware on the
  * resource, so an unsigned caller is refused as unauthenticated whatever it

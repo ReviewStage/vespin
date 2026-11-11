@@ -45,17 +45,23 @@ fi
 # `/effect`, `/client`, `/act-port`, `/service-layer`, `/agent-notices` and
 # `/task-code`, which the web app runs the host in a tab through, `/acts`,
 # `/app-state`, `/bridge` and `/contract`, which the panel reads, and
-# `/app-state-reads`, `/fixture-stage`, `/fixture-inbox` and
+# `/app-state-reads`, `/fixture-stage`, `/fixture-inbox`, `/follow-stream` and
 # `/task-code-remote`, which the Expo app runs the host on Hermes through
 # beside them (`packages/host/AGENTS.md`). Their graphs name no `node:` module, no `ws`, no
-# `electron`, no `@repo/host/node`, and no `Buffer` or `process` global, and
+# `electron`, no `@repo/host/node` or `@repo/features/node`, and no `Buffer` or `process` global, and
 # what needs one sits behind
 # `@repo/host/node`. The walk crosses into `@repo/credentials` through the
 # doors the host names (its barrel and `/snapshot`), since the account's
 # sign-in lives there: the loopback consent sits behind
 # `@repo/credentials/node`, handed to the host as its `SignInConsent` seam.
 # It crosses into `@repo/sync` too, since every row the host holds lives in
-# its pool. Every other package a walk reaches is still left unchecked here.
+# its pool, and into `@repo/wire`, whose doors (`/effect` among them, which
+# `/follow-stream` reopens a stream on) every one of these reaches. The relay sockets and port-forward tunnel the host composes from
+# `@repo/features` (`/relay-socket`, `/relay-credential`,
+# `/port-forward-tunnel`) are walked as doors of their own, held to the same
+# imports and globals, since their Node seams sit behind
+# `@repo/features/node`. Every other package a walk reaches is still left
+# unchecked here.
 node --input-type=module -e '
   import { readFile } from "node:fs/promises";
   import path from "node:path";
@@ -84,11 +90,19 @@ node --input-type=module -e '
         "app-state-reads.ts",
         "fixture-stage.ts",
         "fixture-inbox.ts",
+        "follow-stream.ts",
         "task-code-remote.ts",
       ],
-      forbidden: /^(node:|ws$|electron$|@effect\/platform-node|@repo\/host\/node)/,
+      forbidden: /^(node:|ws$|electron$|@effect\/platform-node|@repo\/host\/node|@repo\/features\/node)/,
       globals: /\b(Buffer|process)\.\w+/,
-      follows: ["@repo/credentials", "@repo/sync"],
+      follows: ["@repo/credentials", "@repo/sync", "@repo/wire"],
+    },
+    {
+      name: "@repo/features relay doors the host composes",
+      root: "packages/features/src",
+      entries: ["relay-socket.ts", "relay-credential.ts", "port-forward-tunnel.ts"],
+      forbidden: /^(node:|ws$|electron$|@effect\/platform-node|@repo\/features\/node)/,
+      globals: /\b(Buffer|process)\.\w+/,
     },
   ];
   const repository = process.argv[1];

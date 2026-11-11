@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_OWNER } from "@repo/features/page-wire";
@@ -119,7 +119,7 @@ test("an agent's written mentions of a page, an agent, a section, and a file are
     ],
   );
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_PLACE.PAGE, planId: TASK, pageId: PAGE } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: PAGE } },
   ]);
 });
 
@@ -134,7 +134,6 @@ test("a page's chip on the open plan hangs the page's tab's card, previewing its
             rows: [{ id: PAGE, title: "Invite funnel", version: 2, at: 1_800_000_000_000 }],
           },
         },
-        [PAGE_OWNER.AGENT]: {},
       },
     },
   );

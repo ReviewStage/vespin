@@ -22,18 +22,24 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, readAgent, readAgentOfConversation } from "@repo/database/models/agent-store";
 import { readMessageByClientId } from "@repo/database/models/message-reads";
 import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
-import { AGENT_MESSAGE_LEAD, agentMessageReplyLine } from "@repo/features/agent-wire";
+import { agentFailureWords } from "@repo/features/agent-failure-words";
+import { AGENT_TOOL } from "@repo/features/agent-tools";
+import {
+  AGENT_FAILURE,
+  AGENT_MESSAGE_LEAD,
+  agentMessageReplyLine,
+} from "@repo/features/agent-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { TURN_STATUS } from "@repo/wire";
 import type { StoredUIMessage } from "@repo/wire/ui-messages";
-import { isTextUIPart } from "ai";
+import { getToolName, isTextUIPart, isToolUIPart } from "ai";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import type { SessionsForAccount } from "../../automations/automation-runs.js";
-import { MESSAGE_CHANNEL } from "../../core.js";
+import { ACTION_RESULT_STATUS, MESSAGE_CHANNEL, TURN_FAILURE } from "../../core.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { MAX_MESSAGE_WORDS_CHARS } from "./agent-message.js";
@@ -52,12 +58,36 @@ const CUT_MARK = "… (cut to fit; read_agent reads the rest)";
 /** What the line says of a turn that ended in words of its own. */
 const NO_WORDS = "(it said nothing)";
 
-/** The last text a turn's journal holds, whole; none where it said nothing. */
+/** The summary of the turn's last `end_turn`, where its answer took it; none where it ended no turn that way, or that call was refused or never answered. */
+function endTurnSummary(journal: StoredUIMessage): string | undefined {
+  // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
+  const part = journal.parts.findLast(
+    (each) => isToolUIPart(each) && getToolName(each) === AGENT_TOOL.END_TURN,
+  );
+  if (part === undefined || !isToolUIPart(part) || part.state !== "output-available")
+    return undefined;
+  // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
+  const output: unknown = part.output;
+  const status =
+    typeof output === "object" && output !== null && "status" in output ? output.status : undefined;
+  const input: unknown = part.input;
+  if (status !== ACTION_RESULT_STATUS.ACCEPTED || typeof input !== "object" || input === null) {
+    return undefined;
+  }
+  const summary = "summary" in input ? input.summary : undefined;
+  return typeof summary === "string" && summary.trim().length > 0 ? summary.trim() : undefined;
+}
+
+/**
+ * A turn's final words, whole: the summary of its last `end_turn`, which is
+ * what its developer reads as its reply, or else the last text its journal
+ * holds; none where it said nothing.
+ */
 export function lastSaid(journal: StoredUIMessage): string | undefined {
   const said = journal.parts.flatMap((part) =>
     isTextUIPart(part) && part.text.trim().length > 0 ? [part.text.trim()] : [],
   );
-  return said.at(-1);
+  return endTurnSummary(journal) ?? said.at(-1);
 }
 
 /** The agent's final words: the last text its turn's journal holds, cut to fit; none where it said nothing. */
@@ -72,6 +102,10 @@ function finalWords(journal: StoredUIMessage): string | undefined {
 /** How the turn ended, in the head's words. */
 function ended(turn: SettledAgentTurn): string {
   if (turn.status === TURN_STATUS.CANCELED) return "was stopped before it finished";
+  // A turn its plan's usage limit stopped is said so, not as a failure word.
+  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) {
+    return `was stopped: ${agentFailureWords(AGENT_FAILURE.PLAN_LIMIT, undefined)}`;
+  }
   if (turn.status === TURN_STATUS.FAILED) {
     return `failed its turn${turn.failure === null ? "" : ` (${turn.failure})`}`;
   }

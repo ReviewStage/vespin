@@ -64,7 +64,6 @@ import {
   item,
   itemPane,
   keyOn,
-  letResolvesGo,
   listed,
   menuItem,
   menuWords,
@@ -105,6 +104,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { readSegmented, segment, segmentedGroup } from "../testing/segmented.js";
 import { standInBundles } from "../testing/side-bundles.js";
+import { standingToastWords } from "../testing/toast.js";
 
 // Landed before any box renders, as the panel lands it after its first paint.
 beforeAll(() => Effect.runPromise(editorBundleLanded));
@@ -151,9 +151,9 @@ function optionHeads(page: HTMLElement): (string | null)[] {
   return openOptions(pane).map((each) => wordsOf(each));
 }
 
-test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside Mark as read or unread, Remind me, and Copy link, which settles it at once at the revision drawn, the thread saying who resolved it, and reaches the service once its Undo is gone; a settled item's menu offers the same less Resolve", async () => {
+test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside Mark as read or unread, Remind me, and Copy link, which settles it at once at the revision drawn, the thread saying who resolved it, and reaches the service at once; a settled item's menu offers the same less Resolve", async () => {
   world.listedWorkspace = ACME;
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = takenCloses();
   const ellipsis = () =>
@@ -175,10 +175,7 @@ test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside
     "You resolved this without an answer",
     "the thread says the reader resolved it, in a line of its own",
   );
-  assert.deepEqual(sent, [], "nothing reaches the service while Undo stands");
-
-  await letResolvesGo();
-  assert.deepEqual(sent, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
+  assert.deepEqual(sent.closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
   act(() => ellipsis().click());
   assert.deepEqual(
     menuWords(),
@@ -188,7 +185,7 @@ test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside
 });
 
 test("an open question's card offers its × named Resolve, which resolves the item at once, asking nothing and sending no reply beside it, and Send only ever sends an answer", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const closes = takenCloses();
   const sent = heldMessages(writtenOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000093"));
@@ -202,9 +199,8 @@ test("an open question's card offers its × named Resolve, which resolves the it
   act(() => resolve.click());
   await settle();
   assert.equal(document.querySelector('[role="alertdialog"]'), null, "Resolve asks nothing");
-  await letResolvesGo();
 
-  assert.deepEqual(closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
+  assert.deepEqual(closes.closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
   assert.deepEqual(sent, [], "no reply goes beside the resolve");
   assert.equal(
     composerEditor(pane).textContent,
@@ -228,13 +224,12 @@ test("an open item's row offers Resolve among its triage acts, at once; a settle
   act(() => menuItem("Resolve").click());
   await settle();
   assert.equal(document.querySelector('[role="alertdialog"]'), null, "Resolve asks nothing");
-  await letResolvesGo();
-  assert.deepEqual(sent, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
+  assert.deepEqual(sent.closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
   assert.ok(!rowMenu(page, threshold).includes("Resolve"), "the resolved row offers it no longer");
 });
 
 test("an item gone from under its open box, as a teammate's delete takes it, lets go of its draft", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   typeInComposer(itemPane(page), "Use 90% instead");
   await settle();
@@ -269,10 +264,10 @@ test("an answer box whose editor bundle could not be loaded says so beside Retry
       return Promise.reject(new Error("The chunk could not be loaded."));
     },
   });
-  const { page } = mount([], { chosen: ON_THRESHOLD, bundles });
+  const { page } = mount({ chosen: ON_THRESHOLD, bundles });
   await settle();
   const note = page.querySelector(".ui-composer-foot-note");
-  assert.equal(note?.textContent, "The answer box could not be loaded.Retry");
+  assert.equal(note?.textContent, "The message box could not be loaded.Retry");
 
   await act(async () => note?.querySelector("button")?.click());
   await settle();
@@ -281,7 +276,7 @@ test("an answer box whose editor bundle could not be loaded says so beside Retry
 });
 
 test("a waiting choice wears a Recommended badge at the head of the option its agent recommends and of no other, and a choice recommending nothing wears none", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(optionHeads(page), [
     "Retry 3 times over an hourRecommended1Backs off 5, 15, then 40 minutes.",
@@ -295,14 +290,14 @@ test("a waiting choice wears a Recommended badge at the head of the option its a
     options: [{ label: "Retry 3 times over an hour" }, { label: "Retry once" }],
   };
   world.inboxes.set(BILLING.id, [asking(THRESHOLD, ask), RETRY]);
-  const again = mount([], { chosen: ON_THRESHOLD });
+  const again = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(optionHeads(again.page), ["Retry 3 times over an hour1", "Retry once2"]);
 });
 
 test("a waiting choice of one is a radio list, each option led by its radio and numbered at its right: a number key picks its option from the list's row and takes the keyboard there, Space picks the focused one, a number typed in the box picks nothing, and K still steps the list", async () => {
   const keys = standKeymap();
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const pane = itemPane(page);
   assert.deepEqual(
@@ -343,7 +338,7 @@ test("a waiting choice of one is a radio list, each option led by its radio and 
 });
 
 test("Enter on a focused option sends the reply carrying the pick and never presses the option; with nothing picked, Send stands held, and Enter sends nothing and says an option is missing", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(repliedOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000090"));
   const pane = itemPane(page);
@@ -352,7 +347,11 @@ test("Enter on a focused option sends the reply carrying the pick and never pres
   assert.equal(sendHeld(pane), true, "Send stands held");
   assert.deepEqual(
     boxParts(pane),
-    ["controls", "line: Add a note", "row: Attach files, Dictate, Send"],
+    [
+      "controls",
+      "line: Add a note",
+      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+    ],
     "the note line stands on its own under the options, over the row of presses",
   );
   keyOn(openOptions(pane)[0] ?? assert.fail("no option"), "Enter");
@@ -381,7 +380,7 @@ test("a waiting choice of several is a checkbox list whose box counts nothing on
     options: [{ label: "Email" }, { label: "Slack" }, { label: "Pager" }],
   });
   world.inboxes.set(BILLING.id, [several, RETRY]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(repliedOn(several, "c1b2c3d4-0000-4000-8000-000000000091"));
   const pane = itemPane(page);
@@ -697,7 +696,7 @@ const THRESHOLD_ANSWERED: InboxItem = {
 };
 
 test("an answer leaves Needs you the moment it is sent, its row staying where it stood", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { sent } = gatedAnswers();
 
@@ -722,7 +721,7 @@ function placesOf(page: HTMLElement): string[] {
 test("on To do, answering the chosen item draws its row gray where it stood, and choosing another row clears it", async () => {
   window.localStorage.setItem(SHOW_KEY, JSON.stringify("to-do"));
   window.localStorage.removeItem(WHOSE_KEY);
-  const { page } = mount([], { chosen: ON_EXPIRY });
+  const { page } = mount({ chosen: ON_EXPIRY });
   await settle();
   const { answer } = gatedAnswers();
   assert.deepEqual(listed(page), ["▸ *Expire after 7 days?", "*Alert at 80%?"]);
@@ -759,7 +758,7 @@ test("on To do, answering the chosen item draws its row gray where it stood, and
 test("on To do, the chosen row stands once the Inbox is come back to, gray, though its item was answered while it was hidden", async () => {
   window.localStorage.setItem(SHOW_KEY, JSON.stringify("to-do"));
   window.localStorage.removeItem(WHOSE_KEY);
-  const { page } = mount([], { chosen: ON_EXPIRY });
+  const { page } = mount({ chosen: ON_EXPIRY });
   await settle();
   assert.deepEqual(listed(page), ["▸ *Expire after 7 days?", "*Alert at 80%?"]);
 
@@ -832,7 +831,7 @@ test("an answer moves no row while the list is shown, and the list sorts anew on
 });
 
 test("an answer the service refuses brings its item back as it was, needing you, with its box's words and why it did not go", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer } = gatedAnswers();
   answerWithNote(page, "Use 90%");
@@ -851,7 +850,7 @@ test("an answer the service refuses brings its item back as it was, needing you,
 });
 
 test("an answer no reply came back for is taken as sent once its thread holds a message under its key: its box empties and says nothing", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer, sent } = gatedAnswers();
   answerWithNote(page, "Use 90%");
@@ -885,10 +884,10 @@ test("an answer no reply came back for is taken as sent once its thread holds a 
   assert.equal(pane.querySelector('.agent-composer [role="alert"]'), null);
 });
 
-test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and the box says so", async () => {
+test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and a toast says so", async () => {
   const notice: InboxItem = { ...noticeOf(THRESHOLD), startedBy: TEAMMATE };
   world.inboxes.set(BILLING.id, [notice, RETRY]);
-  const { page } = mount();
+  const { page } = mount({ toasts: true });
   await settle();
   const waiting: ((view: AgentInboxAnsweredView) => void)[] = [];
   const bridge = appBridge();
@@ -912,14 +911,14 @@ test("a nod on a notice the agent posted over first is not taken: the notice sta
   await act(async () => waiting.shift()?.({ item: asked, taken: false }));
   await settle();
   assert.equal(sendWords(itemPane(page)), "Got it", "the notice stands open, to nod to again");
-  assert.equal(
-    itemPane(page).querySelector('.agent-composer [role="alert"]')?.textContent,
-    "The agent changed this item before your answer landed. Answer it as it stands now.",
-  );
+  assert.deepEqual(standingToastWords(), [
+    "Acknowledged “Alert at 80%?”",
+    "The agent changed this item before you acknowledged it.",
+  ]);
 });
 
 test("an item its agent posts again after it was answered needs you again once a read holds the newer revision, though the list's older read still stands for it elsewhere", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer } = gatedAnswers();
   answerWithNote(page, "Use 90%");
@@ -1023,7 +1022,10 @@ test("picking an option in the draft reply stands it picked and lights Send, the
   assert.deepEqual(subjectParts(pane), ["How long should invites last?"]);
   assert.deepEqual(draftReply(pane), ["You"], "the draft stands at the end, plain");
   assert.equal(composerEditor(pane).getAttribute("aria-label"), "Reply");
-  assert.deepEqual(boxParts(pane), ["line: Reply", "row: Attach files, Dictate, Send"]);
+  assert.deepEqual(boxParts(pane), [
+    "line: Reply",
+    "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+  ]);
 });
 
 test("an approve-or-request-changes ask is two small buttons in the draft reply, the one the agent recommends saying so: the one pressed stands pressed, pressed again it is let go, and the reply sent with words carries it, stamped as requested changes", async () => {
@@ -1083,7 +1085,10 @@ test("an ask of words alone is a plain box with no controls, its line asking for
   const sent = heldMessages(repliedOn(shown, "e1b2c3d4-0000-4000-8000-000000000015"));
   assert.deepEqual(draftReply(pane), ["You"], "no controls stand in the box");
   assert.equal(pane.querySelector("[data-inbox-draft-ask]"), null, "and no Answer press");
-  assert.deepEqual(boxParts(pane), ["line: Reply", "row: Attach files, Dictate, Send"]);
+  assert.deepEqual(boxParts(pane), [
+    "line: Reply",
+    "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+  ]);
   assert.equal(sendHeld(pane), true, "an empty box sends nothing");
   assert.equal(footWords(pane), "");
 
@@ -1132,7 +1137,11 @@ test("a form's fields attach to the reply as they are filled, with no Submit, an
   assert.deepEqual(draftReply(pane), ["You", "controls"]);
   assert.deepEqual(
     boxParts(pane),
-    ["controls", "line: Add a note", "row: Attach files, Dictate, Send"],
+    [
+      "controls",
+      "line: Add a note",
+      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+    ],
     "the note line stands on its own under the form, over the row of presses",
   );
   assert.equal(sendWords(pane), "Send");

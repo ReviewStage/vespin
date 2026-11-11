@@ -2,10 +2,13 @@ import {
   CODE_CARD_TITLE,
   CODE_ROW,
   CodeCard,
+  CodeCardHeader,
+  CodeEditor,
   FileCodeCard,
   TerminalIcon,
   TextButton,
 } from "@repo/ui";
+import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -15,13 +18,34 @@ import { CatalogSection } from "../section";
  * runs, a block of 60 lines cut at 40 behind Show all, a suggestion drawn
  * as rows on the added and removed grounds, a body the caller draws under
  * a header with an action of its own, and a file's lines with the file's
- * opening beside the Copy, as an Inbox item's code stands. The catalog's
+ * opening beside the Copy, as an Inbox item's code stands; the header
+ * alone, its language a press opening its menu, as a block open in a
+ * text's editor wears it; and a code
+ * editor over the same colored lines, its edited lines drawn plain until
+ * colored again, one numbering a script's dozen lines in a gutter as a script's
+ * editor does, and an empty one with its placeholder. The catalog's
  * copy act is the browser's own clipboard; an app hands in its shell's.
  */
 
 const copyToClipboard = (text: string): Promise<void> => navigator.clipboard.writeText(text);
 
 const SHORT = ["pnpm install", "pnpm exec vitest run packages/ui"].join("\n");
+
+/** A setup script past nine lines, so the gutter stands two digits wide and draws each two-digit number whole. */
+const SCRIPT = [
+  "# Start the database the tests run against.",
+  "docker run --detach --name catalog-postgres --publish 5432:5432 postgres:18",
+  "for _ in $(seq 1 60); do",
+  "  docker exec catalog-postgres pg_isready --quiet && break",
+  "  sleep 1",
+  "done",
+  "",
+  "export DATABASE_URL=postgresql://catalog:catalog@localhost:5432/catalog",
+  "pnpm install",
+  "pnpm --filter @repo/web db:migrate",
+  'echo "The database is up and migrated at $DATABASE_URL"',
+  "pnpm exec vitest run packages/ui",
+].join("\n");
 
 const COLORED = [
   'import { CODE_CARD_TITLE, CODE_ROW, CodeCard, TextButton } from "@repo/ui";',
@@ -56,6 +80,47 @@ const LONG = Array.from(
   { length: 60 },
   (_, at) => `  step${at + 1}: "Line ${at + 1} of the block",`,
 ).join("\n");
+
+/** A code editor over `COLORED`, holding its colors for the lines they still spell, as the host's would arrive a moment after a keystroke. */
+function EditedCode(): React.JSX.Element {
+  const [code, setCode] = useState(COLORED);
+  return <CodeEditor label="Colored code" value={code} onChange={setCode} lines={COLORED_LINES} />;
+}
+
+/** A code editor numbering its lines, as a script's stands, a few lines tall while it holds fewer. */
+function NumberedCode(): React.JSX.Element {
+  const [code, setCode] = useState(SCRIPT);
+  return <CodeEditor label="Numbered code" value={code} onChange={setCode} rows={3} lineNumbers />;
+}
+
+/** An empty code editor, its placeholder standing. */
+function EmptyCode(): React.JSX.Element {
+  const [code, setCode] = useState("");
+  return (
+    <CodeEditor label="Empty code" value={code} onChange={setCode} placeholder={SHORT} rows={3} />
+  );
+}
+
+/** The header alone, its language a press, as a block open in a text's editor wears it; the press here only says the menu is open. */
+function PickedLanguage(): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <CodeCardHeader
+      glyph={<TerminalIcon />}
+      title="Shell"
+      titleIs={CODE_CARD_TITLE.WORDS}
+      copied={SHORT}
+      copy={copyToClipboard}
+      picker={{
+        label: "Language: Shell",
+        open,
+        menuId: "catalog-code-language",
+        onPress: () => setOpen(!open),
+        menu: null,
+      }}
+    />
+  );
+}
 
 function CodeCards(): React.JSX.Element {
   return (
@@ -111,6 +176,21 @@ function CodeCards(): React.JSX.Element {
           copy={copyToClipboard}
           onOpen={() => {}}
         />
+      </CatalogSection>
+      <CatalogSection id="code-card-header-picker" title="The header alone, its language a press">
+        <PickedLanguage />
+      </CatalogSection>
+      <CatalogSection
+        id="code-editor"
+        title="A code editor, colored where its colors still spell a line"
+      >
+        <EditedCode />
+      </CatalogSection>
+      <CatalogSection id="code-editor-numbered" title="A code editor numbering its lines">
+        <NumberedCode />
+      </CatalogSection>
+      <CatalogSection id="code-editor-empty" title="An empty code editor, with its placeholder">
+        <EmptyCode />
       </CatalogSection>
     </>
   );

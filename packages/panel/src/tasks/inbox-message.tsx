@@ -1,9 +1,10 @@
-import { INBOX_MESSAGE_AUTHOR, type InboxMessage } from "@repo/features/inbox-wire";
+import { inboxCommentFiles } from "@repo/features/inbox-list-model";
+import { INBOX_MESSAGE_AUTHOR, type InboxMessage, optionFileIds } from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type CommentAuthor, ErrorState } from "@repo/ui";
-import { PICTURE_STATE } from "@repo/ui/picture-read";
-import { useQueries } from "@tanstack/react-query";
+import { PICTURE_STATE, type PictureRead } from "@repo/ui/picture-read";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { ActorRef, commentAuthor } from "../actor-ref.js";
 import { unreadShown } from "../failure-report.js";
@@ -11,8 +12,9 @@ import { usePerson } from "../member-directory.js";
 import { pictureQuery } from "../picture-query.js";
 import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
 import { AttachedFileChips } from "./attached-file-chips.js";
+import { useWordFiles, WordFilesContext } from "./file-chips.js";
 import type { InboxCodeDoors } from "./inbox-code-card.js";
-import { inboxCommentFiles, inboxFileChips } from "./inbox-model.js";
+import { inboxFileChips } from "./inbox-model.js";
 import { InboxPicture, InboxPictures } from "./inbox-pictures.js";
 import { LoneLinkCards } from "./lone-link-card.js";
 import { SentWords } from "./skill-chip.js";
@@ -107,29 +109,24 @@ function CommentFiles({
   itemId,
   files,
   words,
-  images,
+  reads,
 }: {
   itemId: string;
   files: NonNullable<InboxMessage["files"]>;
   /** The comment's words, whose own pictures stand where they name them; none where it wrote none. */
   words: string | undefined;
-  images: InboxImageReads;
+  /** Each file's read, by its id (`MessageWords`). */
+  reads: ReadonlyMap<string, InboxFileRead>;
 }): React.ReactNode {
   const { pictures, others } = useMemo(
     () => inboxCommentFiles(files, words, itemId),
     [files, words, itemId],
   );
-  // Note that each file is read as it is first drawn, and kept as the window's pictures are.
-  const reads = useQueries({
-    queries: others.map((file) => pictureQuery(itemId, file.attachmentId, images.read)),
+  // Note that a picture says itself where its read did not answer (`InboxPicture`), so only the other files' are said here.
+  const failed = others.flatMap((file) => {
+    const read = reads.get(file.attachmentId);
+    return read?.isError === true && !read.isFetching ? [read] : [];
   });
-  const urls = new Map(
-    others.flatMap((file, index) => {
-      const read = reads[index]?.data;
-      return read?.kind === PICTURE_STATE.READY ? [[file.attachmentId, read.url] as const] : [];
-    }),
-  );
-  const failed = reads.filter((read) => read.isError && !read.isFetching);
   return (
     <>
       {pictures.length === 0 ? null : (
@@ -148,7 +145,9 @@ function CommentFiles({
           ))}
         </div>
       )}
-      {others.length === 0 ? null : <AttachedFileChips files={inboxFileChips(others, urls)} />}
+      {others.length === 0 ? null : (
+        <AttachedFileChips files={inboxFileChips(others, readUrls(reads))} />
+      )}
       {failed.length === 0 ? null : (
         <div data-inbox-files-failed="">
           <ErrorState
@@ -165,10 +164,23 @@ function CommentFiles({
   );
 }
 
+/** One of a message's files as read: its bytes once they land, and why the read did not answer. */
+type InboxFileRead = UseQueryResult<PictureRead>;
+
+/** Each file's `data:` URL among the reads that landed, by its id. */
+function readUrls(reads: ReadonlyMap<string, InboxFileRead>): ReadonlyMap<string, string> {
+  return new Map(
+    [...reads].flatMap(([id, read]) =>
+      read.data?.kind === PICTURE_STATE.READY ? [[id, read.data.url] as const] : [],
+    ),
+  );
+}
+
 /**
  * A message's files and words, as its thread draws them: the files it
  * carried over its words, the agent's words drawn as its question's are and
- * a member's as a sent message's, a Markdown document either way.
+ * a member's as a sent message's, a Markdown document either way, each file
+ * a member's words name drawn in them rather than over them.
  */
 export function MessageWords({
   itemId,
@@ -180,13 +192,33 @@ export function MessageWords({
   images: InboxImageReads;
 }): React.JSX.Element {
   const fromAgent = message.author === INBOX_MESSAGE_AUTHOR.AGENT;
+  // Note that the files its ask's options carry stand on their cards, so the message draws them nowhere else.
+  const files = useMemo(() => {
+    const carried = optionFileIds(message.ask);
+    const all = message.files ?? NO_FILES;
+    return carried.size === 0 ? all : all.filter((file) => !carried.has(file.attachmentId));
+  }, [message.files, message.ask]);
+  // Note that each file is read once, as it is first drawn, and kept as the window's pictures are.
+  const queries = useQueries({
+    queries: files.map((file) => pictureQuery(itemId, file.attachmentId, images.read)),
+  });
+  const reads = new Map(
+    files.flatMap((file, at) => {
+      const read = queries[at];
+      return read === undefined ? [] : [[file.attachmentId, read] as const];
+    }),
+  );
+  const chips = inboxFileChips(files, readUrls(reads));
+  // Note that an agent's words write no markers, so they name none of its files.
+  const shown = useWordFiles(chips, fromAgent ? "" : message.text);
+  const { named, viewer } = shown;
   return (
-    <>
+    <WordFilesContext.Provider value={named}>
       <CommentFiles
         itemId={itemId}
-        files={message.files ?? NO_FILES}
+        files={files.filter((_, at) => shown.beside.some((chip) => chip === chips[at]))}
         words={message.text}
-        images={images}
+        reads={reads}
       />
       {message.text === "" ? null : (
         <div
@@ -200,6 +232,7 @@ export function MessageWords({
           )}
         </div>
       )}
-    </>
+      {viewer}
+    </WordFilesContext.Provider>
   );
 }

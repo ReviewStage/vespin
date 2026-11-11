@@ -8,7 +8,7 @@ import type { AgentKind, AgentMachineKind } from "@repo/features/agent-wire";
 import type { AutomationFiringKind, AutomationTriggerKind } from "@repo/features/automation-wire";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { ProviderKeyProvider } from "@repo/features/provider-key-wire";
-import type { TASK_STATUS } from "@repo/features/task-wire";
+import type { TaskSettledStatus } from "@repo/features/task-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import type { INVITATION_ROLE } from "@repo/features/workspace-invitation-wire";
 import { TURN_STATUS } from "@repo/wire";
@@ -237,13 +237,9 @@ export const SERVER_HOST_KIND = {
   THIS_MAC: "this_mac",
 } as const;
 
-/** Who finished a task: a member, by moving it to Done or Canceled, or the service, on the merge of its work or, for a task an automation's run, a Slack message, or `start_agent` made, on its agents finishing well. */
+/** Who finished a task: a member or an agent, by moving it to Done or Canceled. */
 export const SERVER_TASK_FINISHER = {
   MEMBER: "member",
-  MERGE: "merge",
-  RUN: "run",
-  SLACK: "slack",
-  START: "start",
 } as const;
 
 /**
@@ -332,9 +328,6 @@ export const SERVER_AGENT_TOOL = {
 } as const;
 
 type Values<T> = T[keyof T];
-
-/** Where a task came to rest: done or canceled, the two a finish counts. */
-type ServerTaskFinishStatus = typeof TASK_STATUS.DONE | typeof TASK_STATUS.CANCELED;
 
 export type ServerAgentStartFailure = Values<typeof SERVER_AGENT_START_FAILURE>;
 
@@ -426,9 +419,9 @@ export interface ServerEventProperties {
   [SERVER_EVENT.AUTOMATION_RUN_START]: { trigger_kind: AutomationFiringKind };
   [SERVER_EVENT.GITHUB_APP_INSTALL]: Record<string, never>;
   [SERVER_EVENT.HOST_INSTALL]: { kind: Values<typeof SERVER_HOST_KIND> };
-  /** A task moved to Done or Canceled, by a member's own move or by the service on its work's merge. */
+  /** A task moved to Done or Canceled, by a member's or an agent's move. */
   [SERVER_EVENT.TASK_FINISH]: {
-    status: ServerTaskFinishStatus;
+    status: TaskSettledStatus;
     by: Values<typeof SERVER_TASK_FINISHER>;
   };
   /** A Start whose agent was made and then discarded because its session never opened. */

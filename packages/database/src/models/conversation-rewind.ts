@@ -1,16 +1,17 @@
 import { MESSAGE_ROLE } from "@repo/wire";
-import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { Effect, Option, Result, Schema } from "effect";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { Clock, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { conversations, messages, turns } from "../schemas/storage.js";
+import { expireTurnApprovals } from "./agent-approvals.js";
 import {
   DISPATCH_CLAIM,
   DispatchClaimHeld,
   dispatchClaimStands,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
-import { settleKeptTurn } from "./turn-state.js";
+import { settleKeptTurn, type TurnCheckoutSnapshot } from "./turn-state.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
@@ -268,6 +269,126 @@ const findNativeRewind = SqlSchema.findOneOption({
     ),
 });
 
+/** The place of one of the account's own conversation's messages, any sender's. */
+const findMessageSeq = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    messageId: Schema.String,
+  }),
+  Result: Schema.Struct({ seq: Schema.Number }),
+  execute: ({ userId, conversationId, messageId }) =>
+    Database.use((db) =>
+      db
+        .select({ seq: messages.seq })
+        .from(messages)
+        .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+        .where(
+          and(
+            eq(conversations.id, conversationId),
+            eq(conversations.userId, userId),
+            eq(messages.id, messageId),
+          ),
+        ),
+    ),
+});
+
+/** The checkout the runner recorded before the turn one of the account's own lines opened, as the turn's row keeps it; none where the line awaits its turn or that turn recorded none. */
+const findLineSnapshot = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    messageId: Schema.String,
+  }),
+  Result: Schema.Struct({
+    turnId: Schema.String,
+    queuedAt: Schema.Date,
+    commit: Schema.NullOr(Schema.String),
+    head: Schema.NullOr(Schema.String),
+    branch: Schema.NullOr(Schema.String),
+  }),
+  execute: ({ userId, conversationId, messageId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          turnId: turns.id,
+          queuedAt: turns.queuedAt,
+          commit: turns.snapshotCommit,
+          head: turns.snapshotHead,
+          branch: turns.snapshotBranch,
+        })
+        .from(messages)
+        .innerJoin(turns, eq(turns.id, messages.turnId))
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.userId, userId),
+            eq(messages.id, messageId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+          ),
+        ),
+    ),
+});
+
+/** The first checkout a runner recorded before a later turn of the conversation than the one given, by the order the turns were queued in; none where no later turn recorded one. */
+const findNextSnapshot = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    turnId: Schema.String,
+    queuedAt: Schema.Date,
+  }),
+  Result: Schema.Struct({ commit: Schema.String }),
+  execute: ({ conversationId, turnId, queuedAt }) =>
+    Database.use((db) =>
+      db
+        .select({ commit: sql<string>`${turns.snapshotCommit}` })
+        .from(turns)
+        .where(
+          and(
+            eq(turns.conversationId, conversationId),
+            isNotNull(turns.snapshotCommit),
+            or(
+              gt(turns.queuedAt, queuedAt),
+              and(eq(turns.queuedAt, queuedAt), gt(turns.id, turnId)),
+            ),
+          ),
+        )
+        .orderBy(asc(turns.queuedAt), asc(turns.id))
+        .limit(1),
+    ),
+});
+
+/** The developer's first line past a place in the conversation, where one stands. */
+const findLineAfter = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
+  Result: Schema.Struct({
+    seq: Schema.Number,
+    clientId: Schema.String,
+    turnId: Schema.NullOr(Schema.String),
+    takenAfterStep: Schema.NullOr(Schema.Number),
+  }),
+  execute: ({ conversationId, seq }) =>
+    Database.use((db) =>
+      db
+        .select({
+          seq: messages.seq,
+          clientId: messages.clientId,
+          turnId: messages.turnId,
+          takenAfterStep: messages.takenAfterStep,
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+            gt(messages.seq, seq),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(1),
+    ),
+});
+
 /** Where a cut at the line named starts: its row and the instant the turns it drops were queued from; refused where it stands inside a turn. */
 const cutPoint = (conversationId: string, messageId: string) =>
   Effect.gen(function* () {
@@ -307,7 +428,11 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     const keepsFirst =
       first !== undefined && (yield* findTurnBefore({ conversationId, from })).length === 0;
     const dropped = keepsFirst ? later : turnIds;
-    if (keepsFirst) yield* settleKeptTurn(conversationId, first);
+    if (keepsFirst) {
+      yield* settleKeptTurn(conversationId, first);
+      // The kept turn's asks expire with its work, since no runner holds them now; a dropped turn's go with its row.
+      yield* expireTurnApprovals(conversationId, first, new Date(yield* Clock.currentTimeMillis));
+    }
     if (dropped.length > 0) yield* deleteTurns({ conversationId, turnIds: dropped });
     // Note that a worker a dropped turn delegated is deleted with it, its own workers by the cascade.
     yield* deleteWorkersFrom({ conversationId, from });
@@ -353,6 +478,39 @@ export function readNativeRewind(
   );
 }
 
+/**
+ * Where a harness's session is cut as another agent forks it at one of the
+ * conversation's messages, read without cutting anything: just before the
+ * developer's first line past that message, where a turn took it as the
+ * line that opened it, since the session holds everything up to that line
+ * and nothing of the turn it opened; or, where no such line was heard, just
+ * before the line a rewind still waits to cut, or nowhere, for a session
+ * that ends at the message. Refused where the account holds no such
+ * message, and where that line was taken into a turn under way, which no
+ * harness can cut through, so the fork is replayed instead.
+ */
+export function readForkCut(
+  target: ConversationTarget,
+  messageId: string,
+): Effect.Effect<Result.Result<string | undefined, RewindRefusal>, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const { conversationId } = target;
+    const message = yield* findMessageSeq({ ...target, messageId });
+    if (Option.isNone(message)) return Result.fail(REWIND_REFUSAL.NOT_FOUND);
+    const next = yield* findLineAfter({ conversationId, seq: message.value.seq });
+    if (Option.isSome(next) && next.value.turnId !== null) {
+      const { seq, clientId, turnId, takenAfterStep } = next.value;
+      if (takenAfterStep !== null) return Result.fail(REWIND_REFUSAL.INSIDE_TURN);
+      const [opening] = yield* findTurnLines({ conversationId, turnId });
+      return opening === undefined || opening.seq === seq
+        ? Result.succeed(clientId)
+        : Result.fail(REWIND_REFUSAL.INSIDE_TURN);
+    }
+    // Note that a line no turn took never reached the session, so it cuts nothing there.
+    return Result.succeed(Option.getOrUndefined(yield* readNativeRewind(target)));
+  });
+}
+
 /** Lets the harness's cut go once a launch has handed it over, unless a newer rewind replaced it meanwhile. */
 export function clearNativeRewindHanded(
   conversationId: string,
@@ -370,6 +528,59 @@ export function readRewoundRevision(
       Option.flatMap(row, ({ rewoundRevision }) => Option.fromNullishOr(rewoundRevision)),
     ),
   );
+}
+
+/**
+ * The checkout as the agent's runner recorded it before the turn the line
+ * named opened (`turns.snapshot_*`), which a rewind that restores the files
+ * puts the checkout back to; none where the line awaits its turn, or its
+ * turn's runner recorded none.
+ */
+export function readRewindSnapshot(
+  target: ConversationTarget,
+  messageId: string,
+): Effect.Effect<Option.Option<TurnCheckoutSnapshot>, StoreFailure, DatabaseServices> {
+  return Effect.map(findLineSnapshot({ ...target, messageId }), (found) =>
+    Option.flatMap(found, (row) =>
+      row.commit === null
+        ? Option.none()
+        : Option.some({ commit: row.commit, head: row.head, branch: row.branch }),
+    ),
+  );
+}
+
+/** The two checkouts a turn's changes stand between: the one its runner recorded before it, and the next one recorded, or null for the checkout as it stands. */
+export interface TurnCheckoutRange {
+  readonly from: string;
+  readonly to: string | null;
+}
+
+/**
+ * The checkouts the changes of the turn one of the account's own lines
+ * opened stand between: the one its runner recorded before the turn, and the
+ * first one recorded before a later turn, or none, where the checkout as it
+ * stands is the other side. Note that a later turn that recorded no checkout
+ * is passed over, as a turn that never started or whose snapshot missed, so
+ * what such a turn changed reads as this one's. None where the line awaits
+ * its turn or that turn recorded none.
+ */
+export function readTurnCheckoutRange(
+  target: ConversationTarget,
+  messageId: string,
+): Effect.Effect<Option.Option<TurnCheckoutRange>, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const line = yield* findLineSnapshot({ ...target, messageId });
+    if (Option.isNone(line) || line.value.commit === null) return Option.none();
+    const next = yield* findNextSnapshot({
+      conversationId: target.conversationId,
+      turnId: line.value.turnId,
+      queuedAt: line.value.queuedAt,
+    });
+    return Option.some({
+      from: line.value.commit,
+      to: Option.isSome(next) ? next.value.commit : null,
+    });
+  });
 }
 
 /**

@@ -1,6 +1,9 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
-import type { AgentSummary, TasklessAgent } from "@repo/features/agent-wire";
+import type { AgentSummary } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
 import {
   inPinOrder,
   type PinPlace,
@@ -8,10 +11,40 @@ import {
   pinPositionsForMove,
 } from "@repo/features/pin-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { pullRequestsOfTask } from "@repo/features/task-agents-model";
+import {
+  ASSIGNED_TO,
+  type AssignedTo,
+  type ChildTaskCount,
+  childTaskCounts,
+  type DrawnTaskRow,
+  drawnTaskRows,
+  homedTaskRows,
+  NO_REPOSITORY,
+  type RepositoryGroup,
+  repositoryGroups,
+  repositoryHeadingsDrawn,
+  repositoryLabel,
+  TASK_GROUPING,
+  TASK_ORDER,
+  type TaskSections,
+  type TasksById,
+  taskInView,
+  taskSections,
+  tasksAssignedTo,
+  tasksById,
+  taskTime,
+} from "@repo/features/task-list-model";
 import type { TaskSectionWrite } from "@repo/features/task-section-wire";
-import { isAgentEntry, type SectionMember } from "@repo/features/task-section-writes";
+import {
+  type DrawnSection,
+  placeWrites,
+  sectionedTasks,
+  sectionInView,
+  sectionOfTask,
+  unplaceAllWrites,
+} from "@repo/features/task-sections-model";
 import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
+import { repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -26,6 +59,7 @@ import {
   ERROR_STATE_PLACEMENT,
   ErrorState,
   Fill,
+  GROUP_HEADING,
   GroupHeader,
   HoldPress,
   IconButton,
@@ -44,6 +78,7 @@ import {
   PLAIN_PRESS,
   ProviderMark,
   RESIZE_EDGE_SIDE,
+  RepositoryName,
   RepositoryPicture,
   ResizeEdge,
   type ResizeEdgeHandle,
@@ -73,58 +108,18 @@ import {
 import {
   ArrowDownFromLineIcon,
   ArrowUpToLineIcon,
-  HouseIcon,
-  ListTodoIcon,
+  FolderPlusIcon,
   MailOpenIcon,
-  ZapIcon,
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
-import {
-  ASSIGNED_TO,
-  type AssignedTo,
-  agentRow,
-  type DrawnTaskRow,
-  drawnTaskRows,
-  homedTaskRows,
-  NO_REPOSITORY,
-  orderTaskRows,
-  type ProgressGroup,
-  progressGroups,
-  type RepositoryGroup,
-  repositoryGroups,
-  repositoryHeadingsDrawn,
-  repositoryLabel,
-  TASK_GROUPING,
-  TASK_PROGRESS_LABEL,
-  TASK_ROW,
-  type TaskListView,
-  type TaskProgress,
-  type TaskRow,
-  type TasksById,
-  taskRow,
-  taskRowInView,
-  taskRowKey,
-  taskRowProgress,
-  taskRowRepository,
-  taskRowsAssignedTo,
-  taskRowTime,
-  tasksById,
-} from "@repo/ui/task-list-model";
-import {
-  memberSection,
-  placeWrites,
-  sectionOrder,
-  unplaceAllWrites,
-  workspaceSections,
-} from "@repo/ui/task-sections-model";
-import { repositoryPageUrl, TASK_MARK } from "@repo/ui/tasks-model";
+import { agentTab, sameTab } from "@repo/ui/tab-strip-model";
 import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useConnected } from "../connection.js";
-import { LinkWorkspaceProvider } from "../copy-link-item.js";
+import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
@@ -146,13 +141,13 @@ import type { NavigationHistory } from "../places/window-history.js";
 import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
+import { stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
-import { useFailedRuns, useInboxTaskless, useListedInbox } from "../tasks/use-inbox-slices.js";
+import { useFailedRuns, useListedInbox } from "../tasks/use-inbox-slices.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import {
   type AgentPin,
@@ -168,9 +163,10 @@ import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
 import { useFailedRunsMark } from "./failed-runs.js";
-import { withoutFinishedRuns, withoutFinishedRunTasks } from "./finished-runs.js";
+import { withoutFinishedRunTasks } from "./finished-runs.js";
 import { type FoldedGroups, useFoldedGroups } from "./folded-groups.js";
 import { type HoverPane, useHoverPane } from "./hover-pane.js";
+import { MacResourcesButton } from "./mac-resources.js";
 import {
   childTasksFold,
   listedSlot,
@@ -182,10 +178,9 @@ import {
 import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
-import { needsYouOf, useInboxWaiting } from "./places-waiting.js";
+import { useInboxWaiting } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
 import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
-import { SidebarAgent } from "./sidebar-agent.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
 import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarFoot } from "./sidebar-foot.js";
@@ -193,10 +188,8 @@ import { SidebarInboxRow } from "./sidebar-inbox-row.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
-  type DrawnSection,
-  moveToSectionEntry,
+  NEW_SECTION,
   PINNED_DROP_ZONE,
-  rowMember,
   SidebarSections,
   TASKS_DROP_ZONE,
   useSectionDialogs,
@@ -204,11 +197,11 @@ import {
 } from "./sidebar-sections.js";
 import {
   NONE_MATCH,
-  TaskScopeSwitcher,
+  TaskViewOptions,
   tasksHeadWords,
   useTaskViewCommands,
 } from "./sidebar-task-view.js";
-import { SidebarTask } from "./task-actions.js";
+import { type RowFaces, SidebarTask } from "./task-actions.js";
 import { useTaskListView } from "./task-list-view.js";
 import { ChosenTasksContext, useTasksSelection } from "./tasks-selection.js";
 import { useWorkspaceRuns } from "./use-automation-runs.js";
@@ -255,7 +248,9 @@ function useSidebarEdge(
  * it when it folds, after the column's drag strip so they claim their
  * presses back from the window frame. A way with nothing along it is dimmed
  * rather than gone, so neither button moves. The chords are the shell's to
- * offer, since they answer while the column is folded too. A phone draws
+ * offer, since they answer while the column is folded too. Resources stands
+ * before them in the desktop app (`mac-resources.tsx`), so it too is in sight
+ * only while the column is. A phone draws
  * none: its places bar and each page's own Back are how it moves, and the
  * drawer's head is short of room.
  */
@@ -269,6 +264,7 @@ export function HistoryButtons({
   if (room === SHELL_ROOM.NARROW) return null;
   return (
     <div className="title-bar-controls" data-edge="column">
+      <MacResourcesButton />
       <HistoryButton
         label="Back"
         command={APP_COMMAND.BACK}
@@ -403,28 +399,22 @@ interface RowContext {
   /** Whether a pin is the one the open place was opened from, which the sidebar marks in its holder's place. */
   readonly markedPin: (pin: SidebarPin) => boolean;
   readonly onOpen: (taskId: string) => void;
-  /** Whether a row stands under its group's fold: the open one, or one a thread of which waits on the reader (`needsYouOf`). */
-  readonly standsFolded: (row: TaskRow) => boolean;
-  /** Whether a row is the one standing: the open plan's, or the agent's whose page stands. */
-  readonly currentRow: (row: TaskRow) => boolean;
-  /** Opens an agent with no plan on its own page. */
-  readonly onOpenAgent: (agentId: string) => void;
-  /** What an agent's delete runs once it landed: its page left where it is the one standing. */
-  readonly onDeletedAgent: (agentId: string) => () => void;
+  /** Whether a task is the one standing: the open plan. */
+  readonly currentTask: (task: TaskSummary) => boolean;
   /** Whether a task was saved since the developer last looked at it on this Mac. */
   readonly unread: (task: TaskSummary) => boolean;
-  /** Whether an agent's turn ended while the developer was not looking at it. */
-  readonly unseenAgent: (agentId: string) => boolean;
   /** The time each row's last update is counted back from. */
   readonly now: number;
+  /** Which faces a task's row may wear: no assignee's while the list holds those assigned to one member. */
+  readonly faces: RowFaces;
   /** Whether the sidebar is in sight: folded away, nothing it opened stands over the window. */
   readonly inSight: boolean;
   /** Hears a row let go over a section, Tasks, or Pinned, while the account keeps sections; none while it does not. */
-  readonly dropOut: ((row: TaskRow, zone: string, at: number) => void) | undefined;
+  readonly dropOut: ((task: TaskSummary, zone: string, at: number) => void) | undefined;
   /** Hears a row lifted into a drag and that drag ended, while which an empty Pinned stands to take it. */
   readonly onCarried: (carried: boolean) => void;
-  /** An agent's Move to section, as a task's menu offers it; none for an archived agent. */
-  readonly sectionEntry: (agent: TasklessAgent) => MenuEntry | undefined;
+  /** How many of a task's child tasks are finished, of all of them, which its row says; none for a task with none. */
+  readonly childCount: (taskId: string) => ChildTaskCount | undefined;
   /** Whether a task's child tasks stand open under its row, folded until first opened. */
   readonly opened: (taskId: string) => boolean;
   /** Every listed task by its id, through which a child task under a parent the view hides is walked to the ancestor it stands under (`homedTaskRows`). */
@@ -437,12 +427,12 @@ interface RowContext {
 
 /** The rows a list draws, child tasks nested under their parents and passed by under a fold, the open row still standing (`drawnTaskRows`). */
 function nestedRows(
-  rows: readonly TaskRow[],
+  tasks: readonly TaskSummary[],
   folds: FoldedGroups,
-  current: (row: TaskRow) => boolean,
+  current: (task: TaskSummary) => boolean,
   every: TasksById,
-): TaskRow[] {
-  return drawnTaskRows(rows, folds.taskOpened, current, every).map(({ row }) => row);
+): TaskSummary[] {
+  return drawnTaskRows(tasks, folds.taskOpened, current, every).map(({ task }) => task);
 }
 
 /** A repository's group's key, by which it leaves the list. */
@@ -465,24 +455,28 @@ function LeavingGroups<G>({
 }
 
 /**
- * One group's rows, each a plan's or an agent's with no plan, showing the
- * time the list's order chooses, and one mark before it (`SidebarTask`).
+ * One group's rows, each a plan's, showing the time the list's order
+ * chooses. A row says what its group does not: its repository's name where
+ * `repository` names one, and the faces `faces` lets it wear (`rowFaceOf`).
  * A task's child tasks among the rows stand nested under it, folded until
  * its chevron opens them, to any depth, the sidebar having moved each into
  * the list holding its parent (`homedTaskRows`); under a fold, the open
  * one stands at the top (`drawnTaskRows`).
  */
 function TaskRows({
-  rows,
+  tasks,
   context,
+  repository,
 }: {
-  rows: readonly TaskRow[];
+  tasks: readonly TaskSummary[];
   context: RowContext;
+  repository?: (task: TaskSummary) => React.ReactNode;
 }): React.JSX.Element {
+  const { faces } = context;
   // Note that the rows keep the view's order, so a row is dragged only out of them, into a section or Pinned.
   const { dropOut } = context;
-  const nested = useNestedRows(rows, context.opened, context.currentRow, context.every);
-  const drawn = useLeaving(nested, ({ row }) => taskRowKey(row));
+  const nested = useNestedRows(tasks, context.opened, context.currentTask, context.every);
+  const drawn = useLeaving(nested, ({ task }) => task.id);
   const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
   const drag = useRunRowDrag(undefined, {
     onDropOut:
@@ -490,7 +484,7 @@ function TaskRows({
         ? undefined
         : (from, zone, at) => {
             const held = drawn[from]?.value;
-            if (held !== undefined) dropOut(held.row, zone, at);
+            if (held !== undefined) dropOut(held.task, zone, at);
           },
     onCarried: context.onCarried,
   });
@@ -501,40 +495,26 @@ function TaskRows({
         const entry = drawn[index];
         if (entry === undefined) return null;
         const held = entry.value;
-        const { row } = held;
+        const { task } = held;
         const nest = nests[index];
-        return row.kind === TASK_ROW.TASK ? (
+        return (
           <SidebarTask
-            key={row.task.id}
+            key={task.id}
             tasks={context.tasks}
-            task={row.task}
-            current={context.marked(row.task.id, undefined)}
-            open={context.current(row.task.id)}
-            unread={context.unread(row.task)}
+            task={task}
+            current={context.marked(task.id, undefined)}
+            open={context.current(task.id)}
+            unread={context.unread(task)}
             now={context.now}
-            at={taskRowTime(row)}
+            at={taskTime(task, TASK_ORDER.UPDATED)}
+            repository={repository?.(task)}
+            faces={faces}
             depth={held.depth}
             nest={nest}
             place={place}
             fold={childTasksFold(held, context.onFoldTask)}
-            onOpen={() => context.onOpen(row.task.id)}
-          />
-        ) : (
-          <SidebarAgent
-            key={row.agent.id}
-            agent={row.agent}
-            agents={context.tasks.agents}
-            signedIn={context.tasks.signedIn}
-            current={context.currentRow(row)}
-            now={context.now}
-            at={taskRowTime(row)}
-            nest={nest}
-            place={place}
-            shown={context.tasks.shown && context.inSight}
-            onOpen={() => context.onOpenAgent(row.agent.id)}
-            onPin={pinOf(context.tasks, row.agent)}
-            section={context.sectionEntry(row.agent)}
-            onDeleted={context.onDeletedAgent(row.agent.id)}
+            childCount={context.childCount(task.id)}
+            onOpen={() => context.onOpen(task.id)}
           />
         );
       }}
@@ -542,36 +522,20 @@ function TaskRows({
   );
 }
 
-/** Pin or Unpin for an agent's row, the account's own; none for an archived agent, which the sidebar draws among the archived whether or not it is pinned, as a plan's. */
-function pinOf(tasks: SidebarTasks, agent: TasklessAgent): ((pinned: boolean) => void) | undefined {
-  return agent.archivedAt === undefined
-    ? (pinned) => tasks.onPinAgent(agent.id, pinned)
-    : undefined;
-}
-
 /**
  * One row under Pinned and where its pin stands: a pinned plan, a tab
- * pinned on a listed plan, or an agent pinned on it, drawn as its tab; or a
- * pinned agent with no plan, or a tab pinned on its own page.
+ * pinned on a listed plan, or an agent pinned on it, drawn as its tab.
  */
-type PinnedRow =
-  | {
-      readonly kind: typeof TASK_ROW.TASK;
-      readonly task: TaskSummary;
-      readonly pin: SidebarPin | undefined;
-      readonly place: PinPlace;
-    }
-  | {
-      readonly kind: typeof TASK_ROW.AGENT;
-      readonly agent: TasklessAgent;
-      readonly pin: PinnedTab | undefined;
-      readonly place: PinPlace;
-    };
+interface PinnedRow {
+  readonly task: TaskSummary;
+  readonly pin: SidebarPin | undefined;
+  readonly place: PinPlace;
+}
 
-/** A row under Pinned's key: its plan's or its agent's id, an agent's drawn as its tab included, or where a pinned tab's pin stands. */
+/** A row under Pinned's key: its plan's id, an agent's drawn as its tab by the agent's, or where a pinned tab's pin stands. */
 function pinnedRowKey(row: PinnedRow): string {
   const { pin } = row;
-  if (pin === undefined) return row.kind === TASK_ROW.AGENT ? row.agent.id : row.task.id;
+  if (pin === undefined) return row.task.id;
   return isAgentPin(pin) ? pin.tab.agent : String(pin.at);
 }
 
@@ -586,11 +550,7 @@ function accountPinOf(
   row: PinnedRow,
 ): { readonly agent: boolean; readonly id: string } | undefined {
   const { pin } = row;
-  if (pin === undefined) {
-    return row.kind === TASK_ROW.AGENT
-      ? { agent: true, id: row.agent.id }
-      : { agent: false, id: row.task.id };
-  }
+  if (pin === undefined) return { agent: false, id: row.task.id };
   return isAgentPin(pin) ? { agent: true, id: pin.tab.agent } : undefined;
 }
 
@@ -612,33 +572,18 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
 /**
  * The rows under Pinned in the order the developer dragged them to, a pin
  * not yet dragged on top, newest pinned first (`pin-order.ts`): the pinned
- * plans, the pinned agents among them, on a plan the list holds or with
- * none, and the tabs pinned to the sidebar on plans and agents the list
- * holds. A tab or an agent of an archived or deleted plan is drawn nowhere,
+ * plans, the pinned agents among them, on a plan the list holds, and the
+ * tabs pinned to the sidebar on plans the list holds. A tab or an agent of an archived or deleted plan is drawn nowhere,
  * its plan being out of the list; nor is a Plan tab an earlier version
  * pinned, which is made its plan's own pin as soon as the list names the
  * plan (`use-tasks-tab.ts`).
  */
-function pinnedRows(
-  pinned: readonly TaskSummary[],
-  agents: readonly TasklessAgent[],
-  standing: readonly TasklessAgent[],
-  tasks: SidebarTasks,
-): PinnedRow[] {
+function pinnedRows(pinned: readonly TaskSummary[], tasks: SidebarTasks): PinnedRow[] {
   const taskRows = pinned.map(
     (task): PinnedRow => ({
-      kind: TASK_ROW.TASK,
       task,
       pin: undefined,
       place: { position: task.pinPosition, at: task.pinnedAt ?? 0 },
-    }),
-  );
-  const agentRows = agents.map(
-    (agent): PinnedRow => ({
-      kind: TASK_ROW.AGENT,
-      agent,
-      pin: undefined,
-      place: { position: agent.pinPosition, at: agent.pinnedAt ?? 0 },
     }),
   );
   const taskAgentRows = tasks.taskAgentPins.flatMap((pin): PinnedRow[] => {
@@ -646,22 +591,16 @@ function pinnedRows(
     const agent = tasks.liveAgents?.find((each) => each.id === pin.agentId);
     if (task === undefined || agent === undefined) return [];
     const drawn = agentPinOf(pin, agent, tasks);
-    return [
-      { kind: TASK_ROW.TASK, task, pin: drawn, place: { position: drawn.position, at: drawn.at } },
-    ];
+    return [{ task, pin: drawn, place: { position: drawn.position, at: drawn.at } }];
   });
   const tabRows = tasks.sidePanel.pins.flatMap((pin): PinnedRow[] => {
     const place = { position: pin.position, at: pin.at };
-    if ("agent" in pin) {
-      const agent = standing.find((each) => each.id === pin.agent);
-      return agent === undefined ? [] : [{ kind: TASK_ROW.AGENT, agent, pin, place }];
-    }
     const task = tasks.listed.tasks.find((each) => each.id === pin.task);
     return task === undefined || pin.tab === SIDE_PANEL_TAB.DESCRIPTION
       ? []
-      : [{ kind: TASK_ROW.TASK, task, pin, place }];
+      : [{ task, pin, place }];
   });
-  return inPinOrder([...taskRows, ...agentRows, ...taskAgentRows, ...tabRows], placeOf);
+  return inPinOrder([...taskRows, ...taskAgentRows, ...tabRows], placeOf);
 }
 
 /**
@@ -698,19 +637,18 @@ function movePinned(
 }
 
 /**
- * Pins a plan's or an agent's row carried into Pinned at `at` among the
- * rows it draws: pinned now, and given a place there, as its neighbors are
- * where they need one, wherever it lands, on top included
- * (`pinPositionsForInsert`).
+ * Pins a plan's row carried into Pinned at `at` among the rows it draws:
+ * pinned now, and given a place there, as its neighbors are where they need
+ * one, wherever it lands, on top included (`pinPositionsForInsert`).
  */
-function pinAt(rows: readonly PinnedRow[], row: TaskRow, at: number, tasks: SidebarTasks): void {
-  const place: PinPlace = { at: Date.now() };
-  const moving: PinnedRow =
-    row.kind === TASK_ROW.AGENT
-      ? { kind: TASK_ROW.AGENT, agent: row.agent, pin: undefined, place }
-      : { kind: TASK_ROW.TASK, task: row.task, pin: undefined, place };
-  if (row.kind === TASK_ROW.AGENT) tasks.onPinAgent(row.agent.id, true);
-  else tasks.onMarkTask(row.task.id, TASK_MARK.PIN);
+function pinAt(
+  rows: readonly PinnedRow[],
+  task: TaskSummary,
+  at: number,
+  tasks: SidebarTasks,
+): void {
+  const moving: PinnedRow = { task, pin: undefined, place: { at: Date.now() } };
+  tasks.onMarkTask(task.id, TASK_MARK.PIN);
   placePins(pinPositionsForInsert(rows, moving, at, placeOf), tasks);
 }
 
@@ -726,17 +664,14 @@ function unpin(row: PinnedRow, tasks: SidebarTasks): void {
   else if (account !== undefined) tasks.onMarkTask(account.id, TASK_MARK.UNPIN);
 }
 
-/** The write that takes a task or an agent out of the section it is kept in, a pinned one's included; none where it is in none. */
-function leaveSection(tasks: SidebarTasks, member: SectionMember): TaskSectionWrite[] {
-  return memberSection(tasks.taskSections, member) === undefined ? [] : unplaceAllWrites([member]);
+/** The write that takes a task out of the section it is kept in, a pinned one's included; none where it is in none. */
+function leaveSection(tasks: SidebarTasks, taskId: string): TaskSectionWrite[] {
+  return sectionOfTask(tasks.taskSections, taskId) === undefined ? [] : unplaceAllWrites([taskId]);
 }
 
-/** The rows Pinned holds of its own, which child tasks stand under: its plans and its agents with no plan, a pinned tab, or an agent drawn as one, being its holder's. */
-function pinnedHeld(rows: readonly PinnedRow[]): TaskRow[] {
-  return rows.flatMap((row): TaskRow[] => {
-    if (row.pin !== undefined) return [];
-    return [row.kind === TASK_ROW.AGENT ? agentRow(row.agent) : taskRow(row.task)];
-  });
+/** The rows Pinned holds of its own, which child tasks stand under: its plans, a pinned tab, or an agent drawn as one, being its holder's. */
+function pinnedHeld(rows: readonly PinnedRow[]): TaskSummary[] {
+  return rows.flatMap((row): TaskSummary[] => (row.pin === undefined ? [row.task] : []));
 }
 
 /** One row Pinned draws: a pin, with how its child tasks stand under it where it is a task's own, or a child task nested under one. */
@@ -746,7 +681,7 @@ type PinnedDrawn =
 
 /** A row Pinned draws's key: its pin's, or its child task's id. */
 function pinnedDrawnKey(drawn: PinnedDrawn): string {
-  return drawn.pin === undefined ? taskRowKey(drawn.held.row) : pinnedRowKey(drawn.pin);
+  return drawn.pin === undefined ? drawn.held.task.id : pinnedRowKey(drawn.pin);
 }
 
 /** How deep a row Pinned draws stands: a pin at the top, a child task under it. */
@@ -760,20 +695,20 @@ const depthOf = (drawn: PinnedDrawn) => ({ depth: drawn.held?.depth ?? 0 });
  */
 function pinnedDrawn(
   rows: readonly PinnedRow[],
-  adopted: readonly TaskRow[],
+  adopted: readonly TaskSummary[],
   opened: (taskId: string) => boolean,
-  standing: (row: TaskRow) => boolean,
+  standing: (task: TaskSummary) => boolean,
   every: TasksById,
 ): PinnedDrawn[] {
-  const tops = new Map<TaskRow, PinnedRow>();
+  const tops = new Map<TaskSummary, PinnedRow>();
   for (const pin of rows) {
-    if (pin.kind === TASK_ROW.TASK && pin.pin === undefined) tops.set(taskRow(pin.task), pin);
+    if (pin.pin === undefined) tops.set(pin.task, pin);
   }
   const under = new Map<PinnedRow, PinnedDrawn[]>();
   const strays: PinnedDrawn[] = [];
   let into = strays;
   for (const held of drawnTaskRows([...tops.keys(), ...adopted], opened, standing, every)) {
-    const pin = held.depth === 0 ? tops.get(held.row) : undefined;
+    const pin = held.depth === 0 ? tops.get(held.task) : undefined;
     if (pin !== undefined) {
       into = [{ pin, held }];
       under.set(pin, into);
@@ -790,12 +725,11 @@ function pinSlot(drawn: readonly PinnedDrawn[], at: number): number {
   return drawn.slice(0, at).filter((each) => each.pin !== undefined).length;
 }
 
-/** The rows of the list walked by ⌥↑ and ⌥↓ that Pinned holds: its plans, their child tasks, and its agents with no plan, a pinned tab, or an agent drawn as one, being its holder's. */
-function pinnedTaskRows(drawn: readonly PinnedDrawn[]): TaskRow[] {
-  return drawn.flatMap(({ pin, held }): TaskRow[] => {
-    if (pin === undefined) return [held.row];
-    if (pin.pin !== undefined) return [];
-    return [pin.kind === TASK_ROW.AGENT ? agentRow(pin.agent) : taskRow(pin.task)];
+/** The rows of the list walked by ⌥↑ and ⌥↓ that Pinned holds: its plans and their child tasks, a pinned tab, or an agent drawn as one, being its holder's. */
+function pinnedTaskRows(drawn: readonly PinnedDrawn[]): TaskSummary[] {
+  return drawn.flatMap(({ pin, held }): TaskSummary[] => {
+    if (pin === undefined) return [held.task];
+    return pin.pin === undefined ? [pin.task] : [];
   });
 }
 
@@ -887,64 +821,24 @@ function PinnedRows({
         } = entry;
         const nest = nests[index];
         if (row === undefined) {
-          const child = held.row;
-          return child.kind === TASK_ROW.TASK ? (
+          const child = held.task;
+          return (
             <SidebarTask
               key={key}
               tasks={context.tasks}
-              task={child.task}
-              current={context.marked(child.task.id, undefined)}
-              open={context.current(child.task.id)}
-              unread={context.unread(child.task)}
+              task={child}
+              current={context.marked(child.id, undefined)}
+              open={context.current(child.id)}
+              unread={context.unread(child)}
               now={context.now}
-              at={taskRowTime(child)}
+              at={taskTime(child, TASK_ORDER.UPDATED)}
               depth={held.depth}
               nest={nest}
               place={place}
               fold={childTasksFold(held, context.onFoldTask)}
-              onOpen={() => context.onOpen(child.task.id)}
+              childCount={context.childCount(child.id)}
+              onOpen={() => context.onOpen(child.id)}
             />
-          ) : null;
-        }
-        if (row.kind === TASK_ROW.AGENT && row.pin !== undefined) {
-          const { agent, pin } = row;
-          return (
-            <RowPlaced key={key} place={placeOf(key)}>
-              <SidebarPinnedTab
-                tasks={context.tasks}
-                pin={pin}
-                on={{ agent }}
-                nest={nest}
-                place={place}
-                current={context.markedPin(pin)}
-                inSight={context.inSight}
-                onOpen={() => onOpenTab(pin)}
-                onOpenHolder={() => context.onOpenAgent(agent.id)}
-                onUnpin={() => unpin(row, context.tasks)}
-              />
-            </RowPlaced>
-          );
-        }
-        if (row.kind === TASK_ROW.AGENT) {
-          const { agent } = row;
-          return (
-            <RowPlaced key={key} place={placeOf(key)}>
-              <SidebarAgent
-                agent={agent}
-                agents={context.tasks.agents}
-                signedIn={context.tasks.signedIn}
-                current={context.currentRow(agentRow(agent))}
-                now={context.now}
-                at={agent.activityAt}
-                nest={nest}
-                place={place}
-                shown={context.tasks.shown && context.inSight}
-                onOpen={() => context.onOpenAgent(agent.id)}
-                onPin={pinOf(context.tasks, agent)}
-                section={context.sectionEntry(agent)}
-                onDeleted={context.onDeletedAgent(agent.id)}
-              />
-            </RowPlaced>
           );
         }
         const { task, pin } = row;
@@ -958,10 +852,11 @@ function PinnedRows({
                 open={context.current(task.id)}
                 unread={context.unread(task)}
                 now={context.now}
-                at={taskRowTime(taskRow(task))}
+                at={taskTime(task, TASK_ORDER.UPDATED)}
                 nest={nest}
                 place={place}
                 fold={held === undefined ? undefined : childTasksFold(held, context.onFoldTask)}
+                childCount={context.childCount(task.id)}
                 onOpen={() => context.onOpen(task.id)}
               />
             ) : (
@@ -1018,7 +913,7 @@ function PinnedSection({
 }: {
   rows: readonly PinnedRow[];
   /** The child tasks standing under its plans (`homedTaskRows`). */
-  adopted: readonly TaskRow[];
+  adopted: readonly TaskSummary[];
   folds: FoldedGroups;
   /** Whether a row is the plan open, the agent whose page stands, or the pinned tab on show, which a fold leaves standing. */
   shown: (row: PinnedRow) => boolean;
@@ -1031,12 +926,12 @@ function PinnedSection({
 }): React.JSX.Element {
   const folded = folds.pinnedFolded;
   const { taskOpened } = folds;
-  const drawn = pinnedDrawn(rows, adopted, taskOpened, context.currentRow, context.every);
+  const drawn = pinnedDrawn(rows, adopted, taskOpened, context.currentTask, context.every);
   const standing = pinnedDrawn(
     rows.filter(shown),
-    adopted.filter(context.currentRow),
+    adopted.filter(context.currentTask),
     taskOpened,
-    context.currentRow,
+    context.currentTask,
     context.every,
   );
   const empty = rows.length === 0;
@@ -1138,9 +1033,7 @@ function pinnedActionGroups(
   context: RowContext,
   markRead: (task: TaskSummary, unread: boolean) => void,
 ): MenuEntry[][] {
-  const tasks = rows.flatMap((row) =>
-    row.kind === TASK_ROW.TASK && row.pin === undefined ? [row.task] : [],
-  );
+  const tasks = rows.flatMap((row) => (row.pin === undefined ? [row.task] : []));
   return markAllReadGroups(tasks, context, markRead);
 }
 
@@ -1163,8 +1056,7 @@ function repositoryActionGroups(
 ): MenuEntry[][] {
   const { repository } = group;
   const { tasks } = context;
-  const held = group.rows.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task] : []));
-  const read = markAllReadGroups(held, context, markRead);
+  const read = markAllReadGroups(group.tasks, context, markRead);
   if (repository === null) return read;
   const top: MenuAction = tasks.pinnedRepositories.includes(repository)
     ? {
@@ -1191,8 +1083,8 @@ const PIN_NOUN: CountNoun = { one: "pin", many: "pins" };
 /** Pinned's key, by which it leaves the column once it stands for nothing. */
 const PINNED_KEY = "pinned";
 
-/** The scope switcher's key, by which it glides as Pinned comes and goes above it. */
-const SCOPE_KEY = "scope";
+/** The Tasks head's key, by which it glides as Pinned comes and goes above it. */
+const TASKS_HEAD_KEY = "tasks-head";
 
 /** Pinned listed, or not, for `LeavingGroups`: constants, so a render that changes neither lists nothing new. */
 const PINNED_LISTED: readonly string[] = [PINNED_KEY];
@@ -1231,7 +1123,7 @@ function RepositorySection({
   const { repository } = group;
   const folded = folds.folded(repository);
   const named = repository === null ? NO_REPOSITORY : label;
-  const standing = group.rows.filter(context.standsFolded);
+  const standing = group.tasks.filter(context.currentTask);
   // The menu is drawn over the window rather than inside the sidebar, so it
   // closes with the sidebar folding away as well as with the tab hiding.
   const menu = useMenu(context.tasks.shown && context.inSight);
@@ -1244,7 +1136,7 @@ function RepositorySection({
         {...sidebarHead({
           folded,
           onToggle: () => folds.toggle(repository),
-          count: group.rows.length,
+          count: group.tasks.length,
           noun: TASK_NOUN,
         })}
         glyph={
@@ -1271,7 +1163,7 @@ function RepositorySection({
         menuOpen={menu.open !== undefined}
         contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
         standing={
-          standing.length === 0 ? undefined : <TaskRows rows={standing} context={context} />
+          standing.length === 0 ? undefined : <TaskRows tasks={standing} context={context} />
         }
         actions={
           <>
@@ -1292,7 +1184,7 @@ function RepositorySection({
           </>
         }
       >
-        {group.rows.length === 0 ? null : <TaskRows rows={group.rows} context={context} />}
+        {group.tasks.length === 0 ? null : <TaskRows tasks={group.tasks} context={context} />}
       </GroupHeader>
       {menu.drawn === undefined ? null : (
         <ActionMenu
@@ -1307,162 +1199,65 @@ function RepositorySection({
   );
 }
 
-/** A progress group's key, by which it leaves the list. */
-function progressGroupKey(group: ProgressGroup): string {
-  return group.progress;
-}
-
-/**
- * One group of By progress under its heading, folded and counted as a
- * repository's group is (`sidebarHead`), the fold kept on this Mac, with no
- * glyph and no actions, since a group of progress is no place to start a
- * task in. A fold still stands the open row and the rows that need the
- * reader (`standsFolded`).
- */
-function ProgressSection({
-  group,
-  folds,
-  context,
-}: {
-  group: ProgressGroup;
-  folds: FoldedGroups;
-  context: RowContext;
-}): React.JSX.Element {
-  const { progress } = group;
-  const standing = group.rows.filter(context.standsFolded);
-  return (
-    <div className="sidebar-progress" {...motionKey(progressGroupKey(group))}>
-      <GroupHeader
-        {...sidebarHead({
-          folded: folds.progressFolded(progress),
-          onToggle: () => folds.toggleProgress(progress),
-          count: group.rows.length,
-          noun: TASK_NOUN,
-        })}
-        label={TASK_PROGRESS_LABEL[progress]}
-        standing={
-          standing.length === 0 ? undefined : <TaskRows rows={standing} context={context} />
-        }
-      >
-        {group.rows.length === 0 ? null : <TaskRows rows={group.rows} context={context} />}
-      </GroupHeader>
-    </div>
-  );
-}
-
-/** The listed tasks as the view groups them: by repository, by progress, or in one run. */
-type TaskSections =
-  | {
-      readonly grouping: typeof TASK_GROUPING.REPOSITORY;
-      readonly groups: readonly RepositoryGroup[];
-    }
-  | {
-      readonly grouping: typeof TASK_GROUPING.PROGRESS;
-      readonly groups: readonly ProgressGroup[];
-    }
-  | { readonly grouping: typeof TASK_GROUPING.NONE; readonly rows: readonly TaskRow[] };
-
-/**
- * The tasks under Tasks as the view groups them, newest updated first.
- * Grouped by repository, the pinned repositories' groups stand above the
- * rest, newest pinned first, and the rest keep the order's. By progress,
- * each row stands in the group `progressOf` names it.
- */
-function taskSections(
-  rows: readonly TaskRow[],
-  grouping: TaskSections["grouping"],
-  tasks: SidebarTasks,
-  progressOf: (row: TaskRow) => TaskProgress,
-): TaskSections {
-  if (grouping === TASK_GROUPING.NONE) {
-    return { grouping, rows: orderTaskRows(rows) };
-  }
-  if (grouping === TASK_GROUPING.PROGRESS) {
-    return { grouping, groups: progressGroups(rows, progressOf) };
-  }
-  const grouped = repositoryGroups(rows);
-  const pinnedAt = (group: RepositoryGroup) =>
-    group.repository === null ? -1 : tasks.pinnedRepositories.indexOf(group.repository);
-  return {
-    grouping,
-    groups: [
-      ...grouped.filter((group) => pinnedAt(group) >= 0).sort((a, b) => pinnedAt(a) - pinnedAt(b)),
-      ...grouped.filter((group) => pinnedAt(group) < 0),
-    ],
-  };
-}
-
-/** The rows the sections draw, in their order: each group's unless folded, the rows standing under its fold (`stands`). */
+/** The rows the sections draw, in their order: each group's unless folded, the row standing under its fold. */
 function drawnTasks(
   sections: TaskSections,
   folds: FoldedGroups,
-  current: (row: TaskRow) => boolean,
-  stands: (row: TaskRow) => boolean,
+  current: (task: TaskSummary) => boolean,
   every: TasksById,
-): TaskRow[] {
-  const under = (folded: boolean, rows: readonly TaskRow[]) =>
-    nestedRows(folded ? rows.filter(stands) : rows, folds, current, every);
+): TaskSummary[] {
+  const under = (folded: boolean, tasks: readonly TaskSummary[]) =>
+    nestedRows(folded ? tasks.filter(current) : tasks, folds, current, every);
   switch (sections.grouping) {
     case TASK_GROUPING.REPOSITORY:
       // Note that rows of one repository stand in one run under no heading, so no fold of theirs hides them.
       return repositoryHeadingsDrawn(sections.groups)
-        ? sections.groups.flatMap((group) => under(folds.folded(group.repository), group.rows))
+        ? sections.groups.flatMap((group) => under(folds.folded(group.repository), group.tasks))
         : nestedRows(
-            sections.groups.flatMap((group) => group.rows),
+            sections.groups.flatMap((group) => group.tasks),
             folds,
             current,
             every,
           );
-    case TASK_GROUPING.PROGRESS:
-      return sections.groups.flatMap((group) =>
-        under(folds.progressFolded(group.progress), group.rows),
-      );
     case TASK_GROUPING.NONE:
-      return nestedRows(sections.rows, folds, current, every);
+      return nestedRows(sections.tasks, folds, current, every);
   }
 }
 
-/** The rows of each of the sections' lists: each group's, or the one run's. */
-function taskSectionLists(sections: TaskSections): (readonly TaskRow[])[] {
+/** The tasks of each of the sections' lists: each group's, or the one run's. */
+function taskSectionLists(sections: TaskSections): (readonly TaskSummary[])[] {
   return sections.grouping === TASK_GROUPING.NONE
-    ? [sections.rows]
-    : sections.groups.map((group) => group.rows);
+    ? [sections.tasks]
+    : sections.groups.map((group) => group.tasks);
 }
 
-/** The sections with each list's rows as `lists` hands them, in `taskSectionLists`'s order, a group left with none taken out. */
+/** The sections with each list's tasks as `lists` hands them, in `taskSectionLists`'s order, a group left with none taken out. */
 function withTaskLists(
   sections: TaskSections,
-  lists: readonly (readonly TaskRow[])[],
+  lists: readonly (readonly TaskSummary[])[],
 ): TaskSections {
-  const rowsAt = (at: number) => lists[at] ?? [];
+  const tasksAt = (at: number) => lists[at] ?? [];
   switch (sections.grouping) {
     case TASK_GROUPING.REPOSITORY:
       return {
         ...sections,
         groups: sections.groups
-          .map((group, at) => ({ ...group, rows: rowsAt(at) }))
-          .filter((group) => group.rows.length > 0),
-      };
-    case TASK_GROUPING.PROGRESS:
-      return {
-        ...sections,
-        groups: sections.groups
-          .map((group, at) => ({ ...group, rows: rowsAt(at) }))
-          .filter((group) => group.rows.length > 0),
+          .map((group, at) => ({ ...group, tasks: tasksAt(at) }))
+          .filter((group) => group.tasks.length > 0),
       };
     case TASK_GROUPING.NONE:
-      return { ...sections, rows: rowsAt(0) };
+      return { ...sections, tasks: tasksAt(0) };
   }
 }
 
-/** A section as it draws `rows` (`homedTaskRows`): the entries of its own rows among them, a child task standing under a parent it holds after them with no entry. */
-function homedSection(drawn: DrawnSection, rows: readonly TaskRow[]): DrawnSection {
-  const kept = new Set(rows);
+/** A section as it draws `tasks` (`homedTaskRows`): the entries of its own tasks among them, a child task standing under a parent it holds after them with no entry. */
+function homedSection(drawn: DrawnSection, tasks: readonly TaskSummary[]): DrawnSection {
+  const kept = new Set(tasks);
   const entries = drawn.entries.filter((_, at) => {
-    const row = drawn.rows[at];
-    return row !== undefined && kept.has(row);
+    const task = drawn.tasks[at];
+    return task !== undefined && kept.has(task);
   });
-  return { ...drawn, entries, rows };
+  return { ...drawn, entries, tasks };
 }
 
 /** What decides where the Tasks section stands its rows: the workspace listed, the grouping, and whose tasks it holds. */
@@ -1488,35 +1283,27 @@ function sameTaskOrder(was: TaskOrderView, now: TaskOrderView): boolean {
 }
 
 /** The sections with each row drawn as it is now, wherever its held place stood it. */
-function liveSections(sections: TaskSections, live: ReadonlyMap<string, TaskRow>): TaskSections {
-  const now = (rows: readonly TaskRow[]) => rows.map((row) => live.get(taskRowKey(row)) ?? row);
+function liveSections(
+  sections: TaskSections,
+  live: ReadonlyMap<string, TaskSummary>,
+): TaskSections {
+  const now = (tasks: readonly TaskSummary[]) => tasks.map((task) => live.get(task.id) ?? task);
   switch (sections.grouping) {
     case TASK_GROUPING.REPOSITORY:
       return {
         ...sections,
-        groups: sections.groups.map((group) => ({ ...group, rows: now(group.rows) })),
-      };
-    case TASK_GROUPING.PROGRESS:
-      return {
-        ...sections,
-        groups: sections.groups.map((group) => ({ ...group, rows: now(group.rows) })),
+        groups: sections.groups.map((group) => ({ ...group, tasks: now(group.tasks) })),
       };
     case TASK_GROUPING.NONE:
-      return { ...sections, rows: now(sections.rows) };
+      return { ...sections, tasks: now(sections.tasks) };
   }
 }
 
-/** The group a row stands in under a grouping, by what keys it: its repository, its progress (`progressOf`), or the one run's. */
-function groupOf(
-  row: TaskRow,
-  grouping: TaskSections["grouping"],
-  progressOf: (row: TaskRow) => TaskProgress,
-): string | null | undefined {
+/** The group a task stands in under a grouping, by what keys it: its repository, or the one run's. */
+function groupOf(task: TaskSummary, grouping: TaskSections["grouping"]): string | null | undefined {
   switch (grouping) {
     case TASK_GROUPING.REPOSITORY:
-      return taskRowRepository(row);
-    case TASK_GROUPING.PROGRESS:
-      return progressOf(row);
+      return task.repository;
     case TASK_GROUPING.NONE:
       return null;
   }
@@ -1532,36 +1319,38 @@ function groupOf(
  * does.
  */
 function taskPlaces(
-  rows: readonly TaskRow[],
-  held: ReadonlyMap<string, TaskRow>,
+  tasks: readonly TaskSummary[],
+  held: ReadonlyMap<string, TaskSummary>,
   view: Pick<TaskOrderView, "grouping"> & {
     readonly pending: ReadonlySet<string> | undefined;
-    readonly progressOf: (row: TaskRow) => TaskProgress;
   },
-): ReadonlyMap<string, TaskRow> {
-  const placeOf = (row: TaskRow) => {
-    const was = held.get(taskRowKey(row));
-    const pending = row.kind === TASK_ROW.TASK && view.pending?.has(row.task.id) === true;
+): ReadonlyMap<string, TaskSummary> {
+  const placeOf = (task: TaskSummary) => {
+    const was = held.get(task.id);
+    const pending = view.pending?.has(task.id) === true;
     return was === undefined ||
       pending ||
-      groupOf(was, view.grouping, view.progressOf) !== groupOf(row, view.grouping, view.progressOf)
-      ? row
+      groupOf(was, view.grouping) !== groupOf(task, view.grouping)
+      ? task
       : was;
   };
-  return new Map(rows.map((row) => [taskRowKey(row), placeOf(row)] as const));
+  return new Map(tasks.map((task) => [task.id, placeOf(task)] as const));
 }
 
 /**
- * The Tasks section's groups as the view draws them. A row names neither
- * its repository nor a face, which its card says.
+ * The Tasks section's groups as the view draws them. A row says what its
+ * group does not: under a repository's header a teammate's face; in one run
+ * its repository and the face.
  */
 function TaskGroups({
   sections,
+  repositoryOf,
   folds,
   onNewTaskIn,
   context,
 }: {
   sections: TaskSections;
+  repositoryOf: (task: TaskSummary) => React.ReactNode;
   folds: FoldedGroups;
   onNewTaskIn: (repository: string) => void;
   context: RowContext;
@@ -1570,8 +1359,8 @@ function TaskGroups({
     case TASK_GROUPING.REPOSITORY: {
       // Note that one repository's rows, or rows with none, stand in one run, since a lone heading over them all says nothing.
       if (!repositoryHeadingsDrawn(sections.groups)) {
-        const rows = sections.groups.flatMap((group) => group.rows);
-        return rows.length === 0 ? null : <TaskRows rows={rows} context={context} />;
+        const tasks = sections.groups.flatMap((group) => group.tasks);
+        return tasks.length === 0 ? null : <TaskRows tasks={tasks} context={context} />;
       }
       return (
         <LeavingGroups
@@ -1595,20 +1384,9 @@ function TaskGroups({
         />
       );
     }
-    case TASK_GROUPING.PROGRESS:
-      return (
-        <LeavingGroups
-          key={sections.grouping}
-          groups={sections.groups}
-          keyOf={progressGroupKey}
-          group={(group) => (
-            <ProgressSection key={group.progress} group={group} folds={folds} context={context} />
-          )}
-        />
-      );
     case TASK_GROUPING.NONE:
-      return sections.rows.length === 0 ? null : (
-        <TaskRows rows={sections.rows} context={context} />
+      return sections.tasks.length === 0 ? null : (
+        <TaskRows tasks={sections.tasks} context={context} repository={repositoryOf} />
       );
   }
 }
@@ -1671,19 +1449,23 @@ function SidebarHomeRow({
   current,
   disabled,
   onOpen,
+  onOpenInTab,
 }: {
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
+  /** Opens the place in a tab of its own, which a middle-click does; none where the window opens no tabs. */
+  onOpenInTab: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <NavItem
-      icon={<HouseIcon />}
+      icon={<EntityGlyph kind={ENTITY_KIND.HOME} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.HOME)}
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.HOME].chord} />}
       disabled={disabled}
       onClick={onOpen}
+      onOpenInTab={onOpenInTab}
     >
       Home
     </NavItem>
@@ -1701,11 +1483,14 @@ function SidebarTasksRow({
   current,
   disabled,
   onOpen,
+  onOpenInTab,
   onPreload,
 }: {
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
+  /** Opens the place in a tab of its own, which a middle-click does; none where the window opens no tabs. */
+  onOpenInTab: (() => void) | undefined;
   /** Reads the Board's route ahead of a press, its chunk among it. */
   onPreload: () => void;
 }): React.JSX.Element {
@@ -1714,13 +1499,14 @@ function SidebarTasksRow({
   }, IDLE_TIMEOUT_MS.PREFETCH);
   return (
     <NavItem
-      icon={<ListTodoIcon />}
+      icon={<EntityGlyph kind={ENTITY_KIND.BOARD} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.TASKS)}
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.TASKS].chord} />}
       disabled={disabled}
       onPointerEnter={onPreload}
       onClick={onOpen}
+      onOpenInTab={onOpenInTab}
     >
       Tasks
     </NavItem>
@@ -1743,6 +1529,7 @@ function SidebarAutomationsRow({
   running,
   disabled,
   onOpen,
+  onOpenInTab,
 }: {
   current: boolean;
   failed: boolean;
@@ -1750,10 +1537,12 @@ function SidebarAutomationsRow({
   running: number;
   disabled: boolean;
   onOpen: () => void;
+  /** Opens the place in a tab of its own, which a middle-click does; none where the window opens no tabs. */
+  onOpenInTab: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <NavItem
-      icon={<ZapIcon />}
+      icon={<EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       count={{ value: running, noun: RUNNING_NOUN, tone: STATUS_TONE.WORKING }}
       mark={failed ? stateEndMark(GLYPH_STATE.FAILED, false) : undefined}
@@ -1761,76 +1550,11 @@ function SidebarAutomationsRow({
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.AUTOMATIONS].chord} />}
       disabled={disabled}
       onClick={onOpen}
+      onOpenInTab={onOpenInTab}
     >
       Automations
     </NavItem>
   );
-}
-
-/** The listed workspace's sections as the sidebar draws them, and the tasks and agents standing in any of them, which Tasks leaves out. */
-interface SectionedTasks {
-  readonly sections: readonly DrawnSection[];
-  readonly taskIds: ReadonlySet<string>;
-  readonly agentIds: ReadonlySet<string>;
-}
-
-/**
- * The account's sections in the workspace, each with the tasks of `free`,
- * the listed tasks no pin holds, and the agents of `freeAgents`, the listed
- * agents with no task no pin holds, it keeps, in its order. A row in a
- * section that stands elsewhere, pinned or archived, is no row of it, and
- * comes back to it once it stands free again. None while the account keeps
- * no sections here.
- */
-function sectionedTasks(
-  tasks: SidebarTasks,
-  workspaceId: string | undefined,
-  free: readonly TaskSummary[],
-  freeAgents: readonly TasklessAgent[],
-): SectionedTasks {
-  if (workspaceId === undefined) return { sections: [], taskIds: new Set(), agentIds: new Set() };
-  const state = tasks.taskSections;
-  const byId = new Map(free.map((task) => [task.id, task]));
-  const agentsById = new Map(freeAgents.map((agent) => [agent.id, agent]));
-  const sections = workspaceSections(state, workspaceId).map((section): DrawnSection => {
-    const held = sectionOrder(state, section.id).flatMap((entry) => {
-      const agent = isAgentEntry(entry) ? agentsById.get(entry.agentId) : undefined;
-      const task = isAgentEntry(entry) ? undefined : byId.get(entry.taskId);
-      if (agent !== undefined) return [{ entry, row: agentRow(agent) }];
-      return task === undefined ? [] : [{ entry, row: taskRow(task) }];
-    });
-    return { section, entries: held.map(({ entry }) => entry), rows: held.map(({ row }) => row) };
-  });
-  const rows = sections.flatMap((drawn) => drawn.rows);
-  const taskIds = new Set(rows.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task.id] : [])));
-  const agentIds = new Set(
-    rows.flatMap((row) => (row.kind === TASK_ROW.AGENT ? [row.agent.id] : [])),
-  );
-  return { sections, taskIds, agentIds };
-}
-
-/**
- * A section as the view leaves it: its tasks to do and in progress, its
- * finished sub-tasks while the view shows them (`taskRowInView`), and any
- * with no status, an agent's among them, of those Assigned to holds, each
- * with its entry, in its order.
- */
-function sectionInView(
-  drawn: DrawnSection,
-  view: TaskListView,
-  readerId: string | undefined,
-): DrawnSection {
-  const held = new Set(taskRowsAssignedTo(drawn.rows, view.assignedTo, readerId));
-  const shown = (row: TaskRow) => held.has(row) && taskRowInView(row, view);
-  const kept = drawn.rows.flatMap((row, at) => {
-    const entry = drawn.entries[at];
-    return entry !== undefined && shown(row) ? [{ entry, row }] : [];
-  });
-  return {
-    ...drawn,
-    entries: kept.map(({ entry }) => entry),
-    rows: kept.map(({ row }) => row),
-  };
 }
 
 /** What the sidebar is drawn from. */
@@ -1923,6 +1647,7 @@ function SidebarColumn({
   room = SHELL_ROOM.WIDE,
 }: DesktopSidebarProps): React.JSX.Element {
   const tasks: SidebarTasks = { ...control, ...usePins(control.drawnTasks) };
+  const pictures = useRepositoryPictures();
   const connected = useConnected();
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
@@ -2026,6 +1751,8 @@ function SidebarColumn({
   const newTaskIn = (repository: string) => newTaskOver(() => tasks.newTask.onOpenIn(repository));
   const folds = useFoldedGroups(sidebar.staged);
   const taskView = useTaskListView(tasks.workspace?.id, sidebar.staged);
+  // The Tasks head's New section button, which the focus goes back to where the naming ends by a key.
+  const newSectionButton = useRef<HTMLButtonElement | null>(null);
   const reader = useMemberDirectory();
   // Only a workspace somebody shares has people to filter by, so one nobody shares lists every task.
   const { memberCount } = tasks.workspace ?? {};
@@ -2043,34 +1770,16 @@ function SidebarColumn({
   // Note that the task asked for is current while the host opens it, as the address the window stands at already names it.
   const current = (taskId: string) =>
     onTasks && !standingIn && tasks.taskPlaceStands && taskId === tasks.boundFor;
-  // An agent with no plan stands on its own page, which is the place shown while it stands.
-  const agentShown = onTasks && !inAdmin ? tasks.agentView.agentId : undefined;
-  const currentRow = (row: TaskRow) =>
-    row.kind === TASK_ROW.TASK ? current(row.task.id) : row.agent.id === agentShown;
-  // A folded section or repository keeps standing, beside the open row, the rows a thread of which waits on the reader, as the Inbox's row counts them.
+  const currentTask = (task: TaskSummary) => current(task.id);
   const listedInbox = useListedInbox(tasks);
-  const inboxTaskless = useInboxTaskless();
-  const needsYou = useMemo(
-    () => needsYouOf(listedInbox.inbox, inboxTaskless, tasks.me, now),
-    [listedInbox.inbox, inboxTaskless, tasks.me, now],
-  );
-  const standsFolded = (row: TaskRow) =>
-    currentRow(row) ||
-    (tasks.signedIn &&
-      (row.kind === TASK_ROW.TASK
-        ? needsYou.tasks.has(row.task.id)
-        : needsYou.agents.has(row.agent.id)));
-  const openAgent = (agentId: string) => arriveFor(() => tasks.agentView.onOpen(agentId));
   // The list is the chosen workspace's; the unread marks above read every task.
-  const { listed: listedRows, listedAgents } = tasks;
+  const { listed: listedRows } = tasks;
   const pinned = tasks.listed.tasks.filter((task) => task.pinnedAt !== undefined);
-  const pinnedAgents = listedAgents.standing.filter((agent) => agent.pinnedAt !== undefined);
-  const pinnedSection = pinnedRows(pinned, pinnedAgents, listedAgents.standing, tasks);
+  const pinnedSection = pinnedRows(pinned, tasks);
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands.
   const { chosenPin } = tasks;
-  const holderOpen = (row: PinnedRow) =>
-    row.kind === TASK_ROW.TASK ? current(row.task.id) : row.agent.id === agentShown;
+  const holderOpen = (row: PinnedRow) => current(row.task.id);
   const markedPin = pinnedSection.find(
     (row) =>
       row.pin !== undefined &&
@@ -2081,10 +1790,9 @@ function SidebarColumn({
   // The account's own sections stand while a workspace is listed.
   const sectionsShown = tasks.signedIn && tasks.workspace !== undefined;
   const sectioned = sectionedTasks(
-    tasks,
+    tasks.taskSections,
     sectionsShown ? tasks.workspace?.id : undefined,
     tasks.listed.tasks.filter((task) => task.pinnedAt === undefined),
-    listedAgents.standing.filter((agent) => agent.pinnedAt === undefined),
   );
   // The view's filters thin the sections' tasks as they thin the list's, a row dropped among them landing among those drawn.
   const shownSections = sectioned.sections.map((drawn) =>
@@ -2099,61 +1807,61 @@ function SidebarColumn({
     folds.sectionFolded(target.section.id)
       ? at
       : storedSlot(
-          target.rows,
-          drawnTaskRows(target.rows, folds.taskOpened, currentRow, everyTask),
+          target.tasks,
+          drawnTaskRows(target.tasks, folds.taskOpened, currentTask, everyTask),
           at,
         );
   // Note that the drops read the sections and Pinned as drawn, child tasks standing under their parents, once the lists below are homed.
   // Note that the sidebar draws a task in one place, so a row dragged into
   // Pinned leaves its section, and one dragged out of Pinned is unpinned and
   // stands where it was let go, under Tasks or in a section.
-  const dropRow = (row: TaskRow, zone: string, at: number) => {
-    const member = rowMember(row);
+  const dropRow = (task: TaskSummary, zone: string, at: number) => {
+    const taskId = task.id;
     if (zone === PINNED_DROP_ZONE) {
-      tasks.onWriteSections(leaveSection(tasks, member));
-      pinAt(pinnedSection, row, pinSlot(pinnedDrawnRows, at), tasks);
+      tasks.onWriteSections(leaveSection(tasks, taskId));
+      pinAt(pinnedSection, task, pinSlot(pinnedDrawnRows, at), tasks);
       return;
     }
     if (zone === TASKS_DROP_ZONE) {
-      const sectionedIds = member.agent ? sectioned.agentIds : sectioned.taskIds;
-      if (sectionedIds.has(member.id)) tasks.onWriteSections(unplaceAllWrites([member]));
+      if (sectioned.taskIds.has(taskId)) tasks.onWriteSections(unplaceAllWrites([taskId]));
       return;
     }
     const target = homedSections.find((drawn) => drawn.section.id === zone);
     if (target === undefined) return;
     tasks.onWriteSections(
-      placeWrites(target.entries, member, zone, sectionSlot(target, at), Date.now()),
+      placeWrites(target.entries, taskId, zone, sectionSlot(target, at), Date.now()),
     );
   };
   // A tab pinned to the sidebar is no task, so it goes into no section, though Tasks unpins it as any pin.
   const dropPinned = (row: PinnedRow, zone: string, at: number) => {
-    const member =
-      row.pin !== undefined
-        ? undefined
-        : rowMember(row.kind === TASK_ROW.AGENT ? agentRow(row.agent) : taskRow(row.task));
+    const taskId = row.pin !== undefined ? undefined : row.task.id;
     if (zone === TASKS_DROP_ZONE) {
       unpin(row, tasks);
-      if (member !== undefined) tasks.onWriteSections(leaveSection(tasks, member));
+      if (taskId !== undefined) tasks.onWriteSections(leaveSection(tasks, taskId));
       return;
     }
     const target = homedSections.find((drawn) => drawn.section.id === zone);
-    if (target === undefined || member === undefined) return;
+    if (target === undefined || taskId === undefined) return;
     unpin(row, tasks);
     tasks.onWriteSections([
-      ...leaveSection(tasks, member),
-      ...placeWrites(target.entries, member, zone, sectionSlot(target, at), Date.now()),
+      ...leaveSection(tasks, taskId),
+      ...placeWrites(target.entries, taskId, zone, sectionSlot(target, at), Date.now()),
     ]);
   };
   const { chosen } = overlay;
-  // The scope switcher and the list are called whose tasks the list holds.
+  // The reader's own tasks, which the list holds until the reader chooses otherwise.
+  const mine: AssignedTo = { kind: ASSIGNED_TO.ME };
+  // The Tasks head and its list are called whose tasks the list holds.
   const tasksHead = tasksHeadWords(assignedTo, shared, reader, tasks.listed.tasks);
-  // New section stands in the scope switcher's menu while the account keeps sections.
+  // New section stands on the Tasks head while the account keeps sections.
   // Note that a new section is named in place at the foot of the sections, so the sidebar stays standing rather than being put away as a choice puts it.
-  const askNewSection = (from: HTMLElement | null) => {
+  const askNewSection = () => {
     const { workspace } = tasks;
-    if (workspace !== undefined) sectionEdits.beginCreate(workspace.id, from);
+    if (workspace !== undefined) sectionEdits.beginCreate(workspace.id, newSectionButton.current);
   };
   const newSectionOffered = sectionsShown && tasks.workspace !== undefined;
+  // Note that the count reads every listed task, not the rows the view draws, which hides the finished ones by default.
+  const childCounts = useMemo(() => childTaskCounts(tasks.listed.tasks), [tasks.listed.tasks]);
   const context: RowContext = {
     tasks,
     current,
@@ -2161,34 +1869,14 @@ function SidebarColumn({
       markedPin === undefined ? pin === undefined && current(taskId) : pin === markedPin,
     markedPin: (pin) => pin === markedPin,
     onOpen: chosen(openTask),
-    // An agent's page opened from a tab pinned on it is marked in the pin's place, as a task's is.
-    currentRow: (row) =>
-      row.kind === TASK_ROW.AGENT &&
-      markedPin !== undefined &&
-      "agent" in markedPin &&
-      markedPin.agent === row.agent.id
-        ? false
-        : currentRow(row),
-    standsFolded,
-    onOpenAgent: chosen(openAgent),
-    onDeletedAgent: (agentId) => () => {
-      if (tasks.agentView.agentId === agentId) tasks.agentView.onClose();
-    },
+    currentTask,
     unread,
-    unseenAgent: (agentId) =>
-      tasks.unreadTabs.some(
-        (tab) =>
-          typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.AGENT && tab.agent === agentId,
-      ),
     now,
+    faces: { creator: true, assignee: assignedTo.kind !== ASSIGNED_TO.MEMBER },
     inSight: overlay.inSight,
     dropOut: sectionsShown ? dropRow : undefined,
     onCarried: setCarrying,
-    // Note that an archived agent stands in no section, so it is offered none until it is brought back, as an archived task.
-    sectionEntry: (agent) =>
-      agent.archivedAt === undefined
-        ? moveToSectionEntry({ agent: true, id: agent.id }, agent.workspaceId, sectionDialogs)
-        : undefined,
+    childCount: (taskId) => childCounts.get(taskId),
     opened: folds.taskOpened,
     every: everyTask,
     onFoldTask: folds.toggleTask,
@@ -2196,8 +1884,7 @@ function SidebarColumn({
   };
   // A pinned tab is on show where its holder is open and its column shows it:
   // an agent's in the task's own column, any other in the side panel. The
-  // pin marked stands too, so a fold never hides the row the sidebar marks, and so
-  // does a pinned agent while its page stands.
+  // pin marked stands too, so a fold never hides the row the sidebar marks.
   const pinnedShown = (row: PinnedRow) => {
     const { pin } = row;
     if (pin === undefined) return holderOpen(row);
@@ -2212,52 +1899,38 @@ function SidebarColumn({
     );
   };
   // Note that the pins are never filtered, because a pin is already the
-  // reader's own choice. The agents with no plan stand among the plans.
-  // A task an automation's run made leaves Tasks too, once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
+  // reader's own choice. A task an automation's run made leaves Tasks too, once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
   const unpinnedTasks = withoutFinishedRunTasks(
     listedRows.tasks.filter(
       (task) => task.pinnedAt === undefined && !sectioned.taskIds.has(task.id),
     ),
     { unread, inbox: listedInbox.inbox, shown: current, pullRequests: listedPullRequests },
   );
-  // An automation's finished runs leave Tasks once they hold nothing of the reader's (`finished-runs.ts`).
-  const unpinnedAgents = withoutFinishedRuns(
-    listedAgents.standing.filter(
-      (agent) => agent.pinnedAt === undefined && !sectioned.agentIds.has(agent.id),
-    ),
-    {
-      unseen: context.unseenAgent,
-      inbox: inboxTaskless,
-      me: tasks.me,
-      shown: agentShown,
-    },
-  );
-  // Note that an archived task or agent, and a finished run, which the list does not show, count for nothing here.
-  const unlisted =
-    listedRows.tasks.length === 0 &&
-    pinnedAgents.length === 0 &&
-    sectioned.agentIds.size === 0 &&
-    unpinnedAgents.length === 0;
-  const unpinned = [...unpinnedTasks.map(taskRow), ...unpinnedAgents.map(agentRow)];
-  const rows = taskRowsAssignedTo(unpinned, assignedTo, tasks.me);
+  // Note that an archived task, which the list does not show, counts for nothing here.
+  const unlisted = listedRows.tasks.length === 0;
+  // A row names its repository as its group's header would, its owner's picture and its name, owner and all where two share a name.
+  const named = repositoryGroups(unpinnedTasks);
+  const repositoryOf = (task: TaskSummary) => {
+    const { repository } = task;
+    return (
+      <ReplayMask>
+        <RepositoryName
+          repository={repository}
+          label={repository === null ? undefined : repositoryLabel(repository, named)}
+          pictures={pictures}
+        />
+      </ReplayMask>
+    );
+  };
+  const assigned = tasksAssignedTo(unpinnedTasks, assignedTo, tasks.me);
   // The list holds the tasks to do and in progress, and the finished sub-tasks where the view asks; the Tasks page holds the rest.
-  const statusRows = rows.filter((row) => taskRowInView(row, taskView.view));
+  const statusTasks = assigned.filter((task) => taskInView(task, taskView.view));
   const orderView: TaskOrderView = {
     workspaceId: tasks.workspace?.id,
     grouping: taskView.view.grouping,
     assignedTo,
   };
-  // By progress, a row stands in the first group it qualifies for: needing the reader, at work, in review, or up next.
-  const progressOf = (row: TaskRow) =>
-    taskRowProgress(row, {
-      needsYou: (each) =>
-        tasks.signedIn &&
-        (each.kind === TASK_ROW.TASK
-          ? needsYou.tasks.has(each.task.id)
-          : needsYou.agents.has(each.agent.id)),
-      pullRequests: (taskId) => pullRequestsOfTask(listedPullRequests, taskId),
-    });
-  const placing = { grouping: orderView.grouping, pending: tasks.pendingTasks, progressOf };
+  const placing = { grouping: orderView.grouping, pending: tasks.pendingTasks };
   // While the pointer is over the sidebar each task keeps the place it was
   // first drawn in, so one an update would sort elsewhere stays under the
   // reader's hand. Note that the hold is the pointer's and not the sidebar's
@@ -2265,18 +1938,19 @@ function SidebarColumn({
   // window is open, and its tasks would sort anew only at the next launch.
   const sections = useHeldOrder(orderView, tasks.shown && overlay.inSight && pointing, {
     sameOrder: sameTaskOrder,
-    draw: (places: ReadonlyMap<string, TaskRow>) => {
-      const placed = taskPlaces(statusRows, places, placing);
-      const held = taskSections([...placed.values()], orderView.grouping, tasks, progressOf);
-      return liveSections(held, new Map(statusRows.map((row) => [taskRowKey(row), row])));
+    draw: (places: ReadonlyMap<string, TaskSummary>) => {
+      const placed = taskPlaces(statusTasks, places, placing);
+      const held = taskSections([...placed.values()], orderView.grouping, tasks.pinnedRepositories);
+      return liveSections(held, new Map(statusTasks.map((task) => [task.id, task])));
     },
-    placesOf: (_drawn, held) => taskPlaces(statusRows, held, placing),
+    placesOf: (_drawn, held) => taskPlaces(statusTasks, held, placing),
   });
-  // A child task stands only under its parent, wherever a list draws it, and nowhere where none does (`homedTaskRows`).
+  // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and nowhere where none does (`homedTaskRows`).
   const pinnedOwn = pinnedHeld(pinnedSection);
   const homed = homedTaskRows(
-    [pinnedOwn, ...shownSections.map((drawn) => drawn.rows), ...taskSectionLists(sections)],
+    [pinnedOwn, ...shownSections.map((drawn) => drawn.tasks), ...taskSectionLists(sections)],
     everyTask,
+    1 + shownSections.length,
   );
   const pinnedAdopted = (homed[0] ?? []).slice(pinnedOwn.length);
   const homedSections = shownSections.map((drawn, at) => homedSection(drawn, homed[at + 1] ?? []));
@@ -2285,7 +1959,7 @@ function SidebarColumn({
     pinnedSection,
     pinnedAdopted,
     folds.taskOpened,
-    currentRow,
+    currentTask,
     everyTask,
   );
   // The tasks are chosen together across Pinned, the sections, and Tasks, only those the view draws staying chosen, a child task homed nowhere among those it does not.
@@ -2293,45 +1967,39 @@ function SidebarColumn({
     tasks,
     new Set(
       [
-        ...pinnedSection,
+        ...pinnedSection.map((pin) => pin.task),
         ...pinnedAdopted,
-        ...homedSections.flatMap((drawn) => drawn.rows),
+        ...homedSections.flatMap((drawn) => drawn.tasks),
         ...taskSectionLists(homedTasks).flat(),
-      ].flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task.id] : [])),
+      ].map((task) => task.id),
     ),
   );
   // The rows as the list draws them: the pinned, then each group not folded
   // away, the open row standing in its place even under a fold, so walking
   // the list still moves from it.
   const pinnedWalked = pinnedTaskRows(pinnedDrawnRows);
-  const sectionsDrawn = homedSections.flatMap(({ section, rows: held }) =>
+  const sectionsDrawn = homedSections.flatMap(({ section, tasks: held }) =>
     nestedRows(
-      folds.sectionFolded(section.id) ? held.filter(standsFolded) : held,
+      folds.sectionFolded(section.id) ? held.filter(currentTask) : held,
       folds,
-      currentRow,
+      currentTask,
       everyTask,
     ),
   );
-  const pinnedShownDrawn = folds.pinnedFolded ? pinnedWalked.filter(currentRow) : pinnedWalked;
+  const pinnedShownDrawn = folds.pinnedFolded ? pinnedWalked.filter(currentTask) : pinnedWalked;
   const drawn = [
     ...pinnedShownDrawn,
     ...sectionsDrawn,
-    ...drawnTasks(homedTasks, folds, currentRow, standsFolded, everyTask),
+    ...drawnTasks(homedTasks, folds, currentTask, everyTask),
   ];
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
-  const chooseOrder = drawn.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task.id] : []));
+  const chooseOrder = drawn.map((task) => task.id);
   // Moving up and down the list as it reads: down from the home page, where
   // no row is open, is the first row. The ends go no further.
-  const at = drawn.findIndex((row) =>
-    agentShown === undefined
-      ? row.kind === TASK_ROW.TASK && row.task.id === tasks.activeTaskId
-      : row.kind === TASK_ROW.AGENT && row.agent.id === agentShown,
-  );
+  const at = drawn.findIndex((task) => task.id === tasks.activeTaskId);
   const step = (by: number) => {
-    const row = drawn[at + by];
-    if (row === undefined) return;
-    if (row.kind === TASK_ROW.TASK) openTask(row.task.id);
-    else openAgent(row.agent.id);
+    const task = drawn[at + by];
+    if (task !== undefined) openTask(task.id);
   };
   const listed = tasks.signedIn && drawn.length > 0;
   useAppCommand(APP_COMMAND.PREVIOUS_TASK, listed && at > 0 ? () => step(-1) : undefined);
@@ -2341,6 +2009,11 @@ function SidebarColumn({
   const newTaskShown = tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON);
   // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
   const phone = room === SHELL_ROOM.NARROW;
+  // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
+  const listedStep =
+    tasks.workspace === undefined ? undefined : (tasks.workspace.slug ?? tasks.workspace.id);
+  const inTab = (place: LinkDestination) =>
+    listedStep === undefined ? undefined : openInTabOf(linkOf(place, listedStep));
   const places = (
     <>
       <SidebarPlaces>
@@ -2355,12 +2028,18 @@ function SidebarColumn({
             >
               Search
             </NavItem>
-            <SidebarHomeRow current={atHome} disabled={!tasks.signedIn} onOpen={chosen(goHome)} />
+            <SidebarHomeRow
+              current={atHome}
+              disabled={!tasks.signedIn}
+              onOpen={chosen(goHome)}
+              onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
+            />
             <SidebarInboxRow
               waiting={waiting}
               current={inInbox}
               disabled={!tasks.signedIn}
               onOpen={chosen(openInbox)}
+              onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
             />
           </>
         )}
@@ -2369,6 +2048,7 @@ function SidebarColumn({
             current={inBoard}
             disabled={!tasks.signedIn}
             onOpen={chosen(openBoard)}
+            onOpenInTab={inTab({ kind: LINK_DESTINATION.BOARD })}
             onPreload={board.preload}
           />
         )}
@@ -2378,6 +2058,7 @@ function SidebarColumn({
           running={automationsRunning}
           disabled={!tasks.signedIn}
           onOpen={chosen(openAutomations)}
+          onOpenInTab={inTab({ kind: LINK_DESTINATION.AUTOMATIONS })}
         />
       </SidebarPlaces>
       <SidebarRule />
@@ -2484,20 +2165,43 @@ function SidebarColumn({
                         />
                       )}
                     />
-                    {/* The scope switcher heads what its view filters, the sections and the list, Pinned standing above it unfiltered; a row let go on it leaves its section, as one let go on the list does. */}
+                    {/* The Tasks head heads what its view filters, the sections and the list, Pinned standing above it unfiltered; a row let go on it leaves its section, as one let go on the list does. */}
                     {tasks.signedIn ? (
                       <div
-                        className="sidebar-group sidebar-scope-zone"
+                        className="sidebar-group sidebar-tasks-head"
                         data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
-                        {...motionKey(SCOPE_KEY)}
+                        {...motionKey(TASKS_HEAD_KEY)}
                       >
-                        <TaskScopeSwitcher
-                          shown={tasks.shown && overlay.inSight}
-                          words={tasksHead}
-                          masked={assignedTo.kind === ASSIGNED_TO.MEMBER}
-                          control={taskView}
-                          shared={shared}
-                          onNewSection={newSectionOffered ? askNewSection : undefined}
+                        <GroupHeader
+                          heading={GROUP_HEADING.NONE}
+                          label={
+                            assignedTo.kind === ASSIGNED_TO.MEMBER ? (
+                              <ReplayMask>{tasksHead}</ReplayMask>
+                            ) : (
+                              tasksHead
+                            )
+                          }
+                          actions={
+                            <>
+                              {!newSectionOffered ? null : (
+                                <Tooltip label={NEW_SECTION}>
+                                  <IconButton
+                                    ref={newSectionButton}
+                                    icon={<FolderPlusIcon />}
+                                    label={NEW_SECTION}
+                                    size={BUTTON_SIZE.COMPACT}
+                                    onClick={askNewSection}
+                                  />
+                                </Tooltip>
+                              )}
+                              <TaskViewOptions
+                                shown={tasks.shown && overlay.inSight}
+                                control={taskView}
+                                shared={shared}
+                                filtered={shared && assignedTo.kind !== mine.kind}
+                              />
+                            </>
+                          }
                         />
                       </div>
                     ) : null}
@@ -2508,8 +2212,7 @@ function SidebarColumn({
                         tasks,
                         dialogs: sectionDialogs,
                         edits: sectionEdits,
-                        current: currentRow,
-                        standsFolded,
+                        current: currentTask,
                         unread,
                         inSight: overlay.inSight,
                         folded: folds.sectionFolded,
@@ -2517,39 +2220,24 @@ function SidebarColumn({
                         opened: folds.taskOpened,
                         every: everyTask,
                         row: (held, nest, place) => {
-                          const { row } = held;
-                          return row.kind === TASK_ROW.TASK ? (
+                          const { task } = held;
+                          return (
                             <SidebarTask
-                              key={row.task.id}
+                              key={task.id}
                               tasks={tasks}
-                              task={row.task}
-                              current={context.marked(row.task.id, undefined)}
-                              open={current(row.task.id)}
-                              unread={unread(row.task)}
-                              at={taskRowTime(row)}
+                              task={task}
+                              current={context.marked(task.id, undefined)}
+                              open={current(task.id)}
+                              unread={unread(task)}
+                              at={taskTime(task, TASK_ORDER.UPDATED)}
                               now={now}
+                              faces={context.faces}
                               depth={held.depth}
                               nest={nest}
                               place={place}
                               fold={childTasksFold(held, folds.toggleTask)}
-                              onOpen={() => context.onOpen(row.task.id)}
-                            />
-                          ) : (
-                            <SidebarAgent
-                              key={row.agent.id}
-                              agent={row.agent}
-                              agents={tasks.agents}
-                              signedIn={tasks.signedIn}
-                              current={currentRow(row)}
-                              now={now}
-                              at={taskRowTime(row)}
-                              nest={nest}
-                              place={place}
-                              shown={tasks.shown && overlay.inSight}
-                              onOpen={() => context.onOpenAgent(row.agent.id)}
-                              onPin={pinOf(tasks, row.agent)}
-                              section={context.sectionEntry(row.agent)}
-                              onDeleted={context.onDeletedAgent(row.agent.id)}
+                              childCount={context.childCount(task.id)}
+                              onOpen={() => context.onOpen(task.id)}
                             />
                           );
                         },
@@ -2565,8 +2253,8 @@ function SidebarColumn({
                       {...motionRows()}
                     >
                       {assignedTo.kind !== ASSIGNED_TO.ANYONE &&
-                      rows.length === 0 &&
-                      shownSections.every((drawn) => drawn.rows.length === 0) &&
+                      assigned.length === 0 &&
+                      shownSections.every((drawn) => drawn.tasks.length === 0) &&
                       !unlisted &&
                       tasks.listRead &&
                       !tasks.listFailed ? (
@@ -2602,6 +2290,7 @@ function SidebarColumn({
                       )}
                       <TaskGroups
                         sections={homedTasks}
+                        repositoryOf={repositoryOf}
                         folds={folds}
                         onNewTaskIn={chosen(newTaskIn)}
                         context={context}

@@ -6,7 +6,7 @@
  * `OnboardingSurvey`), and each set the service saves is recorded here under
  * the account's person, each answer in its own words and an Other in the
  * person's words where they wrote some. A PostHog destination posts each
- * production response to #signups, as Stage's sign-up survey did. Setup
+ * production response to #signups. Setup
  * keeps a set only where it changed, so a walk back and forth posts once.
  */
 

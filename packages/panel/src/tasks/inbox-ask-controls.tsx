@@ -1,3 +1,24 @@
+import { ASK_PRESS, INBOX_MISSING, type InboxMissing } from "@repo/features/inbox-ask-words";
+import {
+  answeredDraft,
+  doDecision,
+  fieldValueOf,
+  type InboxDraft,
+  picksNone,
+  shownTicks,
+  stepParts,
+  withDoPress,
+  withNoneOfThese,
+  withPicks,
+  withStep,
+  withValue,
+} from "@repo/features/inbox-draft";
+import {
+  ANSWER_TONE,
+  type AnswerTone,
+  decideButtons,
+  RECOMMENDED,
+} from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_BOUNDS,
@@ -8,6 +29,8 @@ import {
   type InboxChoice,
   type InboxField,
   type InboxForm,
+  NONE_OF_THESE,
+  optionsCarryMedia,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
 import { FIELD_WORDS } from "@repo/features/words";
@@ -38,29 +61,17 @@ import {
   TextField,
 } from "@repo/ui";
 import { isComposingKey } from "@repo/ui/composing-key";
+import { draftKindOf } from "@repo/ui/draft-text";
 import { CheckIcon, Undo2Icon } from "@repo/ui/icons";
+import { Fragment } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
 import { MarkdownMessage } from "../markdown-message.js";
-import { INBOX_MISSING, type InboxMissing } from "./inbox-ask-words.js";
 import { type FormTextDoors, type FormTextProps, InboxFormText } from "./inbox-form-text.js";
-import {
-  ANSWER_TONE,
-  type AnswerTone,
-  answeredDraft,
-  decideButtons,
-  doDecision,
-  fieldValueOf,
-  type InboxDraft,
-  RECOMMENDED,
-  shownTicks,
-  stepParts,
-  withDoPress,
-  withStep,
-  withValue,
-} from "./inbox-model.js";
+import { OptionCardMedia } from "./inbox-option-media.js";
 import { ANSWER_STATUS_TONE } from "./inbox-stamp.js";
 import { REPLY_SCOPE } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
+import { DraftFence } from "./transcript-markdown.js";
 import { useOpenLink } from "./use-open-link.js";
 
 /**
@@ -95,16 +106,46 @@ const INBOX_ASK_PRESSES = "inbox-ask-presses flex flex-wrap gap-control-gap";
 /** The words a choice's open options are named by, for a reader that does not see the question over them. */
 const CHOICE_LEGEND = "Options";
 
-/** A choice's options as `@repo/ui`'s ChoiceList draws them, each the agent recommends wearing its badge. */
+/**
+ * The value None of these stands under among a choice's cards. Note that
+ * it is no label an option could spell, since a label is words and this
+ * opens with a character no one types.
+ */
+const NONE_VALUE = "\u0000none";
+
+/** A choice's options as `@repo/ui`'s ChoiceList draws them, each the agent recommends wearing its badge, and each card its media. */
 function choiceOptions(
-  options: readonly { label: string; detail?: string | undefined; recommended: boolean }[],
+  options: readonly (InboxChoice["options"][number] & { recommended: boolean })[],
+  cards: boolean,
 ): ChoiceOption<string>[] {
-  return options.map((option) => ({
+  // Note that a card's detail would step it back as unavailable, so a card says its trade-off as its state.
+  const drawn = options.map((option) => ({
     value: option.label,
     label: option.label,
-    detail: option.detail,
+    ...(cards
+      ? { state: option.detail, below: <OptionCardMedia option={option} /> }
+      : { detail: option.detail }),
     badge: option.recommended ? RECOMMENDED : undefined,
   }));
+  return cards ? [...drawn, { value: NONE_VALUE, label: NONE_OF_THESE }] : drawn;
+}
+
+/** What a choice's cards hold picked: the options the draft picks, or None of these alone. */
+function cardValues(draft: InboxDraft): readonly string[] {
+  return picksNone(draft) ? [NONE_VALUE] : draft.choices;
+}
+
+/**
+ * The draft after a choice's cards change to `values`: None of these picked
+ * where it is newly among them, letting every option go, and else the
+ * options among them, letting None of these go.
+ */
+function withCardValues(draft: InboxDraft, values: readonly string[]): InboxDraft {
+  const none = values.includes(NONE_VALUE);
+  if (none && !picksNone(draft)) return withNoneOfThese(draft);
+  const choices = values.filter((value) => value !== NONE_VALUE);
+  if (none && choices.length === 0) return draft;
+  return withPicks(picksNone(draft) ? withNoneOfThese(draft) : draft, choices);
 }
 
 /** Where a choice's open options stand, which a number key and Enter's way to what is missing find them by. */
@@ -142,25 +183,29 @@ function ChoiceOptions({
   readOnly?: boolean;
   onDraft: (draft: InboxDraft) => void;
 }): React.JSX.Element {
+  const cards = optionsCarryMedia(choice);
   const options = choiceOptions(
     choice.options.map((option) => ({
       ...option,
       recommended: recommendedLabels(choice).includes(option.label),
     })),
+    cards,
   );
   return (
     <div {...(readOnly ? {} : { [OPTIONS_ATTRIBUTE]: "" })}>
       <ChoiceList
         legend={CHOICE_LEGEND}
         options={options}
-        value={draft.choices}
+        value={cards ? cardValues(draft) : draft.choices}
         select={choice.multiple === true ? CHOICE_SELECT.MANY : CHOICE_SELECT.ONE}
-        look={CHOICE_LOOK.MARKED}
-        numbered={numbered && !readOnly}
+        look={cards ? CHOICE_LOOK.CARD : CHOICE_LOOK.MARKED}
+        numbered={numbered && !readOnly && !cards}
         clearable
         disabled={disabled}
         readOnly={readOnly}
-        onChange={(choices) => onDraft({ ...draft, choices: [...choices] })}
+        onChange={(choices) =>
+          onDraft(cards ? withCardValues(draft, choices) : { ...draft, choices: [...choices] })
+        }
       />
     </div>
   );
@@ -495,12 +540,6 @@ function onResponseKey(
 /** The keys 1 to 9, each the option of its number. */
 export const OPTION_NUMBER = /^[1-9]$/u;
 
-/** What the presses closing an open ask say. */
-const ASK_PRESS = {
-  DONE: "Mark done",
-  NOT_DONE: "Couldn't do it",
-} as const;
-
 /** What an open ask's presses send, and what they are drawn with. */
 interface AskDoors {
   readonly draft: InboxDraft;
@@ -559,8 +598,9 @@ const STEP_CODE_TITLE = "code";
  * bold, code, and links among it, a list in it run into the line (`inline`),
  * and a link pressed opening its page without ticking the box (`TextLink`).
  * Each fence standing in the step draws under the words as the window's one
- * code card, its lines kept and its Copy taking them whole, outside the
- * box's press (`stepParts`); a step of a fence alone is named by its place.
+ * code card, its lines kept and its Copy taking them whole, or as a draft to
+ * be sent elsewhere where it is fenced ```slack, ```email, or ```draft
+ * (`DraftFence`), outside the box's press (`stepParts`); a step of a fence alone is named by its place.
  */
 function StepBox({
   step,
@@ -584,12 +624,17 @@ function StepBox({
       <Stack gap={GAP.CONTROL}>
         {fences.map((fence, place) => (
           // A step's fences have no key of their own, and are never reordered.
-          <CodeCard
-            key={place}
-            title={fence.lang ?? STEP_CODE_TITLE}
-            code={fence.code}
-            copy={copyThroughShell}
-          />
+          <Fragment key={place}>
+            {draftKindOf(fence.lang ?? "") === undefined ? (
+              <CodeCard
+                title={fence.lang ?? STEP_CODE_TITLE}
+                code={fence.code}
+                copy={copyThroughShell}
+              />
+            ) : (
+              <DraftFence language={fence.lang} code={fence.code} />
+            )}
+          </Fragment>
         ))}
       </Stack>
     );

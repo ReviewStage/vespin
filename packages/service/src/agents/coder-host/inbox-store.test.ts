@@ -9,10 +9,10 @@ import {
   recordAutomationRun,
   settleAutomationRun,
 } from "@repo/database/models/automation-store";
-import { updateTask } from "@repo/database/models/task-store";
+import { createTask, updateTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { organization, user } from "@repo/database/schemas/auth";
-import { automationRun, automation as automationTable } from "@repo/database/schemas/automation";
+import { automationRun } from "@repo/database/schemas/automation";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { inboxItemRead } from "@repo/database/schemas/inbox-item-read";
 import { task as taskTable } from "@repo/database/schemas/task";
@@ -106,8 +106,7 @@ import { accountInboxPast, agentInboxPast, taskInboxPast } from "./inbox-page.js
  * is taken only at the revision it names while the item is open and can be
  * withdrawn under its key, a read keeps every open item however many others
  * changed, every member of the task's workspace reads and answers the items
- * of an agent any of them started, an agent with no task posts to its
- * workspace's members as one on a task does to its task's, a member writes
+ * of an agent any of them started, a member writes
  * on an item's thread whatever its status, which moves the item's last
  * change and nothing else of it, and nothing of a workspace the account is
  * not in is read or written. Over the sync hub, a task's, an agent's, and the account's held reads
@@ -237,15 +236,18 @@ const openAutomation = (userId: string, workspaceId: string) =>
     return Option.getOrThrow(made).id;
   });
 
-/** An account's workspace with one agent started in it on no task, as an automation's run starts one, by an automation of the account's where asked. */
-const openTasklessAgentOf = (byAutomation: boolean) =>
+/** An account's workspace with one agent started in it on a task of its own, as an automation's run starts one, by an automation of the account's where asked. */
+const openRunAgentOf = (byAutomation: boolean) =>
   Effect.gen(function* () {
     const userId = yield* openUser;
     const workspaceId = yield* openWorkspace(userId);
     const automationId = byAutomation ? yield* openAutomation(userId, workspaceId) : undefined;
-    const started = yield* createAgent(userId, {
-      taskId: null,
+    const task = yield* createTask(userId, {
       organizationId: workspaceId,
+      repository: "acme/relay",
+    });
+    const started = yield* createAgent(userId, {
+      taskId: task.id,
       automationId,
       idempotencyKey: randomUUID(),
       model: "anthropic/claude-opus-5.5",
@@ -256,11 +258,11 @@ const openTasklessAgentOf = (byAutomation: boolean) =>
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
     assert.ok(Option.isSome(started));
-    const agent: InboxAgent = { userId, taskId: null, agentId: started.value.agent.id };
+    const agent: InboxAgent = { userId, taskId: task.id, agentId: started.value.agent.id };
     return { agent, workspaceId, automationId };
   });
 
-const openTasklessAgent = openTasklessAgentOf(false);
+const openRunAgent = openRunAgentOf(false);
 
 /** A live statement run as Realtime runs it, its SQL and its values as they are, and its rows read back under the schema the desktop decodes them with. */
 const runLive = <Row, Encoded>(statement: LiveStatement, schema: Schema.Codec<Row, Encoded>) =>
@@ -320,20 +322,20 @@ const accountItemIdsOf = (userId: string, since: number, settledSince: number) =
 
 it.layer(getTestDB())("the inbox store", (it) => {
   it.effect(
-    "the account's items read a teammate's item on a shared task and an agent's with no task in a shared workspace, and none of another workspace",
+    "the account's items read teammates' items on shared tasks of two workspaces, and none of another workspace",
     () =>
       Effect.gen(function* () {
         const shared = yield* openAgentIn;
-        const { agent: taskless, workspaceId } = yield* openTasklessAgent;
+        const { agent: second, workspaceId } = yield* openRunAgent;
         const teammate = yield* openUser;
         yield* joinWorkspace(shared.workspaceId, teammate);
         yield* joinWorkspace(workspaceId, teammate);
         const outsider = yield* openAgentIn;
         const onTask = yield* post(shared.agent);
-        const ofTaskless = yield* post(taskless);
+        const ofSecond = yield* post(second);
         const elsewhere = yield* post(outsider.agent);
 
-        const both = [onTask.id, ofTaskless.id].toSorted();
+        const both = [onTask.id, ofSecond.id].toSorted();
         assert.deepEqual(yield* accountItemIdsOf(teammate, 0, 0), { stamps: both, items: both });
         assert.deepEqual(yield* accountItemIdsOf(outsider.agent.userId, 0, 0), {
           stamps: [elsewhere.id],
@@ -461,7 +463,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
     () =>
       Effect.gen(function* () {
         const onTask = yield* openAgentIn;
-        const { agent: taskless, workspaceId } = yield* openTasklessAgentOf(true);
+        const { agent: ofRun, workspaceId } = yield* openRunAgentOf(true);
         const teammate = yield* openUser;
         yield* joinWorkspace(workspaceId, teammate);
         yield* joinWorkspace(onTask.workspaceId, teammate);
@@ -469,7 +471,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         yield* openWorkspace(outsider);
         const first = yield* post(onTask.agent);
         yield* post(onTask.agent, { ...SETTINGS, key: "second" });
-        yield* post(taskless);
+        yield* post(ofRun);
         // Read by the agent's starter and not by the teammate, so the two read it apart.
         assert.ok(yield* markInboxItemRead(onTask.agent.userId, first.id));
         // A second task of the starter's, settled, whose agent asks on it after, which the Inbox lists like any other.
@@ -493,7 +495,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         });
 
         const owner = onTask.agent.userId;
-        for (const reader of [owner, taskless.userId, teammate, outsider]) {
+        for (const reader of [owner, ofRun.userId, teammate, outsider]) {
           const held = yield* accountInboxPast(reader, INBOX_CURSOR_START);
           const live = yield* liveAnswerOf(reader, held.readAt);
           // Each read keeps a cursor of its own, which the other never reads.
@@ -627,117 +629,10 @@ it.layer(getTestDB())("the inbox store", (it) => {
   );
 
   it.effect(
-    "the account's read carries an open item of an agent with no plan under its own keys, by its automation and repository, for every member of the workspace and no one else, never among the plans' items, and names a personal automation, by name or id, only to who may read it",
-    () =>
-      Effect.gen(function* () {
-        const { agent, workspaceId, automationId } = yield* openTasklessAgentOf(true);
-        const teammate = yield* openUser;
-        yield* joinWorkspace(workspaceId, teammate);
-        const outsider = yield* openUser;
-        yield* openWorkspace(outsider);
-        const posted = yield* post(agent);
-
-        const theirs = yield* accountInboxPast(teammate, INBOX_CURSOR_START);
-        const others = yield* accountInboxPast(outsider, INBOX_CURSOR_START);
-
-        assert.deepEqual(
-          theirs.planless?.map((entry) => [
-            entry.id,
-            entry.automationId,
-            entry.automationName,
-            entry.repository,
-            entry.workspaceId,
-          ]),
-          [[posted.id, automationId, "Flaky-test sweep", "acme/relay", workspaceId]],
-        );
-        assert.deepEqual(
-          theirs.automations?.map((group) => [group.automationId, group.items]),
-          [[automationId, 1]],
-        );
-        assert.deepEqual(
-          theirs.planless?.map((entry) => entry.startedBy),
-          [agent.userId],
-          "the teammate's read names who started the agent, whom it asks",
-        );
-        assert.ok(!theirs.items.some((entry) => entry.id === posted.id));
-        assert.deepEqual([others.planless, others.automations, others.agents], [[], [], []]);
-
-        // Made personal, the automation's runs stay the workspace's, and which automation it is its creator's.
-        yield* Database.use((db) =>
-          db
-            .update(automationTable)
-            .set({ scope: AUTOMATION_SCOPE.PERSONAL })
-            .where(eq(automationTable.id, automationId ?? "")),
-        );
-        const teammateRead = yield* accountInboxPast(teammate, INBOX_CURSOR_START);
-        const creatorRead = yield* accountInboxPast(agent.userId, INBOX_CURSOR_START);
-        assert.deepEqual(
-          teammateRead.planless?.map((entry) => [
-            entry.id,
-            entry.automationId,
-            entry.automationName,
-          ]),
-          [[posted.id, null, null]],
-        );
-        assert.deepEqual(
-          teammateRead.automations?.map((group) => [group.automationId, group.items]),
-          [[null, 1]],
-        );
-        assert.deepEqual(
-          creatorRead.planless?.map((entry) => [entry.automationId, entry.automationName]),
-          [[automationId, "Flaky-test sweep"]],
-        );
-
-        // Settled, the item waits no longer, and its agent is still listed as holding it, named as its open item was, to every member who may read it.
-        assert.ok(Option.isSome(yield* answerDone(agent.userId, posted)));
-        const settled = yield* accountInboxPast(teammate, INBOX_CURSOR_START);
-        assert.deepEqual(settled.planless, []);
-        assert.deepEqual(
-          settled.agents?.map((held) => [
-            held.agentId,
-            held.items,
-            held.toDo,
-            held.automationName,
-            held.repository,
-            held.workspaceId,
-          ]),
-          [[agent.agentId, 1, 0, null, "acme/relay", workspaceId]],
-        );
-        assert.deepEqual((yield* accountInboxPast(outsider, INBOX_CURSOR_START)).agents, []);
-        const live = yield* liveAnswerOf(teammate, settled.readAt);
-        assert.deepEqual({ ...live, cursor: settled.cursor }, settled);
-      }),
-  );
-
-  it.effect(
-    "an agent with no plan posts to its workspace: a member who did not start it reads and answers the item, and an account outside the workspace does neither",
-    () =>
-      Effect.gen(function* () {
-        const { agent, workspaceId } = yield* openTasklessAgent;
-        const teammate = yield* openUser;
-        yield* joinWorkspace(workspaceId, teammate);
-        const outsider = yield* openUser;
-        yield* openWorkspace(outsider);
-
-        const posted = yield* post(agent);
-
-        const { id } = posted;
-        assert.ok(Option.isNone(yield* readInboxItem(outsider, id)));
-        assert.ok(Option.isNone(yield* answerDone(outsider, posted)));
-        assert.equal(
-          Option.getOrThrow(yield* readInboxItem(teammate, id)).item.agentId,
-          agent.agentId,
-        );
-        const answered = yield* answerDone(teammate, posted);
-        assert.equal(Option.getOrUndefined(answered)?.status, INBOX_STATUS.ANSWERED);
-      }),
-  );
-
-  it.effect(
     "an item names the member whose agent asks it and an answer the member who gave it, to every member, and an answer withdrawn or an item asked again names nobody",
     () =>
       Effect.gen(function* () {
-        const { agent, workspaceId } = yield* openTasklessAgent;
+        const { agent, workspaceId } = yield* openRunAgent;
         const teammate = yield* openUser;
         yield* joinWorkspace(workspaceId, teammate);
         const posted = yield* post(agent);
@@ -1633,7 +1528,7 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
         const { agent, workspaceId } = yield* openAgentIn;
         const teammate = yield* openUser;
         yield* joinWorkspace(workspaceId, teammate);
-        const elsewhere = yield* openTasklessAgent;
+        const elsewhere = yield* openRunAgent;
         yield* joinWorkspace(elsewhere.workspaceId, agent.userId);
         const open = yield* postedId(agent, "open");
         const settledItem = yield* postedItem(agent, "settled");
@@ -2080,46 +1975,6 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
 
         assert.deepEqual([unassigned, assigned, reassigned], [false, true, false]);
         assert.deepEqual([notTheOwners, leftToTheOwner], [false, true]);
-      }),
-  );
-
-  it.effect("an item of an agent with no task waits on the member who started it", () =>
-    Effect.gen(function* () {
-      const { agent, workspaceId } = yield* openTasklessAgent;
-      const teammate = yield* openUser;
-      yield* joinWorkspace(workspaceId, teammate);
-      yield* postedId(agent, "taskless");
-
-      const [item] = yield* memberAgentInboxItems(teammate, agent.agentId);
-      assert.equal(item?.waitsOn?.userId, agent.userId);
-    }),
-  );
-
-  it.effect(
-    "a settled item still unread of an agent with no task is counted in the account's read of its starter alone, never a teammate's",
-    () =>
-      Effect.gen(function* () {
-        const { agent, workspaceId } = yield* openTasklessAgent;
-        const owner = agent.userId;
-        const teammate = yield* openUser;
-        yield* joinWorkspace(workspaceId, teammate);
-        // Each answered by the owner, then written on again by its agent: settled, and unread for the owner.
-        const settledOf = (of: InboxAgent) =>
-          Effect.gen(function* () {
-            const item = yield* postedItem(of, "settled");
-            assert.ok(Option.isSome(yield* answerDone(owner, item)));
-            yield* TestClock.adjust(Duration.seconds(1));
-            assert.ok(Option.isSome(yield* replyInboxItem(of, "settled", "One more thing.")));
-            return item.id;
-          });
-        const coder = yield* settledOf(agent);
-        const stampIds = (readerId: string) =>
-          Effect.map(accountWaitingStamps(readerId), (stamps) => stamps.map((stamp) => stamp.id));
-
-        assert.deepEqual(
-          [(yield* stampIds(owner)).toSorted(), yield* stampIds(teammate)],
-          [[coder], []],
-        );
       }),
   );
 });

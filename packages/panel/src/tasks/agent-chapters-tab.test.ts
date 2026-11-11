@@ -389,6 +389,7 @@ function controlAnswering(answers: Answers): AgentsControl {
       agent: undefined,
       chaptersModel: chaptersModelOn(provider, CHAPTERS_MODEL.HAIKU),
       slackNotifications: true,
+      sounds: { list: [], choices: { finish: undefined, ask: undefined } },
     },
   });
   const { deliverChapters, deliverMembers, deliverParts, deliverPreferences } = handHostReads({
@@ -880,13 +881,12 @@ function madeBy(model: string, headSha = HEAD): AgentsControl {
   });
 }
 
-test("the rail's foot says which model made the chapters, inside the tab's ph-no-capture root", async () => {
+test("the rail's foot says which model made the chapters", async () => {
   const tab = await draw(madeBy("claude-haiku-5-5"));
   const line = await vi.waitFor(
     () => tab.querySelector(".chapter-rail-credit") ?? assert.fail("the model is named"),
   );
   assert.equal(line.textContent, "Chapters by Haiku 5.5");
-  assert.notEqual(line.closest(".ph-no-capture"), null);
 });
 
 test("stale chapters still say which model made them, and a model Settings does not offer is named by its id", async () => {

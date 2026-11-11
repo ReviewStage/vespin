@@ -5,18 +5,32 @@ import {
   pinPositionsForMove,
 } from "@repo/features/pin-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { childTaskCounts, NO_REPOSITORY, repositoryLabel } from "@repo/features/task-list-model";
 import {
   TASK_SECTION_ICON_KIND,
   TASK_SECTION_WRITE,
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
-import { isAgentEntry } from "@repo/features/task-section-writes";
+import {
+  placeWrites,
+  restoreWrites,
+  sectionEntries,
+  sectionOrder,
+  sectionTaskIds,
+  workspaceSections,
+} from "@repo/features/task-sections-model";
+import {
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
 import {
   TASK_PRIORITY_ORDER,
   TASK_STATUS_ORDER,
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { TASK_MARK } from "@repo/features/tasks-model";
 import {
   noneYetWords,
   REFRESH_FAILED_WORDS,
@@ -56,7 +70,6 @@ import {
   Stack,
   TaskPriorityMark,
   type TaskRowCell,
-  TaskRowDraft,
   TaskStatusMark,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -71,16 +84,6 @@ import {
 import { actorName, creatorActor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { GLYPH, ListTodoIcon, PinIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { childTaskCounts, NO_REPOSITORY, repositoryLabel } from "@repo/ui/task-list-model";
-import {
-  placeWrites,
-  restoreWrites,
-  sectionEntries,
-  sectionOrder,
-  sectionTaskIds,
-  workspaceSections,
-} from "@repo/ui/task-sections-model";
-import { TASK_MARK } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
   LIST_COLUMN,
@@ -106,7 +109,6 @@ import {
 } from "@repo/ui/virtual-rows";
 import { Schema } from "effect";
 import {
-  Fragment,
   memo,
   type ReactNode,
   type RefObject,
@@ -126,11 +128,6 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
-import {
-  NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
-  TASK_STATUS_WORDS,
-} from "../tasks/task-standing.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -138,7 +135,7 @@ import { keptKey, useKept } from "../use-kept.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { groupNewTaskWords, NewTaskInButton, quickAddInto } from "./new-task-button.js";
 import { useTasksWaiting } from "./places-waiting.js";
-import { type DraftParts, type QuickAddLine, QuickAddLines, useQuickAdd } from "./quick-add.js";
+import { QuickAddLines, rowQuickAddLine, useQuickAdd } from "./quick-add.js";
 import { sectionGlyph } from "./section-icon-picker.js";
 import { groupCount, sidebarFold } from "./sidebar-fold.js";
 import { type OpenedTask, openedTaskOf, type TaskRowTab, useTaskRowTab } from "./task-actions.js";
@@ -152,7 +149,7 @@ import {
   OlderCompleted,
   type TasksViewFrame,
 } from "./tasks-page-options.js";
-import { type ChosenTasks, useTasksSelection } from "./tasks-selection.js";
+import { type ChosenRows, useTasksSelection } from "./tasks-selection.js";
 import { useHeldTasks } from "./use-held-tasks.js";
 import { useTaskDrag } from "./use-row-drag.js";
 
@@ -211,8 +208,9 @@ import { useTaskDrag } from "./use-row-drag.js";
  * chosen, by X on the row in hand, and as a Mac's list chooses them, ⌘-click
  * one in or out, ⇧-click a run, ⇧↑↓ grow it, ⌘A every row of an open group, and Esc
  * none, across every group, while a plain press still opens the task. While any is chosen, a bar floating at the foot of the page acts on
- * them all at once: Mark done, Set status, and Move to section, each
- * answered by one toast whose Undo puts every task back where it stood.
+ * them all at once (`tasks-selection.tsx`): Status and Move to section,
+ * each answered by one toast whose Undo puts every task back where it
+ * stood, and Permanently delete, asked first.
  */
 
 /** What the page is called, to a screen reader. */
@@ -510,12 +508,10 @@ function leaveSection(tasks: ListTasks, taskId: string): TaskSectionWrite[] {
     : [];
 }
 
-/** A section's entries for the tasks its group draws, in its own order; its agents, which the List draws not, left out. */
+/** A section's entries for the tasks its group draws, in its own order. */
 function drawnEntries(tasks: ListTasks, group: TasksGroup, sectionId: string) {
   const drawn = new Set(group.tasks.map((task) => task.id));
-  return sectionOrder(tasks.taskSections, sectionId).flatMap((entry) =>
-    !isAgentEntry(entry) && drawn.has(entry.taskId) ? [entry] : [],
-  );
+  return sectionOrder(tasks.taskSections, sectionId).filter((entry) => drawn.has(entry.taskId));
 }
 
 /** What a group's drag does, each row heard by its task's id: its rows moved within it, where it keeps an order, and a row let go over another group's zone. */
@@ -554,8 +550,7 @@ function listDrops(
         const entries = drawnEntries(tasks, group, head.sectionId);
         const entry = entries.find((each) => each.taskId === taskId);
         if (entry === undefined) return;
-        const member = { agent: false, id: entry.taskId };
-        tasks.onWriteSections(placeWrites(entries, member, head.sectionId, to, Date.now()));
+        tasks.onWriteSections(placeWrites(entries, entry.taskId, head.sectionId, to, Date.now()));
       };
     }
     return undefined;
@@ -591,8 +586,7 @@ function listDrops(
         now.onMovePins(pinMoves(pinPositionsForInsert(others, again, at, pinPlaceOf)));
       }
       if (leaving.length === 0) return;
-      const member = { agent: false, id: task.id };
-      const writes = restoreWrites(before, now.taskSections, [member], null, Date.now());
+      const writes = restoreWrites(before, now.taskSections, [task.id], null, Date.now());
       if (writes.length > 0) now.onWriteSections(writes);
     };
     switch (onto.kind) {
@@ -613,8 +607,7 @@ function listDrops(
         );
         const entries = target === undefined ? [] : drawnEntries(tasks, target, onto.sectionId);
         leave();
-        const member = { agent: false, id: task.id };
-        tasks.onWriteSections(placeWrites(entries, member, onto.sectionId, at, Date.now()));
+        tasks.onWriteSections(placeWrites(entries, task.id, onto.sectionId, at, Date.now()));
         return;
       }
       case TASKS_GROUP.STATUS:
@@ -677,7 +670,7 @@ const TasksPageRow = memo(function TasksPageRow({
   subTasksFinished: number;
   subTasksTotal: number;
   /** The selection it stands in, where it is one of several chosen: how many, and what the bar does to them all. */
-  chosen: ChosenTasks | undefined;
+  chosen: ChosenRows | undefined;
   /** Whether it draws its menu's ⋯, which a finger's List leaves out. */
   more: boolean;
   /** Opens a task by its id. */
@@ -727,54 +720,6 @@ const TasksPageRow = memo(function TasksPageRow({
     />
   );
 });
-
-/** The chips a quick add's draft draws in the cells of the properties the List draws, by the property each says. */
-const DRAFT_CELLS = [TASK_PROPERTY.PRIORITY, TASK_PROPERTY.STATUS, TASK_PROPERTY.ASSIGNEE] as const;
-
-/** The draft's chip for a property, where it has one. */
-function draftChip(draft: DraftParts, property: TaskRowCell): ReactNode {
-  if (property === TASK_PROPERTY.PRIORITY) return draft.priority;
-  if (property === TASK_PROPERTY.STATUS) return draft.status;
-  if (property === TASK_PROPERTY.ASSIGNEE) return draft.assignee;
-  return null;
-}
-
-/**
- * A List group's quick add line: a row of the list's own cells, raised as a
- * card off the page as a Board's draft is, so it reads as one being written, the draft's
- * chips in the cells of its priority, status, and assignee and its bare
- * title in the name's, so it reads as the row it is about to be; a chip
- * whose column the List does not draw stands after the title, so each
- * stays in reach. An add still out stands as its row, its name muted, and
- * why one was refused in the name's cell.
- */
-function listQuickAddLine(properties: readonly TaskRowCell[]): QuickAddLine {
-  return ({ draft, pending, refused }) => (
-    <TaskRowDraft
-      cells={properties}
-      content={
-        draft === undefined
-          ? {}
-          : Object.fromEntries(
-              DRAFT_CELLS.map((property) => [property, draftChip(draft, property)]),
-            )
-      }
-      name={
-        <>
-          <ReplayMask>{draft?.title ?? pending}</ReplayMask>
-          {draft === undefined
-            ? null
-            : DRAFT_CELLS.filter((property) => !properties.includes(property)).map((property) => (
-                <Fragment key={property}>{draftChip(draft, property)}</Fragment>
-              ))}
-        </>
-      }
-      note={refused === undefined ? undefined : <ReplayMask>{refused}</ReplayMask>}
-      drafting={draft !== undefined}
-      pending={pending !== undefined}
-    />
-  );
-}
 
 /**
  * Where the List's runs of rows stand: the page's scroller they stand in,
@@ -872,7 +817,7 @@ function TasksListGroup({
             moves
             className={`tasks-list-adds ${ROWS_GRID}`}
           >
-            <QuickAddLines quick={quick} line={listQuickAddLine(properties)} />
+            <QuickAddLines quick={quick} line={rowQuickAddLine(properties)} />
           </Stack>
         ) : null}
         {drawn.length === 0 ? null : (
@@ -1025,7 +970,8 @@ export function TasksList({
       }),
   );
   // Note that every door a row is handed stands across draws, so a row held while what it is handed does (`memo`) holds.
-  const setStanding = useSteadyDoor(useStandingDoor(tasks));
+  const standingDoor = useStandingDoor(tasks);
+  const setStanding = useSteadyDoor(standingDoor.set);
   const rowTab = useTaskRowTab(tasks);
   const { region, agents } = tasks;
   const opened = useMemo(() => openedTaskOf({ region, agents }), [region, agents]);
@@ -1228,6 +1174,7 @@ export function TasksList({
         />
       </div>
       {selection.dialog}
+      {standingDoor.dialog}
     </CollectionPage>
   );
 }

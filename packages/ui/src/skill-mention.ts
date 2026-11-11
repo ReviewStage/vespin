@@ -138,11 +138,6 @@ export function matchingSkills(
   return [...starts, ...holds, ...describes];
 }
 
-/** The word a skill is named by wherever it is drawn or written: `/name`, the words that load it. */
-export function skillWord(name: string): string {
-  return `${SLASH}${name}`;
-}
-
 /** Every chosen skill the message names, as `/name` words of the skills given, in order. */
 export function skillTokens(text: string, names: ReadonlySet<string>): readonly TextRange[] {
   const tokens: TextRange[] = [];
@@ -155,4 +150,23 @@ export function skillTokens(text: string, names: ReadonlySet<string>): readonly 
     if (names.has(text.slice(at + 1, end))) tokens.push({ start: at, end });
   }
   return tokens;
+}
+
+/**
+ * The command the message opens with, as its first word, where it is one of
+ * the commands given (`/compact`): the one place a command acts, so a
+ * command's chip stands there alone, never later in the words. Nothing
+ * where the first word is no such command.
+ */
+export function leadingCommandToken(
+  text: string,
+  names: ReadonlySet<string>,
+): TextRange | undefined {
+  const at = text.search(/\S/u);
+  if (at === -1 || !startsWord(text, at)) return undefined;
+  let end = at + 1;
+  while (end < text.length && NAME_CHARACTER.test(text[end] ?? "")) end += 1;
+  const next = text[end];
+  if (next !== undefined && !SPACE.test(next)) return undefined;
+  return names.has(text.slice(at + 1, end)) ? { start: at, end } : undefined;
 }

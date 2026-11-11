@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { listProviderKeyRows, setPlanStatus } from "@repo/database/models/provider-key-store";
+import {
+  listProviderKeyRows,
+  setPlanStatus,
+  setPlanUsage,
+} from "@repo/database/models/provider-key-store";
 import {
   accountChatGptDeviceLogin,
   accountProviderKey,
@@ -41,6 +45,7 @@ import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedAnswer } from "../testing/hosted-route.js";
 import { CODEX_DEVICE_OAUTH } from "./chatgpt-credentials.js";
+import { CHATGPT_USAGE_URL } from "./chatgpt-usage.js";
 import { providerKeysProcedures } from "./provider-keys-procedures.js";
 
 /**
@@ -172,6 +177,8 @@ const openAccounts = (
     fast?: FastAnswers;
     /** OpenAI's authorization server, where a test reaches it. */
     auth?: (request: RecordedRequest) => Response;
+    /** ChatGPT's usage endpoint, which refuses where a test does not answer it. */
+    usage?: (request: RecordedRequest) => Response;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -188,9 +195,11 @@ const openAccounts = (
     const provider = recordingHttpClient((request) =>
       new URL(request.url).origin === AUTH_ORIGIN
         ? (options.auth ?? openAiAuth())(request)
-        : request.url === FAST_CHECK_URL
-          ? (options.fast?.get(keyOf(request.headers))?.clone() ?? jsonResponse({}))
-          : jsonResponse({}, answers.get(keyOf(request.headers)) ?? HTTP_STATUS.UNAUTHORIZED),
+        : request.url === CHATGPT_USAGE_URL
+          ? (options.usage?.(request) ?? jsonResponse({}, HTTP_STATUS.UNAUTHORIZED))
+          : request.url === FAST_CHECK_URL
+            ? (options.fast?.get(keyOf(request.headers))?.clone() ?? jsonResponse({}))
+            : jsonResponse({}, answers.get(keyOf(request.headers)) ?? HTTP_STATUS.UNAUTHORIZED),
     );
     const logged: string[] = [];
     const procedures = providerKeysProcedures({
@@ -289,6 +298,7 @@ const ID_CLAIMS = {
   iss: AUTH_ORIGIN,
   aud: CODEX_DEVICE_OAUTH.CLIENT_ID,
   sub: "chatgpt-subject-0000",
+  email: "person@example.test",
   exp: 4_000_000_000,
 } as const;
 
@@ -445,6 +455,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const saved = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC));
         const read = yield* ask(request(owner));
 
+        const [kept] = keysOf(saved).keys;
         assert.deepEqual(keysOf(saved), {
           keys: [
             {
@@ -453,6 +464,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
               addedAt: savedAt,
               status: PROVIDER_KEY_STATUS.VERIFIED,
               statusAt: savedAt,
+              id: kept?.id,
+              position: 0,
             },
           ],
         });
@@ -596,40 +609,84 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
-    "a save replaces the provider's key, and a removal takes it out, for the bearer's account alone",
+    "a save adds a key at the bottom of its provider's keys or replaces the one it names in place, a rename names one, and a removal takes one out, for the bearer's account alone",
     () =>
       Effect.gen(function* () {
+        const second = "sk-ant-api03-second-key-000000000000000scnd";
         const replacement = "sk-ant-api03-replacement-00000000000000repl";
         const { owner, other, ask } = yield* openAccounts({
           ring: KEK.ONE,
-          provider: new Map([...ACCEPTING, [replacement, HTTP_STATUS.OK]]),
+          provider: new Map([
+            ...ACCEPTING,
+            [second, HTTP_STATUS.OK],
+            [replacement, HTTP_STATUS.OK],
+          ]),
         });
         keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC)));
         keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, KEY.OPENAI)));
+        const added = keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, second)));
+        const [firstId, secondId] = added.keys.map((key) => key.id ?? "");
         yield* TestClock.adjust("1 day");
 
         const replaced = keysOf(
-          yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, replacement)),
+          yield* ask(
+            request(owner, {
+              method: "PUT",
+              body: {
+                provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+                key: replacement,
+                subscriptionId: firstId ?? "",
+              },
+            }),
+          ),
         );
+        const named = (userId: string, id: string) =>
+          ask(
+            request(userId, {
+              method: "PUT",
+              path: "/api/account/provider-keys/label",
+              body: {
+                provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+                kind: PROVIDER_KEY_KIND.API_KEY,
+                subscriptionId: id,
+                label: "Team credits",
+              },
+            }),
+          );
+        const removing = (userId: string, id: string) =>
+          request(userId, {
+            method: "DELETE",
+            query: `provider=${PROVIDER_KEY_PROVIDER.ANTHROPIC}&subscriptionId=${id}`,
+          });
         const othersRead = keysOf(yield* ask(request(other)));
-        const othersRemoval = keysOf(yield* ask(remove(other, PROVIDER_KEY_PROVIDER.OPENAI)));
-        const removed = keysOf(yield* ask(remove(owner, PROVIDER_KEY_PROVIDER.OPENAI)));
-        const removedTwice = keysOf(yield* ask(remove(owner, PROVIDER_KEY_PROVIDER.OPENAI)));
+        const othersRename = keysOf(yield* named(other, secondId ?? ""));
+        const othersRemoval = keysOf(yield* ask(removing(other, secondId ?? "")));
+        const renamed = keysOf(yield* named(owner, secondId ?? ""));
+        const removed = keysOf(yield* ask(removing(owner, firstId ?? "")));
 
         assert.deepEqual(
-          replaced.keys.map(({ provider, hint }) => [provider, hint]),
+          replaced.keys.map(({ provider, hint, id }) => [provider, hint, id]),
           [
-            [PROVIDER_KEY_PROVIDER.ANTHROPIC, "sk-ant-…repl"],
-            [PROVIDER_KEY_PROVIDER.OPENAI, "sk-proj-…abcd"],
+            [PROVIDER_KEY_PROVIDER.ANTHROPIC, "sk-ant-…repl", firstId],
+            [PROVIDER_KEY_PROVIDER.ANTHROPIC, "sk-ant-…scnd", secondId],
+            [PROVIDER_KEY_PROVIDER.OPENAI, "sk-proj-…abcd", replaced.keys[2]?.id],
           ],
         );
         assert.deepEqual(othersRead.keys, [], "another account holds none");
+        assert.deepEqual(othersRename.keys, [], "another account names none of the owner's");
         assert.deepEqual(othersRemoval.keys, [], "another account removes none of the owner's");
         assert.deepEqual(
-          removed.keys.map(({ provider }) => provider),
-          [PROVIDER_KEY_PROVIDER.ANTHROPIC],
+          renamed.keys.map(({ hint, label }) => [hint, label]),
+          [
+            ["sk-ant-…repl", undefined],
+            ["sk-ant-…scnd", "Team credits"],
+            ["sk-proj-…abcd", undefined],
+          ],
         );
-        assert.deepEqual(removedTwice, removed);
+        assert.deepEqual(
+          removed.keys.map(({ hint }) => hint),
+          ["sk-ant-…scnd", "sk-proj-…abcd"],
+        );
       }),
   );
 
@@ -755,6 +812,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           status: PROVIDER_KEY_STATUS.UNVERIFIED,
           statusAt: savedAt,
           forAgents: true,
+          id: keysOf(saved).subscriptions?.[0]?.id ?? "",
+          position: 0,
         };
         assert.deepEqual(keysOf(saved), { keys: [], subscriptions: [subscription] });
         assert.deepEqual(countedProviders(owner), [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC }]);
@@ -933,6 +992,113 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
+    "a plan's usage windows are answered as last heard, the shortest first, each until its own window resets",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+        const { owner, ask } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
+        yield* TestClock.adjust("1 hour");
+        yield* connectPlan(ask, owner);
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const session = { usedPercent: 42, windowMins: 300, resetsAt: now.getTime() + 30 * 60_000 };
+        const week = {
+          usedPercent: 18,
+          windowMins: 10_080,
+          resetsAt: now.getTime() + 3 * 86_400_000,
+        };
+        for (const window of [week, session]) {
+          yield* setPlanUsage(
+            owner,
+            PROVIDER_KEY_PROVIDER.OPENAI,
+            PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+            window,
+            now,
+            now,
+          );
+        }
+        const usage = (read: Answer) =>
+          keysOf(read).subscriptions?.map((plan) => [plan.usage, plan.usageWindows]);
+
+        const heard = usage(yield* ask(request(owner)));
+        yield* TestClock.adjust("31 minutes");
+        const reset = usage(yield* ask(request(owner)));
+
+        assert.deepEqual(heard, [[session, [session, week]]]);
+        assert.deepEqual(reset, [[week, [week]]]);
+      }),
+  );
+
+  it.effect(
+    "a read of the keys asks ChatGPT for a plan's usage with its token and workspace where its reading is due, and keeps both windows it answers",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+        const resetsAt = { session: 1_800_000_000, week: 1_800_400_000 };
+        const { owner, ask, checks } = yield* openAccounts({
+          ring: KEK.ONE,
+          auth: device.auth,
+          usage: () =>
+            jsonResponse({
+              plan_type: "team",
+              rate_limit: {
+                allowed: true,
+                limit_reached: false,
+                primary_window: {
+                  used_percent: 12,
+                  limit_window_seconds: 18_000,
+                  reset_after_seconds: 0,
+                  reset_at: resetsAt.session,
+                },
+                secondary_window: {
+                  used_percent: 64,
+                  limit_window_seconds: 604_800,
+                  reset_after_seconds: 0,
+                  reset_at: resetsAt.week,
+                },
+              },
+            }),
+        });
+        yield* connectPlan(ask, owner);
+        const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL);
+
+        const first = keysOf(yield* ask(request(owner))).subscriptions?.[0]?.usageWindows;
+        // A reading heard inside five minutes is not asked for again.
+        yield* ask(request(owner));
+
+        assert.deepEqual(first, [
+          { usedPercent: 12, windowMins: 300, resetsAt: resetsAt.session * 1000 },
+          { usedPercent: 64, windowMins: 10_080, resetsAt: resetsAt.week * 1000 },
+        ]);
+        assert.deepEqual(
+          asked().map((check) => [check.authorization, check.headers.get("chatgpt-account-id")]),
+          [[`Bearer ${DEVICE_TOKENS.access_token}`, DEVICE.WORKSPACE]],
+        );
+      }),
+  );
+
+  it.effect(
+    "a ChatGPT that refuses a plan's usage is asked once in five minutes, not on every read of the keys",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+        const { owner, ask, checks } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
+        yield* connectPlan(ask, owner);
+        const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL).length;
+
+        yield* ask(request(owner));
+        yield* ask(request(owner));
+        const whileRefused = asked();
+        yield* TestClock.adjust("5 minutes");
+        yield* ask(request(owner));
+
+        assert.deepEqual([whileRefused, asked()], [1, 2]);
+      }),
+  );
+
+  it.effect(
     "removing the ChatGPT plan revokes its refresh token at OpenAI first and answers whether OpenAI confirmed it",
     () =>
       Effect.gen(function* () {
@@ -1010,10 +1176,19 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             status: PROVIDER_KEY_STATUS.UNVERIFIED,
             statusAt: startedAt,
             forAgents: true,
+            id: connected.keys?.subscriptions?.[0]?.id ?? "",
+            position: 0,
+            email: "person@example.test",
           },
         ]);
         assert.deepEqual(again, { outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: connected.keys });
         assert.deepEqual(countedProviders(owner), [{ provider: PROVIDER_KEY_PROVIDER.OPENAI }]);
+        const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+        assert.equal(
+          plan?.accountEmail,
+          ID_CLAIMS.email,
+          "the plan is named by its account's email",
+        );
 
         // The calls Codex makes, in Codex's own bodies.
         const bodyOf = (url: string) =>
@@ -1087,7 +1262,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         });
         assert.deepEqual(refused, {
           outcome: CHATGPT_DEVICE_LOGIN.REFUSED,
-          message: "ChatGPT did not connect this account. Start again to try once more.",
+          message: "Codex did not connect this account. Start again to try once more.",
         });
         assert.deepEqual(stillRefused, refused);
         for (const userId of [owner, other]) {

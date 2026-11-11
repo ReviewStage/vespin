@@ -1,0 +1,35 @@
+# markdown.yaml -- a task's description holding every piece of Markdown the app draws, shot from its top, at its table, at its end, and its picture full screen.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `skeleton.yaml` is, so no server is
+# reached; the description is the fixture's task's, which holds every piece
+# (`@repo/host/fixture-inbox`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Inbox"
+- tapOn: "Tasks"
+- tapOn: "Teammate invitations"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Goal"
+    direction: DOWN
+- takeScreenshot: markdown-top
+- scrollUntilVisible:
+    element: "Owner"
+    direction: DOWN
+- takeScreenshot: markdown-table
+- scrollUntilVisible:
+    element: "The invite page"
+    direction: DOWN
+- takeScreenshot: markdown-end
+- tapOn: "The invite page"
+- assertVisible:
+    id: "markdown-picture-done"
+- takeScreenshot: markdown-picture
+- tapOn:
+    id: "markdown-picture-done"

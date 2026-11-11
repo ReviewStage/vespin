@@ -7,6 +7,7 @@ import {
   COMPLETION_SOUND_LABEL,
   COMPLETION_SOUNDS,
   isAppSettingId,
+  isCustomCompletionSound,
 } from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import {
@@ -39,6 +40,14 @@ import {
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
 import {
+  isKeepAwake,
+  KEEP_AWAKE_DEFAULT,
+  KEEP_AWAKE_DETAIL,
+  KEEP_AWAKE_LABEL,
+  KEEP_AWAKE_LIST,
+  KEEP_AWAKE_OPTION_LABEL,
+} from "./keep-awake.js";
+import {
   isMacCommandMode,
   MAC_COMMAND_MODE,
   MAC_COMMAND_MODE_LABEL,
@@ -46,6 +55,19 @@ import {
   MAC_COMMANDS_LABEL,
 } from "./mac-commands.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
+import {
+  isPermissionMode,
+  PERMISSION_MODE_DEFAULT,
+  PERMISSION_MODE_HINT,
+  PERMISSION_MODE_LABEL,
+  PERMISSION_MODE_LIST,
+} from "./permission-mode.js";
+import {
+  isPullRequestOpen,
+  PULL_REQUEST_OPEN_DEFAULT,
+  PULL_REQUEST_OPEN_LABEL,
+  PULL_REQUEST_OPEN_LIST,
+} from "./pull-request-open.js";
 import {
   accountHiddenSetting,
   accountToggleSetting,
@@ -106,6 +128,15 @@ function oneOf<Value extends string>(values: readonly Value[]) {
   return (value: UnparsedWireValue): value is Value => reads(value);
 }
 
+/** The sounds a recipe plays, every one but the account's own clips. */
+const RECIPE_SOUNDS = COMPLETION_SOUNDS.filter((sound) => !isCustomCompletionSound(sound));
+
+/** The sounds an agent's finish may play: the account's own finish clip first, as its menu lists it under Yours, then every recipe. */
+const FINISH_SOUNDS = [COMPLETION_SOUND.CUSTOM, ...RECIPE_SOUNDS];
+
+/** The sounds something that needs the account may play: its own ask clip first, then every recipe. */
+const ASK_SOUNDS = [COMPLETION_SOUND.CUSTOM_ASK, ...RECIPE_SOUNDS];
+
 const DIFF_LAYOUT_LIST = Object.values(DIFF_LAYOUT);
 const DIFF_INDICATORS_LIST = Object.values(DIFF_INDICATORS);
 const INLINE_DIFF_LIST = Object.values(INLINE_DIFF);
@@ -162,7 +193,6 @@ export const APP_SETTING_SCHEMA = {
     field: "zoom",
     id: APP_SETTING_ID.ZOOM,
     label: "Zoom",
-    detail: "⌘+ and ⌘− step through these sizes, and ⌘0 returns to 100%.",
     values: ZOOM_PERCENTS,
     token: (percent) => String(percent),
     optionLabel: (percent) => `${percent}%`,
@@ -206,6 +236,30 @@ export const APP_SETTING_SCHEMA = {
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
   /*
+   * Whether This Mac's host keeps the Mac awake for its agents. Kept on
+   * this device, since the Mac is the device's; the app hands it to the
+   * host in the host's own state (`@repo/host`'s `keep-awake-record.ts`).
+   */
+  keepAwake: choiceSetting({
+    field: "keepAwake",
+    id: APP_SETTING_ID.KEEP_AWAKE,
+    label: KEEP_AWAKE_LABEL,
+    detail: (settings) =>
+      KEEP_AWAKE_DETAIL[
+        KEEP_AWAKE_LIST.find((choice) => choice === settings("keepAwake")) ?? KEEP_AWAKE_DEFAULT
+      ],
+    values: KEEP_AWAKE_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => KEEP_AWAKE_OPTION_LABEL[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isKeepAwake),
+    default: KEEP_AWAKE_DEFAULT,
+    page: SETTINGS_PAGE.THIS_MAC,
+    order: 3,
+    visible: desktopAppDrawn,
+    // Nothing to run per write: This Mac's host is handed the choice as the settings are told again.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  /*
    * Where an app link opened in a browser goes: it stays on the web, or the
    * web hands it to the Mac app (`@repo/features/link-open`). The account's,
    * so the web reads it on a signed-in load; it rides the preferences
@@ -221,10 +275,32 @@ export const APP_SETTING_SCHEMA = {
     optionLabel: (choice) => LINK_OPEN_LABEL[choice],
     guard: (value: UnparsedWireValue) => optional(value, isLinkOpen),
     default: LINK_OPEN.BROWSER,
-    page: SETTINGS_PAGE.ACCOUNT,
-    section: SETTING_SECTION.LINKS,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.GENERAL,
     order: 300,
     // Nothing to run per write: a web page reads the choice as it loads.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  /*
+   * Where a press on a pull request opens: its agent's Pull request tab, as
+   * it always did, or its page on GitHub (`pull-request-open.ts`). An
+   * account preference riding a part of the snapshot of its own, as the
+   * link choice beside it does, so every Mac and the web open alike.
+   */
+  pullRequestOpen: choiceSetting({
+    field: "pullRequestOpen",
+    id: APP_SETTING_ID.PULL_REQUEST_OPEN,
+    label: "Open pull requests in",
+    values: PULL_REQUEST_OPEN_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => PULL_REQUEST_OPEN_LABEL[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isPullRequestOpen),
+    default: PULL_REQUEST_OPEN_DEFAULT,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.GENERAL,
+    order: 302,
+    // Nothing to run per write: a press reads the choice as it lands.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: accountDrawn,
   }),
@@ -238,8 +314,8 @@ export const APP_SETTING_SCHEMA = {
     id: APP_SETTING_ID.OPEN_NEW_TASK,
     label: "Open a task once it starts",
     default: true,
-    page: SETTINGS_PAGE.ACCOUNT,
-    section: SETTING_SECTION.TASKS,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.GENERAL,
     order: 305,
     visible: accountDrawn,
     // Nothing to run per write: New task reads the setting as a task starts.
@@ -296,8 +372,8 @@ export const APP_SETTING_SCHEMA = {
     optionLabel: (choice) => AGENT_ENTER_LABEL[choice],
     guard: (value: UnparsedWireValue) => optional(value, isAgentEnter),
     default: AGENT_ENTER.STEER,
-    page: SETTINGS_PAGE.ACCOUNT,
-    section: SETTING_SECTION.COMPOSER,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.AGENTS,
     order: 400,
     // Nothing to run per write: the message box reads the choice as a key is pressed.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
@@ -323,18 +399,45 @@ export const APP_SETTING_SCHEMA = {
     optionLabel: (choice) => COMMIT_AUTHOR_LABEL[choice],
     guard: (value: UnparsedWireValue) => optional(value, isCommitAuthor),
     default: COMMIT_AUTHOR_DEFAULT,
-    page: SETTINGS_PAGE.ACCOUNT,
-    section: SETTING_SECTION.COMMITS,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.AGENTS,
     order: 450,
     // Nothing to run per write: an agent reads the choice as its first session starts.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: accountDrawn,
   }),
   /*
-   * When a sound plays as an agent finishes or asks, and which one. Account
-   * preferences, as Enter's choice is, each riding a part of the snapshot
-   * of its own. The sound's row stands only while one plays at all, and
-   * Settings draws a Play beside it.
+   * How a new agent's actions are approved: the mode a Claude Code agent
+   * starts on, Full access until the account chooses (`permission-mode.ts`).
+   * An account preference riding a part of the snapshot of its own, as the
+   * commit author does, since the service reads it as an agent starts
+   * wherever it was chosen. A running agent's own is changed from its
+   * model menu.
+   */
+  agentPermissionMode: choiceSetting({
+    field: "agentPermissionMode",
+    id: APP_SETTING_ID.AGENT_PERMISSION_MODE,
+    label: "Default permissions",
+    values: PERMISSION_MODE_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => PERMISSION_MODE_LABEL[choice],
+    optionHint: (choice) => PERMISSION_MODE_HINT[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isPermissionMode),
+    default: PERMISSION_MODE_DEFAULT,
+    page: SETTINGS_PAGE.AGENTS,
+    section: SETTING_SECTION.NEW_AGENTS,
+    order: 100,
+    // Nothing to run per write: the service reads the choice as an agent starts.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  /*
+   * When a sound plays as an agent finishes or asks, and which one for each:
+   * a finish, completed or failed, and something new that needs the
+   * account, a question or a command waiting on a Mac, so the two are told
+   * apart by ear. Account preferences, as Enter's choice is, each riding a
+   * part of the snapshot of its own. The sounds' rows stand only while one
+   * plays at all, and Settings draws a Play beside each.
    */
   soundWhen: choiceSetting({
     field: "soundWhen",
@@ -345,8 +448,8 @@ export const APP_SETTING_SCHEMA = {
     optionLabel: (choice) => SOUND_WHEN_LABEL[choice],
     guard: (value: UnparsedWireValue) => optional(value, isSoundWhen),
     default: SOUND_WHEN.OFF,
-    page: SETTINGS_PAGE.ACCOUNT,
-    section: SETTING_SECTION.SOUNDS,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.NOTIFICATIONS,
     order: 500,
     // Nothing to run per write: an agent's finish reads the choice as it lands.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
@@ -355,16 +458,34 @@ export const APP_SETTING_SCHEMA = {
   completionSound: choiceSetting({
     field: "completionSound",
     id: APP_SETTING_ID.COMPLETION_SOUND,
-    label: "Sound",
-    values: COMPLETION_SOUNDS,
+    label: "When an agent finishes",
+    values: FINISH_SOUNDS,
     token: (sound) => sound,
     optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
-    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(FINISH_SOUNDS)),
     default: COMPLETION_SOUND.CHIME,
-    page: SETTINGS_PAGE.ACCOUNT,
-    section: SETTING_SECTION.SOUNDS,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.NOTIFICATIONS,
     order: 510,
     // Nothing to run per write: an agent's finish reads the choice as it plays.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: (view) =>
+      view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,
+  }),
+  askSound: choiceSetting({
+    field: "askSound",
+    id: APP_SETTING_ID.ASK_SOUND,
+    label: "When something needs you",
+    detail: "A question for you, or a command waiting on your Mac",
+    values: ASK_SOUNDS,
+    token: (sound) => sound,
+    optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(ASK_SOUNDS)),
+    default: COMPLETION_SOUND.KNOCK,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.NOTIFICATIONS,
+    order: 515,
+    // Nothing to run per write: an ask reads the choice as it plays.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: (view) =>
       view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,
@@ -380,8 +501,8 @@ export const APP_SETTING_SCHEMA = {
     id: APP_SETTING_ID.TURN_NOTIFICATIONS,
     label: "Show a notification",
     default: false,
-    page: SETTINGS_PAGE.ACCOUNT,
-    section: SETTING_SECTION.SOUNDS,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.NOTIFICATIONS,
     order: 520,
     // Nothing to run per write: an agent's finish reads the choice as it lands.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
@@ -461,7 +582,6 @@ export const APP_SETTING_SCHEMA = {
     field: "diffLayout",
     id: APP_SETTING_ID.DIFF_LAYOUT,
     label: "Layout",
-    detail: "A diff too narrow to split is drawn unified.",
     values: DIFF_LAYOUT_LIST,
     token: (layout) => layout,
     optionLabel: (layout) => DIFF_LAYOUT_LABEL[layout],
@@ -492,7 +612,6 @@ export const APP_SETTING_SCHEMA = {
     field: "inlineDiff",
     id: APP_SETTING_ID.DIFF_INLINE,
     label: "Changed words",
-    detail: "Off tints the line alone.",
     values: INLINE_DIFF_LIST,
     token: (inline) => inline,
     optionLabel: (inline) => INLINE_DIFF_LABEL[inline],

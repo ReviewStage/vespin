@@ -1,3 +1,4 @@
+import { addRepositoryFailureWords } from "@repo/features/agent-refusal-words";
 import {
   ADDED_REPOSITORY_CHECKOUT,
   type AddedRepositoryCheckout,
@@ -29,8 +30,8 @@ import { appPlatform } from "../app-platform.js";
 import { useConfirmAct } from "../confirm-act.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
-import { addRepositoryFailureWords } from "./agent-model.js";
+import { useToast } from "../toast.js";
+
 import { CHIP_PLACE, RepositoryChip, type RepositoryChooser } from "./repository-chip.js";
 import { type AgentsControl, agentAddRepositoryMutation } from "./use-agents.js";
 
@@ -55,8 +56,8 @@ import { type AgentsControl, agentAddRepositoryMutation } from "./use-agents.js"
 /** The agent Add repository… is offered on, as the item reads it. */
 type AddedTo = Pick<AgentSummary, "id" | "archivedAt" | "machine" | "startedBy">;
 
-/** What the item reads of the control: the reader, where the agents' workspace is known, and the door the add goes through. */
-type AddDoors = Pick<AgentsControl, "me" | "workspaceId" | "onUnarchive" | "addRepository">;
+/** What the item reads of the control: the reader and the door the add goes through. */
+type AddDoors = Pick<AgentsControl, "me" | "onUnarchive" | "addRepository">;
 
 /** The add of a surface that offers none, which no dialog ever sends. */
 const NO_ADD = agentAddRepositoryMutation(() =>
@@ -184,7 +185,6 @@ export function useAddRepository(
     toast({
       words: addedWords(picked, answer.addedCheckout),
       tone: STATUS_TONE.COMPLETE,
-      hold: TOAST_HOLD.DONE,
     });
   };
   const addAct = useConfirmAct(adding, {
@@ -208,7 +208,6 @@ export function useAddRepository(
     recent: [],
     openGitHub: (url) => appPlatform().openWeb(url),
     pictures: true,
-    scope: agents.workspaceId,
     manages: false,
   };
   return {

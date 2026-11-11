@@ -1,4 +1,5 @@
 import { storedAgentChoice } from "@repo/features/account-preferences-live";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { contextWindowSchema } from "@repo/features/agent-wire";
 import {
   CHAPTERS_PICK_LIST,
@@ -20,6 +21,9 @@ import {
   experimentChoicesFrom,
   experimentOn,
   NO_EXPERIMENTS,
+  PERMISSION_MODE_LIST,
+  PULL_REQUEST_OPEN_LIST,
+  type PullRequestOpen,
   SOUND_WHEN_LIST,
   type SoundWhen,
 } from "@repo/settings";
@@ -74,20 +78,23 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
  * default model each write their own part without reading the other first.
  * The experiments part is the one patch: its keys are merged over what
  * stood, so a Mac that knows fewer experiments never erases another's.
- * `preferences` is the shared part; the link choice, Enter's choice, the
- * commit author, setup finished, the setup place, when and which sound plays,
+ * `preferences` is the shared part; the link choice, the pull request choice, Enter's choice, the
+ * commit author, a new agent's permission mode, setup finished, the setup place, when and which sound plays,
  * whether a notification is posted, and the survey's answers are parts of
  * their own, which a build that predates them never sends.
  */
 export interface AccountPreferencesWrite {
   preferences?: AccountPreferences;
   linkOpen?: LinkOpen;
+  pullRequestOpen?: PullRequestOpen;
   agentEnter?: AgentEnter;
   commitAuthor?: CommitAuthor;
+  agentPermissionMode?: AgentPermissionMode;
   setupFinished?: boolean;
   setupPlace?: string;
   soundWhen?: SoundWhen;
   completionSound?: CompletionSound;
+  askSound?: CompletionSound;
   turnNotifications?: boolean;
   onboardingSurvey?: string;
   agent?: ModelChoice;
@@ -101,12 +108,15 @@ export type AccountSeamEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServic
 /** The columns every read and the write's `returning` project, so a row decodes one way whatever wrote it. */
 const PREFERENCE_COLUMNS = {
   linkOpen: accountPreference.linkOpen,
+  pullRequestOpen: accountPreference.pullRequestOpen,
   agentEnter: accountPreference.agentEnter,
   commitAuthor: accountPreference.commitAuthor,
+  agentPermissionMode: accountPreference.agentPermissionMode,
   setupFinished: accountPreference.setupFinished,
   setupPlace: accountPreference.setupPlace,
   soundWhen: accountPreference.soundWhen,
   completionSound: accountPreference.completionSound,
+  askSound: accountPreference.askSound,
   turnNotifications: accountPreference.turnNotifications,
   onboardingSurvey: accountPreference.onboardingSurvey,
   agentModel: accountPreference.agentModel,
@@ -119,12 +129,15 @@ const PREFERENCE_COLUMNS = {
 
 const PreferenceRowSchema = Schema.Struct({
   linkOpen: Schema.NullOr(Schema.String),
+  pullRequestOpen: Schema.NullOr(Schema.String),
   agentEnter: Schema.NullOr(Schema.String),
   commitAuthor: Schema.NullOr(Schema.String),
+  agentPermissionMode: Schema.NullOr(Schema.String),
   setupFinished: Schema.NullOr(Schema.Boolean),
   setupPlace: Schema.NullOr(Schema.String),
   soundWhen: Schema.NullOr(Schema.String),
   completionSound: Schema.NullOr(Schema.String),
+  askSound: Schema.NullOr(Schema.String),
   turnNotifications: Schema.NullOr(Schema.Boolean),
   onboardingSurvey: Schema.NullOr(Schema.String),
   agentModel: Schema.NullOr(Schema.String),
@@ -147,12 +160,15 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
     preferences:
       accountPreferencesFromStored({
         ...(row.linkOpen ? { linkOpen: row.linkOpen } : undefined),
+        ...(row.pullRequestOpen ? { pullRequestOpen: row.pullRequestOpen } : undefined),
         ...(row.agentEnter ? { agentEnter: row.agentEnter } : undefined),
         ...(row.commitAuthor ? { commitAuthor: row.commitAuthor } : undefined),
+        ...(row.agentPermissionMode ? { agentPermissionMode: row.agentPermissionMode } : undefined),
         ...(row.setupFinished === null ? undefined : { setupFinished: row.setupFinished }),
         ...(row.setupPlace ? { setupPlace: row.setupPlace } : undefined),
         ...(row.soundWhen ? { soundWhen: row.soundWhen } : undefined),
         ...(row.completionSound ? { completionSound: row.completionSound } : undefined),
+        ...(row.askSound ? { askSound: row.askSound } : undefined),
         ...(row.turnNotifications === null
           ? undefined
           : { turnNotifications: row.turnNotifications }),
@@ -264,12 +280,15 @@ export function readAccountAccess(
 const PreferenceWriteSchema = Schema.Struct({
   userId: Schema.String,
   linkOpen: Schema.optionalKey(Schema.Literals(LINK_OPEN_LIST)),
+  pullRequestOpen: Schema.optionalKey(Schema.Literals(PULL_REQUEST_OPEN_LIST)),
   agentEnter: Schema.optionalKey(Schema.Literals(AGENT_ENTER_LIST)),
   commitAuthor: Schema.optionalKey(Schema.Literals(COMMIT_AUTHOR_LIST)),
+  agentPermissionMode: Schema.optionalKey(Schema.Literals(PERMISSION_MODE_LIST)),
   setupFinished: Schema.optionalKey(Schema.Boolean),
   setupPlace: Schema.optionalKey(Schema.String),
   soundWhen: Schema.optionalKey(Schema.Literals(SOUND_WHEN_LIST)),
   completionSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
+  askSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
   turnNotifications: Schema.optionalKey(Schema.Boolean),
   onboardingSurvey: Schema.optionalKey(Schema.String),
   agent: Schema.optionalKey(
@@ -292,14 +311,21 @@ function writtenColumns(write: PreferenceWrite) {
   return {
     ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),
     ...(write.linkOpen === undefined ? undefined : { linkOpen: write.linkOpen }),
+    ...(write.pullRequestOpen === undefined
+      ? undefined
+      : { pullRequestOpen: write.pullRequestOpen }),
     ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
     ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
+    ...(write.agentPermissionMode === undefined
+      ? undefined
+      : { agentPermissionMode: write.agentPermissionMode }),
     ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),
     ...(write.setupPlace === undefined ? undefined : { setupPlace: write.setupPlace }),
     ...(write.soundWhen === undefined ? undefined : { soundWhen: write.soundWhen }),
     ...(write.completionSound === undefined
       ? undefined
       : { completionSound: write.completionSound }),
+    ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
     ...(write.turnNotifications === undefined
       ? undefined
       : { turnNotifications: write.turnNotifications }),
@@ -365,14 +391,21 @@ export function writeAccountPreferences(
       userId,
       ...(write.preferences === undefined ? undefined : { updatedAt }),
       ...(write.linkOpen === undefined ? undefined : { linkOpen: write.linkOpen }),
+      ...(write.pullRequestOpen === undefined
+        ? undefined
+        : { pullRequestOpen: write.pullRequestOpen }),
       ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
       ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
+      ...(write.agentPermissionMode === undefined
+        ? undefined
+        : { agentPermissionMode: write.agentPermissionMode }),
       ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),
       ...(write.setupPlace === undefined ? undefined : { setupPlace: write.setupPlace }),
       ...(write.soundWhen === undefined ? undefined : { soundWhen: write.soundWhen }),
       ...(write.completionSound === undefined
         ? undefined
         : { completionSound: write.completionSound }),
+      ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
       ...(write.turnNotifications === undefined
         ? undefined
         : { turnNotifications: write.turnNotifications }),

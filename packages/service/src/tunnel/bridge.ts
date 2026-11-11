@@ -1,5 +1,5 @@
 /**
- * bridge.ts -- the bridges a tunnel reaches in an agent's sandbox, by kind: the script each runs in the sandbox's PTY, and whether its traffic holds the sandbox.
+ * bridge.ts -- the bridges a tunnel reaches in an agent's sandbox, by kind: the script each runs in the sandbox's PTY.
  *
  * A bridge is one Node script run in the running sandbox session's PTY,
  * as the agent's browser bridge is (`agents/browser/sandbox-browser.ts`):
@@ -18,7 +18,7 @@
  * the Mac on the one channel the Mac opens.
  */
 
-import { TUNNEL_KIND, type TunnelKind } from "@repo/features/sandbox-tunnel-wire";
+import { TUNNEL_KIND } from "@repo/features/sandbox-tunnel-wire";
 import type { CommandAsk } from "@repo/sandbox";
 import { CODER } from "../agents/coder-host/bounds.js";
 import { MIRROR_BRIDGE_SOURCE } from "./mirror-bridge.js";
@@ -30,17 +30,6 @@ export type TunnelBridge =
 
 /** The bridge's own word, a line with a `bridge` key: ready, from then on speaking frames, or failed at the step it names, as it exits. */
 export const TUNNEL_BRIDGE_WORD = { KEY: "bridge", READY: "ready", FAILED: "failed" } as const;
-
-/**
- * Whether a kind's connection holds the agent's sandbox, touching it while
- * it stands: a forwarded port's does, since someone is using the
- * app it serves; the mirror's does not, since it only follows the agent's
- * work, and pauses when the sandbox stops after a turn.
- */
-export const TUNNEL_HOLDS_SANDBOX = {
-  [TUNNEL_KIND.PORT_FORWARD]: true,
-  [TUNNEL_KIND.MIRROR]: false,
-} as const satisfies Record<TunnelKind, boolean>;
 
 /** The port bridge, as Node runs it with the port as its one argument. */
 export const PORT_BRIDGE_SOURCE = `"use strict";

@@ -25,6 +25,7 @@ import { AGENT_STATUS, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { AGENT_STATUS_WORDS } from "@repo/features/automation-list-model";
 import { formatCount, formatPercent } from "@repo/features/number-format";
 import { FAST_ACCESS, PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
+import { repositoryPageUrl } from "@repo/features/tasks-model";
 import { formatInstant } from "@repo/features/time-format";
 import {
   Badge,
@@ -49,7 +50,6 @@ import {
   DataTableSkeleton,
   type RowData,
 } from "@repo/ui/data-table";
-import { repositoryPageUrl } from "@repo/ui/tasks-model";
 import { useMemo } from "react";
 import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/stat-card.js";
 import { ExternalLink } from "../chrome/external-links.js";

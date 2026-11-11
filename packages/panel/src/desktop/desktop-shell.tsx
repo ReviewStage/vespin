@@ -1,5 +1,6 @@
 import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
 import type { Task } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -28,7 +29,6 @@ import {
   useDrawerSwipe,
 } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, useMatch } from "@tanstack/react-router";
 import {
@@ -68,7 +68,7 @@ import { SignInGate } from "../sign-in-gate.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
-import { useAgentLook, useTaskLooks } from "../tasks/use-task-looks.js";
+import { useTaskLooks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
   appStateQuery,
@@ -871,15 +871,6 @@ export function DesktopShell({
       ? undefined
       : (tasks.tasks.find((row) => row.id === shownTask.id) ?? shownTask),
   );
-  // An agent with no plan is looked at as its page is on screen, as the plan is.
-  const { agentId: pageAgentId } = tasks.agentView;
-  useAgentLook(
-    tab === PANEL_TAB.TASKS && pageAgentId !== undefined
-      ? [...tasks.listedAgents.standing, ...tasks.listedAgents.archived].find(
-          (agent) => agent.id === pageAgentId,
-        )
-      : undefined,
-  );
   const mentionedAgents = useMemo(
     () => ({ models: tasks.agents.models, me: tasks.me }),
     [tasks.agents.models, tasks.me],
@@ -1049,16 +1040,13 @@ export function ShellPlaces(): React.JSX.Element {
   } = useShellPlaces();
   const { account } = settings;
   useFocusHandedBack(focusHolder);
-  const pageAgent = tasks.agentView.agentId;
   const bar = useBarStanding(tasks);
   const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = bar.inbox.chosen !== undefined;
   // A phone's task is headed by a row of its own, whose ⋯ stands for the panel's toggle (`task-pane-switcher.tsx`).
   const panelToggle =
-    (descriptionToggle && room !== SHELL_ROOM.NARROW) ||
-    pageAgent !== undefined ||
-    (inboxOpen && inboxItemShown);
+    (descriptionToggle && room !== SHELL_ROOM.NARROW) || (inboxOpen && inboxItemShown);
   // A phone's drawer is modal, as a phone's own drawers are: while it stands
   // over the work, the work is inert, so neither a screen reader nor a
   // keyboard reaches what the drawer covers, and a press there only puts it

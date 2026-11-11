@@ -201,6 +201,8 @@ export interface DescriptionEditorProps {
    * drawing down. None where the editor draws TipTap's own box.
    */
   readonly drawTaskBox?: TaskBoxDrawer | undefined;
+  /** Draws each code block's header, as the drawn text's code card heads it, its language chosen there; a bare block where it draws none. */
+  readonly drawCodeHeader?: CodeHeaderDrawer | undefined;
   /** What the text's pictures are drawn and taken in with; none where the text takes no pictures, as a template does not. */
   readonly pictures?: DescriptionEditorPictures | undefined;
   /** The open comment threads' words, in offsets of `markdown`, which the editor carries as its words move; none where the text has no comments. */
@@ -295,6 +297,25 @@ export interface EditorTaskBox {
 
 /** Draws a task item's box into its element; answers what takes the drawing down. */
 export type TaskBoxDrawer = (element: HTMLElement, box: EditorTaskBox) => () => void;
+
+/** A code block as the editor asks its header drawn: its language as its fence names it, none as empty; its lines as they stand, which its Copy copies; and the door that sets its language, none as empty. */
+export interface EditorCodeBlock {
+  readonly language: string;
+  readonly code: string;
+  readonly setLanguage: (language: string) => void;
+}
+
+/** A drawing the editor keeps while its subject stands: drawn again as it changes, without being taken down, and taken down at last. */
+export interface EditorDrawing<A> {
+  readonly redraw: (what: A) => void;
+  readonly undraw: () => void;
+}
+
+/** Draws a code block's header into its element, drawn again as the block changes so a menu open in it stays open. */
+export type CodeHeaderDrawer = (
+  element: HTMLElement,
+  block: EditorCodeBlock,
+) => EditorDrawing<EditorCodeBlock>;
 
 /**
  * What the panel may do to a mention it draws: name it anew in place, the
@@ -494,12 +515,8 @@ export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
 /** A chip the composer draws in its words: a skill, written `/name`. */
 export interface ComposerChip {
   readonly name: string;
-}
-
-/** A quote of the agent's words the composer holds as a block of its own (`@repo/ui/reply-quote`): its words, and what takes it out of the box. */
-export interface ComposerQuote {
-  readonly words: string;
-  readonly remove: () => void;
+  /** Whether the chip is the command the message opens with, rather than a skill named anywhere in it. */
+  readonly command: boolean;
 }
 
 /** What the message box hands its editor as it mounts it. */
@@ -518,8 +535,10 @@ export interface ComposerEditorProps {
   readonly onDraft: (text: string) => void;
   /** A key, heard before the editor's own handling; answers whether the owner took it. */
   readonly onKey: (event: KeyboardEvent) => boolean;
-  /** Enter with no Shift, while no input method is composing; on a coarse pointer, where Enter is a new line, only with ⌘ or Ctrl. */
+  /** Enter with no Shift, while no input method is composing; on a coarse pointer, where Enter is a new line, only with ⌘ or Ctrl; where Enter writes, only with ⌘ or Ctrl. */
   readonly onEnter: () => void;
+  /** Whether a bare Enter writes a new line, as a document's text does, so only ⌘ or Ctrl with Enter is `onEnter`: a box whose words are kept rather than sent, as an automation's prompt is. */
+  readonly enterWrites?: boolean | undefined;
   /** Files pasted; answers whether the owner took them, which keeps them out of the words. */
   readonly onPasteFiles: (files: readonly File[]) => boolean;
   /** Words pasted, before they are laid in; answers whether the owner took them as a file, which keeps them out of the words. */
@@ -530,8 +549,10 @@ export interface ComposerEditorProps {
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
   /** Draws a chip into the element its node stands as; answers what takes the drawing down. */
   readonly drawChip: (element: HTMLElement, chip: ComposerChip) => () => void;
-  /** Draws a quote into the element its block stands as; answers what takes the drawing down. Where none is given, the quote's words are drawn as they are. */
-  readonly drawQuote?: ((element: HTMLElement, quote: ComposerQuote) => () => void) | undefined;
+  /** The files a marker names (`@repo/features/file-marker`), whose markers become chips; none where the box takes no files into its words. */
+  readonly files?: ReadonlySet<string> | undefined;
+  /** Draws a file's chip into the element its node stands as, handed the file's name; answers what takes the drawing down. Where none is given, its marker is drawn as the words it is. */
+  readonly drawFile?: ((element: HTMLElement, name: string) => () => void) | undefined;
   /** What the box's mentions are picked and drawn with: an `@` word reported as `/` words are, and each mention drawn into its node's element; none where the box takes no mentions. */
   readonly mentions?: ComposerMentions | undefined;
   /** The format toolbar's doors, the selection told to it and ⌘K over words handed to it, where one stands over the box. */
@@ -546,10 +567,17 @@ export interface ComposerMark {
    * whether any went in. The mark is let go either way.
    */
   readonly insert: (words: string) => boolean;
+  /**
+   * The files named put in as their chips where the mark now stands,
+   * spaced from a word on either side, the caret after them; answers whether
+   * they went in, which they do not past the bound. The mark is let go
+   * either way.
+   */
+  readonly insertFiles: (names: readonly string[]) => boolean;
   readonly release: () => void;
 }
 
-/** A composer's editor as mounted: every change from outside goes through one of these, never through the words handed back, a format toolbar's presses among them. Note that the box holds no block, so its toolbar offers no Turn into. */
+/** A composer's editor as mounted: every change from outside goes through one of these, never through the words handed back, a format toolbar's presses among them. Note that the box's toolbar offers its marks alone, never Turn into, since its one block, the quote, is typed or chorded. */
 export interface ComposerEditorHandle extends EditorFormatting {
   /** Empties the words, as a send that was taken does. */
   readonly clear: () => void;
@@ -560,10 +588,10 @@ export interface ComposerEditorHandle extends EditorFormatting {
   /** The `/` word the caret ends written as the skill named, a space after it. */
   readonly chooseSkill: (name: string) => void;
   /**
-   * Words of the agent's laid in as a quote block under the line the caret
-   * stands on, or in its place where the line is empty, the caret on an
-   * empty line under it and the box focused; cut where the bound cuts it.
-   * Answers whether any went in.
+   * Words of the agent's laid in as a quote block under the line or the
+   * quote the caret stands in, or in its place where the line is empty, the
+   * caret on an empty line under it and the box focused; cut where the bound
+   * cuts it. Answers whether any went in.
    */
   readonly insertQuote: (words: string) => boolean;
   /** The `@` word the caret ends written as the mention chosen, a space after it, the caret after the space. */
@@ -574,6 +602,10 @@ export interface ComposerEditorHandle extends EditorFormatting {
   readonly insertMention: (mention: MentionNode) => void;
   /** The skills a `/name` names: each such word is drawn as a chip from now on. */
   readonly setSkills: (skills: ReadonlySet<string>) => void;
+  /** The box's own commands: the message's first word naming one is drawn as its chip from now on. */
+  readonly setCommands: (commands: ReadonlySet<string>) => void;
+  /** The files a marker names: each such marker is drawn as its chip from now on. */
+  readonly setFiles: (files: ReadonlySet<string>) => void;
   /** Whether the words take a change: off while a message is held, read-only while a dictation stands, which keeps the caret. */
   readonly setInput: (input: ComposerInput) => void;
   /** The attributes that tie the editor element to its list (`listAria`), which name it a combobox while the list stands (`rootAria`). */

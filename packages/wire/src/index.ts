@@ -38,6 +38,7 @@ export {
 } from "./json.js";
 export { keepIdentity } from "./keep-identity.js";
 export { LEGACY_APP_WORD, literalsReadingLegacy } from "./legacy-app-word.js";
+export { literalsReadingUnknown } from "./literals-reading-unknown.js";
 export {
   EXCESS_KEYS,
   type ExcessKeys,
@@ -48,10 +49,14 @@ export {
   type SchemaRefusal,
 } from "./schema-vocabulary.js";
 export {
+  TURN_OPEN,
   TURN_ORIGIN,
   TURN_STATUS,
+  TURN_TERMINAL,
+  type TurnOpenStatus,
   type TurnOrigin,
   type TurnStatus,
+  type TurnTerminalStatus,
 } from "./turn.js";
 export {
   type AgentMessageMetadata,
@@ -59,6 +64,9 @@ export {
   ASSISTANT_MESSAGE_METADATA,
   type AssistantMessageMetadata,
   type AutomationLineMetadata,
+  CARRY_ON_REASON,
+  type CarryOnLineMetadata,
+  type CarryOnReason,
   COMMENT_LINE_BOUNDS,
   COMPACTION_METADATA,
   type CommentLineMetadata,

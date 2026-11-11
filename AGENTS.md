@@ -20,16 +20,19 @@ requests.
 | `apps/mobile/scripts/simulator-screenshots.sh` | Run the iOS app's Maestro flows on the named simulators and keep their screenshots |
 
 CI runs the portable check on Linux, where `export:ios` bundles the iOS app
-with Metro beside the typecheck, and one macOS job for the iOS app alone
-(`ci.yml`'s `mobile` job, on GitHub's `xcode-27` image): it runs only when
-`apps/mobile/**` or `packages/ui-native/**` changes, builds the app for the
-simulator, runs its Maestro flows on an iPhone, the iPhone Duo, and an iPad,
-and uploads their screenshots as the `mobile-screenshots` artifact, which
-`apps/mobile/AGENTS.md` says how to read. No workflow runs the desktop app's
-tests on a Mac: the release job (`release.yml`'s `macos-15` job, run on a `v*`
-tag push or a manual dispatch) only builds, signs, notarizes, and verifies the
-app. A green PR says nothing about the Mac app, and the one macOS check to
-wait for is the iOS app's.
+with Metro beside the typecheck. The iOS app's simulators run by hand, never
+on a PR (`ios-simulators.yml`, on GitHub's `xcode-27` image): it builds the
+app for the simulator, runs its Maestro flows on an iPhone, the iPhone Duo,
+and an iPad, and uploads their screenshots as the `mobile-screenshots`
+artifact, which `apps/mobile/AGENTS.md` says how to read. No workflow runs the
+desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
+run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
+and verifies the app. A green PR says nothing about either app on a device.
+
+A release is dated in Eastern time (America/New_York), never UTC or the
+author's own zone: its `CHANGELOG.md` heading carries the day its tag is
+pushed there (`TZ=America/New_York date +%F`), and `.github/RELEASE.md` is
+the rest of cutting one.
 
 ## Layout
 
@@ -82,6 +85,26 @@ no-suppression check): `Skeleton` and `SkeletonRegion` are drawn only by a
 component named `*Skeleton`, in which an intrinsic element's class must be a
 literal naming itself a skeleton's (`…-skeleton…`); every other box is a
 component, factored out of the surface where it builds the box by hand.
+
+What a row does lives in its row component, never in the page that draws
+it: its menu, its rename, its selection, and its muted and unread states
+are built inside the one component every list of that kind draws
+(`TaskListRow`, `AgentListRow`), so a list that draws the row gets all of
+it, and no page hands a shared row a menu, an editor, or a selection of its
+own. `[check: anti-slop/row-behavior-in-row]`, under the same no-suppression
+check: outside the row components `tools/anti-slop/row-behavior.json` names,
+each with its reason, handing `@repo/ui`'s `TaskRow` its `menu`, `editor`,
+`note`, `choosable`, `settled`, or `unread`, or `TaskListRow` or
+`AgentListRow` a `menu`, `editor`, or `note`, is an error, as is a spread
+onto one. `ListRow` is not held: it is the row of many kinds, each drawn
+where it is listed. A menu shows a shortcut exactly where pressing it would act on the
+menu's subject, so a key it prints always works and one it leaves out does
+not act there. `[check: anti-slop/no-shortcut-flag]`, under the same
+no-suppression check: `commandAction` and its siblings take the menu's
+subject, and the place offering a key says what it acts on
+(`useShortcutTarget`, `packages/panel/src/shortcut-target.ts`); a literal
+`true` or `false`, a negation, a comparison, `&&` or `||`, or a condition
+choosing between the subject and nothing where they take it is an error.
 
 Lint holds the iOS half too (`anti-slop/no-raw-press-outside-ui-native`,
 under the same no-suppression check): outside `packages/ui-native`, an
@@ -157,11 +180,12 @@ component, or add the component or variant there.
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's
-  `Sentry.init`, and the web app's
-  browser SDK, `apps/web/src/app/web-sentry-sdk.ts`, with the desktop renderer's
+  `Sentry.init`, the web app's
+  browser SDK, `apps/web/src/app/web-sentry-sdk.ts`, and the iOS app's React
+  Native SDK, `apps/mobile/src/crash-reports.ts`, with the desktop renderer's
   token filters, `@repo/features/sentry-breadcrumbs`), so what a request, a log
   line, a local variable, or an error's words carries may still reach Sentry
-  from the desktop and the browser, and a log line, a local variable, or an
+  from the desktop, the browser, and the iOS app, and a log line, a local variable, or an
   error's words from any of them; a credential among it is replaced only where
   Sentry's denylist catches it by name, and `PRIVACY.md` says so.
 - Session replay records the rendered panel with every word masked

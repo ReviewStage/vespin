@@ -1,5 +1,5 @@
 /**
- * codex.ts -- one launch of Codex for an agent: `codex app-server` spawned with the ChatGPT plan's provider, the thread started or resumed, the service's lines turned into turns, steers, interrupts and restarts, every notification posted out, and the launch ended, or kept warm, once the agent's turn is over.
+ * codex.ts -- one launch of Codex for an agent: `codex app-server` spawned on the account's ChatGPT plan or API key in the cloud, or the machine's own login on a host, the thread started or resumed, the service's lines turned into turns, steers, interrupts and restarts, every notification posted out, and the launch ended, or kept warm, once the agent's turn is over.
  *
  * One controller fiber owns the launch's state and acts on one signal at a
  * time: a line the service wrote, or what app-server reported (a message a turn
@@ -30,7 +30,10 @@
  * IDLE and keeps the launch up (`RUNNER_WARM`) for the service's next message,
  * until the service or its host retires it or its warm window ends it as
  * `idled`; a `warm` line runs that window again from now, and such a launch is
- * warm from its start too. One interrupted
+ * warm from its start too. A message line marked `compact` compacts the
+ * thread in its place (`thread/compact/start`) once no turn runs, the turn
+ * app-server runs for it taken up from its `turn/started` and over at its
+ * `turn/completed` by the same rule. One interrupted
  * after the service's stop ends the launch as `stopped`; a
  * failed turn, or one interrupted without a stop, as `failed`, with the
  * turn's error, so it shows as interrupted and Continue resumes the thread. A
@@ -52,22 +55,14 @@
  * sign-in that renews the token stays with the service; only the access
  * token enters the sandbox, held by app-server and in no environment.
  *
- * On a host app-server takes its token from a command, Codex's provider
- * `auth`: the runner's own bundle as `codex-token` (`codex-token.ts`), which
- * asks the service at the config's `tokenUrl` under the runner's bearer. A
- * plan connected through Codex's own device-code login has a token only
- * Codex's ChatGPT backend accepts, so where the launch's environment names
- * that backend (`RUNNER_ENV.CODEX_PLAN_BACKEND`) the provider sends there,
- * naming the workspace the plan pays from as Codex's ChatGPT sign-in does
- * (`CHATGPT_BACKEND_PROVIDER`), its token from the same command. Codex keeps
- * what the command printed for the refresh interval, and runs it again past
- * that and after a 401, so a turn outlives any one token, and no token sits
- * in app-server's environment; what the command prints reaches app-server
- * alone. A launch whose environment holds `OPENAI_API_KEY` (one the
- * account's OpenAI API key pays for) asks no token: app-server reads the key
- * from there, the provider's documented `env_key`, and no command it runs
- * inherits it; in the cloud's sandbox it is a placeholder there too, the key
- * set in its place at the firewall.
+ * On a host app-server runs on the machine's own login, the one `codex
+ * login` keeps in `CODEX_HOME` (`~/.codex` by default), through Codex's own
+ * provider, and the runner names no provider, token, or key of its own: the
+ * launch is handed none of the account's (`harnessEnvOf`). A cloud launch
+ * whose environment holds `OPENAI_API_KEY` (one the account's OpenAI API key
+ * pays for) asks no token: app-server reads the key from there, the
+ * provider's documented `env_key`, and no command it runs inherits it; it is
+ * a placeholder there, the key set in its place at the firewall.
  *
  * Speed. Each turn names its service tier: `fast` for a fast version,
  * which Codex sends as the API's `priority`, on the plan and an API key
@@ -90,15 +85,34 @@
  * the subagent's answer, so one spawn would fail every later turn of the
  * thread.
  *
- * Sandbox. Codex runs no sandbox of its own, `danger-full-access` with
- * approval `never` (https://learn.chatgpt.com/docs/sandboxing), set as the
- * thread starts and again as the `sandboxPolicy` of each `turn/start`, as
- * app-server documents, so a thread started under another mode runs under
- * this one from its next turn. The machine is the boundary: a host's box, to
- * which an agent there has full access, or the cloud's sandbox, whose
- * firewall holds every credential and leaves only placeholders inside. Its
- * commands still inherit no bearer or key (`shell_environment_policy`),
- * since none is theirs to use, a placeholder or not.
+ * Sandbox. The agent's mode (`PERMISSION_MODE`) runs Codex as the Codex
+ * app means it (https://learn.chatgpt.com/docs/sandboxing), set as the
+ * thread starts and again in each `turn/start`, as app-server documents, so
+ * a thread started under another mode runs under this one from its next
+ * turn. Full access runs no sandbox of Codex's own, `danger-full-access`
+ * with approval `never`: the machine is the boundary, a host's box, to which
+ * an agent there has full access, or the cloud's sandbox, whose firewall
+ * holds every credential and leaves only placeholders inside. Ask for
+ * approval and Approve for me run Codex's workspace sandbox on its own
+ * defaults, as the Codex app does: the checkout writable, its `.git`
+ * protected, the network off, and approval `on-request`, so Codex asks to run
+ * a command outside the sandbox, to reach the network, or to write outside
+ * the checkout, a commit and an install among them, with no extras of
+ * ours. Under Ask for approval the
+ * member answers each ask (`approvals.ts`): Allow is Codex's `accept`, Always
+ * allow its `acceptForSession`, which keeps the rule in the session rather
+ * than writing one into `CODEX_HOME`, Deny or a message sent meanwhile its
+ * `decline`, and a launch's end its `cancel`; app-server settling an ask
+ * itself (`serverRequest/resolved`) withdraws it. Under Approve for me
+ * Codex's automatic review answers them in the member's place, and a
+ * command it denies or could not review says why at the end of its output
+ * (`reviewNotes`). An MCP server's elicitation, which Codex declines itself
+ * under approval `never`, is declined here under every mode. Note that two
+ * gaps stand under the workspace sandbox: a command reaches Docker's socket,
+ * through which it can write anywhere, and a checkout beside this one, which
+ * the config does not name, is read-only. Commands still inherit no bearer
+ * or key (`shell_environment_policy`), since none is theirs to use, a
+ * placeholder or not.
  */
 
 import { randomUUID } from "node:crypto";
@@ -112,12 +126,27 @@ import {
   type AppServer,
   AppServerError,
   type AppServerListener,
+  type AppServerRequest,
   AppServerRequestFailed,
   spawnAppServer,
 } from "./app-server.js";
+import {
+  type Approvals,
+  cutInput,
+  denyForMessage,
+  denyWaiting,
+  holdAsk,
+  makeApprovals,
+  settleAsk,
+} from "./approvals.js";
+import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import type {
+  ApprovalsReviewer,
+  AskForApproval,
   ChatgptAuthTokensRefreshResponse,
+  CommandExecutionApprovalDecision,
+  SandboxMode,
   SandboxPolicy,
   ThreadStartParams,
   TurnStatus,
@@ -134,29 +163,45 @@ import {
   installedSkillsPath,
   type LaunchContext,
   type LaunchOutcome,
-  type RunnerSelf,
   runsOnHost,
+  toolEnvOf,
 } from "./launch.js";
-import { CODEX_PIN, SANDBOX_TOOL_ENV } from "./pins.js";
+import { codexMemoryWatch } from "./out-of-memory.js";
 import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
+  type ApprovalBy,
+  type ApprovalDecision,
+  type CheckoutSnapshot,
   CODEX_EFFORT,
   CODEX_ERROR_INFO,
-  CODEX_PLAN_BACKEND,
-  CODEX_TOKEN_COMMAND,
+  CONNECTION_LOST_DETAIL,
   type CodexConfig,
   type CodexEffort,
-  type CodexPlanBackend,
+  type CodexNotification,
   type ContentBlock,
   codexErrorKind,
+  connectionLostFailure,
   INPUT_LINE,
   INSTALLED_SKILLS,
   InputLineSchema,
+  PERMISSION_MODE,
+  type PermissionMode,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
   RUNNER_WARM,
+  type RunnerApprovalRequested,
   type RunnerEnd,
 } from "./protocol.js";
+import {
+  awaitProvider,
+  codexConnectionLost,
+  type ProbeTarget,
+  type ProviderProbe,
+  probeTargetOf,
+  providerTargetOf,
+} from "./reconnect.js";
 import { RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
 
@@ -171,31 +216,11 @@ const CHATGPT_PROVIDER = {
 } as const;
 
 /**
- * Codex's ChatGPT backend, for a plan's token Codex's own device-code login
- * was issued, which OpenAI's API refuses: the base URL Codex's built-in
- * ChatGPT sign-in sends to (Codex 0.163.0's `CHATGPT_CODEX_BASE_URL`), and
- * the headers it adds there that a provider of ours must name itself. Codex
- * sends the workspace's header beside its bearer for that sign-in alone,
- * and the `version` header from its built-in provider's `http_headers`;
- * `originator` and `User-Agent` it sends for every provider, so ours
- * carries them as they are.
+ * Where Codex's built-in ChatGPT sign-in sends its model calls (Codex
+ * 0.163.0's `CHATGPT_CODEX_BASE_URL`), which a host's launch on the
+ * machine's own login probes when a turn could not reach its provider.
  */
-const CHATGPT_BACKEND_PROVIDER = {
-  ID: "chatgpt_backend_plan",
-  NAME: "ChatGPT plan",
-  BASE_URL: "https://chatgpt.com/backend-api/codex",
-  HEADER: { ACCOUNT: "ChatGPT-Account-ID", VERSION: "version" },
-} as const;
-
-/**
- * How app-server runs the token command: given long enough for the service's cold start
- * and a renewal at OpenAI behind it, and run again once what it printed is
- * five minutes old, well inside the margin the service's route answers a token with.
- */
-const TOKEN_COMMAND = {
-  TIMEOUT_MS: 30_000,
-  REFRESH_INTERVAL_MS: 300_000,
-} as const;
+const CHATGPT_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/codex";
 
 /** The name our MCP server is registered under in Codex's config (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
@@ -243,11 +268,19 @@ const METHOD = {
   THREAD_FORK: "thread/fork",
   THREAD_TURNS_LIST: "thread/turns/list",
   THREAD_REVERT: "thread/revert",
+  THREAD_COMPACT_START: "thread/compact/start",
   TURN_START: "turn/start",
   TURN_STEER: "turn/steer",
   TURN_INTERRUPT: "turn/interrupt",
+  TURN_STARTED: "turn/started",
   TURN_COMPLETED: "turn/completed",
   ITEM_STARTED: "item/started",
+  ITEM_COMPLETED: "item/completed",
+  COMMAND_APPROVAL: "item/commandExecution/requestApproval",
+  FILE_CHANGE_APPROVAL: "item/fileChange/requestApproval",
+  MCP_ELICITATION: "mcpServer/elicitation/request",
+  SERVER_REQUEST_RESOLVED: "serverRequest/resolved",
+  AUTO_REVIEW_COMPLETED: "item/autoApprovalReview/completed",
 } as const;
 
 /** JSON-RPC's code for a request the receiver refuses as it stands. */
@@ -258,7 +291,10 @@ const SIGNAL = {
   LINE: "line",
   INPUT_CLOSED: "input_closed",
   MESSAGE_TAKEN: "message_taken",
+  TURN_STARTED: "turn_started",
   TURN_COMPLETED: "turn_completed",
+  /** The provider's host was probed after a turn failed to reach it: it answered, or never did within the bound (`reconnect.ts`). */
+  PROBED: "probed",
   EXITED: "exited",
   CUT_OFF: "cut_off",
 } as const;
@@ -267,14 +303,39 @@ type Signal =
   | { readonly kind: typeof SIGNAL.LINE; readonly text: string }
   | { readonly kind: typeof SIGNAL.INPUT_CLOSED }
   | { readonly kind: typeof SIGNAL.MESSAGE_TAKEN; readonly clientId: string }
+  | { readonly kind: typeof SIGNAL.TURN_STARTED; readonly turnId: string }
   | {
       readonly kind: typeof SIGNAL.TURN_COMPLETED;
       readonly turnId: string;
       readonly status: TurnStatus;
       readonly error: string | undefined;
+      /** Codex's own word for why the turn failed (`codexErrorInfo`), as it wrote it. */
+      readonly errorInfo: unknown;
     }
+  | { readonly kind: typeof SIGNAL.PROBED; readonly answered: boolean }
   | { readonly kind: typeof SIGNAL.EXITED; readonly stderrTail: string }
   | { readonly kind: typeof SIGNAL.CUT_OFF; readonly why: string };
+
+const LAUNCH_STATE = {
+  IDLE: "idle",
+  TURN: "turn",
+  /** The launch waits for the provider's host to answer again; the service's messages wait with it (`waiting`). */
+  RECONNECTING: "reconnecting",
+} as const;
+
+/**
+ * Where the launch stands: idle, warm where it started warm or its turn
+ * completed with nothing left and an IDLE posted, and no message taken since;
+ * running the turn app-server named, stopping once a Stop interrupted it; or
+ * reconnecting. A message sent while its turn stops waits for the next turn
+ * rather than being steered into the one ending.
+ */
+type LaunchState =
+  | { readonly kind: typeof LAUNCH_STATE.IDLE; readonly warm: boolean }
+  | { readonly kind: typeof LAUNCH_STATE.TURN; readonly id: string; readonly stopping: boolean }
+  | { readonly kind: typeof LAUNCH_STATE.RECONNECTING };
+
+const IDLE: LaunchState = { kind: LAUNCH_STATE.IDLE, warm: false };
 
 /**
  * A message the service sent, as Codex takes it, under the id Codex echoes when a
@@ -286,6 +347,8 @@ interface Outgoing {
   readonly clientId: string;
   readonly input: readonly UserInput[];
   readonly lines: readonly string[];
+  /** The checkout as it stood before the turn this message started (`checkout-snapshot.ts`); none for a steer, or where it could not be recorded. */
+  readonly snapshot?: CheckoutSnapshot | undefined;
 }
 
 /** The fields of an answer the controller reads. */
@@ -312,6 +375,9 @@ const TurnsPageSchema = Schema.Struct({
   nextCursor: Schema.NullOr(Schema.String),
 });
 const decodeThreadAnswer = Schema.decodeUnknownOption(ThreadAnswerSchema);
+
+/** App-server's word for a thread resumed on another model provider than it was written on, in its refusal's message or data. */
+const PROVIDER_MISMATCH = /model\s*provider\s*mismatch/i;
 const decodeTurnsPage = Schema.decodeUnknownOption(TurnsPageSchema);
 const decodeTurnAnswer = Schema.decodeUnknownOption(TurnAnswerSchema);
 const decodeLine = Schema.decodeUnknownOption(Schema.fromJsonString(InputLineSchema));
@@ -330,12 +396,6 @@ function isCodexEffort(effort: string): effort is CodexEffort {
 /** A TOML basic string, as Codex's `-c key=value` reads one. */
 function toml(value: string): string {
   return JSON.stringify(value);
-}
-
-/** Where the token command is run from: the runner's bundle, asked for the token at `tokenUrl`. */
-interface TokenCommand {
-  readonly self: RunnerSelf;
-  readonly tokenUrl: string;
 }
 
 /**
@@ -445,21 +505,14 @@ const API_KEY_PROVIDER = {
 const CODEX_AUTH = {
   /** The account's ChatGPT plan in the cloud's sandbox, app-server signed in on host-supplied tokens the runner asks the service for. */
   CHATGPT_TOKENS: "chatgpt_tokens",
-  /** The account's ChatGPT plan on a host, its token asked of the service through the runner's token command. */
-  TOKEN_COMMAND: "token_command",
+  /** The machine's own login on a host, which app-server reads from `CODEX_HOME` itself. */
+  MACHINE_LOGIN: "machine_login",
   /** The account's OpenAI API key, in the launch's environment. */
   API_KEY: "api_key",
 } as const;
 
 type CodexAuth = (
-  | {
-      readonly kind: typeof CODEX_AUTH.TOKEN_COMMAND;
-      readonly command: TokenCommand;
-      /** Where the plan's token is sent (`RUNNER_ENV.CODEX_PLAN_BACKEND`). */
-      readonly backend: CodexPlanBackend;
-      /** The workspace the plan pays from, where its starter named one (`RUNNER_ENV.CHATGPT_ACCOUNT_ID`). */
-      readonly chatgptAccountId: string | undefined;
-    }
+  | { readonly kind: typeof CODEX_AUTH.MACHINE_LOGIN }
   | {
       readonly kind: typeof CODEX_AUTH.CHATGPT_TOKENS;
       /** Where the plan's tokens are asked for: the service's token route. */
@@ -467,69 +520,40 @@ type CodexAuth = (
     }
   | { readonly kind: typeof CODEX_AUTH.API_KEY }
 ) & {
-  /** The catalog app-server reads in place of its bundled one (`catalogFile`): `planCatalog` on the plan, `ultrafastCatalog` on an API key. */
+  /** The catalog app-server reads in place of its bundled one (`catalogFile`): `planCatalog` on the plan and the machine's login, `ultrafastCatalog` on an API key. */
   readonly catalog: string;
 };
 
 /**
- * The headers our provider adds on Codex's ChatGPT backend, as Codex's
- * ChatGPT sign-in sends them there: its pinned version, and the workspace
- * where the plan names one; none on OpenAI's API.
- */
-function backendHeaders(auth: CodexAuth): string | undefined {
-  if (auth.kind !== CODEX_AUTH.TOKEN_COMMAND || auth.backend !== CODEX_PLAN_BACKEND.CHATGPT) {
-    return undefined;
-  }
-  const { HEADER } = CHATGPT_BACKEND_PROVIDER;
-  const headers: (readonly [string, string])[] = [
-    ...(auth.chatgptAccountId === undefined
-      ? []
-      : ([[HEADER.ACCOUNT, auth.chatgptAccountId]] as const)),
-    [HEADER.VERSION, CODEX_PIN.VERSION],
-  ];
-  return `{ ${headers.map(([name, value]) => `${toml(name)} = ${toml(value)}`).join(", ")} }`;
-}
-
-/**
- * How our provider is handed its token: from the runner's token command
- * on a host's plan, or from `OPENAI_API_KEY` (the documented `env_key`) on an API
- * key; its own name; where it sends its requests, Codex's ChatGPT backend
- * with the headers it reads there for a device-code plan's token, OpenAI's
- * API for every other; none on host-supplied tokens, which Codex's own
- * OpenAI provider sends.
+ * Our provider for an API key, handed its key from `OPENAI_API_KEY` (the
+ * documented `env_key`), and sending to OpenAI's API; none on host-supplied
+ * tokens or the machine's own login, which Codex's own OpenAI provider
+ * sends.
  */
 function providerOverrides(auth: CodexAuth): (readonly [string, string])[] {
-  if (auth.kind === CODEX_AUTH.CHATGPT_TOKENS) return [];
-  const named =
-    auth.kind === CODEX_AUTH.API_KEY
-      ? { ...API_KEY_PROVIDER, BASE_URL: CHATGPT_PROVIDER.BASE_URL }
-      : auth.backend === CODEX_PLAN_BACKEND.CHATGPT
-        ? CHATGPT_BACKEND_PROVIDER
-        : CHATGPT_PROVIDER;
-  const provider = `model_providers.${named.ID}`;
-  const headers = backendHeaders(auth);
-  const credential: (readonly [string, string])[] =
-    auth.kind === CODEX_AUTH.API_KEY
-      ? [[`${provider}.env_key`, toml(RUNNER_ENV.OPENAI_API_KEY)]]
-      : [
-          [`${provider}.auth.command`, toml(auth.command.self.executable)],
-          [
-            `${provider}.auth.args`,
-            `[${[auth.command.self.script, CODEX_TOKEN_COMMAND, auth.command.tokenUrl].map(toml).join(", ")}]`,
-          ],
-          [`${provider}.auth.timeout_ms`, String(TOKEN_COMMAND.TIMEOUT_MS)],
-          [`${provider}.auth.refresh_interval_ms`, String(TOKEN_COMMAND.REFRESH_INTERVAL_MS)],
-        ];
+  if (auth.kind !== CODEX_AUTH.API_KEY) return [];
+  const provider = `model_providers.${API_KEY_PROVIDER.ID}`;
   return [
-    ["model_provider", toml(named.ID)],
-    [`${provider}.name`, toml(named.NAME)],
-    [`${provider}.base_url`, toml(named.BASE_URL)],
-    ...credential,
-    ...(headers === undefined ? [] : ([[`${provider}.http_headers`, headers]] as const)),
+    ["model_provider", toml(API_KEY_PROVIDER.ID)],
+    [`${provider}.name`, toml(API_KEY_PROVIDER.NAME)],
+    [`${provider}.base_url`, toml(CHATGPT_PROVIDER.BASE_URL)],
+    [`${provider}.env_key`, toml(RUNNER_ENV.OPENAI_API_KEY)],
     [`${provider}.wire_api`, toml("responses")],
     [`${provider}.requires_openai_auth`, "false"],
     [`${provider}.supports_websockets`, "false"],
   ];
+}
+
+/**
+ * The host app-server sends its model calls to on this credential: Codex's
+ * ChatGPT backend for the machine's own login, which is most often a ChatGPT
+ * sign-in, and OpenAI's API for every other, host-supplied tokens among
+ * them, which Codex's own OpenAI provider sends there.
+ */
+function providerOf(auth: CodexAuth): ProbeTarget {
+  return providerTargetOf(
+    auth.kind === CODEX_AUTH.MACHINE_LOGIN ? CHATGPT_BACKEND_BASE_URL : CHATGPT_PROVIDER.BASE_URL,
+  );
 }
 
 /** What every launch turns on beside its provider: the fast tier, the Ultrafast one on an API key, and the catalog the launch wrote. */
@@ -544,23 +568,93 @@ function featureOverrides(auth: CodexAuth): (readonly [string, string])[] {
   ];
 }
 
-/** The sandbox every turn runs under, as `turn/start`'s documented `sandboxPolicy`: none of Codex's own. */
-const SANDBOX_POLICY = { type: "dangerFullAccess" } as const satisfies SandboxPolicy;
+/** Codex's own folder under a home, where it keeps its login and threads unless `CODEX_HOME` names another. */
+const CODEX_HOME_FOLDER = ".codex";
 
-/** The sandbox mode a thread is started and resumed under, as app-server's config names `SANDBOX_POLICY`. */
-const SANDBOX_MODE = "danger-full-access";
+/**
+ * How a launch runs Codex for its mode: the approval policy and sandbox
+ * every thread and turn names, who answers an ask where one is asked, and
+ * the argv beside them. Full access names no reviewer, as a launch from
+ * before modes named none.
+ */
+interface CodexPermissions {
+  readonly approvalPolicy: AskForApproval;
+  readonly approvalsReviewer: ApprovalsReviewer | undefined;
+  readonly sandbox: SandboxMode;
+  readonly sandboxPolicy: SandboxPolicy;
+  readonly overrides: readonly (readonly [string, string])[];
+}
+
+/** Full access: none of Codex's own sandbox, nothing asked (the file header's Sandbox). */
+const FULL_ACCESS: CodexPermissions = {
+  approvalPolicy: "never",
+  approvalsReviewer: undefined,
+  sandbox: "danger-full-access",
+  sandboxPolicy: { type: "dangerFullAccess" },
+  overrides: [
+    ["approval_policy", toml("never")],
+    ["sandbox_mode", toml("danger-full-access")],
+  ],
+};
+
+/** Who answers Codex's asks in each mode that asks: the member, or Codex's automatic review. */
+const REVIEWER_OF = {
+  [PERMISSION_MODE.ASK]: "user",
+  [PERMISSION_MODE.AUTO]: "auto_review",
+} as const satisfies Record<
+  Exclude<PermissionMode, typeof PERMISSION_MODE.FULL_ACCESS>,
+  ApprovalsReviewer
+>;
+
+/**
+ * The mode's permissions: full access as it always ran, or Codex's
+ * workspace sandbox on its own defaults (no writable root beside the
+ * checkout, the network off) with approval `on-request`, as the Codex app
+ * runs its Ask for approval and Approve for me.
+ */
+function permissionsOf(mode: PermissionMode | undefined): CodexPermissions {
+  if (mode === undefined || mode === PERMISSION_MODE.FULL_ACCESS) return FULL_ACCESS;
+  const approvalsReviewer = REVIEWER_OF[mode];
+  return {
+    approvalPolicy: "on-request",
+    approvalsReviewer,
+    sandbox: "workspace-write",
+    sandboxPolicy: {
+      type: "workspaceWrite",
+      writableRoots: [],
+      networkAccess: false,
+      excludeTmpdirEnvVar: false,
+      excludeSlashTmp: false,
+    },
+    overrides: [
+      ["approval_policy", toml("on-request")],
+      ["approvals_reviewer", toml(approvalsReviewer)],
+      ["sandbox_mode", toml("workspace-write")],
+    ],
+  };
+}
 
 /**
  * App-server's argv: our provider and its credential where the launch
  * runs on one of ours (`providerOverrides`), our MCP
  * server and each integration's beside it with the bearer read from the environment and their tools approved up
  * front (under `approval_policy = "never"` Codex 0.163.0 otherwise fails
- * every MCP call, as P16 found) and given as long as the service runs a call, no
- * sandbox (`SANDBOX_MODE`), and commands inheriting the core variables
- * without the bearer or the key, and handed the image's tools' own
- * (`SANDBOX_TOOL_ENV`). Nothing in argv is secret.
+ * every MCP call, as P16 found) and given as long as the service runs a call, the
+ * mode's sandbox and approval policy (`CodexPermissions`), and commands inheriting the launch's whole
+ * environment, the workspace's variables among it whatever their names,
+ * without the bearer or the key, and handed in the cloud's sandbox the
+ * image's tools' own (`toolEnvOf`), as Claude Code's commands are (`runner.ts`). Note
+ * that Codex's default excludes, which drop every name holding `KEY`,
+ * `SECRET`, or `TOKEN`, are ignored, because a workspace's variables are
+ * mostly such names, and those a member set are its agents' to use. Nothing
+ * in argv is secret.
  */
-function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
+function appServerArgs(
+  config: CodexConfig,
+  auth: CodexAuth,
+  permissions: CodexPermissions,
+  toolEnv: Readonly<Record<string, string>>,
+): string[] {
   const mcp = `mcp_servers.${MCP_SERVER}`;
   // Each integration the agent is handed is a server of its own on the same bearer, its tools approved and bounded as ours are.
   // Note that a cached catalog satisfies an integration's startup (`startup_readiness`) while it connects, so a
@@ -590,18 +684,21 @@ function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
     [`${mcp}.default_tools_approval_mode`, toml("approve")],
     [`${mcp}.tool_timeout_sec`, MCP_TOOL_TIMEOUT_SECONDS.toFixed(1)],
     ...integrations,
-    ["approval_policy", toml("never")],
-    ["sandbox_mode", toml(SANDBOX_MODE)],
-    ["shell_environment_policy.inherit", toml("core")],
-    ["shell_environment_policy.ignore_default_excludes", "false"],
+    ...permissions.overrides,
+    ["shell_environment_policy.inherit", toml("all")],
+    ["shell_environment_policy.ignore_default_excludes", "true"],
     ["shell_environment_policy.exclude", `[${excluded.map(toml).join(", ")}]`],
-    // Note that the image's tools are set apart, since a command inherits only the core variables.
-    [
-      "shell_environment_policy.set",
-      `{ ${Object.entries(SANDBOX_TOOL_ENV)
-        .map(([name, value]) => `${name} = ${toml(value)}`)
-        .join(", ")} }`,
-    ],
+    // Note that the image's tools are set apart, since app-server's own environment does not hold them.
+    ...(Object.keys(toolEnv).length === 0
+      ? []
+      : ([
+          [
+            "shell_environment_policy.set",
+            `{ ${Object.entries(toolEnv)
+              .map(([name, value]) => `${name} = ${toml(value)}`)
+              .join(", ")} }`,
+          ],
+        ] as const)),
   ];
   return [
     "app-server",
@@ -628,6 +725,17 @@ function steerWaits(error: AppServerError): boolean {
   );
 }
 
+/**
+ * Whether app-server refused to resume a thread for its model provider: the
+ * thread was written on another provider than this launch's
+ * (`modelProviderMismatch`), as a plan's thread is once the agent's API key
+ * pays, or the other way round. Such a thread is forked on this launch's
+ * provider instead, which goes on with its history.
+ */
+function providerMismatch(error: AppServerError): boolean {
+  return PROVIDER_MISMATCH.test(`${error.detail} ${JSON.stringify(error.data ?? null)}`);
+}
+
 /** A message line's blocks as Codex's `UserInput`: text as text, a base64 image as a data URL. */
 function userInput(content: readonly ContentBlock[]): UserInput[] {
   return content.map((block) =>
@@ -644,25 +752,46 @@ interface CodexLaunch {
   server: AppServer;
   serverScope: Scope.Closeable;
   threadId: string;
-  /** The turn this launch is running on its thread, once app-server named it. */
-  turnId: string | undefined;
+  state: LaunchState;
   /** Messages a turn was handed and has not yet taken, by the id Codex echoes. */
   readonly sent: Map<string, Outgoing>;
   /** Messages for the next turn. */
   waiting: Outgoing[];
+  /** A compaction the service asked for while a turn ran, started once none runs. */
+  compactNext: Outgoing | undefined;
   /** The service's lines this launch has said app-server took, each said once. */
   readonly accepted: Set<string>;
   /** The credential app-server runs on. */
   readonly auth: CodexAuth;
+  /** How the launch's mode runs Codex. */
+  readonly permissions: CodexPermissions;
+  /** The asks waiting on the member (`approvals.ts`). */
+  readonly approvals: Approvals;
   model: string;
   effort: CodexEffort | undefined;
   /** The service tier the next turn names (`turnTierOf`); null for the standard one. */
   tier: ServiceTier | null;
-  stopping: boolean;
-  /** Whether the launch is warm: started warm, or its turn completed with nothing left and an IDLE posted, and no message taken since. */
-  warm: boolean;
+  /**
+   * Whether the agent's turn is under way, as the service holds it: opened
+   * by the turn a message starts, and over at the completion that leaves
+   * no message unanswered (the end-of-run rule above). A turn started
+   * while it is under way, for a steer the last turn could not take, is a
+   * continuation of the same turn of the service's, so it records no
+   * checkout: the one recorded as the turn opened stands.
+   */
+  open: boolean;
   /** The thread's rollout as the store mirrors it, where the config names the store. */
   readonly mirror: RolloutMirror | undefined;
+  /** The provider's host, as app-server reaches it, which a lost connection is probed for. */
+  readonly providerHost: string;
+  /** Where that host is probed: the proxy app-server goes through, or the host itself. */
+  readonly probeTarget: ProbeTarget;
+  /** How many items the thread had started when the last carry-on was asked for, so a connection lost before any more fails the launch rather than probing again. */
+  carriedOnAt: number | undefined;
+  /** How many items the thread has started but the service's own messages, which say nothing of the model. */
+  readonly heard: { count: number };
+  /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
+  readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
 }
 
 /**
@@ -686,7 +815,12 @@ function ended(end: RunnerEnd, failure = ""): LaunchOutcome {
 interface ThreadSeen {
   readonly context: LaunchContext<CodexConfig>;
   readonly signals: Queue.Queue<Signal>;
+  readonly approvals: Approvals;
+  /** Whether the launch's mode asks, which serves app-server's approval requests rather than refusing them. */
+  readonly asks: boolean;
   threadId: string | undefined;
+  /** How many items the thread has started but the service's own messages (`CodexLaunch`'s `heard`). */
+  readonly heard: { count: number };
 }
 
 /**
@@ -704,25 +838,177 @@ const planTokens = (
     (answer) => ({ ...answer, chatgptPlanType: null }) as ChatgptAuthTokensRefreshResponse,
   );
 
+/** The fields of an approval request the ask is posted with: the item that asks, and Codex's words for it. */
+const ApprovalAskSchema = Schema.Struct({
+  itemId: Schema.String,
+  reason: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  command: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  cwd: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  grantRoot: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+const decodeApprovalAsk = Schema.decodeUnknownOption(ApprovalAskSchema);
+const decodeResolved = Schema.decodeUnknownOption(
+  Schema.Struct({ requestId: Schema.Union([Schema.Number, Schema.String]) }),
+);
+
+/** Each approval request app-server makes, by the item type that asks, as the transcript names the call, and the words its ask is titled with. */
+const APPROVAL_ASK = {
+  [METHOD.COMMAND_APPROVAL]: { toolName: "commandExecution", title: "Run this command" },
+  [METHOD.FILE_CHANGE_APPROVAL]: { toolName: "fileChange", title: "Make this file change" },
+} as const;
+
+/** Whether a method is one of app-server's approval requests. */
+function isApprovalMethod(method: string): method is keyof typeof APPROVAL_ASK {
+  return method === METHOD.COMMAND_APPROVAL || method === METHOD.FILE_CHANGE_APPROVAL;
+}
+
+/**
+ * The member's decision in Codex's words (the file header's Sandbox): an ask
+ * the launch's end or app-server itself settled is canceled; every other is
+ * accepted, accepted for the session, or declined as decided.
+ */
+function codexDecisionOf(
+  decision: ApprovalDecision,
+  by: ApprovalBy,
+): Extract<CommandExecutionApprovalDecision, string> {
+  if (by === APPROVAL_BY.ENDED || by === APPROVAL_BY.ABORTED) return "cancel";
+  switch (decision) {
+    case APPROVAL_DECISION.ALLOW:
+      return "accept";
+    case APPROVAL_DECISION.ALLOW_FOR_AGENT:
+      return "acceptForSession";
+    case APPROVAL_DECISION.DENY:
+      return "decline";
+  }
+}
+
+/**
+ * One approval request, posted as the ask on the item that made it and held
+ * for the member's answer, under an id of the runner's own, since
+ * app-server's restart with each launch; `asked` keeps which ask each of
+ * app-server's ids stands for until it settles.
+ */
+function servedAsk(
+  seen: ThreadSeen,
+  asked: Map<string, string>,
+  request: AppServerRequest & { readonly method: keyof typeof APPROVAL_ASK },
+): Effect.Effect<Schema.Json, AppServerRequestFailed> {
+  const params = decodeApprovalAsk(request.params);
+  if (Option.isNone(params)) {
+    return Effect.fail(
+      new AppServerRequestFailed({ detail: "the approval request is unreadable" }),
+    );
+  }
+  const { itemId, reason, command, cwd, grantRoot } = params.value;
+  const { toolName, title } = APPROVAL_ASK[request.method];
+  const requestId = randomUUID();
+  const input = Object.fromEntries(
+    Object.entries({ command, cwd, grantRoot }).filter(([, value]) => typeof value === "string"),
+  );
+  const requested: RunnerApprovalRequested = {
+    type: RUNNER_EVENT.APPROVAL_REQUESTED,
+    requestId,
+    toolUseId: itemId,
+    toolName,
+    title,
+    ...(typeof reason === "string" && reason !== "" ? { description: reason } : undefined),
+    input: cutInput(input),
+  };
+  const key = String(request.id);
+  return Effect.sync(() => asked.set(key, requestId)).pipe(
+    Effect.andThen(
+      holdAsk(seen.approvals, requested, (decision, by) => ({
+        decision: codexDecisionOf(decision, by),
+      })),
+    ),
+    Effect.ensuring(Effect.sync(() => asked.delete(key))),
+  );
+}
+
+/** An MCP server's elicitation, declined: nobody answers a form for an agent. */
+const DECLINED_ELICITATION = { action: "decline", content: null, _meta: null } as const;
+
+/**
+ * A command Codex's automatic review denied, or could not finish, said at
+ * the end of the command's output as it is posted, so its row in the
+ * transcript says why it did not run, a review that failed among them,
+ * which would otherwise leave only a declined command. Note that the model
+ * reads Codex's own words for the review, not this line.
+ */
+function reviewNotes(): (notification: CodexNotification) => CodexNotification {
+  const notes = new Map<string, string>();
+  return (notification) => {
+    if (notification.method === METHOD.AUTO_REVIEW_COMPLETED) {
+      const { targetItemId, review } = notification.params;
+      const why = review.rationale ?? "";
+      if (targetItemId === null || targetItemId === undefined) return notification;
+      if (review.status === "denied") {
+        notes.set(targetItemId, `Codex's automatic review denied this command. ${why}`.trim());
+      } else if (review.status === "timedOut") {
+        notes.set(targetItemId, "Codex's automatic review timed out, so this command did not run.");
+      }
+      return notification;
+    }
+    if (notification.method !== METHOD.ITEM_COMPLETED) return notification;
+    const { item } = notification.params;
+    const note = notes.get(item.id);
+    if (item.type !== "commandExecution" || note === undefined) return notification;
+    notes.delete(item.id);
+    const said = item.aggregatedOutput ?? "";
+    const aggregatedOutput = said === "" ? note : `${said.replace(/\n$/, "")}\n${note}`;
+    return {
+      ...notification,
+      params: { ...notification.params, item: { ...item, aggregatedOutput } },
+    };
+  };
+}
+
 /**
  * What app-server reports, posted in order and turned into the controller's
- * signals; and on host-supplied tokens, its ask for fresh ones after a 401,
- * answered with the service's (`refresh`).
+ * signals; on host-supplied tokens, its ask for fresh ones after a 401,
+ * answered with the service's (`refresh`); where the launch's mode asks,
+ * each approval it asks, held for the member's answer, and withdrawn as it
+ * settles it itself; and every MCP elicitation, declined.
  */
 function listenerFor(
   seen: ThreadSeen,
   refresh: Effect.Effect<ChatgptAuthTokensRefreshResponse, CodexTokenFailed> | undefined,
 ): AppServerListener {
+  const annotate = codexMemoryWatch();
+  const reviewed = reviewNotes();
+  const asked = new Map<string, string>();
   return {
-    onRequest: (method) =>
-      method === METHOD.CHATGPT_AUTH_TOKENS_REFRESH && refresh !== undefined
-        ? refresh.pipe(
-            Effect.mapError((failure) => new AppServerRequestFailed({ detail: failure.detail })),
-          )
-        : undefined,
+    onRequest: (request) => {
+      if (request.method === METHOD.CHATGPT_AUTH_TOKENS_REFRESH && refresh !== undefined) {
+        return refresh.pipe(
+          Effect.mapError((failure) => new AppServerRequestFailed({ detail: failure.detail })),
+        );
+      }
+      if (request.method === METHOD.MCP_ELICITATION) return Effect.succeed(DECLINED_ELICITATION);
+      if (!seen.asks || !isApprovalMethod(request.method)) return undefined;
+      return servedAsk(seen, asked, { ...request, method: request.method });
+    },
     onNotification: (notification) =>
       Effect.gen(function* () {
-        yield* seen.context.sink.emit(notification);
+        yield* seen.context.sink.emit(
+          reviewed(yield* Effect.promise(() => annotate(notification))),
+        );
+        if (notification.method === METHOD.SERVER_REQUEST_RESOLVED) {
+          // App-server settled an ask itself, as an interrupt does: it is withdrawn, where it still waits.
+          const resolved = decodeResolved(notification.params);
+          const requestId = Option.isSome(resolved)
+            ? asked.get(String(resolved.value.requestId))
+            : undefined;
+          if (requestId === undefined) return;
+          yield* settleAsk(seen.approvals, requestId, APPROVAL_DECISION.DENY, APPROVAL_BY.ABORTED);
+          return;
+        }
+        if (notification.method === METHOD.TURN_STARTED) {
+          const { threadId, turn } = notification.params;
+          if (threadId !== seen.threadId) return;
+          yield* Queue.offer(seen.signals, { kind: SIGNAL.TURN_STARTED, turnId: turn.id });
+          return;
+        }
         if (notification.method === METHOD.TURN_COMPLETED) {
           const { threadId, turn } = notification.params;
           if (threadId !== seen.threadId) return;
@@ -731,14 +1017,19 @@ function listenerFor(
             turnId: turn.id,
             status: turn.status,
             error: turn.error?.message,
+            errorInfo: turn.error?.codexErrorInfo,
           });
           return;
         }
         if (notification.method !== METHOD.ITEM_STARTED) return;
         const { threadId, item } = notification.params;
-        if (threadId !== seen.threadId || item.type !== "userMessage" || item.clientId === null) {
+        if (threadId !== seen.threadId) return;
+        // Every item but a message of ours is the model's doing, so it counts as the model heard from.
+        if (item.type !== "userMessage") {
+          seen.heard.count += 1;
           return;
         }
+        if (item.clientId === null) return;
         yield* Queue.offer(seen.signals, { kind: SIGNAL.MESSAGE_TAKEN, clientId: item.clientId });
       }),
     onExit: (stderrTail) =>
@@ -763,7 +1054,10 @@ class RolloutUnread extends Data.TaggedError("RolloutUnread") {}
  * the thread opens rather than as it starts.
  */
 const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
-  launch: Pick<CodexLaunch, "context" | "signals" | "model" | "auth">,
+  launch: Pick<
+    CodexLaunch,
+    "context" | "signals" | "model" | "auth" | "heard" | "permissions" | "approvals"
+  >,
   threadId: string | undefined,
   fork: boolean,
   /** Whether the thread's rollout stands on the sandbox's disk, written back where it had to be. */
@@ -780,15 +1074,19 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       : undefined;
   // Note that the listener reads the thread's id from here, because a new
   // thread's notifications arrive before `thread/start` answers.
+  const { permissions } = launch;
   const seen: ThreadSeen = {
     context: launch.context,
     signals: launch.signals,
+    approvals: launch.approvals,
+    asks: permissions !== FULL_ACCESS,
     threadId: fork ? undefined : threadId,
+    heard: launch.heard,
   };
   const server = yield* spawnAppServer(
     {
       executable: config.executable,
-      args: appServerArgs(config, launch.auth),
+      args: appServerArgs(config, launch.auth, permissions, toolEnvOf(env)),
       cwd: config.cwd,
       // Note that Claude Code's credentials, were they set, are no business of Codex's.
       env: {
@@ -832,20 +1130,32 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
     const thread = {
       cwd: config.cwd,
       model: launch.model,
-      approvalPolicy: "never",
-      sandbox: SANDBOX_MODE,
+      approvalPolicy: permissions.approvalPolicy,
+      ...(permissions.approvalsReviewer === undefined
+        ? undefined
+        : { approvalsReviewer: permissions.approvalsReviewer }),
+      sandbox: permissions.sandbox,
       developerInstructions: config.developerInstructions,
     } satisfies ThreadStartParams;
-    const answer =
+    // Note that a resume refused for its provider forks the thread, so whether it forked is told with the answer.
+    const forking = (forkedId: string) =>
+      server.request(METHOD.THREAD_FORK, { ...thread, threadId: forkedId, excludeTurns: true });
+    const { answer, forked } =
       threadId === undefined
-        ? yield* server.request(METHOD.THREAD_START, thread)
+        ? { answer: yield* server.request(METHOD.THREAD_START, thread), forked: false }
         : fork
-          ? yield* server.request(METHOD.THREAD_FORK, { ...thread, threadId, excludeTurns: true })
-          : yield* server.request(METHOD.THREAD_RESUME, {
-              ...thread,
-              threadId,
-              excludeTurns: true,
-            });
+          ? { answer: yield* forking(threadId), forked: true }
+          : yield* server
+              .request(METHOD.THREAD_RESUME, { ...thread, threadId, excludeTurns: true })
+              .pipe(
+                Effect.map((resumed) => ({ answer: resumed, forked: false })),
+                Effect.catchIf(providerMismatch, () =>
+                  Effect.map(forking(threadId), (forkedAnswer) => ({
+                    answer: forkedAnswer,
+                    forked: true,
+                  })),
+                ),
+              );
     const opened = decodeThreadAnswer(answer);
     if (Option.isNone(opened)) {
       return yield* new AppServerError({
@@ -854,13 +1164,19 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       });
     }
     seen.threadId = opened.value.thread.id;
-    return opened.value.thread;
+    return { ...opened.value.thread, forked };
   });
   const openedThread = yield* opened.pipe(
     (handshake) => launch.context.trace.step(RUNNER_SPAN.HANDSHAKE, handshake),
     Effect.tapError(() => Scope.close(serverScope, Exit.void)),
   );
-  return { server, serverScope, threadId: openedThread.id, path: openedThread.path ?? undefined };
+  return {
+    server,
+    serverScope,
+    threadId: openedThread.id,
+    path: openedThread.path ?? undefined,
+    forked: openedThread.forked,
+  };
 });
 
 /** How many turns a page of the rewind's read back from the thread's end holds. */
@@ -870,7 +1186,9 @@ const TURNS_PAGE = 10;
  * The resumed thread reverted to before the turn that took the message a
  * rewind dropped, found by its client id reading back from the thread's
  * end; a thread no turn of which took it is left whole, as a rewind Codex
- * never heard of leaves nothing of its own to cut. A revert that fails is
+ * never heard of leaves nothing of its own to cut. Answers the path of the
+ * segment the revert began (`codex-rollout.ts`), where Codex named one,
+ * which the thread's later lines are written to. A revert that fails is
  * logged and the thread goes on whole, since the launch's message still
  * stands to be answered.
  */
@@ -878,7 +1196,7 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
   server: AppServer,
   threadId: string,
   rewindBefore: string,
-) {
+): Effect.fn.Return<string | undefined, AppServerError> {
   let cursor: string | null = null;
   for (;;) {
     const page = decodeTurnsPage(
@@ -890,15 +1208,19 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
         itemsView: "full",
       }),
     );
-    if (Option.isNone(page)) return;
+    if (Option.isNone(page)) return undefined;
     const taking = page.value.data.find((turn) =>
       turn.items.some((item) => item.type === "userMessage" && item.clientId === rewindBefore),
     );
     if (taking !== undefined) {
-      yield* server.request(METHOD.THREAD_REVERT, { threadId, beforeTurnId: taking.id });
-      return;
+      const answer = yield* server.request(METHOD.THREAD_REVERT, {
+        threadId,
+        beforeTurnId: taking.id,
+      });
+      const reverted = decodeThreadAnswer(answer);
+      return Option.isSome(reverted) ? (reverted.value.thread.path ?? undefined) : undefined;
     }
-    if (page.value.nextCursor === null) return;
+    if (page.value.nextCursor === null) return undefined;
     cursor = page.value.nextCursor;
   }
 });
@@ -907,7 +1229,9 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
  * Says each of the service's lines a message carries was taken by app-server, as
  * Claude Code's launch says a line was handed to the SDK, so the service ties the
  * line to the turn that runs it. A line said once is not said again when a
- * message is sent again in the next turn.
+ * message is sent again in the next turn. The checkout recorded before the
+ * turn is said with the line that opened it alone, the first of a merged
+ * message, since that is the line the turn stands under.
  */
 const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   launch: CodexLaunch,
@@ -916,7 +1240,12 @@ const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   for (const uuid of outgoing.lines) {
     if (launch.accepted.has(uuid)) continue;
     launch.accepted.add(uuid);
-    yield* launch.context.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
+    const opening = uuid === outgoing.lines[0] ? outgoing.snapshot : undefined;
+    yield* launch.context.sink.emit({
+      type: RUNNER_EVENT.ACCEPTED,
+      uuid,
+      ...(opening === undefined ? undefined : { snapshot: opening }),
+    });
   }
 });
 
@@ -925,7 +1254,7 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   launch: CodexLaunch,
   messages: readonly Outgoing[],
 ) {
-  const outgoing: Outgoing =
+  const merged: Outgoing =
     messages.length === 1 && messages[0] !== undefined
       ? messages[0]
       : {
@@ -933,6 +1262,12 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
           input: messages.flatMap((message) => message.input),
           lines: messages.flatMap((message) => message.lines),
         };
+  // The checkout is recorded before app-server can touch it, under the first line the turn takes,
+  // where the turn opens the agent's; a turn continuing one under way leaves the opening record standing.
+  const first = merged.lines[0];
+  const snapshot = launch.open || first === undefined ? undefined : yield* launch.snapshot(first);
+  launch.open = true;
+  const outgoing: Outgoing = { ...merged, snapshot };
   const answer = decodeTurnAnswer(
     yield* launch.server.request(METHOD.TURN_START, {
       threadId: launch.threadId,
@@ -940,8 +1275,11 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
       input: [...outgoing.input],
       model: launch.model,
       effort: launch.effort ?? null,
-      approvalPolicy: "never",
-      sandboxPolicy: SANDBOX_POLICY,
+      approvalPolicy: launch.permissions.approvalPolicy,
+      ...(launch.permissions.approvalsReviewer === undefined
+        ? undefined
+        : { approvalsReviewer: launch.permissions.approvalsReviewer }),
+      sandboxPolicy: launch.permissions.sandboxPolicy,
       // Note that a null tier is the standard one, which a fast or Ultrafast version turned off goes back to.
       serviceTier: turnTierOf(launch),
     }),
@@ -952,8 +1290,30 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
       detail: "no turn in the answer",
     });
   }
-  launch.turnId = answer.value.turn.id;
+  launch.state = { kind: LAUNCH_STATE.TURN, id: answer.value.turn.id, stopping: false };
   launch.sent.set(outgoing.clientId, outgoing);
+  yield* accepted(launch, outgoing);
+});
+
+/**
+ * The turn a compaction runs as, until app-server names it: the thread's
+ * compaction answers no turn of its own, and its `turn/started` names the
+ * turn the launch then runs.
+ */
+const COMPACTION_TURN = "";
+
+/**
+ * Compacts the thread in the message's place, a turn app-server runs of
+ * its own, which takes no words; the line is said taken once app-server
+ * took the ask. Note that it is never among the messages a turn was
+ * handed (`sent`), because no message item ever names it.
+ */
+const startCompaction = Effect.fn("agent-runner/codex/startCompaction")(function* (
+  launch: CodexLaunch,
+  outgoing: Outgoing,
+) {
+  yield* launch.server.request(METHOD.THREAD_COMPACT_START, { threadId: launch.threadId });
+  launch.state = { kind: LAUNCH_STATE.TURN, id: COMPACTION_TURN, stopping: false };
   yield* accepted(launch, outgoing);
 });
 
@@ -971,20 +1331,34 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
   const value = line.value;
   switch (value.type) {
     case INPUT_LINE.MESSAGE: {
-      launch.warm = false;
       yield* launch.context.trace.taken;
+      // A message sent while a call waits on the member's answer declines the call, and goes on as the member's words.
+      yield* denyForMessage(launch.approvals, value.content);
       // Note that our id for the line is the id Codex echoes, so a turn that takes it names it.
       const uuid = value.uuid ?? randomUUID();
       const outgoing: Outgoing = { clientId: uuid, input: userInput(value.content), lines: [uuid] };
-      if (launch.turnId === undefined) {
+      const { state } = launch;
+      // A compaction waits for a turn running, or a host being probed, to be over, as app-server compacts no thread at work.
+      if (value.compact === true) {
+        if (state.kind === LAUNCH_STATE.IDLE) yield* startCompaction(launch, outgoing);
+        else launch.compactNext = outgoing;
+        return undefined;
+      }
+      if (state.kind === LAUNCH_STATE.IDLE) {
         yield* startTurn(launch, [outgoing]);
+        return undefined;
+      }
+      // A message sent while the provider's host is probed waits for it, and one sent while
+      // the turn stops waits for that turn to end: either starts the next turn.
+      if (state.kind === LAUNCH_STATE.RECONNECTING || state.stopping) {
+        launch.waiting.push(outgoing);
         return undefined;
       }
       // A steer the turn cannot take waits for the next turn; any other refusal fails the launch.
       const steered = yield* launch.server
         .request(METHOD.TURN_STEER, {
           threadId: launch.threadId,
-          expectedTurnId: launch.turnId,
+          expectedTurnId: state.id,
           clientUserMessageId: outgoing.clientId,
           input: [...outgoing.input],
         })
@@ -1006,11 +1380,12 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
         yield* Effect.logWarning("agent-runner: skipped a stop for another launch");
         return undefined;
       }
-      if (launch.turnId === undefined) return ended(RUNNER_END.STOPPED);
-      launch.stopping = true;
+      const { state } = launch;
+      if (state.kind !== LAUNCH_STATE.TURN) return ended(RUNNER_END.STOPPED);
+      launch.state = { ...state, stopping: true };
       // Note that a turn app-server did not interrupt ends with the launch, which closes app-server, so a stop never waits on a hung one.
       const interrupted = yield* launch.server
-        .request(METHOD.TURN_INTERRUPT, { threadId: launch.threadId, turnId: launch.turnId })
+        .request(METHOD.TURN_INTERRUPT, { threadId: launch.threadId, turnId: state.id })
         .pipe(
           Effect.as(true),
           Effect.catch(() =>
@@ -1021,7 +1396,8 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
     }
     case INPUT_LINE.RETIRE: {
       // Lines are taken one at a time, so a message ahead of this one already took the launch out of warm.
-      if (launch.warm && launch.turnId === undefined && launch.waiting.length === 0) {
+      const { state } = launch;
+      if (state.kind === LAUNCH_STATE.IDLE && state.warm && launch.waiting.length === 0) {
         return ended(RUNNER_END.IDLED);
       }
       yield* Effect.logWarning("agent-runner: skipped a retire for a launch at work");
@@ -1030,6 +1406,13 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
     // Note that a warm launch's window is its wait for the next signal, which this one already ran again from now.
     case INPUT_LINE.WARM:
       return undefined;
+    case INPUT_LINE.APPROVAL: {
+      const { requestId, decision, message } = value;
+      if (!(yield* settleAsk(launch.approvals, requestId, decision, APPROVAL_BY.MEMBER, message))) {
+        yield* Effect.logWarning("agent-runner: skipped an approval for no waiting call");
+      }
+      return undefined;
+    }
     case INPUT_LINE.MODEL: {
       if (value.model !== undefined) launch.model = value.model;
       // Note that a line naming either speed key says both, the one it leaves out being off.
@@ -1058,10 +1441,23 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
   launch: CodexLaunch,
   signal: Extract<Signal, { kind: typeof SIGNAL.TURN_COMPLETED }>,
 ) {
-  if (signal.turnId !== launch.turnId) return undefined;
-  launch.turnId = undefined;
+  const { state } = launch;
+  if (state.kind !== LAUNCH_STATE.TURN || signal.turnId !== state.id) return undefined;
+  launch.state = IDLE;
   yield* mirrored(launch);
-  if (launch.stopping) return ended(RUNNER_END.STOPPED);
+  // A stopped turn's own messages end with it; those sent since the stop start the next turn.
+  if (state.stopping) {
+    const since = launch.waiting;
+    launch.sent.clear();
+    launch.waiting = [];
+    if (since.length === 0) return ended(RUNNER_END.STOPPED);
+    yield* startTurn(launch, since);
+    return undefined;
+  }
+  // A turn app-server gave up on for want of its provider's host is carried on once the host answers, not ended.
+  if (signal.status === "failed" && codexConnectionLost(signal.errorInfo)) {
+    return yield* connectionLost(launch);
+  }
   if (signal.status === "failed")
     return ended(RUNNER_END.FAILED, signal.error ?? "the turn failed");
   if (signal.status === "interrupted") {
@@ -1083,12 +1479,81 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
     const done = yield* takeSignal(launch, queued.value);
     if (done !== undefined) return done;
   }
-  if (launch.turnId !== undefined) return undefined;
+  if (launch.state.kind !== LAUNCH_STATE.IDLE) return undefined;
+  launch.open = false;
+  const compaction = launch.compactNext;
+  if (compaction !== undefined) {
+    launch.compactNext = undefined;
+    yield* startCompaction(launch, compaction);
+    return undefined;
+  }
   if (launch.context.config.warm !== true) return ended(RUNNER_END.TURN_ENDED);
   // The agent's turn is over: the launch stays warm for the service's next message
   // rather than ending.
-  launch.warm = true;
+  launch.state = { kind: LAUNCH_STATE.IDLE, warm: true };
   yield* launch.context.sink.emit({ type: RUNNER_EVENT.IDLE });
+  return undefined;
+});
+
+/**
+ * App-server could not reach its provider: the launch posts CONNECTION_LOST
+ * and probes the provider's host, unless the connection was lost again before
+ * the thread started any item since the last carry-on, when the launch ends
+ * failed rather than loop (`reconnect.ts`).
+ */
+const connectionLost = Effect.fn("agent-runner/codex/connectionLost")(function* (
+  launch: CodexLaunch,
+) {
+  if (launch.carriedOnAt === launch.heard.count) {
+    yield* Effect.logWarning(
+      "agent-runner: the connection was lost again before the model answered",
+    );
+    return ended(
+      RUNNER_END.FAILED,
+      connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.LOST_AGAIN),
+    );
+  }
+  yield* Effect.logWarning(`agent-runner: lost the connection to ${launch.providerHost}`);
+  launch.state = { kind: LAUNCH_STATE.RECONNECTING };
+  yield* launch.context.sink.emit({
+    type: RUNNER_EVENT.CONNECTION_LOST,
+    host: launch.providerHost,
+  });
+  yield* awaitProvider(launch.probeTarget).pipe(
+    Effect.flatMap((answered) => Queue.offer(launch.signals, { kind: SIGNAL.PROBED, answered })),
+    Effect.forkScoped,
+  );
+  return undefined;
+});
+
+/**
+ * The probe settled: the host answered, so the messages that waited start
+ * the next turn, or, with none waiting, CONNECTION_RESTORED asks the service
+ * for a carry-on line; or the bound passed, and the launch ends failed with
+ * why.
+ */
+const connectionProbed = Effect.fn("agent-runner/codex/connectionProbed")(function* (
+  launch: CodexLaunch,
+  answered: boolean,
+) {
+  if (launch.state.kind !== LAUNCH_STATE.RECONNECTING) return undefined;
+  launch.state = IDLE;
+  if (!answered) {
+    yield* Effect.logWarning(`agent-runner: ${launch.providerHost} did not answer within the wait`);
+    return ended(
+      RUNNER_END.FAILED,
+      connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.GAVE_UP),
+    );
+  }
+  launch.carriedOnAt = launch.heard.count;
+  const waiting = launch.waiting;
+  launch.waiting = [];
+  if (waiting.length > 0) yield* startTurn(launch, waiting);
+  yield* launch.context.sink.emit({
+    type: RUNNER_EVENT.CONNECTION_RESTORED,
+    host: launch.providerHost,
+    carryOn: waiting.length === 0,
+  });
   return undefined;
 });
 
@@ -1099,21 +1564,28 @@ function takeSignal(
 ): Effect.Effect<
   LaunchOutcome | undefined,
   AppServerError,
-  ChildProcessSpawner.ChildProcessSpawner
+  ChildProcessSpawner.ChildProcessSpawner | ProviderProbe | Scope.Scope
 > {
   switch (signal.kind) {
     case SIGNAL.LINE:
       return takeLine(launch, signal.text);
     case SIGNAL.INPUT_CLOSED: {
       // A turn still running is let finish; the launch ends with it.
-      const idle = launch.turnId === undefined && launch.waiting.length === 0;
+      const idle = launch.state.kind !== LAUNCH_STATE.TURN && launch.waiting.length === 0;
       return Effect.succeed(idle ? ended(RUNNER_END.INPUT_CLOSED) : undefined);
     }
     case SIGNAL.MESSAGE_TAKEN:
       launch.sent.delete(signal.clientId);
       return Effect.succeed(undefined);
+    case SIGNAL.TURN_STARTED:
+      if (launch.state.kind === LAUNCH_STATE.TURN && launch.state.id === COMPACTION_TURN) {
+        launch.state = { ...launch.state, id: signal.turnId };
+      }
+      return Effect.succeed(undefined);
     case SIGNAL.TURN_COMPLETED:
       return takeTurnCompleted(launch, signal);
+    case SIGNAL.PROBED:
+      return connectionProbed(launch, signal.answered);
     case SIGNAL.EXITED:
       return Effect.succeed(
         ended(RUNNER_END.FAILED, `app-server exited: ${signal.stderrTail.trim()}`.trim()),
@@ -1129,52 +1601,42 @@ function onApiKey(context: LaunchContext<CodexConfig>): boolean {
   return key !== undefined && key !== "";
 }
 
-const decodePlanBackend = Schema.decodeUnknownOption(
-  Schema.Literals(Object.values(CODEX_PLAN_BACKEND)),
-);
-
-/**
- * The backend the plan's token is sent to, as the launch's starter named it:
- * OpenAI's API where it named none; none where it named one this runner
- * does not know.
- */
-function planBackendOf(context: LaunchContext<CodexConfig>): CodexPlanBackend | undefined {
-  const named = context.env[RUNNER_ENV.CODEX_PLAN_BACKEND];
-  if (named === undefined || named === "") return CODEX_PLAN_BACKEND.OPENAI_API;
-  return Option.getOrUndefined(decodePlanBackend(named));
-}
-
 /**
  * The credential a launch's app-server runs on, with the catalog written for
- * it: the account's API key where the environment holds it; otherwise the
- * plan, in the cloud's sandbox on host-supplied tokens, and on a host through
- * its token command, on the backend given, where the runner knows its own
- * bundle, and none where it does not.
+ * it: on a host the machine's own login; in the cloud's sandbox the
+ * account's API key where the environment holds it, and otherwise the plan
+ * on host-supplied tokens.
  */
 const authOf = Effect.fn("agent-runner/codexAuthOf")(function* (
   context: LaunchContext<CodexConfig>,
-  backend: CodexPlanBackend,
 ) {
+  if (runsOnHost(context.env)) {
+    return { kind: CODEX_AUTH.MACHINE_LOGIN, catalog: yield* catalogFile(planCatalog()) } as const;
+  }
   if (onApiKey(context)) {
     return { kind: CODEX_AUTH.API_KEY, catalog: yield* catalogFile(ultrafastCatalog()) } as const;
   }
-  if (!runsOnHost(context.env)) {
-    return {
-      kind: CODEX_AUTH.CHATGPT_TOKENS,
-      tokenUrl: context.config.tokenUrl,
-      catalog: yield* catalogFile(planCatalog()),
-    } as const;
-  }
-  if (context.self === undefined) return undefined;
-  const chatgptAccountId = context.env[RUNNER_ENV.CHATGPT_ACCOUNT_ID];
   return {
-    kind: CODEX_AUTH.TOKEN_COMMAND,
-    command: { self: context.self, tokenUrl: context.config.tokenUrl },
-    backend,
-    chatgptAccountId: chatgptAccountId === "" ? undefined : chatgptAccountId,
+    kind: CODEX_AUTH.CHATGPT_TOKENS,
+    tokenUrl: context.config.tokenUrl,
     catalog: yield* catalogFile(planCatalog()),
   } as const;
 });
+
+/**
+ * Where Codex keeps its threads, which the rollout's mirror reads and
+ * writes back to: `CODEX_HOME` where the launch names it, and on a host
+ * that names none Codex's own default under the machine's home; none
+ * where neither is known.
+ */
+function codexHomeOf(env: Readonly<Record<string, string | undefined>>): string | undefined {
+  const named = env.CODEX_HOME;
+  if (named !== undefined && named !== "") return named;
+  const home = env.HOME;
+  return runsOnHost(env) && home !== undefined && home !== ""
+    ? join(home, CODEX_HOME_FOLDER)
+    : undefined;
+}
 
 /**
  * The PATH app-server runs with: the one given, behind the folder of tools
@@ -1195,14 +1657,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   context: LaunchContext<CodexConfig>,
 ) {
   const { config } = context;
-  const backend = planBackendOf(context);
-  if (backend === undefined) {
-    return ended(RUNNER_END.FAILED, "the plan's backend is not one this runner knows");
-  }
-  const auth: CodexAuth | undefined = yield* authOf(context, backend);
-  if (auth === undefined) {
-    return ended(RUNNER_END.FAILED, "the runner was not started from its bundle");
-  }
+  const snapshots = yield* CheckoutSnapshots;
+  const auth = yield* authOf(context);
   const signals = yield* Queue.unbounded<Signal>();
   yield* context.cutOff.pipe(
     Effect.flatMap((why) => Queue.offer(signals, { kind: SIGNAL.CUT_OFF, why })),
@@ -1210,7 +1666,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   );
   // A thread resumed or forked has its rollout written back where the sandbox no longer holds it,
   // beside app-server's start.
-  const codexHome = context.env.CODEX_HOME;
+  const codexHome = codexHomeOf(context.env);
   const store =
     config.transcriptsUrl === undefined || codexHome === undefined
       ? undefined
@@ -1227,8 +1683,12 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Effect.orElseSucceed(() => false),
     Effect.forkScoped,
   );
+  const heard = { count: 0 };
+  const provider = providerOf(auth);
+  const permissions = permissionsOf(config.permissionMode);
+  const approvals = yield* makeApprovals(context.sink);
   const opened = yield* openAppServer(
-    { context, signals, model: config.model, auth },
+    { context, signals, model: config.model, auth, heard, permissions, approvals },
     config.threadId,
     config.fork === true,
     Fiber.join(restoring),
@@ -1240,37 +1700,74 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
       failure._tag === "RolloutUnread" ? ROLLOUT_UNREAD : `${failure.method}: ${failure.detail}`,
     );
   }
-  const { path, ...server } = opened.success;
-  const mirror =
-    store === undefined || path === undefined
-      ? undefined
-      : yield* openRolloutMirror(store.store, store.codexHome, server.threadId, path).pipe(
-          Effect.option,
-          Effect.map(Option.getOrUndefined),
-        );
-  if (config.threadId !== undefined && config.rewindBefore !== undefined) {
-    yield* revertedBefore(opened.success.server, opened.success.threadId, config.rewindBefore).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`agent-runner: the thread was not rewound: ${error.method}`),
-      ),
-    );
+  const { path, forked, ...server } = opened.success;
+  const reverting =
+    config.threadId !== undefined && config.rewindBefore !== undefined
+      ? revertedBefore(server.server, server.threadId, config.rewindBefore).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning(`agent-runner: the thread was not rewound: ${error.method}`),
+              undefined,
+            ),
+          ),
+        )
+      : Effect.succeed(undefined);
+  const segment = yield* reverting;
+  // Note that only a thread resumed as it was stands in the store whole: a fork's file, the fallback's for a provider among them, is Codex's new writing.
+  const resumed = config.threadId !== undefined && !forked;
+  // A fork cut by a revert stands on the file Codex forked it into, which the store holds none of, so it is sent whole before the mirror follows the thread.
+  if (store !== undefined && path !== undefined && segment !== undefined && !resumed) {
+    const forked = yield* openRolloutMirror(
+      store.store,
+      store.codexHome,
+      server.threadId,
+      path,
+      false,
+    ).pipe(Effect.option);
+    if (Option.isSome(forked)) {
+      yield* mirrorRollout(forked.value).pipe(
+        Effect.catch(() => Effect.logWarning("agent-runner: the forked rollout was not mirrored")),
+      );
+    }
   }
+  // The mirror follows the thread onto the segment a revert began, which the store holds none of yet.
+  const mirroredPath = segment ?? path;
+  const mirror =
+    store === undefined || mirroredPath === undefined
+      ? undefined
+      : yield* openRolloutMirror(
+          store.store,
+          store.codexHome,
+          server.threadId,
+          mirroredPath,
+          resumed && segment === undefined,
+        ).pipe(Effect.option, Effect.map(Option.getOrUndefined));
   const launch: CodexLaunch = {
     context,
     signals,
     ...server,
-    turnId: undefined,
+    // Note that a warm launch is warm from its start, so one launched with no message waits for its first as one past an IDLE does.
+    state: { kind: LAUNCH_STATE.IDLE, warm: config.warm === true },
     sent: new Map(),
     waiting: [],
+    compactNext: undefined,
     accepted: new Set(),
     auth,
+    permissions,
+    approvals,
     model: config.model,
     effort: config.effort,
     tier: serviceTierOf(config.fast, config.ultrafast),
-    stopping: false,
-    // Note that a warm launch is warm from its start, so one launched with no message waits for its first as one past an IDLE does.
-    warm: config.warm === true,
+    open: false,
     mirror,
+    providerHost: provider.host,
+    probeTarget: probeTargetOf(context.env, provider),
+    carriedOnAt: undefined,
+    heard,
+    snapshot: (lineId) =>
+      config.agentId === undefined
+        ? Effect.succeed(undefined)
+        : snapshots.take(config.cwd, config.agentId, lineId),
   };
 
   // The service's lines join the signals in a loop of their own, so a line is
@@ -1283,11 +1780,12 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   const outcome = yield* Effect.gen(function* () {
     for (;;) {
       // A warm launch waits at most its window for the next signal, and ends where none came.
-      const next = launch.warm
-        ? yield* Queue.take(signals).pipe(
-            Effect.timeoutOption(Duration.millis(config.warmForMs ?? RUNNER_WARM.IDLE_CAP_MS)),
-          )
-        : Option.some(yield* Queue.take(signals));
+      const next =
+        launch.state.kind === LAUNCH_STATE.IDLE && launch.state.warm
+          ? yield* Queue.take(signals).pipe(
+              Effect.timeoutOption(Duration.millis(config.warmForMs ?? RUNNER_WARM.IDLE_CAP_MS)),
+            )
+          : Option.some(yield* Queue.take(signals));
       if (Option.isNone(next)) return ended(RUNNER_END.IDLED);
       const done = yield* takeSignal(launch, next.value);
       if (done !== undefined) return done;
@@ -1298,7 +1796,9 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     ),
   );
   // App-server ends before the launch's last event, so nothing it emits on
-  // the way down is numbered after it.
+  // the way down is numbered after it. A call still waiting on the member is
+  // canceled first, so its ask is resolved ahead of the launch's last event.
+  yield* denyWaiting(approvals, APPROVAL_BY.ENDED);
   yield* Scope.close(launch.serverScope, Exit.void);
   yield* mirrored(launch);
   return outcome;

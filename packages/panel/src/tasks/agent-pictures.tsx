@@ -34,6 +34,7 @@ import {
   messageFileChips,
 } from "./attached-file-chips.js";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
+import { useWordFiles, WordFilesContext } from "./file-chips.js";
 
 /**
  * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_image`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
@@ -60,8 +61,8 @@ import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
  * the agent, which its row names by the picture it was kept as rather than
  * carrying its bytes, is read the same way and drawn among the line's files
  * (`MessageFileChips`).
- * Everything here is left out of the screen recording, as the tab around
- * it is.
+ * Every picture and video here is left out of the screen recording
+ * (`PictureSet`).
  */
 
 /** Where an agent's or a worker's pictures are read through: the scope the window keeps them under, and the read. */
@@ -555,6 +556,70 @@ export function MessageFileChips({
   return <KeptFileChips files={messageFileChips(message)} sending={sending} />;
 }
 
+/** A line's files as chips, each one kept as a picture read through the agent's pictures, its bytes once they land. */
+function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
+  const door = useContext(AgentPicturesContext);
+  const states = usePictureStates(
+    door,
+    files.map(({ pictureId }) => pictureId),
+  );
+  return files.map(({ pictureId, ...chip }, index): FileChip => {
+    const state = states[index];
+    return pictureId !== undefined && state?.kind === PICTURE_STATE.READY
+      ? { ...chip, url: state.url }
+      : chip;
+  });
+}
+
+/**
+ * The files a sent line names in its words (`@repo/features/file-marker`),
+ * handed to the words under it, which draw each marker as its file's chip
+ * (`SentWords`), and to its files' row, which leaves those out; a press opens
+ * a file over the window, walking the files in the order the words name
+ * them. A line whose words name none of its files, as every line sent before
+ * markers, draws as it did.
+ */
+export function MessageFiles({
+  message,
+  words,
+  children,
+}: {
+  message: AgentTranscriptMessage;
+  words: string;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <WordFilesOf files={messageFileChips(message)} words={words}>
+      {children}
+    </WordFilesOf>
+  );
+}
+
+/**
+ * The files a line names in its words, each kept as a picture read through
+ * the agent's pictures, handed to the words and the files' row under it as
+ * `MessageFiles` hands a transcript line's: a queued message's too, whose
+ * files the queue names by the id their bytes are read by.
+ */
+export function WordFilesOf({
+  files,
+  words,
+  children,
+}: {
+  files: readonly MessageFileChip[];
+  words: string;
+  children: ReactNode;
+}): ReactNode {
+  const shown = useWordFiles(useKeptChips(files), words);
+  if (shown.named === undefined) return children;
+  return (
+    <WordFilesContext.Provider value={shown.named}>
+      {children}
+      {shown.viewer}
+    </WordFilesContext.Provider>
+  );
+}
+
 /**
  * Files as a line draws them, each one that names a picture rather than
  * carrying its bytes read through the agent's pictures, its thumbnail drawn
@@ -569,16 +634,9 @@ export function KeptFileChips({
   /** Whether the line is still on its way, its row not yet read back. */
   sending?: boolean;
 }): ReactNode {
-  const door = useContext(AgentPicturesContext);
-  const states = usePictureStates(
-    door,
-    files.map(({ pictureId }) => pictureId),
-  );
-  const chips = files.map(({ pictureId, ...chip }, index): FileChip => {
-    const state = states[index];
-    return pictureId !== undefined && state?.kind === PICTURE_STATE.READY
-      ? { ...chip, url: state.url }
-      : chip;
-  });
+  // Note that a file the words draw in place is not drawn over them again, and that a
+  // marker draws the first file of its name alone, so a later file of that name stays here.
+  const drawn = new Set(useContext(WordFilesContext)?.names);
+  const chips = useKeptChips(files.filter((file) => !drawn.delete(file.name)));
   return <AttachedFileChips files={chips} uploading={sending} />;
 }

@@ -75,12 +75,6 @@ function saysOwnAddress(href: string, words: string): boolean {
   return bareAddress(words) === bareAddress(href);
 }
 
-/** The site a web address is of, as a website chip names it: its host without its `www.`; nothing for an address that is not the web's. */
-export function siteName(href: string): string | undefined {
-  if (!WEB_SCHEME.test(href) || !URL.canParse(href)) return undefined;
-  return new URL(href).hostname.replace(/^www\./u, "");
-}
-
 /** What a link to `href` labeled `words` says: its address said bare where the words are the address, its label otherwise. */
 export function linkFace(href: string, words: string): LinkFace {
   const bare = saysOwnAddress(href, words) ? bareUrl(href) : undefined;

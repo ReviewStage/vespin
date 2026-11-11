@@ -1,6 +1,10 @@
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
+  agentPermissionModeRequestSchema,
+  approvalAnswerRequestSchema,
+} from "./agent-approval-wire.js";
+import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   agentAddRepositoryRequestSchema,
@@ -12,7 +16,6 @@ import {
   agentMessagesAnswerSchema,
   agentPinRequestSchema,
   agentQueueChangeSchema,
-  agentReadRequestSchema,
   agentRenameRequestSchema,
   agentServersRequestSchema,
   agentStartRequestFields,
@@ -28,8 +31,10 @@ import { dictationContract } from "./contract/dictation.js";
 import { githubTokenContract } from "./contract/github-token.js";
 import { hostsContract } from "./contract/hosts.js";
 import { inboxContract } from "./contract/inbox.js";
+import { liveActivitiesContract } from "./contract/live-activities.js";
 import { messagesContract } from "./contract/messages.js";
 import { modelsContract } from "./contract/models.js";
+import { pushDevicesContract } from "./contract/push-devices.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { dictationRequestSchema } from "./dictation-wire.js";
 import { failureFactsSchema } from "./failure-facts.js";
@@ -45,19 +50,40 @@ import {
   inboxMessageRequestSchema,
   inboxReadAllRequestSchema,
   inboxStartRequestSchema,
+  inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
+import {
+  liveActivityEndedRequestSchema,
+  liveActivityTokenRequestSchema,
+} from "./live-activity-wire.js";
 import { memoryIdSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
+  chatGptDeviceStartRequestSchema,
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeySaveRequestSchema,
+  subscriptionIdSchema,
+  subscriptionLabelRequestSchema,
+  subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import { pullRequestActionRequestSchema } from "./pull-request-write-wire.js";
+import {
+  pushDeviceNotifyRequestSchema,
+  pushDeviceRegisterRequestSchema,
+  pushDeviceUnregisterRequestSchema,
+} from "./push-device-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
+import {
+  soundAddRequestSchema,
+  soundChoiceRequestSchema,
+  soundIdSchema,
+  soundRenameRequestSchema,
+} from "./sound-clip-wire.js";
+import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -97,18 +123,27 @@ export const AGENT_RENAMES = {
 const AGENT_ACCOUNT_CALLS = {
   models: modelsContract,
   dictation: dictationContract,
+  pushDevices: pushDevicesContract,
+  liveActivities: liveActivitiesContract,
   githubToken: githubTokenContract,
   account: {
     writePreferences: accountContract.writePreferences,
     providerKeys: accountContract.providerKeys,
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
+    renameSubscription: accountContract.renameSubscription,
+    reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
     memories: accountContract.memories,
     forgetMemory: accountContract.forgetMemory,
     startChatGptDeviceLogin: accountContract.startChatGptDeviceLogin,
     pollChatGptDeviceLogin: accountContract.pollChatGptDeviceLogin,
     cancelChatGptDeviceLogin: accountContract.cancelChatGptDeviceLogin,
+    sound: accountContract.sound,
+    addSound: accountContract.addSound,
+    renameSound: accountContract.renameSound,
+    removeSound: accountContract.removeSound,
+    chooseSound: accountContract.chooseSound,
   },
 };
 
@@ -257,6 +292,7 @@ const AGENT_MESSAGE_CALLS = {
   inbox: {
     answer: inboxContract.answer,
     close: inboxContract.close,
+    takeBack: inboxContract.takeBack,
     message: inboxContract.message,
     start: inboxContract.start,
     home: inboxContract.home,
@@ -388,6 +424,24 @@ export type HostDoneAnswerView = typeof hostDoneAnswerViewSchema.Type;
 /** What removing a host names: its id. */
 export const hostIdParamsSchema = hostIdRequestSchema;
 
+/**
+ * What turning Run agents on this Mac on or off answers: done, with what of
+ * a turn off did not land, or why it could not be. Turned off, the host's
+ * state is gone either way; the service may not have taken its leave, so
+ * the account may still list it (`stillListed`), and an agent's folder may
+ * still stand, the words it could not be removed with (`folderLeft`).
+ */
+export const thisMacHostSetAnswerViewSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    done: EffectSchema.Literal(true),
+    stillListed: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+    folderLeft: EffectSchema.optionalKey(EffectSchema.String),
+  }),
+  hostDoneAnswerViewSchema.members[1],
+]);
+
+export type ThisMacHostSetAnswerView = typeof thisMacHostSetAnswerViewSchema.Type;
+
 /** What turning Run agents on this Mac on or off says: whether it is on, and, turning it off, whether its agents' folders go with it. */
 export const thisMacHostSetParamsSchema = EffectSchema.Struct({
   on: EffectSchema.Boolean,
@@ -437,10 +491,11 @@ export const providerKeySaveParamsSchema = providerKeySaveRequestSchema;
 
 export type ProviderKeySaveParams = typeof providerKeySaveParamsSchema.Type;
 
-/** Removing a key, as the window asks it: the provider, and the kind where it is no API key. */
+/** Removing a key, as the window asks it: the provider, the kind where it is no API key, and the subscription where it is not the first of its kind. */
 export const providerKeyRemoveParamsSchema = EffectSchema.Struct({
   provider: EffectSchema.Literals(Object.values(PROVIDER_KEY_PROVIDER)),
   kind: EffectSchema.optionalKey(providerKeyKindSchema),
+  subscriptionId: EffectSchema.optionalKey(subscriptionIdSchema),
 });
 
 export type ProviderKeyRemoveParams = typeof providerKeyRemoveParamsSchema.Type;
@@ -449,6 +504,23 @@ export type ProviderKeyRemoveParams = typeof providerKeyRemoveParamsSchema.Type;
 export const providerKeyForAgentsParamsSchema = providerKeyForAgentsRequestSchema;
 
 export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema.Type;
+
+/** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
+export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;
+
+export type SubscriptionLabelParams = typeof subscriptionLabelParamsSchema.Type;
+
+/** Reordering a kind's subscriptions, as the window asks it: their ids, the first paying first. */
+export const subscriptionOrderParamsSchema = subscriptionOrderRequestSchema;
+
+export type SubscriptionOrderParams = typeof subscriptionOrderParamsSchema.Type;
+
+/** Codex's device-code login begun, as the window asks it: whether it adds a plan rather than replacing the first; nothing where it replaces. */
+export const chatGptDeviceStartParamsSchema = EffectSchema.UndefinedOr(
+  chatGptDeviceStartRequestSchema,
+);
+
+export type ChatGptDeviceStartParams = typeof chatGptDeviceStartParamsSchema.Type;
 
 /** The member's own GitHub token, as the window hears it read, saved, or removed: what it is, or why there is no answer. */
 export const githubTokenAnswerViewSchema = answerView(githubTokenContract.read);
@@ -459,6 +531,46 @@ export type GitHubTokenAnswerView = typeof githubTokenAnswerViewSchema.Type;
 export const githubTokenSaveParamsSchema = githubTokenSaveRequestSchema;
 
 export type GitHubTokenSaveParams = typeof githubTokenSaveParamsSchema.Type;
+
+/** Which of the account's own sounds a read or a removal names. */
+export const soundIdParamsSchema = EffectSchema.Struct({ id: soundIdSchema });
+
+export type SoundIdParams = typeof soundIdParamsSchema.Type;
+
+/** One of the account's own sounds' clips, as the window hears it read: its bytes in base64 under its type with their hash, null where the account keeps no such sound, or why there is no answer. The host fetched it under the account, so the window holds no bearer and no address. */
+export const soundClipAnswerViewSchema = answerView(accountContract.sound);
+
+export type SoundClipAnswerView = typeof soundClipAnswerViewSchema.Type;
+
+/** A sound added, as Settings asks it: its name, the clip as a `data:` URL, never its file's name, and the sound to play it as at once, where the press was a sound's. */
+export const soundAddParamsSchema = soundAddRequestSchema;
+
+export type SoundAddParams = typeof soundAddParamsSchema.Type;
+
+/** A sound added, as the window hears it: the sound kept, or why there is no answer. */
+export const soundAddAnswerViewSchema = answerView(accountContract.addSound);
+
+export type SoundAddAnswerView = typeof soundAddAnswerViewSchema.Type;
+
+/** A sound renamed, as Settings asks it. */
+export const soundRenameParamsSchema = soundRenameRequestSchema;
+
+export type SoundRenameParams = typeof soundRenameParamsSchema.Type;
+
+/** A sound renamed or removed, as the window hears it: the sound as it now stands, null where it is gone, or why there is no answer. */
+export const soundStateViewSchema = answerView(accountContract.renameSound);
+
+export type SoundStateView = typeof soundStateViewSchema.Type;
+
+/** Which of the account's sounds one of its two sounds plays, as Settings asks it. */
+export const soundChoiceParamsSchema = soundChoiceRequestSchema;
+
+export type SoundChoiceParams = typeof soundChoiceParamsSchema.Type;
+
+/** A choice, as the window hears it: the sound the slot now plays, or why there is no answer. */
+export const soundChoiceAnswerViewSchema = answerView(accountContract.chooseSound);
+
+export type SoundChoiceAnswerView = typeof soundChoiceAnswerViewSchema.Type;
 
 /** A workspace's memories, as the window hears one forgotten: the memories as they stand, or why there are none. */
 export const memoriesAnswerViewSchema = answerView(accountContract.forgetMemory);
@@ -516,8 +628,7 @@ export type AgentListAnswer = typeof agentListAnswerViewSchema.Type;
 /**
  * Starting an agent, as the window asks it: the task, and the Start request
  * the service takes; or, for a Start from another agent, no task, the new
- * agent going where that agent is, its task or its workspace where it has
- * none. A Start naming neither a task nor an agent to start from starts
+ * agent going on that agent's task. A Start naming neither a task nor an agent to start from starts
  * nowhere, and is refused.
  */
 export const agentStartParamsSchema = EffectSchema.Struct({
@@ -574,10 +685,31 @@ export const agentDeleteAnswerViewSchema = answerView(agentsContract.delete, {
 
 export type AgentDeleteAnswerView = typeof agentDeleteAnswerViewSchema.Type;
 
+/** An ask answered, as the window hears it: how the ask then stands, or why it was not answered, an ask settled already naming how it stands. */
+export const agentApprovalAnswerViewSchema = answerView(agentsContract.answerApproval);
+
+export type AgentApprovalAnswerView = typeof agentApprovalAnswerViewSchema.Type;
+
 /** An agent on screen kept warm, as the window hears it: that the service took the call, or why not. */
 export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
 export type AgentWarmAnswerView = typeof agentWarmAnswerViewSchema.Type;
+
+/** One of an agent's repository's run actions, as the window names it: the agent, and the action by its id. */
+export const agentRunActionParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  actionId: EffectSchema.NonEmptyString,
+});
+
+/** A run action run, as the window hears it: the shell that runs it, or why it did not run. */
+export const agentRunActionAnswerViewSchema = answerView(agentsContract.runAction);
+
+export type AgentRunActionAnswerView = typeof agentRunActionAnswerViewSchema.Type;
+
+/** A run action's shell interrupted, as the window hears it: the agent's shells as they then stand, or why it was not. */
+export const agentRunActionStopAnswerViewSchema = answerView(agentsContract.stopRunAction);
+
+export type AgentRunActionStopAnswerView = typeof agentRunActionStopAnswerViewSchema.Type;
 
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */
 export const agentMessagesParamsSchema = EffectSchema.Struct({
@@ -681,6 +813,23 @@ export const agentServersParamsSchema = EffectSchema.Struct({
 
 export type AgentServersParams = typeof agentServersParamsSchema.Type;
 
+/** One agent's permission mode changed for its next turn, as the window asks it: the agent and the mode. */
+export const agentPermissionModeParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  ...agentPermissionModeRequestSchema.fields,
+});
+
+export type AgentPermissionModeParams = typeof agentPermissionModeParamsSchema.Type;
+
+/** One ask of an agent answered, as the window asks it: the agent, the ask, and the answer with a denial's words. */
+export const agentApprovalAnswerParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  approvalId: EffectSchema.NonEmptyString,
+  ...approvalAnswerRequestSchema.fields,
+});
+
+export type AgentApprovalAnswerParams = typeof agentApprovalAnswerParamsSchema.Type;
+
 /** A repository added to one agent beside the ones it works in, as the window asks it of the host. */
 export const agentAddRepositoryParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -703,14 +852,6 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
 
-/** The reader's own read mark of one agent moved (`read-mark.ts`), as the window asks it: the agent and how. */
-export const agentMarkReadParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  ...agentReadRequestSchema.fields,
-});
-
-export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;
-
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -720,9 +861,11 @@ export const agentStopParamsSchema = EffectSchema.Struct({
 export const agentRewindParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   messageId: EffectSchema.NonEmptyString,
+  /** Whether the agent's files go back too, to the snapshot its runner took before the turn the line opened. */
+  restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
-/** One agent, as the window asks to read it whole as its own page, on a task or with none. */
+/** One agent, as the window asks to read it whole by its id. */
 export const agentPageParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
@@ -748,6 +891,12 @@ export const agentPullRequestReadParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentPullRequestReadParams = typeof agentPullRequestReadParamsSchema.Type;
+
+/** What a read of one turn's changes names: the agent, and the developer's line that opened the turn. */
+export const agentTurnChangesParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  messageId: EffectSchema.NonEmptyString,
+});
 
 /** The parts of a pull request its Pull request tab holds, each a read of its own: the pull request itself, its checks, its conversation, what the agent published, what its reviewer and label pickers offer, and which of its files the member marked viewed. */
 export const PULL_REQUEST_PART = {
@@ -782,6 +931,11 @@ export const agentChangesAnswerViewSchema = answerView(agentsContract.changes, {
 });
 
 export type AgentChangesAnswerView = typeof agentChangesAnswerViewSchema.Type;
+
+/** The files one of an agent's turns changed, as the window hears them: the files, or why there are none to draw, a snapshot gone and a Mac away among the whys. */
+export const agentTurnChangesAnswerViewSchema = answerView(agentsContract.turnChanges);
+
+export type AgentTurnChangesAnswerView = typeof agentTurnChangesAnswerViewSchema.Type;
 
 /** One agent's pull request itself as its overview draws it, as the window hears it: the pull request, why there is none yet, or why there is no answer. */
 const agentOverviewPullRequestAnswerViewSchema = answerView(
@@ -855,16 +1009,65 @@ export const dictationTranscribeAnswerViewSchema = answerView(dictationContract.
 
 export type DictationTranscribeAnswerView = typeof dictationTranscribeAnswerViewSchema.Type;
 
+/** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
+export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;
+
+export type PushDeviceRegisterParams = typeof pushDeviceRegisterParamsSchema.Type;
+
+/** The phone named by its token and gateway, as its unregister and its standing's read name it. */
+export const pushDeviceKeyParamsSchema = pushDeviceUnregisterRequestSchema;
+
+export type PushDeviceKeyParams = typeof pushDeviceKeyParamsSchema.Type;
+
+/** The phone's "Notify me" set, by its token and gateway. */
+export const pushDeviceNotifyParamsSchema = pushDeviceNotifyRequestSchema;
+
+export type PushDeviceNotifyParams = typeof pushDeviceNotifyParamsSchema.Type;
+
+/** A register or an unregister as the app hears it: done, or why not. */
+export const pushDeviceDoneAnswerViewSchema = answerView(pushDevicesContract.register);
+
+export type PushDeviceDoneAnswerView = typeof pushDeviceDoneAnswerViewSchema.Type;
+
+/** The phone's standing as its Settings reads it: its "Notify me" and how its pushes fared, or why not, a phone the service does not hold among it. */
+export const pushDeviceStatusAnswerViewSchema = answerView(pushDevicesContract.status);
+
+export type PushDeviceStatusAnswerView = typeof pushDeviceStatusAnswerViewSchema.Type;
+
+/** A "Notify me" set as the app hears it: done, or why not, a phone the service does not hold among it. */
+export const pushDeviceNotifyAnswerViewSchema = answerView(pushDevicesContract.notify);
+
+export type PushDeviceNotifyAnswerView = typeof pushDeviceNotifyAnswerViewSchema.Type;
+
+/** A token of the phone's Live Activity, its push-to-start token or its activity's update token, beside the phone's own token and gateway. */
+export const liveActivityTokenParamsSchema = liveActivityTokenRequestSchema;
+
+export type LiveActivityTokenParams = typeof liveActivityTokenParamsSchema.Type;
+
+/** The phone's Live Activity ended or dismissed on the phone, by the phone's token and gateway. */
+export const liveActivityEndedParamsSchema = liveActivityEndedRequestSchema;
+
+export type LiveActivityEndedParams = typeof liveActivityEndedParamsSchema.Type;
+
+/** A Live Activity token registered as the app hears it: done, or why not, a phone the service does not hold yet among it. */
+export const liveActivityTokenAnswerViewSchema = answerView(liveActivitiesContract.startToken);
+
+export type LiveActivityTokenAnswerView = typeof liveActivityTokenAnswerViewSchema.Type;
+
+/** The phone's Live Activity's end as the app hears it: done, or why not. */
+export const liveActivityEndedAnswerViewSchema = answerView(liveActivitiesContract.ended);
+
+export type LiveActivityEndedAnswerView = typeof liveActivityEndedAnswerViewSchema.Type;
+
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {
   PLAN: "plan",
-  AGENT: "agent",
 } as const;
 
-/** The kind of holder an inbox item is on: a plan, or an agent with no task. */
+/** The kind of holder an inbox item is on: a plan. */
 export type InboxScopeKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
-/** One plan's inbox, or one agent's, as the window follows it: which kind, and the plan's or agent's id. */
+/** One plan's inbox, as the window follows it: which kind, and the plan's id. */
 export const agentInboxScopeSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(INBOX_SCOPE_KIND)),
   id: EffectSchema.NonEmptyString,
@@ -894,11 +1097,10 @@ export type AgentInboxAnsweredView = typeof agentInboxAnsweredViewSchema.Type;
 
 /**
  * A close of one item without an answer, as the window asks it: the item,
- * and the close request the service takes, its key the window's own; and,
- * where it is `held`, that the window offers Undo for it, so the host draws
- * it at once and sends it only once the window lets it go
- * (`agentInboxCloseReleaseParamsSchema`). It is heard as an answer is
- * (`agentInboxAnsweredViewSchema`).
+ * and the close request the service takes, its key the window's own. It is
+ * heard as an answer is (`agentInboxAnsweredViewSchema`). Note that a close
+ * an older build queued on disk may name `held`, which the host held it
+ * under then and now reads as nothing.
  */
 export const agentInboxCloseParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
@@ -908,16 +1110,20 @@ export const agentInboxCloseParamsSchema = EffectSchema.Struct({
 
 export type AgentInboxCloseParams = typeof agentInboxCloseParamsSchema.Type;
 
-/** A held close let go by the window that asked it, by the close's key: sent to the service, or, where `send` is false, taken back as its Undo asks. */
-export const agentInboxCloseReleaseParamsSchema = EffectSchema.Struct({
-  clientKey: EffectSchema.NonEmptyString,
-  send: EffectSchema.Boolean,
+/** The member's own nod or close taken back, as the window asks it: the item, and the key that nod or close went under (`inboxTakeBackRequestSchema`). */
+export const agentInboxTakeBackParamsSchema = EffectSchema.Struct({
+  itemId: EffectSchema.NonEmptyString,
+  ...inboxTakeBackRequestSchema.fields,
 });
 
-/** What letting a held close go found: whether it was still held, which an Undo that came too late hears as false. */
-export const agentInboxCloseReleasedViewSchema = EffectSchema.Struct({
-  held: EffectSchema.Boolean,
-});
+export type AgentInboxTakeBackParams = typeof agentInboxTakeBackParamsSchema.Type;
+
+/** A take-back, as the window hears it: the item as it then stands and what came of the take-back, or why there is no answer. */
+export const agentInboxTakenBackViewSchema = factsUnheard(
+  answerView(inboxContract.takeBack, { as: AGENT_INBOX_WRITE_RENAMES }),
+);
+
+export type AgentInboxTakenBackView = typeof agentInboxTakenBackViewSchema.Type;
 
 /** A message on one item's thread, as the window asks it: the item, and the message request the service takes, its key the window's own. */
 export const agentInboxMessageParamsSchema = EffectSchema.Struct({
@@ -1001,6 +1207,8 @@ export type AgentAccountInboxAnswerView = typeof agentAccountInboxAnswerViewSche
 export const agentInboxAttachmentParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
+  /** The video the window plays: a recording is answered as its MP4 copy to one that plays MP4, as the iOS app's does, where one is kept; its WebM otherwise. */
+  playable: EffectSchema.optionalKey(playableVideoTypeSchema),
 });
 
 export type AgentInboxAttachmentParams = typeof agentInboxAttachmentParamsSchema.Type;
@@ -1010,6 +1218,8 @@ export const agentPictureParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   pictureId: EffectSchema.NonEmptyString,
   callId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+  /** The video the window plays, as an inbox attachment's read takes it. */
+  playable: EffectSchema.optionalKey(playableVideoTypeSchema),
 });
 
 /** One part of a message of an agent's transcript, or one of its workers' where `callId` names the delegation call that started it, by the message's id and the part's index among its parts: what the page carried cut (`cutParts`). */
@@ -1036,10 +1246,11 @@ export type AgentPartView = typeof agentPartViewSchema.Type;
  */
 export const agentInboxAttachmentViewSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    // A transcript's picture may be a WebM an agent recorded, read through this same view.
+    // A transcript's picture may be a WebM an agent recorded, read through this same view, or its MP4 copy to a window that plays MP4.
     contentType: EffectSchema.Literals([
       ...Object.values(AGENT_ATTACHMENT_TYPE),
       CONVERSATION_MEDIA_TYPE.WEBM,
+      MP4_TYPE,
     ]),
     base64: EffectSchema.String,
   }),

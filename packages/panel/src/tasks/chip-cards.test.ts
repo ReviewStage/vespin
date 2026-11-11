@@ -82,20 +82,8 @@ const PAGE_ID = "26494df1-595a-4364-abf7-85781c65a9f8";
 
 const ITEM_ID = "item_4b9e";
 
-/** A coding agent on no task, which shows its pages on itself. */
+/** A coding agent of the workspace, which an automation started. */
 const SWEEP_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
-
-/** Another agent on no task, which the reader cannot reach. */
-const HIDDEN_AGENT = "9d2b7b5f-4e3f-4e9c-9c77-7a5d8b3f4c32";
-
-/** The page the agent on no task showed on itself, as a read of its pages lists it. */
-const SWEEP_PAGE: PageLine = {
-  id: "4a5b6c7d-8e9f-4a0b-8c1d-2e3f4a5b6c7d",
-  title: "Flake ledger",
-  version: 2,
-  at: AT,
-  shownBy: { kind: PAGE_SHOWER.AGENT, agentId: SWEEP_AGENT },
-};
 
 /** The page the open plan holds. */
 const UNFURL_PAGE: PageLine = {
@@ -198,20 +186,19 @@ const STATE: AppStateSnapshot = (() => {
     tasks: {
       ...IDLE_TASKS_VIEW,
       tasks: [TASK],
-      tasklessAgents: [
+      // The agent that showed a page on itself, as an older link names it, now on the plan.
+      taskAgents: [
         {
           id: SWEEP_AGENT,
-          planId: null,
+          planId: TASK_ID,
           turnId: null,
           title: "Sweep the flaky tests",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           status: AGENT_STATUS.COMPLETED,
           createdAt: AT,
-          automationId: null,
           workspaceId: ACME.id,
           repository: "acme/relay",
-          activityAt: AT,
         },
       ],
       workspaces: [ACME, BETA],
@@ -282,13 +269,12 @@ const ANSWERED: InboxItem = {
   ],
 };
 
-/** An item of the agent on no task, answered too. */
+/** An item the plan's agent posted, answered too, which an older link names under its agent rather than its plan. */
 const SWEEP_ITEM = "item_9a1f";
 
 const SWEPT: InboxItem = {
   ...ANSWERED,
   id: SWEEP_ITEM,
-  agentId: SWEEP_AGENT,
   key: "9a1f",
   title: "Quarantine the flaky test?",
 };
@@ -299,21 +285,13 @@ const told: AnyAct[] = [];
 /** Every hold the window took on a workspace's automations, in order. */
 let automationHolds: readonly AutomationsHold[] = [];
 
-/** Every agent on no task whose pages the window held, in order. */
-const agentPageReads: string[] = [];
-
 /**
- * The pages each plan and agent on no task holds, as the host lays them on
- * the window's document once held: the open plan's page, another plan's,
- * the agent's own, and a refusal for an agent the reader cannot reach.
+ * The pages each plan holds, as the host lays them on the window's document
+ * once held: the open plan's page and another plan's.
  */
 function heldPagesOf(place: PagePlace): AppHolderPages {
-  if ("taskId" in place) {
-    if (place.taskId === TASK_ID) return { rows: [UNFURL_PAGE] };
-    return { rows: place.taskId === OTHER_TASK ? [ROLLOUT_PAGE] : [] };
-  }
-  agentPageReads.push(place.agentId);
-  return place.agentId === SWEEP_AGENT ? { rows: [SWEEP_PAGE] } : { failed: true };
+  if (place.taskId === TASK_ID) return { rows: [UNFURL_PAGE] };
+  return { rows: place.taskId === OTHER_TASK ? [ROLLOUT_PAGE] : [] };
 }
 
 let root: Root | undefined;
@@ -326,7 +304,6 @@ afterEach(() => {
   document.body.innerHTML = "";
   told.length = 0;
   automationHolds = [];
-  agentPageReads.length = 0;
   vi.useRealTimers();
 });
 
@@ -360,16 +337,13 @@ const PAGE: TaskMentionsValue = {
   },
 };
 
-/** The words drawn as a transcript draws them on a plan's page, the plan's own unless another is given, in a window holding `STATE`, whose feed holds the plan's items and the agent on no task's, which a chip's glyph and card read, unless another is given. */
+/** The words drawn as a transcript draws them on a plan's page, the plan's own unless another is given, in a window holding `STATE`, whose feed holds the plan's items, which a chip's glyph and card read, unless another is given. */
 async function drawn(
   text: string,
   page: TaskMentionsValue = PAGE,
   state: AppStateSnapshot = STATE,
   feed: AppHostRead<AppInboxItems> = {
-    rows: {
-      [INBOX_SCOPE_KIND.PLAN]: { [TASK_ID]: [WAITING, ANSWERED] },
-      [INBOX_SCOPE_KIND.AGENT]: { [SWEEP_AGENT]: [SWEPT] },
-    },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK_ID]: [WAITING, ANSWERED, SWEPT] } },
   },
 ): Promise<HTMLElement> {
   fakeAppBridge({
@@ -573,46 +547,6 @@ test("a page's chip hangs its title, its version and who showed it, and when it 
   assert.deepEqual([read.sub, read.detailWords], [undefined, ["Shown by Vespin"]]);
 });
 
-test("a chip of a page an agent on no task showed hangs the same card as a plan's page, read as it is first hung: its title, its version and the agent that showed it, and when it moved, over its preview; one the agent's pages hold not, or of an agent the reader cannot reach, says it can't be read", async () => {
-  const container = await drawn(
-    [
-      mentionMarkdown(
-        { kind: MENTION_KIND.PAGE, agentId: SWEEP_AGENT, pageId: SWEEP_PAGE.id },
-        "",
-        PLACE,
-      ),
-      mentionMarkdown(
-        { kind: MENTION_KIND.PAGE, agentId: SWEEP_AGENT, pageId: PAGE_ID },
-        "Old ledger",
-        PLACE,
-      ),
-      mentionMarkdown(
-        { kind: MENTION_KIND.PAGE, agentId: HIDDEN_AGENT, pageId: SWEEP_PAGE.id },
-        "Someone's ledger",
-        PLACE,
-      ),
-    ].join(" "),
-  );
-  assert.deepEqual(agentPageReads, [], "words full of chips read nothing until one is looked at");
-  const [shown, unheld, hidden] = chipsOf(container);
-
-  const page = await cardOf(shown);
-  assert.equal(page.card, "data-page-card");
-  assert.equal(page.name, "Flake ledger");
-  assert.deepEqual([page.sub, page.detailWords], ["Version 2", ["Shown by Sweep the flaky tests"]]);
-  assert.ok(page.corner, "the corner says when the page last moved");
-  assert.equal(
-    document.querySelector(".ui-tooltip-card .ui-page-thumb-frame")?.getAttribute("src"),
-    pageFrameUrl({ agentId: SWEEP_AGENT, pageId: SWEEP_PAGE.id, version: 2 }),
-    "the preview is the agent's page at its newest version",
-  );
-
-  const other = await cardOf(unheld);
-  assert.deepEqual([other.name, other.notes], ["Old ledger", [PAGE_UNREAD]]);
-  const refused = await cardOf(hidden);
-  assert.deepEqual([refused.name, refused.notes], ["Someone's ledger", [PAGE_UNREAD]]);
-});
-
 test("a file's and a folder's chips hang their path, their repository, and where they are read", async () => {
   const container = await drawn(
     [
@@ -645,12 +579,12 @@ test("a file's and a folder's chips hang their path, their repository, and where
   );
 });
 
-test("an Inbox item's chip hangs its Inbox row's own card, whether the item waits or was answered, on a task or on an agent with no task", async () => {
+test("an Inbox item's chip hangs its Inbox row's own card, whether the item waits or was answered, and whether its link names it under its task or, as an older link does, under its agent", async () => {
   const container = await drawn(
     [
       `[waiting](${HOME}/plan/${TASK_ID}/inbox/${ITEM_ID})`,
       `[answered](${HOME}/plan/${TASK_ID}/inbox/${ANSWERED_ITEM})`,
-      `[swept](${HOME}/agent/${SWEEP_AGENT}/inbox/${SWEEP_ITEM})`,
+      `[swept](${HOME}/agent/${WAITING.agentId}/inbox/${SWEEP_ITEM})`,
     ].join(" "),
   );
   const [waiting, answered, swept] = chipsOf(container);
@@ -674,7 +608,7 @@ test("an Inbox item's labeled chip is called by the item's title, whether it wai
     [
       `[@Inbox item](${HOME}/plan/${TASK_ID}/inbox/${ITEM_ID})`,
       `[@Inbox item](${HOME}/plan/${TASK_ID}/inbox/${ANSWERED_ITEM})`,
-      `[@Inbox item](${HOME}/agent/${SWEEP_AGENT}/inbox/${SWEEP_ITEM})`,
+      `[@Inbox item](${HOME}/agent/${WAITING.agentId}/inbox/${SWEEP_ITEM})`,
     ].join(" "),
   );
 

@@ -7,7 +7,7 @@ import {
   TERMINAL_RELAY_CLOSE,
   TERMINAL_RELAY_FRAME,
 } from "@repo/features/terminal-wire";
-import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
+import { SANDBOX_TOUCH_EVERY, SandboxUnavailable } from "@repo/sandbox";
 import {
   type Cause,
   Clock,
@@ -93,7 +93,10 @@ function world(options: {
   readonly tokensWait?: Deferred.Deferred<void>;
   /** Whether the agent's credential is its starter's own token. */
   readonly memberToken?: boolean;
+  /** How many of the first touches the sandbox does not confirm. */
+  readonly touchesUnconfirmed?: number;
 }) {
+  let touchesAsked = 0;
   let credentialAt: number | undefined;
   const policies: string[] = [];
   const touched: { readonly sessionId: string; readonly at: number }[] = [];
@@ -111,10 +114,13 @@ function world(options: {
     listeningPorts: () => Effect.die("the relay lists no ports"),
     share: () => Effect.die("the relay shares nothing"),
     unshare: () => Effect.die("the relay shares nothing"),
+    preview: () => Effect.die("the relay previews nothing"),
     shared: () => Effect.die("the relay shares nothing"),
     start: () => Effect.die("the relay starts nothing"),
     rename: () => Effect.die("the relay renames nothing"),
     kill: () => Effect.die("the relay kills nothing"),
+    run: () => Effect.die("the relay runs no run action"),
+    interrupt: () => Effect.die("the relay stops no run action"),
     resume: () =>
       Effect.sync(() => {
         asked.resumed += 1;
@@ -175,9 +181,15 @@ function world(options: {
         if (credentialAt === claimedAt.getTime()) credentialAt = undefined;
       }),
     touch: (sessionId) =>
-      Effect.flatMap(Clock.currentTimeMillis, (at) =>
-        Effect.sync(() => void touched.push({ sessionId, at })),
-      ),
+      Effect.suspend(() => {
+        touchesAsked += 1;
+        if (touchesAsked <= (options.touchesUnconfirmed ?? 0)) {
+          return Effect.fail(new SandboxUnavailable({}));
+        }
+        return Effect.flatMap(Clock.currentTimeMillis, (at) =>
+          Effect.sync(() => void touched.push({ sessionId, at })),
+        );
+      }),
   };
   /** Another window's renewal of the token, at the instant given. */
   const renewElsewhere = (at: number) =>
@@ -337,7 +349,7 @@ it.effect("the shell's exit reaches the desktop as exited, and ends the connecti
 );
 
 it.effect(
-  "a connected terminal touches the agent's sandbox from its attach for as long as it stands, typed in or not, and no longer once it closes",
+  "a connected terminal touches the agent's sandbox at its attach and then only once it is used, never for standing open, and no longer once it closes",
   () =>
     Effect.gen(function* () {
       const pty = yield* scriptedSocket;
@@ -349,11 +361,15 @@ it.effect(
         Effect.scoped(relayTerminal(device.socket, ASK, open.deps)),
       );
       yield* settle;
-      // Nobody types for two touch intervals.
+      // Nobody types and nothing prints for two touch intervals, then a key is typed.
       for (let minute = 0; minute < 2 * every; minute += 60_000) {
         yield* TestClock.adjust(Duration.minutes(1));
         yield* settle;
       }
+      yield* device.push({ bytes: encode("x") });
+      yield* settle;
+      yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
+      yield* settle;
       const closedWhileOpen = [...device.closed];
       yield* device.leave;
       yield* Fiber.join(relay);
@@ -363,9 +379,31 @@ it.effect(
       assert.deepEqual(closedWhileOpen, [], "nobody typing never closes the terminal");
       assert.deepEqual(
         open.asked.touched,
-        [0, every, 2 * every].map((at) => ({ sessionId: "wrun_1", at })),
+        [0, 3 * every].map((at) => ({ sessionId: "wrun_1", at })),
       );
     }),
+);
+
+it.effect("a touch the sandbox did not confirm is tried again a touch interval on", () =>
+  Effect.gen(function* () {
+    const pty = yield* scriptedSocket;
+    const device = yield* scriptedSocket;
+    const open = world({ pty, touchesUnconfirmed: 1 });
+
+    const relay = yield* Effect.forkChild(
+      Effect.scoped(relayTerminal(device.socket, ASK, open.deps)),
+    );
+    yield* settle;
+    // The attach's touch is not confirmed, and nothing is typed or printed after it.
+    yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
+    yield* settle;
+    yield* device.leave;
+    yield* Fiber.join(relay);
+
+    assert.deepEqual(open.asked.touched, [
+      { sessionId: "wrun_1", at: Duration.toMillis(SANDBOX_TOUCH_EVERY) },
+    ]);
+  }),
 );
 
 it.effect("a stopped sandbox is never touched by a terminal", () =>

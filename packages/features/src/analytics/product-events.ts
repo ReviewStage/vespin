@@ -162,6 +162,7 @@ export const PRODUCT_SETTINGS_VIEW = {
   HOSTS: "hosts",
   INTEGRATIONS: "integrations",
   MCP: "mcp",
+  /** No page since Settings › CLI was folded into the MCP page; an older build still counts a visit to it. */
   CLI: "cli",
   SKILLS: "skills",
   API_KEYS: "api_keys",
@@ -169,8 +170,10 @@ export const PRODUCT_SETTINGS_VIEW = {
   PLAN_TEMPLATE: "plan_template",
   WORKSPACE: "workspace",
   ENVIRONMENT: "environment",
+  /** No page since Settings › Cloud setup was folded into the Environment page; an older build still counts a visit to it. */
   CLOUD_SETUP: "cloud_setup",
   ACCOUNT: "account",
+  PREFERENCES: "preferences",
   NOTIFICATIONS: "notifications",
   THIS_MAC: "this_mac",
   EXPERIMENTAL: "experimental",
@@ -292,10 +295,13 @@ export const PRODUCT_EXPERIMENT = {
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   SEVERAL_REPOSITORIES: "several-repositories",
   DESCRIPTIONS: "descriptions",
+  REWIND_FILES: "rewind-files",
+  TURN_END: "turn-end",
   /** Renamed to Task descriptions, so no build sends it now; kept because a web tab served before the rename still may, and one unread value refuses the batch. */
   PLANS: "plans",
   /** Removed with Chat on the right, so no build sends it now; kept because an older build's batch still may, and one unread value refuses the batch. */
   CHAT_ON_THE_RIGHT: "chat-on-the-right",
+  RUN_ACTIONS: "run-actions",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];

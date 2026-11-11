@@ -1,29 +1,27 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
-import { RUN_ON_MAC_OFF, type RunOnMacStanding } from "@repo/features/workspace-tools-wire";
-import { ACT_KIND } from "@repo/host/acts";
-import { HOST_CAPABILITY, MAC_COMMAND_MODE } from "@repo/settings";
-import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
+import {
+  AGENT_MACHINE,
+  type AgentRunsOnRequest,
+  type AgentSummary,
+} from "@repo/features/agent-wire";
+import type { MacOffer } from "@repo/features/models-wire";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
+import { OpenSettingsProvider } from "../open-settings.js";
 import { fakeActPort } from "../testing/app-bridge.js";
-import {
-  handBeats,
-  handHostReads,
-  handSettings,
-  handState,
-  stateWith,
-} from "../testing/app-state.js";
+import { handBeats, handState } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
-import { restOn } from "../testing/hint-rest.js";
 import { AgentPlace } from "./agent-place.js";
+import type { PlaceMove } from "./move-agent.js";
 
 /**
- * agent-place.test.ts -- the chip an agent's box wears says where it runs: a device named with its standing as the window's shared presence read says it, not as the agent's own read once did, or the cloud, whose card names the Mac its `run_on_mac` runs on and how it stands.
+ * agent-place.test.ts -- the chip an agent's box wears says where it runs: a device named with its standing as the window's shared presence read says it, not as the agent's own read once did, or the cloud, which a reader hears with its sandbox's state and whose popover lists that state and the sandbox's size; and where a move is offered, it lists the places to move the agent to, or where to add a Mac where the member has none.
  * Synthetic ids and names.
  */
 
@@ -49,9 +47,6 @@ const DEVICE = "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d15";
 
 const AGENT_ID = "7a1c4e9b-2f3d-4b6a-8c5e-1d0f9a8b7c6e";
 
-/** The reader's own account. */
-const READER = "user-reader";
-
 /** A minute and a half since the agent's own read saw a beat: past the window the label judges by. */
 const READ_SEEN_AT = Date.now() - 90_000;
 
@@ -62,27 +57,16 @@ async function settle(): Promise<void> {
   });
 }
 
-/** An agent's box drawn with `agent` while the beats stand as `ages` says, each device's age, or failed where none is given, and what the box then says; on a Mac whose Settings let no agent run commands where `never`. */
+/** An agent's box drawn with `agent` while the beats stand as `ages` says, each device's age, or failed where none is given, and what the box then says. */
 async function placeOf(
-  agent: Pick<AgentSummary, "mac" | "machine">,
+  agent: Pick<AgentSummary, "mac" | "machine" | "sandbox" | "sandboxVcpus">,
   ages: Readonly<Record<string, number>> | undefined,
-  runOnMac?: RunOnMacStanding,
-  never = false,
 ): Promise<string> {
   clear();
   fakeActPort({});
-  // Note that the bridge is laid afresh, so a case's settings never reach the next.
+  // Note that the bridge is laid afresh, so a case's state never reaches the next.
   handState({});
-  if (never) {
-    const { run } = stateWith({}, {});
-    handSettings(
-      { macCommands: MAC_COMMAND_MODE.NEVER },
-      { run: { ...run, capabilities: [HOST_CAPABILITY.MAC_COMMANDS] } },
-    );
-  }
   handBeats(ages);
-  if (runOnMac !== undefined)
-    handHostReads({ workspaceTools: { [AGENT_ID]: { rows: { runOnMac } } } });
   // Note that the label is read once, so the document is in the client from its first frame, as the root's `ensureQueryData` leaves it.
   writeAppState(await appBridge().requestAppState());
   const container = document.createElement("div");
@@ -90,11 +74,7 @@ async function placeOf(
   const root = createRoot(container);
   roots.push(root);
   act(() =>
-    root.render(
-      withQueryClient(
-        createElement(AgentPlace, { agent: { id: AGENT_ID, ...agent }, readerId: READER }),
-      ),
-    ),
+    root.render(withQueryClient(createElement(AgentPlace, { agent: { id: AGENT_ID, ...agent } }))),
   );
   await settle();
   return document.body.textContent ?? "";
@@ -134,89 +114,98 @@ test("a device the account does not own, which the read does not name, shows its
   assert.equal(label, "Runs on: Charles's MacBook Air");
 });
 
-test("an agent in the cloud says Cloud, whatever the beats say", async () => {
-  assert.equal(await placeOf({}, undefined), "Runs on: Cloud");
-});
-
-/** The `run_on_mac` row the cloud chip's card ends with, once rested on: whose its person chip names and what its dot says. */
-async function runOnMacRowOf(
-  runOnMac: RunOnMacStanding,
-  never = false,
-): Promise<readonly (string | null)[]> {
-  await placeOf({}, undefined, runOnMac, never);
-  restOn(document.querySelector(".ui-chip") ?? assert.fail("the chip stands"));
-  await settle();
-  const row =
-    [...document.querySelectorAll(".ui-hover-card-row")].find(
-      (each) => each.querySelector("[data-actor-ref]") !== null,
-    ) ?? assert.fail("the card names a Mac");
-  return [
-    row.querySelector("[data-actor-ref] .ui-inline-ref-label")?.textContent ?? null,
-    row.querySelector('.ui-status-glyph[role="img"]')?.getAttribute("aria-label") ?? null,
-  ];
-}
-
-test("a cloud agent's chip says to a reader, and its card shows, the reader's own Mac its run_on_mac runs on, online", async () => {
-  const runOnMac = { on: true, owner: { userId: READER, name: "Ada Lovelace" } } as const;
-  assert.equal(
-    await placeOf({}, undefined, runOnMac),
-    "Runs on: Cloud, run_on_mac on your Mac, Online",
-  );
-  assert.deepEqual(await runOnMacRowOf(runOnMac), ["You", "Online"]);
-});
-
-test("a cloud agent's card names a teammate's Mac, offline where none of theirs listens", async () => {
-  assert.deepEqual(
-    await runOnMacRowOf({
-      on: false,
-      reason: RUN_ON_MAC_OFF.MAC_AWAY,
-      owner: { userId: "user-charles", name: "Charles Pan" },
-    }),
-    ["Charles Pan", "Offline"],
-  );
-});
-
-/** This Mac's command setting as the card offers it; none where the card offers none. */
-function macSetting(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    '[role="radiogroup"][aria-label="Let agents run commands on this Mac"]',
+/** The Cloud chip, which a reader hears as its label says. */
+function cloudChip(): HTMLButtonElement {
+  return (
+    document.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
+    assert.fail("the Cloud chip stands")
   );
 }
 
-test("a Mac set to let no agent run commands is off in Settings on the reader's own Mac alone, whose card changes it there, a teammate's offline", async () => {
-  const away = { on: false, reason: RUN_ON_MAC_OFF.MAC_AWAY } as const;
-  assert.deepEqual(
-    await runOnMacRowOf({ ...away, owner: { userId: READER, name: "Ada Lovelace" } }, true),
-    ["You", "Off in Settings"],
+/** The facts the open popover lists, each its label and its value. */
+function factsShown(): readonly (readonly [string, string])[] {
+  return [...document.querySelectorAll(".ui-fact")].map(
+    (fact) =>
+      [
+        fact.querySelector("dt")?.textContent ?? "",
+        fact.querySelector("dd")?.textContent ?? "",
+      ] as const,
   );
-  const setting = macSetting() ?? assert.fail("the card offers this Mac's setting");
-  assert.equal(setting.querySelector('[aria-checked="true"]')?.textContent, "Never");
-  const written: unknown[] = [];
-  const settings = (await appBridge().requestAppState()).settings ?? assert.fail("settings held");
-  fakeActPort({
-    [ACT_KIND.SETTING_UPDATE]: (payload) => {
-      written.push(payload);
-      return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
-    },
-  });
+}
+
+test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's state, and its popover lists the state and the sandbox's size", async () => {
+  const running = {
+    state: SANDBOX_STATE.RUNNING,
+    stateAt: Date.now(),
+    runsUntil: Date.now() + 60_000,
+  };
+  await placeOf({ sandbox: running, sandboxVcpus: 4 }, undefined);
+  assert.equal(cloudChip().textContent, "Cloud");
+  assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Running");
+
+  act(() => cloudChip().click());
+  assert.deepEqual(factsShown(), [
+    ["Status", "Running"],
+    ["CPU", "4 vCPUs"],
+    ["Memory", "8 GB"],
+  ]);
+
+  await placeOf({}, undefined);
+  assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Off");
+});
+
+/** The cloud agent's chip drawn with the move given, opened, and the rows its menu lists, the settings the window was asked to open kept. */
+async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTMLElement[]> {
+  clear();
+  fakeActPort({});
+  handState({});
+  handBeats({});
+  writeAppState(await appBridge().requestAppState());
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
   act(() =>
-    (
-      [...setting.querySelectorAll<HTMLButtonElement>("button")].find(
-        (choice) => choice.textContent === "Ask every time",
-      ) ?? assert.fail("the setting offers Ask every time")
-    ).click(),
+    root.render(
+      withQueryClient(
+        createElement(
+          OpenSettingsProvider,
+          { value: (link: SettingsLink) => opened.push(link) },
+          createElement(AgentPlace, {
+            agent: { id: AGENT_ID },
+            move,
+          }),
+        ),
+      ),
+    ),
   );
   await settle();
-  assert.deepEqual(written, [{ field: "macCommands", value: MAC_COMMAND_MODE.ASK }]);
+  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
+  return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+}
 
+test("where a move is offered, the popover lists the places under its facts and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
+  const moved: AgentRunsOnRequest[] = [];
+  const opened: SettingsLink[] = [];
+  const studio: MacOffer = { deviceId: DEVICE, name: "Studio", providers: [] };
+  const withMac = {
+    devices: [studio],
+    moveTo: (to: AgentRunsOnRequest) => moved.push(to),
+    pushedOnly: false,
+    detail: undefined,
+  };
+
+  const rows = await placeMenuOf(withMac, opened);
+  assert.deepEqual(factsShown(), [["Status", "Off"]]);
   assert.deepEqual(
-    await runOnMacRowOf({ ...away, owner: { userId: "user-charles", name: "Charles Pan" } }, true),
-    ["Charles Pan", "Offline"],
+    rows.map((row) => row.textContent?.includes("Studio") ?? false),
+    [false, true],
   );
-  assert.equal(macSetting(), null, "a teammate's Mac is no setting of this Mac's");
-  assert.deepEqual(
-    await runOnMacRowOf({ ...away, owner: { userId: READER, name: "Ada Lovelace" } }),
-    ["You", "Offline"],
-    "a Mac whose Settings let agents run commands is only offline",
-  );
+  act(() => rows[1]?.click());
+  assert.deepEqual(moved, [{ machine: AGENT_MACHINE.DEVICE, deviceId: DEVICE }]);
+
+  const bare = await placeMenuOf({ ...withMac, devices: [] }, opened);
+  act(() => bare.find((row) => row.textContent?.includes("Set up a Mac"))?.click());
+  assert.deepEqual(opened, [{ page: SETTINGS_VIEW.HOSTS }]);
+  assert.equal(moved.length, 1);
 });

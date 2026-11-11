@@ -45,8 +45,7 @@ import { logStoreFailure } from "../http/store-failure.js";
  * resolving and reopening are any agent's, as they are any member's. Every
  * call names the task whose description it acts on, the agent's own or any other of
  * its workspace, which the door holds to that workspace
- * (`../agents/coder-host/agent-doors.ts`), so an agent on no task answers a
- * thread too. It runs on the description the door bound, as the member whose turn
+ * (`../agents/coder-host/agent-doors.ts`). It runs on the description the door bound, as the member whose turn
  * it is, and is written under the agent that made it, by its id. A call
  * answers what it did as the model reads it, never a failure.
  */

@@ -13,14 +13,29 @@ import {
   type ChoiceLook,
   type ChoiceOption,
   type ChoiceSelect,
+  ExternalIcon,
   GAP,
+  GlyphSlot,
   Inline,
+  MARK_PROVIDER,
+  OPTION_MEDIA_KIND,
+  OptionMedia,
+  type OptionMediaKind,
+  type OptionMediaPiece,
+  PAGE_THUMB_FIT,
+  PageThumb,
+  PROVIDER_MARK_SIZE,
+  ProviderMark,
+  SETTINGS_ROW_STATE,
+  SettingsRowStateLine,
+  SettingsSection,
   STATUS_TONE,
   Stack,
   SteppedBack,
   Text,
   TextLink,
 } from "@repo/ui";
+import { GLYPH, ICON_SIZE, ImageOffIcon } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -28,7 +43,7 @@ import { CatalogSection } from "../section";
 /**
  * choice-list.tsx -- a pick-one list with a recommended option and an
  * unavailable one, a pick-several list, both marked with their radios or
- * checkboxes and numbered, a yes and a no across, toned, pills, cards holding controls of their own, rows with a mark before their words, an
+ * checkboxes and numbered, a yes and a no across, toned, pills, cards holding controls of their own, settings rows holding the same, rows with a mark before their words, an
  * unavailable list, a settled record of what was picked, a marked list
  * stepped back beside a step and its presses, as an ask taken back, a list
  * and its presses on a tint laid over the column's ground, as a post that
@@ -114,6 +129,126 @@ const CREDENTIALS: readonly ChoiceOption<string>[] = [
     detail: "Desktop only",
     disabled: true,
   },
+];
+
+/** A rows list's credentials, as Settings › Agents draws them: the plan connected, the key with its own Add key. */
+const CREDENTIAL_ROWS: readonly ChoiceOption<string>[] = [
+  {
+    value: "plan",
+    label: "Claude plan",
+    mark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
+    state: (
+      <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>Connected</SettingsRowStateLine>
+    ),
+    aside: <Button variant={BUTTON_VARIANT.QUIET}>Disconnect</Button>,
+  },
+  {
+    value: "key",
+    label: "Anthropic API key",
+    mark: (
+      <GlyphSlot size={ICON_SIZE.LARGE}>
+        <GLYPH.API_KEY />
+      </GlyphSlot>
+    ),
+    aside: <Button variant={BUTTON_VARIANT.OUTLINE}>Add key</Button>,
+    below: <Text>Create an API key, then paste it here.</Text>,
+    disabled: true,
+  },
+];
+
+/** A made-up screenshot `width` by `height`, its ground `fill`, with a bar and a block on it. */
+function shot(width: number, height: number, fill: string): string {
+  const bar = Math.max(6, Math.round(height * 0.08));
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="${fill}"/><rect x="6%" y="6%" width="50%" height="${bar}" rx="${bar / 2}" fill="#fff9"/><rect x="6%" y="24%" width="88%" height="60%" rx="8" fill="#fff5"/></svg>`,
+  )}`;
+}
+
+const PAGE = `data:text/html,${encodeURIComponent("<body style='margin:0;font:48px sans-serif;background:#fff;padding:32px'><h1>Directions</h1><p>Three ways a turn could end.</p>")}`;
+
+/** Nothing opens in the catalog. */
+const OPEN = () => undefined;
+
+/** A picture or a recording `width` by `height` as an option's tile, whole on its ground. */
+function filed(
+  caption: string | undefined,
+  width: number,
+  height: number,
+  kind: OptionMediaKind = OPTION_MEDIA_KIND.PICTURE,
+): OptionMediaPiece {
+  const image = shot(width, height, `hsl(${(width * 7 + height) % 360} 60% 60%)`);
+  const thumb = <PageThumb fit={PAGE_THUMB_FIT.CONTAIN} image={image} />;
+  return { kind, caption, thumb, onOpen: OPEN };
+}
+
+/**
+ * A choice between designs: each kind of media, then the shapes and the
+ * states a tile meets (a tall phone shot, a wide banner, a small icon never
+ * enlarged, no caption, a long one cut short, one still read, one gone),
+ * an option with none, and None of these.
+ */
+const DESIGNS: readonly ChoiceOption<string>[] = [
+  {
+    value: "kinds",
+    label: "Every kind",
+    state: "A picture, a recording, a page, and a link.",
+    badge: "Recommended",
+    below: (
+      <OptionMedia
+        label="Every kind"
+        pieces={[
+          filed("On a desktop", 1440, 900),
+          filed("Ticking two follow-ups", 1280, 720, OPTION_MEDIA_KIND.RECORDING),
+          {
+            kind: OPTION_MEDIA_KIND.PAGE,
+            caption: "Done card directions",
+            thumb: (
+              <PageThumb frame={{ title: "Directions", src: PAGE, sandbox: "allow-scripts" }} />
+            ),
+            mark: <GLYPH.PAGE />,
+            onOpen: OPEN,
+          },
+          {
+            kind: OPTION_MEDIA_KIND.LINK,
+            caption: "preview.example.com",
+            thumb: <PageThumb glyph={<ExternalIcon />} />,
+            onOpen: OPEN,
+          },
+        ]}
+      />
+    ),
+  },
+  {
+    value: "shapes",
+    label: "Shapes, captions, and states",
+    state: "Tall, wide, a small icon, no caption, a long one, on its way, and gone.",
+    below: (
+      <OptionMedia
+        label="Shapes, captions, and states"
+        pieces={[
+          filed("On a phone", 390, 844),
+          filed("Banner, 4 to 1", 1600, 400),
+          filed("App icon", 64, 64),
+          filed(undefined, 1200, 800),
+          filed("The whole flow from opening a thread to sending the answer", 1920, 1080),
+          {
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "On its way",
+            thumb: <PageThumb />,
+            onOpen: OPEN,
+          },
+          {
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "Could not be read",
+            thumb: <PageThumb glyph={<ImageOffIcon />} />,
+            onOpen: OPEN,
+          },
+        ]}
+      />
+    ),
+  },
+  { value: "plain", label: "An option with no media", state: "Its card holds its words alone." },
+  { value: "none", label: "None of these" },
 ];
 
 function Held({
@@ -212,6 +347,25 @@ function ChoiceLists(): React.JSX.Element {
           start={["subscription"]}
           look={CHOICE_LOOK.CARD}
         />
+      </CatalogSection>
+      <CatalogSection id="choice-list-media" title="Cards carrying media">
+        <Held
+          legend="Designs"
+          options={DESIGNS}
+          start={["kinds"]}
+          select={CHOICE_SELECT.MANY}
+          look={CHOICE_LOOK.CARD}
+        />
+      </CatalogSection>
+      <CatalogSection id="choice-list-rows" title="Settings rows holding controls">
+        <SettingsSection title="Claude">
+          <Held
+            legend="New Claude agents use"
+            options={CREDENTIAL_ROWS}
+            start={["plan"]}
+            look={CHOICE_LOOK.ROWS}
+          />
+        </SettingsSection>
       </CatalogSection>
       <CatalogSection id="choice-list-mark" title="With a mark">
         <Held legend="Workspace" options={WORKSPACES} start={["northwind"]} />

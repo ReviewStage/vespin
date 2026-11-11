@@ -2,13 +2,23 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { it } from "@effect/vitest";
-import { RUNNER_END, RUNNER_EVENT, type RunnerEvent } from "@repo/agent-runner/protocol";
+import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
+  RUNNER_END,
+  RUNNER_EVENT,
+  type RunnerEvent,
+} from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { listPendingApprovals, readApproval } from "@repo/database/models/agent-approvals";
 import {
   createAgent,
+  latestTurnsOfReached,
   readAgent,
   readAgentContext,
   readAgentRouting,
+  recordAgentPayer,
+  recordAgentRunnerLaunch,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
@@ -18,20 +28,18 @@ import {
   saveProviderKey,
 } from "@repo/database/models/provider-key-store";
 import { readTask, updateTask } from "@repo/database/models/task-store";
-import { lapsedTurnsOf } from "@repo/database/models/turn-state";
-import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
+import { lapsedTurnsOf, releaseWaitedTurns } from "@repo/database/models/turn-state";
+import {
+  SettledTurnListener,
+  StartedTurnListener,
+  storeWriter,
+} from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
-import {
-  AGENT_FAILURE,
-  AGENT_KIND,
-  AGENT_PAYER,
-  type AgentPayer,
-  CHECK_SUMMARY,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { getTestDB, startTask } from "@repo/database/testing";
+import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
+import { AGENT_FAILURE, AGENT_KIND, AGENT_PAYER, type AgentPayer } from "@repo/features/agent-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -42,13 +50,14 @@ import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import type { StoredUIMessage } from "@repo/wire/ui-messages";
+import { COMPACTED_PART, type StoredUIMessage } from "@repo/wire/ui-messages";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, eq } from "drizzle-orm";
 import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
+import { TURN_FAILURE } from "../../core.js";
 import {
   recordingProductAnalytics,
   SERVER_EVENT,
@@ -58,6 +67,7 @@ import {
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
+import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import { agentFailureOf } from "../coder-host/status.js";
 import { titleAgent } from "../coder-host/title.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
@@ -98,7 +108,9 @@ const standingWith = (
   options: RunnerEventsOptions,
   after:
     | Layer.Layer<AfterResponse>
-    | Layer.Layer<SettledTurnListener> = Layer.empty as Layer.Layer<AfterResponse>,
+    | Layer.Layer<
+        SettledTurnListener | StartedTurnListener
+      > = Layer.empty as Layer.Layer<AfterResponse>,
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -108,6 +120,7 @@ const standingWith = (
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       ANALYTICS.layer,
       after,
+      NO_GITHUB,
     );
     const web = HttpRouter.toWebHandler(
       runnerEventsApp(options).pipe(HttpRouter.provideRequest(services)),
@@ -197,18 +210,6 @@ const taskStatusOf = (userId: string, taskId: string) =>
   Effect.map(readTask(userId, taskId), (read) => Option.getOrThrow(read).task.status);
 
 const agentWithBearer = agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
-
-/** The agent's pull request as its row keeps it once merged. */
-const MERGED = {
-  number: 42,
-  title: "Fix the refresh",
-  url: "https://github.com/acme/relay/pull/42",
-  state: PULL_REQUEST_STATE.MERGED,
-  checks: CHECK_SUMMARY.PASSING,
-  additions: 12,
-  deletions: 3,
-  changedFiles: 2,
-};
 
 /** The SDK messages of P00's workflow turn, in the pinned SDK's shapes, as the runner numbers and posts them. */
 function workflowTurn(lineId: string): readonly RunnerEvent[] {
@@ -354,10 +355,8 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const events = workflowTurn(agent.lineId);
-        // The task was marked done, and the agent's pull request merged: its turn takes the task
-        // up again, and the turn's end, everyone then idle, finishes it (`tasks/task-finish.ts`).
+        // The task was marked done: its turn takes the task up again (`tasks/task-finish.ts`).
         yield* updateTask(agent.userId, agent.taskId, { status: TASK_STATUS.DONE });
-        yield* openedPullRequest(agent.userId, agent.agentId, MERGED);
 
         const first = yield* post(agent.bearer, events.slice(0, 11));
         const midway = yield* transcriptOf(agent.target.conversationId);
@@ -368,7 +367,6 @@ it.layer(SUITE)("the runner events route", (it) => {
         assert.deepEqual(first.body, { applied: 11, sequence: 10 });
         assert.deepEqual(last.body, { applied: 4, sequence: 14 });
         assert.equal(reopened, TASK_STATUS.IN_PROGRESS);
-        assert.equal(yield* taskStatusOf(agent.userId, agent.taskId), TASK_STATUS.DONE);
         // A model turn that ends with work still in flight leaves the agent's turn running,
         // and the words forming after it are told through their last finished sentence.
         assert.deepEqual(
@@ -516,6 +514,39 @@ it.layer(SUITE)("the runner events route", (it) => {
       assert.deepEqual(overlapping.body, { applied: 0, sequence: 11 });
       assert.deepEqual(twice, once);
     }),
+  );
+
+  it.effect(
+    "a NUL a tool's answer carries, in its text or in the JSON our own tool answers, lands as a replacement character, not a refused batch",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        // A command's output may hold a NUL, and our own tool's JSON may spell one that its reading
+        // makes real, which no Postgres text or jsonb value can hold.
+        const events = workflowTurn(agent.lineId).map(
+          (event) =>
+            // SAFETY: each event is one the pinned SDK or the runner emits, two tool answers' text alone changed.
+            JSON.parse(
+              JSON.stringify(event)
+                .replace("File created", "File\\u0000created")
+                .replace('\\"inbox\\":[]', '\\"inbox\\":[\\"a\\\\u0000b\\"]'),
+            ) as RunnerEvent,
+        );
+
+        const landed = yield* post(agent.bearer, events.slice(0, 6));
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(landed, {
+          status: HOSTED_HTTP_STATUS.OK,
+          body: { applied: 6, sequence: 5 },
+        });
+        assert.deepEqual(rows.at(-1)?.parts.map(drawn).slice(1, 4), [
+          ["tool-Write", "output-available", "File�created"],
+          ["step-start"],
+          ["tool-read_inbox", "output-available", { status: "accepted", inbox: ["a�b"] }],
+        ]);
+      }),
   );
 
   it.effect(
@@ -729,6 +760,39 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "the checkout an ACCEPTED carries, as the runner recorded it before the turn, lands on the turn's row, its branch and HEAD absent where the runner named none",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const commit = "0123456789abcdef0123456789abcdef01234567";
+        const events = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId, snapshot: { commit } },
+          {
+            type: "system",
+            subtype: "init",
+            parent_tool_use_id: null,
+            session_id: SESSION,
+            uuid: randomUUID(),
+          },
+        ].map((message, sequence) => ({ sequence, message }) as RunnerEvent);
+
+        yield* post(agent.bearer, events);
+        const [row] = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({
+              commit: turns.snapshotCommit,
+              head: turns.snapshotHead,
+              branch: turns.snapshotBranch,
+            })
+            .from(turns)
+            .where(eq(turns.conversationId, agent.target.conversationId)),
+        );
+        assert.deepEqual(row, { commit, head: null, branch: null });
+      }),
+  );
+
+  it.effect(
     "a warm launch's IDLE settles its turn as a turn's end does and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
     () =>
       Effect.gen(function* () {
@@ -780,18 +844,24 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a turn the batch settles is heard once its transaction is over, so what it said is committed",
+    "a turn the batch starts and settles is heard started, then settled, each once its transaction is over, so what it said is committed",
     () =>
       Effect.gen(function* () {
-        const heard: { readonly turnId: string; readonly inTransaction: boolean }[] = [];
-        const listener = Layer.succeed(SettledTurnListener, {
-          heard: (turn) =>
-            Effect.flatMap(SqlClient.SqlClient, (client) =>
-              Effect.map(Effect.serviceOption(client.transactionService), (open) => {
-                heard.push({ turnId: turn.turnId, inTransaction: Option.isSome(open) });
-              }),
-            ),
-        });
+        const heard: {
+          readonly kind: string;
+          readonly turnId: string;
+          readonly inTransaction: boolean;
+        }[] = [];
+        const hear = (kind: string) => (turn: { readonly turnId: string }) =>
+          Effect.flatMap(SqlClient.SqlClient, (client) =>
+            Effect.map(Effect.serviceOption(client.transactionService), (open) => {
+              heard.push({ kind, turnId: turn.turnId, inTransaction: Option.isSome(open) });
+            }),
+          );
+        const listener = Layer.merge(
+          Layer.succeed(StartedTurnListener, { heard: hear("started") }),
+          Layer.succeed(SettledTurnListener, { heard: hear("settled") }),
+        );
         const post = yield* standingWith({}, listener);
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
@@ -811,9 +881,13 @@ it.layer(SUITE)("the runner events route", (it) => {
         yield* post(agent.bearer, events);
 
         assert.deepEqual(
-          heard.map((each) => each.inTransaction),
-          [false],
+          heard.map((each) => [each.kind, each.inTransaction]),
+          [
+            ["started", false],
+            ["settled", false],
+          ],
         );
+        assert.equal(heard[0]?.turnId, heard[1]?.turnId);
       }),
   );
 
@@ -898,7 +972,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a compaction stamps the agent, and a launch the plan's limit refused fails its turn saying so",
+    "a compaction stamps the agent and leaves its notice in the turn, and a launch the plan's limit refused with no reset named fails its turn saying so",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -914,11 +988,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           },
           {
             type: "rate_limit_event",
-            rate_limit_info: {
-              status: "rejected",
-              rateLimitType: "five_hour",
-              resetsAt: 1_800_000_000,
-            },
+            rate_limit_info: { status: "rejected", rateLimitType: "five_hour" },
             ...top,
           },
           { type: "result", subtype: "error_during_execution", is_error: true, ...top },
@@ -943,19 +1013,92 @@ it.layer(SUITE)("the runner events route", (it) => {
 
         yield* post(agent.bearer, events);
         yield* post(agent.bearer, relaunch);
-        const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
+        const { turns: ended, rows } = yield* transcriptOf(agent.target.conversationId);
         const context = yield* readAgentContext(agent.userId, agent.agentId);
 
+        const failures = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ failure: turns.failure, detail: turns.failureDetail })
+            .from(turns)
+            .where(eq(turns.conversationId, agent.target.conversationId)),
+        );
         assert.deepEqual(ended.map((turn) => [turn.status, turn.failureDetail]).sort(), [
-          [
-            TURN_STATUS.FAILED,
-            "error_during_execution; rate_limit_rejected five_hour resets 2027-01-15T08:00:00.000Z",
-          ],
+          [TURN_STATUS.FAILED, "error_during_execution; rate_limit_rejected five_hour"],
           [TURN_STATUS.FAILED, "input_closed"],
         ]);
+        // The turn its plan's limit cut short failed for that limit, not as a model call that failed.
+        assert.equal(
+          failures.find(({ detail }) => detail?.includes("rate_limit_rejected") === true)?.failure,
+          TURN_FAILURE.PLAN_LIMIT,
+        );
         assert.notEqual(Option.getOrThrow(context).compactedAt, null);
+        assert.deepEqual(
+          rows.flatMap((row) =>
+            row.parts.flatMap((part) =>
+              part.type === COMPACTED_PART && "data" in part ? [part.data] : [],
+            ),
+          ),
+          [{ tokensBefore: 1000 }],
+        );
         // Only the last turn's kind stands, so the next message says the call's words no longer hold and hands the task again.
         assert.deepEqual(yield* readNativeTurnHanded(agent.target), { spoken: true });
+      }),
+  );
+
+  it.effect(
+    "an ask its runner holds lands under the running turn, half a character in its input made whole, its runner's word settles it, and one left pending expires as the turn ends",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const ask = (requestId: string) => ({
+          type: RUNNER_EVENT.APPROVAL_REQUESTED,
+          requestId,
+          toolUseId: `toolu_${requestId}`,
+          toolName: "Bash",
+          title: "Run git push --force?",
+          // A runner's cut inside a surrogate pair leaves half a character, which Postgres refuses in a JSON value.
+          input: { command: "git push --force", note: "cut at \uD83D" },
+        });
+        const asking = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          { type: "system", subtype: "init", ...top },
+          ask("a"),
+          ask("b"),
+          {
+            type: RUNNER_EVENT.APPROVAL_RESOLVED,
+            requestId: "a",
+            decision: APPROVAL_DECISION.DENY,
+            by: APPROVAL_BY.MESSAGE,
+          },
+        ];
+        const ending = [
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const numbered = [...asking, ...ending].map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, numbered.slice(0, asking.length));
+        const waiting = yield* listPendingApprovals(agent.userId, agent.agentId);
+        yield* post(agent.bearer, numbered.slice(asking.length));
+        const standingOf = (approvalId: string) =>
+          Effect.map(
+            readApproval(agent.userId, agent.agentId, approvalId),
+            (read) => Option.getOrThrow(read).status,
+          );
+
+        assert.deepEqual(
+          waiting.map((each) => [each.requestId, each.toolUseId, each.ask.input]),
+          [["b", "toolu_b", { command: "git push --force", note: "cut at \uFFFD" }]],
+        );
+        const [b] = waiting;
+        assert.ok(b !== undefined);
+        assert.equal(yield* standingOf(b.id), APPROVAL_STATUS.EXPIRED);
+        assert.deepEqual(yield* listPendingApprovals(agent.userId, agent.agentId), []);
       }),
   );
 
@@ -990,45 +1133,53 @@ it.layer(SUITE)("the runner events route", (it) => {
     }),
   );
 
-  it.effect("a turn the model refused with no fallback ends as a refusal", () =>
-    Effect.gen(function* () {
-      const post = yield* standing;
-      const agent = yield* agentWithBearer;
-      const top = { parent_tool_use_id: null, session_id: SESSION };
-      const messagesOfTurn = [
-        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
-        {
-          type: "system",
-          subtype: "model_refusal_no_fallback",
-          original_model: "claude-opus-5-5",
-          request_id: null,
-          api_refusal_category: "cyber",
-          content: "Claude declined to answer.",
-          ...top,
-        },
-        // The CLI's result need not say the model turn failed.
-        { type: "result", subtype: "success", is_error: false, ...top },
-        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
-      ];
-      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
-      yield* post(
-        agent.bearer,
-        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
-      );
-      const db = yield* Database;
-      const ended = yield* db
-        .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
-        .from(turns)
-        .where(eq(turns.conversationId, agent.target.conversationId));
+  it.effect(
+    "a turn the model refused with no fallback ends as a refusal, and its agent reads as refused",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "system",
+            subtype: "model_refusal_no_fallback",
+            original_model: "claude-opus-5-5",
+            request_id: null,
+            api_refusal_category: "cyber",
+            content: "Claude declined to answer.",
+            ...top,
+          },
+          // The CLI's result need not say the model turn failed.
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        yield* post(
+          agent.bearer,
+          messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+        );
+        const db = yield* Database;
+        const ended = yield* db
+          .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.target.conversationId));
 
-      assert.deepEqual(ended, [
-        {
-          status: TURN_STATUS.FAILED,
-          failure: "refusal",
-          detail: "model_refusal_no_fallback cyber",
-        },
-      ]);
-    }),
+        assert.deepEqual(ended, [
+          {
+            status: TURN_STATUS.FAILED,
+            failure: "refusal",
+            detail: "model_refusal_no_fallback cyber",
+          },
+        ]);
+        // The agent reads as refused, which its tab offers a continue on another model for.
+        const [turn] = ended;
+        assert.equal(
+          agentFailureOf(turn && { ...turn, failureDetail: turn.detail }),
+          AGENT_FAILURE.REFUSAL,
+        );
+      }),
   );
 
   it.effect("a compaction that failed is why its failed turn says it failed", () =>
@@ -1246,6 +1397,78 @@ it.layer(SUITE)("the runner events route", (it) => {
           input: { id: "page-1" },
           connection: "notion-2",
         });
+      }),
+  );
+
+  it.effect(
+    "a call to a tool the record does not hold is stored as an unknown tool's, refused, naming the tool it called, and the harness's own ToolSearch is left out",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const refused =
+          "<tool_use_error>Error: No such tool available: mcp__workspace__edit_plan</tool_use_error>";
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "assistant",
+            message: {
+              id: "msg_1",
+              content: [
+                { type: "tool_use", id: "toolu_search", name: "ToolSearch", input: {} },
+                {
+                  type: "tool_use",
+                  id: "toolu_plan",
+                  name: "mcp__workspace__edit_plan",
+                  input: { notes: [] },
+                },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: "user",
+            message: {
+              content: [
+                { type: "tool_result", tool_use_id: "toolu_search", content: "Loaded." },
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu_plan",
+                  content: refused,
+                  is_error: true,
+                },
+              ],
+            },
+            ...top,
+          },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+        const parts = rows.at(-1)?.parts ?? [];
+
+        assert.deepEqual(
+          parts.map((part) => [
+            part.type,
+            "state" in part ? part.state : undefined,
+            "input" in part ? part.input : undefined,
+            "errorText" in part ? part.errorText : undefined,
+          ]),
+          [
+            ["step-start", undefined, undefined, undefined],
+            [
+              "tool-unknown_tool",
+              "output-error",
+              { name: "edit_plan", input: { notes: [] } },
+              refused,
+            ],
+          ],
+        );
       }),
   );
 
@@ -1642,7 +1865,13 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             // An interrupted subagent did not do its work: its call settles as an error.
             "output-error",
           ],
+          // The compaction item leaves its notice where it happened.
+          ["data-compacted"],
+          ["data-usage-limit"],
         ]);
+        const limitNotice = rows.at(-1)?.parts.at(-1);
+        assert.ok(limitNotice?.type === "data-usage-limit");
+        assert.deepEqual(limitNotice.data, { agent: "Codex", resetsAt: null });
         assert.ok(!JSON.stringify(rows).includes("iVBORw0K"));
         assert.deepEqual(
           ended.map((turn) => [turn.status, turn.failureDetail]),
@@ -1987,6 +2216,87 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
+    "a limit a Codex turn reaches is written to the subscription its agent runs on, and the account's first stands",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CODEX, ["Find the queue."]);
+        yield* signedIn(agent.userId);
+        const second = yield* saveProviderKey(
+          agent.userId,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-sign-in" },
+          "ChatGPT",
+          null,
+          new Date(0),
+          null,
+          { add: true },
+        );
+        yield* recordAgentPayer(
+          agent.userId,
+          agent.agentId,
+          AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+          second,
+        );
+
+        const resetsAt = Date.UTC(2026, 9, 22, 9);
+        yield* post(
+          agent.bearer,
+          refusedLaunch(
+            agent.lineId,
+            0,
+            {
+              message: 'unexpected status 429: {"error":{"code":"usage_limit_reached"}}',
+              codexErrorInfo: "usageLimitExceeded",
+              additionalDetails: null,
+            },
+            [
+              {
+                method: "account/rateLimits/updated",
+                params: {
+                  rateLimits: {
+                    limitId: null,
+                    limitName: null,
+                    primary: {
+                      usedPercent: 100,
+                      windowDurationMins: 300,
+                      resetsAt: resetsAt / 1000,
+                    },
+                    secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: null },
+                    rateLimitReachedType: "rate_limit_reached",
+                  },
+                },
+              },
+            ],
+          ),
+        );
+        const rows = yield* listProviderKeyRows(agent.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+
+        assert.deepEqual(
+          rows.map((row) => [
+            row.id === second,
+            row.status,
+            row.limitResetsAt?.toISOString() ?? null,
+            row.usageWindows,
+          ]),
+          [
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null],
+            [
+              true,
+              PROVIDER_KEY_STATUS.LIMIT_REACHED,
+              new Date(resetsAt).toISOString(),
+              [
+                { usedPercent: 100, windowMins: 300, resetsAt },
+                { usedPercent: 40, windowMins: 10080 },
+              ],
+            ],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "an account OpenAI says is not eligible, or whose plan does not include Codex, is marked so; a failure that says nothing of the plan, or an agent a key pays for, leaves the row as it stood",
     () =>
       Effect.gen(function* () {
@@ -2058,7 +2368,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
-    "an API key of the starter's that OpenAI refused as expired is marked invalid and opens no issue, where Vespin's own key refused so opens one",
+    "an API key of the starter's that OpenAI refused as expired is marked invalid and opens no issue, as a local agent's machine's own login refused so reads as a machine to sign in on, where Vespin's own key refused so opens one",
     () =>
       Effect.gen(function* () {
         const reported: Readonly<Record<string, unknown>>[] = [];
@@ -2098,6 +2408,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         ]);
         yield* post(onApp.bearer, refusedLaunch(onApp.lineId, 0, expired));
 
+        const onMachine = yield* agentOn({ ...HARNESS.CODEX, payer: AGENT_PAYER.MAC_SIGN_IN }, [
+          "Fix the test.",
+        ]);
+        yield* post(onMachine.bearer, refusedLaunch(onMachine.lineId, 0, expired));
+
         const keyRows = yield* listProviderKeyRows(onKey.userId, PROVIDER_KEY_KIND.API_KEY);
         assert.deepEqual(
           keyRows.map((row) => row.status),
@@ -2125,6 +2440,9 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           AGENT_FAILURE.PROVIDER_KEY,
         ]);
         assert.deepEqual(yield* failureOf(onApp.target.conversationId), [AGENT_FAILURE.MODEL]);
+        assert.deepEqual(yield* failureOf(onMachine.target.conversationId), [
+          AGENT_FAILURE.MACHINE_SIGN_IN,
+        ]);
       }),
   );
 
@@ -2220,12 +2538,31 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     messagesOfLaunch.map((message, index) => ({ sequence: from + index, message }) as RunnerEvent);
 
   /** One launch whose one turn Claude Code ended in error, with what it said first. */
-  const failedClaudeLaunch = (lineId: string, said: readonly WireValue[]): readonly unknown[] => {
+  const failedClaudeLaunch = (
+    lineId: string,
+    said: readonly WireValue[],
+    limitReply = false,
+  ): readonly unknown[] => {
     const top = { parent_tool_use_id: null, session_id: SESSION };
     return [
       { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
       { type: "system", subtype: "init", ...top },
       ...said,
+      ...(limitReply
+        ? [
+            {
+              type: "assistant",
+              error: "rate_limit",
+              message: {
+                id: "msg_limit",
+                content: [
+                  { type: "text", text: "You've hit your session limit · resets 11pm (UTC)" },
+                ],
+              },
+              ...top,
+            },
+          ]
+        : []),
       { type: "result", subtype: "success", is_error: true, ...top },
       { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
     ];
@@ -2261,14 +2598,30 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         yield* launch(ran(agent.lineIds[0] ?? ""));
 
         const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
+        const weekResetsAt = Date.UTC(2026, 9, 25, 9);
+        // The week's reading on every model, and one on Opus alone, which is a window of its own beside it.
+        const weekOf = (rateLimitType: string, utilization: number) => ({
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "allowed",
+            rateLimitType,
+            resetsAt: weekResetsAt / 1000,
+            utilization,
+          },
+          uuid: randomUUID(),
+          ...top,
+        });
         yield* launch(
           failedClaudeLaunch(agent.lineIds[1] ?? "", [
+            weekOf("seven_day", 0.4),
+            weekOf("seven_day_opus", 0.9),
             {
               type: "rate_limit_event",
               rate_limit_info: {
                 status: "rejected",
                 rateLimitType: "five_hour",
                 resetsAt: resetsAt / 1000,
+                utilization: 1,
               },
               uuid: randomUUID(),
               ...top,
@@ -2304,6 +2657,208 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
+        // The usage the limit reported stays the plan's latest, in percent of its five hours beside its weeks, through the turns after it.
+        const [row] = yield* listProviderKeyRows(
+          agent.userId,
+          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+        );
+        assert.deepEqual(
+          row?.usageWindows?.toSorted((a, b) => (a.windowMins ?? 0) - (b.windowMins ?? 0)),
+          [
+            { usedPercent: 100, windowMins: 300, resetsAt },
+            { usedPercent: 40, windowMins: 10080, resetsAt: weekResetsAt },
+            { usedPercent: 90, windowMins: 10080, model: "Opus", resetsAt: weekResetsAt },
+          ],
+        );
+      }),
+  );
+
+  it.effect(
+    "a turn the plan's limit cuts short, with no other payer but a reset named, stays open until the reset, which the sweep releases it at for the next launch to finish",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const only = yield* pasted(agent.userId);
+        yield* recordAgentPayer(agent.userId, agent.agentId, AGENT_PAYER.CLAUDE_SUBSCRIPTION, only);
+        const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const limited = numberedFrom(
+          0,
+          failedClaudeLaunch(
+            agent.lineId,
+            [
+              {
+                type: "rate_limit_event",
+                rate_limit_info: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: resetsAt / 1000,
+                },
+                uuid: randomUUID(),
+                ...top,
+              },
+            ],
+            true,
+          ),
+        );
+        yield* post(agent.bearer, limited);
+        const waiting = (yield* latestTurnsOfReached([agent.target.conversationId])).get(
+          agent.target.conversationId,
+        );
+        const early = yield* releaseWaitedTurns(new Date(resetsAt - 1), 1000);
+        const released = yield* releaseWaitedTurns(new Date(resetsAt), 1000);
+
+        // The launch the sweep hands it on to, past the reset, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(limited.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          finished.rows.flatMap((row) =>
+            row.parts.flatMap((part) => (part.type === "data-usage-limit" ? [part.data] : [])),
+          ),
+          [{ agent: "Claude", resetsAt }],
+        );
+        assert.ok(!JSON.stringify(finished.rows).includes("You've hit your session limit"));
+        assert.equal(waiting?.status, TURN_STATUS.RUNNING);
+        assert.equal(waiting?.waitsUntil?.getTime(), resetsAt);
+        assert.ok((waiting?.leaseUntil?.getTime() ?? 0) > resetsAt);
+        assert.deepEqual(
+          early.filter((turn) => turn.conversationId === agent.target.conversationId),
+          [],
+        );
+        assert.deepEqual(
+          released
+            .filter((turn) => turn.conversationId === agent.target.conversationId)
+            .map((turn) => turn.turnId),
+          [waiting?.id],
+        );
+        assert.deepEqual(
+          finished.turns.map((turn) => turn.status),
+          [TURN_STATUS.SETTLED],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
+      }),
+  );
+
+  it.effect(
+    "a turn the plan's limit cuts short, with another subscription standing, says which plan it moves to and stays open for the next launch, which finishes it with the line shown once",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const first = yield* pasted(agent.userId);
+        yield* saveProviderKey(
+          agent.userId,
+          PROVIDER_KEY_PROVIDER.ANTHROPIC,
+          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+          { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-token" },
+          "sk-ant-oat01…second",
+          null,
+          new Date(1000),
+          null,
+          { add: true, label: "Personal plan" },
+        );
+        yield* recordAgentPayer(
+          agent.userId,
+          agent.agentId,
+          AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+          first,
+        );
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const limited = numberedFrom(
+          0,
+          failedClaudeLaunch(
+            agent.lineId,
+            [
+              {
+                type: "rate_limit_event",
+                rate_limit_info: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: Date.UTC(2026, 9, 21, 15, 40) / 1000,
+                },
+                uuid: randomUUID(),
+                ...top,
+              },
+            ],
+            true,
+          ),
+        );
+        yield* post(agent.bearer, limited);
+        const cut = yield* transcriptOf(agent.target.conversationId);
+        assert.ok(!JSON.stringify(cut.rows).includes("You've hit your session limit"));
+        assert.deepEqual(
+          cut.rows.flatMap((row) =>
+            row.parts.flatMap((part) => (part.type === "data-usage-limit" ? [part.data] : [])),
+          ),
+          [
+            {
+              agent: "Claude",
+              resetsAt: null,
+              moved: { from: "Claude plan 1", to: "Personal plan" },
+            },
+          ],
+        );
+
+        // The launch on the next subscription, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(limited.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          [cut.turns.map((turn) => turn.status), finished.turns.map((turn) => turn.status)],
+          [[TURN_STATUS.RUNNING], [TURN_STATUS.SETTLED]],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
+      }),
+  );
+
+  it.effect(
+    "a turn whose launch Claude Code could not resume the session of stays open for the next launch, which finishes it with the line shown once",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        // As the CLI answers a resume of a session it finds nowhere it looks.
+        const refused = numberedFrom(0, [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "result",
+            subtype: "error_during_execution",
+            is_error: true,
+            errors: [`No conversation found with session ID: ${SESSION}`],
+            ...top,
+          },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ]);
+        yield* post(agent.bearer, refused);
+        const cut = yield* transcriptOf(agent.target.conversationId);
+
+        // The launch on a fresh session, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(refused.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          [cut.turns.map((turn) => turn.status), finished.turns.map((turn) => turn.status)],
+          [[TURN_STATUS.RUNNING], [TURN_STATUS.SETTLED]],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
       }),
   );
 
@@ -2549,5 +3104,233 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
       assert.notEqual(answeredUntitled, "Fix the flaky invite test");
       assert.equal(named.title, "Fix the flaky invite test");
     }),
+  );
+});
+
+/** The CLI's words for a subagent the plan's limit stopped, which its call's error and task notification both carry, as the pinned Claude Code (2.1.304) wrote them. */
+const WORKER_LIMIT_WORDS =
+  "Agent terminated early due to an API error: You've hit your session limit · resets 4am (UTC) (error type rate_limit, HTTP 429, request id req_fixture, model sent to the API: claude-opus-5-5)";
+
+/** The plan's limit as the CLI reports it, refused or lifted. */
+const claudeRateLimit = (status: "allowed" | "rejected") => ({
+  type: "rate_limit_event",
+  rate_limit_info: {
+    status,
+    resetsAt: 1_794_269_818,
+    ...(status === "rejected" ? { rateLimitType: "five_hour" } : undefined),
+  },
+  uuid: randomUUID(),
+  session_id: SESSION,
+});
+
+/** A worker's call, on Claude Code, as its model asks for it. */
+const claudeWorker = (background: boolean) => ({
+  type: "assistant",
+  message: {
+    id: "msg_1",
+    content: [
+      {
+        type: "tool_use",
+        id: "toolu_worker",
+        name: "Agent",
+        input: {
+          description: "Collect real menu items",
+          prompt: "List the menus.",
+          subagent_type: "general-purpose",
+          ...(background ? undefined : { run_in_background: false }),
+        },
+      },
+    ],
+  },
+  parent_tool_use_id: null,
+  session_id: SESSION,
+});
+
+/** The worker's task failing, as the CLI says it: its state, then its notification. */
+const claudeWorkerFailed = [
+  {
+    type: "system",
+    subtype: "task_updated",
+    task_id: "a1",
+    patch: { status: "failed", error: WORKER_LIMIT_WORDS },
+    session_id: SESSION,
+  },
+  {
+    type: "system",
+    subtype: "task_notification",
+    task_id: "a1",
+    tool_use_id: "toolu_worker",
+    status: "failed",
+    output_file: "/tmp/a1.output",
+    summary: WORKER_LIMIT_WORDS,
+    session_id: SESSION,
+  },
+];
+
+/** The main thread going on past its worker and finishing its turn. */
+const claudeFinished = [
+  {
+    type: "assistant",
+    message: { id: "msg_2", content: [{ type: "text", text: "Done." }] },
+    parent_tool_use_id: null,
+    session_id: SESSION,
+  },
+  { type: "result", subtype: "success", is_error: false, parent_tool_use_id: null },
+  { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+];
+
+/** A spawn on Codex, and its subagent's thread. */
+const codexSpawn = {
+  type: "collabAgentToolCall",
+  id: "call_spawn",
+  tool: "spawnAgent",
+  status: "inProgress",
+  senderThreadId: THREAD,
+  receiverThreadIds: [],
+  prompt: null,
+  model: null,
+  reasoningEffort: null,
+  agentsStates: {},
+};
+
+/**
+ * Each way a worker the plan's usage limit stopped reaches the route, as
+ * the pinned harnesses emit it: on Claude Code, the rejected limit the CLI
+ * reports ahead of the worker's failure, which a background worker's task
+ * notification and a foreground worker's error answer each follow; on
+ * Codex, the subagent's thread failing with `usageLimitExceeded`.
+ */
+const WORKERS_LIMITED = [
+  {
+    name: "a background worker on Claude Code",
+    harness: HARNESS.CLAUDE_CODE,
+    events: (lineId: string): readonly WireValue[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      claudeWorker(true),
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_worker",
+              content: "Async agent launched successfully. agentId: a1",
+            },
+          ],
+        },
+        tool_use_result: { status: "async_launched", agentId: "a1" },
+        parent_tool_use_id: null,
+        session_id: SESSION,
+      },
+      claudeRateLimit("allowed"),
+      claudeRateLimit("rejected"),
+      {
+        type: "assistant",
+        message: {
+          id: "msg_limit",
+          model: "<synthetic>",
+          content: [{ type: "text", text: "You've hit your session limit · resets 4am (UTC)" }],
+        },
+        error: "rate_limit",
+        parent_tool_use_id: "toolu_worker",
+        session_id: SESSION,
+      },
+      ...claudeWorkerFailed,
+      ...claudeFinished,
+    ],
+    part: "tool-Agent",
+    limited: "Claude",
+  },
+  {
+    name: "a foreground worker on Claude Code",
+    harness: HARNESS.CLAUDE_CODE,
+    events: (lineId: string): readonly WireValue[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      claudeWorker(false),
+      claudeRateLimit("allowed"),
+      claudeRateLimit("rejected"),
+      ...claudeWorkerFailed,
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_worker",
+              content: WORKER_LIMIT_WORDS,
+              is_error: true,
+            },
+          ],
+        },
+        tool_use_result: `Error: ${WORKER_LIMIT_WORDS}`,
+        parent_tool_use_id: null,
+        session_id: SESSION,
+      },
+      ...claudeFinished,
+    ],
+    part: "tool-Agent",
+    limited: "Claude",
+  },
+  {
+    name: "a subagent on Codex",
+    harness: HARNESS.CODEX,
+    events: (lineId: string): readonly WireValue[] => [
+      { method: "thread/started", params: { thread: { id: THREAD, parentThreadId: null } } },
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      notification("turn/started", { turn: { id: "turn-1" } }),
+      notification("item/started", { item: codexSpawn }),
+      notification("item/completed", {
+        item: {
+          ...codexSpawn,
+          status: "completed",
+          receiverThreadIds: ["thread-sub"],
+          prompt: "List the menus.",
+        },
+      }),
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "thread-sub",
+          turn: {
+            id: "turn-sub",
+            status: "failed",
+            error: {
+              message: 'unexpected status 429: {"error":{"code":"usage_limit_reached"}}',
+              codexErrorInfo: "usageLimitExceeded",
+              additionalDetails: null,
+            },
+          },
+        },
+      },
+      notification("turn/completed", { turn: { id: "turn-1", status: "completed" } }),
+      { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+    ],
+    part: "tool-collabAgentToolCall",
+    limited: "Codex",
+  },
+] as const;
+
+it.layer(SUITE)("the runner events route, for a worker its plan's limit stopped", (it) => {
+  it.effect.each(WORKERS_LIMITED)(
+    "settles the worker's call with the limit's notice, never the harness's error: $name",
+    ({ harness, events, part, limited }) =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(harness, ["Collect the menus."]);
+        // SAFETY: each message is one the pinned harness or the runner emits, written in its JSON shape.
+        const posted = events(agent.lineId).map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, posted);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        const worker = rows.at(-1)?.parts.find((each) => each.type === part);
+        assert.deepEqual(worker === undefined ? undefined : drawn(worker), [
+          part,
+          "output-available",
+          { usageLimit: { agent: limited, resetsAt: null } },
+        ]);
+      }),
   );
 });

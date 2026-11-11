@@ -2,8 +2,8 @@
  * link-reads.ts -- whether a link's read of the service, still on its way, is still the window's to act on.
  *
  * A link that names its place by something only the service resolves (an
- * Inbox item by its id alone, a task by its number, an agent with no task
- * named) opens once that read answers. Any move the developer makes before
+ * Inbox item by its id alone, a task by its number, an agent named by its id
+ * alone) opens once that read answers. Any move the developer makes before
  * then supersedes it, whatever door made the move: any move of the window's
  * router history to another page, pushed, replaced in the step's place, or
  * Back and Forward. Only the history's own write of the step standing

@@ -1,5 +1,5 @@
 /**
- * compose-account-asks.ts -- the account's own asks of the service on the window's behalf: its provider keys, a ChatGPT login by device code, its GitHub token, a workspace's memories, its hosts and a host's pairing, when its devices last beat, and a clip dictated into a box heard as words.
+ * compose-account-asks.ts -- the account's own asks of the service on the window's behalf: its provider keys, a ChatGPT login by device code, its GitHub token, a workspace's memories, its hosts and a host's pairing, when its devices last beat, its own sounds, and a clip dictated into a box heard as words.
  *
  * Nothing is held here but the reads the host fetches for the windows that
  * hold them (`held-fetch.ts`): the account's provider keys, its GitHub
@@ -69,6 +69,8 @@ export type AccountAsksClient = Pick<
   | "saveProviderKey"
   | "removeProviderKey"
   | "setProviderKeyForAgents"
+  | "renameSubscription"
+  | "reorderSubscriptions"
   | "startChatGptDeviceLogin"
   | "pollChatGptDeviceLogin"
   | "cancelChatGptDeviceLogin"
@@ -76,7 +78,20 @@ export type AccountAsksClient = Pick<
   | "saveGitHubToken"
   | "removeGitHubToken"
   | "forgetMemory"
+  | "readSound"
+  | "addSound"
+  | "renameSound"
+  | "removeSound"
+  | "chooseSound"
   | "transcribeDictation"
+  | "markActive"
+  | "registerPushDevice"
+  | "unregisterPushDevice"
+  | "pushDeviceStatus"
+  | "setPushDeviceNotify"
+  | "registerLiveActivityStartToken"
+  | "registerLiveActivityToken"
+  | "endLiveActivity"
 >;
 
 export interface AccountAsksDependencies extends AccountGateDependencies {
@@ -358,7 +373,11 @@ function actsOf(
       Effect.flatMap(asked(client.removeProviderKey(removal)), keysWritten),
     PROVIDER_KEYS_FOR_AGENTS: (change) =>
       Effect.flatMap(asked(client.setProviderKeyForAgents(change)), keysWritten),
-    CHATGPT_DEVICE_START: () => asked(client.startChatGptDeviceLogin()),
+    SUBSCRIPTION_RENAME: (rename) =>
+      Effect.flatMap(asked(client.renameSubscription(rename)), keysWritten),
+    SUBSCRIPTIONS_REORDER: (order) =>
+      Effect.flatMap(asked(client.reorderSubscriptions(order)), keysWritten),
+    CHATGPT_DEVICE_START: (start) => asked(client.startChatGptDeviceLogin(start)),
     // Note that the login is asked after here, on the interval its start named, so a window waits on one answer rather than asking again on a timer of its own.
     CHATGPT_DEVICE_WAIT: ({ loginId, intervalSeconds }) => {
       const interval = Duration.seconds(intervalSeconds);
@@ -376,8 +395,24 @@ function actsOf(
       pool,
       memoryForget((forget) => asked(client.forgetMemory(forget))),
     ),
+    // Note that a sound's bytes and name pass through once, to the window that asked or on to the service, and are noted nowhere, as the service keeps them alone.
+    SOUND_READ: (read) => asked(client.readSound(read)),
+    SOUND_ADD: (add) => asked(client.addSound(add)),
+    SOUND_RENAME: (rename) => asked(client.renameSound(rename)),
+    SOUND_REMOVE: (removal) => asked(client.removeSound(removal)),
+    SOUND_CHOOSE: (choice) => asked(client.chooseSound(choice)),
     // Note that the clip passes through once and is noted nowhere, because its words are the developer's voice.
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
+    // Note that the beat carries nothing and its answer is read by no one, so a signed-out window's is dropped at the gate.
+    ACCOUNT_ACTIVE: () => Effect.asVoid(asked(client.markActive())),
+    // Note that a phone's token passes through once and is noted nowhere, as the service keeps it alone.
+    PUSH_DEVICE_REGISTER: (device) => asked(client.registerPushDevice(device)),
+    PUSH_DEVICE_UNREGISTER: (device) => asked(client.unregisterPushDevice(device)),
+    PUSH_DEVICE_STATUS: (device) => asked(client.pushDeviceStatus(device)),
+    PUSH_DEVICE_NOTIFY: (choice) => asked(client.setPushDeviceNotify(choice)),
+    LIVE_ACTIVITY_START_TOKEN: (token) => asked(client.registerLiveActivityStartToken(token)),
+    LIVE_ACTIVITY_TOKEN: (token) => asked(client.registerLiveActivityToken(token)),
+    LIVE_ACTIVITY_ENDED: (phone) => asked(client.endLiveActivity(phone)),
     // A removal is drawn gone over the held hosts the moment it is asked.
     HOSTS_REMOVE: declaredWrite(
       pool,

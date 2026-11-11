@@ -1,0 +1,29 @@
+# settings.yaml -- Settings' notifications on the Inbox fixture: the phone registered, its pushes working, and its "Notify me" picked.
+#
+# Launched on the host's Inbox fixture with notifications allowed, so the
+# phone names itself by the fixture's synthetic token, which the fixture
+# registers and answers working, its last push a few minutes old
+# (`@repo/host/fixture-inbox`), and no server or APNs is reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    permissions:
+      notifications: allow
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+# The account's photo leads the Inbox's bar, heard as Settings, and opens it.
+- tapOn: "Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "When I'm away"
+# Note that the row is one element, its name and value heard together, and a
+# text matches an element's whole words.
+- assertVisible: "Notifications, Working"
+- waitForAnimationToEnd
+- takeScreenshot: settings-notifications
+# A choice is drawn at once, as the fixture takes it.
+- tapOn: "Always"
+- waitForAnimationToEnd
+- takeScreenshot: settings-notify-always

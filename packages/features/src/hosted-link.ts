@@ -104,6 +104,10 @@ export const HOSTED_DEADLINE = {
   USUAL: "usual",
   HELD: "held",
   STEER: "steer",
+  /** A rewind that puts the files back too, which waits on a Mac's restore (`MAC_MACHINE.RESTORE_WAIT`, two minutes) past the rewind's own steps. */
+  REWIND_FILES: "rewind-files",
+  /** A read of a turn's changes, which waits on the diff on the agent's machine, a sandbox woken where it stopped (`CHECKOUT_RESTORE.TIMEOUT`, a minute), past the usual read's bound. */
+  TURN_CHANGES: "turn-changes",
   START: "start",
   CHAPTERS: "chapters",
   BROWSER_OPEN: "browser-open",
@@ -129,6 +133,8 @@ export type HostedDeadline = (typeof HOSTED_DEADLINE)[keyof typeof HOSTED_DEADLI
 const LONG_DEADLINE_MS = {
   [HOSTED_DEADLINE.HELD]: 35_000,
   [HOSTED_DEADLINE.STEER]: 45_000,
+  [HOSTED_DEADLINE.REWIND_FILES]: 165_000,
+  [HOSTED_DEADLINE.TURN_CHANGES]: 75_000,
   [HOSTED_DEADLINE.START]: 120_000,
   [HOSTED_DEADLINE.CHAPTERS]: 250_000,
   [HOSTED_DEADLINE.BROWSER_OPEN]: 120_000,

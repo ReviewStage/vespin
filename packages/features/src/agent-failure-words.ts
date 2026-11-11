@@ -26,6 +26,9 @@ import {
  * day the page is renamed.
  */
 
+/** What a plan's reached limit says where it is told alone: a refusal with no reset known, and a notice, toast, or reply about an agent its plan's limit stopped. */
+export const LIMIT_REACHED_WORDS = "Usage limit reached";
+
 /** Why a turn failed, by the service's one word for it; nothing for a reason with no words. */
 const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.MODEL]: "the model call failed",
@@ -33,6 +36,8 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.GITHUB]: "GitHub refused or could not be reached",
   [AGENT_FAILURE.ABANDONED]: "it ran out of time",
   [AGENT_FAILURE.PROVIDER_KEY]: "your API key was refused or cannot be read",
+  [AGENT_FAILURE.MACHINE_SIGN_IN]:
+    "the machine isn't signed in to Claude Code or Codex; sign in to it on that machine, then send a message",
   [AGENT_FAILURE.NOT_STARTED]: "the agent never started",
   [AGENT_FAILURE.FAST_ON_OWN_KEY]:
     "Fast isn't available on your own API key; choose the model with Fast off",
@@ -43,6 +48,10 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.RUNNER_LOST]: "the agent's run was cut off before the turn ended",
   [AGENT_FAILURE.NO_PROGRESS]: "the agent stopped responding",
   [AGENT_FAILURE.LINE_UNTAKEN]: "no machine picked the turn up in time",
+  [AGENT_FAILURE.PLAN_LIMIT]: "the plan hit its usage limit and the turn could not go on",
+  [AGENT_FAILURE.REFUSAL]: "the model declined to continue this conversation",
+  [AGENT_FAILURE.CONNECTION_LOST]:
+    "the connection to the model's provider was lost and did not come back",
   [AGENT_FAILURE.OTHER]: undefined,
 } as const satisfies Record<AgentFailure, string | undefined>;
 
@@ -63,11 +72,11 @@ const MENDED_BY_NEW_AGENT: ReadonlySet<AgentFailure> = new Set([
 
 /**
  * Why an agent whose host stopped beating while its turn ran failed, said
- * whole in place of a failure's words: the host by its name, and that a
- * message carries the agent on once the host is back.
+ * whole in place of a failure's words: the host by its name, and that what
+ * it did not push stays there, which its row's Continue in the cloud leaves behind.
  */
 export function hostLostWords(host: string): string {
-  return `${host} went offline during this turn. Send a message to carry on once it's back.`;
+  return `${host} went offline. Unpushed changes stay on it.`;
 }
 
 /** What a host's launch was doing as it stopped, by the step it last reported, as "it failed while" goes on. */
@@ -86,7 +95,7 @@ const HARNESS_NAMES = {
 /** Why a host's launch never started, by the reason the host said, as the sentence that says it and how to mend it. */
 const LAUNCH_UNSTARTED_WORDS = {
   [DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN]:
-    "The host couldn't start this agent: this Mac's GitHub sign-in can't reach the repository. Sign in with gh auth login, or set up SSH for the repository, then send a message to try again.",
+    "The machine couldn't start this agent: its GitHub sign-in can't reach the repository. Sign in with gh auth login, or set up SSH for the repository, then send a message to try again.",
 } as const satisfies Record<DeviceLaunchUnstarted, string>;
 
 /**
@@ -106,7 +115,7 @@ export function launchStoppedWords(
     step === DEVICE_LAUNCH_STEP.STARTING && runtime !== undefined
       ? `starting ${HARNESS_NAMES[runtime]}`
       : LAUNCH_STOPPED_WORDS[step];
-  return `The host couldn't start this agent: it failed while ${doing}. Send a message to try again.`;
+  return `The machine couldn't start this agent: it failed while ${doing}. Send a message to try again.`;
 }
 
 /** Whether only a new agent goes on past this failure, rather than a message to the agent that failed. */

@@ -5,6 +5,7 @@ import type {
   TasksPageAnswer,
   TasksPictureAnswer,
 } from "@repo/features/tasks-view";
+import type { PlayableVideoType } from "@repo/features/video-signature";
 import { Data, Effect, MutableHashMap, Option } from "effect";
 
 /**
@@ -52,12 +53,16 @@ export class AgentPictureKey extends Data.TaggedClass(KEPT_KIND.AGENT_PICTURE)<{
   readonly agentId: string;
   readonly pictureId: string;
   readonly callId: string | undefined;
+  /** The video it was read for, since a recording is answered as its MP4 copy to a window that plays MP4. */
+  readonly playable: PlayableVideoType;
 }> {}
 
 /** An attachment of an inbox item, a row of its own; it names no agent or task, so it goes only by age, at a sign-out, or under another account. */
 export class InboxAttachmentKey extends Data.TaggedClass(KEPT_KIND.INBOX_ATTACHMENT)<{
   readonly itemId: string;
   readonly attachmentId: string;
+  /** The video it was read for, as a picture's key keeps it. */
+  readonly playable: PlayableVideoType;
 }> {}
 
 /** A picture of a description, or a file one of its comments carries: each upload is given an id of its own. */
@@ -66,7 +71,7 @@ export class DescriptionPictureKey extends Data.TaggedClass(KEPT_KIND.DESCRIPTIO
   readonly attachmentId: string;
 }> {}
 
-/** One version of a page, of a task or of an agent on no task: a version is never written again. */
+/** One version of a page of a task: a version is never written again. */
 export class PageVersionKey extends Data.TaggedClass(KEPT_KIND.PAGE_VERSION)<{
   readonly ownerKind: PageOwner["kind"];
   readonly ownerId: string;
@@ -157,15 +162,13 @@ function charactersOf(value: unknown): number {
   return characters;
 }
 
-/** Whether a key names content of the agent: its pictures and its workers', its pull request's images, and the pages it owns on no task. */
+/** Whether a key names content of the agent: its pictures and its workers', and its pull request's images. */
 export function keptOfAgent(agentId: string): (key: KeptKey) => boolean {
   return (key) => {
     switch (key._tag) {
       case KEPT_KIND.AGENT_PICTURE:
       case KEPT_KIND.GITHUB_IMAGE:
         return key.agentId === agentId;
-      case KEPT_KIND.PAGE_VERSION:
-        return key.ownerKind === PAGE_OWNER.AGENT && key.ownerId === agentId;
       default:
         return false;
     }

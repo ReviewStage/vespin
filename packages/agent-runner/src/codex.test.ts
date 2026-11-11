@@ -3,9 +3,9 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
@@ -23,22 +23,24 @@ import type * as HttpClient from "effect/http/HttpClient";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
-import { codexToken } from "./codex-token.js";
-import type { RunnerSelf } from "./launch.js";
 import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
   CODEX_EFFORT,
-  CODEX_PLAN_BACKEND,
-  CODEX_TOKEN_COMMAND,
+  CONNECTION_LOST_DETAIL,
   type CodexConfig,
+  connectionLostFailure,
   IMAGE_MEDIA_TYPE,
   INPUT_LINE,
   INSTALLED_SKILLS,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
   RUNNER_HARNESS,
   RUNNER_PLACE,
+  RUNNER_RECONNECT,
   type RunnerEvent,
 } from "./protocol.js";
 import { runAgent } from "./runner.js";
@@ -51,7 +53,9 @@ import {
   type Script,
   type Spawned,
 } from "./testing/fake-app-server.js";
+import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
+import { fakeProbe } from "./testing/fake-probe.js";
 import { makeFakeService } from "./testing/fake-service.js";
 
 const BEARER = "runner-bearer-for-tests";
@@ -66,13 +70,11 @@ it.effect(
       // Note that in a sandbox this is the launch's placeholder, the key itself set at its firewall, which the runner reads alike.
       const apiKey = "openai-api-key-for-tests";
       const service = fakeService("sleep 600");
-      // The launch knows no bundle: on its API key it asks no token.
-      const { spawned, write, run } = yield* launch(
-        [STOPPED],
-        service,
-        { ...ENV, [RUNNER_ENV.OPENAI_API_KEY]: apiKey },
-        {},
-      );
+      // On its API key it asks no token.
+      const { spawned, write, run } = yield* launch([STOPPED], service, {
+        ...SANDBOX_ENV,
+        [RUNNER_ENV.OPENAI_API_KEY]: apiKey,
+      });
       yield* write({ ...CONFIG, model: "gpt-6.1-sol", fast: true });
       yield* write({ type: INPUT_LINE.MODEL, fast: true, ultrafast: true });
       yield* write(message("Run sleep 600.", LINE.FIRST));
@@ -121,12 +123,7 @@ it.effect(
 );
 
 const TOKEN_URL = "https://app.test/api/agents/runner-token";
-const SELF: RunnerSelf = {
-  executable: "/usr/local/bin/node",
-  script: "/opt/agent/agent-runner/agent-runner.mjs",
-};
-
-/** A launch on a host, whose plan's token comes from the runner's token command. */
+/** A launch on a host, which runs Codex on the machine's own login. */
 const ENV = {
   [RUNNER_ENV.BEARER]: BEARER,
   [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST,
@@ -137,9 +134,6 @@ const ENV = {
 /** A launch in the cloud's sandbox, whose bearer is the launch's placeholder and whose plan is signed in on host-supplied tokens. */
 const SANDBOX_ENV = {
   [RUNNER_ENV.BEARER]: BEARER,
-  // Named as a host's launch names them, which a sandbox's runner reads neither of.
-  [RUNNER_ENV.CODEX_PLAN_BACKEND]: CODEX_PLAN_BACKEND.CHATGPT,
-  [RUNNER_ENV.CHATGPT_ACCOUNT_ID]: "chatgpt-workspace-from-env",
   CODEX_HOME: "/home/agent/.codex",
   PATH: "/usr/bin",
 };
@@ -147,6 +141,7 @@ const SANDBOX_ENV = {
 const CONFIG: CodexConfig = {
   harness: RUNNER_HARNESS.CODEX,
   cwd: "/srv/agent-probe-repo",
+  agentId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   executable: "/opt/agent-codex/bin/codex",
   model: "gpt-5.5",
   effort: CODEX_EFFORT.HIGH,
@@ -216,32 +211,43 @@ function launch(
   scripts: readonly Script[],
   service: ReturnType<typeof makeFakeService>,
   env: Record<string, string> = ENV,
-  extra: { readonly self?: RunnerSelf; readonly http?: Layer.Layer<HttpClient.HttpClient> } = {
-    self: SELF,
-  },
+  extra: {
+    readonly http?: Layer.Layer<HttpClient.HttpClient>;
+    readonly probe?: ReturnType<typeof fakeProbe>;
+  } = {},
 ) {
   return Effect.gen(function* () {
     const server = fakeAppServer(scripts);
     const claude = yield* fakeClaudeCode([]);
+    const probe = extra.probe ?? fakeProbe();
     const logged: string[] = [];
     const recorder = Logger.make(({ message: logMessage }) => {
       logged.push(JSON.stringify(logMessage));
     });
     const stdin = yield* Queue.unbounded<string, Cause.Done>();
     const write = (line: CodexConfig | InputLine) => Queue.offer(stdin, JSON.stringify(line));
-    const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env, self: extra.self }).pipe(
+    const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env }).pipe(
       Effect.scoped,
       Effect.provide(
         Layer.mergeAll(
           server.layer,
           extra.http ?? service.layer,
           claude.layer,
+          probe.layer,
+          fakeCheckoutSnapshots().layer,
           Logger.layer([recorder]),
         ),
       ),
       Effect.forkScoped,
     );
-    return { spawned: server.spawned, write, closeStdin: Queue.end(stdin), run, logged };
+    return {
+      spawned: server.spawned,
+      write,
+      closeStdin: Queue.end(stdin),
+      run,
+      logged,
+      probed: probe.record,
+    };
   });
 }
 
@@ -330,7 +336,7 @@ it.effect(
 );
 
 it.effect(
-  "starts app-server with the plan's provider, runs a fast version on the fast tier, steers the running turn, and ends at its completion",
+  "on a host, starts app-server on the machine's own login with none of the cloud image's tool settings, runs a fast version on the fast tier, steers the running turn, and ends at its completion",
   () =>
     Effect.gen(function* () {
       const service = fakeService("ci-watch");
@@ -363,8 +369,21 @@ it.effect(
         kinds(service.applied).filter((kind) => kind !== RUNNER_EVENT.ACCEPTED),
         [...notified(WORKFLOW.exchanges), RUNNER_EVENT.END],
       );
-      // Each line is said taken once, under the service's own id, which Codex is handed to echo.
-      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+      // Each line is said taken once, under the service's own id, which Codex is handed to echo; the
+      // first opened the turn, so its ACCEPTED carries the checkout as it stood before it, and the steer's none.
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+        ),
+        [
+          {
+            type: RUNNER_EVENT.ACCEPTED,
+            uuid: LINE.FIRST,
+            snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+          },
+          { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.STEERED },
+        ],
+      );
       assert.deepEqual(
         service.applied.map(({ sequence }) => sequence),
         service.applied.map((_, index) => FIRST_SEQUENCE + index),
@@ -385,16 +404,6 @@ it.effect(
       const overrides = (process?.args ?? []).filter((_, index, args) => args[index - 1] === "-c");
       assert.deepEqual(process?.args.slice(0, 3), ["app-server", "--listen", "stdio://"]);
       assert.deepEqual(overrides, [
-        'model_provider="openai_chatgpt_plan"',
-        'model_providers.openai_chatgpt_plan.name="ChatGPT plan"',
-        'model_providers.openai_chatgpt_plan.base_url="https://api.openai.com/v1"',
-        `model_providers.openai_chatgpt_plan.auth.command="${SELF.executable}"`,
-        `model_providers.openai_chatgpt_plan.auth.args=["${SELF.script}", "codex-token", "${TOKEN_URL}"]`,
-        "model_providers.openai_chatgpt_plan.auth.timeout_ms=30000",
-        "model_providers.openai_chatgpt_plan.auth.refresh_interval_ms=300000",
-        'model_providers.openai_chatgpt_plan.wire_api="responses"',
-        "model_providers.openai_chatgpt_plan.requires_openai_auth=false",
-        "model_providers.openai_chatgpt_plan.supports_websockets=false",
         "features.fast_mode=true",
         `model_catalog_json=${catalogOverride}`,
         'mcp_servers.workspace.url="https://app.test/runner/mcp"',
@@ -409,10 +418,9 @@ it.effect(
         "mcp_servers.linear.tool_timeout_sec=600.0",
         'approval_policy="never"',
         'sandbox_mode="danger-full-access"',
-        'shell_environment_policy.inherit="core"',
-        "shell_environment_policy.ignore_default_excludes=false",
+        'shell_environment_policy.inherit="all"',
+        "shell_environment_policy.ignore_default_excludes=true",
         'shell_environment_policy.exclude=["APP_RUNNER_TOKEN"]',
-        'shell_environment_policy.set={ PLAYWRIGHT_BROWSERS_PATH = "0" }',
       ]);
       // The bearer reaches app-server in its environment alone, never argv.
       assert.equal(process?.env[RUNNER_ENV.BEARER], BEARER);
@@ -516,23 +524,59 @@ it.effect("interrupts the running turn on a stop and ends the launch as stopped"
   }),
 );
 
+it.effect("runs a message sent while a stop's interrupt is in flight as the next turn", () =>
+  Effect.gen(function* () {
+    const service = fakeService("sleep 600");
+    // The interrupt is answered before its turn completes, as P16 recorded it; the message then starts the next turn.
+    const script: Script = { exchanges: [...STOPPED.exchanges, RESUMED_TURN] };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write(CONFIG);
+    yield* write(message("Run `sleep 600` and wait for it to finish.", LINE.FIRST));
+    yield* service.seen;
+    yield* write({ type: INPUT_LINE.STOP });
+    yield* write(message("What exact line did you first write to PROBE.md?", LINE.STEERED));
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "turn/start")[1]?.input, [
+      { type: "text", text: "What exact line did you first write to PROBE.md?", text_elements: [] },
+    ]);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+  }),
+);
+
 it.effect(
-  "a thread resumed in a sandbox that no longer holds its rollout has it written back from the service's store first",
+  "a thread resumed in a sandbox that no longer holds its rollout has every file of it written back whole from the service's store first, across its pages, a revert's segment among them, and none whose subpath escapes its home",
   () =>
     Effect.gen(function* () {
       const home = mkdtempSync(join(tmpdir(), "codex-home-"));
       const subpath = `sessions/2026/11/06/rollout-2026-11-06T18-00-00-${THREAD}.jsonl`;
+      const segment = subpath.replace(".jsonl", "_01a1c22e-c54f-77b3-8748-7037accf178c.jsonl");
+      // A subpath another agent's runner appended, carried with its copy, names a place outside the home.
+      const escaping = "../escaped.jsonl";
       const kept = [
         { type: "session_meta", payload: { id: THREAD } },
         { type: "response_item", payload: { type: "message", role: "user" } },
       ];
+      const segmentKept = [
+        {
+          type: "session_meta",
+          payload: { id: THREAD, history_base: { end_ordinal_exclusive: 1 } },
+        },
+      ];
+      // The store answers the thread's file a line a page, so the restore joins both pages in order.
       vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
         const call = JSON.parse(String(init?.body));
         const answer =
           call.call === "listSubkeys"
-            ? { subkeys: [subpath] }
-            : call.call === "load"
-              ? { entries: kept }
+            ? { subkeys: [subpath, segment, escaping] }
+            : call.call === "loadPage"
+              ? call.key.subpath === segment
+                ? { entries: segmentKept, next: null }
+                : call.after === null
+                  ? { entries: kept.slice(0, 1), next: 1 }
+                  : { entries: kept.slice(1), next: null }
               : {};
         return new Response(JSON.stringify(answer));
       });
@@ -549,10 +593,13 @@ it.effect(
       yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-      assert.equal(
-        readFileSync(join(home, subpath), "utf8"),
-        kept.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
+      const lines = (entries: readonly unknown[]) =>
+        entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
+      assert.deepEqual(
+        [readFileSync(join(home, subpath), "utf8"), readFileSync(join(home, segment), "utf8")],
+        [lines(kept), lines(segmentKept)],
       );
+      assert.equal(existsSync(join(home, escaping)), false, "a rollout written outside the home");
       vi.restoreAllMocks();
       rmSync(home, { recursive: true, force: true });
     }),
@@ -622,6 +669,46 @@ it.effect(
     }),
 );
 
+it.effect("forks a thread app-server will not resume on this launch's model provider", () =>
+  Effect.gen(function* () {
+    const service = fakeService("What exact line");
+    const resumed = exchange(RESUMED, 2);
+    const mismatch: RecordedMessage = {
+      id: 3,
+      error: {
+        code: -32600,
+        message: "Model provider mismatch",
+        data: {
+          type: "modelProviderMismatch",
+          modelProvider: "vespin",
+          currentModelProvider: "openai",
+        },
+      },
+    };
+    const script: Script = {
+      exchanges: [
+        exchange(RESUMED, 0),
+        exchange(RESUMED, 1),
+        { method: "thread/resume", reply: [mismatch] },
+        { method: "thread/fork", reply: resumed.reply },
+        RESUMED_TURN,
+      ],
+    };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write({ ...CONFIG, threadId: THREAD });
+    yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(
+      received(process, "thread/fork").map((params) => params.threadId),
+      [THREAD],
+    );
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+  }),
+);
+
 /** The resumed launch, its second message's steer refused as said, then, where it waits, run as the next turn. */
 function refusedSteer(error: NonNullable<RecordedMessage["error"]>, waits: boolean): Script {
   const refusal: RecordedMessage = { id: 4, error };
@@ -662,7 +749,21 @@ it.effect("sends a steer refused by a turn that cannot be steered as the next tu
     assert.deepEqual(received(process, "turn/start")[1]?.input, [
       { type: "text", text: "And the second line?", text_elements: [] },
     ]);
-    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+    // The next turn goes on with the agent's turn the service holds, so only the line that opened it
+    // carries the checkout: a record under the steer's would write over the turn's own.
+    assert.deepEqual(
+      service.applied.flatMap(({ message: posted }) =>
+        "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+      ),
+      [
+        {
+          type: RUNNER_EVENT.ACCEPTED,
+          uuid: LINE.FIRST,
+          snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+        },
+        { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.STEERED },
+      ],
+    );
   }),
 );
 
@@ -748,6 +849,38 @@ it.effect("ends an idle launch at once on a stop, and on stdin closing, with no 
   }),
 );
 
+it.effect("compacts the thread in a compaction line's place, its words dropped", () =>
+  Effect.gen(function* () {
+    const service = fakeService("turn/completed");
+    const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+    if (started === undefined) throw new Error("the resumed turn has no turn/started");
+    const script: Script = {
+      exchanges: [
+        ...RESUME,
+        {
+          method: "thread/compact/start",
+          reply: [{ id: 3, result: {} }, started, ...RESUMED_TURN_END],
+        },
+      ],
+    };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write({ ...CONFIG, threadId: THREAD });
+    yield* write({
+      type: INPUT_LINE.MESSAGE,
+      uuid: LINE.FIRST,
+      content: [{ type: "text", text: "/compact keep the plan" }],
+      compact: true,
+    });
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "thread/compact/start"), [{ threadId: THREAD }]);
+    assert.deepEqual(received(process, "turn/start"), []);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+  }),
+);
+
 it.effect("starts the next turn for a message Vespin sent just before the turn completed", () =>
   Effect.gen(function* () {
     const service = fakeService("turn/completed");
@@ -792,8 +925,6 @@ it.effect("starts the next turn for a message Vespin sent just before the turn c
   }),
 );
 
-const PROVIDER = "model_providers.openai_chatgpt_plan";
-
 /** The value of the `-c` override `key` a process was started with, where it has one. */
 function override(process: Spawned | undefined, key: string): string | undefined {
   const prefix = `${key}=`;
@@ -815,85 +946,6 @@ function fakeTokenRoute(chatgptAccountId?: string) {
   };
   return { bearers, respond };
 }
-
-/**
- * Codex's provider `auth` as app-server runs it: the command and its args read
- * from the process's argv, run with the process's own environment (here the
- * command's body, the runner's `codexToken`, in place of a child), and
- * its stdout the bearer app-server sends.
- */
-function runTokenCommand(process: Spawned, http: Layer.Layer<HttpClient.HttpClient>) {
-  const command = JSON.parse(override(process, `${PROVIDER}.auth.command`) ?? "null");
-  const args: string[] = JSON.parse(override(process, `${PROVIDER}.auth.args`) ?? "[]");
-  assert.equal(command, SELF.executable);
-  assert.deepEqual(args.slice(0, 2), [SELF.script, CODEX_TOKEN_COMMAND]);
-  return codexToken(args[2] ?? "", process.env).pipe(Effect.provide(http), Effect.orDie);
-}
-
-it.effect(
-  "on the plan, app-server takes its token from the runner's command, which a 401 mid-turn runs again, and the turn goes on to complete",
-  () =>
-    Effect.gen(function* () {
-      const service = fakeService();
-      const route = fakeTokenRoute();
-      const http = fakeHttpClientLayer((url, init) =>
-        url === TOKEN_URL ? route.respond(url, init) : service.respond(url, init),
-      );
-      // What app-server sent OpenAI as its bearer, request by request.
-      const sentToOpenAi: string[] = [];
-      const turn: Exchange = {
-        ...RESUMED_TURN,
-        beforeReply: (process) =>
-          Effect.gen(function* () {
-            // The turn's first request goes out on the command's token.
-            sentToOpenAi.push(yield* runTokenCommand(process, http));
-            // An hour on, OpenAI answers 401: app-server runs the command again and retries.
-            sentToOpenAi.push(yield* runTokenCommand(process, http));
-          }),
-      };
-      const { spawned, write, run, logged } = yield* launch(
-        [{ exchanges: [...RESUME, turn] }],
-        service,
-        ENV,
-        { self: SELF, http },
-      );
-      yield* write({ ...CONFIG, threadId: THREAD });
-      yield* write(message("What exact line did you first write to PROBE.md?"));
-
-      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-      assert.equal(spawned.length, 1);
-      const [process] = spawned;
-      assert.deepEqual(process?.unexpected, []);
-      assert.deepEqual(sentToOpenAi, ["plan-token-1", "plan-token-2"]);
-      assert.deepEqual(route.bearers, [`Bearer ${BEARER}`, `Bearer ${BEARER}`]);
-      assert.deepEqual(kinds(service.applied).slice(-2), ["turn/completed", RUNNER_EVENT.END]);
-      assert.deepEqual(service.applied.at(-1)?.message, {
-        type: RUNNER_EVENT.END,
-        reason: RUNNER_END.TURN_ENDED,
-      });
-
-      // The provider runs the command.
-      assert.equal(override(process, `${PROVIDER}.auth.timeout_ms`), "30000");
-      assert.equal(override(process, `${PROVIDER}.auth.refresh_interval_ms`), "300000");
-      assert.deepEqual(JSON.parse(override(process, `${PROVIDER}.auth.args`) ?? "[]"), [
-        SELF.script,
-        CODEX_TOKEN_COMMAND,
-        TOKEN_URL,
-      ]);
-      // The command inherits the bearer; no command the agent runs does.
-      assert.equal(process?.env[RUNNER_ENV.BEARER], BEARER);
-      assert.equal(override(process, "shell_environment_policy.exclude"), '["APP_RUNNER_TOKEN"]');
-      assert.equal(override(process, "shell_environment_policy.inherit"), '"core"');
-
-      // What the command printed went to app-server alone: never argv, an event, or a log.
-      const posted = service.bodies.join("\n");
-      for (const secret of ["plan-token-1", "plan-token-2", BEARER]) {
-        assert.ok(!posted.includes(secret));
-        assert.ok(!logged.some((line) => line.includes(secret)));
-        assert.ok(!process?.args.some((arg) => arg.includes(secret)));
-      }
-    }),
-);
 
 /** The workspace the fake token route says the plan pays from. */
 const WORKSPACE = "chatgpt-workspace-fixture";
@@ -976,85 +1028,6 @@ it.effect(
     }),
 );
 
-it.effect(
-  "the token command says only Vespin's status when Vespin refuses it, never the bearer",
-  () =>
-    Effect.gen(function* () {
-      const http = fakeHttpClientLayer(async () => new Response(null, { status: 409 }));
-      const refused = yield* codexToken(TOKEN_URL, ENV).pipe(Effect.provide(http), Effect.flip);
-      assert.equal(refused.detail, "The service refused the token: 409");
-
-      const unset = yield* codexToken(TOKEN_URL, {}).pipe(Effect.provide(http), Effect.flip);
-      assert.equal(unset.detail, "APP_RUNNER_TOKEN is not set");
-
-      const unreachable = fakeHttpClientLayer(async () => {
-        throw new Error(`connection reset for ${BEARER}`);
-      });
-      const failed = yield* codexToken(TOKEN_URL, ENV).pipe(
-        Effect.provide(unreachable),
-        Effect.flip,
-      );
-      assert.equal(failed.detail, "The service did not answer");
-    }),
-);
-
-it.effect("never starts app-server on the plan when it does not know its own bundle", () =>
-  Effect.gen(function* () {
-    const service = fakeService();
-    const { spawned, write, run } = yield* launch([WORKFLOW], service, ENV, {});
-    yield* write(CONFIG);
-
-    assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
-    assert.deepEqual(spawned, []);
-  }),
-);
-
-it.effect(
-  "on a device-code plan, app-server's provider sends to Codex's ChatGPT backend naming the workspace, its token from the same command; a backend this runner does not know starts nothing",
-  () =>
-    Effect.gen(function* () {
-      const service = fakeService();
-      const device = {
-        ...ENV,
-        [RUNNER_ENV.CODEX_PLAN_BACKEND]: CODEX_PLAN_BACKEND.CHATGPT,
-        [RUNNER_ENV.CHATGPT_ACCOUNT_ID]: "chatgpt-workspace-fixture",
-      };
-      const { spawned, write, run } = yield* launch(
-        [{ exchanges: [...RESUME, RESUMED_TURN] }],
-        service,
-        device,
-      );
-      yield* write({ ...CONFIG, threadId: THREAD });
-      yield* write(message("What exact line did you first write to PROBE.md?"));
-
-      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-      const provider = (spawned[0]?.args ?? []).filter(
-        (arg, index, args) => args[index - 1] === "-c" && arg.startsWith("model_provider"),
-      );
-      assert.deepEqual(provider, [
-        'model_provider="chatgpt_backend_plan"',
-        'model_providers.chatgpt_backend_plan.name="ChatGPT plan"',
-        'model_providers.chatgpt_backend_plan.base_url="https://chatgpt.com/backend-api/codex"',
-        `model_providers.chatgpt_backend_plan.auth.command="${SELF.executable}"`,
-        `model_providers.chatgpt_backend_plan.auth.args=["${SELF.script}", "codex-token", "${TOKEN_URL}"]`,
-        "model_providers.chatgpt_backend_plan.auth.timeout_ms=30000",
-        "model_providers.chatgpt_backend_plan.auth.refresh_interval_ms=300000",
-        'model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "0.163.0" }',
-        'model_providers.chatgpt_backend_plan.wire_api="responses"',
-        "model_providers.chatgpt_backend_plan.requires_openai_auth=false",
-        "model_providers.chatgpt_backend_plan.supports_websockets=false",
-      ]);
-
-      const unknown = yield* launch([WORKFLOW], fakeService(), {
-        ...ENV,
-        [RUNNER_ENV.CODEX_PLAN_BACKEND]: "elsewhere",
-      });
-      yield* unknown.write(CONFIG);
-      assert.equal(yield* Fiber.join(unknown.run), RUNNER_END.FAILED);
-      assert.deepEqual(unknown.spawned, []);
-    }),
-);
-
 /** A page of the thread's turns, newest first, each naming the client id of the line it took. */
 function turnsPage(turns: readonly { readonly id: string; readonly line: string }[]): Exchange {
   return {
@@ -1102,6 +1075,136 @@ it.effect("reverts a rewound thread to before the turn that took the line the re
   }),
 );
 
+/** The lines of a thread's file app-server just wrote, which the store holds none of yet: a fork's whole file, or a revert's segment. */
+const FRESH_LINES = [
+  { type: "session_meta", payload: { id: THREAD } },
+  { type: "response_item", payload: { type: "message", role: "user" } },
+];
+
+const FORKED_FILE = `sessions/2026/11/09/rollout-2026-11-09T21-52-40-${THREAD}.jsonl`;
+const SEGMENT_FILE = FORKED_FILE.replace(".jsonl", "_01a1c24c-01e2-79a2-bc69-837e26c4ac0e.jsonl");
+
+/** The thread forked into the file at the path given, under the same id the recorded turn names. */
+function forked(path: string): Exchange {
+  return { method: "thread/fork", reply: [{ id: 2, result: { thread: { id: THREAD, path } } }] };
+}
+
+/** The thread reverted to before the steered line's turn, Codex naming the segment it began at the path given. */
+function revertedInto(path: string): Exchange[] {
+  return [
+    turnsPage([{ id: "turn-2", line: LINE.STEERED }]),
+    {
+      method: "thread/revert",
+      reply: [
+        {
+          id: 91,
+          result: {
+            thread: { id: THREAD, path },
+            turnsBackwardsCursor: null,
+            itemsBackwardsCursor: null,
+          },
+        },
+      ],
+    },
+  ];
+}
+
+const SOURCE_THREAD = "00000000-0000-4000-8000-0000000000ff";
+
+it.effect.each([
+  {
+    opened: "the segment a revert began",
+    files: [SEGMENT_FILE],
+    config: { threadId: THREAD, rewindBefore: LINE.STEERED },
+    exchanges: ([segment = ""]: readonly string[]) => [...RESUME, ...revertedInto(segment)],
+  },
+  {
+    opened: "a forked thread's file",
+    files: [FORKED_FILE],
+    config: { threadId: SOURCE_THREAD, fork: true },
+    exchanges: ([file = ""]: readonly string[]) => [
+      exchange(RESUMED, 0),
+      exchange(RESUMED, 1),
+      forked(file),
+    ],
+  },
+  {
+    opened:
+      "the file of a fork a provider's refusal of the resume made, then the segment its rewind began",
+    files: [FORKED_FILE, SEGMENT_FILE],
+    config: { threadId: SOURCE_THREAD, rewindBefore: LINE.STEERED },
+    exchanges: ([file = "", segment = ""]: readonly string[]) => [
+      exchange(RESUMED, 0),
+      exchange(RESUMED, 1),
+      {
+        method: "thread/resume",
+        reply: [
+          {
+            id: 2,
+            error: {
+              code: -32600,
+              message: "Model provider mismatch",
+              data: { type: "modelProviderMismatch" },
+            },
+          },
+        ],
+      },
+      forked(file),
+      ...revertedInto(segment),
+    ],
+  },
+  {
+    opened: "a fork's file, then the segment the fork's cut began",
+    files: [FORKED_FILE, SEGMENT_FILE],
+    config: { threadId: SOURCE_THREAD, fork: true, rewindBefore: LINE.STEERED },
+    exchanges: ([file = "", segment = ""]: readonly string[]) => [
+      exchange(RESUMED, 0),
+      exchange(RESUMED, 1),
+      forked(file),
+      ...revertedInto(segment),
+    ],
+  },
+])("mirrors $opened to the service's store from its first line", ({ files, config, exchanges }) =>
+  Effect.gen(function* () {
+    const home = mkdtempSync(join(tmpdir(), "codex-home-"));
+    const paths = files.map((file) => join(home, file));
+    // Codex writes each file as it answers, so it stands with lines the store has none of.
+    for (const path of paths) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, FRESH_LINES.map((line) => `${JSON.stringify(line)}\n`).join(""));
+    }
+    const appended: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const call = JSON.parse(String(init?.body));
+      if (call.call === "append") appended.push({ key: call.key, entries: call.entries });
+      return new Response(JSON.stringify(call.call === "listSubkeys" ? { subkeys: [] } : {}));
+    });
+    const script: Script = { exchanges: [...exchanges(paths), RESUMED_TURN] };
+    const { spawned, write, run } = yield* launch([script], fakeService(), {
+      ...ENV,
+      CODEX_HOME: home,
+    });
+    yield* write({
+      ...CONFIG,
+      ...config,
+      transcriptsUrl: "https://app.test/api/agents/runner-transcripts",
+    });
+    yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    assert.deepEqual(spawned[0]?.unexpected, []);
+    assert.deepEqual(
+      appended,
+      files.map((subpath) => ({
+        key: { projectKey: "codex", sessionId: THREAD, subpath },
+        entries: FRESH_LINES,
+      })),
+    );
+    vi.restoreAllMocks();
+    rmSync(home, { recursive: true, force: true });
+  }),
+);
+
 it.effect("resumes a thread whole where no turn took the line the rewind dropped", () =>
   Effect.gen(function* () {
     const service = fakeService();
@@ -1116,4 +1219,338 @@ it.effect("resumes a thread whole where no turn took the line the rewind dropped
     assert.deepEqual(process?.unexpected, []);
     assert.deepEqual(received(process, "thread/revert"), []);
   }),
+);
+
+/** The carry-on line the service sends once the provider's host answers. */
+const CARRY_ON = "Your previous turn was interrupted; carry on.";
+
+/**
+ * The resumed turn, failed as app-server reports a stream it lost to the
+ * network: Codex's own kind for it, with no HTTP status since nothing
+ * answered; or refused with a status, which no probe mends.
+ */
+function lostTurn(httpStatusCode: number | null): Exchange {
+  const completed = RESUMED_TURN.reply.at(-1);
+  assert.ok(completed?.method === "turn/completed");
+  const params = completed.params;
+  assert.ok(typeof params === "object" && params !== null && "turn" in params);
+  const turn = params.turn;
+  assert.ok(typeof turn === "object" && turn !== null);
+  return {
+    method: "turn/start",
+    reply: [
+      ...RESUMED_TURN.reply.slice(0, -1),
+      {
+        ...completed,
+        params: {
+          ...params,
+          turn: {
+            ...turn,
+            status: "failed",
+            error: {
+              message: "stream disconnected before completion: connection reset",
+              codexErrorInfo: { responseStreamDisconnected: { httpStatusCode } },
+              additionalDetails: null,
+            },
+          },
+        },
+      },
+    ],
+  };
+}
+
+/** Waits, without moving the clock, until the service has taken an event of the type given. */
+function untilPosted(service: ReturnType<typeof fakeService>, type: string) {
+  return Effect.gen(function* () {
+    const posted = () =>
+      service.applied.some(({ message }) => "type" in message && message.type === type);
+    for (let step = 0; step < 5_000 && !posted(); step += 1) yield* Effect.yieldNow;
+    assert.ok(posted(), `the service took no ${type}`);
+  });
+}
+
+it.effect(
+  "keeps the launch up when app-server loses its provider, probes the host, and runs the carry-on as the next turn once it answers",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const script: Script = { exchanges: [...RESUME, lostTurn(null), RESUMED_TURN] };
+      const { spawned, write, run, probed } = yield* launch([script], service, ENV, {
+        probe: fakeProbe(1),
+      });
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+      assert.equal(run.pollUnsafe(), undefined, "the launch stays up");
+
+      // Refused at once, answered after the first wait.
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+      assert.equal(probed.targets.length, 2);
+      const restored = service.applied.find(
+        ({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.CONNECTION_RESTORED,
+      )?.message;
+      assert.ok(restored !== undefined && "type" in restored);
+      assert.deepEqual(restored, {
+        type: RUNNER_EVENT.CONNECTION_RESTORED,
+        host: probed.targets[0]?.host,
+        carryOn: true,
+      });
+
+      yield* write(message(CARRY_ON, LINE.STEERED));
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const [process] = spawned;
+      assert.deepEqual(process?.unexpected, []);
+      assert.deepEqual(received(process, "turn/start")[1]?.input, [
+        { type: "text", text: CARRY_ON, text_elements: [] },
+      ]);
+      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+    }),
+);
+
+it.effect(
+  "ends the launch failed, saying why, once the provider's host stays silent past the wait",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const script: Script = { exchanges: [...RESUME, lostTurn(null)] };
+      const { write, run, probed } = yield* launch([script], service, ENV, {
+        probe: fakeProbe(Number.POSITIVE_INFINITY),
+      });
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+
+      for (;;) {
+        if (run.pollUnsafe() !== undefined) break;
+        yield* TestClock.adjust(RUNNER_RECONNECT.LONGEST_WAIT_MS);
+      }
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: connectionLostFailure(
+          probed.targets[0]?.host ?? "",
+          CONNECTION_LOST_DETAIL.GAVE_UP,
+        ),
+      });
+    }),
+);
+
+it.effect(
+  "ends the launch failed as before on a stream the provider refused with a status, probing nothing",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const script: Script = { exchanges: [...RESUME, lostTurn(401)] };
+      const { write, run, probed } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(probed.targets.length, 0);
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: "stream disconnected before completion: connection reset",
+      });
+    }),
+);
+
+/** The sleep turn's command, as app-server asks to run it outside the sandbox. */
+const COMMAND_ASK: RecordedMessage = {
+  id: 41,
+  method: "item/commandExecution/requestApproval",
+  params: {
+    kind: "command",
+    threadId: THREAD,
+    turnId: "00000000-0000-4000-8000-000000000006",
+    itemId: "call_9_0",
+    startedAtMs: 1792520831000,
+    environmentId: null,
+    reason: "Install the dependencies over the network",
+    command: "/bin/bash -lc 'sleep 600'",
+    cwd: "/srv/agent-probe-repo",
+  },
+};
+
+/** An MCP server's form, which app-server hands the client under approval `on-request`. */
+const ELICITATION: RecordedMessage = {
+  id: 42,
+  method: "mcpServer/elicitation/request",
+  params: {
+    threadId: THREAD,
+    turnId: null,
+    serverName: "linear",
+    mode: "form",
+    message: "Pick a team",
+  },
+};
+
+/** The sleep turn with what app-server asks the client after the command starts. */
+function sleepTurnAsking(...asked: readonly RecordedMessage[]): Script {
+  const turn = exchange(FIRST, 5);
+  return {
+    exchanges: [...OPEN, { ...turn, reply: [...turn.reply, ...asked] }, exchange(FIRST, 6)],
+  };
+}
+
+/** The runner's events of one type, as posted. */
+function posted(service: ReturnType<typeof fakeService>, type: string) {
+  return service.applied.flatMap(({ message: each }) =>
+    "type" in each && each.type === type ? [each] : [],
+  );
+}
+
+it.effect(
+  "in Ask for approval, runs Codex's workspace sandbox on its own defaults, holds an ask for the member, answers Always allow as acceptForSession, and declines an MCP form",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
+      const { spawned, write, run } = yield* launch(
+        [sleepTurnAsking(COMMAND_ASK, ELICITATION)],
+        service,
+      );
+      yield* write({ ...CONFIG, permissionMode: PERMISSION_MODE.ASK });
+      yield* write(message("Run sleep 600.", LINE.FIRST));
+      yield* service.seen;
+      const [process] = spawned;
+      assert.ok(process !== undefined);
+      // The form is declined at once; the command waits on the member.
+      assert.deepEqual(yield* Queue.take(process.answers), {
+        id: 42,
+        result: { action: "decline", content: null, _meta: null },
+      });
+      const [asked] = posted(service, RUNNER_EVENT.APPROVAL_REQUESTED);
+      assert.ok(asked !== undefined && asked.type === RUNNER_EVENT.APPROVAL_REQUESTED);
+      assert.equal(asked.toolUseId, "call_9_0");
+      assert.equal(asked.toolName, "commandExecution");
+      assert.equal(asked.description, "Install the dependencies over the network");
+      assert.equal(asked.input.command, "/bin/bash -lc 'sleep 600'");
+      yield* write({
+        type: INPUT_LINE.APPROVAL,
+        requestId: asked.requestId,
+        decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+      });
+      assert.deepEqual(yield* Queue.take(process.answers), {
+        id: 41,
+        result: { decision: "acceptForSession" },
+      });
+      yield* write({ type: INPUT_LINE.STOP });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+      assert.deepEqual(
+        posted(service, RUNNER_EVENT.APPROVAL_RESOLVED).map((each) => ({ ...each })),
+        [
+          {
+            type: RUNNER_EVENT.APPROVAL_RESOLVED,
+            requestId: asked.requestId,
+            decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+            by: APPROVAL_BY.MEMBER,
+          },
+        ],
+      );
+      assert.equal(override(process, "approval_policy"), '"on-request"');
+      assert.equal(override(process, "approvals_reviewer"), '"user"');
+      assert.equal(override(process, "sandbox_mode"), '"workspace-write"');
+      // Codex's own workspace defaults: nothing writable beside the checkout, and the network off.
+      assert.equal(override(process, "sandbox_workspace_write.writable_roots"), undefined);
+      assert.equal(override(process, "sandbox_workspace_write.network_access"), undefined);
+      const [thread] = received(process, "thread/start");
+      assert.equal(thread?.approvalPolicy, "on-request");
+      assert.equal(thread?.approvalsReviewer, "user");
+      assert.equal(thread?.sandbox, "workspace-write");
+      assert.deepEqual(received(process, "turn/start")[0]?.sandboxPolicy, {
+        type: "workspaceWrite",
+        writableRoots: [],
+        networkAccess: false,
+        excludeTmpdirEnvVar: false,
+        excludeSlashTmp: false,
+      });
+    }),
+);
+
+/** A command Codex's automatic review denied, its completion, and an ask the review handed to the member. */
+const REVIEWED: readonly RecordedMessage[] = [
+  {
+    method: "item/autoApprovalReview/completed",
+    params: {
+      threadId: THREAD,
+      turnId: "00000000-0000-4000-8000-000000000006",
+      startedAtMs: 1792520831000,
+      completedAtMs: 1792520832000,
+      reviewId: "review-1",
+      targetItemId: "call_reviewed",
+      decisionSource: "agent",
+      review: {
+        status: "denied",
+        riskLevel: null,
+        userAuthorization: null,
+        rationale: "Automatic approval review failed: the reviewer's model was refused.",
+      },
+      action: {
+        type: "command",
+        source: "shell",
+        command: "curl https://example.test",
+        cwd: "/srv/agent-probe-repo",
+      },
+    },
+  },
+  {
+    method: "item/completed",
+    params: {
+      threadId: THREAD,
+      turnId: "00000000-0000-4000-8000-000000000006",
+      item: {
+        type: "commandExecution",
+        id: "call_reviewed",
+        command: "curl https://example.test",
+        cwd: "/srv/agent-probe-repo",
+        status: "declined",
+        aggregatedOutput: null,
+        exitCode: null,
+      },
+    },
+  },
+  COMMAND_ASK,
+];
+
+it.effect(
+  "in Approve for me, Codex's automatic review answers, a command it denied says why on its row, and an ask still waiting as the launch ends is resolved before its end",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
+      const { spawned, write, run } = yield* launch([sleepTurnAsking(...REVIEWED)], service);
+      yield* write({ ...CONFIG, permissionMode: PERMISSION_MODE.AUTO });
+      yield* write(message("Run sleep 600.", LINE.FIRST));
+      yield* service.seen;
+      yield* write({ type: INPUT_LINE.STOP });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+      const [process] = spawned;
+      assert.equal(override(process, "approvals_reviewer"), '"auto_review"');
+      assert.equal(received(process, "turn/start")[0]?.approvalsReviewer, "auto_review");
+      const declined = service.applied.flatMap(({ message: each }) =>
+        "method" in each &&
+        each.method === "item/completed" &&
+        each.params.item.id === "call_reviewed"
+          ? [each.params.item]
+          : [],
+      );
+      assert.deepEqual(
+        declined.map((item) =>
+          item.type === "commandExecution" ? item.aggregatedOutput : undefined,
+        ),
+        [
+          "Codex's automatic review denied this command. Automatic approval review failed: the reviewer's model was refused.",
+        ],
+      );
+      assert.deepEqual(
+        posted(service, RUNNER_EVENT.APPROVAL_RESOLVED).map((each) =>
+          each.type === RUNNER_EVENT.APPROVAL_RESOLVED ? each.by : undefined,
+        ),
+        [APPROVAL_BY.ENDED],
+      );
+      assert.equal(kinds(service.applied).at(-1), RUNNER_EVENT.END);
+    }),
 );

@@ -66,15 +66,17 @@ it (the window under it is the shell's: `apps/desktop/src/renderer/AGENTS.md`):
 ## Confirms
 
 An act that cannot be undone asks first, over `@repo/ui/confirm-state`, its act in
-red (`CONFIRM_LOSS.IRREVERSIBLE`). One that can be undone but reaches someone else (a
-member removed, an invitation canceled, a teammate's working
-agent archived) still asks, its act in the accent (`CONFIRM_LOSS.AFFECTS_OTHERS`). One that
+red (`CONFIRM_LOSS.IRREVERSIBLE`), as does one that stops agents at work (a working agent
+archived, or a task whose agents work set at Done or Canceled), since the work they are in
+the middle of is lost. One that can be undone but reaches someone else (a
+member removed, an invitation canceled) still asks, its act in the accent (`CONFIRM_LOSS.AFFECTS_OTHERS`). One that
 can be undone and reaches only the reader asks nothing: it happens at once and offers
 Undo on a toast only the undo stack builds (`undo-stack.ts`), whose Undo runs the act's
 entry, as ⌘Z does; `TOAST_ONLY_UNDO` declares the writes whose Undo is the toast's alone. Three acts
 are the exceptions and act on the press: merging a pull request from its merge control
 and submitting a review, as GitHub-style review tools do, and Stop on an agent's turn,
-whose work so far stands; removing a pull request from a merge queue still asks. In the
+whose work so far stands; removing a pull request from a merge queue still asks, and so
+does Bypass rules and merge…, a merge past its base's rules, its act in red. In the
 desktop window it asks through `<ConfirmDialog>`, a modal over the window held by
 `useConfirmDialog`: title, what goes, Cancel focused and the act last.
 Settings asks the same way, from a row's button or its ⋯ menu. A question does not

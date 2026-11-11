@@ -15,11 +15,15 @@ import {
   listEveryProviderKeyRow,
   listProviderKeyRows,
   removeProviderKey,
+  reorderSubscriptions,
   resealProviderKey,
   saveProviderKey,
   setPlanStatus,
+  setPlanUsage,
+  setPlanUsageWindows,
   setProviderKeyForAgents,
   setProviderKeyStatus,
+  setSubscriptionLabel,
   withProviderKeyLocked,
 } from "../provider-key-store.js";
 
@@ -210,33 +214,37 @@ it.layer(getTestDB())("the provider key store", (it) => {
           new Date(3_600_000),
         );
 
-        const resealed = yield* withProviderKeyLocked(owner, OPENAI, CHATGPT_OAUTH, (row) =>
-          resealProviderKey(
-            owner,
-            OPENAI,
-            CHATGPT_OAUTH,
-            Option.getOrThrow(row).sealedKey,
-            sealed("signin-2"),
-            new Date(7_200_000),
-          ),
-        );
-        const stale = yield* resealProviderKey(
+        const [held] = yield* listProviderKeyRows(owner, CHATGPT_OAUTH);
+        const id = held?.id ?? "";
+        const resealed = yield* withProviderKeyLocked(
           owner,
           OPENAI,
           CHATGPT_OAUTH,
+          undefined,
+          (row) =>
+            resealProviderKey(
+              owner,
+              Option.getOrThrow(row).id,
+              Option.getOrThrow(row).sealedKey,
+              sealed("signin-2"),
+              new Date(7_200_000),
+            ),
+        );
+        const stale = yield* resealProviderKey(
+          owner,
+          id,
           "signin-1",
           sealed("signin-3"),
           new Date(9_000_000),
         );
         const othersReseal = yield* resealProviderKey(
           other,
-          OPENAI,
-          CHATGPT_OAUTH,
+          id,
           "signin-2",
           sealed("signin-4"),
           new Date(9_000_000),
         );
-        const othersLocked = yield* withProviderKeyLocked(other, OPENAI, CHATGPT_OAUTH, (row) =>
+        const othersLocked = yield* withProviderKeyLocked(other, OPENAI, CHATGPT_OAUTH, id, (row) =>
           Effect.succeed(Option.isNone(row)),
         );
 
@@ -360,6 +368,239 @@ it.layer(getTestDB())("the provider key store", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.UNREADABLE, null],
         ]);
+      }),
+  );
+
+  it.effect(
+    "subscriptions are added in order; a save naming none replaces the first, one naming an id that one, and a ChatGPT sign-in as a stored account its own row",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const { OPENAI } = PROVIDER_KEY_PROVIDER;
+        const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
+        const save = (seal: string, placement: Parameters<typeof saveProviderKey>[8]) =>
+          saveProviderKey(
+            owner,
+            OPENAI,
+            CHATGPT_OAUTH,
+            sealed(seal),
+            "ChatGPT",
+            null,
+            new Date(1),
+            null,
+            placement,
+          );
+        const order = () =>
+          Effect.map(listProviderKeyRows(owner, CHATGPT_OAUTH), (rows) =>
+            rows.map((row) => [row.id, row.sealedKey, row.accountEmail]),
+          );
+
+        const first = yield* save("a-1", { accountEmail: "a@example.test" });
+        const second = yield* save("b-1", { accountEmail: "b@example.test", add: true });
+        const third = yield* save("c-1", { accountEmail: "c@example.test", add: true });
+        assert.deepEqual(yield* order(), [
+          [first, "a-1", "a@example.test"],
+          [second, "b-1", "b@example.test"],
+          [third, "c-1", "c@example.test"],
+        ]);
+
+        assert.equal(yield* save("b-2", { accountEmail: "b@example.test", add: true }), second);
+        assert.equal(yield* save("c-2", { subscriptionId: third }), third);
+        assert.equal(yield* save("d-1", { accountEmail: "d@example.test" }), first);
+        assert.deepEqual(yield* order(), [
+          [first, "d-1", "d@example.test"],
+          [second, "b-2", "b@example.test"],
+          [third, "c-2", null],
+        ]);
+      }),
+  );
+
+  it.effect(
+    "a call naming a subscription reaches that one alone, one naming none the first, and no account reaches another's by its id",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const { ANTHROPIC } = PROVIDER_KEY_PROVIDER;
+        const { CLAUDE_SETUP_TOKEN } = PROVIDER_KEY_KIND;
+        const add = (account: string, seal: string) =>
+          saveProviderKey(
+            account,
+            ANTHROPIC,
+            CLAUDE_SETUP_TOKEN,
+            sealed(seal),
+            "sk-ant-oat…",
+            null,
+            new Date(1_000),
+            null,
+            { add: true },
+          );
+        const first = yield* add(owner, "first");
+        const second = yield* add(owner, "second");
+        yield* add(other, "theirs");
+        const shownOf = (account: string) =>
+          Effect.map(listProviderKeyRows(account, CLAUDE_SETUP_TOKEN), (rows) =>
+            rows.map((row) => [row.sealedKey, row.status, row.forAgents]),
+          );
+
+        yield* setPlanStatus(
+          owner,
+          ANTHROPIC,
+          CLAUDE_SETUP_TOKEN,
+          PROVIDER_KEY_STATUS.LIMIT_REACHED,
+          new Date(9_000),
+          new Date(2_000),
+          new Date(5_000),
+          second,
+        );
+        yield* setPlanStatus(
+          owner,
+          ANTHROPIC,
+          CLAUDE_SETUP_TOKEN,
+          PROVIDER_KEY_STATUS.INVALID,
+          undefined,
+          new Date(2_000),
+          new Date(5_000),
+        );
+        assert.equal(
+          yield* setProviderKeyForAgents(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, false, second),
+          true,
+        );
+        assert.deepEqual(yield* shownOf(owner), [
+          ["first", PROVIDER_KEY_STATUS.INVALID, true],
+          ["second", PROVIDER_KEY_STATUS.LIMIT_REACHED, false],
+        ]);
+
+        assert.equal(
+          yield* setProviderKeyForAgents(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, false, first),
+          false,
+        );
+        yield* removeProviderKey(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, second);
+        const othersLock = yield* withProviderKeyLocked(
+          other,
+          ANTHROPIC,
+          CLAUDE_SETUP_TOKEN,
+          first,
+          (row) => Effect.succeed(Option.isNone(row)),
+        );
+        assert.equal(othersLock, true);
+        yield* add(other, "theirs-2");
+        assert.deepEqual(
+          (yield* shownOf(owner)).map(([seal]) => seal),
+          ["first", "second"],
+          "another account's calls by the owner's ids reach none of the owner's subscriptions",
+        );
+
+        yield* removeProviderKey(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN);
+        assert.deepEqual(
+          (yield* shownOf(owner)).map(([seal]) => seal),
+          ["second"],
+          "a removal naming none removes the first, and the next one becomes the first",
+        );
+        yield* removeProviderKey(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, second);
+        assert.deepEqual(yield* shownOf(owner), []);
+        assert.deepEqual(
+          (yield* shownOf(other)).map(([seal]) => seal),
+          ["theirs", "theirs-2"],
+        );
+      }),
+  );
+
+  it.effect(
+    "a reorder puts the named subscriptions first in its order and the rest after, a rename names one, and neither reaches another account's",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const { ANTHROPIC } = PROVIDER_KEY_PROVIDER;
+        const { CLAUDE_SETUP_TOKEN } = PROVIDER_KEY_KIND;
+        const add = (account: string, seal: string) =>
+          saveProviderKey(
+            account,
+            ANTHROPIC,
+            CLAUDE_SETUP_TOKEN,
+            sealed(seal),
+            "sk-ant-oat…",
+            null,
+            new Date(1_000),
+            null,
+            { add: true },
+          );
+        const first = yield* add(owner, "first");
+        const second = yield* add(owner, "second");
+        const third = yield* add(owner, "third");
+        const theirs = yield* add(other, "theirs");
+        const shownOf = (account: string) =>
+          Effect.map(listProviderKeyRows(account, CLAUDE_SETUP_TOKEN), (rows) =>
+            rows.map((row) => [row.sealedKey, row.label]),
+          );
+
+        yield* reorderSubscriptions(owner, ANTHROPIC, [third, theirs, first]);
+        yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, "Personal Max");
+        yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, theirs, "Taken");
+        assert.deepEqual(yield* shownOf(owner), [
+          ["third", null],
+          ["first", "Personal Max"],
+          ["second", null],
+        ]);
+
+        yield* reorderSubscriptions(other, ANTHROPIC, [second, first]);
+        yield* setSubscriptionLabel(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, "Theirs now");
+        assert.deepEqual(
+          (yield* shownOf(owner)).map(([seal, label]) => [seal, label]),
+          [
+            ["third", null],
+            ["first", "Personal Max"],
+            ["second", null],
+          ],
+          "another account's calls by the owner's ids move and name none of the owner's",
+        );
+        assert.deepEqual(yield* shownOf(other), [["theirs", null]]);
+
+        yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, null);
+        assert.deepEqual((yield* shownOf(owner))[1], ["first", null]);
+      }),
+  );
+
+  it.effect(
+    "a provider's answer to a usage ask replaces the plan's windows, but never a turn's reading heard after the ask went out",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
+        const plan = yield* saveProviderKey(
+          owner,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          CHATGPT_OAUTH,
+          sealed("plan"),
+          "ChatGPT",
+          null,
+          new Date(1_000),
+        );
+        const windowsOf = Effect.map(listProviderKeyRows(owner, CHATGPT_OAUTH), (rows) =>
+          rows.map((row) => row.usageWindows),
+        );
+        const session = { usedPercent: 10, windowMins: 300 };
+
+        yield* setPlanUsageWindows(owner, plan, [session], new Date(2_000));
+        const answered = yield* windowsOf;
+        // A turn hears the session at 60% while the next ask, sent at 3s, is still out; its answer lands after.
+        yield* setPlanUsage(
+          owner,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          CHATGPT_OAUTH,
+          { usedPercent: 60, windowMins: 300 },
+          new Date(4_000),
+          new Date(4_000),
+          plan,
+        );
+        yield* setPlanUsageWindows(
+          owner,
+          plan,
+          [{ usedPercent: 20, windowMins: 300 }],
+          new Date(3_000),
+        );
+
+        assert.deepEqual(answered, [[session]]);
+        assert.deepEqual(yield* windowsOf, [[{ usedPercent: 60, windowMins: 300 }]]);
       }),
   );
 });

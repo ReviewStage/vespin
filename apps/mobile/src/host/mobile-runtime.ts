@@ -8,7 +8,8 @@
  */
 
 import type { RunProfile } from "@repo/host/app-state";
-import { Effect, type Layer, ManagedRuntime } from "effect";
+import { followStream, type OpenedStream } from "@repo/host/follow-stream";
+import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -22,6 +23,8 @@ import {
 export interface MobileHostStartOptions {
   /** The profile a fixture run stands on; none for a live run. */
   readonly fixture: RunProfile | undefined;
+  /** Whether a fixture run stands as the service's refusal of an old build leaves it; never in a live run. */
+  readonly fixtureUpdateNeeded?: boolean | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files. */
@@ -29,10 +32,19 @@ export interface MobileHostStartOptions {
   readonly device: DeviceSeams;
   /** The client every service call goes out on; the device's fetch where none is given. */
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>;
+  /** Effect's reporters the host's runtime stands on, Sentry's among them; Effect's own where none is given. */
+  readonly errorReporting?: Layer.Layer<never>;
 }
 
-/** The host as started: what the screens read and act through, and its close, which drains it. */
+/** A stream the screens hold open on the act port, such as a transcript's follow, until the stop handed back is called. */
+export type HostFollow = <View>(
+  open: () => Promise<OpenedStream<View>>,
+  take: (view: View) => void,
+) => () => void;
+
+/** The host as started: what the screens read and act through, the follows they hold open, and its close, which drains it. */
 export interface StandingMobileHost extends MobileHost {
+  readonly follow: HostFollow;
   readonly close: () => Promise<void>;
 }
 
@@ -51,19 +63,31 @@ export async function startMobileHost(
   const fork = (effect: Effect.Effect<void>): void => {
     runtime.runFork(Effect.withErrorReporting(effect, { defectsOnly: true }));
   };
+  // The reporters stand beneath the host, so every fiber it forks and every act reports through them.
   runtime = ManagedRuntime.make(
-    composeMobile({
-      httpClient,
-      fork,
-      fixture: options.fixture,
-      appVersion: options.appVersion,
-      stateRoot: options.stateRoot,
-      device: options.device,
-    }),
+    Layer.provideMerge(
+      composeMobile({
+        httpClient,
+        fork,
+        fixture: options.fixture,
+        fixtureUpdateNeeded: options.fixtureUpdateNeeded,
+        appVersion: options.appVersion,
+        stateRoot: options.stateRoot,
+        device: options.device,
+      }),
+      options.errorReporting ?? Layer.empty,
+    ),
   );
   try {
     const host = await runtime.runPromise(MobileHostTag);
-    return { bridge: host.bridge, acts: host.acts, close: () => runtime.dispose() };
+    // A follow runs on the host's runtime, opened again as it breaks, until its stop interrupts it.
+    const follow: HostFollow = (open, take) => {
+      const fiber = runtime.runFork(followStream(open, take));
+      return () => {
+        runtime.runFork(Fiber.interrupt(fiber));
+      };
+    };
+    return { bridge: host.bridge, acts: host.acts, follow, close: () => runtime.dispose() };
   } catch (error) {
     await runtime.dispose();
     throw error;

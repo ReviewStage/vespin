@@ -16,7 +16,8 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { momentText } from "@repo/features/time-format";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -74,16 +75,16 @@ import { useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useConfirmAct } from "../confirm-act.js";
-import { LinkWorkspaceProvider, useCopyLinkItem } from "../copy-link-item.js";
+import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "../live-reads.js";
 import { MemberDirectory, useCreator } from "../member-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { GLYPH_STATE, glyphStateWords, stateEndMark } from "../state-glyph.js";
+import { stateEndMark } from "../state-glyph.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
 import { rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
@@ -277,7 +278,6 @@ function useRunNow(automationId: string): { readonly running: boolean; readonly 
             words: RUN_REFUSAL_WORDS[answer.failure],
             replayUnmasked: true,
             tone: STATUS_TONE.DANGER,
-            hold: TOAST_HOLD.FAILED,
             failure: {
               surface: FAILURE_SURFACE.AUTOMATION_RUN,
               cause: answer,
@@ -327,7 +327,11 @@ function AutomationRow({
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const next = automationNext(automation);
   const nextWords = automationNextText(automation, now);
-  const copyLink = useCopyLinkItem()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+  const openInTab = useOpenInTab()({
+    kind: LINK_DESTINATION.AUTOMATION,
+    automationId: automation.id,
+  });
   // Note that the glyph is the row's decoration, so its working word is said in the row's words instead.
   const working = state === GLYPH_STATE.WORKING ? glyphStateWords(state, false) : undefined;
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
@@ -390,10 +394,11 @@ function AutomationRow({
         actions={<AutomationSwitch automation={automation} write={onToggle} />}
         hint={{ Hint: RowHint, label: automation.name }}
         onPress={onOpen}
+        onOpenInTab={openInTab}
         menu={rowMenu(
           ROW_THING,
           automationActionGroups({
-            copyLink,
+            links,
             runNow: runNowAction(runNow.running, runNow.run),
             onDelete,
           }),

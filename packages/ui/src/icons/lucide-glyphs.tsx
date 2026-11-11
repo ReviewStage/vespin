@@ -27,6 +27,7 @@ import {
   FastForward,
   FileText,
   Folder,
+  Hand,
   Heading1,
   Heading2,
   Heading3,
@@ -40,6 +41,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  Mail,
   Maximize,
   Maximize2,
   MessageSquare,
@@ -53,6 +55,7 @@ import {
   PanelRight,
   Pause,
   Pencil,
+  PenLine,
   Pin,
   PinOff,
   Play,
@@ -63,6 +66,8 @@ import {
   Search,
   SearchX,
   Settings,
+  ShieldAlert,
+  ShieldEllipsis,
   SkipBack,
   SkipForward,
   Square,
@@ -130,6 +135,15 @@ export const AlertIcon = lucideGlyph(CircleAlert, "ui-glyph");
 
 /** A magnifier struck through: a place the window cannot show, gone or not the reader's. */
 export const NotFoundIcon = lucideGlyph(SearchX, "ui-glyph");
+
+/** A shield round a mark of exclamation, in the warning ink wherever it stands: an agent runs every tool call without asking. */
+export const FullAccessIcon = lucideGlyph(ShieldAlert, "ui-glyph text-attention");
+
+/** A raised hand: an agent asks before it edits a file outside its checkout or reaches the internet, and a call it holds for an answer. */
+export const AskFirstIcon = lucideGlyph(Hand, "ui-glyph");
+
+/** A shield round a prompt's dots: an agent's tool calls left to its CLI's own judgment, which asks only for those it finds unsafe. */
+export const AutoApproveIcon = lucideGlyph(ShieldEllipsis, "ui-glyph");
 
 /** A ring round a check: something was done. */
 export const CircleCheckIcon = lucideGlyph(CircleCheck, "ui-glyph");
@@ -271,6 +285,12 @@ export const ImageIcon = lucideGlyph(Image, "icon-button-glyph");
 
 /** A pencil over an open square: a new piece of work, as every chat app's compose button draws it. */
 export const ComposeIcon = lucideGlyph(SquarePen, "icon-button-glyph");
+
+/** An envelope: an email to be sent, as a draft's card is headed. */
+export const MailIcon = lucideGlyph(Mail, "icon-button-glyph");
+
+/** A pen over a line: words written to be sent, as a draft bound nowhere in particular is headed. */
+export const DraftIcon = lucideGlyph(PenLine, "icon-button-glyph");
 
 /** A cog: the account's row that leads to Settings, drawn the way every app draws settings. */
 export const GearIcon = lucideGlyph(Settings, "gear-glyph");

@@ -201,6 +201,16 @@ const titledAs = (owner: string, agent: Agent, title: string) =>
     agent,
   );
 
+/** Answers a model gives that are no title, which name nothing. */
+const NO_TITLE_ANSWERS = [
+  { named: "the untitled name", answer: "<Untitled>." },
+  {
+    named: "the exchange rather than naming it",
+    answer:
+      "Hello! I'm not sure which description you mean, since I don't see one in our conversation. Could you share it?",
+  },
+] as const;
+
 /** The task's name as the account reads it. */
 const taskName = (owner: string, taskId: string) =>
   Effect.map(readTask(owner, taskId), (read) => Option.getOrThrow(read).task.name);
@@ -223,20 +233,26 @@ it.layer(getTestDB())("an untitled task's name", (it) => {
     }),
   );
 
-  it.effect("a model answering the untitled name names neither the agent nor its task", () =>
-    Effect.gen(function* () {
-      const owner = yield* openGithubUser();
-      const organizationId = yield* openWorkspace(owner);
-      const task = yield* createTask(owner, { organizationId });
-      const first = yield* startOnTask(owner, task.id, "Expire teammate invitations after a week.");
-      const second = yield* startOnTask(owner, task.id, "Send a reminder the day before.");
+  it.effect.each(NO_TITLE_ANSWERS)(
+    "a model answering $named names neither the agent nor its task",
+    ({ answer }) =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const organizationId = yield* openWorkspace(owner);
+        const task = yield* createTask(owner, { organizationId });
+        const first = yield* startOnTask(
+          owner,
+          task.id,
+          "Expire teammate invitations after a week.",
+        );
+        const second = yield* startOnTask(owner, task.id, "Send a reminder the day before.");
 
-      yield* titledAs(owner, first, "<Untitled>.");
-      yield* titledAs(owner, second, "Send invitation reminders");
+        yield* titledAs(owner, first, answer);
+        yield* titledAs(owner, second, "Send invitation reminders");
 
-      assert.equal(Option.getOrThrow(yield* readAgent(owner, first.id)).title, null);
-      assert.equal(yield* taskName(owner, task.id), "Send invitation reminders");
-    }),
+        assert.equal(Option.getOrThrow(yield* readAgent(owner, first.id)).title, null);
+        assert.equal(yield* taskName(owner, task.id), "Send invitation reminders");
+      }),
   );
 
   it.effect("a task named by a member keeps its name when its agent is titled", () =>
@@ -347,8 +363,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
         const organizationId = yield* openWorkspace(owner);
         const started = Option.getOrThrow(
           yield* createAgent(owner, {
-            taskId: null,
-            organizationId,
+            taskId: (yield* createTask(owner, { organizationId })).id,
             descriptionSnapshot: null,
             prompt: HANDED,
             idempotencyKey: randomUUID(),
@@ -405,8 +420,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
         const handed = `${words}\n\n---\n\nA member wrote this to Vespin's Slack bot in a Slack thread.\n\n<slack-thread>\n<@U01>: the billing export is broken too\n</slack-thread>`;
         const { agent } = Option.getOrThrow(
           yield* createAgent(owner, {
-            taskId: null,
-            organizationId: yield* openWorkspace(owner),
+            taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
             descriptionSnapshot: null,
             prompt: handed,
             idempotencyKey: randomUUID(),
@@ -462,8 +476,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
         );
         const started = Option.getOrThrow(
           yield* createAgent(owner, {
-            taskId: null,
-            organizationId,
+            taskId: (yield* createTask(owner, { organizationId })).id,
             descriptionSnapshot: null,
             prompt: handed,
             idempotencyKey: randomUUID(),
@@ -527,8 +540,7 @@ const journaledAgent = Effect.gen(function* () {
   const owner = yield* openGithubUser();
   const organizationId = yield* openWorkspace(owner);
   const started = yield* createAgent(owner, {
-    taskId: null,
-    organizationId,
+    taskId: (yield* createTask(owner, { organizationId })).id,
     descriptionSnapshot: null,
     prompt: DESCRIPTION_TEXT,
     idempotencyKey: randomUUID(),

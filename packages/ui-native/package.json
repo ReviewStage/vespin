@@ -15,12 +15,18 @@
   "dependencies": {
     "@expo/ui": "58.0.27",
     "@repo/features": "workspace:*",
+    "@repo/wire": "workspace:*",
     "expo-glass-effect": "58.0.5",
+    "expo-haptics": "58.0.7",
+    "expo-symbols": "58.0.4",
+    "expo-video": "58.0.13",
     "react": "catalog:mobile",
     "react-native": "0.88.1",
-    "react-native-safe-area-context": "5.11.1"
+    "react-native-safe-area-context": "5.11.1",
+    "react-native-webview": "14.0.1"
   },
   "devDependencies": {
+    "@types/mdast": "4.0.4",
     "@types/react": "catalog:mobile",
     "typescript": "catalog:",
     "vitest": "catalog:"

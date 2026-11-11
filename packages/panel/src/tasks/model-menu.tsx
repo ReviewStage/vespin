@@ -1,5 +1,6 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
+import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import {
   type CatalogModel,
   MODEL_SPEED,
@@ -8,6 +9,7 @@ import {
 } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
+import { PERMISSION_MODE_LABEL } from "@repo/settings";
 import {
   ErrorState,
   type FootRow,
@@ -23,15 +25,21 @@ import { unreadShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import {
+  type AgentModeControl,
+  MODE_APPLIES,
+  MODE_GLYPH,
+  MODE_GROUP,
+  MODE_QUESTION,
+  MODES,
+  modeMenuRows,
+} from "./agent-approvals.js";
+import {
   CONTEXT_WORD,
   type ConnectFailure,
   choiceModelId,
   choiceOn,
   choiceWords,
   contextWindowsOf,
-  effortFor,
-  effortLabel,
-  effortsOf,
   FAST_WORD,
   fastRestingNote,
   longWindowNote,
@@ -72,7 +80,12 @@ import { useRepositoryRemedy } from "./repository-remedy.js";
  * leaves the menu open, or, for a model with an Ultrafast version, Speed in
  * its place, naming the speed chosen now and opening a submenu of the
  * speeds the model offers, Standard, Fast, and Ultrafast, which closes the
- * menu on a pick as Effort does. A model whose provider no subscription or API key
+ * menu on a pick as Effort does. Last, on a running Claude Code agent's
+ * chip alone, Permissions names the agent's permission mode after its glyph
+ * and opens a submenu of the three under the question they answer, each
+ * with its hint under its name and a line under them saying a change
+ * reaches the agent from its next turn (`agent-approvals.tsx`); it closes
+ * the menu on a pick. A model whose provider no subscription or API key
  * of the account's pays for says "Connect Claude" or "Connect Codex" at its
  * row's end, and its pick, or Fast's press where it is the choice, closes
  * the menu and lands on that harness's row in Settings › Agents rather
@@ -103,6 +116,7 @@ const FOOT_ROW = {
   FAST: "fast",
   SPEED: "speed",
   CONNECT: "connect",
+  PERMISSIONS: "permissions",
 } as const;
 
 /**
@@ -178,6 +192,8 @@ export function ModelMenu(props: {
   lastLine?: MenuLastLine | undefined;
   /** Whether the choice is what a new agent would start on, on the reader's own credentials, so one nothing of theirs pays for says it cannot run: an automation's. */
   startsNew?: boolean | undefined;
+  /** The agent's permission mode and its change, pinned as the last row; none for an agent whose harness takes no mode, and on an automation's menu. */
+  permissions?: AgentModeControl | undefined;
   /** The menu is on its way out (`SearchableMenu`'s). */
   leaving?: boolean | undefined;
   /** Hands the menu's element to the hold its owner draws it through its exit with. */
@@ -288,6 +304,34 @@ export function ModelMenu(props: {
     ];
   };
 
+  /** The Permissions row, naming the agent's mode and opening the three, each with its hint. */
+  const permissionsRow = (): FootRow[] => {
+    const control = props.permissions;
+    if (control === undefined) return [];
+    const Glyph = MODE_GLYPH[control.mode];
+    return [
+      {
+        id: FOOT_ROW.PERMISSIONS,
+        label: MODE_GROUP,
+        icon: <Glyph />,
+        detail: PERMISSION_MODE_LABEL[control.mode],
+        submenu: {
+          label: MODE_GROUP,
+          heading: MODE_QUESTION,
+          rows: modeMenuRows(),
+          value: control.mode,
+          note: MODE_APPLIES,
+          onPick: (picked) => {
+            const mode = MODES.find((each) => each === picked);
+            if (mode === undefined) return;
+            onClose();
+            control.choose(mode);
+          },
+        },
+      },
+    ];
+  };
+
   const unrunnable =
     props.startsNew === true && models !== undefined && chosen !== undefined
       ? unrunnableChoice(models, chosen)
@@ -312,9 +356,12 @@ export function ModelMenu(props: {
     ];
   };
 
+  // Note that Permissions stands while the catalog is unread, failed, or no longer offers the choice, since the menu is the one place a mode is changed.
   const foot: FootRow[] | undefined =
     chosen === undefined || read === undefined || models === undefined
-      ? undefined
+      ? props.permissions === undefined
+        ? undefined
+        : permissionsRow()
       : [
           ...connectRow(),
           {
@@ -333,6 +380,7 @@ export function ModelMenu(props: {
           },
           ...contextRow(chosen, models),
           ...speedRow(read, chosen),
+          ...permissionsRow(),
         ];
 
   return (

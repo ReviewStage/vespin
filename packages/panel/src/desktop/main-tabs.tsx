@@ -5,8 +5,9 @@ import {
   type AgentStatus,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
+import type { ToolTarget } from "@repo/features/tool-call-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   DraftMark,
@@ -16,7 +17,6 @@ import {
   INLINE_EDIT_LOOK,
   InlineEdit,
   PlusIcon,
-  RetryButton,
   TABS_GROUND,
   TOOLBAR_INSET,
   TOOLBAR_LOOK,
@@ -25,7 +25,6 @@ import {
   Tooltip,
   useMenu,
 } from "@repo/ui";
-import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {
   agentTab,
   draftTab,
@@ -40,8 +39,9 @@ import { absurd } from "effect";
 import { memo, useEffect, useRef } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useDraftedAgents } from "../composer-drafts.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { leftMark } from "../draft-mark.js";
+import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
 import { AgentTab, StartingAgentTab } from "../tasks/agent-tab.js";
@@ -51,21 +51,22 @@ import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
 import { useFailedAgents } from "../tasks/failed-lines.js";
 import { agentForkDoors, ForkProvider } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
+import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
-import type { ToolTarget } from "../tasks/tool-call-model.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
-import { ActionMenu, type MenuAction } from "./action-menu.js";
-import { type AgentTerminalDoors, useAgentActions } from "./agent-actions.js";
+import { ActionMenu, type MenuAction, type MenuSubmenu } from "./action-menu.js";
+import { type AgentTerminalDoors, type ShownShell, useAgentActions } from "./agent-actions.js";
 import { AgentHistory } from "./agent-history.js";
 import type { TaskCards } from "./side-panel.js";
 import {
   type AddEntry,
+  CHOSEN_TAB_KEYS,
   type DocumentMenu,
   DoorsTab,
   type ShownTab,
@@ -136,9 +137,6 @@ const NEW_AGENT_STARTING = "Starting…";
 /** The row that opens the task's Inbox, which no agent's id spells. */
 const INBOX_ROW = "inbox";
 
-/** What the press that reads the plan's agents again, after a first read did not land, says. */
-const RETRY_AGENTS = "Retry agents";
-
 /**
  * A tab whose name may be edited where it stands: an agent's.
  * While the edit is open the tab is its name's field, and a key that ends
@@ -205,6 +203,7 @@ export function AgentMenuTab({
   terminals,
   onOpenBrowser,
   onShown,
+  run,
 }: {
   agent: AgentSummary;
   agents: AgentsControl;
@@ -218,12 +217,15 @@ export function AgentMenuTab({
   onOpenBrowser?: ((agentId: string) => void) | undefined;
   /** Hears the tab while it is the one shown, for a phone's header (`DoorsTab`). */
   onShown: ((shown: ShownTab | undefined) => void) | undefined;
+  /** Run ›, the agent's run actions, in a phone's ⋯, which has no room for the row's Run button; none elsewhere. */
+  run?: MenuSubmenu | undefined;
 }): React.JSX.Element {
   const actions = useAgentActions(agent, agents, {
     label: look.label,
     shown,
     terminals,
     onOpenBrowser,
+    run,
     onDeleted: doors.onClose,
   });
   // The chosen agent's ⌥⌘C, ⇧⌥⌘C, and ⌘⌫ while the column has the keys, over the open task's description and its delete.
@@ -453,20 +455,6 @@ function NewAgentButton({
   );
 }
 
-/**
- * What a phone's Overview offers after the task's agents in place of the
- * column's hidden "+" (`plan-agents.tsx`): New agent as the "+" offers it
- * (`newAgentStarts`), and the agents' read again where it never landed, as
- * the strip's Retry offers it.
- */
-export function phoneAgentStarts(main: MainTabsControl, agents: AgentsControl): MenuAction[] {
-  const retry: MenuAction[] =
-    agents.listFailed && agents.agents === undefined
-      ? [{ label: RETRY_AGENTS, onSelect: agents.onRetryList }]
-      : [];
-  return [...newAgentStarts(main, agents), ...retry];
-}
-
 /** The row the column's tabs stand in, which is its toolbar's title: the strip, what follows it, and the "+" last. */
 function MainTabsRow({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="main-tabs flex items-center gap-list-gap">{children}</div>;
@@ -483,8 +471,7 @@ export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
  * (`details`), as a channel's name opens its details, and whose right-click
  * is the task's own menu (`descriptionMenu`), whichever the page shows,
  * renamed where it stands while `rename` is editing, and led on a run's task
- * by the path to the automation whose run made it (`trail`), as the run's
- * agent's own page leads with it; then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
+ * by the path to the automation whose run made it (`trail`); then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
  * it: every menu there is a right-click. The window's side panel toggle
  * stands at its end (`desktop-shell.tsx`).
  */
@@ -575,7 +562,9 @@ export function TaskTopbar({
 /**
  * The column's bar: the agents' tabs and the draft's, then the "+", which
  * stands apart from the strip so it is never dragged nor dropped before,
- * then the chosen agent's ⋯ and `actions`. The task's details stand in place
+ * then, at the row's end, the chosen agent's Run button, where its repository
+ * has run actions (`run-actions-button.tsx`), which a phone offers in the
+ * chosen tab's ⋯ instead. The task's details stand in place
  * of the bar and the side panel alike, so no tab ever stands with none
  * chosen. ⌘W closes the chosen tab while the column holds the window's
  * focus (`keys`).
@@ -592,6 +581,7 @@ export function MainTabBars({
   onOpenTerminal,
   onOpenLocal,
   onOpenBrowser,
+  onShowShell,
   onShown,
   onOpenAgent,
   waiting,
@@ -618,6 +608,8 @@ export function MainTabBars({
   onOpenLocal?: ((agentId: string) => void) | undefined;
   /** Opens a new tab of an agent's cloud browser in the side panel, by the agent; a phone's alone, whose ⋯ offers it beside Show terminal. */
   onOpenBrowser?: ((agentId: string) => void) | undefined;
+  /** Shows a shell the service started for an agent, a run action's, in the side panel's Terminal tab, by the agent; none where the platform runs no terminals. */
+  onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
   /** Hears the tab the column shows, for a phone's header, whose ⋯ offers what the tab's right-click would (`task-pane-switcher.tsx`); none wider than a phone. */
   onShown?: ((shown: ShownTab | undefined) => void) | undefined;
   /** Opens an agent from History: a closed one's tab in the column, an archived one's own page. */
@@ -635,7 +627,7 @@ export function MainTabBars({
     (entry) => entry.tab,
   );
   useStripLooks(LOOK_STRIP.COLUMN, task.id, strip);
-  const copyLink = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   // Close others closes every tab but `entry` that closes, then shows it; none where no other tab closes.
   const closeOthersOf = (entry: DrawnTab): (() => void) | undefined => {
     const others = strip.flatMap((other) =>
@@ -648,6 +640,19 @@ export function MainTabBars({
     };
   };
   const chosen = strip.find((entry) => entry.look.selected);
+  // The chosen agent's run actions: the row's Run button, or a phone's Run › in its ⋯, which has no room for the button.
+  const runAgent = chosen?.agent?.archivedAt === undefined ? chosen?.agent : undefined;
+  const run = useRunActions(
+    runAgent,
+    shown,
+    runAgent === undefined || onShowShell === undefined
+      ? undefined
+      : (terminal) => onShowShell(runAgent.id, terminal),
+  );
+  const phone = onShown !== undefined;
+  const tabSubject = (entry: DrawnTab) => shortcutSubject(SHORTCUT_SUBJECT.TAB, tabKey(entry.tab));
+  // The chosen tab is what the strip's keys act on, so its menu prints them.
+  useShortcutTarget(chosen === undefined ? undefined : tabSubject(chosen), CHOSEN_TAB_KEYS);
   useAppCommand(APP_COMMAND.CLOSE_TAB, keys ? chosen?.close : undefined);
   useAppCommand(
     APP_COMMAND.CLOSE_OTHER_TABS,
@@ -660,16 +665,19 @@ export function MainTabBars({
   };
   const doorsOf = (entry: DrawnTab): TabDoors => {
     // An agent's link is its own action (`agent-actions.tsx`).
-    const linked: LinkPlace | undefined =
-      entry.agent === undefined ? undefined : { kind: LINK_PLACE.AGENT, agentId: entry.agent.id };
+    const linked: LinkDestination | undefined =
+      entry.agent === undefined
+        ? undefined
+        : { kind: LINK_DESTINATION.AGENT, agentId: entry.agent.id };
     const { agent } = entry;
     return {
       chosen: entry.look.selected,
+      subject: tabSubject(entry),
       onClose: entry.close,
       onCloseOthers: closeOthersOf(entry),
       // Note that an archived agent offers no pin, as its sidebar row does none, since no pin of it is drawn until it comes back.
       pin: agent === undefined || agent.archivedAt !== undefined ? undefined : pinDoor(agent.id),
-      copyLink: linked === undefined ? undefined : copyLink(linked),
+      links: linked === undefined ? undefined : linkItemsOf(linked),
     };
   };
   return (
@@ -707,20 +715,11 @@ export function MainTabBars({
                   terminals={{ onOpenTerminal, onOpenLocal }}
                   onOpenBrowser={onOpenBrowser}
                   onShown={onShown}
+                  run={phone && entry.look.selected ? runSubmenu(run) : undefined}
                 />
               ),
             )}
           </TabStrip>
-          {/* The first read of the task's agents did not land: nothing is known
-                to draw, so the row offers the read again where the tabs would be,
-                after the strip rather than in it, so the strip's scrolling never
-                takes it out of reach, and as its glyph alone where the bar is
-                short of room (desktop.css's `main-tabs`). */}
-          {agents.listFailed && agents.agents === undefined ? (
-            <ReplayUnmask>
-              <RetryButton label={RETRY_AGENTS} onRetry={agents.onRetryList} />
-            </ReplayUnmask>
-          ) : null}
           <NewAgentButton
             start={newAgentStarts(main, agents)[0]}
             asked={main.newTabAsked}
@@ -730,13 +729,18 @@ export function MainTabBars({
         </MainTabsRow>
       }
       actions={
-        <AgentHistory
-          main={main}
-          agents={agents}
-          held={views.held}
-          shown={shown}
-          onOpenAgent={onOpenAgent}
-        />
+        <>
+          {phone || run === undefined || chosen === undefined ? null : (
+            <RunActionsButton offer={run} agentName={chosen.look.label} />
+          )}
+          <AgentHistory
+            main={main}
+            agents={agents}
+            held={views.held}
+            shown={shown}
+            onOpenAgent={onOpenAgent}
+          />
+        </>
       }
     />
   );
@@ -852,7 +856,6 @@ export function MainTabContent({
             onOpenTarget={onOpenTarget}
             cards={cards.agent(agentId)}
             onHeld={views.onAgentHeld}
-            run={agents.origin}
             threads={threads}
           />
         </ForkProvider>
@@ -866,10 +869,7 @@ export function MainTabContent({
 /**
  * One agent's pane: what an agent's or the draft's tab shows
  * (`MainTabContent`), at the document's reading width (`.desktop-agent`).
- * The task column draws it for the tab it shows, as the panel of that tab,
- * and the page of an agent no plan holds draws it for its agent
- * (`desktop-agent-page.tsx`), so an agent reads, finds, and is written to
- * alike wherever it stands.
+ * The task column draws it for the tab it shows, as the panel of that tab.
  *
  * A memo boundary: the task's page drawn again over the same agent and the
  * same doors, as its column's focus and its side panel's width draw it,

@@ -16,6 +16,33 @@ export const MICROPHONE_USAGE_DESCRIPTION =
 // as its own child and so with its entitlements) can raise it.
 export const APPLE_EVENTS_USAGE_DESCRIPTION =
   "Vespin asks before a command an agent runs on this Mac controls another app.";
+// The sentences macOS shows when a command run in the app touches a protected
+// place: an agent's `run_on_mac`, or the developer's own in a Terminal tab.
+// macOS asks in the app's name for what its shells touch, though the app
+// reads none of these places itself, so each sentence says who asked and
+// whether refusing costs anything. A folder's answer is remembered and
+// covers reads and writes alike, for every later command, so it says so.
+export const SHELL_ACCESS_USAGE_DESCRIPTIONS = Object.freeze({
+  NSAppleMusicUsageDescription:
+    "A command run in Vespin, by you or an agent, asked to read your music library. Vespin never needs it, so Don't Allow is safe.",
+  NSDesktopFolderUsageDescription:
+    "A command run in Vespin, by you or an agent, asked to use your Desktop folder. Allowing lets every later command in Vespin read and change files there; allow it if you keep code there.",
+  NSDocumentsFolderUsageDescription:
+    "A command run in Vespin, by you or an agent, asked to use your Documents folder. Allowing lets every later command in Vespin read and change files there; allow it if you keep code there.",
+  NSDownloadsFolderUsageDescription:
+    "A command run in Vespin, by you or an agent, asked to use your Downloads folder. Allowing lets every later command in Vespin read and change files there; allow it if you keep code there.",
+});
+// The entitlements the bundled host's executables are signed with, in place
+// of the app's (`electron-builder-hooks.mjs`'s `signElectronBuilderApp`).
+// The launcher only replaces itself with Node, so it is granted nothing.
+// Node is granted V8's JIT and nothing else: it runs only Vespin's own
+// bundles, the daemon and the runner, never an agent's `node`, which its
+// `PATH` finds elsewhere, so it loads no library another team signed, and
+// library validation stays on.
+export const BUNDLED_HOST_ENTITLEMENTS = Object.freeze({
+  launcher: Object.freeze([]),
+  node: Object.freeze(["com.apple.security.cs.allow-jit"]),
+});
 // The bundle carries one icon for every mode, so the icns is cut from the dark
 // tile — space black reads on either desktop. The running app swaps the Dock
 // image between the light and dark tiles itself; see src/main/window/dock-icon.ts.

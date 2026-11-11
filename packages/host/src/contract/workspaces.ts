@@ -4,8 +4,8 @@ import { workspaceSentryAnswerSchema } from "@repo/features/sentry-install-wire"
 import { workspaceSlackBotAnswerSchema } from "@repo/features/slack-bot-wire";
 import {
   tasksWorkspaceCreateParamsSchema,
-  tasksWorkspaceExperimentSetParamsSchema,
   tasksWorkspaceDeleteParamsSchema,
+  tasksWorkspaceExperimentSetParamsSchema,
   tasksWorkspaceInvitationCancelParamsSchema,
   tasksWorkspaceInviteParamsSchema,
   tasksWorkspaceLeaveParamsSchema,
@@ -33,6 +33,7 @@ import { workspaceInvitationSchema } from "@repo/features/workspace-invitation-w
 import {
   workspaceInstallScriptPutRequestSchema,
   workspaceRepositorySetupPutRequestSchema,
+  workspaceRunActionsPutRequestSchema,
   workspaceSandboxSetupAnswerSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { workspaceMemberSchema, workspaceSchema } from "@repo/features/workspace-wire";
@@ -261,6 +262,13 @@ export const WORKSPACE_ACTS = declaredActs({
     input: workspaceRepositorySetupPutRequestSchema,
     output: workspaceSandboxSetupAnswerSchema,
     refusal: "Could not save that setup script on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_RUN_ACTIONS_PUT: hostAct({
+    input: workspaceRunActionsPutRequestSchema,
+    output: workspaceSandboxSetupAnswerSchema,
+    refusal: "Could not save those run actions on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),

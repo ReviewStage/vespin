@@ -14,7 +14,7 @@
  * it is hung, as a chip's is. A search finds it by its name and its detail.
  */
 
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
 import type { MenuRow } from "@repo/ui";
 import { ACTOR_KIND, type EditReader, teammateCreator } from "@repo/ui/actor-model";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
@@ -26,10 +26,9 @@ import type { MentionableAgent } from "./mention-picker.js";
 import { type MentionedAgentsPlace, useMentionedPlace } from "./mentioned-place.js";
 import { agentEndMark, TAB_KIND, tabLook } from "./tab-look.js";
 
-/** What a row says of an agent's task: the open one, another by its name or by none, or none at all, and whether it is archived. */
+/** What a row says of an agent's task: the open one, or another by its name or by none, and whether it is archived. */
 const AGENT_DETAIL = {
   THIS_TASK: "This task",
-  NO_TASK: "No task",
   OTHER_TASK: "Another task",
   ARCHIVED: "Archived",
 } as const;
@@ -39,7 +38,6 @@ const DETAIL_JOIN = " · ";
 
 /** The line under an agent's card, as a card read for a chip says it: the task the agent works on. */
 const CARD_FOOT = {
-  NO_TASK: "On no task",
   ON: "On ",
 } as const;
 
@@ -55,8 +53,8 @@ export interface AgentRowPlace extends MentionedAgentsPlace {
 
 /** The line under an agent's card: the task it works on, where the list named it. */
 function cardFoot(agent: MentionableAgent): CardFoot | undefined {
-  if (agent.task === undefined) return taskFoot(CARD_FOOT.NO_TASK);
-  return agent.task.name === undefined ? undefined : taskFoot(`${CARD_FOOT.ON}${agent.task.name}`);
+  const name = agent.task?.name;
+  return name === undefined ? undefined : taskFoot(`${CARD_FOOT.ON}${name}`);
 }
 
 /**
@@ -87,13 +85,18 @@ function agentCard(agent: MentionableAgent, place: AgentRowPlace): React.ReactNo
   );
 }
 
-/** The row's end: a teammate's face where the reader did not start the agent, then the failed mark where its turn failed. */
-function agentRowEnd(agent: MentionableAgent, place: AgentRowPlace): React.ReactNode {
-  const { summary } = agent;
-  if (summary === undefined) return undefined;
+/**
+ * An agent row's end, wherever an agent is listed (this menu, ⌘K, Agent
+ * history): a teammate's face where the reader did not start the agent,
+ * then the failed mark where its turn failed.
+ */
+export function agentSummaryEnd(
+  summary: AgentSummary,
+  directory: EditReader,
+): React.JSX.Element | undefined {
   const starter = teammateCreator(
     { createdBy: summary.startedBy, ownerId: summary.startedBy?.userId },
-    place.directory,
+    directory,
   );
   const failed = agentEndMark(summary, true);
   if (starter === undefined && failed === undefined) return undefined;
@@ -105,17 +108,15 @@ function agentRowEnd(agent: MentionableAgent, place: AgentRowPlace): React.React
   );
 }
 
-/** What an agent's row says of its task: this one, another by its name, or none, and whether it is archived. */
+/** What an agent's row says of its task: this one, or another by its name where the place knows it, and whether it is archived. */
 function agentTaskDetail(
   agent: Pick<MentionableAgent, "task" | "archived">,
   taskId: string | undefined,
 ): string {
   const task =
-    agent.task === undefined
-      ? AGENT_DETAIL.NO_TASK
-      : agent.task.id === taskId
-        ? AGENT_DETAIL.THIS_TASK
-        : (agent.task.name ?? AGENT_DETAIL.OTHER_TASK);
+    agent.task !== undefined && agent.task.id === taskId
+      ? AGENT_DETAIL.THIS_TASK
+      : (agent.task?.name ?? AGENT_DETAIL.OTHER_TASK);
   return agent.archived === true ? `${task}${DETAIL_JOIN}${AGENT_DETAIL.ARCHIVED}` : task;
 }
 
@@ -153,7 +154,7 @@ export function agentMenuRow(agent: MentionableAgent, place: AgentRowPlace): Men
     label,
     icon,
     detail,
-    end: agentRowEnd(agent, place),
+    end: summary === undefined ? undefined : agentSummaryEnd(summary, place.directory),
     card: agentCard(agent, place),
     terms: detail === undefined ? [label] : [label, detail],
   };

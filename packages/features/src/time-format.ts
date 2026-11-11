@@ -180,6 +180,16 @@ export function dueText(at: number, now: number): string {
   return at > now && at - now < WEEK_MS ? WEEKDAY_AND_TIME.format(at) : dateText(at, now, true);
 }
 
+/**
+ * When a moment to come comes, as a row counts down to it: "in 2h" inside a
+ * day, since a clock alone leaves the reader to work out how near it is,
+ * and past a day as `dueText` says it, "Thu 9:00 AM", then "Nov 20", since
+ * "in 3d" leaves the hour to guess.
+ */
+export function untilText(at: number, now: number): string {
+  return at - now < DAY_MS ? distanceText(at - now) : dueText(at, now);
+}
+
 /** A day and a time in the fewest words, as a version is named: "Oct 11, 2:14 PM". */
 export function dayAndTimeText(at: number): string {
   return DAY_AND_TIME.format(at);
@@ -225,6 +235,12 @@ export function callHeading(startedAt: number, now: number): string {
 /** What separates how long a turn worked from when it ended, and a call's heading from its length. */
 export const WORKED_SEPARATOR = " · ";
 
+/** What a transcript's last line says while its agent works. */
+export const WORKING_LINE = "Working…";
+
+/** What a finished turn's last line says before how long it worked. */
+export const WORKED_WORDS = "Worked for ";
+
 /** A length in two units, the smaller left out where it is zero: "2m", not "2m 0s". */
 function twoUnits(large: number, largeUnit: string, small: number, smallUnit: string): string {
   return small === 0 ? `${large}${largeUnit}` : `${large}${largeUnit} ${small}${smallUnit}`;
@@ -244,6 +260,12 @@ export function workingTime(elapsedMs: number): string {
   if (hours < DAYS_COUNTED_PAST * DAY_HOURS)
     return twoUnits(hours, "h", minutes % HOUR_MINUTES, "m");
   return twoUnits(Math.floor(hours / DAY_HOURS), "d", hours % DAY_HOURS, "h");
+}
+
+/** What a finished turn's last line says: how long it worked, and the day and time it ended, as a call's header says it from `now`: "Worked for 1m 18s · Today, 3:42 PM". */
+export function workedForText(startedAt: number, endedAt: number, now: number): string {
+  const ended = callHeading(endedAt, now);
+  return `${WORKED_WORDS}${workingTime(endedAt - startedAt)}${WORKED_SEPARATOR}${ended}`;
 }
 
 /**

@@ -29,9 +29,10 @@
  * published keys (`verifyCodexDeviceIdToken`): signed by OpenAI for Codex's
  * client and unexpired.
  *
- * Removing the plan revokes its renewable session at OpenAI's revocation
- * endpoint, which must be on OpenAI's own authorization server, first, under the same lock, retrying a failure to connect or a
- * server error a few times, and removes the row whether or not OpenAI
+ * Removing the plan first revokes its renewable session at OpenAI's
+ * revocation endpoint, which must be on OpenAI's own authorization server,
+ * under the same lock, retrying a failure to connect or a server error a
+ * few times, and removes the row whether or not OpenAI
  * confirmed it, answering which, so the account can be told to end the
  * session in ChatGPT's settings.
  *
@@ -74,7 +75,6 @@ const CHATGPT_FLOW = {
   RETIRED_THIRD_PARTY: "third_party",
 } as const;
 
-/** OpenAI's authorization server and where its published keys and revocation endpoint are read from. */
 export const CHATGPT_OAUTH = {
   /** OpenAI's authorization server: no call that carries a credential goes anywhere else. */
   ISSUER: "https://auth.openai.com",
@@ -100,8 +100,8 @@ export const CODEX_DEVICE_OAUTH = {
 /** How long before its expiry an access token is renewed rather than handed out, unless a caller asks for longer. */
 const REFRESH_MARGIN = Duration.minutes(10);
 
-/** How long OpenAI is given to answer one call. */
-const CALL_TIMEOUT = Duration.seconds(10);
+/** How long OpenAI is given to answer one call, whichever of its endpoints, ChatGPT's usage read among them. */
+export const OPENAI_CALL_TIMEOUT = Duration.seconds(10);
 
 /** The waits between revocation tries, after a failure to connect or a server error: a second, then two. */
 const REVOKE_RETRY = { WAIT: Duration.seconds(1), TIMES: 2 } as const;
@@ -210,6 +210,7 @@ const IdTokenClaimsJson = Schema.fromJsonString(
     aud: Schema.Union([Schema.String, Schema.Array(Schema.String)]),
     exp: Schema.Number,
     sub: Schema.NonEmptyString,
+    email: Schema.optionalKey(Schema.String),
     [CODEX_DEVICE_OAUTH.AUTH_CLAIM]: Schema.optionalKey(AuthClaimSchema),
   }),
 );
@@ -382,9 +383,10 @@ export const dropRetiredChatGptCredentials = /* @__PURE__ */ Effect.fnUntraced(f
     userId,
     OWNER_KIND.provider,
     OWNER_KIND.kind,
+    undefined,
     Effect.fnUntraced(function* (locked) {
       if (Option.isNone(locked) || !retiredChatGptRow(ring, userId, locked.value)) return false;
-      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind);
+      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind, locked.value.id);
       return true;
     }),
   );
@@ -448,7 +450,7 @@ const readSigningKeys = /* @__PURE__ */ Effect.fnUntraced(function* () {
     client.get(url).pipe(
       Effect.flatMap((response) => response.json),
       Effect.scoped,
-      Effect.timeout(CALL_TIMEOUT),
+      Effect.timeout(OPENAI_CALL_TIMEOUT),
       Effect.option,
     );
   const discovered = Option.flatMap(
@@ -550,7 +552,8 @@ const checkIdToken = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * A Codex device-code login's ID token checked before its credentials are
  * kept, as `checkIdToken` checks one, under Codex's client, answering the
- * account it names and the ChatGPT workspace its claim names. Note that its
+ * account it names, its email where it names one, and the ChatGPT workspace
+ * its claim names. Note that its
  * access token's audience is not asked, because the service received it
  * from OpenAI's token endpoint itself rather than from a client.
  */
@@ -564,6 +567,7 @@ export const verifyCodexDeviceIdToken = /* @__PURE__ */ Effect.fnUntraced(functi
   return {
     verdict: checked.verdict,
     accountId: checked.claims.sub,
+    email: checked.claims.email,
     chatgptAccountId: auth?.chatgpt_account_id,
   };
 });
@@ -594,7 +598,7 @@ export const postToOpenAi = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
     ),
     Effect.scoped,
-    Effect.timeout(CALL_TIMEOUT),
+    Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.option,
   );
 });
@@ -631,10 +635,13 @@ function renewedFrom(
 }
 
 /**
- * An access token for the account's ChatGPT plan, good for at least the
+ * An access token for the account's ChatGPT plan of this id, or its first
+ * where none is named, good for at least the
  * renewal margin, or the longer one a caller names (a launch of Codex asks
  * for a token that outlasts its first turn's start): the one it holds where
- * it is, a renewed one otherwise. Runs under the row's lock, OpenAI's token
+ * it is, a renewed one otherwise. A plan at its usage limit answers the
+ * limit rather than a token, unless the caller only reads the plan's usage
+ * (`evenAtLimit`), which its limit does not stop. Runs under the row's lock, OpenAI's token
  * endpoint included, so two renewals of one plan never race its rotating
  * refresh token. A row the retired third-party sign-in sealed is removed,
  * answering none.
@@ -643,11 +650,14 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
   userId: string,
   ring: KeyRing,
   margin: Duration.Duration = REFRESH_MARGIN,
+  subscriptionId?: string,
+  evenAtLimit = false,
 ) {
   const access: ChatGptAccess = yield* withProviderKeyLocked(
     userId,
     OWNER_KIND.provider,
     OWNER_KIND.kind,
+    subscriptionId,
     Effect.fnUntraced(function* (locked) {
       if (Option.isNone(locked)) return { outcome: CHATGPT_ACCESS.NONE };
       const row = locked.value;
@@ -657,12 +667,12 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
       const credentials = openCredentials(ring, userId, row);
       if (credentials === undefined) return { outcome: CHATGPT_ACCESS.UNREADABLE };
       if (credentials === RETIRED) {
-        yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind);
+        yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind, row.id);
         return { outcome: CHATGPT_ACCESS.NONE };
       }
       const now = yield* DateTime.nowAsDate;
       const limitResetsAt = planLimitResetsAt(row, now.getTime());
-      if (limitResetsAt !== undefined)
+      if (limitResetsAt !== undefined && !evenAtLimit)
         return { outcome: CHATGPT_ACCESS.LIMIT_REACHED, limitResetsAt };
       const dueAt = now.getTime() + Duration.toMillis(Duration.max(margin, REFRESH_MARGIN));
       if (row.accessExpiresAt !== null && row.accessExpiresAt.getTime() > dueAt) {
@@ -709,14 +719,7 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
       if (renewed === undefined) return { outcome: CHATGPT_ACCESS.UNREACHABLE };
       const { expiresAt } = renewed;
       const sealed = sealCredentials(ring, userId, renewed.credentials);
-      yield* resealProviderKey(
-        userId,
-        OWNER_KIND.provider,
-        OWNER_KIND.kind,
-        row.sealedKey,
-        sealed,
-        expiresAt,
-      );
+      yield* resealProviderKey(userId, row.id, row.sealedKey, sealed, expiresAt);
       return {
         outcome: CHATGPT_ACCESS.READY,
         accessToken: Redacted.make(renewed.credentials.accessToken),
@@ -737,7 +740,7 @@ const revokeOnce = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.flatMap((response) => response.json),
     Effect.flatMap(Schema.decodeUnknownEffect(DiscoverySchema)),
     Effect.scoped,
-    Effect.timeout(CALL_TIMEOUT),
+    Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.option,
   );
   if (Option.isNone(discovered)) return REVOKE_OUTCOME.RETRY;
@@ -770,20 +773,22 @@ const revokeSession = (credentials: SealedCredentials) =>
   );
 
 /**
- * Removes the account's ChatGPT plan, revoking its renewable session at
- * OpenAI first, under the row's lock so no renewal rotates the token being
- * revoked. The row goes whether or not OpenAI confirmed it; answers whether
+ * Removes the account's ChatGPT plan of this id, or its first where none is
+ * named, revoking its renewable session at OpenAI first, under the row's
+ * lock so no renewal rotates the token being revoked. The row goes whether or not OpenAI confirmed it; answers whether
  * it did, and true where there was nothing to revoke, as for a row the
  * retired third-party sign-in sealed, which OpenAI is never asked about.
  */
 export const removeChatGptCredentials = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   ring: KeyRing,
+  subscriptionId?: string,
 ) {
   return yield* withProviderKeyLocked(
     userId,
     OWNER_KIND.provider,
     OWNER_KIND.kind,
+    subscriptionId,
     Effect.fnUntraced(function* (locked) {
       if (Option.isNone(locked)) return true;
       const credentials = openCredentials(ring, userId, locked.value);
@@ -791,7 +796,7 @@ export const removeChatGptCredentials = /* @__PURE__ */ Effect.fnUntraced(functi
         credentials === undefined
           ? false
           : credentials === RETIRED || (yield* revokeSession(credentials));
-      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind);
+      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind, locked.value.id);
       return confirmed;
     }),
   );

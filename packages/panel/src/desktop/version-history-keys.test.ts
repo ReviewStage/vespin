@@ -3,9 +3,9 @@
 import { MOTION_DELAY_MS } from "@repo/brand";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";

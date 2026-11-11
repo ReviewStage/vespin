@@ -27,6 +27,7 @@ import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { feedbackDelivery } from "@repo/features/feedback";
 import type { LinkPlatform } from "@repo/features/link-open";
 import { TERMINAL_PORT_CHANNEL } from "@repo/features/terminal-acts";
+import { BUILD_TOO_OLD_WORDS } from "@repo/features/words";
 import { runModeFor } from "@repo/host";
 import {
   type ActPortDependencies,
@@ -89,7 +90,7 @@ import { version as appVersion } from "../../package.json";
 import { type ConnectTabs, connectTabs, tabBrowser } from "./connect-tab";
 import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-file-system";
 import { type PageLeave, tabLeave } from "./page-leave";
-import { failedChunkAnswer, PRELOAD_ERROR, staleBuildTab } from "./stale-build";
+import { failedChunkAnswer, PART_DID_NOT_LOAD, PRELOAD_ERROR, staleBuildTab } from "./stale-build";
 import { developmentFixtureProfile } from "./web-fixture";
 import {
   askTabNotifications,
@@ -97,7 +98,7 @@ import {
   tabNotificationsStatus,
   webNoticeDoors,
 } from "./web-notices";
-import { copyPng, downloadText, openTab, webPlatform } from "./web-platform";
+import { copyPng, copyRichText, downloadText, openTab, webPlatform } from "./web-platform";
 import { openTerminalSocketFromPage } from "./web-terminal-socket";
 
 /** Where the host in the tab keeps its files, inside the browser's storage (`local-storage-file-system.ts`). */
@@ -322,6 +323,9 @@ function platformProcedures(
     [KIND.WINDOW_COPY_IMAGE]: port[KIND.WINDOW_COPY_IMAGE].handler(({ input }) =>
       copyPng(Promise.resolve(input.png)),
     ),
+    [KIND.WINDOW_COPY_RICH]: port[KIND.WINDOW_COPY_RICH].handler(({ input }) =>
+      copyRichText(input),
+    ),
     [KIND.WINDOW_SAVE_FILE]: port[KIND.WINDOW_SAVE_FILE].handler(({ input }) =>
       downloadText({ name: input.name, text: input.text }),
     ),
@@ -464,6 +468,14 @@ const composedWeb = (
       });
       // A session that changes under the tab leaves it with a full page load (Neon's "When the session changes"), dropping the previous account's live reads.
       yield* linkSessionReload({ state, reload: () => location.reload() });
+      // A tab the service refused as older than it serves asks to move onto the build now live, as a chunk that failed to load does.
+      const askUpdate = failedChunkAnswer(staleBuildTab(tab, BUILD_TOO_OLD_WORDS));
+      yield* Effect.forkScoped(
+        Stream.runForEach(
+          Stream.changes(Stream.map(state.changes, ({ network }) => network.updateNeeded === true)),
+          (needed) => (needed ? askUpdate() : Effect.void),
+        ),
+      );
 
       const doors = yield* noticeDoors;
       // Whether the browser lets the tab post notifications, which Settings says under the switch:
@@ -591,7 +603,7 @@ export function composeWeb(
       Effect.suspend(() =>
         Stream.runForEach(
           Stream.fromEventListener(window, PRELOAD_ERROR),
-          failedChunkAnswer(staleBuildTab(tab)),
+          failedChunkAnswer(staleBuildTab(tab, PART_DID_NOT_LOAD)),
         ),
       ),
     ),

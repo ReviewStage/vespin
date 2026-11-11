@@ -1,8 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
-import { PRODUCT_NAME } from "@repo/features/product-name";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { type HostCapability, NO_EXPERIMENTS, SETTINGS_VIEW_COUNTED_AS } from "@repo/settings";
 import {
@@ -27,7 +26,6 @@ import {
   SettingsPage,
   Stack,
   TEXT_ELEMENT,
-  TEXT_FONT,
   TEXT_VARIANT,
   Text,
   TOOLBAR_LOOK,
@@ -41,8 +39,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
-import { LinkWorkspaceProvider, useCopyLinkItem } from "../copy-link-item.js";
-import { SettingsPageLink } from "../open-settings.js";
+import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
 import {
@@ -93,46 +90,22 @@ export interface SettingsStep {
 }
 
 /**
- * The line under the title of the pages that connect something, each
- * naming the one a reader may have meant: Integrations holds what the
- * account's own agents use, the product's MCP lets outside agents use the
- * account, CLI is the `vespin` command an agent with a shell runs, so a
- * reader who landed on one looking for another is sent across, and Hosts
- * says what a host is and where it is picked. No other page has one.
+ * The line under the title of the pages that connect something: one short
+ * sentence saying what the page is for, since its name alone may not. Agents
+ * says once, for both harnesses' lists, the order their credentials are
+ * tried in. The MCP & CLI page has none, since each of its two sections
+ * says under its own heading what it is for. No other page has one.
  */
 function pageDescription(view: SettingsView): ReactNode {
   switch (view) {
+    case SETTINGS_VIEW.AGENTS:
+      return <ReplayUnmask>Plans and API keys are used in the order listed.</ReplayUnmask>;
     case SETTINGS_VIEW.INTEGRATIONS:
-      return (
-        <ReplayUnmask>
-          Services your {PRODUCT_NAME} agents can use. To use {PRODUCT_NAME} from Claude Code,
-          Cursor, or another agent, go to <SettingsPageLink page={SETTINGS_VIEW.MCP} />.
-        </ReplayUnmask>
-      );
-    case SETTINGS_VIEW.MCP:
-      return (
-        <ReplayUnmask>
-          Use {PRODUCT_NAME} from Claude Code, Codex, Cursor, ChatGPT, and other agents. To give
-          your {PRODUCT_NAME} agents tools like Linear or Sentry, go to{" "}
-          <SettingsPageLink page={SETTINGS_VIEW.INTEGRATIONS} />. For the command line, go to{" "}
-          <SettingsPageLink page={SETTINGS_VIEW.CLI} />.
-        </ReplayUnmask>
-      );
-    case SETTINGS_VIEW.CLI:
-      return (
-        <ReplayUnmask>
-          Use {PRODUCT_NAME} from your terminal and your agents with the{" "}
-          <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-            {PRODUCT_NAME.toLowerCase()}
-          </Text>{" "}
-          command.
-        </ReplayUnmask>
-      );
+      return <ReplayUnmask>Apps your agents can use.</ReplayUnmask>;
     case SETTINGS_VIEW.HOSTS:
       return (
         <ReplayUnmask>
-          Macs and Linux servers of yours that run your agents instead of the cloud. Pick one under
-          a task's Runs on.
+          Run agents on your own Mac or Linux server instead of the cloud.
         </ReplayUnmask>
       );
     default:
@@ -155,7 +128,8 @@ function SettingsPageRow({
 }): React.JSX.Element {
   const page = settingsPageOf(view);
   const menu = useMenu(true);
-  const copyLink = useCopyLinkItem()({ kind: LINK_PLACE.SETTINGS, page: view });
+  const links = useLinkItems()({ kind: LINK_DESTINATION.SETTINGS, page: view });
+  const openInTab = useOpenInTab()({ kind: LINK_DESTINATION.SETTINGS, page: view });
   return (
     <li>
       <NavItem
@@ -163,15 +137,16 @@ function SettingsPageRow({
         current={current ? NAV_CURRENT.PAGE : undefined}
         roving
         onClick={onOpen}
-        contextMenu={copyLink === undefined ? undefined : menu.contextMenu()}
+        onOpenInTab={openInTab}
+        contextMenu={links.length === 0 ? undefined : menu.contextMenu()}
       >
         {page.title}
       </NavItem>
-      {menu.drawn === undefined || copyLink === undefined ? null : (
+      {menu.drawn === undefined || links.length === 0 ? null : (
         <ActionMenu
           label={PAGE_ACTIONS}
           menu={menu.drawn}
-          groups={[[copyLink]]}
+          groups={[links]}
           replayUnmasked
           onClose={menu.close}
         />

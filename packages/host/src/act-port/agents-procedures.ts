@@ -41,12 +41,13 @@ type NotedAgentAct =
   | "AGENTS_CHOOSE"
   | "AGENTS_RENAME"
   | "AGENTS_SERVERS"
+  | "AGENTS_PERMISSION_MODE"
   | "AGENTS_ADD_REPOSITORY"
   | "AGENTS_STOP"
   | "AGENTS_REWIND"
+  | "AGENTS_CLEAR"
   | "AGENTS_ARCHIVE"
-  | "AGENTS_PIN"
-  | "AGENTS_MARK_READ";
+  | "AGENTS_PIN";
 
 /** The answer as it stands, noted on its way to the panel. */
 function noted<Answer, E>(
@@ -119,6 +120,13 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
         declaredAnswer(AGENT_ACTS.AGENTS_SERVERS, acts.AGENTS_SERVERS, input),
       );
     }),
+    [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]: actPort[AGENT_ACT_KIND.AGENTS_PERMISSION_MODE].effect(
+      function* ({ input }) {
+        return yield* notedAgent(
+          declaredAnswer(AGENT_ACTS.AGENTS_PERMISSION_MODE, acts.AGENTS_PERMISSION_MODE, input),
+        );
+      },
+    ),
     [AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY]: actPort[AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY].effect(
       function* ({ input }) {
         return yield* notedAgent(
@@ -134,6 +142,11 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
     }) {
       return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_REWIND, acts.AGENTS_REWIND, input));
     }),
+    [AGENT_ACT_KIND.AGENTS_CLEAR]: actPort[AGENT_ACT_KIND.AGENTS_CLEAR].effect(function* ({
+      input,
+    }) {
+      return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_CLEAR, acts.AGENTS_CLEAR, input));
+    }),
     [AGENT_ACT_KIND.AGENTS_ARCHIVE]: actPort[AGENT_ACT_KIND.AGENTS_ARCHIVE].effect(function* ({
       input,
     }) {
@@ -143,13 +156,6 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
     }),
     [AGENT_ACT_KIND.AGENTS_PIN]: actPort[AGENT_ACT_KIND.AGENTS_PIN].effect(function* ({ input }) {
       return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_PIN, acts.AGENTS_PIN, input));
-    }),
-    [AGENT_ACT_KIND.AGENTS_MARK_READ]: actPort[AGENT_ACT_KIND.AGENTS_MARK_READ].effect(function* ({
-      input,
-    }) {
-      return yield* notedAgent(
-        declaredAnswer(AGENT_ACTS.AGENTS_MARK_READ, acts.AGENTS_MARK_READ, input),
-      );
     }),
     [AGENT_ACT_KIND.AGENTS_SHOWN]: actPort[AGENT_ACT_KIND.AGENTS_SHOWN].effect(function* ({
       input,

@@ -27,7 +27,7 @@ import {
   descriptionCommentsQuery,
   descriptionCommentsRetryMutation,
 } from "../live-reads.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 
 /**
  * use-description-comments.ts -- a description's comment threads, or one of its task's pages', as one control: held by the host while the surface shows them, and each write on its way back.
@@ -59,6 +59,7 @@ const COMMENT_NOTE = {
   NO_WORDS: "The words this comment was on are no longer in the description.",
   NOT_YOURS: "Only its writer can change this comment.",
   GONE: "This comment is no longer in the thread.",
+  TOO_MANY_FILES: "A comment can't carry that many files.",
   AGENT_AWAY: "That agent isn't running, so it couldn't take the thread.",
 } as const;
 
@@ -103,6 +104,8 @@ function refusalWords(refusal: DescriptionCommentRefusal): string {
       return COMMENT_NOTE.GONE;
     case DESCRIPTION_COMMENT_REFUSAL.KEY_TAKEN:
       return COMMENT_NOTE.NOT_CHANGED;
+    case DESCRIPTION_COMMENT_REFUSAL.TOO_MANY_FILES:
+      return COMMENT_NOTE.TOO_MANY_FILES;
   }
 }
 
@@ -130,7 +133,6 @@ export function useDescriptionComments(
         replayUnmasked: true,
         words,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface,
           cause: "refused" in answer ? FAILURE_CONDITION.REFUSED : FAILURE_CONDITION.NOT_KEPT,

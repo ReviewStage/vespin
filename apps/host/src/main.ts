@@ -6,16 +6,31 @@
  * at `lib/agent-runner.mjs` (`host-platform.ts`), and runs on the release's
  * own Node. The same bundle runs on every OS, as `process.platform` says
  * (`hostRuntime`). The account install (`apps/web/install/install.sh`)
- * runs it as the account it is installed in, on Linux and on a Mac alike:
- * each release unpacked under `~/.local/share/vespin-host/versions/<version>`,
- * `current` beside them linking to the one that runs, its state under
- * `~/.local/state/vespin-host`, which the release's `vespin-host` names
- * (`vespin-host.sh`), and a systemd user unit or a LaunchAgent running `run`
- * through `current`, and again a minute after any exit. This Mac's host is
- * that same install, which the desktop app starts and stops through launchd
- * (`apps/desktop/src/main/native/this-mac-host.ts`).
+ * runs it as the account it is installed in, on Linux and on a headless
+ * Mac: each release unpacked under
+ * `~/.local/share/vespin-host/versions/<version>`, `current` beside them
+ * linking to the one that runs, its state under `~/.local/state/vespin-host`,
+ * which the release's `vespin-host` names (`vespin-host.sh`), and a systemd
+ * user unit or a LaunchAgent running `run` through `current`, and again a
+ * minute after any exit.
  *
- * `run` is the command the service runs. A box that never connected says
+ * This Mac's host, on a Mac the desktop app runs on, is the same bundle
+ * shipped inside the app, its `lib/` under `Contents/Resources/host`, run on
+ * the Node the app carries by the LaunchAgent the app registers through
+ * `SMAppService` (`apps/desktop/src/main/native/this-mac-host.ts`), whose
+ * plist starts it as `run --bundled`. A bundled daemon keeps the account install's state
+ * root (`DARWIN_HOST.stateRoot`), so the box's record and its agents'
+ * folders carry over, but updates with the app rather than itself, and once
+ * its box is removed it rests as a refused one does: the app owns the
+ * bundle, the plist and the registration, so the daemon touches none of
+ * them, and the app removes what else the host left with
+ * `@repo/host/daemon`'s `uninstallBundledHost`.
+ *
+ * `run` is the command the service runs. It first locks its state root
+ * (`hostLockTaken`), and one that finds another daemon holding it says so
+ * and exits, touching nothing, so a second daemon on the same box, run by
+ * hand or by a second install, never settles the first's turns as runners
+ * gone. A box that never connected says
  * so and watches its state folder until a connect writes its record
  * (`hostDeviceWhen`), rather than exiting for its service to start it
  * over; one that did runs the daemon
@@ -23,7 +38,8 @@
  * runner it started with it. Once the service settles the box's secret as
  * refused, the host removed in Settings › Hosts, it stops them and marks its
  * record refused; the account install then removes itself, as `vespin-host
- * uninstall` does, run apart from its own service (`removeItself`), and any
+ * uninstall --keep-agents` does, run apart from its own service
+ * (`removeItself`), keeping its agents' folders and its log, and any
  * other run rests (`hostRefusedRest`) until the box is connected again. A
  * start on a refused record rests the same way, never removing anything,
  * since the install script starts the service before it connects the box
@@ -55,6 +71,7 @@ import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
   NodeChildProcessSpawner,
@@ -70,6 +87,7 @@ import {
   HOST_CONNECT_OUTCOME,
   HOST_DAEMON_END,
   HOST_LEAVE_OUTCOME,
+  HOST_LOCK,
   HOST_SERVICE,
   type HostPairingCode,
   type HostReleases,
@@ -78,6 +96,7 @@ import {
   hostArch,
   hostDaemon,
   hostDeviceWhen,
+  hostLockTaken,
   hostPlatform,
   hostRefusedRest,
   hostRuntime,
@@ -87,7 +106,7 @@ import {
   readHostDevice,
 } from "@repo/host/daemon";
 import { Environment, reporterLayer } from "@repo/host/effect";
-import { reportToStderr } from "@repo/host/node";
+import { armedWatchLayer, reportToStderr } from "@repo/host/node";
 import { ConfigProvider, Duration, Effect, Exit, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -132,13 +151,16 @@ const LEAVE_EXIT = { LEFT: 0, UNANSWERED: 1 } as const;
 /** The release's command, beside its `lib/`, whose `uninstall` removes the account install (`vespin-host.sh`). */
 const RELEASE_COMMAND = "bin/vespin-host";
 
+/** What a removed box runs of that command: the account install removed, its agents' folders and its log kept, since nobody is there to be asked about work that was not pushed. */
+const UNINSTALL_KEEPING_AGENTS = ["uninstall", "--keep-agents"] as const;
+
 /** The transient systemd unit a removed box's uninstall runs in, apart from the daemon's own unit, which it stops. */
 const UNINSTALL_UNIT = "vespin-host-uninstall";
 
 const COMMAND = { RUN: "run", CONNECT: "connect", LEAVE: "leave", VERSION: "version" } as const;
 
-/** The release's own folder: this bundle stands in its `lib/`. */
-const installFolder = path.resolve(path.dirname(process.argv[1] ?? "."), "..");
+/** The release's own folder, the app's `Contents/Resources/host` for a bundled one: this bundle stands in its `lib/`, whichever way its Node was started. */
+const installFolder = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 /**
  * The account install's releases, where this release's own real path
@@ -185,7 +207,9 @@ const runtime: HostRuntime | undefined =
 
 const nodeServices = Layer.mergeAll(
   NodeChildProcessSpawner.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
+    ),
   ),
   FetchHttpClient.layer,
   reporterLayer(reportToStderr),
@@ -203,14 +227,14 @@ const arch = ({ os: hostOs }: HostRuntime) =>
       : Effect.succeed(read);
   });
 
-/** The daemon on the box's record, a wait until a connect writes one, or a rest while the service refuses it; it ends once the daemon switched to a newer release. */
-const follow = (runtime: HostRuntime) =>
+/** The daemon on the box's record, a wait until a connect writes one, or a rest while the service refuses it; it ends once the daemon switched to one of the releases given, or was removed from an account install. */
+const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
   Effect.gen(function* () {
     const { stateRoot } = runtime;
     const device = yield* readHostDevice(stateRoot);
     if (Option.isNone(device)) {
       reportToStderr(
-        `${PRODUCT_NAME} host: this box is not connected. Run ${HOST_COMMAND} connect, or the install command from Settings › Hosts › Add hosts (${DEFAULT_INSTALL_COMMAND}), and approve the code it shows in ${PRODUCT_NAME}.`,
+        `${PRODUCT_NAME} host: this box is not connected. Run ${HOST_COMMAND} connect, or the install command from Settings › Machines › Add a machine (${DEFAULT_INSTALL_COMMAND}), and approve the code it shows in ${PRODUCT_NAME}.`,
       );
       yield* hostDeviceWhen(stateRoot, Option.isSome);
       return undefined;
@@ -238,12 +262,13 @@ const follow = (runtime: HostRuntime) =>
       device: device.value,
       version: VERSION,
       platform,
-      releases: accountReleases(),
+      releases,
+      pid: process.pid,
     });
     if (ended === HOST_DAEMON_END.REMOVED) {
       reportToStderr(`${PRODUCT_NAME} host: every agent it ran is stopped.`);
-      // Note that only the account install removes itself, since a run of any other build has no install to remove, and rests as a refused box does.
-      return accountReleases() === undefined ? undefined : ended;
+      // Note that only the account install removes itself, since a bundled or any other run has no install of its own to remove, and rests as a refused box does.
+      return releases === undefined ? undefined : ended;
     }
     return ended;
   }).pipe(Effect.repeat({ until: (ended) => ended !== undefined }));
@@ -307,8 +332,8 @@ const restartAsked = (service: HostService | undefined) =>
  * stopping the daemon's service, its first step, does not stop it too: in a
  * transient systemd unit of its own beside a unit, which a stop of the
  * unit's control group does not reach, and otherwise in a session of its
- * own, its words in the daemon's own log. Its input is no terminal, so it
- * asks nothing and removes every agent's folder. Whether it started.
+ * own, its words in the daemon's own log. It keeps every agent's folder and
+ * the log, asking nothing. Whether it started.
  */
 const uninstallApart = (service: HostService | undefined) => {
   const command = path.join(installFolder, RELEASE_COMMAND);
@@ -317,7 +342,15 @@ const uninstallApart = (service: HostService | undefined) => {
       Effect.flatMap(
         ChildProcess.make(
           "systemd-run",
-          ["--user", "--collect", "--quiet", "--unit", UNINSTALL_UNIT, command, "uninstall"],
+          [
+            "--user",
+            "--collect",
+            "--quiet",
+            "--unit",
+            UNINSTALL_UNIT,
+            command,
+            ...UNINSTALL_KEEPING_AGENTS,
+          ],
           { stdin: "ignore", stdout: "ignore", stderr: "ignore" },
         ),
         (handle) => handle.exitCode,
@@ -330,7 +363,7 @@ const uninstallApart = (service: HostService | undefined) => {
   // Note that a command that cannot start fails as an `error` event after the spawn returns, so the answer waits on `spawn` or `error`, whichever comes first.
   return Effect.callback<boolean>((resume) => {
     try {
-      const child = spawn(command, ["uninstall"], {
+      const child = spawn(command, UNINSTALL_KEEPING_AGENTS, {
         detached: true,
         stdio: ["ignore", "inherit", "inherit"],
       });
@@ -347,32 +380,48 @@ const uninstallApart = (service: HostService | undefined) => {
 
 /**
  * A box removed in Settings › Hosts removing itself, as `vespin-host
- * uninstall` would: its service, its agents' folders, its state and its
- * releases. The daemon exits once the uninstall has started, since the
- * uninstall stops its service within moments; one that did not start is
- * said, and a start of the service meanwhile rests on its refused record.
+ * uninstall --keep-agents` would: its service, its state and its releases,
+ * never its agents' folders or its log. The daemon exits once the uninstall
+ * has started, since the uninstall stops its service within moments; one
+ * that did not start is said, and a start of the service meanwhile rests on
+ * its refused record.
  */
 const removeItself = (service: HostService | undefined) =>
   Effect.gen(function* () {
     reportToStderr(
-      `${PRODUCT_NAME} host: removed in Settings › Hosts, so it removes itself from this account: its service, its agents' folders, its state and its releases.`,
+      `${PRODUCT_NAME} host: removed in Settings › Machines, so it removes itself from this account: its service, its state and its releases. Its agents' folders and this log stay.`,
     );
     if (!(yield* uninstallApart(service))) {
       reportToStderr(
-        `${PRODUCT_NAME} host: could not start its uninstall. Run ${HOST_COMMAND} uninstall to remove it.`,
+        `${PRODUCT_NAME} host: could not start its uninstall. Run ${HOST_COMMAND} uninstall --keep-agents to remove it.`,
       );
     }
   });
 
-/** `vespin-host run`: the daemon, resting while the service refuses the box's secret, until it switched to a newer release, which its service is asked to start at once, or the box was removed, which it removes itself from. */
-const run = (runtime: HostRuntime) =>
+/**
+ * `vespin-host run`: the daemon, resting while the service refuses the box's
+ * secret, until it switched to a newer release, which its service is asked
+ * to start at once, or the box was removed, which it removes itself from.
+ * `run --bundled`, the app's own LaunchAgent, is handed no releases, so it
+ * does neither and runs until launchd stops it. Either exits at once where
+ * another daemon holds the state root's lock.
+ */
+const run = (runtime: HostRuntime, bundled: boolean) =>
   Effect.gen(function* () {
+    // Note that a second daemon on the state root leaves before it touches anything, so the two never settle each other's turns as runners gone.
+    if ((yield* hostLockTaken(runtime.stateRoot)) === HOST_LOCK.HELD) {
+      reportToStderr(
+        `${PRODUCT_NAME} host: another ${HOST_COMMAND} already runs on ${runtime.stateRoot}, so this one exits.`,
+      );
+      return 0;
+    }
+    if (bundled) return yield* Effect.as(follow(runtime, undefined), 0);
     const service = yield* serviceRunning(runtime);
-    const ended = yield* follow(runtime);
+    const ended = yield* follow(runtime, accountReleases());
     if (ended === HOST_DAEMON_END.UPDATED) yield* restartAsked(service);
     if (ended === HOST_DAEMON_END.REMOVED) yield* removeItself(service);
     return 0;
-  });
+  }).pipe(Effect.scoped);
 
 /** `vespin-host leave`: the box removed from its account on its own secret, as `vespin-host uninstall` asks before it deletes that secret; only a call the service did not take is said, since the uninstall says the rest. */
 const leave = (runtime: HostRuntime) =>
@@ -479,7 +528,10 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
       ),
     ).pipe(Effect.as(1));
   }
-  if (command === COMMAND.RUN) return run(runtime);
+  if (command === COMMAND.RUN) {
+    const { values } = parseArgs({ args: [...rest], options: { bundled: { type: "boolean" } } });
+    return run(runtime, values.bundled === true);
+  }
   if (command === COMMAND.LEAVE) return leave(runtime);
   if (command === COMMAND.CONNECT) {
     const { values } = parseArgs({
@@ -496,7 +548,7 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
   }
   return Effect.sync(() =>
     process.stderr.write(
-      "usage: vespin-host run | connect [--origin <url>] [--name <name>] | version | uninstall\n",
+      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | version | uninstall [--keep-agents]\n",
     ),
   ).pipe(Effect.as(CONNECT_EXIT.USAGE));
 }

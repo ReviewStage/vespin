@@ -3,10 +3,10 @@
 import assert from "node:assert/strict";
 import { AGENT_MACHINE, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { Task, TaskSummary } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { BROWSER_TAB_OPEN_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { agentTab, cloudBrowserTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";

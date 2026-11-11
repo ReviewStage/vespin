@@ -25,10 +25,15 @@ export const FAILURE_REASON = {
   AUTHORIZE_TOKEN: "authorize-token",
   /** No subscription or API key of the member's pays for the model's provider: its harness's row on Settings › Agents connects one. */
   CONNECT_AGENTS: "connect-agents",
+  /** The agent's own machine is offline: the agent continued in the cloud carries the message on. */
+  CONTINUE_IN_CLOUD: "continue-in-cloud",
   OTHER: "other",
 } as const;
 
 export type FailureReason = (typeof FAILURE_REASON)[keyof typeof FAILURE_REASON];
+
+/** What a press that continues an agent in the cloud, off its machine gone offline, says. */
+export const CONTINUE_IN_CLOUD_LABEL = "Continue in the cloud";
 
 /** The remedies that mend a task's repository in the task's own place, and so name the task. */
 type TaskRemedyReason =
@@ -68,13 +73,24 @@ export type Failure =
       readonly provider?: ModelProvider | undefined;
     }
   | {
-      readonly reason: typeof FAILURE_REASON.GITHUB_TOKEN | typeof FAILURE_REASON.OTHER;
+      readonly reason:
+        | typeof FAILURE_REASON.GITHUB_TOKEN
+        | typeof FAILURE_REASON.CONTINUE_IN_CLOUD
+        | typeof FAILURE_REASON.OTHER;
       readonly text: string;
     };
 
 /** What a press that connects an agent's credential says: the harness it connects, or Settings where none is known. */
 function connectLabel(provider: ModelProvider | undefined): string {
   return provider === undefined ? "Open Settings" : `Connect ${harnessNameOf(provider)}`;
+}
+
+/** A press's rejection as a failure only Retry answers: an `Error`'s message, else the value itself. */
+export function rejectedFailure(rejected: unknown): Failure {
+  return {
+    reason: FAILURE_REASON.OTHER,
+    text: rejected instanceof Error ? rejected.message : String(rejected),
+  };
 }
 
 /** The remedy's label; none where only Retry answers. */
@@ -98,6 +114,8 @@ export function remedyLabel(failure: Failure): string | undefined {
       return `Authorize token for ${failure.organization}`;
     case FAILURE_REASON.CONNECT_AGENTS:
       return connectLabel(failure.provider);
+    case FAILURE_REASON.CONTINUE_IN_CLOUD:
+      return CONTINUE_IN_CLOUD_LABEL;
     case FAILURE_REASON.OTHER:
       return undefined;
   }
@@ -115,6 +133,7 @@ export function retriesBesideRemedy(failure: Failure): boolean {
     failure.reason === FAILURE_REASON.ADD_REPOSITORY ||
     failure.reason === FAILURE_REASON.GITHUB_TOKEN ||
     failure.reason === FAILURE_REASON.AUTHORIZE_TOKEN ||
-    failure.reason === FAILURE_REASON.CONNECT_AGENTS
+    failure.reason === FAILURE_REASON.CONNECT_AGENTS ||
+    failure.reason === FAILURE_REASON.CONTINUE_IN_CLOUD
   );
 }

@@ -1,4 +1,6 @@
 import { type HostedTerminalClient, terminalRelayAddress, webSocketOrigin } from "@repo/features";
+import { openedUnderCredential } from "@repo/features/relay-credential";
+import type { OpenTerminalSocket, TerminalSocket } from "@repo/features/relay-socket";
 import {
   TERMINAL_CONNECTION,
   TERMINAL_FLOW,
@@ -15,7 +17,8 @@ import {
   terminalShellParamsSchema,
 } from "@repo/features/terminal-view";
 import {
-  TERMINAL_RELAY_CLOSE,
+  RELAY_SOCKET_END,
+  socketEnding,
   TERMINAL_RELAY_FRAME,
   terminalRelayServiceFrameSchema,
 } from "@repo/features/terminal-wire";
@@ -41,8 +44,6 @@ import { type BrowserLiveConcern, browserLiveConcern } from "./compose-browser-l
 import type { Composer } from "./composer.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
-import { openedUnderCredential } from "./relay-credential.js";
-import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
 
 /**
@@ -93,8 +94,8 @@ export const TERMINAL_OPENING_RETRY = {
   LONGEST: Duration.seconds(30),
 } as const;
 
-/** How long a connection stays open with nothing typed, printed, or shown. */
-const TERMINAL_IDLE = Duration.minutes(10);
+/** How long a connection stays open with nothing typed, printed, or shown: as long as its sandbox runs past its last use (`@repo/sandbox`'s `SANDBOX_IDLE`), so the tab hears it idle as the sandbox stops. */
+const TERMINAL_IDLE = Duration.minutes(5);
 
 /** The service's side of the terminals, as this concern asks it. */
 export type TerminalClient = Pick<
@@ -143,13 +144,6 @@ function openingWait(asked: number): Duration.Duration {
     TERMINAL_OPENING_RETRY.LONGEST,
   );
 }
-
-/** The states a relay's close ends a connection in, by its code; any other close is a drop. */
-const ENDED_BY_CLOSE: ReadonlyMap<number, TerminalConnection> = new Map([
-  [TERMINAL_RELAY_CLOSE.STOPPED, TERMINAL_CONNECTION.STOPPED],
-  [TERMINAL_RELAY_CLOSE.GONE, TERMINAL_CONNECTION.GONE],
-  [TERMINAL_RELAY_CLOSE.EXITED, TERMINAL_CONNECTION.EXITED],
-]);
 
 /** How one socket's life ended, where the connection does not try again on its own schedule. */
 const SOCKET_ENDING = {
@@ -305,7 +299,10 @@ function composed(
         // Note that only this socket is let go here, because a wake may already have opened the next one.
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
-            if (connection.socket === socket) connection.socket = undefined;
+            // Note that the pacing is this socket's too, so no pause stands once it is gone.
+            if (connection.socket === socket) {
+              Object.assign(connection, { socket: undefined, unacked: 0, paused: false });
+            }
           }),
         );
         let attached = false;
@@ -328,22 +325,26 @@ function composed(
             Effect.forEach(typed, (bytes) => socket.send({ bytes }), { discard: true }),
           );
         });
-        const ended = closeCode === undefined ? undefined : ENDED_BY_CLOSE.get(closeCode);
-        if (ended !== undefined) {
-          yield* tell(
-            connection,
-            ended,
-            ended === TERMINAL_CONNECTION.EXITED ? exitCode : undefined,
-          );
-          return SOCKET_ENDING.ENDED;
+        const end = socketEnding(closeCode, exitCode, attached);
+        switch (end.kind) {
+          case RELAY_SOCKET_END.EXITED:
+            yield* tell(connection, TERMINAL_CONNECTION.EXITED, end.code);
+            return SOCKET_ENDING.ENDED;
+          case RELAY_SOCKET_END.STOPPED:
+            yield* tell(connection, TERMINAL_CONNECTION.STOPPED);
+            return SOCKET_ENDING.ENDED;
+          case RELAY_SOCKET_END.GONE:
+            yield* tell(connection, TERMINAL_CONNECTION.GONE);
+            return SOCKET_ENDING.ENDED;
+          case RELAY_SOCKET_END.STARTING:
+            yield* tell(connection, TERMINAL_CONNECTION.STARTING);
+            return yield* Effect.fail(new SandboxStarting());
+          case RELAY_SOCKET_END.UNATTACHED:
+            return yield* drop;
+          case RELAY_SOCKET_END.DROPPED:
+            yield* tell(connection, TERMINAL_CONNECTION.RECONNECTING);
+            return SOCKET_ENDING.DROPPED;
         }
-        if (closeCode === TERMINAL_RELAY_CLOSE.STARTING) {
-          yield* tell(connection, TERMINAL_CONNECTION.STARTING);
-          return yield* Effect.fail(new SandboxStarting());
-        }
-        if (!attached) return yield* drop;
-        yield* tell(connection, TERMINAL_CONNECTION.RECONNECTING);
-        return SOCKET_ENDING.DROPPED;
       }),
     );
 

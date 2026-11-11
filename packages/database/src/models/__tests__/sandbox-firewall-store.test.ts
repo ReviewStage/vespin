@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
-import { getTestDB, openTaskAgent, openWorkspace } from "../../testing/index.js";
+import { getTestDB, openAgentOnOwnTask, openWorkspace } from "../../testing/index.js";
 import { keepFirewallLaunch, readFirewallLaunch } from "../sandbox-firewall-store.js";
 
 /**
@@ -27,7 +27,7 @@ const openOwner = Effect.gen(function* () {
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
-  const agentId = yield* openTaskAgent(userId, yield* openWorkspace(userId), null);
+  const agentId = yield* openAgentOnOwnTask(userId, yield* openWorkspace(userId));
   return { userId, sandboxSessionId: `sbx_${randomUUID()}`, agentId };
 });
 
@@ -78,7 +78,7 @@ it.layer(getTestDB())("the launch kept at a sandbox session's firewall", (it) =>
         const neighbor = {
           userId: ended.userId,
           sandboxSessionId: `sbx_${randomUUID()}`,
-          agentId: yield* openTaskAgent(ended.userId, yield* openWorkspace(ended.userId), null),
+          agentId: yield* openAgentOnOwnTask(ended.userId, yield* openWorkspace(ended.userId)),
         };
         yield* keepFirewallLaunch(ended, launchOf(ended.agentId, "sealed-ended"), AT);
         yield* keepFirewallLaunch(neighbor, launchOf(neighbor.agentId, "sealed-neighbor"), AT);

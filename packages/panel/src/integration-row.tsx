@@ -18,7 +18,7 @@ import {
   integrationAccountLabel,
 } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { readFailedWords } from "@repo/features/words";
+import { readFailedWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AccountWords,
@@ -46,6 +46,7 @@ import {
 import type { ServerRow } from "@repo/ui/agent-servers-model";
 import { GLYPH, PlusIcon, RefreshCwIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
@@ -57,6 +58,7 @@ import { confirmFailure, refusedShown } from "./failure-report.js";
 import { type GitHubConnectControl, useGitHubConnection } from "./github-connect.js";
 import { GRANT_OUTCOME, grantedBySignIn, useIntegrationGrant } from "./integration-grant.js";
 import type { IntegrationStatuses } from "./integration-statuses.js";
+import { type RenameShape, renameWrite } from "./rename-write.js";
 import { Highlighted } from "./search-field.js";
 import { MenuRow } from "./settings/menu-row.js";
 
@@ -88,10 +90,19 @@ const ROW_LINE = {
 
 /** What a row offers to mend its connection, on its button or in its ⋯. */
 const ROW_ACT = {
-  RECONNECT: "Reconnect",
+  RECONNECT: VERB.RECONNECT,
   ADD_ACCOUNT: "Add another account",
   RENAME: "Rename",
 } as const;
+
+/** Where a row's own grant stands: at rest, a sign-in being begun, or one being called off. */
+const ROW_GRANT = {
+  IDLE: "idle",
+  CONNECTING: "connecting",
+  CANCELING: "canceling",
+} as const;
+
+type RowGrant = (typeof ROW_GRANT)[keyof typeof ROW_GRANT];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
@@ -243,6 +254,19 @@ function disconnectAccount(
   );
 }
 
+type RenameKind = typeof ACT_KIND.INTEGRATIONS_RENAME;
+
+/** An account's rename at `provider` as its mutation is asked, by the connection it names; refused where the service answers a failure. */
+function integrationRename(
+  provider: ServerRow["provider"],
+): RenameShape<ActResult<RenameKind>, ActVariables<RenameKind>> {
+  return {
+    ask: (connection, label) => ({ provider, connection, label }),
+    asked: ({ connection, label }) => ({ subjectId: connection, name: label }),
+    refused: (answer) => "failure" in answer,
+  };
+}
+
 /** One account's row at a provider, or a provider's where the account holds none there. */
 export function IntegrationRow({
   row,
@@ -263,26 +287,27 @@ export function IntegrationRow({
   /** Asks the account's server for its tools again, offered where the read failed. */
   onRetryTools: () => void;
 }): React.JSX.Element {
-  const { mutateAsync: sendIntegrationsRename } = useMutation(
-    actMutation(ACT_KIND.INTEGRATIONS_RENAME),
-  );
   const { provider, connection, name, account, accountName } = row;
+  const renaming = useMutation(actMutation(ACT_KIND.INTEGRATIONS_RENAME));
+  const rename = useInlineRename(
+    account === undefined ? undefined : connection,
+    renameWrite(renaming, integrationRename(provider)),
+  );
   const { cancelSignIn } = statuses;
   const grant = useIntegrationGrant(statuses);
   const bySignIn = grantedBySignIn(provider);
   const github = useGitHubConnection();
   const signIn = statuses.signInOf(connection);
-  const [connecting, setConnecting] = useState(false);
-  // Note that the sign-in's own Cancel is the one busy while it is called off, as Connect is while one begins.
-  const [canceling, setCanceling] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // Note that the sign-in's own Cancel is the one busy while it is called off, as Connect is while one begins, and either holds every other grant back.
+  const [stage, setStage] = useState<RowGrant>(ROW_GRANT.IDLE);
   const [rejection, setRejection] = useState<string | undefined>(undefined);
   // Several accounts at a provider are each renamed, and each disconnected leaving the others.
   const several = row.accounts > 1 && account !== undefined;
 
   /** How a grant begun went, said under the row where it could not begin. */
   const began = (outcome: (typeof GRANT_OUTCOME)[keyof typeof GRANT_OUTCOME]) => {
-    setConnecting(false);
+    // A Cancel under way stands until it answers, whatever a grant begun before it answers.
+    setStage((now) => (now === ROW_GRANT.CANCELING ? now : ROW_GRANT.IDLE));
     if (outcome === GRANT_OUTCOME.NOT_OPENED) setRejection(ROW_LINE.NOT_OPENED);
     if (outcome === GRANT_OUTCOME.REFUSED) {
       setRejection(`${name} could not be connected. Try again.`);
@@ -290,37 +315,29 @@ export function IntegrationRow({
   };
 
   const connect = useCallback(() => {
-    setConnecting(true);
+    setStage(ROW_GRANT.CONNECTING);
     setRejection(undefined);
     void grant.begin(connection).then(began);
   }, [grant, connection, name]);
 
   const addAccount = () => {
-    setConnecting(true);
+    setStage(ROW_GRANT.CONNECTING);
     setRejection(undefined);
     void grant.add(provider).then(began);
   };
 
   const cancel = useCallback(() => {
-    setConnecting(true);
-    setCanceling(true);
+    setStage(ROW_GRANT.CANCELING);
     setRejection(undefined);
     void cancelSignIn(connection).then((canceled) => {
-      setConnecting(false);
-      setCanceling(false);
+      setStage(ROW_GRANT.IDLE);
       if (!canceled) setRejection(`The sign-in to ${name} could not be canceled. Try again.`);
     });
   }, [cancelSignIn, connection, name]);
 
-  /** A rename ended: a new label asked of the service, which the host draws over its read on the press, so every surface draws it at once; a refusal puts the old one back and is said under the row. */
+  /** A rename ended: a new label asked of the service, which the host draws over its read on the press, so every surface draws it at once; a refusal puts the old one back, reopens the field over the label asked, and is said under the row. */
   const renamed = ({ value: label }: InlineEditEnd) => {
-    setEditing(false);
-    if (label === undefined || label === account?.label) return;
-    setRejection(undefined);
-    const refused = () => setRejection(`${name} could not be renamed. Try again.`);
-    void sendIntegrationsRename({ provider, connection, label }).then((answer) => {
-      if ("failure" in answer) refused();
-    }, refused);
+    rename.end(label === account?.label ? undefined : label);
   };
 
   const connected = status === INTEGRATION_STATUS.CONNECTED;
@@ -346,6 +363,7 @@ export function IntegrationRow({
     confirmFailure(FAILURE_SURFACE.INTEGRATION_DISCONNECT),
   );
 
+  const busy = stage !== ROW_GRANT.IDLE;
   const line = rowLine(provider, status, health, signIn);
   const broken = connected && health.kind === CONNECTION_HEALTH.BROKEN && health.reconnect;
   const waiting = !connected && signIn?.kind === SIGN_IN.WAITING;
@@ -360,7 +378,7 @@ export function IntegrationRow({
   const reconnect = {
     label: ROW_ACT.RECONNECT,
     icon: <RefreshCwIcon />,
-    disabled: connecting,
+    disabled: busy,
     onSelect: connect,
   };
   const leave = {
@@ -370,7 +388,7 @@ export function IntegrationRow({
     onSelect: disconnect.ask,
   };
   const naming = several
-    ? [{ label: ROW_ACT.RENAME, icon: <GLYPH.RENAME />, onSelect: () => setEditing(true) }]
+    ? [{ label: ROW_ACT.RENAME, icon: <GLYPH.RENAME />, onSelect: rename.begin }]
     : [];
   const adding =
     !bySignIn && statuses.canAdd(provider) && row.accounts < INTEGRATION_ACCOUNTS_MAX
@@ -378,7 +396,7 @@ export function IntegrationRow({
           {
             label: ROW_ACT.ADD_ACCOUNT,
             icon: <PlusIcon />,
-            disabled: connecting,
+            disabled: busy,
             onSelect: addAccount,
           },
         ]
@@ -409,9 +427,13 @@ export function IntegrationRow({
           adornment:
             accountName === undefined ? undefined : (
               <InlineEdit
-                value={account === undefined ? accountName : integrationAccountLabel(account)}
+                value={
+                  account === undefined
+                    ? accountName
+                    : (rename.asked ?? integrationAccountLabel(account))
+                }
                 label={`${name} account name`}
-                editing={editing && account !== undefined}
+                editing={rename.editing}
                 maxLength={INTEGRATION_LABEL_MAX}
                 look={INLINE_EDIT_LOOK.INPUT}
                 onEnd={renamed}
@@ -431,23 +453,29 @@ export function IntegrationRow({
             ) : (
               <RowLineText line={line} />
             ),
-          error: refusedShown(rejection, FAILURE_SURFACE.INTEGRATION_RENAME),
+          // Note that a rename's refusal is the rename's own, so a connect begun meanwhile neither erases it nor is hidden by it.
+          error: refusedShown(
+            [rename.refused ? `${name} could not be renamed. Try again.` : undefined, rejection]
+              .filter((words) => words !== undefined)
+              .join(" "),
+            FAILURE_SURFACE.INTEGRATION_RENAME,
+          ),
           control: waiting ? (
             <>
               <Button
                 variant={BUTTON_VARIANT.QUIET}
-                busy={connecting && !canceling}
+                busy={stage === ROW_GRANT.CONNECTING}
                 busyLabel="Reopening the sign-in"
-                disabled={canceling}
+                disabled={stage === ROW_GRANT.CANCELING}
                 onClick={connect}
               >
                 {SIGN_IN_ACTION.REOPEN}
               </Button>
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={canceling}
+                busy={stage === ROW_GRANT.CANCELING}
                 busyLabel="Canceling the sign-in"
-                disabled={connecting && !canceling}
+                disabled={stage === ROW_GRANT.CONNECTING}
                 onClick={cancel}
               >
                 {SIGN_IN_ACTION.CANCEL}
@@ -460,7 +488,7 @@ export function IntegrationRow({
               variant={BUTTON_VARIANT.OUTLINE}
               // Note that the name starts with the words the button shows, so a voice command that says them finds it, and names the row, since several rows may offer the same words.
               label={`${grantLabel(status, signIn)} ${name}`}
-              busy={connecting}
+              busy={busy}
               busyLabel={`Connecting ${name}`}
               onClick={connect}
             >

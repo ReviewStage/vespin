@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
@@ -8,7 +9,6 @@ import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views"
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { pageTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -72,9 +72,6 @@ const PAGE_TAB: SidePanelTab = pageTab("page-1");
 
 /** An Inbox item of the task. */
 const ITEM: InboxChoice = { taskId: DOCUMENT_TASK.id, itemId: "item-1" };
-
-/** A coding agent of the task's. */
-const AGENT = "agent-1";
 
 /** An automation of Acme's, whose page stands over the plan. */
 const AUTOMATION = "automation-1";
@@ -522,37 +519,6 @@ test("on a narrow stage a task opened from a list on its plan is one step, whose
 
   act(() => window.history().onBack());
   assert.equal(window.at().inbox.open, true, "Back returns to the list in one step");
-});
-
-test("on a narrow stage a side panel shut over a page other than its plan's is no step: it neither steps back to the plan behind nor takes the step of the plan opened after it", () => {
-  const window = mount(SHELL_ROOM.NARROW, ON_TASK);
-  // An agent's page draws a side panel of its own, which a narrow room holds full screen over it.
-  window.press(() => window.tab().agentView.onOpen(AGENT));
-  window.move((held) => ({ ...held, panel: { open: true, tab: PAGE_TAB } }));
-  assert.equal(window.addresses().length, 2);
-
-  window.press(() => window.back().pane());
-  assert.equal(window.at().panel.open, false);
-  assert.equal(window.agent(), AGENT, "shutting the panel leaves the agent's page standing");
-  assert.equal(window.addresses().length, 2, "and is no step");
-
-  window.press(() => window.tab().agentView.onClose());
-  assert.equal(window.addresses().length, 3, "the plan opened after it is a step of its own");
-  assert.equal(window.standingAddress(), TASK_PATH);
-  act(() => window.history().onBack());
-  assert.equal(window.agent(), AGENT, "Back returns to the agent's page");
-});
-
-test("Back to an agent's page stands the side panel beside it on the tab its step held, which the address does not say", () => {
-  const window = mount(SHELL_ROOM.WIDE, ON_TASK);
-  window.press(() => window.tab().agentView.onOpen(AGENT));
-  window.move((held) => ({ ...held, panel: { open: true, tab: PAGE_TAB } }));
-  window.press(() => window.tab().agentView.onClose());
-  window.move((held) => ({ ...held, panel: { open: false, tab: undefined } }));
-
-  act(() => window.history().onBack());
-  assert.equal(window.agent(), AGENT);
-  assert.deepEqual(window.at().panel, { open: true, tab: PAGE_TAB });
 });
 
 test("on a narrow stage an Inbox item opened from its list is a step, and the Inbox's way back steps back to the list", () => {

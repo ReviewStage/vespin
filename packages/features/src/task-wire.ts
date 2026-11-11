@@ -1,18 +1,17 @@
-import { WireValueSchema } from "@repo/wire";
+import { literalsReadingUnknown, WireValueSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
   AGENT_MACHINE,
-  AGENT_STATUS,
   agentPullRequestSchema,
   agentRunsOnRequestSchema,
   agentStartRequestFields,
+  agentStatusSchema,
   agentSummarySchema,
   CHECK_SUMMARY,
   extraRepositoryRefusalSchema,
   localAgentRefusalSchema,
   PULL_REQUEST_STATE,
   startBrief,
-  tasklessAgentSchema,
 } from "./agent-wire.js";
 import { DEVICE_KIND, DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
@@ -112,6 +111,20 @@ export const TASK_STATUS = {
 
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
 
+/**
+ * The statuses a task's work is settled in, finished or cut: the two a
+ * finish stamps `completedAt` for and counts, an archive keeps, and a
+ * blocker holds nothing up in. Every reader takes this one set.
+ */
+export const TASK_SETTLED = [TASK_STATUS.DONE, TASK_STATUS.CANCELED] as const;
+
+export type TaskSettledStatus = (typeof TASK_SETTLED)[number];
+
+/** Whether a task standing in `status` is settled (`TASK_SETTLED`); none, from a service before statuses, is not. */
+export function isTaskSettled(status: TaskStatus | undefined): status is TaskSettledStatus {
+  return TASK_SETTLED.some((settled) => settled === status);
+}
+
 /** The order a menu lists the statuses in: the order work moves through them, the settled last. */
 export const TASK_STATUS_ORDER: readonly TaskStatus[] = [
   TASK_STATUS.BACKLOG,
@@ -156,6 +169,18 @@ export type TaskMode = (typeof TASK_MODE)[keyof typeof TASK_MODE];
 export const taskStatusSchema = EffectSchema.Literals(Object.values(TASK_STATUS));
 
 export const taskPrioritySchema = EffectSchema.Literals(Object.values(TASK_PRIORITY));
+
+/** Where a task stands as a reader decodes it: a status this build does not know reads as under way, since a newer service's status is one a task still moves through. */
+export const taskStatusReadSchema = literalsReadingUnknown(
+  Object.values(TASK_STATUS),
+  TASK_STATUS.IN_PROGRESS,
+);
+
+/** How much a task matters as a reader decodes it: a priority this build does not know reads as none. */
+export const taskPriorityReadSchema = literalsReadingUnknown(
+  Object.values(TASK_PRIORITY),
+  TASK_PRIORITY.NONE,
+);
 
 export const taskModeSchema = EffectSchema.Literals(Object.values(TASK_MODE));
 
@@ -421,6 +446,7 @@ function updateNamesAChange(update: {
   status?: TaskStatus;
   priority?: TaskPriority;
   assigneeId?: string | null;
+  stopAgents?: boolean;
   runsOn?: TaskRunsOnRequest;
 }): boolean {
   return Object.keys(update).length > 0;
@@ -442,6 +468,9 @@ function positionIsPinned(update: { pinned?: boolean; pinPosition?: string }): b
  * member of the task's workspace before it is kept, and null clears it. A move is the task's
  * owner's alone, into a workspace they are a member of whose GitHub reaches
  * the task's repository, and lets its assignee go where they are no member there.
+ * A move to Done or Canceled archives the task's idle agents; with
+ * `stopAgents`, which the member confirmed, it stops the running ones first
+ * and archives them too, and a build from before it names none.
  * A task holds no place to run, so `runsOn`, which a released desktop still
  * sends, is read so that build's change decodes, and changes nothing.
  */
@@ -457,6 +486,8 @@ export const taskUpdateRequestSchema = EffectSchema.Struct({
   status: EffectSchema.optionalKey(taskStatusSchema),
   priority: EffectSchema.optionalKey(taskPrioritySchema),
   assigneeId: EffectSchema.optionalKey(EffectSchema.NullOr(taskAssigneeIdSchema)),
+  /** With a move to Done or Canceled, whether the task's running agents are stopped and archived with it. */
+  stopAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
   runsOn: EffectSchema.optionalKey(taskRunsOnRequestSchema),
 }).check(EffectSchema.makeFilter(updateNamesAChange), EffectSchema.makeFilter(positionIsPinned));
 
@@ -697,7 +728,7 @@ const taskSummaryFields = {
    */
   origin: EffectSchema.optionalKey(taskOriginSchema),
   /** Where the task stands; absent from a service before tasks had one. */
-  status: EffectSchema.optionalKey(taskStatusSchema),
+  status: EffectSchema.optionalKey(taskStatusReadSchema),
   /**
    * Epoch milliseconds the task's status last moved to Done or Canceled;
    * absent while it stands in any other, and from a service before this was
@@ -705,7 +736,7 @@ const taskSummaryFields = {
    */
   completedAt: EffectSchema.optionalKey(countedNumber),
   /** How much the task matters; absent from a service before tasks had one. */
-  priority: EffectSchema.optionalKey(taskPrioritySchema),
+  priority: EffectSchema.optionalKey(taskPriorityReadSchema),
   /** The task's number in its workspace, which its key is drawn from with the workspace's prefix; absent from a service before tasks had one. */
   number: EffectSchema.optionalKey(taskNumberSchema),
   /**
@@ -756,7 +787,7 @@ const taskAgentLineSchema = EffectSchema.Struct({
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   /**
    * Epoch milliseconds: when its run began while it works, and when its
    * newest turn ended once it has; absent where neither is known.
@@ -806,14 +837,14 @@ export type TaskPullRequests = typeof taskPullRequestsSchema.Type;
 
 /**
  * The pull request one agent opened, as its row keeps what the service last
- * read of it on GitHub, the agent on a plan or none, archived or not, and
- * the plan it stands on: what a plan's or an agent's own tabs and summary
- * offer the agent's Changes by.
+ * read of it on GitHub, the agent archived or not, and the task it stands
+ * on: what a task's or an agent's own tabs and summary offer the agent's
+ * Changes by.
  */
 export const listedPullRequestSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
-  /** The plan the agent stands on; null for one on none. */
-  taskId: EffectSchema.NullOr(EffectSchema.String),
+  /** The task the agent stands on. */
+  taskId: EffectSchema.String,
   pullRequest: agentPullRequestSchema,
 });
 
@@ -823,8 +854,7 @@ export type ListedPullRequest = typeof listedPullRequestSchema.Type;
  * The reader's own pin of one agent on a plan (`agent_pin`), as a plan's
  * is: the agent, the plan it stands on, when they pinned it, and where they
  * dragged it in the sidebar's Pinned section (`pin-order.ts`), absent while
- * it stands by `pinnedAt`. An agent with no plan carries its pin on its own
- * row (`tasklessAgentSchema`).
+ * it stands by `pinnedAt`.
  */
 export const taskAgentPinSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
@@ -986,12 +1016,10 @@ export type Task = typeof taskSchema.Type;
 /**
  * The plan list as the window draws it from the rows it follows live
  * (`task-list-live.ts`): every plan the account reaches, newest started
- * first, each with its agents counted, and beside them every agent with no
- * plan in the account's workspaces, newest started first.
+ * first, each with its agents counted.
  */
 const taskListAnswerSchema = EffectSchema.Struct({
   plans: EffectSchema.Array(taskSummarySchema),
-  planlessAgents: EffectSchema.optionalKey(EffectSchema.Array(tasklessAgentSchema)),
 });
 
 export type TaskListAnswer = typeof taskListAnswerSchema.Type;
@@ -999,14 +1027,11 @@ export type TaskListAnswer = typeof taskListAnswerSchema.Type;
 /**
  * The plan list (GET): every plan the account owns, newest started first,
  * each with its agents in brief and the lines a released client requires
- * (`heldTaskSummarySchema`), and beside them every agent with no plan in the
- * account's workspaces, newest started first, the archived ones of each only
- * where the query asks for them. The agents are absent from a service before
- * them.
+ * (`heldTaskSummarySchema`). Every agent stands on a task, so it carries no
+ * `planlessAgents`, which a released desktop reads as optional.
  */
 export const heldTaskListAnswerSchema = EffectSchema.Struct({
   plans: EffectSchema.Array(heldTaskSummarySchema),
-  planlessAgents: taskListAnswerSchema.fields.planlessAgents,
 });
 
 export type HeldTaskListAnswer = typeof heldTaskListAnswerSchema.Type;

@@ -3,16 +3,17 @@
 import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, fileTab, pageTab, STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { type AdminRoute, useAdminRoute } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
+import { type AgentRoute, useAgentRoute } from "../agent-route.js";
 import { runAppCommand } from "../app-commands.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
 import { stepTitle } from "../history-titles.js";
@@ -50,6 +51,8 @@ import type { RoutedPlace } from "./routed-places.js";
 import { taskAtOf, taskOfAt } from "./task-step.js";
 import {
   type HistoryBehind,
+  type RecentStep,
+  type RecentSteps,
   type TaskVisits,
   useHistoryMouseButtons,
   useRoutedStanding,
@@ -104,13 +107,14 @@ function mount(
     views: RoutedViews,
   ) => StepTitle | undefined,
 ) {
-  let history: (WindowHistory & HistoryBehind & TaskVisits) | undefined;
+  let history: (WindowHistory & HistoryBehind & TaskVisits & RecentSteps) | undefined;
   let open: TasksControl | undefined;
   let backs: NarrowBacks | undefined;
   let restand: ((tasks: TasksControl) => void) | undefined;
   let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
   let person: PersonRoute | undefined;
+  let agentPage: AgentRoute | undefined;
   let automations: AutomationsRoute | undefined;
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
@@ -137,6 +141,7 @@ function mount(
     // The Board and a person's page stand where the router does, as the window's root reads them, and are left for the state's place.
     board = useBoardRoute();
     person = usePersonRoute();
+    agentPage = useAgentRoute();
     automations = useAutomationsRoute({
       narrow: false,
     });
@@ -287,6 +292,9 @@ function mount(
       }),
     /** Opens the Board of the workspace at `workspace` by the router, as the Board's own doors do. */
     openBoard: (workspace: string) => act(() => board?.onOpen(workspace)),
+    /** Opens an agent's own page by the router, as a door naming an agent the task list does not carry does. */
+    openAgentPage: (agentId: string, workspace: string) =>
+      act(() => agentPage?.onOpen(agentId, workspace)),
     /** Opens a person's page by the router, as a press on their name does. */
     openPerson: (userId: string, name: string | undefined, workspace: string) =>
       act(() => person?.onOpen(userId, name, workspace)),
@@ -516,6 +524,26 @@ test("a person's page is a step of its own, which Back from a plan opened after 
   act(() => window.history().onBack());
   await settle();
   assert.equal(window.at(), "/acme/person/user-maya");
+  act(() => window.history().onBack());
+  await settle();
+  assert.equal(window.at(), "/acme/person/user-charles");
+});
+
+test("an agent's own page, which opens its agent on its task, is a step Back from that task passes over", async () => {
+  const listed = { workspaces: [ACME], workspace: ACME };
+  const window = mount(listedTab(listed));
+  window.openPerson("user-charles", undefined, ACME.slug);
+  window.openAgentPage("8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21", ACME.slug);
+  await settle();
+  window.leaveFor(
+    listedTab({
+      ...listed,
+      page: TASKS_PAGE.DOCUMENT,
+      activeTaskId: TASK_ID,
+      boundFor: TASK_ID,
+    }),
+  );
+
   act(() => window.history().onBack());
   await settle();
   assert.equal(window.at(), "/acme/person/user-charles");
@@ -1335,4 +1363,84 @@ test("a version history opened over another task is counted once, as the history
     (event) => (event as [string, { surface: string }])[1].surface === "version_history",
   );
   assert.equal(histories.length, 1, JSON.stringify(counted));
+});
+
+/** What a step ⌃Tab would step to shows: a task's column and side panel, or a routed place's address. */
+function screenOf(step: RecentStep): string {
+  const task = step.place.task;
+  if (task === undefined) return step.place.address;
+  const column = task.column;
+  const side = task.side;
+  const columnWord =
+    column === undefined || typeof column === "string" || column.kind !== STRIP_TAB_KIND.AGENT
+      ? "none"
+      : column.agent;
+  const sideWord =
+    side === null || side === undefined
+      ? "shut"
+      : typeof side !== "string" && side.kind === STRIP_TAB_KIND.FILE
+        ? side.file
+        : side;
+  return `${columnWord} beside ${sideWord}`;
+}
+
+test("⌃Tab's screens are Back's steps, most recent first: a tab chosen in the side panel's strip takes the screen in place, a column tab and an Inbox item are each their own, and a step Back lands on comes first", () => {
+  const readme = fileTab("README.md");
+  const notes = fileTab("docs/notes.md");
+  const onItem = listedTab({ inboxStands: { chosen: { itemId: "item-1", taskId: TASK_ID } } });
+  const window = mount(onTabs({ column: AGENT_A, side: readme }));
+  press();
+  window.stand(onTabs({ column: AGENT_A, side: notes }));
+  press();
+  window.stand(onTabs({ column: AGENT_B, side: notes }));
+  press();
+  window.stand(onItem);
+  assert.deepEqual(window.history().recent().map(screenOf), [
+    "/acme/inbox/item-1",
+    "agent-b beside docs/notes.md",
+    "agent-a beside docs/notes.md",
+  ]);
+
+  act(() => window.history().onBack());
+  const recent = window.history().recent();
+  assert.deepEqual(recent.map(screenOf), [
+    "agent-b beside docs/notes.md",
+    "/acme/inbox/item-1",
+    "agent-a beside docs/notes.md",
+  ]);
+  assert.deepEqual(
+    recent.map((step) => step.standing),
+    [true, false, false],
+  );
+});
+
+test("⌃Tab goes to a screen as a visit after the one standing, standing it as Back stands a step it lands on, so Back returns from it", () => {
+  const shown: string[] = [];
+  // Note that the panes' doors are the window's wherever it stands, so the Inbox holds the task's as the window does.
+  const { mainTabs, sidePanel } = onTabs({ column: AGENT_A, shown });
+  const onItem = listedTab({
+    mainTabs,
+    sidePanel: { ...sidePanel, open: false },
+    inboxStands: { chosen: { itemId: "item-1", taskId: TASK_ID } },
+  });
+  const window = mount(onTabs({ column: AGENT_A, shown }));
+  press();
+  window.stand(onTabs({ column: AGENT_B, shown }));
+  press();
+  window.stand(onItem);
+  const agentA = window.history().recent()[2];
+  assert.ok(agentA !== undefined);
+
+  act(() => window.history().onVisitStep(agentA.place));
+  assert.deepEqual(shown, ["column:agent-a", "side:shut"]);
+  window.stand(onTabs({ column: AGENT_A, shown }));
+  assert.equal(window.addresses().length, 4, "one visit after the Inbox item");
+  assert.deepEqual(window.history().recent().map(screenOf), [
+    "agent-a beside shut",
+    "/acme/inbox/item-1",
+    "agent-b beside shut",
+  ]);
+
+  act(() => window.history().onBack());
+  assert.equal(window.at(), "/acme/inbox/item-1");
 });

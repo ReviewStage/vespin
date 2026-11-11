@@ -1,3 +1,4 @@
+import { shortCommit } from "@repo/features/code-ref-words";
 import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_FILE_REFUSAL, type TaskFileRefusal } from "@repo/features/task-wire";
@@ -47,14 +48,6 @@ const FILE_REFUSAL_LINE = {
   [TASK_FILE_REFUSAL.NOT_REACHABLE]: `${PRODUCT_NAME}'s GitHub App no longer reaches this task's repository.`,
   [TASK_FILE_REFUSAL.UNAVAILABLE]: "GitHub could not be read.",
 } as const satisfies Record<TaskFileRefusal, string>;
-
-/** The characters of a commit's SHA a line names it by, as GitHub abbreviates one. */
-const SHORT_COMMIT_CHARS = 7;
-
-/** A commit as a line names it: its SHA cut as GitHub abbreviates one. */
-export function shortCommit(sha: string): string {
-  return sha.slice(0, SHORT_COMMIT_CHARS);
-}
 
 /**
  * What a File tab says in place of a file refused: the table's line, and

@@ -192,7 +192,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     audio: { microphoneStatus: MICROPHONE_STATUS.GRANTED },
     tasks: IDLE_TASKS_VIEW,
     agents: { unseen: [] },
-    inbox: { waiting: [], tasks: [], taskless: [], automations: [], agents: [], failedRuns: [] },
+    inbox: { waiting: [], tasks: [], failedRuns: [] },
     [LIVE_READ.ACCOUNT_PREFERENCES]: NO_KEYS_HELD,
     [LIVE_READ.AGENT_ORIGINS]: NO_AGENT_ORIGINS,
     [LIVE_READ.INBOX_ITEMS]: UNREAD,
@@ -263,9 +263,7 @@ function inCaseWorkspaces(
     tasks,
     ...(patch[LIVE_READ.INBOX_ITEMS] === undefined
       ? {
-          [LIVE_READ.INBOX_ITEMS]: {
-            rows: { [INBOX_SCOPE_KIND.PLAN]: {}, [INBOX_SCOPE_KIND.AGENT]: {} },
-          },
+          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: {} } },
         }
       : undefined),
     ...(patch[LIVE_READ.AUTOMATIONS] === undefined
@@ -917,8 +915,8 @@ export function holdPages(
     [TASKS_ACT_KIND.TASKS_PAGES_FOLLOW]: (place) => {
       asked.push(place);
       const read = pagesOf(place);
-      const kind = "taskId" in place ? PAGE_OWNER.TASK : PAGE_OWNER.AGENT;
-      const id = "taskId" in place ? place.taskId : place.agentId;
+      const kind = PAGE_OWNER.TASK;
+      const id = place.taskId;
       // Note that the host pushes what it read once the hold is taken, never inside it.
       if (read !== undefined && held[kind][id] === undefined) {
         held = { ...held, [kind]: { ...held[kind], [id]: read } };

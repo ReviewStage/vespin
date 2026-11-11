@@ -9,6 +9,7 @@ import {
   TURN_STATUS,
   type TurnStatus,
 } from "@repo/wire";
+import { and, eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -17,6 +18,7 @@ import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
 import { getTestDB, plansOf } from "../../testing/index.js";
 import {
   listMessagesBefore,
+  listMessagesFrom,
   listMessagesPast,
   listTurnOpeners,
   messageCursorNow,
@@ -158,7 +160,7 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
   );
 
   it.effect(
-    "a read back from the end answers the newest rows below the sequence asked, oldest first, and none of another account's conversation",
+    "a read back from the end answers the newest rows below the sequence asked, and a read on from a place the oldest at or above it, oldest first, and none of another account's conversation",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
@@ -178,6 +180,10 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
           seqsOf(yield* listMessagesBefore(other, conversation, {}, Number.MAX_SAFE_INTEGER, 2)),
           [],
         );
+        // A read on from a place answers the oldest rows at or above it, oldest first.
+        assert.deepEqual(seqsOf(yield* listMessagesFrom(owner, conversation, {}, 2, 2)), [2, 3]);
+        assert.deepEqual(seqsOf(yield* listMessagesFrom(owner, conversation, {}, 5, 2)), [5]);
+        assert.deepEqual(seqsOf(yield* listMessagesFrom(other, conversation, {}, 0, 2)), []);
       }),
   );
 
@@ -327,6 +333,19 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
             [quiet, 1],
           ].sort(),
         );
+
+        // Note that a reader after the newest parts alone is handed the last of them, in order.
+        yield* Database.use((db) =>
+          db
+            .update(messages)
+            .set({ parts: ["One", "Two", "Three"].map((text) => ({ type: "text", text })) })
+            .where(and(eq(messages.conversationId, busy), eq(messages.seq, 3))),
+        );
+        const tails = yield* newestJournalsOfReached([busy], {}, 2);
+        assert.deepEqual(tails.get(busy)?.message.parts, [
+          { type: "text", text: "Two" },
+          { type: "text", text: "Three" },
+        ]);
       }),
   );
 });

@@ -1,5 +1,5 @@
 /**
- * use-inbox-search.ts -- the listed workspace's Inbox as ⌘K searches it: every item of every standing task holding one, and of every agent with no task something waits on, read only while a search asks for them.
+ * use-inbox-search.ts -- the listed workspace's Inbox as ⌘K searches it: every item of every standing task holding one, read only while a search asks for them.
  *
  * The palette reads the same followed inboxes the window's Inbox lists
  * (`use-holder-inbox-items.ts`), so an item found
@@ -9,16 +9,15 @@
  * them at once while their follows come back.
  */
 
-import { useMemo } from "react";
-import { type InboxGroup, type InboxListed, needsYou } from "./inbox-model.js";
 import {
-  agentHoldings,
+  type InboxGroup,
+  type InboxListed,
   inboxGroups,
-  NO_HOLDINGS,
-  taskHoldings,
-  useHolderInboxItems,
-} from "./use-holder-inbox-items.js";
-import { useInboxAgents, useListedInbox } from "./use-inbox-slices.js";
+  needsYou,
+} from "@repo/features/inbox-list-model";
+import { useMemo } from "react";
+import { NO_HOLDINGS, taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
+import { useListedInbox } from "./use-inbox-slices.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /** What a search finds in the Inbox: its items, what needs the reader first, then the latest changed; and how far their read has come. */
@@ -45,33 +44,21 @@ function searchOrder(groups: readonly InboxGroup[], readerId: string | undefined
 export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch {
   const { inboxTasks } = useListedInbox(tasks);
   const standing = tasks.listed.tasks;
-  const agents = useInboxAgents();
   // Note that nothing is followed while no search asks.
   const holdings = useMemo(
     () =>
       asked
-        ? [
-            ...taskHoldings(
-              inboxTasks.filter((holding) => standing.some((task) => task.id === holding.taskId)),
-            ),
-            ...agentHoldings(agents),
-          ]
+        ? taskHoldings(
+            inboxTasks.filter((holding) => standing.some((task) => task.id === holding.taskId)),
+          )
         : NO_HOLDINGS,
-    [asked, inboxTasks, standing, agents],
+    [asked, inboxTasks, standing],
   );
   const read = useHolderInboxItems(holdings);
-  const workspaceId = tasks.workspace?.id;
   const items = useMemo(() => {
-    const groups = asked
-      ? inboxGroups(read.items, {
-          tasks: inboxTasks,
-          listed: standing,
-          agents,
-          workspaceId,
-        })
-      : [];
+    const groups = asked ? inboxGroups(read.items, { tasks: inboxTasks, listed: standing }) : [];
     return searchOrder(groups, tasks.me);
-  }, [asked, inboxTasks, standing, read.items, agents, workspaceId, tasks.me]);
+  }, [asked, inboxTasks, standing, read.items, tasks.me]);
   // Note that an inbox counts as read only once its push holds what main says it now holds, since an older push kept from the last search may lack the item sought.
   const reading = read.pending;
   const { onRetry } = read;

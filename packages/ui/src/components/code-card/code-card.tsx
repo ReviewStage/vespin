@@ -4,9 +4,13 @@ import { cssCustomProperties } from "../../css.js";
 import { useUntilFound } from "../../use-until-found.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 import { CopyButton } from "../copy-button/copy-button.js";
-import { OneLine } from "../one-line/one-line.js";
 import { TextButton } from "../text-button/text-button.js";
-import { wholeWordsHint } from "../tooltip/hint.js";
+import {
+  BlockCardHeader,
+  CODE_CARD_TITLE,
+  type CodeCardTitle,
+  type CodeCardTitlePicker,
+} from "./block-card-header.js";
 
 /**
  * code-card.tsx -- the window's one card for a block of code: a header naming its language or file with the one Copy, its lines in the host's colors, and a cut at 40 lines.
@@ -48,6 +52,12 @@ import { wholeWordsHint } from "../tooltip/hint.js";
  * edge to edge.
  */
 
+export {
+  CODE_CARD_TITLE,
+  type CodeCardTitle,
+  type CodeCardTitlePicker,
+} from "./block-card-header.js";
+
 /** How many lines a block shows before the rest waits behind Show all. */
 const CODE_CARD_CUT_LINES = 40;
 
@@ -69,30 +79,12 @@ export const CODE_ROW = {
 
 export type CodeRow = (typeof CODE_ROW)[keyof typeof CODE_ROW];
 
-/** What a header's title is: a name, set in mono (a language or a file), or words, set as the window's own (a suggestion's "Suggested change"). */
-export const CODE_CARD_TITLE = {
-  NAME: "name",
-  WORDS: "words",
-} as const;
-
-export type CodeCardTitle = (typeof CODE_CARD_TITLE)[keyof typeof CODE_CARD_TITLE];
-
 /** Each row's tint, by what it does. */
 const ROW_CLASS = {
   [CODE_ROW.ADDED]: "ui-code-card-row block px-list-inset bg-code-added",
   [CODE_ROW.REMOVED]: "ui-code-card-row block px-list-inset bg-code-removed",
   [CODE_ROW.CONTEXT]: "ui-code-card-row block px-list-inset",
 } as const satisfies Record<CodeRow, string>;
-
-/** Each title's face: a name in mono, words in the label's weight and the text's ink. */
-const TITLE_CLASS = {
-  [CODE_CARD_TITLE.NAME]: "ui-code-card-title flex min-w-0 items-center font-mono",
-  [CODE_CARD_TITLE.WORDS]:
-    "ui-code-card-title flex min-w-0 items-center font-label text-foreground",
-} as const satisfies Record<CodeCardTitle, string>;
-
-/** A glyph before the title, at an icon's size on the title's line. */
-const GLYPH = "ui-code-card-glyph mr-icon-gap inline-flex flex-none [&>svg]:size-icon-16";
 
 /** The lines, whole and scrolling sideways, each run in its color for the appearance it stands in. */
 const BODY =
@@ -111,8 +103,8 @@ function runColors({ color, lightColor }: CodeToken): React.CSSProperties | unde
   return cssCustomProperties(colors);
 }
 
-/** One line's runs, each in its color where the host colored them. */
-function lineRuns(tokens: CodeLines[number]): ReactNode {
+/** One line's runs, each in its color where the host colored them, as a code card and a code editor draw them. */
+export function lineRuns(tokens: CodeLines[number]): ReactNode {
   return tokens.map((token, at) => (
     <span key={at} style={runColors(token)}>
       {token.text}
@@ -156,7 +148,8 @@ function CodeRuns({
   text: readonly string[];
   lines: CodeLines | undefined;
 }): ReactNode {
-  if (lines === undefined) return text.join("\n");
+  // Note that an empty block holds one empty line, so it stands a line tall, as an empty block in the editor does.
+  if (lines === undefined) return text.length === 1 && text[0] === "" ? "\n" : text.join("\n");
   return lines.map((tokens, line) => (
     // Note that a line's place is its identity: the lines of one block never reorder.
     <Fragment key={line}>
@@ -164,6 +157,52 @@ function CodeRuns({
       {lineRuns(tokens)}
     </Fragment>
   ));
+}
+
+/**
+ * The header a code card wears, alone: `title` and its glyph, the header's
+ * own controls, and the one Copy. A code block open in a text's editor wears
+ * it over the editor's own lines, so the block reads the same edited as
+ * drawn, and lets its title be chosen there (`picker`), its language.
+ */
+export function CodeCardHeader({
+  glyph,
+  title,
+  titleIs = CODE_CARD_TITLE.NAME,
+  picker,
+  copied,
+  actions,
+  copy,
+}: {
+  /** A glyph before the title, such as the language's file icon; none for a title alone. */
+  glyph?: ReactNode;
+  /** What the lines are: the language they are written in, or the file they came from or a chip naming it. */
+  title: ReactNode;
+  /** Whether a text title is a name, in mono, or words. */
+  titleIs?: CodeCardTitle;
+  /** The title as a press opening its owner's menu, a language's; a title that cannot be chosen without one. */
+  picker?: CodeCardTitlePicker | undefined;
+  /** What Copy copies; none draws no Copy. */
+  copied: string | undefined;
+  /** Controls of the header's own, before its Copy. */
+  actions?: ReactNode;
+  /** The caller's platform act that puts words on the clipboard (`CopyButton`). */
+  copy: (text: string) => Promise<void>;
+}): React.JSX.Element {
+  return (
+    <BlockCardHeader
+      glyph={glyph}
+      title={title}
+      titleIs={titleIs}
+      picker={picker}
+      actions={
+        <>
+          {actions}
+          {copied === undefined ? null : <CopyButton text={copied} what={COPY_WHAT} copy={copy} />}
+        </>
+      }
+    />
+  );
 }
 
 /** What a block's own words are, or what a caller draws in their place. */
@@ -242,20 +281,14 @@ export function CodeCard({
       aria-label={label}
       {...data}
     >
-      <figcaption className="ui-code-card-header flex min-w-0 items-center justify-between gap-control-gap border-b border-border bg-muted pl-list-inset text-caption text-muted-foreground">
-        <span className={TITLE_CLASS[titleIs]} data-title={titleIs}>
-          {glyph === undefined ? null : <span className={GLYPH}>{glyph}</span>}
-          {typeof title === "string" ? (
-            <OneLine hint={wholeWordsHint(title)}>{title}</OneLine>
-          ) : (
-            title
-          )}
-        </span>
-        <span className="ui-code-card-actions ml-auto flex flex-none">
-          {actions}
-          {copied === undefined ? null : <CopyButton text={copied} what={COPY_WHAT} copy={copy} />}
-        </span>
-      </figcaption>
+      <CodeCardHeader
+        glyph={glyph}
+        title={title}
+        titleIs={titleIs}
+        copied={copied}
+        actions={actions}
+        copy={copy}
+      />
       {code === undefined ? (
         body
       ) : (

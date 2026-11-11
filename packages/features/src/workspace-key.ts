@@ -53,6 +53,16 @@ export interface KeySpan<Known> {
   readonly known: Known;
 }
 
+/** Every word among `words` shaped like a task's key, in order, whether a task is listed by it or not. */
+export function keyWordsIn(words: string): readonly KeySpan<undefined>[] {
+  return [...words.matchAll(KEY_IN_WORDS)].map((match) => ({
+    key: match[0],
+    start: match.index,
+    end: match.index + match[0].length,
+    known: undefined,
+  }));
+}
+
 /**
  * Each task's key that `known` holds standing among the words, in order; a
  * word shaped like one that `known` does not hold, `UTF-8` say, is left as
@@ -62,18 +72,10 @@ export function keySpansIn<Known>(
   words: string,
   known: ReadonlyMap<string, Known>,
 ): readonly KeySpan<Known>[] {
-  const spans: KeySpan<Known>[] = [];
-  for (const match of words.matchAll(KEY_IN_WORDS)) {
-    const held = known.get(match[0]);
-    if (held === undefined) continue;
-    spans.push({
-      key: match[0],
-      start: match.index,
-      end: match.index + match[0].length,
-      known: held,
-    });
-  }
-  return spans;
+  return keyWordsIn(words).flatMap((span) => {
+    const held = known.get(span.key);
+    return held === undefined ? [] : [{ ...span, known: held }];
+  });
 }
 
 /** Whether the words typed are a task's key whole, as `stag-422` is STAG-422: the case and the space around them aside. */

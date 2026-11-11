@@ -257,7 +257,7 @@ async function inbox(
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] } },
   });
   // The host lays the agent's transcript, which names a page of its task, once its tab holds it.
   pushedTranscripts(() => [TRANSCRIPT]);
@@ -562,5 +562,9 @@ test("an element of a page beside the Inbox opens its comment in the item's box'
   );
   // The editor mounts once its bundle lands, its words the writer's own alone.
   await vi.waitFor(() => started.querySelector(".ProseMirror") ?? assert.fail("the editor stands"));
-  assert.equal(started.querySelector(".composer-quote"), null, "the words do not repeat the quote");
+  assert.equal(
+    started.querySelector(".composer-editor blockquote"),
+    null,
+    "the words do not repeat the quote",
+  );
 });

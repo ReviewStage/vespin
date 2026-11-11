@@ -38,7 +38,8 @@ const TASK_ID = "3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b";
 const PAGE_ID = "26494df1-595a-4364-abf7-85781c65a9f8";
 const TITLED_AGENT = "7b1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f";
 const UNTITLED_AGENT = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e60";
-const TASKLESS_AGENT = "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f61";
+/** An agent of another listed plan, which a link names by itself alone. */
+const OTHER_AGENT = "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f61";
 
 /** A plan the window lists, still Untitled, and one it lists not. */
 const UNTITLED_TASK = "4e5f6a7b-8c9d-4e0f-8a1b-2c3d4e5f6a72";
@@ -75,7 +76,7 @@ const TASK_AGENTS: readonly ListedAgent[] = [
 /** A plan whose agents have not named it yet. */
 const { agents: _agents, ...UNNAMED } = TASK;
 
-/** Main's document: the plans listed, an agent on no task, and the open plan's page. */
+/** Main's document: the plans listed, their agents, and the open plan's page. */
 const STATE: AppStateSnapshot = stateWith(
   {},
   {
@@ -83,21 +84,19 @@ const STATE: AppStateSnapshot = stateWith(
       ...IDLE_TASKS_VIEW,
       listStatus: TASKS_READ.READY,
       tasks: [TASK, { ...UNNAMED, id: UNTITLED_TASK, name: UNTITLED_TASK_NAME }],
-      taskAgents: TASK_AGENTS,
-      tasklessAgents: [
+      taskAgents: [
+        ...TASK_AGENTS,
         {
-          id: TASKLESS_AGENT,
-          planId: null,
+          id: OTHER_AGENT,
+          planId: UNTITLED_TASK,
           turnId: null,
           title: "Answer workspace questions",
           model: "openai/gpt-5.5",
           effort: "medium",
           status: AGENT_STATUS.COMPLETED,
           createdAt: AT,
-          automationId: null,
           workspaceId: "workspace-acme",
           repository: null,
-          activityAt: AT,
         },
       ],
       activeTaskId: TASK_ID,
@@ -106,7 +105,6 @@ const STATE: AppStateSnapshot = stateWith(
       [PAGE_OWNER.TASK]: {
         [TASK_ID]: { rows: [{ id: PAGE_ID, title: "Invite funnel", version: 2, at: AT }] },
       },
-      [PAGE_OWNER.AGENT]: {},
     },
   },
 );
@@ -180,7 +178,7 @@ test("a chip written under an old name is called by the name the window holds no
       `[@Untitled](${PLAN}),`,
       `[@Wire it](${PLAN}/agent/${TITLED_AGENT}),`,
       `[@Agent](${PLAN}/agent/${UNTITLED_AGENT}),`,
-      `[@Workspace questions](${HOME}/agent/${TASKLESS_AGENT}),`,
+      `[@Workspace questions](${HOME}/agent/${OTHER_AGENT}),`,
       `[@Old funnel](${PLAN}/page/${PAGE_ID}),`,
       `[@Rollout](${PLAN}#rollout-plan),`,
       `[@Rollout](${PLAN}#rollout),`,

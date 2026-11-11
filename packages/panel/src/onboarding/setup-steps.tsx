@@ -26,7 +26,7 @@ import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
-import { useWelcomed } from "../desktop/desktop-welcome.js";
+import { welcomed } from "../desktop/desktop-welcome.js";
 import { confirmFailure } from "../failure-report.js";
 import { workspaceMembersQuery } from "../live-reads.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
@@ -124,7 +124,7 @@ export function useSetupGate(
     (accountId !== undefined && finishedOnDevice.includes(accountId));
   // Note that the models are the ones the host holds for the account, so nothing here asks for them.
   const { models, modelsFailed } = tasks.newTask;
-  const fresh = useWelcomed(tasks);
+  const fresh = welcomed(tasks);
   // Note that a read that failed is taken as an agent standing, so a hitch never stands setup before an account that has worked.
   const agent =
     models !== undefined
@@ -367,11 +367,6 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title={team === undefined ? "Create a team workspace" : "Your team workspace"}
-        description={
-          team === undefined
-            ? "Your team shares tasks, agents, and the repositories you connect next."
-            : "Change its name or photo, or invite more of your team."
-        }
         foot={
           <AuthStepFoot
             at={at + 1}
@@ -397,7 +392,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title="Connect an agent"
-        description="Run agents on your ChatGPT or Claude plan, or an API key."
+        description="Set up a plan or an API key. Pick which one new agents use."
         foot={foot(agent, last ? "Finish" : "Continue")}
       >
         <AgentConnectSection onConnected={onConnected} />

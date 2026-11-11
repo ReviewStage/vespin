@@ -2,20 +2,23 @@
 
 import assert from "node:assert/strict";
 import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
+import { PULL_REQUEST_OPEN } from "@repo/settings";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
-import { withQueryClient } from "../testing/copy-feedback.js";
+import { handSettings } from "../testing/app-state.js";
+import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
-import { BranchChip, LinesChanged, type PublishedDoors, PublishedRow } from "./agent-published.js";
+import { LinesChanged, type PublishedDoors, PublishedRow } from "./agent-published.js";
 
 /**
  * agent-published.test.ts -- the pull request's row pinned over an agent's
  * box opens the agent's Pull request tab where a side panel takes it, and
  * the pull request on GitHub where none does; where the press opened the
  * tab, its right-click offers GitHub's page instead, beside the branch's
- * copies. The box's foot wears the branch's chip only while no pull
- * request stands. Synthetic ids.
+ * copies; where the account opens pull requests on GitHub, the other way
+ * round. Synthetic ids.
  */
 
 const URL = "https://github.com/acme/relay/pull/42";
@@ -127,29 +130,21 @@ test("under a finger, the pull request's row draws no ⋯, and held it offers it
   menuItem("Open on GitHub");
 });
 
+test("where the account opens pull requests on GitHub, the pull request's row opens its page and its right-click offers the tab", async () => {
+  handSettings({ pullRequestOpen: PULL_REQUEST_OPEN.GITHUB });
+  const { row, asked } = drawRow(true);
+  // Lets the window's first read of the settings land.
+  await settleQueries();
+  act(() => row.click());
+  rightClick(row);
+  act(() => menuItem(`Open in ${PRODUCT_NAME}`).click());
+  assert.deepEqual(asked, [`github ${URL}`, "tab"]);
+});
+
 test("where no panel takes the tab, the pull request's row opens it on GitHub", () => {
   const { row, asked } = drawRow(false);
   act(() => row.click());
   assert.deepEqual(asked, [`github ${URL}`]);
-});
-
-test("the box's foot wears the branch's chip, opening the branch compared on GitHub, only while no pull request stands", () => {
-  const { doors, asked } = doorsAsked(true);
-  const branchOnly = { ...PUBLISHED, pullRequest: null };
-  const chip =
-    drawn(createElement(BranchChip, { published: branchOnly, doors })) ??
-    assert.fail("the branch's chip stands");
-  act(() => chip.click());
-  assert.deepEqual(asked, [
-    "github https://github.com/acme/relay/compare/luke/expiry-job?expand=1",
-  ]);
-  act(() => root?.unmount());
-
-  assert.equal(
-    drawn(createElement(BranchChip, { published: PUBLISHED, doors })),
-    null,
-    "a pull request's row stands over the box instead",
-  );
 });
 
 test("the pull request's row reads as every place names it, its number then its title", () => {

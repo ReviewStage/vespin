@@ -59,7 +59,7 @@ test("an archived agent's composer row is named by its words and carries Stop an
       stop: () => Promise.resolve(true),
     }),
   );
-  assert.equal(named(note), "Unarchive to send messages");
+  assert.equal(named(note), "This agent is archived");
   press(note, "Stop");
   press(note, "Unarchive");
 });

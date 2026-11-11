@@ -118,6 +118,7 @@ beforeEach(() => {
         agent: DEFAULT_CHOICE,
         chaptersModel: CHAPTERS_MODEL_DEFAULT,
         slackNotifications: true,
+        sounds: { list: [], choices: { finish: undefined, ask: undefined } },
       },
     },
   });
@@ -728,6 +729,29 @@ test("an agent's start still out lets its words go, so New task opened before it
   assert.match(card.note() ?? "", /Vespin cannot reach acme\/web\./u);
 });
 
+test("a refusal opens the card again on its words ahead of those written in New task while the start was out", async () => {
+  let answer: (refused: Failure | undefined) => void = () => undefined;
+  const card = await mount(
+    new Promise<Failure | undefined>((resolve) => {
+      answer = resolve;
+    }),
+  );
+  card.type("Dark mode");
+  await card.key("Enter");
+  await card.reopen();
+  card.type("Light mode");
+  await card.key("Escape");
+  await act(async () =>
+    answer({ reason: FAILURE_REASON.OTHER, text: "Vespin cannot reach acme/web." }),
+  );
+  await settle();
+
+  assert.deepEqual(
+    [...card.field().querySelectorAll("p")].map((line) => line.textContent),
+    ["Dark mode", "Light mode"],
+  );
+});
+
 test("words typed before the workspaces are read stay in the box as the workspace lands, over its older draft, and are its draft", async () => {
   const card = await mount();
   await card.list("workspace-personal");
@@ -951,6 +975,61 @@ test("an owner of a workspace whose GitHub reaches no repository is offered Choo
   pressWay(await openChip(), "Choose repositories");
 
   assert.deepEqual(dialog.links, [WORKSPACE_GITHUB]);
+});
+
+/** A read answering that the App is installed and reaches one repository. */
+const ONE_REACHED = () =>
+  Promise.resolve({
+    repositories: {
+      installed: true,
+      repositories: [
+        {
+          owner: "acme",
+          name: "web",
+          fullName: "acme/web",
+          defaultBranch: "main",
+          private: true,
+          updatedAt: 1,
+        },
+      ],
+      installationUrl: "https://github.com/apps/luke/installations/new",
+    },
+  });
+
+test("an owner's repository list ends in Configure repositories in Settings, opening the workspace's GitHub in Settings", async () => {
+  const dialog = await mount(undefined, undefined, {
+    scope: "workspace-acme",
+    list: ONE_REACHED,
+  });
+
+  await openChip();
+  const configure =
+    [...document.querySelectorAll<HTMLElement>("[role='option'], button")].find(
+      (each) => each.textContent === "Configure repositories in Settings",
+    ) ?? assert.fail("the menu offers Configure repositories in Settings");
+  act(() => configure.click());
+
+  assert.deepEqual(dialog.links, [WORKSPACE_GITHUB]);
+});
+
+test("a member's repository list ends in whom to ask to configure repositories, with nothing to press", async () => {
+  fakeActPort({});
+  handMembers(() => ({ rows: { members: PEOPLE } }));
+  await mount(undefined, undefined, {
+    scope: "workspace-acme",
+    manages: false,
+    list: ONE_REACHED,
+  });
+
+  await openChip();
+
+  await vi.waitFor(() =>
+    assert.equal(
+      document.querySelector(".ui-searchable-menu-last-line")?.textContent,
+      "Ask Dean or Charles to configure repositories",
+    ),
+  );
+  assert.equal(document.body.textContent?.includes("Configure repositories in Settings"), false);
 });
 
 /** How the GitHub row ends for a workspace with a GitHub connected whose read finds none installed. */

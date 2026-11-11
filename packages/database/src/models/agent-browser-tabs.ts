@@ -7,9 +7,8 @@
  * upsert as it acts on a tab, a close, and the list of its own tabs, is the
  * service's and reads no account, as the sandbox's terminal lease reads
  * none. A member's side reads through the rule a whole agent is read by: a
- * coding agent's tabs are listed only to one who sees that agent and, for
- * one on a task, that task too (`agentVisibleTo`), so an agent on no task
- * is reached by the agent alone, and any other reads as none at all. A task's tabs are its agents' together, each read
+ * coding agent's tabs are listed only to one who sees that agent and its
+ * task too (`agentVisibleTo`), and any other reads as none at all. A task's tabs are its agents' together, each read
  * through the agent's own row (`agent.task_id`), never the task the
  * tab's row was written under, so a tab follows its agent. Whether the member may drive the tab, which a coding
  * agent on its starter's own token keeps to the starter, is the service's to
@@ -56,7 +55,7 @@ const CURSOR_KINDS = Object.values(BROWSER_CURSOR_KIND);
 const BrowserTabSchema = Schema.Struct({
   id: Schema.String,
   conversationId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   targetId: Schema.String,
   address: Schema.String,
   title: Schema.String,
@@ -138,14 +137,12 @@ function shown(text: string): string {
 
 /**
  * The task of the agent whose conversation is named, read from the agent's
- * own row rather than taken from the caller; null for an agent on none. Note
- * that the column is still written but no read reaches a tab by it: a tab is
- * reached through its agent's row (`agentOfPlace`).
+ * own row rather than taken from the caller. Note that a tab is reached
+ * through its agent's row (`agentOfPlace`), and the column is the topic its
+ * writes wake (`sync/tables.ts`).
  */
 function taskOfConversation(conversationId: string) {
-  return sql<
-    string | null
-  >`(select ${agentTable.taskId} from ${agentTable} where ${agentTable.conversationId} = ${conversationId})`;
+  return sql<string>`(select ${agentTable.taskId} from ${agentTable} where ${agentTable.conversationId} = ${conversationId})`;
 }
 
 /**

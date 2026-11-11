@@ -60,6 +60,7 @@ import {
   subject,
   TASK_ID,
   type TranscriptLive,
+  TURN_CHANGES,
   WAITING,
   WORKSPACE_ID,
 } from "./testing/agents-subject.js";
@@ -176,6 +177,10 @@ it.effect("each method asks the service once and answers what it said, whole", (
     });
     assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID }), CHANGES);
     assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID, number: 11 }), CHANGES);
+    assert.deepEqual(
+      yield* acts.AGENTS_TURN_CHANGES({ agentId: AGENT_ID, messageId: "line-1" }),
+      TURN_CHANGES,
+    );
     assert.deepEqual(
       yield* acts.CHAPTERS_GENERATE({
         agentId: AGENT_ID,
@@ -333,6 +338,7 @@ it.effect("each method asks the service once and answers what it said, whole", (
       `page:${AGENT_ID}`,
       `changes:${AGENT_ID}`,
       `changes:${AGENT_ID}#11`,
+      `turn-changes:${AGENT_ID}:line-1`,
       `chapters-generate:${AGENT_ID}#11`,
       `github-image:${AGENT_ID}:https://camo.githubusercontent.com/abc`,
       `pull-request-action:${AGENT_ID}#11:${PULL_REQUEST_ACTION.READY_FOR_REVIEW}`,
@@ -1371,7 +1377,6 @@ const PLAN_SCOPE = { kind: "plan", id: TASK_ID } as const;
 /** Steps taken until the host has told `times` inboxes, since a row's digest is the platform's own promise. */
 const toldTimes = (told: () => readonly unknown[], times: number) =>
   Effect.repeat(Effect.yieldNow, { until: () => told().length >= times, times: 10_000 });
-const AGENT_SCOPE = { kind: "agent", id: AGENT_ID } as const;
 
 /** One scope's read as the host last told the held inboxes, as a wire value; none where it holds none of the scope. */
 function heldOf(
@@ -1451,7 +1456,7 @@ it.effect(
 
       // Eight other holders held and let go push the plan out, and its read is let go with its rows.
       const others = Array.from({ length: 8 }, (_, at) => ({
-        kind: INBOX_SCOPE_KIND.AGENT,
+        kind: INBOX_SCOPE_KIND.PLAN,
         id: `0000000${at}-1111-4a6b-9c33-0d1e2f3a4b5c`,
       }));
       for (const scope of others) {
@@ -1507,27 +1512,27 @@ it.effect(
 );
 
 it.effect(
-  "an agent's inbox the account does not reach is told failed, as is one the service answers nothing for, Try again reads it anew telling nothing meanwhile, and behind a closed gate a hold reads nothing until the gate opens",
+  "a plan's inbox the account does not reach is told failed, as is one the service answers nothing for, Try again reads it anew telling nothing meanwhile, and behind a closed gate a hold reads nothing until the gate opens",
   () =>
     Effect.gen(function* () {
       const refused = yield* subject();
       refused.sealScope({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
-      yield* refused.acts.AGENTS_INBOX_FOLLOW.hold(AGENT_SCOPE);
+      yield* refused.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(refused.told, AGENT_SCOPE), { failed: true });
+      assert.deepEqual(heldOf(refused.told, PLAN_SCOPE), { failed: true });
 
       const unsealed = yield* subject();
-      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.hold(AGENT_SCOPE);
+      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(unsealed.told, AGENT_SCOPE), { failed: true });
-      assert.deepEqual(unsealed.asked, [`agent-inbox-live:${AGENT_ID}`]);
+      assert.deepEqual(heldOf(unsealed.told, PLAN_SCOPE), { failed: true });
+      assert.deepEqual(unsealed.asked, [`description-inbox-live:${TASK_ID}`]);
       unsealed.sealScope(LIVE_ANSWERED);
-      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.retry(AGENT_SCOPE);
+      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.retry(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(unsealed.told, AGENT_SCOPE), {});
+      assert.deepEqual(heldOf(unsealed.told, PLAN_SCOPE), {});
       assert.deepEqual(unsealed.asked, [
-        `agent-inbox-live:${AGENT_ID}`,
-        `agent-inbox-live:${AGENT_ID}`,
+        `description-inbox-live:${TASK_ID}`,
+        `description-inbox-live:${TASK_ID}`,
       ]);
 
       const signedOut = yield* subject({ signedIn: false });
@@ -1586,7 +1591,7 @@ it.effect(
       yield* reset;
       yield* settled;
       assert.equal(live.scope.held(), 0, "a sign-out lets its poll go");
-      assert.deepEqual(told().at(-1), { plan: {}, agent: {} });
+      assert.deepEqual(told().at(-1), { plan: {} });
 
       yield* open;
       yield* settled;
@@ -1741,9 +1746,9 @@ function deliverItems(
   });
 }
 
-/** The account's items as the window is told them, by plan, none of an agent with no task. */
+/** The account's items as the window is told them, by plan. */
 function byPlan(plans: Readonly<Record<string, readonly InboxItem[]>>) {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} } };
+  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
 }
 
 it.effect(
@@ -2289,61 +2294,6 @@ it.effect(
 );
 
 it.effect(
-  "a close held for its Undo drops its question at once and asks the service nothing until it is let go: undone, it stands again and the service never hears of it; let go, it is sent",
-  () =>
-    Effect.gen(function* () {
-      const { acts, call, sealAccount, live, asked, accountInboxes } = yield* subject();
-      sealAccount(LIVE_ANSWERED);
-      yield* call(GATEWAY_METHOD.AGENTS_ACCOUNT_INBOX_FOLLOW);
-      yield* settled;
-      const plan = { planId: TASK_ID, items: 1, toDo: 1, updatedAt: ITEM.updatedAt };
-      const parts = { planless: [], automations: [], failedRuns: [] };
-      live.account.set({ ...parts, items: [WAITING], plans: [plan] }, ["9100"]);
-      yield* toldTimes(accountInboxes, 1);
-      /** How many items wait, as the account inbox was last told. */
-      const waiting = () => {
-        const told = accountInboxes().at(-1);
-        assert.ok(isRecord(told) && Array.isArray(told.items));
-        return told.items.length;
-      };
-      const closes = () => asked.filter((each) => each.startsWith("close:"));
-      const close = { itemId: ITEM.id, revision: ITEM.revision, held: true };
-
-      const undone = yield* Effect.forkChild(
-        acts.AGENTS_INBOX_CLOSE({ ...close, clientKey: "close-1" }),
-      );
-      yield* settled;
-      assert.equal(waiting(), 0);
-      const undo = yield* acts.AGENTS_INBOX_CLOSE_RELEASE({
-        clientKey: "close-1",
-        send: false,
-      });
-      yield* Fiber.join(undone);
-      yield* settled;
-      assert.deepEqual(undo, { held: true });
-      assert.equal(waiting(), 1);
-      assert.deepEqual(closes(), []);
-
-      const sent = yield* Effect.forkChild(
-        acts.AGENTS_INBOX_CLOSE({ ...close, clientKey: "close-2" }),
-      );
-      yield* settled;
-      yield* acts.AGENTS_INBOX_CLOSE_RELEASE({ clientKey: "close-2", send: true });
-      yield* Fiber.join(sent);
-      yield* settled;
-      assert.deepEqual(closes(), [`close:${ITEM.id}:${ITEM.revision}:close-2`]);
-      // Note that an Undo past the send finds nothing held to take back.
-      assert.deepEqual(
-        yield* acts.AGENTS_INBOX_CLOSE_RELEASE({
-          clientKey: "close-2",
-          send: false,
-        }),
-        { held: false },
-      );
-    }),
-);
-
-it.effect(
   "an inbox write queued on disk by an older build under its Gateway method's name is laid back and sent on relaunch, a reminder under Snooze's",
   () =>
     Effect.gen(function* () {
@@ -2392,202 +2342,6 @@ it.effect(
         ],
       );
       assert.deepEqual(pool.queued(), []);
-    }),
-);
-
-it.effect(
-  "an Undo pressed while its close waits behind a write the service has not answered is kept: the close, sent at last, is taken back and never reaches the service",
-  () =>
-    Effect.gen(function* () {
-      const pool = yield* entityPool({ mintKey: () => "write-key", replayRefused: Effect.void });
-      const { acts, asked, answerMarks } = yield* subject({ pool });
-      const closes = () => asked.filter((each) => each.startsWith("close:"));
-
-      answerMarks(false);
-      yield* acts.AGENTS_INBOX_READ_STATE({ itemId: ITEM.id, unread: false });
-      yield* settled;
-      assert.equal(pool.queued().length, 1, "the mark waits for the service");
-      const closing = yield* Effect.forkChild(
-        acts.AGENTS_INBOX_CLOSE({
-          itemId: ITEM.id,
-          revision: ITEM.revision,
-          clientKey: "close-1",
-          held: true,
-        }),
-      );
-      yield* settled;
-      assert.equal(pool.queued().length, 2, "the close waits behind the mark");
-      assert.deepEqual(
-        yield* acts.AGENTS_INBOX_CLOSE_RELEASE({
-          clientKey: "close-1",
-          send: false,
-        }),
-        { held: true },
-      );
-
-      answerMarks(true);
-      yield* pool.resend;
-      yield* settled;
-      yield* Fiber.join(closing);
-      assert.deepEqual(closes(), []);
-      assert.deepEqual(pool.queued(), []);
-    }),
-);
-
-it.effect(
-  "a close held for its Undo is sent, not dropped, when the host quits before its window lets it go",
-  () =>
-    Effect.gen(function* () {
-      const { acts, asked, flushHeldCloses } = yield* subject();
-      const closing = yield* Effect.forkChild(
-        acts.AGENTS_INBOX_CLOSE({
-          itemId: ITEM.id,
-          revision: ITEM.revision,
-          clientKey: "close-1",
-          held: true,
-        }),
-      );
-      yield* settled;
-      assert.deepEqual(
-        asked.filter((each) => each.startsWith("close:")),
-        [],
-      );
-      yield* flushHeldCloses;
-      yield* Fiber.join(closing);
-      assert.deepEqual(
-        asked.filter((each) => each.startsWith("close:")),
-        [`close:${ITEM.id}:${ITEM.revision}:close-1`],
-      );
-    }),
-);
-
-/** A close of `ITEM` held for its Undo under `clientKey`, as a window asks it. */
-const heldClose = (clientKey: string) => ({
-  itemId: ITEM.id,
-  revision: ITEM.revision,
-  clientKey,
-  held: true,
-});
-
-it.effect(
-  "a close held for its Undo is sent under the account that held it as that account leaves, before it has left",
-  () =>
-    Effect.gen(function* () {
-      let account = "user-ana";
-      const { acts, asked, letGoHeldCloses } = yield* subject({ accountId: () => account });
-      /** Each close the service was asked, with the account signed in as it was asked. */
-      const closesUnder = () => asked.filter((each) => each.startsWith("close:"));
-      const closing = yield* Effect.forkChild(acts.AGENTS_INBOX_CLOSE(heldClose("close-1")));
-      yield* settled;
-
-      yield* letGoHeldCloses;
-      assert.deepEqual(closesUnder(), [`close:${ITEM.id}:${ITEM.revision}:close-1`]);
-      account = "user-ben";
-      yield* Fiber.join(closing);
-      assert.equal(closesUnder().length, 1);
-    }),
-);
-
-it.effect(
-  "a held close still out as its account leaves is dropped once the bound has passed, its item standing open, and is never sent under the next account",
-  () =>
-    Effect.gen(function* () {
-      let account = "user-ana";
-      const { acts, asked, letGoHeldCloses, answerClosesAfter } = yield* subject({
-        accountId: () => account,
-      });
-      const closes = () => asked.filter((each) => each.startsWith("close:"));
-      answerClosesAfter(Effect.never);
-      const closing = yield* Effect.forkChild(acts.AGENTS_INBOX_CLOSE(heldClose("close-1")));
-      yield* settled;
-
-      const leaving = yield* Effect.forkChild(letGoHeldCloses);
-      yield* settled;
-      yield* TestClock.adjust(Duration.seconds(5));
-      yield* Fiber.join(leaving);
-      const answer = yield* Fiber.join(closing);
-      assert.ok("failure" in answer, "the close is not taken, so its item stands open");
-      account = "user-ben";
-      answerClosesAfter(Effect.void);
-      yield* TestClock.adjust(Duration.minutes(1));
-      yield* settled;
-      assert.deepEqual(closes(), [`close:${ITEM.id}:${ITEM.revision}:close-1`]);
-    }),
-);
-
-it.effect(
-  "a held close let go once another account is signed in is never sent, and its item stands open",
-  () =>
-    Effect.gen(function* () {
-      let account = "user-ana";
-      const { acts, asked } = yield* subject({ accountId: () => account });
-      const closing = yield* Effect.forkChild(acts.AGENTS_INBOX_CLOSE(heldClose("close-1")));
-      yield* settled;
-
-      account = "user-ben";
-      yield* acts.AGENTS_INBOX_CLOSE_RELEASE({ clientKey: "close-1", send: true });
-      const answer = yield* Fiber.join(closing);
-      assert.ok("failure" in answer, "the close is not taken, so its item stands open");
-      assert.deepEqual(
-        asked.filter((each) => each.startsWith("close:")),
-        [],
-      );
-    }),
-);
-
-it.effect(
-  "a held close its window let go while it waited behind another write is never sent once another account is signed in",
-  () =>
-    Effect.gen(function* () {
-      let account = "user-ana";
-      const pool = yield* entityPool({ mintKey: () => "write-key", replayRefused: Effect.void });
-      const { acts, asked, answerMarks } = yield* subject({ pool, accountId: () => account });
-      answerMarks(false);
-      yield* acts.AGENTS_INBOX_READ_STATE({ itemId: ITEM.id, unread: false });
-      yield* settled;
-      const closing = yield* Effect.forkChild(acts.AGENTS_INBOX_CLOSE(heldClose("close-1")));
-      yield* settled;
-      yield* acts.AGENTS_INBOX_CLOSE_RELEASE({ clientKey: "close-1", send: true });
-
-      account = "user-ben";
-      answerMarks(true);
-      yield* pool.resend;
-      yield* settled;
-      yield* Fiber.join(closing);
-      assert.deepEqual(
-        asked.filter((each) => each.startsWith("close:")),
-        [],
-      );
-    }),
-);
-
-it.effect(
-  "a held close still waiting behind another write as its account leaves is never sent under the next account",
-  () =>
-    Effect.gen(function* () {
-      let account = "user-ana";
-      const pool = yield* entityPool({ mintKey: () => "write-key", replayRefused: Effect.void });
-      const { acts, asked, answerMarks, letGoHeldCloses } = yield* subject({
-        pool,
-        accountId: () => account,
-      });
-      answerMarks(false);
-      yield* acts.AGENTS_INBOX_READ_STATE({ itemId: ITEM.id, unread: false });
-      yield* settled;
-      const closing = yield* Effect.forkChild(acts.AGENTS_INBOX_CLOSE(heldClose("close-1")));
-      yield* settled;
-      yield* acts.AGENTS_INBOX_CLOSE_RELEASE({ clientKey: "close-1", send: true });
-
-      yield* letGoHeldCloses;
-      account = "user-ben";
-      answerMarks(true);
-      yield* pool.resend;
-      yield* settled;
-      yield* Fiber.join(closing);
-      assert.deepEqual(
-        asked.filter((each) => each.startsWith("close:")),
-        [],
-      );
     }),
 );
 

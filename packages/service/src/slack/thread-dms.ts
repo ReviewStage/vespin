@@ -64,7 +64,7 @@ import {
   inboxReadAskSchema,
   knownAsk,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
@@ -640,7 +640,7 @@ function redrawTitleDms(
 
 /** The item's link by its id alone, whose agent and task a reader asks the service for. */
 function threadLink(itemId: string, place: { readonly step: string }) {
-  return linkOf({ kind: LINK_PLACE.INBOX_ITEM, itemId }, place.step);
+  return linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId }, place.step);
 }
 
 /** Whether the agent's item under the key stands open, read before a post so the post's DM tells a follow-up from a thread opened. */

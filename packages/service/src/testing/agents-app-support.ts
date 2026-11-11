@@ -51,11 +51,15 @@ import { CODER } from "../agents/coder-host/bounds.js";
 import { NATIVE_SESSION_PREFIX } from "../agents/coder-host/native-runtime.js";
 import { instancePublishedCache } from "../agents/coder-host/published.js";
 import type { SummaryModelOf } from "../agents/coder-host/replay-summary.js";
+import {
+  type ApprovalLine,
+  RUNNER_ANSWER,
+  type RunnerAnswer,
+} from "../agents/coder-host/runtime-sessions.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { messagesProcedures } from "../agents/messages-procedures.js";
 import { type SandboxDeleteReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
 import {
-  type AgentSessions,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -80,6 +84,7 @@ import {
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { recordingProductAnalytics } from "../events/server-events.js";
 import { LINK_OUTCOME } from "../github/github-installations.js";
+import { pullRequestLinksLayer } from "../github/pull-request-links.js";
 import { PULL_REQUEST_QUEUED_OPERATION } from "../github/pull-request-merging.js";
 import type { AfterResponse } from "../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -87,8 +92,10 @@ import { type InboxTitleModelOf, inboxProcedures } from "../inbox/inbox-procedur
 import type { postInboxThread } from "../inbox/inbox-store.js";
 import { type MemberMcpAuth, memberMcpApp } from "../member-mcp/app.js";
 import { hostedFetch } from "../orpc/handler.js";
+import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
 import type { WebServices } from "../runtime.js";
+import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
 import { tasksProcedures } from "../tasks/tasks-procedures.js";
 import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
@@ -102,7 +109,12 @@ import {
   standingGithubRow,
 } from "../testing/github-app-fake.js";
 import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "../testing/integration-connect.js";
-import { harnessFor, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
+import { MEMBER_MCP_AGENT_SANDBOX } from "../testing/member-mcp-auth.js";
+import {
+  harnessFor,
+  type ScriptedSessions,
+  scriptedHarnessLayer,
+} from "../testing/native-harness-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 
@@ -138,6 +150,8 @@ const TASK_PATH =
 /** One part of a message of an agent's or a worker's transcript, whole, at its public path on the hosted oRPC router. */
 const TRANSCRIPT_PART_PATH =
   /^\/api\/agents\/[^/]+\/(?:subagents\/[^/]+\/)?messages\/[^/]+\/parts\/[^/]+$/u;
+/** An ask of an agent's a member answers, at its public path on the hosted oRPC router. */
+const AGENT_APPROVAL_PATH = /^\/api\/agents\/[^/]+\/approvals\/[^/]+$/u;
 
 export const RELAY = { owner: "Acme", name: "Relay" } as const;
 export const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
@@ -259,6 +273,8 @@ export function fakeAgentSessions(
     readonly resetSees?: Effect.Effect<boolean>;
     /** What happens while a cancel is out, before the harness answers it, as a turn's end racing the Stop does. */
     readonly canceling?: Effect.Effect<void>;
+    /** How a member's answer to an ask reaches the runner: written, which is the default, or as the outcome named. */
+    readonly answers?: RunnerAnswer;
   } = {},
 ) {
   const together = Latch.makeUnsafe(options.cancelsTogether === undefined);
@@ -273,9 +289,17 @@ export function fakeAgentSessions(
   const resetAs: string[] = [];
   /** What `resetSees` saw at each retire, in order. */
   const resetSaw: boolean[] = [];
+  /** Every answer to an ask written to a runner, in order, with its session. */
+  const answered: (readonly [string, ApprovalLine])[] = [];
   let sessions = 0;
   let deliveries = 0;
-  const agentSessions = (authorization: string): AgentSessions => ({
+  const agentSessions = (authorization: string): ScriptedSessions => ({
+    answer: (sessionId, _conversationId, line) =>
+      Effect.sync(() => {
+        const outcome = options.answers ?? RUNNER_ANSWER.WRITTEN;
+        if (outcome === RUNNER_ANSWER.WRITTEN) answered.push([sessionId, line]);
+        return outcome;
+      }),
     open: (message) =>
       Effect.suspend(() => {
         if (options.reachable === false) {
@@ -337,7 +361,7 @@ export function fakeAgentSessions(
         }),
       ),
   });
-  return { agentSessions, opened, sent, canceled, canceledAs, reset, resetAs, resetSaw };
+  return { agentSessions, opened, sent, canceled, canceledAs, reset, resetAs, resetSaw, answered };
 }
 
 /** The deployment's environment with no key of its own, which a test gives the one it reads, and the suite's key ring, which a sandbox's firewall record is sealed under. */
@@ -383,10 +407,12 @@ const ORPC_PUBLIC_PATH: ReadonlyMap<string, (id: string) => string> = new Map([
   ["/api/agents/agent", (id: string) => `/api/agents/${id}`],
   ["/api/agents/calls", (id: string) => `/api/agents/${id}/calls`],
   ["/api/agents/stop", (id: string) => `/api/agents/${id}/stop`],
+  ["/api/agents/rewind", (id: string) => `/api/agents/${id}/rewind`],
   ["/api/agents/queue", (id: string) => `/api/agents/${id}/queue`],
   ["/api/agents/agents", (id: string) => `/api/agents/${id}/agents`],
   ["/api/agents/messages-newest", (id: string) => `/api/agents/${id}/messages/newest`],
   ["/api/agents/changes", (id: string) => `/api/agents/${id}/changes`],
+  ["/api/agents/turn-changes", (id: string) => `/api/agents/${id}/turn-changes`],
   ["/api/agents/review-options", (id: string) => `/api/agents/${id}/review-options`],
   ["/api/agents/workspace-tools", (id: string) => `/api/agents/${id}/workspace-tools`],
   ["/api/agents/pull-request", (id: string) => `/api/agents/${id}/pull-request`],
@@ -436,6 +462,9 @@ export const standing = (
       modelCatalogOf(CATALOG),
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+      Layer.succeed(PageLinks, { sandbox: undefined }),
+      pullRequestLinksLayer,
+      Layer.succeed(SlackBot, slackBotOver(undefined)),
       ANALYTICS.layer,
     );
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.
@@ -487,7 +516,9 @@ export const standing = (
     });
     yield* Effect.addFinalizer(() => Effect.promise(() => agents.dispose()));
     const memberMcp = HttpRouter.toWebHandler(
-      memberMcpApp(memberMcpBearers(bearers)).pipe(HttpRouter.provideRequest(services)),
+      memberMcpApp(memberMcpBearers(bearers), MEMBER_MCP_AGENT_SANDBOX, seams.workspaces).pipe(
+        HttpRouter.provideRequest(services),
+      ),
       { disableLogger: true },
     );
     yield* Effect.addFinalizer(() => Effect.promise(() => memberMcp.dispose()));
@@ -515,7 +546,11 @@ export const standing = (
           url.pathname = `/api/agents/${encodeURIComponent(id)}/subagents/${encodeURIComponent(call)}/messages/newest`;
           return routed(new Request(url, request), webServices);
         }
-        if (pathname === WORKSPACE_AGENTS || TRANSCRIPT_PART_PATH.test(pathname)) {
+        if (
+          pathname === WORKSPACE_AGENTS ||
+          TRANSCRIPT_PART_PATH.test(pathname) ||
+          AGENT_APPROVAL_PATH.test(pathname)
+        ) {
           return routed(request, webServices);
         }
         return pathname === TASKS || TASK_PATH.test(pathname)
@@ -550,6 +585,7 @@ function memberMcpBearers(bearers: ReadonlyMap<string, string>): MemberMcpAuth {
         : Promise.resolve({ sub, client_id: MEMBER_MCP_CLIENT_ID });
     },
     metadata: () => Promise.resolve({}),
+    baseURL: ORIGIN,
   };
 }
 
@@ -573,8 +609,11 @@ export function request(
     picture?: string;
     src?: string;
     number?: string;
+    messageId?: string;
     /** A browser's session cookie, sent beside the bearer or, with no account named, in its place. */
     cookie?: string;
+    /** The media types the caller takes, as the iOS app names the video it plays. */
+    accept?: string;
   } = {},
 ): Request {
   // A path the hosted oRPC router answers names its id as a segment; an old group's reads it from the query.
@@ -594,8 +633,10 @@ export function request(
   if (init.picture !== undefined) url.searchParams.set("picture", init.picture);
   if (init.src !== undefined) url.searchParams.set("src", init.src);
   if (init.number !== undefined) url.searchParams.set("number", init.number);
+  if (init.messageId !== undefined) url.searchParams.set("messageId", init.messageId);
   const headers = new Headers();
   if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+  if (init.accept !== undefined) headers.set("accept", init.accept);
   // Every client of the service names its JSON body so, which the hosted oRPC router reads a body by.
   if (init.body !== undefined) headers.set("content-type", "application/json");
   if (init.cookie !== undefined) headers.set("cookie", init.cookie);
@@ -910,6 +951,7 @@ export const INBOX_ATTACHMENT = "/api/inbox/attachment";
 export const INBOX_MESSAGES = "/api/inbox/{id}/messages";
 export const INBOX_ITEM_READ = "/api/inbox/{id}/read";
 export const INBOX_CLOSE = "/api/inbox/{id}/close";
+export const INBOX_ITEM_TAKE_BACK = "/api/inbox/{id}/take-back";
 export const INBOX_READ = "/api/inbox/read";
 
 /** A post as the agent's inbox tool hands the store one. */

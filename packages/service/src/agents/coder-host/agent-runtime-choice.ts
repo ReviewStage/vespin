@@ -1,8 +1,9 @@
 /**
- * agent-runtime-choice.ts -- the runtime a new coding agent runs on and who pays for it, decided once as it starts.
+ * agent-runtime-choice.ts -- the runtime a coding agent runs on, decided once as it starts, and who pays for each of its turns, chosen afresh at every launch.
  *
  * An agent runs on a native harness when, and only when, that provider's
- * plan pays for it. The plan is offered to every account that connected it:
+ * plan or the account's API key for it pays for it. The plan is offered to
+ * every account that connected one of its subscriptions:
  *
  * - Claude Code, paid for by the account's Claude plan, on any Claude model,
  *   a fast version running with Claude Code's own fast mode on, where the
@@ -13,11 +14,11 @@
  *   keeps a ChatGPT sign-in (`chatgpt_oauth`)
  *   that OpenAI has not signed out and the deployment can still open.
  *
- * Settings' choice for that harness decides: the plan where its row's
- * `forAgents` is on (Subscription) and the plan is offered, the account's
- * own API key for the model's provider otherwise: on Claude Code, as its
- * documented `ANTHROPIC_API_KEY`, for a Claude model, and on Codex, as its
- * provider's `env_key`, for a GPT model. No new agent runs on the retired runtime, whose
+ * A Start runs the agent on the plan where the account keeps a subscription
+ * of it, and on the account's own API key for the model's provider
+ * otherwise: on Claude Code, as its documented `ANTHROPIC_API_KEY`, for a
+ * Claude model, and on Codex, as its provider's `env_key`, for a GPT model.
+ * No new agent runs on the retired runtime, whose
  * agents are refused as ended (`runtime-sessions.ts`). Our own key
  * pays for no coding agent: an account with neither is refused by name
  * (`AgentCredentialMissing`, which names the provider), and connects one in
@@ -27,20 +28,37 @@
  * API key the account has not saved or the Preview cannot open
  * (`accounts/own-api-key.ts`).
  *
- * The choice is written on the agent as it is made and never changes: a
- * plan that later runs out or is disconnected pauses the agent, and never
- * moves it to another payer.
+ * The runtime is written on the agent's conversation as it starts and never
+ * changes. Who pays is chosen again at each launch, a message to a warm
+ * runner among them (`turnPayerOf`): the first credential of the
+ * provider's, in the one order the account keeps its subscriptions of the
+ * harness's plan and its API keys in, with room, a subscription having room
+ * where it is signed in and at no limit whose named reset is still ahead,
+ * and a key unless its provider refused it or last refused it for quota or credit, so an
+ * agent goes back to the top subscription as soon as its limit resets;
+ * where none has room, its first key, which a turn finds topped up or not;
+ * else a Preview's stand-in key; and where neither, the plan's refusal,
+ * naming when its soonest limit resets. The payer and the subscription it names are written on the
+ * agent as each launch chooses them, so a turn's limit is written to the
+ * subscription it ran on, and a runner launched on another credential than
+ * the choice now names is launched again (`runner-sessions.ts`'s
+ * `staleWarm`).
  *
  * Where the agent runs is chosen beside it (`agentMachineChoice`): a Vercel
- * Sandbox, or, where the Start names one of the starter's Macs, that Mac, on
- * the same runtime and payer a cloud agent would run on. Its Macs are offered
- * (`macOffers`) each that beat within `THIS_MAC.FRESH`, and the agent is
- * pinned to the one the Start named, once it is checked to be among them. A local agent runs
- * Claude Code, or Codex on a Mac that registered a Codex it checked; one on
- * Codex on a Mac with none, or on no harness at all, is refused by name.
+ * Sandbox, or, where the Start names one of the starter's machines, that
+ * machine. Its machines are offered (`macOffers`) each that beat within
+ * `THIS_MAC.FRESH`, and the agent is pinned to the one the Start named, once
+ * it is checked to be among them. A local agent runs Claude Code, or Codex on
+ * a machine that registered a Codex it checked; one on Codex on a machine with
+ * none, or on no harness at all, is refused by name. A local agent runs on
+ * the machine's own login to its harness (`AGENT_PAYER.MAC_SIGN_IN`), never on
+ * a credential the account saved in the app, so a Start on a machine needs
+ * none (`localAgentRuntimeChoice`), and each of its launches records that
+ * payer rather than choosing one (`launchPayerOf`).
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { type Agent, recordAgentPayer } from "@repo/database/models/agent-store";
 import { type Device, deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
 import { openProviderKey, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import {
@@ -63,13 +81,18 @@ import {
   DEVICE_SETUP,
   type DeviceSetup,
 } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import { type MacOffer, MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import {
+  apiKeyName,
+  PLAN_NAME,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
+  planLimitResetsAt,
+  planNamesOf,
+  planStanding,
 } from "@repo/features/provider-key-wire";
+import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import { Clock, Data, Duration, Effect, Option, type Redacted, Result } from "effect";
 import { previewKeysOf } from "../../accounts/own-api-key.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
@@ -130,7 +153,25 @@ const ON_CODEX: AgentRuntimeChoice = {
   payer: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
 };
 
-/** The statuses of a ChatGPT sign-in an agent cannot launch on: OpenAI signed it out or said the account is not eligible, or the deployment cannot open it. */
+/** The runtime each provider's models run on, whoever pays. */
+const PROVIDER_RUNTIME = {
+  [MODEL_PROVIDER.ANTHROPIC]: CONVERSATION_RUNTIME.CLAUDE_CODE,
+  [MODEL_PROVIDER.OPENAI]: CONVERSATION_RUNTIME.CODEX,
+} as const satisfies Record<ModelProvider, NativeRuntime>;
+
+/** The payer each provider's plan is recorded as. */
+const PLAN_PAYER = {
+  [MODEL_PROVIDER.ANTHROPIC]: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+  [MODEL_PROVIDER.OPENAI]: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+} as const satisfies Record<ModelProvider, AgentPayer>;
+
+/** Who pays for an agent's turn, and which of its starter's subscriptions or API keys, by its row's id; a Preview's stand-in names none. */
+export interface TurnPayer {
+  readonly payer: AgentPayer;
+  readonly subscriptionId: string | undefined;
+}
+
+/** The statuses of a ChatGPT sign-in or an API key an agent cannot launch on: its provider refused it or said the account is not eligible, or the deployment cannot open it. */
 const UNUSABLE_SIGN_IN: ReadonlySet<string> = new Set([
   PROVIDER_KEY_STATUS.INVALID,
   PROVIDER_KEY_STATUS.INELIGIBLE,
@@ -152,38 +193,68 @@ const keyRowsOf = (
   rows === undefined ? listAccountProviderKeyRows(userId) : Effect.succeed(rows);
 
 /**
- * The plan credential the provider's harness launches on, as the account
- * keeps it among `rows`, or none, as above. A ChatGPT sign-in must also open under the
- * deployment's ring as it stands, since a row sealed under a key since
- * rotated out still reads as its last stored status.
+ * The subscriptions of the plan the provider's harness launches on, as the
+ * account keeps them among `rows`, in the account's order, or none, as
+ * above. A ChatGPT sign-in must also open under the deployment's ring as it
+ * stands, since a row sealed under a key since rotated out still reads as
+ * its last stored status.
  */
-function keptPlan(
+function keptPlans(
   userId: string,
   provider: string,
   ring: Redacted.Redacted | undefined,
   rows: AccountKeyRows,
-): ProviderKeyRow | undefined {
+): readonly ProviderKeyRow[] {
   if (provider === MODEL_PROVIDER.ANTHROPIC) {
-    return rows.find(
+    return rows.filter(
       (row) =>
         row.kind === PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN &&
         row.provider === PROVIDER_KEY_PROVIDER.ANTHROPIC,
     );
   }
   const parsed = ring === undefined ? undefined : parseKeyRing(ring);
-  if (parsed === undefined || Result.isFailure(parsed)) return undefined;
+  if (parsed === undefined || Result.isFailure(parsed)) return [];
   const owner = {
     userId,
     provider: PROVIDER_KEY_PROVIDER.OPENAI,
     kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
   };
-  return rows.find(
+  return rows.filter(
     (row) =>
       row.kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
       row.provider === PROVIDER_KEY_PROVIDER.OPENAI &&
       !UNUSABLE_SIGN_IN.has(row.status) &&
       Result.isSuccess(openProviderKey(parsed.success, owner, row)),
   );
+}
+
+/**
+ * Whether a credential has room for a turn at `now`: one its provider did
+ * not refuse and the deployment can open, as `UNUSABLE_SIGN_IN` says of a
+ * sign-in and a key alike; a subscription at no limit that still stands, and
+ * a key its provider did not last refuse for quota. Note that a launch falls
+ * back to the first key where no key has room (`turnPayerOf`), as before.
+ */
+const hasRoom = (row: ProviderKeyRow, now: number): boolean =>
+  !UNUSABLE_SIGN_IN.has(row.status) &&
+  (row.kind === PROVIDER_KEY_KIND.API_KEY
+    ? row.status !== PROVIDER_KEY_STATUS.QUOTA_EXCEEDED
+    : planStanding(row, now) !== PROVIDER_KEY_STATUS.LIMIT_REACHED);
+
+/**
+ * The subscription a turn is refused on where none has room and no key
+ * pays: the one whose named reset comes soonest, so the refusal names the
+ * earliest time a turn could run again; else the first.
+ */
+function soonestReset(plans: readonly ProviderKeyRow[], now: number): ProviderKeyRow | undefined {
+  let soonest: { readonly row: ProviderKeyRow; readonly resetsAt: number } | undefined;
+  for (const row of plans) {
+    const resetsAt = planLimitResetsAt(row, now);
+    if (resetsAt !== undefined && (soonest === undefined || resetsAt < soonest.resetsAt)) {
+      soonest = { row, resetsAt };
+    }
+  }
+  return soonest?.row ?? plans[0];
 }
 
 /** The plan's runtime and payer for a model of the provider's: Claude Code for Anthropic's, Codex for OpenAI's. */
@@ -227,15 +298,15 @@ const deploymentEnvironment = Effect.map(
   Option.getOrUndefined,
 );
 
-/** The runtime and payer of a new agent of the account's on a model of the provider's, by Settings' choice among `rows`, or refused where no credential of the account's pays, as above. */
+/** The runtime and payer of a new agent of the account's on a model of the provider's, by what it keeps among `rows`, or refused where no credential of the account's pays, as above. */
 const providerRuntimeChoice = Effect.fnUntraced(function* (
   userId: string,
   provider: ModelProvider,
   rows: AccountKeyRows,
 ): Effect.fn.Return<AgentRuntimeChoice, StoreFailure | AgentCredentialMissing, DatabaseServices> {
   const environment = yield* deploymentEnvironment;
-  const plan = keptPlan(userId, provider, environment?.providerKeyEncryptionKeys, rows);
-  if (plan?.forAgents === true) return onPlanOf(provider);
+  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
+  if (plans.length > 0) return onPlanOf(provider);
   // Our key pays for no coding agent, so an account with no API key of the provider's is refused by name.
   if (!(yield* keepsApiKey(userId, provider, rows, environment)))
     return yield* Effect.fail(new AgentCredentialMissing({ provider }));
@@ -255,23 +326,31 @@ export const agentRuntimeChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* providerRuntimeChoice(userId, provider, yield* keyRowsOf(userId, rows));
 });
 
+/**
+ * The runtime a model's agent runs on, Claude Code for a Claude model and
+ * Codex for a GPT model, whoever pays for it: all an agent started from
+ * another reads before its machine is known (`takeover.ts`'s
+ * `landedInheriting`), which a credential never changes.
+ */
+export const modelRuntimeOf = (model: string): Effect.Effect<NativeRuntime> =>
+  Effect.map(providerOfModel(model), (provider) => PROVIDER_RUNTIME[provider]);
+
+/**
+ * The runtime and payer of a new local agent on the model given: the
+ * model's harness, on the login of the machine it runs on, which needs no
+ * credential of the account's.
+ */
+export const localAgentRuntimeChoice = (model: string): Effect.Effect<AgentRuntimeChoice> =>
+  Effect.map(modelRuntimeOf(model), (runtime) => ({ runtime, payer: AGENT_PAYER.MAC_SIGN_IN }));
+
 /** The model providers a Mac may run a Start of: Claude Code's, and Codex's on a Mac that checked a Codex (`runsCodex`). */
 const MAC_PROVIDERS: readonly ModelProvider[] = [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.OPENAI];
 
 /** Whether the Mac runs Codex agents: it registered a Codex it checked against the pin. */
 const runsCodex = (device: Device): boolean => device.codexExecutable !== null;
 
-/**
- * Whether the Mac runs a Start of the provider's models: Claude Code's
- * anywhere, Codex's where it checked a Codex; where the account pays for the
- * harness in the app (`paid`).
- */
-function macRunsProvider(
-  device: Device,
-  provider: ModelProvider,
-  paid: readonly ModelProvider[],
-): boolean {
-  if (!paid.includes(provider)) return false;
+/** Whether the machine runs a Start of the provider's models: Claude Code's anywhere, Codex's where it checked a Codex. */
+function macRunsProvider(device: Device, provider: ModelProvider): boolean {
   return provider === MODEL_PROVIDER.ANTHROPIC || runsCodex(device);
 }
 
@@ -282,28 +361,11 @@ const RUNTIME_PROVIDER = {
 } as const satisfies Record<NativeRuntime, ModelProvider>;
 
 /**
- * The providers a Start on any of the account's Macs runs, as the account
- * can pay for them: each of `MAC_PROVIDERS` a Start of the account's would
- * run, on a plan or a key it keeps in the app, and none it cannot pay for.
- */
-const paidMacProviders = Effect.fnUntraced(function* (
-  userId: string,
-): Effect.fn.Return<readonly ModelProvider[], StoreFailure, DatabaseServices> {
-  const rows = yield* keyRowsOf(userId, undefined);
-  const paid: ModelProvider[] = [];
-  for (const provider of MAC_PROVIDERS) {
-    const choice = yield* Effect.result(providerRuntimeChoice(userId, provider, rows));
-    if (Result.isSuccess(choice)) paid.push(provider);
-  }
-  return paid;
-});
-
-/**
  * The devices a task of the account's may run its agents on, as the menus
  * offer them: each device it registered, the latest beat first, with its
  * kind and last beat, so a device away now is offered but drawn away, and
- * the providers an agent on it runs that the account can pay for
- * (`paidMacProviders`). Only one
+ * the providers an agent on it runs (`macRunsProvider`), whatever the
+ * account saved in the app, since its agents run on its own logins. Only one
  * that beat within `THIS_MAC.FRESH` takes a task's Runs on or an agent
  * (`freshOffer`).
  * Note that every one is offered by name rather than one as This Mac,
@@ -314,12 +376,10 @@ export const macOffers = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
 ): Effect.fn.Return<readonly MacOffer[], StoreFailure, DatabaseServices> {
   const registered = yield* devicesSeenSince(userId, new Date(0));
-  if (registered.length === 0) return [];
-  const paid = yield* paidMacProviders(userId);
   return registered.map((device) => ({
     deviceId: device.id,
     name: device.name,
-    providers: MAC_PROVIDERS.filter((provider) => macRunsProvider(device, provider, paid)),
+    providers: MAC_PROVIDERS.filter((provider) => macRunsProvider(device, provider)),
     // Note that every device runs the host program, so each is offered as a host; the device row keeps no kind.
     kind: DEVICE_KIND.HOST,
     platform: device.platform,
@@ -356,10 +416,9 @@ const freshOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
  * that Mac is one the account is offered and there now (`freshOffer`) and lists the
  * provider the runtime runs; refused by name otherwise: a Mac that is
  * another account's or is not there as away, Codex on a Mac that runs none,
- * and a repository reached on the starter's own token (`githubAccess`) on a
- * host from before it works in one on its own GitHub sign-in
- * (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`), whose launch would ask for a token
- * the service never hands a device.
+ * and an agent in a repository on a host from before it works in every
+ * repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`),
+ * whose launch would ask for a token the service never hands a device.
  */
 export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -368,7 +427,7 @@ export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
     readonly deviceId?: string | undefined;
   },
   runtime: NativeRuntime,
-  githubAccess?: GitHubAccess | undefined,
+  inRepository: boolean,
 ): Effect.fn.Return<AgentMachineChoice, StoreFailure | LocalAgentRefused, DatabaseServices> {
   if (asked.machine !== AGENT_MACHINE.DEVICE) return IN_A_SANDBOX;
   const offer = yield* freshOffer(userId, asked.deviceId);
@@ -382,7 +441,7 @@ export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (!offer.providers.includes(RUNTIME_PROVIDER[runtime])) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.CODEX });
   }
-  if (githubAccess === GITHUB_ACCESS.TOKEN && !(yield* signsInOwnGithub(userId, offer.deviceId))) {
+  if (inRepository && !(yield* signsInOwnGithub(userId, offer.deviceId))) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN });
   }
   return { machine: AGENT_MACHINE.DEVICE, deviceId: offer.deviceId };
@@ -396,10 +455,172 @@ const signsInOwnGithub = (userId: string, deviceId: string) =>
     ),
   );
 
+/** A provider's credentials in the order they pay in, the first first: by position, then the earlier added. */
+const byPlace = (a: ProviderKeyRow, b: ProviderKeyRow): number =>
+  a.position - b.position || a.createdAt.getTime() - b.createdAt.getTime();
+
+/** The provider's API keys the account saved among `rows`, in the order they pay in. */
+const keysOf = (provider: ModelProvider, rows: AccountKeyRows): readonly ProviderKeyRow[] =>
+  rows
+    .filter((row) => row.kind === PROVIDER_KEY_KIND.API_KEY && row.provider === provider)
+    .toSorted(byPlace);
+
+/** The provider's subscriptions a launch may run on and its API keys, in the one order they pay in. */
+const payersOf = Effect.fnUntraced(function* (
+  userId: string,
+  provider: ModelProvider,
+): Effect.fn.Return<
+  {
+    readonly rows: AccountKeyRows;
+    readonly plans: readonly ProviderKeyRow[];
+    readonly ordered: readonly ProviderKeyRow[];
+    readonly environment: HostedEnvironmentValues | undefined;
+    readonly now: number;
+  },
+  StoreFailure,
+  DatabaseServices
+> {
+  const rows = yield* keyRowsOf(userId, undefined);
+  const environment = yield* deploymentEnvironment;
+  const now = yield* Clock.currentTimeMillis;
+  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
+  const ordered = [...plans, ...keysOf(provider, rows)].toSorted(byPlace);
+  return { rows, plans, ordered, environment, now };
+});
+
+/**
+ * The first of the provider's payers among `ordered` (`payersOf`) with room
+ * (`hasRoom`), passing over the one `passedOver` names; none where none has.
+ * Both a launch's choice (`turnPayerOf`) and a limit's move
+ * (`roomAfterLimit`) take it, so a limit's notice names the payer the
+ * relaunch runs on.
+ */
+function firstPayerRow(
+  ordered: readonly ProviderKeyRow[],
+  now: number,
+  passedOver?: string,
+): ProviderKeyRow | undefined {
+  return ordered.find((row) => row.id !== passedOver && hasRoom(row, now));
+}
+
+/**
+ * Who pays for the next turn of the account's agent on the provider's
+ * harness, chosen now and written on the agent (`recordAgentPayer`), as
+ * above: the first of its subscriptions and its saved API keys, in the
+ * account's order, with room; else its first key; else a Preview's
+ * stand-in key; else the plan on the subscription whose limit resets
+ * soonest, or its first, whose own refusal the harness answers in the
+ * plan's words, as it would with no subscription at all.
+ */
+export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agentId: string,
+  provider: ModelProvider,
+): Effect.fn.Return<TurnPayer, StoreFailure, DatabaseServices> {
+  const { rows, plans, ordered, environment, now } = yield* payersOf(userId, provider);
+  const first = firstPayerRow(ordered, now) ?? keysOf(provider, rows)[0];
+  let chosen: TurnPayer =
+    first?.kind === PROVIDER_KEY_KIND.API_KEY
+      ? { payer: AGENT_PAYER.API_KEY, subscriptionId: first.id }
+      : { payer: PLAN_PAYER[provider], subscriptionId: first?.id };
+  if (first === undefined) {
+    chosen = (yield* keepsApiKey(userId, provider, rows, environment))
+      ? { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined }
+      : { payer: PLAN_PAYER[provider], subscriptionId: soonestReset(plans, now)?.id };
+  }
+  yield* recordAgentPayer(userId, agentId, chosen.payer, chosen.subscriptionId ?? null);
+  return chosen;
+});
+
+/**
+ * Who pays for the next turn of the account's agent, chosen now and written
+ * on the agent: a local agent's machine's own login, which needs no choice
+ * (`AGENT_PAYER.MAC_SIGN_IN`); any other's as `turnPayerOf` chooses it.
+ */
+export const launchPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agent: Pick<Agent, "id" | "machine">,
+  provider: ModelProvider,
+): Effect.fn.Return<TurnPayer, StoreFailure, DatabaseServices> {
+  if (agent.machine !== AGENT_MACHINE.DEVICE) return yield* turnPayerOf(userId, agent.id, provider);
+  yield* recordAgentPayer(userId, agent.id, AGENT_PAYER.MAC_SIGN_IN, null);
+  return { payer: AGENT_PAYER.MAC_SIGN_IN, subscriptionId: undefined };
+});
+
+/** A plan or API key among `rows` named as Settings names it (`planNamesOf`, `apiKeyName`). */
+function payerNameOf(provider: ModelProvider, rows: AccountKeyRows, row: ProviderKeyRow): string {
+  if (row.kind === PROVIDER_KEY_KIND.API_KEY) return apiKeyName(row);
+  const plans = rows.filter(
+    (each) => each.provider === provider && each.kind !== PROVIDER_KEY_KIND.API_KEY,
+  );
+  const names = planNamesOf(
+    provider,
+    plans.map((each) => ({
+      id: each.id,
+      label: each.label ?? undefined,
+      email: each.accountEmail ?? undefined,
+      addedAt: each.createdAt.getTime(),
+    })),
+  );
+  return names.get(row.id) ?? PLAN_NAME[provider];
+}
+
+/**
+ * Where a turn cut short on the credential named, a subscription at its
+ * limit or a key out of quota, or on the account's first subscription where
+ * none is named, may go on with another payer at once: the next with room,
+ * as `turnPayerOf` would choose the next launch's (`firstPayerRow`, past the
+ * one cut short), or, where the account saved no API key of the provider, a
+ * Preview's stand-in; each named as Settings names it, for the notice the
+ * turn leaves where it moved. None where no other payer has room. Note that
+ * the one cut short is passed over by name, since the turn's own word on it
+ * may not be written yet.
+ */
+export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  provider: ModelProvider,
+  limitedSubscriptionId: string | undefined,
+): Effect.fn.Return<UsageLimitMove | undefined, StoreFailure, DatabaseServices> {
+  const { rows, plans, ordered, environment, now } = yield* payersOf(userId, provider);
+  const limitedId = limitedSubscriptionId ?? plans[0]?.id;
+  const limited = rows.find((row) => row.id === limitedId);
+  const from = limited === undefined ? PLAN_NAME[provider] : payerNameOf(provider, rows, limited);
+  const next = firstPayerRow(ordered, now, limitedId);
+  if (next !== undefined) return { from, to: payerNameOf(provider, rows, next) };
+  if (keysOf(provider, rows).length > 0) return undefined;
+  if (!(yield* keepsApiKey(userId, provider, rows, environment))) return undefined;
+  // Note that a Preview's stand-in key has no row, so it is named as any API key.
+  return { from, to: "API key" };
+});
+
+/**
+ * When the soonest limit among the account's other subscriptions of the
+ * plan resets, past the one named as `roomAfterLimit` passes it over, so a
+ * turn no payer has room for now knows the earliest it could go on; none
+ * where no other subscription is at a limit that names its reset.
+ */
+export const soonestResetBeside = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  provider: ModelProvider,
+  limitedSubscriptionId: string | undefined,
+): Effect.fn.Return<number | undefined, StoreFailure, DatabaseServices> {
+  const rows = yield* keyRowsOf(userId, undefined);
+  const environment = yield* deploymentEnvironment;
+  const now = yield* Clock.currentTimeMillis;
+  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
+  const limited = limitedSubscriptionId ?? plans[0]?.id;
+  const resets = plans.flatMap((row) => {
+    const resetsAt = row.id === limited ? undefined : planLimitResetsAt(row, now);
+    return resetsAt === undefined ? [] : [resetsAt];
+  });
+  return resets.length === 0 ? undefined : Math.min(...resets);
+});
+
 /**
  * The provider whose credential an agent lacks to take a message, or none
- * where it may: an agent on its starter's API key needs that key for its
- * model's provider; one on its plan is the plan's, which refuses by its own
+ * where it may: an agent last on its starter's API key needs a credential of
+ * its model's provider, the key or a subscription its next launch turns to
+ * (`turnPayerOf`); one on its plan is the plan's, which refuses by its own
  * words.
  */
 export const messageCredentialMissing = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -408,9 +629,7 @@ export const messageCredentialMissing = /* @__PURE__ */ Effect.fnUntraced(functi
 ): Effect.fn.Return<ModelProvider | undefined, StoreFailure, DatabaseServices> {
   if (routing.payer !== AGENT_PAYER.API_KEY) return undefined;
   const provider = yield* providerOfModel(agent.model);
-  const rows = yield* keyRowsOf(agent.userId, undefined);
-  const environment = yield* deploymentEnvironment;
-  return (yield* keepsApiKey(agent.userId, provider, rows, environment)) ? undefined : provider;
+  return (yield* unconnectedProviders(agent.userId)).has(provider) ? provider : undefined;
 });
 
 /**
@@ -468,6 +687,6 @@ export const accountFastOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
       row.kind === PROVIDER_KEY_KIND.API_KEY && row.provider === PROVIDER_KEY_PROVIDER.ANTHROPIC,
   )?.fastAccess;
   const ring = (yield* deploymentEnvironment)?.providerKeyEncryptionKeys;
-  const plan = keptPlan(userId, MODEL_PROVIDER.OPENAI, ring, rows);
-  return { anthropic: anthropic ?? undefined, chatGptPlan: plan?.forAgents === true };
+  const plans = keptPlans(userId, MODEL_PROVIDER.OPENAI, ring, rows);
+  return { anthropic: anthropic ?? undefined, chatGptPlan: plans.length > 0 };
 });

@@ -1,11 +1,11 @@
+import { fileName } from "@repo/features/code-ref-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { DownloadIcon, type PaneBarMenu, STATUS_TONE } from "@repo/ui";
 import { FolderTreeIcon, GLYPH } from "@repo/ui/icons";
 import { appPlatform } from "../app-platform.js";
 import { useCopyToast } from "../copy-feedback.js";
 import type { MenuAction } from "../desktop/action-menu.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
-import { fileName } from "./file-ref-model.js";
+import { useToast } from "../toast.js";
 import { WHOLE_TEXT, type WholeText } from "./file-tab-model.js";
 
 /**
@@ -58,7 +58,6 @@ export function useSaveText(): (name: string, text: string) => Promise<void> {
           show({
             words: "The file could not be saved. Try again.",
             tone: STATUS_TONE.DANGER,
-            hold: TOAST_HOLD.FAILED,
             failure: { surface: FAILURE_SURFACE.FILE_SAVE, cause },
           }),
       );
@@ -89,7 +88,6 @@ export function useFileMenu({
         show({
           words: refused ? REFUSED : UNREAD,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: refused
             ? { surface: FAILURE_SURFACE.FILE_READ, cause: whole.cause, refused }
             : { surface: FAILURE_SURFACE.FILE_READ, cause: whole.cause },

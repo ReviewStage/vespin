@@ -23,7 +23,8 @@
  * to delete with it; nothing here names one. The `agent` user is made in a
  * sandbox created from the image. Every write the checkout makes is the group's
  * (`../repository-shell.ts`'s `GROUP_WRITES`), so the `agent` user writes
- * it too. A create on an image not yet ready (`ImageNotReady`) is asked again
+ * it too, and the dependencies a base drive's fill installed are handed to
+ * that user at its launch (`launchRunner`'s readying). A create on an image not yet ready (`ImageNotReady`) is asked again
  * once the registry has had time to prepare the image. The
  * commit identity is left to the launch (`finishCheckout`), which sets it,
  * and the write token again, beside its own steps. Nothing is deleted where the setup or the
@@ -95,6 +96,7 @@ import { type Agent, hasRepository, type WithRepository } from "@repo/database/m
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { sandboxVcpus } from "@repo/features/sandbox-size";
 import {
   type ListedSandbox,
   type OpenedSandbox,
@@ -144,7 +146,7 @@ import {
   readBaseDrive,
 } from "../base-drive.js";
 import { AgentImage } from "../coder-host/agent-image.js";
-import { CODER, sandboxVcpus } from "../coder-host/bounds.js";
+import { CODER } from "../coder-host/bounds.js";
 import {
   type AgentExtraRead,
   type AgentRepositoryRead,
@@ -160,6 +162,7 @@ import {
   refreshAgentCheckout,
   writeAgentCredential,
 } from "../coder-host/checkout.js";
+import { diffCheckout, restoreCheckout } from "../coder-host/checkout-restore.js";
 import { NATIVE_SKILLS_PATH } from "../coder-host/native-skills.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
@@ -180,6 +183,13 @@ import {
   sandboxFirewall,
 } from "../sandbox-firewall.js";
 import {
+  recordedSandboxBooted,
+  recordedSandboxBootFailed,
+  recordedSandboxBooting,
+  recordedSandboxDiscarded,
+  recordedSandboxOpen,
+} from "../sandbox-use.js";
+import {
   AgentMachine,
   type AgentMachineService,
   type DeliveredCredentials,
@@ -198,6 +208,7 @@ import {
   type RunnerRecord,
   type SandboxSetup,
 } from "./agent-machine.js";
+import { makePhoneVideo, phoneVideoOf } from "./phone-video.js";
 
 /**
  * Where a message's files that the harness takes no block of are written
@@ -219,6 +230,8 @@ const SANDBOX_LAYOUT: MachineLayout = {
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
   transcriptsKept: true,
+  diskSessions: false,
+  permissionModes: true,
 };
 
 /** The runner's bundle as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's unit. */
@@ -252,6 +265,36 @@ const LINK_TOOLS_DIRECTORY = `if [ -d ${SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME} ]
  * it, since the runner started after it takes the user's groups as it starts.
  */
 const JOIN_DOCKER_GROUP = `if getent group docker > /dev/null && ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
+
+/** Where pnpm keeps its store for a checkout on the workspace's drive, as the base drive's fill installs: the drive's root, the first folder up from the checkout it may write on that drive. */
+const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
+
+/**
+ * The workspace's drive's root opened to the store's group on each launch,
+ * root's, where pnpm's store stands at it, so `agent`, in the default user's
+ * group, may write there, and its pnpm picks that store as the fill's did.
+ * Note that this is because pnpm keeps its store at the topmost folder of
+ * the checkout's drive its user may write, and a fork of a base drive mounts
+ * with a root only root writes, so `agent`'s pnpm chose a store under the
+ * checkout and, finding the one its `node_modules` names elsewhere, asked to
+ * purge it.
+ */
+const OPEN_DRIVE_STORE = `if [ -d ${DRIVE_PNPM_STORE} ]; then chgrp --reference=${DRIVE_PNPM_STORE} ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; chmod g+w ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; fi`;
+
+/**
+ * The dependencies another user installed in the agent's checkout handed to
+ * `agent` on each launch, root's: the base drive's fill's
+ * (`../base-drive.ts`), or a setup script's, both the default user's. Note
+ * that this is because an install chmods what it installed on every run
+ * (pnpm a package's bins, a `prepare` script the hooks it copies), which
+ * only a file's owner may, so `agent`'s own install failed on them. The
+ * checkout's files but its `.git` and pnpm's store on the drive, whose files
+ * `node_modules` links, are made `agent`'s, their group and its writes left
+ * as they stand, so the default user still writes them. It is asked only
+ * where the checkout's `node_modules` is not `agent`'s, so a launch after
+ * the one that handed it walks nothing.
+ */
+const HAND_INSTALL_TO_AGENT = `if [ -d ${CODER.CHECKOUT_PATH}/node_modules ] && [ "$(stat -c %U ${CODER.CHECKOUT_PATH}/node_modules)" != ${AGENT_USER} ]; then find ${CODER.CHECKOUT_PATH} -mindepth 1 -maxdepth 1 ! -name .git -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
 
 /**
  * A checkout marked safe for git in the sandbox and its repository shared
@@ -310,6 +353,9 @@ const CREDENTIAL_UNREAD = "the agent's repository credential could not be read";
  * each checkout marked safe for git and shared with `agent`'s group, the
  * agent's own and those of the repositories it works in beside it at the
  * paths given (`extraCheckoutPaths`), none for an agent in one repository,
+ * the drive's pnpm store opened to `agent` (`OPEN_DRIVE_STORE`) and what
+ * another user installed in its checkout handed to it
+ * (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
  * and the folder an agent saves what the service reads back in made
  * `agent`'s and readable by the default user the service reads as
  * (`SHARED_FILES_DIRECTORY`). Note that the checkout's git config is written
@@ -326,6 +372,8 @@ function readyScript(extraCheckouts: readonly string[]): string {
     `rm -rf ${RUNNER_UPLOAD}`,
     `if [ -d ${NATIVE_SKILLS_PATH.UPLOAD} ]; then rm -rf ${NATIVE_SKILLS_PATH.INSTALLED} && mkdir -p $(dirname ${NATIVE_SKILLS_PATH.INSTALLED}) && mv ${NATIVE_SKILLS_PATH.UPLOAD} ${NATIVE_SKILLS_PATH.INSTALLED} && chown -R root:root ${NATIVE_SKILLS_PATH.INSTALLED} && chmod -R u=rwX,go=rX ${NATIVE_SKILLS_PATH.INSTALLED}; fi`,
     ...[CODER.CHECKOUT_PATH, ...extraCheckouts].flatMap(sharedCheckout),
+    OPEN_DRIVE_STORE,
+    HAND_INSTALL_TO_AGENT,
     `install -d -o ${AGENT_USER} -g ${AGENT_USER} -m 0755 ${SHARED_FILES_DIRECTORY}`,
   ].join("\n");
 }
@@ -480,6 +528,7 @@ function markOf(record: AgentRunnerRecord): RunnerMark {
   return {
     firstSequence: record.firstSequence,
     ...(record.fingerprint === null ? {} : { fingerprint: record.fingerprint }),
+    ...(record.permissionMode === null ? {} : { permissionMode: record.permissionMode }),
     linesRead: true,
   };
 }
@@ -498,6 +547,7 @@ function storedRecord(
     sandboxName: name,
     firstSequence: mark.firstSequence,
     fingerprint: mark.fingerprint ?? null,
+    permissionMode: mark.permissionMode ?? null,
     sandboxSessionId: runner?.running ?? null,
     commandId: runner?.command ?? null,
   };
@@ -729,6 +779,7 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         const legacy = yield* legacySandboxOf(api, found.session);
         if (legacy !== undefined && legacy.name !== found.name) yield* api.delete(legacy.name);
         yield* api.delete(found.name);
+        yield* recordedSandboxDiscarded(found.name);
         yield* forgetAgentRunnerRecord(keptOf(found).userId, found.session, found.name);
       }),
 
@@ -749,6 +800,15 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         Effect.map(api.run(running, readFileCommand(path, bound + 1)), (ran) =>
           ran.exitCode === 0 ? new Uint8Array(Buffer.from(ran.stdout, "base64")) : undefined,
         ),
+      ),
+
+    restoreCheckout: (session, snapshot) => restoreCheckout(api, { sessionId: session, snapshot }),
+
+    diffCheckout: (session, range) => diffCheckout(api, { sessionId: session, range }),
+
+    phoneVideo: (session, path) =>
+      Effect.flatMap(runningSession(session), (running) =>
+        Effect.map(api.run(running, makePhoneVideo(path)), phoneVideoOf),
       ),
   };
 }
@@ -958,7 +1018,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * for, created as the attempt says where none stands, with whether it was
    * created, its checkout made in its `onCreate` where the agent has a
    * repository and the sandbox was created (`checkedOutIn`), and whether that
-   * moved a lockfile. A setup that fails fails the open, and what it made is
+   * moved a lockfile, and the open recorded as its use (`../sandbox-use.ts`).
+   * A setup that fails fails the open, and what it made is
    * left as it stands. Note that the setup's own failure is the open's,
    * because `onCreate`'s rejection is handed on as the call's, which
    * would read as the sandbox's rather than in the checkout's words.
@@ -1006,6 +1067,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.provideService(Sandbox, api),
         Effect.mapError((failure) => refused ?? failure),
       );
+      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId), created);
       return { ...runningOf(sandbox), created, lockfileMoved: moved, from: attempt.from };
     });
 
@@ -1209,8 +1271,10 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     // launch only once the sandbox stands, and never cuts its opening short; its write token is
     // the one a sandbox created here checks out through (`checkedOutIn`). Note that a use that
     // fails leaves the sandbox standing under the session's name, where the next message finds it.
+    // The sandbox is recorded booting before it opens, and its boot ended where the open or its use failed.
     open: (ask, use) =>
       Effect.gen(function* () {
+        yield* recordedSandboxBooting(ask.agent.id, agentSandboxName(ask.session));
         const reading = yield* Effect.forkChild(
           Effect.exit(
             hasRepository(ask.agent)
@@ -1260,7 +1324,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           },
           beside,
         );
-      }),
+      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(ask.session)))),
 
     // The session's sandbox is run again as it was opened, through `getOrCreate` (`gotOn`): resumed
     // where it stands, or made again from the image where its snapshot is gone, with the drive its
@@ -1275,6 +1339,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       Effect.gen(function* () {
         const legacy = found.name !== agentSandboxName(found.session);
         if (legacy && found.running !== undefined) return { place: found.running, created: false };
+        // Note that the boot is recorded under the session's own name, which a legacy sandbox is reopened under and the task list reads.
+        yield* recordedSandboxBooting(agent.id, agentSandboxName(found.session));
         const standing = legacy
           ? ((yield* api.get(found.name)) ?? keptOf(found).sandbox)
           : keptOf(found).sandbox;
@@ -1292,7 +1358,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           place: sandboxPlace(found.session, name, running),
           created: created && from === CREATED_FROM.IMAGE,
         };
-      }),
+      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(found.session)))),
 
     // The runner's unit is uploaded beside the caller's steps, and the sandbox is readied as root
     // once the steps its start waits on are done (`started`), since the readying shares the
@@ -1394,6 +1460,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             .pipe(
               Effect.tapError(() => diedAtStart(api, place, commandId, Object.values(launch.env))),
             );
+          yield* recordedSandboxBooted(launch.name);
         }).pipe(
           Effect.withSpan("web/handRunnerFirstLines"),
           Effect.tapError(() =>
@@ -1401,7 +1468,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           ),
         );
         return { handle, ready };
-      }),
+      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(launch.name))),
   };
 }
 

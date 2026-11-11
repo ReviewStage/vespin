@@ -48,6 +48,8 @@ const terminalSummarySchema = EffectSchema.Struct({
   command: EffectSchema.String,
   cwd: EffectSchema.String,
   running: EffectSchema.Boolean,
+  /** The run action the shell was started for (`workspace-sandbox-setup-wire.ts`), by its id; none for a shell a developer opened. */
+  runAction: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type TerminalSummary = typeof terminalSummarySchema.Type;
@@ -135,3 +137,53 @@ export const terminalRelayServiceFrameSchema = EffectSchema.Union([
     code: EffectSchema.Int,
   }),
 ]);
+
+/** How one relay socket's life ended, read from its close, the `exited` frame's code, and whether the shell attached. */
+export const RELAY_SOCKET_END = {
+  /** The sandbox is stopped; only the developer's resume brings it back. */
+  STOPPED: "stopped",
+  /** The agent was archived, or the shell ended elsewhere. */
+  GONE: "gone",
+  /** The shell exited, its status in `code` where the `exited` frame carried one. */
+  EXITED: "exited",
+  /** The agent has not opened its sandbox yet. */
+  STARTING: "starting",
+  /** The shell had attached, and the socket dropped: it may open again at once. */
+  DROPPED: "dropped",
+  /** The socket dropped, or closed, before the shell attached: it may open again after a wait. */
+  UNATTACHED: "unattached",
+} as const;
+
+export type RelaySocketEnd =
+  | { readonly kind: typeof RELAY_SOCKET_END.EXITED; readonly code: number | undefined }
+  | {
+      readonly kind: Exclude<
+        (typeof RELAY_SOCKET_END)[keyof typeof RELAY_SOCKET_END],
+        typeof RELAY_SOCKET_END.EXITED
+      >;
+    };
+
+/** The ends a relay's close code says outright, whether or not the shell attached; any other close is a drop. */
+const END_BY_CLOSE: ReadonlyMap<number, RelaySocketEnd["kind"]> = new Map([
+  [TERMINAL_RELAY_CLOSE.STOPPED, RELAY_SOCKET_END.STOPPED],
+  [TERMINAL_RELAY_CLOSE.GONE, RELAY_SOCKET_END.GONE],
+  [TERMINAL_RELAY_CLOSE.EXITED, RELAY_SOCKET_END.EXITED],
+  [TERMINAL_RELAY_CLOSE.STARTING, RELAY_SOCKET_END.STARTING],
+]);
+
+/**
+ * How a relay socket ended, the one reading every client of the relay
+ * shares: the close code first, so a relay that said why is believed
+ * whether or not the shell attached, then whether it attached. The exit
+ * code rides only on an exit.
+ */
+export function socketEnding(
+  closeCode: number | undefined,
+  exitCode: number | undefined,
+  attached: boolean,
+): RelaySocketEnd {
+  const said = closeCode === undefined ? undefined : END_BY_CLOSE.get(closeCode);
+  if (said === RELAY_SOCKET_END.EXITED) return { kind: said, code: exitCode };
+  if (said !== undefined) return { kind: said };
+  return { kind: attached ? RELAY_SOCKET_END.DROPPED : RELAY_SOCKET_END.UNATTACHED };
+}

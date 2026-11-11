@@ -117,10 +117,7 @@ const PageLinkClaimsJson = Schema.fromJsonString(
   Schema.Struct({
     site: Schema.String,
     userId: Schema.String,
-    owner: Schema.Union([
-      Schema.Struct({ kind: Schema.Literal(PAGE_OWNER.TASK), taskId: Schema.String }),
-      Schema.Struct({ kind: Schema.Literal(PAGE_OWNER.AGENT), agentId: Schema.String }),
-    ]),
+    owner: Schema.Struct({ kind: Schema.Literal(PAGE_OWNER.TASK), taskId: Schema.String }),
     pageId: Schema.String,
     version: pageVersionNumberSchema,
     until: Schema.Number,

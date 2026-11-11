@@ -16,7 +16,7 @@ import { askAct } from "../act.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { pullRequestAsked } from "./pull-request-number.js";
 
-/** An agent's page, as a link to it or a row naming it by its id alone reads it. */
+/** One agent by its id alone, as its own address or a row naming it reads it. */
 export function agentPageQueryOptions(agentId: string) {
   return queryOptions({
     queryKey: [QUERY_ROOT.AGENT_PAGE, agentId],
@@ -78,6 +78,24 @@ export class ChangesFailed extends Error {
 function landedChanges(answer: AgentChangesAnswerView) {
   if ("failure" in answer) throw new ChangesFailed(answer);
   return answer;
+}
+
+/**
+ * The files one of an agent's turns changed, read on its machine between the
+ * checkouts its runner recorded, as the turn's Changes tab is first shown and
+ * on Retry; a refusal stands as the answer, which the tab says by name. The
+ * files, once read, stand for the window's life, since nothing changes a
+ * turn's diff but the next turn's; a refusal is read again as the tab is next
+ * shown, since the Mac may be back or the snapshot there by then.
+ */
+export function agentTurnChangesQueryOptions(agentId: string, messageId: string) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.AGENT_TURN_CHANGES, agentId, messageId],
+    queryFn: () => askAct(ACT_KIND.AGENTS_TURN_CHANGES, { agentId, messageId }),
+    staleTime: (query) =>
+      query.state.data !== undefined && "files" in query.state.data ? Number.POSITIVE_INFINITY : 0,
+    retry: false,
+  });
 }
 
 /**

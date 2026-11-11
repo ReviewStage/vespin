@@ -11,9 +11,14 @@
  * `layout` and `open` answer at once, from the agent and the agents folder
  * its Mac registered, or its home folder where it named none, with no round
  * trip: the agent's folder there holds
- * its worktree, which the Mac makes as it takes the launch line, the files
- * a message carries, and the skills its member installed into the app
- * (`deviceAgentLayout`). `launchRunner` queues the launch line, its runner's
+ * its worktree, which the Mac makes as it takes the launch line, and the
+ * files a message carries (`deviceAgentLayout`). A Mac whose release bundles a runner that keeps the
+ * CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`), by the
+ * host version it last called with, has it kept there, as a sandbox's is,
+ * its runner mirroring Codex's threads from their default under the
+ * machine's own home; an older one keeps its sessions on its disk alone. Either resumes
+ * a session the store does not hold whole from its disk (`diskSessions`).
+ * `launchRunner` queues the launch line, its runner's
  * environment and first lines sealed together under the deployment's key
  * ring (`sealMacLaunchSecrets`) and opened again only by the Mac's claim,
  * which clears the row's copy. `writeLine`, `writeFiles`, and `kill` queue a
@@ -70,28 +75,32 @@ import {
   queueDeviceAgentLine,
   queueDeviceAgentRequest,
   withdrawDeviceAgentRequest,
+  withdrawUnclaimedDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
 import { deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
 import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_MACHINE, MAC_PRESENCE } from "@repo/features/agent-wire";
+import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
+import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_BOUNDS,
   DEVICE_AGENT_LINE_KIND,
   DEVICE_AGENT_REQUEST_KIND,
   DEVICE_CAPABILITY,
-  DEVICE_GITHUB_ACCESS,
   type DeviceAgentAnswer,
   type DeviceAgentLaunchPayload,
   type DeviceAgentObject,
+  type DeviceCapability,
   deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
   deviceAgentLaunchSecretsSchema,
   deviceAgentLayoutIn,
+  deviceAgentRestorePayloadSchema,
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { hostVersionMeets } from "@repo/features/host-wire";
 import {
   COMMAND_GONE,
   type CommandExit,
@@ -117,6 +126,8 @@ import { heldUntil } from "../../http/held-read.js";
 import { agentCommitIdentity, type CheckoutServices } from "../coder-host/checkout.js";
 import {
   type AgentMachineService,
+  CHECKOUT_DIFF_OUTCOME,
+  type CheckoutDiffOutcome,
   type DeliveredCredentials,
   type FoundPlace,
   LaunchRefused,
@@ -127,6 +138,7 @@ import {
   type MachinePlace,
   type MachineRunning,
   type OpenedPlace,
+  RESTORE_OUTCOME,
   RUNNER_RECORD,
   type RunnerCredential,
   type RunnerHandle,
@@ -140,6 +152,17 @@ export const MAC_MACHINE = {
   POLL: Duration.millis(250),
   /** How long a read of a runner's exit waits where its caller names no wait, as a sandbox's does. */
   EXIT_WAIT: Duration.seconds(2),
+  /** How long a restore of the worktree waits for its Mac to settle the line, which a large worktree takes a while over. */
+  RESTORE_WAIT: Duration.minutes(2),
+  /** How long a diff of the worktree waits for its Mac's answer, as long as the Mac gives the diff (`DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS`). */
+  DIFF_WAIT: Duration.millis(DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS),
+  /**
+   * The first host release whose bundled runner keeps the CLI's transcript
+   * at the service where its config names `transcriptsUrl`, and reads a
+   * session's chain through that store for a cut; a Mac on an older one
+   * keeps its sessions on its disk alone, as before.
+   */
+  TRANSCRIPTS_SINCE: "0.11.0",
 } as const;
 
 /**
@@ -169,7 +192,38 @@ const nameOfAgent = Brand.nominal<MachineName>();
 
 const encodeFilesPayload = Schema.encodeSync(deviceAgentFilesPayloadSchema);
 const encodeLaunchPayload = Schema.encodeSync(deviceAgentLaunchPayloadSchema);
+const encodeRestorePayload = Schema.encodeSync(deviceAgentRestorePayloadSchema);
 const encodeSecrets = Schema.encodeSync(Schema.fromJsonString(deviceAgentLaunchSecretsSchema));
+
+/** Whether the Mac's host, by the version it last called with, runs a runner that keeps the CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`). */
+function keepsTranscripts(version: string | null): boolean {
+  return version !== null && hostVersionMeets(version, MAC_MACHINE.TRANSCRIPTS_SINCE);
+}
+
+/** The agent's things on the Mac its layout was read off, under the agents folder that Mac registered, or its home folder where it named none. */
+function macFolders(
+  device: { readonly home: string; readonly agentsFolder: string | null },
+  agentId: string,
+) {
+  // Note that a Mac's own word for its agents folder is taken over this build's root, so a release that moves the root on either side still lays a launch out where its Mac looks.
+  return deviceAgentLayoutIn(device.agentsFolder ?? deviceAgentsFolder(device.home), agentId);
+}
+
+/**
+ * Whether the account's Mac given keeps its runners' CLI transcripts at the
+ * service, and where an agent's checkout stands on it, by the agent's id;
+ * none where the account holds no such Mac standing, which no launch lays
+ * out either. A continue or fork reads this to carry a session to or from a
+ * Mac (`../coder-host/takeover.ts`).
+ */
+export const macCheckoutsOf = (userId: string, deviceId: string) =>
+  Effect.map(
+    deviceLayout(userId, deviceId),
+    Option.map((device) => ({
+      transcriptsKept: keepsTranscripts(device.version),
+      checkoutPathOf: (agentId: string) => macFolders(device, agentId).checkoutPath,
+    })),
+  );
 
 /** A local agent's place on its Mac, under our session given: the agent itself, since it has one place. */
 function macPlace(session: string, agentId: string): MachinePlace {
@@ -268,26 +322,27 @@ function deviceMachineOver(
           ? new LaunchRefused({ reason: "host removed", deviceRemoved: true })
           : new LaunchRefused({ reason: "no mac" });
       }
-      // Note that a Mac's own word for its agents folder is taken over this build's root, so a release that moves the root on either side still lays a launch out where its Mac looks.
-      const folders = deviceAgentLayoutIn(
-        device.value.agentsFolder ?? deviceAgentsFolder(device.value.home),
-        agentId,
-      );
+      const folders = macFolders(device.value, agentId);
+      const kept = keepsTranscripts(device.value.version);
       const layout: MachineLayout = {
         checkoutPath: folders.checkoutPath,
-        installedSkills: folders.installedSkills,
-        // Note that the Mac writes the skills where they are installed, since no root installs them after.
-        skillsUpload: folders.installedSkills,
+        // Note that a local agent is handed none of the skills its member installed into the app, and
+        // its harness finds whatever skills the machine's own home holds.
+        installedSkills: undefined,
+        skillsUpload: undefined,
         attachments: folders.attachments,
         // Note that the Mac answers reads inside the agent's folder alone, so what we read back is saved in its temp folder, never `/tmp`.
         sharedFiles: folders.temp,
         claudeExecutable: device.value.claudeExecutable,
         codexExecutable: device.value.codexExecutable ?? undefined,
-        // Note that a Mac's Codex keeps its threads at its default under the agent's own home.
+        // Note that a Mac's Codex keeps its threads and its login at its own default under the machine's
+        // home, which its runner finds by itself, so nothing names `CODEX_HOME` for it.
         codexHome: undefined,
         // Note that the Mac's follower writes its lines to the stdin of the runner its release bundled.
         linesRead: false,
-        transcriptsKept: false,
+        transcriptsKept: kept,
+        diskSessions: true,
+        permissionModes: device.value.capabilities.includes(DEVICE_CAPABILITY.PERMISSION_MODES),
       };
       return layout;
     });
@@ -339,14 +394,16 @@ function deviceMachineOver(
     });
 
   /**
-   * One request asked of the agent's Mac and its answer waited for, the row
-   * withdrawn however the wait ends; unavailable where the Mac is away, or
-   * did not answer in time.
+   * One request asked of the agent's Mac and its answer waited for, at most
+   * the wait given, a tool's request's where none is, the row withdrawn
+   * however the wait ends; unavailable where the Mac is away, or did not
+   * answer in time.
    */
   const asked = (
     session: string,
     kind: (typeof DEVICE_AGENT_REQUEST_KIND)[keyof typeof DEVICE_AGENT_REQUEST_KIND],
     args: DeviceAgentObject,
+    wait: Duration.Duration = MAC_MACHINE.ANSWER_WAIT,
   ) =>
     Effect.gen(function* () {
       const pin = yield* pinOfSession(session);
@@ -362,7 +419,7 @@ function deviceMachineOver(
           Option.isSome,
           deviceTopics(userId),
           MAC_MACHINE.POLL,
-          MAC_MACHINE.ANSWER_WAIT,
+          wait,
         );
         return Option.flatMap(held, ({ read }) => read);
       }).pipe(Effect.ensuring(Effect.ignore(stored(withdrawDeviceAgentRequest(userId, id)))));
@@ -370,26 +427,32 @@ function deviceMachineOver(
       return answer.value;
     });
 
-  /** The runner's exit as its launch line was settled: its code, gone where it settled with none or the line is gone, null while it runs. */
-  const exitOf = (pin: DeviceAgentPin, handle: RunnerHandle) =>
-    Effect.map(
-      stored(deviceAgentLineStanding(pin.userId, handle.command)),
-      (standing): CommandExit => {
-        if (Option.isNone(standing)) return COMMAND_GONE;
-        if (!standing.value.settled) return null;
-        return standing.value.exitCode ?? COMMAND_GONE;
-      },
-    );
+  /** A line's exit as the Mac settled it: its code, gone where it settled with none or the line is gone, null while it stands unsettled. */
+  const exitOfLine = (pin: DeviceAgentPin, lineId: string) =>
+    Effect.map(stored(deviceAgentLineStanding(pin.userId, lineId)), (standing): CommandExit => {
+      if (Option.isNone(standing)) return COMMAND_GONE;
+      if (!standing.value.settled) return null;
+      return standing.value.exitCode ?? COMMAND_GONE;
+    });
 
-  /** Whether the agent's Mac registered that it launches an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
-  const signsInOwnGithub = (pin: DeviceAgentPin) =>
+  /** The runner's exit as its launch line was settled, as `exitOfLine` reads it. */
+  const exitOf = (pin: DeviceAgentPin, handle: RunnerHandle) => exitOfLine(pin, handle.command);
+
+  /** Whether the agent's Mac registered the capability (`DEVICE_CAPABILITY`); a Mac removed registered none. */
+  const registered = (pin: DeviceAgentPin, capability: DeviceCapability) =>
     pin.deviceId === null
       ? Effect.succeed(false)
       : Effect.map(stored(deviceLayout(pin.userId, pin.deviceId)), (standing) =>
-          Option.exists(standing, (device) =>
-            device.capabilities.includes(DEVICE_CAPABILITY.GITHUB_SIGN_IN),
-          ),
+          Option.exists(standing, (device) => device.capabilities.includes(capability)),
         );
+
+  /** Whether the agent's Mac registered that it takes a restore line (`DEVICE_CAPABILITY.RESTORE_CHECKOUT`). */
+  const restoresCheckout = (pin: DeviceAgentPin) =>
+    registered(pin, DEVICE_CAPABILITY.RESTORE_CHECKOUT);
+
+  /** Whether the agent's Mac registered that it launches every agent in a repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
+  const signsInOwnGithub = (pin: DeviceAgentPin) =>
+    registered(pin, DEVICE_CAPABILITY.GITHUB_SIGN_IN);
 
   /** The deployment's key ring, which a launch's secrets are sealed under; refused where it has none. */
   const keyRing = Effect.gen(function* () {
@@ -409,8 +472,7 @@ function deviceMachineOver(
     deliverCredentials: (_agent, credentials) => handedOnMac(credentials),
 
     // The worktree is the device's to make of its shared clone as it takes the launch line, on the
-    // agent's own GitHub token, or the device's own GitHub sign-in for an agent on its starter's
-    // token, so the open asks the device nothing and leaves nothing to finish.
+    // device's own GitHub sign-in, so the open asks the device nothing and leaves nothing to finish.
     open: (ask, use) =>
       Effect.gen(function* () {
         const [layout, beside] = yield* Effect.all(
@@ -546,10 +608,10 @@ function deviceMachineOver(
           { concurrency: "unbounded" },
         );
         if (Option.isNone(agent)) return yield* new LaunchRefused({ reason: "no agent" });
-        const onOwnSignIn =
-          hasRepository(agent.value) && agent.value.githubAccess === GITHUB_ACCESS.TOKEN;
-        // Note that an agent on its starter's own token whose host is a build from before it, as one whose host went back to an older release since its Start, is refused here too, since that host would ask for a token the service never hands a device.
-        if (onOwnSignIn && !(yield* signsInOwnGithub(pin))) {
+        // Note that an agent in a repository whose host is a build from before it works in every repository on its own GitHub
+        // sign-in, as one whose host went back to an older release since its Start, is refused, since that host would ask for a
+        // token the service never hands a device.
+        if (hasRepository(agent.value) && !(yield* signsInOwnGithub(pin))) {
           yield* Effect.ignore(launch.abandon(ready));
           return yield* new LaunchRefused({ reason: "host predates its own github sign-in" });
         }
@@ -571,7 +633,6 @@ function deviceMachineOver(
             firstSequence: mark.firstSequence,
             ...(mark.fingerprint === undefined ? {} : { fingerprint: mark.fingerprint }),
             ...(commitsBy === undefined ? {} : { identity: commitsBy }),
-            ...(onOwnSignIn ? { githubAccess: DEVICE_GITHUB_ACCESS.TOKEN } : {}),
           };
           yield* queued(pin, {
             id,
@@ -630,6 +691,76 @@ function deviceMachineOver(
             ? answer.bytes
             : undefined,
       ),
+
+    // A restore line put the worktree back, which its Mac settles with the restore's exit; a Mac whose host
+    // takes no such line restores nothing, and one away is refused as every line to it is.
+    restoreCheckout: (session, snapshot) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+        if (Option.isNone(pin)) return RESTORE_OUTCOME.MISSING;
+        // A Mac away or removed is refused by name before its host's release is read, which a removed host has none of.
+        yield* refuseAway(pin.value);
+        if (!(yield* restoresCheckout(pin.value))) return RESTORE_OUTCOME.UNSUPPORTED;
+        const id = randomUUID();
+        yield* queued(pin.value, {
+          id,
+          kind: DEVICE_AGENT_LINE_KIND.RESTORE,
+          payload: encodeRestorePayload(snapshot),
+        });
+        // Note that a line the Mac has not taken by the time the wait ends is withdrawn, because a Mac
+        // back later would otherwise put the files back under whatever the agent has done since.
+        const settled = yield* heldUntil(
+          exitOfLine(pin.value, id),
+          (exit) => exit !== null,
+          deviceTopics(pin.value.userId),
+          MAC_MACHINE.POLL,
+          MAC_MACHINE.RESTORE_WAIT,
+        ).pipe(
+          Effect.ensuring(
+            Effect.ignore(stored(withdrawUnclaimedDeviceAgentLine(pin.value.userId, id))),
+          ),
+        );
+        const exit = Option.match(settled, { onNone: () => null, onSome: ({ read }) => read });
+        if (exit === 0) return RESTORE_OUTCOME.RESTORED;
+        if (exit === CHECKOUT_RESTORE_EXIT.MISSING) return RESTORE_OUTCOME.MISSING;
+        // A follower from before the line settles it with no exit, having acted on nothing.
+        if (exit === COMMAND_GONE) return RESTORE_OUTCOME.UNSUPPORTED;
+        return RESTORE_OUTCOME.FAILED;
+      }),
+
+    // A diff request the Mac's host answers with the script's exit and what it printed; a Mac whose host
+    // takes no such request diffs nothing, and one away is refused as every request to it is.
+    diffCheckout: (session, range) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+        const missing: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.MISSING };
+        if (Option.isNone(pin)) return missing;
+        yield* refuseAway(pin.value);
+        if (!(yield* registered(pin.value, DEVICE_CAPABILITY.DIFF_CHECKOUT))) {
+          const unsupported: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED };
+          return unsupported;
+        }
+        const answer = yield* asked(
+          session,
+          DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+          { from: range.from, to: range.to },
+          MAC_MACHINE.DIFF_WAIT,
+        );
+        if (answer.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return missing;
+        if (answer.exit === 0) {
+          const diffed: CheckoutDiffOutcome = {
+            outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
+            diff: answer.diff,
+          };
+          return diffed;
+        }
+        if (answer.exit === CHECKOUT_DIFF_EXIT.MISSING) return missing;
+        const failed: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
+        return failed;
+      }),
+
+    // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
+    phoneVideo: () => Effect.succeed(undefined),
   };
 }
 

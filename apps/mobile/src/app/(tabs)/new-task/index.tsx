@@ -1,37 +1,25 @@
-// index.tsx -- the New task tab: a placeholder for the composer, its bar of glass at the foot.
+// index.tsx -- the New task tab's own screen, which the round + never selects, since it opens New task as a sheet; a link that names the tab lands here and opens the sheet from it.
 
-import { BUTTON_LOOK, Button, Chip, EmptyState, GlassBar, Screen, Spacer } from "@repo/ui-native";
-import { Stack } from "expo-router";
-import { useState } from "react";
+import { EmptyState, Screen } from "@repo/ui-native";
+import { Stack, useRouter } from "expo-router";
+import { SettingsBarButton } from "../../../settings-button.js";
 
-/** The models the placeholder's chips pick among, until the host's catalog names them. */
-const PLACEHOLDER_MODELS = ["Opus 5.5", "Fable 5.1"] as const;
+export { ScreenBoundary as ErrorBoundary } from "../../../screen-boundary.js";
 
 export default function NewTaskScreen() {
-  const [model, setModel] = useState<string>(PLACEHOLDER_MODELS[0]);
+  const router = useRouter();
   return (
     <>
       <Stack.Screen options={{ title: "New task" }} />
+      <SettingsBarButton />
       <Screen>
         <EmptyState
           title="New task"
           symbol="square.and.pencil"
           description="Describe the task, and an agent starts on it."
+          action={{ label: "New task", onPress: () => router.push("/start-task") }}
         />
       </Screen>
-      <GlassBar>
-        {PLACEHOLDER_MODELS.map((name) => (
-          <Chip key={name} label={name} selected={name === model} onPress={() => setModel(name)} />
-        ))}
-        <Spacer />
-        <Button
-          label="Start"
-          symbol="arrow.up"
-          look={BUTTON_LOOK.GLASS_PROMINENT}
-          disabled
-          onPress={() => undefined}
-        />
-      </GlassBar>
     </>
   );
 }

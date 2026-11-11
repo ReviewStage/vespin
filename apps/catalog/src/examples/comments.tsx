@@ -10,6 +10,7 @@ import {
   GAP,
   LAYOUT_ELEMENT,
   MoreButton,
+  QuietWords,
   STATUS_TONE,
   Stack,
 } from "@repo/ui";
@@ -146,9 +147,13 @@ function Comments(): React.JSX.Element {
           </Stack>
         </div>
       </CatalogSection>
-      <CatalogSection id="comment-draft" title="A draft, with no time">
+      <CatalogSection id="comment-draft" title="A pending comment, with no time">
         <div className="catalog-frame">
-          <Comment author={{ name: "Grace Hopper", id: "user-grace" }}>
+          <Comment
+            author={{ name: "Grace Hopper", id: "user-grace" }}
+            status={<QuietWords>Pending</QuietWords>}
+            trailing={<MoreButton thing="Comment" size={BUTTON_SIZE.COMPACT} onClick={() => {}} />}
+          >
             Pending review comment.
           </Comment>
         </div>

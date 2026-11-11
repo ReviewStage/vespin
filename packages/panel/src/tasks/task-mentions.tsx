@@ -1,7 +1,8 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { descriptionSections } from "@repo/features/description-document";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import { type MentionPlace, sectionAnchors } from "@repo/features/mention-link";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -24,13 +25,12 @@ import {
 } from "react";
 import { askAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import type { MentionNode } from "../description-editor/contract.js";
 import { descriptionDocumentQuery } from "../live-reads.js";
 import type { LinkDrawer } from "../markdown-message.js";
-import type { MentionNode } from "../description-editor/contract.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { agentActor, agentName } from "./agent-model.js";
 import { type MentionDoors, mentionLinkDrawer } from "./mention-chip.js";
-import type { MentionHolder } from "./mention-holder.js";
 import type {
   MentionAgentsReader,
   MentionableAgent,
@@ -53,11 +53,11 @@ import { workspaceAgentSearchQueryOptions } from "./workspace-agent-search.js";
  * (`skill-chip.tsx`'s `SkillFiles`). A place off a task's page reads nothing,
  * picks no mention, and draws a mention's link as words.
  *
- * The page of an agent no task holds, as an automation's run starts one,
- * hands the same through `tasklessMentions`: its repository's files, its
- * skills, and the servers, with no description's sections, since there is no task.
- * New task's composer hands the same for its workspace, its repository's
- * once one is chosen on its chip (`new-task-composer.tsx`). Each
+ * New task's composer hands what a place no task holds offers through
+ * `tasklessMentions`: its workspace's repository's files once one is chosen
+ * on its chip (`new-task-composer.tsx`), its skills, and the servers, with
+ * no description's sections, since there is no task; an automation's
+ * prompt hands the same. Each
  * hands the workspace's coding agents too, the newest as the task list
  * carries them and those words name as the service finds them, through
  * `useMentionAgentsReader`, each named by its task.
@@ -76,7 +76,7 @@ import { workspaceAgentSearchQueryOptions } from "./workspace-agent-search.js";
 
 /** A task's page's mentions: what holds them, its text as saved, and the doors its chips open through. */
 export interface TaskMentionsValue {
-  /** The task, or the agent on no task, whose page it is; none for a place neither holds. */
+  /** The task whose page it is; none for a place no task holds. */
   readonly holder: MentionHolder | undefined;
   readonly taskName: string;
   /** The slug of the task's workspace, which a mention of it is written under. */
@@ -86,13 +86,13 @@ export interface TaskMentionsValue {
   /** The id of the workspace whose installation the repository is read through, where no task names it. */
   readonly workspaceId?: string | undefined;
   readonly text: () => string;
-  /** The pages agents showed on the task, or the agent on no task showed itself, which an `@` offers; none where neither holds the place. */
+  /** The pages agents showed on the task, which an `@` offers; none where no task holds the place. */
   readonly pages?: readonly MentionablePage[] | undefined;
   /** The task's coding agents, which an `@` offers first; none off a task. */
   readonly agents?: readonly MentionableAgent[] | undefined;
   /** Reads the workspace's coding agents, which an `@` offers after the task's own. */
   readonly readAgents?: MentionAgentsReader | undefined;
-  /** The pull requests the task's agents published, or the agent on no task did, which an `@` offers; none elsewhere. */
+  /** The pull requests the task's agents published, which an `@` offers; none elsewhere. */
   readonly pullRequests?: readonly MentionablePullRequest[] | undefined;
   readonly doors: MentionDoors;
 }
@@ -145,14 +145,7 @@ const NO_ANCHORS: ReadonlySet<string> = new Set();
 /** What a press on a task's chip does with no opener at hand, as in a test of one surface: nothing. */
 const OPEN_NOTHING = (): void => undefined;
 
-/** What an agent on no task holds on its own page, which an `@` there offers: the agent, the pages it showed, and the pull request it opened, as the page has read them. */
-interface TasklessHolding {
-  readonly agentId: string;
-  readonly pages: readonly MentionablePage[] | undefined;
-  readonly pullRequests: readonly MentionablePullRequest[];
-}
-
-/** A place no task holds, as an agent an automation started stands in: its workspace's slug, which a mention is written under, its id, which its repository is read through, and the repository, null where none is chosen yet, as in New task. */
+/** A place no task holds, as New task's composer and an automation's prompt are: its workspace's slug, which a mention is written under, its id, which its repository is read through, and the repository, null where none is chosen yet. */
 export interface TasklessPlace {
   readonly workspace: string;
   readonly workspaceId: string;
@@ -160,43 +153,34 @@ export interface TasklessPlace {
 }
 
 /**
- * The mentions of a page no task holds, as the page of an agent an
- * automation started is: its repository's files and folders, its skills,
- * and the servers, and no description's sections; on an agent's own page, the
- * pages it showed and the pull request it opened, which `holds` hands; a task or a section a message
- * names opens through `onOpenTask`, and a file through `onOpenFile`, in
- * the panel beside the page, which reads it by the place's workspace and
- * repository, or on GitHub where the place hands none. A place of no
- * repository, as the app's page is, offers the rest all the same. A link to a
- * pull request the place's agent opened hangs the card `pullRequestOf`
- * answers, where the place hands one.
+ * The mentions of a place no task holds, as New task's composer and an
+ * automation's prompt are: its repository's files and folders, its skills,
+ * and the servers, and no description's sections nor pages; a task or a
+ * section a message names opens through `onOpenTask`. A place of no
+ * repository offers the rest all the same.
  */
 export function tasklessMentions(
   place: TasklessPlace,
   onOpenTask: MentionDoors["onOpenTask"],
   readAgents?: MentionAgentsReader,
-  opens: Partial<Pick<MentionDoors, "pullRequestOf" | "onOpenFile">> = {},
-  holds?: TasklessHolding,
 ): TaskMentionsValue {
   const { workspace, workspaceId, repository } = place;
-  const holder = holds === undefined ? undefined : { agentId: holds.agentId };
   return {
-    holder,
+    holder: undefined,
     taskName: "",
     workspace,
     workspaceId,
     repository,
     text: () => "",
-    pages: holds?.pages,
+    pages: undefined,
     readAgents,
-    pullRequests: holds?.pullRequests,
+    pullRequests: undefined,
     doors: {
-      holder,
+      holder: undefined,
       place: { workspace, repository },
       anchors: NO_ANCHORS,
       onOpenTask,
-      onOpenFile: repository === null ? undefined : opens.onOpenFile,
-      pullRequestOf: opens.pullRequestOf,
+      onOpenFile: undefined,
     },
   };
 }
@@ -228,7 +212,10 @@ export function heldTaskMentions(
   workspace: string,
   text: string | undefined,
   { pages, agents, readAgents }: TaskHolding,
-  doors: Pick<MentionDoors, "onOpenTask" | "onOpenFile" | "agentOf" | "pullRequestOf">,
+  doors: Pick<
+    MentionDoors,
+    "onOpenTask" | "onOpenFile" | "onOpenTurnChanges" | "agentOf" | "pullRequestOf"
+  >,
 ): TaskMentionsValue {
   const holder = { taskId: task.id };
   const { repository } = task;
@@ -340,9 +327,7 @@ export function mentionableAgent(
     id: agent.id,
     name,
     actor: agentActor(agent, name),
-    ...(agent.planId === null
-      ? undefined
-      : { task: { id: agent.planId, name: names.get(agent.planId) } }),
+    task: { id: agent.planId, name: names.get(agent.planId) },
     archived: agent.archivedAt !== undefined,
     summary: agent,
   };
@@ -446,18 +431,19 @@ export function useMentionLink(task?: MentionedTask): LinkDrawer {
   return useMemo(() => mentionLinkDrawer(doors), [doors]);
 }
 
-/** Makes the agent's message box the one a mention made elsewhere on the page is laid into, for as long as it is drawn. */
-export function useMentionBox(receive: MentionBox): void {
+/** Makes the agent's message box the one a mention made elsewhere on the page is laid into, for as long as it is drawn; none where the box takes none, as an Inbox answer's. */
+export function useMentionBox(receive: MentionBox | undefined): void {
   const stand = useContext(MentionBoxContext)?.stand;
   const latest = useRef(receive);
   latest.current = receive;
+  const takes = receive !== undefined;
   useEffect(() => {
-    if (stand === undefined) return;
-    const taking: MentionBox = (mention) => latest.current(mention);
+    if (stand === undefined || !takes) return;
+    const taking: MentionBox = (mention) => latest.current?.(mention);
     // Note that a box is set as a function's answer, since the box is itself a function.
     stand(() => taking);
     return () => stand((standing) => (standing === taking ? undefined : standing));
-  }, [stand]);
+  }, [stand, takes]);
 }
 
 /** Hands a mention to the agent's message box drawn on the page; nothing while no box stands there, or off a task's page. */

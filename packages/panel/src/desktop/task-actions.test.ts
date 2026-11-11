@@ -13,6 +13,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -20,7 +21,6 @@ import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { draftTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -439,12 +439,104 @@ test("the plan's ⋯ menu ends with who created the plan and who last edited it,
   assert.deepEqual(menuFooter(), ["Created by a deleted account", "Last edited"]);
 });
 
-test("a sidebar task Vespin or a coding agent made says in its ⋯ who made it for whom", () => {
+test("a sidebar task wears its assignee's face where someone else is on it, the dashed unassigned mark where no one is, and nothing where the reader is, never its creator's", () => {
+  /** Each mark the row wears, by its kind and its letter, and what the row says of it, read as Dean sees them. */
+  const faces = (task: TaskSummary) => {
+    const { tasks, asked } = openTab();
+    const container = mount(
+      withQueryClient(
+        createElement(MemberDirectory, {
+          workspace: undefined,
+          readerId: DEAN.userId,
+          children: sidebarTask(tasks, task, asked),
+        }),
+      ),
+    );
+    const marks = container.querySelectorAll(".sidebar-task-time > .actor-mark");
+    // What the row says while it holds the keyboard, its time stepped out for Pin and Archive.
+    const line = container.querySelector(".ui-list-row-title");
+    const said = [...(line?.childNodes ?? [])]
+      .map(heard)
+      .join("")
+      .match(/\((?:created by|assigned to|unassigned)[^)]*\)/u)?.[0];
+    unmountAll();
+    return [[...marks].map((mark) => [mark.getAttribute("data-kind"), mark.textContent]), said];
+  };
+
+  // Charles created it and no one is on it: the dashed mark, not his face.
+  assert.deepEqual(faces(SHARED_TASK), [[["unassigned", ""]], "(unassigned)"]);
+  assert.deepEqual(faces({ ...SHARED_TASK, assignee: CHARLES }), [
+    [["person", "C"]],
+    "(assigned to Charles Pan)",
+  ]);
+  assert.deepEqual(faces({ ...SHARED_TASK, assignee: DEAN }), [[], undefined]);
+  assert.deepEqual(faces(OTHER), [[["unassigned", ""]], "(unassigned)"]);
+});
+
+test("a sidebar task no one is on wears no face in a workspace of the reader alone, by its count or else by its members read, and the dashed mark where others share it or nobody counted them", async () => {
+  const { memberCount: _uncounted, ...uncounted } = PERSONAL;
+  /** Each mark the row wears, by its kind, and what the row says of who is on it, read as Dean sees them. */
+  const faces = async (
+    workspace: Workspace,
+    members: readonly { userId: string; name: string }[] | undefined,
+  ) => {
+    installMembers(members);
+    const { tasks, asked } = openTab();
+    const task = { ...OTHER, workspaceId: workspace.id };
+    const container = mountReading(
+      withPeopleRead({ workspace, readerId: DEAN.userId }, sidebarTask(tasks, task, asked)),
+    );
+    await act(async () => {
+      for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
+    });
+    await peopleRead();
+    const marks = container.querySelectorAll(".sidebar-task-time > .actor-mark");
+    const line = container.querySelector(".ui-list-row-title");
+    const said = [...(line?.childNodes ?? [])]
+      .map(heard)
+      .join("")
+      .match(/\((?:assigned to|unassigned)[^)]*\)/u)?.[0];
+    unmountAll();
+    return [[...marks].map((mark) => mark.getAttribute("data-kind")), said];
+  };
+
+  assert.deepEqual(await faces(PERSONAL, [DEAN]), [[], undefined]);
+  assert.deepEqual(await faces(PERSONAL, undefined), [[], undefined]);
+  assert.deepEqual(await faces(STAGE, [DEAN, CHARLES]), [["unassigned"], "(unassigned)"]);
+  // A service that counts no members leaves it to the members read, and keeps the mark while nobody counted them.
+  assert.deepEqual(await faces(uncounted, [DEAN]), [[], undefined]);
+  assert.deepEqual(await faces(uncounted, [DEAN, CHARLES]), [["unassigned"], "(unassigned)"]);
+  assert.deepEqual(await faces(uncounted, undefined), [["unassigned"], "(unassigned)"]);
+});
+
+test("a sidebar task Vespin or a coding agent made wears who is on it rather than their square, and its ⋯ says who made it for whom", () => {
+  /** Each mark the row wears, by its kind. */
+  const marks = (task: TaskSummary) => {
+    const { tasks, asked } = openTab();
+    const container = mount(
+      withQueryClient(
+        createElement(MemberDirectory, {
+          workspace: undefined,
+          readerId: DEAN.userId,
+          children: sidebarTask(tasks, task, asked),
+        }),
+      ),
+    );
+    const worn = [...container.querySelectorAll(".sidebar-task-time > .actor-mark")].map((mark) =>
+      mark.getAttribute("data-kind"),
+    );
+    unmountAll();
+    return worn;
+  };
   const deans = { ...SHARED_TASK, ownerId: DEAN.userId, createdBy: DEAN };
   const byAgent = {
     ...deans,
     origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" },
   } as const;
+  const byApp = { ...deans, origin: { actor: DESCRIPTION_ACTOR.NOTETAKER } } as const;
+  assert.deepEqual(marks(byAgent), ["unassigned"]);
+  assert.deepEqual(marks({ ...byApp, assignee: DEAN }), []);
+  assert.deepEqual(marks({ ...byApp, assignee: CHARLES }), ["person"]);
 
   const { asked } = openTab();
   const listed = tasksControl({ me: DEAN.userId, tasks: [byAgent] });
@@ -753,14 +845,14 @@ function chooseIn(submenu: string, label: string): void {
   act(() => item.click());
 }
 
-test("a row's Status, opened by a right-click or by S on the focused row, sets the task at the status picked, Done as the row's Mark done check does, asking nothing even where agents work on it, and checks the status it stands at", async () => {
-  const working: TaskSummary = {
+test("a row's Status, opened by a right-click or by S on the focused row, sets the task at the status picked, Done as the row's Mark done check does, asking nothing where no agent works on it, and checks the status it stands at", async () => {
+  const resting: TaskSummary = {
     ...OTHER,
     ...STANDING,
     status: TASK_STATUS.IN_PROGRESS,
-    agents: { total: 2, working: 1, pullRequestTotal: 0 },
+    agents: { total: 2, working: 0, pullRequestTotal: 0 },
   };
-  const done: TaskSummary = { ...working, status: TASK_STATUS.DONE };
+  const done: TaskSummary = { ...resting, status: TASK_STATUS.DONE };
   const settled: [string, TaskStatus | undefined][] = [];
   // Each status leaves on the act port, which the service keeps.
   fakeActPort({
@@ -770,7 +862,7 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
       return Promise.resolve(true);
     },
   });
-  const tasks = tasksControl({ tasks: [working] });
+  const tasks = tasksControl({ tasks: [resting] });
   const asked: Asked = {
     opened: [],
     changed: [],
@@ -780,7 +872,7 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
   const doneButton = (container: HTMLElement) =>
     container.querySelector('button[aria-label="Mark done"]');
 
-  const row = mount(withQueryClient(sidebarTask(tasks, working, asked)));
+  const row = mount(withQueryClient(sidebarTask(tasks, resting, asked)));
   const check = doneButton(row);
   assert.ok(check instanceof HTMLButtonElement, "the row offers Mark done as its button");
   act(() => check.click());
@@ -809,9 +901,9 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
   assert.equal(asking(), false, "no status asks anything");
   await act(async () => undefined);
   assert.deepEqual(settled, [
-    [working.id, TASK_STATUS.DONE],
-    [working.id, TASK_STATUS.DONE],
-    [working.id, TASK_STATUS.CANCELED],
+    [resting.id, TASK_STATUS.DONE],
+    [resting.id, TASK_STATUS.DONE],
+    [resting.id, TASK_STATUS.CANCELED],
   ]);
 
   unmountAll();

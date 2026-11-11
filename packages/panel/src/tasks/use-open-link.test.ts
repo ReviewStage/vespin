@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, type ReadLink } from "@repo/features/link-grammar";
 import { APP_HOME_LINK, LINK_ORIGIN } from "@repo/features/link-home";
 import type { PagePlace } from "@repo/features/page-wire";
 import type { TaskPullRequests } from "@repo/features/task-wire";
@@ -38,7 +38,7 @@ import {
  * opens on GitHub, though a listed task's agent opened it, a new list
  * draws no part opening links again, which reads the list as the link
  * opens, and a link naming a listed task by its number reaches the place
- * pressed on by the task's id; what a task's or an agent's page opens beside
+ * pressed on by the task's id; what a task's page opens beside
  * it, and where the window opens what no surface took, one row per kind of
  * address. What the window is handed is read as the window reads it,
  * matched on its route tree (`../places/link-places.ts`). Synthetic ids, a
@@ -174,7 +174,7 @@ test("a new list of tasks draws no part opening links again, and a link opened a
   assert.deepEqual(links.map(matched), [
     {
       declared: LINK_ROUTED_PLACE.CHANGES,
-      place: { kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT },
+      place: { kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT },
     },
   ]);
 });
@@ -188,68 +188,68 @@ test.each([
     "an agent's link",
     AT_AGENT,
     LINK_ROUTED_PLACE.AGENT,
-    { kind: LINK_PLACE.AGENT, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, agentId: AGENT },
   ],
   [
     "an agent's link in the app's own scheme",
     `${APP_HOME_LINK}acme/agent/${AGENT}`,
     LINK_ROUTED_PLACE.AGENT,
-    { kind: LINK_PLACE.AGENT, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, agentId: AGENT },
   ],
   [
     "an agent's link under its task",
     ON_TASK,
     LINK_ROUTED_PLACE.AGENT,
-    { kind: LINK_PLACE.AGENT, planId: TASK, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
   ],
   [
     "an agent's link under /plan/",
     ON_PLAN,
     LINK_ROUTED_PLACE.AGENT,
-    { kind: LINK_PLACE.AGENT, planId: TASK, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
   ],
   [
     "a message's link",
     `${AT_AGENT}/message/msg-7`,
     LINK_ROUTED_PLACE.MESSAGE,
-    { kind: LINK_PLACE.MESSAGE, agentId: AGENT, messageId: "msg-7" },
+    { kind: LINK_DESTINATION.MESSAGE, agentId: AGENT, messageId: "msg-7" },
   ],
   [
     "a message's link under /plan/",
     `${ON_PLAN}/message/msg-7`,
     LINK_ROUTED_PLACE.MESSAGE,
-    { kind: LINK_PLACE.MESSAGE, planId: TASK, agentId: AGENT, messageId: "msg-7" },
+    { kind: LINK_DESTINATION.MESSAGE, planId: TASK, agentId: AGENT, messageId: "msg-7" },
   ],
   [
     "a worker's link",
     `${AT_AGENT}/worker/toolu_1`,
     LINK_ROUTED_PLACE.WORKER,
-    { kind: LINK_PLACE.WORKER, agentId: AGENT, callId: "toolu_1" },
+    { kind: LINK_DESTINATION.WORKER, agentId: AGENT, callId: "toolu_1" },
   ],
   [
     "a worker's link under its task",
     `${ON_TASK}/worker/toolu_1`,
     LINK_ROUTED_PLACE.WORKER,
-    { kind: LINK_PLACE.WORKER, planId: TASK, agentId: AGENT, callId: "toolu_1" },
+    { kind: LINK_DESTINATION.WORKER, planId: TASK, agentId: AGENT, callId: "toolu_1" },
   ],
   [
     "a Changes link",
     `${AT_AGENT}/changes`,
     LINK_ROUTED_PLACE.CHANGES,
-    { kind: LINK_PLACE.CHANGES, agentId: AGENT },
+    { kind: LINK_DESTINATION.CHANGES, agentId: AGENT },
   ],
   [
     "a Changes link under /plan/",
     `${ON_PLAN}/changes`,
     LINK_ROUTED_PLACE.CHANGES,
-    { kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT },
+    { kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT },
   ],
   [
     "a review thread's link",
     `${AT_AGENT}/changes/files/thread/PRRT_1`,
     LINK_ROUTED_PLACE.PULL_REQUEST_THREAD,
     {
-      kind: LINK_PLACE.PULL_REQUEST_THREAD,
+      kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
       agentId: AGENT,
       threadId: "PRRT_1",
       view: "files",
@@ -260,7 +260,7 @@ test.each([
     `${ON_TASK}/changes/conversation/thread/PRRT_1`,
     LINK_ROUTED_PLACE.PULL_REQUEST_THREAD,
     {
-      kind: LINK_PLACE.PULL_REQUEST_THREAD,
+      kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
       planId: TASK,
       agentId: AGENT,
       threadId: "PRRT_1",
@@ -271,13 +271,13 @@ test.each([
     "a worker of our own under /plan/, read as its task",
     `${LINK_ORIGIN}/acme/plan/${TASK}/worker/toolu_1`,
     LINK_ROUTED_PLACE.TASK,
-    { kind: LINK_PLACE.TASK, planId: TASK },
+    { kind: LINK_DESTINATION.TASK, planId: TASK },
   ],
   [
     "a channel's link, read as the Inbox",
     `${LINK_ORIGIN}/acme/channel/c-1`,
     LINK_ROUTED_PLACE.INBOX,
-    { kind: LINK_PLACE.INBOX },
+    { kind: LINK_DESTINATION.INBOX },
   ],
 ] as const)(
   "%s written in a part is handed to the window, which matches it on its route tree as that place",
@@ -316,7 +316,7 @@ test("a link naming a listed task by its number is asked of the place it is pres
       },
     },
   );
-  const asked: LinkPlace[] = [];
+  const asked: LinkDestination[] = [];
   let open: ((href: string) => void) | undefined;
   // Note that the part reads the window's document, so it is read by the press.
   function Opener(): null {
@@ -347,7 +347,7 @@ test("a link naming a listed task by its number is asked of the place it is pres
   });
   act(() => open?.(`https://vespin.dev/acme/task/42/page/${page}`));
 
-  assert.deepEqual(asked, [{ kind: LINK_PLACE.PAGE, planId: TASK, pageId: page }]);
+  assert.deepEqual(asked, [{ kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: page }]);
 });
 
 const OTHER = "5b7d9f1a-3c5e-4a7b-9d1f-2b4c6d8e0f1a";
@@ -373,25 +373,23 @@ const HOLDING = {
 const ARCHIVED = { ...HOLDING, agentIds: [], heldIds: [AGENT] };
 
 const TASK_PAGE: PagesHere = { kind: HERE.TASK, taskId: TASK, ...HOLDING };
-const AGENT_PAGE: PagesHere = { kind: HERE.AGENT, agentId: AGENT, ...HOLDING };
 
-/** What the window lists: the task, and an agent on no task, which opened the pull request numbered 43. */
+/** What the window lists: the task, whose agent opened the pull request at `URL`. */
 const WINDOW_LISTED: Listed = {
   tasks: [{ taskId: TASK, pullRequests: [{ url: URL, agentId: AGENT }] }],
-  agents: [{ id: OTHER, pullRequest: { url: "https://github.com/acme/relay/pull/43" } }],
 };
 
 function go(link: ReadLink): Route {
   return { kind: ROUTE.GO, link };
 }
 
-/** What a task's or an agent's page opened beside it: a pull request in an agent's tab, by its number where it is another, or a page read on its place; none where it left the address to the window. */
+/** What a task's page opened beside it: a pull request in an agent's tab, by its number where it is another, or a page read on its place; none where it left the address to the window. */
 type OpenedBeside =
   | { readonly pullRequest: readonly [string, number | undefined] }
   | { readonly page: readonly [string, PagePlace] }
   | undefined;
 
-/** What a press on `href` opens beside a task's or an agent's page. */
+/** What a press on `href` opens beside a task's page. */
 function openedOnPage(href: string, here: PagesHere): OpenedBeside {
   let opened: OpenedBeside;
   const open = openPullRequestsHere(
@@ -452,30 +450,6 @@ test.each<[string, string, PagesHere, OpenedBeside]>([
     undefined,
   ],
   ["a task: a file of its repository, the window's", FILE, TASK_PAGE, undefined],
-  [
-    "an agent's page: the pull request it opened, in its Pull request tab",
-    URL,
-    AGENT_PAGE,
-    { pullRequest: [AGENT, undefined] },
-  ],
-  [
-    "an agent's page: a task's page, beside it read on that task",
-    `${APP}/plan/${TASK}/page/${PAGE}`,
-    AGENT_PAGE,
-    { page: [PAGE, { taskId: TASK }] },
-  ],
-  [
-    "an agent's page: a page under a task named by a number not found, the window's, which finds the task",
-    `${APP}/task/42/page/${PAGE}`,
-    AGENT_PAGE,
-    undefined,
-  ],
-  [
-    "an agent's page: another pull request of its repository, by its number",
-    "https://github.com/acme/relay/pull/41",
-    AGENT_PAGE,
-    { pullRequest: [AGENT, 41] },
-  ],
 ])("%s", (_, href, here, expected) => {
   assert.deepEqual(openedOnPage(href, here), expected);
 });
@@ -491,7 +465,7 @@ test("a task's page: a related task's pull request, as its row presses it, the w
 
   assert.deepEqual(
     { places, opened },
-    { places: [{ kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT }], opened: [] },
+    { places: [{ kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT }], opened: [] },
   );
 });
 
@@ -500,25 +474,19 @@ test.each<[string, string, boolean, Route]>([
     "the window: an app link, to its place",
     `${APP}/agent/${AGENT}`,
     true,
-    go({ workspace: "acme", place: { kind: LINK_PLACE.AGENT, agentId: AGENT } }),
+    go({ workspace: "acme", place: { kind: LINK_DESTINATION.AGENT, agentId: AGENT } }),
   ],
   [
     "the window: a plan an older link names, to the plan",
     `luke://plan/${TASK}`,
     true,
-    go({ workspace: "", place: { kind: LINK_PLACE.TASK, planId: TASK } }),
+    go({ workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: TASK } }),
   ],
   [
     "the window: a pull request a listed task's agent opened, however spelled, to its Pull request tab on the task",
     `${URL}#issuecomment-1`,
     true,
-    go({ workspace: "", place: { kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT } }),
-  ],
-  [
-    "the window: a pull request a listed agent on no task opened, to its Pull request tab",
-    "https://github.com/acme/relay/pull/43",
-    true,
-    go({ workspace: "", place: { kind: LINK_PLACE.CHANGES, agentId: OTHER } }),
+    go({ workspace: "", place: { kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT } }),
   ],
   [
     "the window: a pull request nothing listed names, to the browser",

@@ -20,7 +20,7 @@ import {
   releaseCredentialRenewal,
 } from "@repo/database/models/sandbox-terminal-lease";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { Sandbox, touchSandbox } from "@repo/sandbox";
+import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { controlsAgent } from "../agents/agent-reach.js";
@@ -28,6 +28,7 @@ import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { agentRepositoryToken } from "../agents/coder-host/checkout.js";
 import { connectPty } from "../agents/sandbox-pty.js";
+import { touchedAgentSandbox } from "../agents/sandbox-use.js";
 import { AgentSandbox, agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
 import type { GitHubApp } from "../github/github-app.js";
 import type { RelayDependencies } from "./relay.js";
@@ -77,7 +78,7 @@ export const relayDependencies: Effect.Effect<RelayDependencies, never, RelaySer
         ),
       sandbox,
       connect: (shell) => connectPty(sandboxes, shell),
-      touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
+      touch: (sessionId) => run(touchedAgentSandbox(agentSandboxName(sessionId))),
       claimRenewal: (conversationId, sandboxSessionId, now, renewedBefore) =>
         run(claimCredentialRenewal(conversationId, sandboxSessionId, now, renewedBefore)).pipe(
           Effect.orElseSucceed(() => false),

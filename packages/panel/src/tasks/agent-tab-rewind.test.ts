@@ -8,12 +8,15 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
+import { handState } from "../testing/app-state.js";
 import {
   composerEditor,
   editorBundleLanded,
@@ -25,10 +28,11 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AgentTab } from "./agent-tab.js";
+import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
 
 /**
  * agent-tab-rewind.test.ts -- an edited message sent from an agent's tab asks
- * before it drops the messages after it, as Revert to here does: Cancel keeps
+ * before it drops the messages after it, as Rewind conversation to here does: Cancel keeps
  * every later message and sends nothing, Send takes the agent back and sends,
  * and the last message is sent at once. Synthetic throughout.
  */
@@ -60,6 +64,21 @@ function line(
     ...(role === MESSAGE_ROLE.ASSISTANT ? { startedAt: 2_000, finishedAt: 80_000 } : undefined),
   };
 }
+
+/** The agent's reply that edited a file, as the transcript carries the edit. */
+const EDITED: AgentTranscriptMessage = {
+  ...line("reply-2", MESSAGE_ROLE.ASSISTANT, "Dark variant done."),
+  parts: [
+    { type: "text", text: "Dark variant done." },
+    {
+      type: "tool-apply_patch",
+      toolCallId: "call-edit",
+      state: "output-available",
+      input: { patchText: "*** Update File: src/tile.css\n@@\n-light\n+dark\n+darker" },
+      output: "ok",
+    },
+  ],
+};
 
 const MESSAGES: readonly AgentTranscriptMessage[] = [
   line("plan", MESSAGE_ROLE.USER, "# Fix the tile"),
@@ -104,13 +123,67 @@ async function settle(): Promise<void> {
   await settleQueries();
 }
 
-/** The agent's tab over the transcript, every rewind and send it makes written down in order. */
-async function drawnTab(holdSends = false) {
-  fakeAppBridge({});
+/**
+ * The agent's tab over the transcript, every rewind and send it makes written
+ * down in order, a rewind that puts the files back marked `:files`; the
+ * agent's workspace has the files-back experiment on where `restoring`.
+ */
+async function drawnTab(
+  holdSends = false,
+  messages: readonly AgentTranscriptMessage[] = MESSAGES,
+  restoring = false,
+) {
+  const opened: string[] = [];
+  const turns: [string, string, string][] = [];
+  const page: TaskMentionsValue = {
+    holder: { taskId: TASK },
+    taskName: "Fix the tile",
+    workspace: "acme",
+    repository: "acme/relay",
+    text: () => "",
+    doors: {
+      holder: { taskId: TASK },
+      place: { workspace: "acme", repository: "acme/relay" },
+      anchors: new Set(),
+      onOpenTask: () => undefined,
+      onOpenFile: (path) => {
+        opened.push(path);
+      },
+      onOpenTurnChanges: (agentId, messageId, path) => {
+        turns.push([agentId, messageId, path]);
+      },
+    },
+  };
+  if (restoring) {
+    handState(
+      { [EXPERIMENT.REWIND_FILES]: true },
+      {
+        tasks: {
+          ...IDLE_TASKS_VIEW,
+          taskAgents: [
+            {
+              id: AGENT,
+              planId: TASK,
+              turnId: null,
+              title: AGENT_SUMMARY.title,
+              model: AGENT_SUMMARY.model,
+              effort: AGENT_SUMMARY.effort,
+              status: AGENT_SUMMARY.status,
+              createdAt: AGENT_SUMMARY.createdAt,
+              workspaceId: "workspace-1",
+              repository: "acme/relay",
+            },
+          ],
+        },
+      },
+    );
+  } else {
+    fakeAppBridge({});
+  }
   const calls: string[] = [];
   pushedTranscripts(() => [
     {
-      messages: [...MESSAGES],
+      messages: [...messages],
       cursor: "5:0",
       status: AGENT_STATUS.COMPLETED,
       title: null,
@@ -118,8 +191,8 @@ async function drawnTab(holdSends = false) {
   ]);
   const control = agentsControl({
     agents: [AGENT_SUMMARY],
-    onRewind: (_agentId, messageId) => {
-      calls.push(`rewind:${messageId}`);
+    onRewind: (_agentId, messageId, restoreFiles) => {
+      calls.push(restoreFiles === true ? `rewind:${messageId}:files` : `rewind:${messageId}`);
       return Promise.resolve(REWOUND);
     },
     onMessage: (_agentId, text) => {
@@ -134,13 +207,16 @@ async function drawnTab(holdSends = false) {
   await act(async () =>
     root.render(
       withQueryClient(
-        createElement(AgentTab, {
-          agent: AGENT_SUMMARY,
-          control,
-          shown: true,
-          onOpenSubagent: () => undefined,
-          onOpenTarget: () => undefined,
-          onHeld: () => undefined,
+        createElement(TaskMentions, {
+          value: page,
+          children: createElement(AgentTab, {
+            agent: AGENT_SUMMARY,
+            control,
+            shown: true,
+            onOpenSubagent: () => undefined,
+            onOpenTarget: () => undefined,
+            onHeld: () => undefined,
+          }),
         }),
       ),
     ),
@@ -178,7 +254,7 @@ async function drawnTab(holdSends = false) {
     pressInComposer(container, "Enter");
     await settle();
   };
-  return { container, calls, message, editAndSend, sendFromFoot, dialog, press };
+  return { container, calls, opened, turns, message, editAndSend, sendFromFoot, dialog, press };
 }
 
 test("sending an edited middle message asks first, and Cancel keeps every later message and sends nothing", async () => {
@@ -222,4 +298,79 @@ test("a line sent and not yet read back follows the last message, so editing it 
 
   assert.ok(tab.dialog(), "the question stands");
   assert.deepEqual(tab.calls, ["send:And the docs."], "nothing was cut yet");
+});
+
+test("an edited message whose turn recorded the files offers them back in its box while the workspace has the experiment on, and Send in the question hands the choice on with the rewind", async () => {
+  const recorded = MESSAGES.map((each) =>
+    each.id === "middle" ? { ...each, filesRestorable: true as const } : each,
+  );
+  const plain = await drawnTab(false, recorded);
+  const plainEdit = plain
+    .message("middle")
+    .querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
+  assert.ok(plainEdit);
+  await act(async () => plainEdit.click());
+  await settle();
+  assert.equal(
+    plain.message("middle").querySelector('[role="checkbox"]'),
+    null,
+    "with the experiment off, the box offers no files back",
+  );
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  document.body.innerHTML = "";
+
+  const tab = await drawnTab(false, recorded, true);
+  const edit = tab.message("middle").querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
+  assert.ok(edit);
+  await act(async () => edit.click());
+  await settle();
+  const choice = tab.message("middle").querySelector<HTMLElement>('[role="checkbox"]');
+  assert.ok(choice, "the box offers the files back");
+  await act(async () => choice.click());
+  await settle();
+  const box = tab.message("middle");
+  act(() => composerEditor(box).focus());
+  typeInComposer(box, " and the light one");
+  pressInComposer(box, "Enter");
+  await settle();
+  assert.ok(
+    tab.dialog()?.textContent?.includes("The agent's files also go back"),
+    tab.dialog()?.textContent ?? "no question stands",
+  );
+  await tab.press("Send message");
+
+  assert.deepEqual(tab.calls, [
+    "rewind:middle:files",
+    "send:Use the dark variant. and the light one",
+  ]);
+});
+
+test("a turn that edited a file says which, with its lines added and removed, over its Worked for line while the workspace has the experiment on, and says nothing of it while it is off", async () => {
+  const edited = MESSAGES.map((each) => (each.id === "reply-2" ? EDITED : each));
+  const off = await drawnTab(false, edited);
+  assert.equal(off.message("reply-2").querySelector("[data-turn-files]"), null);
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  document.body.innerHTML = "";
+
+  const on = await drawnTab(false, edited, true);
+  const row = on.message("reply-2").querySelector<HTMLElement>("[data-turn-files]");
+  assert.ok(row, "the row stands");
+  assert.ok(row.textContent?.includes("1 file changed +2 −1"), row.textContent ?? "");
+  const chip = row.querySelector<HTMLElement>("[data-mention-ref]");
+  assert.ok(chip, "the file is its chip");
+  assert.ok(
+    chip.textContent?.includes("tile.css") && chip.textContent.includes("+2 −1"),
+    chip.textContent ?? "",
+  );
+  await act(async () => chip.click());
+  assert.deepEqual(
+    [on.turns, on.opened],
+    [[[AGENT, "middle", "src/tile.css"]], []],
+    "the chip opens the turn's changes, by the line that opened the turn, standing on the file",
+  );
+  assert.equal(
+    on.message("reply-1").querySelector("[data-turn-files]"),
+    null,
+    "a turn with no edit draws none",
+  );
 });

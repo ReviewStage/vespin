@@ -63,6 +63,37 @@ const PANEL = [
 ].join(" ");
 const HEAD = "-mr-2 flex items-center justify-between gap-control-gap";
 const TITLE = "m-0 text-section font-section";
+const HEAD_ACTIONS = "flex flex-none items-center";
+
+/**
+ * A popover card's head, every card's alike: its title in the section's
+ * type at the start, and its own controls at the end (a ×, a Copy), the
+ * head pulled out to the card's edge so their glyphs, not their squares,
+ * line up with the content under them.
+ */
+export function PopoverCardHead({
+  id,
+  title,
+  replayUnmasked = false,
+  actions,
+}: {
+  /** The title's id, which a dialog it heads names itself by. */
+  id?: string | undefined;
+  title: string;
+  /** Whether the title is the app's own words, which a screen recording shows as they read. */
+  replayUnmasked?: boolean | undefined;
+  /** The controls at its end; none where it has none. */
+  actions?: React.ReactNode | undefined;
+}): React.JSX.Element {
+  return (
+    <div className={HEAD}>
+      <h2 id={id} className={TITLE}>
+        <ReplayWords unmasked={replayUnmasked}>{title}</ReplayWords>
+      </h2>
+      {actions === undefined ? null : <span className={HEAD_ACTIONS}>{actions}</span>}
+    </div>
+  );
+}
 
 /** How the panel is drawn: a card with its head, or a menu's surface whose content is edge to edge. */
 export const POPOVER_PANEL_LOOK = {
@@ -218,14 +249,16 @@ export function PopoverPanel({
       }}
     >
       {look === POPOVER_PANEL_LOOK.CARD ? (
-        <div className={HEAD}>
-          <h2 id={titleId} className={TITLE}>
-            <ReplayWords unmasked={replayUnmasked}>{title}</ReplayWords>
-          </h2>
-          {closeLabel === undefined ? null : (
-            <CloseButton label={closeLabel} hint={hint} onPress={onDismiss} />
-          )}
-        </div>
+        <PopoverCardHead
+          id={titleId}
+          title={title}
+          replayUnmasked={replayUnmasked}
+          actions={
+            closeLabel === undefined ? undefined : (
+              <CloseButton label={closeLabel} hint={hint} onPress={onDismiss} />
+            )
+          }
+        />
       ) : (
         <h2 id={titleId} className="ui-visually-hidden">
           <ReplayWords unmasked={replayUnmasked}>{title}</ReplayWords>

@@ -4,6 +4,7 @@ import { posix } from "node:path";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
+import { writePage } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -18,11 +19,13 @@ import {
   INBOX_FILE_TYPE,
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
+import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { paddedTo, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
@@ -162,11 +165,6 @@ const onlyItem = (agent: Pick<InboxAgent, "userId"> & { readonly taskId: string 
     return item;
   });
 
-/** The mention an agent writes a thread of its own as, by its id alone under its workspace, its link spelled out as the window reads one. */
-function mentionOf(agent: { readonly workspaceId: string }, title: string, itemId: string): string {
-  return `[@${title}](https://vespin.dev/workspace-${agent.workspaceId}/inbox/${itemId})`;
-}
-
 /** The message whose ask the thread holds open. */
 function openAsk(item: InboxItem) {
   const asking = item.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
@@ -194,7 +192,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: QUEUE.key,
               title: QUEUE.title,
-              mention: mentionOf(agent, QUEUE.title, first.id),
+              id: first.id,
               status: INBOX_STATUS.OPEN,
               thread: [
                 {
@@ -286,7 +284,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-ready",
               title: "PR ready",
-              mention: mentionOf(agent, "PR ready", notice.id),
+              id: notice.id,
               status: INBOX_STATUS.OPEN,
               thread: [{ from: "you", text: "Opened." }],
             },
@@ -296,13 +294,6 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(
           refusalOf(yield* withdrawAsk(agent, input({ key: "pr-ready", reason: "Merged." }))),
           INBOX_REFUSAL.NO_OPEN_ASK,
-        );
-        for (let at = 1; at < INBOX_BOUNDS.MAX_OPEN_PER_AGENT; at += 1) {
-          yield* post(agent, { key: `pr-${at}`, title: "PR ready", body: "Opened." });
-        }
-        assert.equal(
-          refusalOf(yield* post(agent, { key: "pr-more", title: "PR ready", body: "Opened." })),
-          INBOX_REFUSAL.TOO_MANY_NOTICES,
         );
       }),
   );
@@ -444,6 +435,97 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           recommended: "SMS",
           status: INBOX_ASK_STATUS.OPEN,
         });
+      }),
+  );
+
+  it.effect(
+    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version the agent was shown, and a page of another task is refused",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+        const shown = { kind: PAGE_SHOWER.AGENT, agentId: agent.agentId } as const;
+        const page = yield* writePage(
+          agent.userId,
+          taskPageOwner(agent.taskId),
+          { title: "Done card directions", html: "<p>Directions</p>" },
+          shown,
+        ).pipe(Effect.map(Option.getOrThrow));
+        // A later version stands by the time the agent posts the one it was shown.
+        yield* writePage(
+          agent.userId,
+          taskPageOwner(agent.taskId),
+          { pageId: page.id, title: "Done card directions", html: "<p>Later</p>" },
+          shown,
+        );
+        const sandbox = sandboxWith({ "shots/body.png": PNG, "shots/card.png": PNG });
+        const options = [
+          {
+            label: "A card",
+            media: [
+              { path: "shots/card.png", caption: "The card on a desktop" },
+              { page: page.id, version: 1 },
+              { url: "https://preview.example.com/card", label: "Preview" },
+            ],
+          },
+          { label: "No card" },
+        ];
+        const ask = { type: INBOX_ASK.DECIDE, options };
+        const body = "How should a turn end? ![Today](shots/body.png)";
+
+        const posted = yield* post(agent, { ...QUEUE, body, ask }, sandbox);
+
+        assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED);
+        const item = yield* onlyItem(agent);
+        const asking = openAsk(item);
+        const [, card] = asking.files ?? [];
+        assert.deepEqual(
+          (asking.files ?? []).map((file) => file.name),
+          ["body.png", "card.png"],
+        );
+        assert.deepEqual(openAsk(item).ask, {
+          type: INBOX_ASK.DECIDE,
+          options: [
+            {
+              label: "A card",
+              media: [
+                {
+                  type: INBOX_OPTION_MEDIA.FILE,
+                  attachmentId: card?.attachmentId,
+                  mediaType: INBOX_IMAGE_TYPE.PNG,
+                  caption: "The card on a desktop",
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.PAGE,
+                  pageId: page.id,
+                  version: 1,
+                  title: "Done card directions",
+                  place: { taskId: agent.taskId },
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.LINK,
+                  url: "https://preview.example.com/card",
+                  label: "Preview",
+                },
+              ],
+            },
+            { label: "No card" },
+          ],
+          status: INBOX_ASK_STATUS.OPEN,
+        });
+
+        const other = yield* startTask(agent.userId, { name: "Another task" });
+        const elsewhere = yield* writePage(
+          agent.userId,
+          taskPageOwner(other.id),
+          { title: "Elsewhere", html: "<p>Elsewhere</p>" },
+          shown,
+        ).pipe(Effect.map(Option.getOrThrow));
+        const away = [{ label: "A card", media: [{ page: elsewhere.id }] }, { label: "No card" }];
+        const refused = yield* post(agent, {
+          ...QUEUE,
+          ask: { type: INBOX_ASK.DECIDE, options: away },
+        });
+        assert.equal(refusalOf(refused), INBOX_REFUSAL.NO_PAGE);
       }),
   );
 
@@ -617,7 +699,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: SETTINGS.key,
               title: SETTINGS.title,
-              mention: mentionOf(agent, SETTINGS.title, settings.id),
+              id: settings.id,
               status: INBOX_STATUS.CLOSED,
               thread: [
                 {
@@ -694,7 +776,12 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(open.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(open.inbox?.[0]?.thread, [
           { from: "you", text: QUEUE.body, ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN } },
-          { from: "Test User", text: "Is Redis free?", files: ["pricing.txt"] },
+          {
+            from: "Test User",
+            fromUserId: agent.userId,
+            text: "Is Redis free?",
+            files: ["pricing.txt"],
+          },
           { from: "you", text: "No: it needs a new service." },
         ]);
 
@@ -729,7 +816,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           {
             key: QUEUE.key,
             title: QUEUE.title,
-            mention: mentionOf(agent, QUEUE.title, asked.id),
+            id: asked.id,
             status: INBOX_STATUS.ANSWERED,
             earlier: 2,
             thread: [
@@ -740,12 +827,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
               },
               {
                 from: "Test User",
+                fromUserId: agent.userId,
                 text: "Go with the outbox.",
                 answers: { reply: INBOX_REPLY.CHOSE, choices: ["Postgres outbox"] },
               },
               { from: "you", text: "Thanks." },
               { from: "you", text: "Shipping it." },
-              { from: "Test User", text: "Great." },
+              { from: "Test User", fromUserId: agent.userId, text: "Great." },
             ],
           },
         ]);
@@ -783,7 +871,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "the agent reads back which member closed a thread without an answer, and its own withdrawal by its reason",
+    "the agent reads back which member closed a thread without an answer, by name and by the account their link names them by, and its own withdrawal by its reason",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -799,12 +887,19 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
           read.inbox
-            ?.map((line) => [line.key, line.status, line.closedBy, line.thread[0]?.ask])
+            ?.map((line) => [
+              line.key,
+              line.status,
+              line.closedBy,
+              line.closedByUserId,
+              line.thread[0]?.ask,
+            ])
             .sort(),
           [
             [
               "own",
               INBOX_STATUS.CLOSED,
+              undefined,
               undefined,
               {
                 type: INBOX_ASK.DO,
@@ -816,6 +911,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
               SETTINGS.key,
               INBOX_STATUS.CLOSED,
               "Test User",
+              agent.userId,
               { type: INBOX_ASK.DO, status: INBOX_ASK_STATUS.WITHDRAWN },
             ],
           ].sort(),
@@ -859,7 +955,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-merged",
               title: "PR merged",
-              mention: mentionOf(agent, "PR merged", merged.id),
+              id: merged.id,
               status: INBOX_STATUS.CLOSED,
               thread: [{ from: "you", text: "Merged." }],
               closedReason: "Merged by hand.",
@@ -867,7 +963,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-ready",
               title: "PR ready",
-              mention: mentionOf(agent, "PR ready", ready.id),
+              id: ready.id,
               status: INBOX_STATUS.ANSWERED,
               thread: [{ from: "you", text: "Opened." }],
             },

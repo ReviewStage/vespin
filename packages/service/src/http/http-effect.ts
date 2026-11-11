@@ -1,4 +1,5 @@
 import type { StoreFailure } from "@repo/database/core/query";
+import type { ApprovalStatus } from "@repo/features/agent-approval-wire";
 import type {
   ExtraRepositoryRefusal,
   LocalAgentRefusal,
@@ -7,6 +8,7 @@ import type {
 import type { InstalledSkillRefusal } from "@repo/features/installed-skill-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { RepositoryUnreached } from "@repo/features/repository-reach-wire";
+import { PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "@repo/features/video-signature";
 import { readEither } from "@repo/wire/effect";
 import { type Cause, Effect, type Layer, Option, Result, type Scope, Stream } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -65,6 +67,7 @@ export const HOSTED_REFUSAL_STATUS = {
   [HOSTED_API_ERROR.ALREADY_INVITED]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.SANDBOX_STOPPED]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.SANDBOX_SNAPSHOT_GONE]: HOSTED_HTTP_STATUS.CONFLICT,
+  [HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.SKILL_NAME_TAKEN]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.SKILL_FILES_REFUSED]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.WORKSPACE_SLUG_MALFORMED]: HOSTED_HTTP_STATUS.BAD_REQUEST,
@@ -83,6 +86,8 @@ export const HOSTED_REFUSAL_STATUS = {
   [HOSTED_API_ERROR.MEMORY_OFF]: HOSTED_HTTP_STATUS.FORBIDDEN,
   [HOSTED_API_ERROR.MEMORY_CREDENTIAL]: HOSTED_HTTP_STATUS.BAD_REQUEST,
   [HOSTED_API_ERROR.MEMORY_FULL]: HOSTED_HTTP_STATUS.CONFLICT,
+  [HOSTED_API_ERROR.APPROVAL_SETTLED]: HOSTED_HTTP_STATUS.CONFLICT,
+  [HOSTED_API_ERROR.PERMISSION_MODE_REFUSED]: HOSTED_HTTP_STATUS.CONFLICT,
 } as const;
 
 type HostedRefusalSlug = keyof typeof HOSTED_REFUSAL_STATUS;
@@ -103,6 +108,7 @@ export type HostedRefusal = {
   readonly minimumVersion?: string;
   readonly heldUntil?: number;
   readonly hostRemoved?: true;
+  readonly approvalStatus?: ApprovalStatus;
 };
 
 /**
@@ -178,6 +184,7 @@ export const HOSTED_REFUSAL = {
   SANDBOX_STOPPED: { error: HOSTED_API_ERROR.SANDBOX_STOPPED },
   /** The coding agent's sandbox can never resume, its snapshot and saved files gone; nothing was resumed. */
   SANDBOX_SNAPSHOT_GONE: { error: HOSTED_API_ERROR.SANDBOX_SNAPSHOT_GONE },
+  CHECKOUT_SNAPSHOT_MISSING: { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING },
   /** A skill of that name is already installed in the scope asked; nothing was installed. */
   SKILL_NAME_TAKEN: { error: HOSTED_API_ERROR.SKILL_NAME_TAKEN },
   /** A skill's files were refused; nothing was installed. */
@@ -213,6 +220,10 @@ export const HOSTED_REFUSAL = {
   MEMORY_CREDENTIAL: { error: HOSTED_API_ERROR.MEMORY_CREDENTIAL },
   /** The workspace holds as many memories as it may; nothing was written. */
   MEMORY_FULL: { error: HOSTED_API_ERROR.MEMORY_FULL },
+  /** An answer named an ask that no longer waits (`approvalSettled`, which names how it stands); nothing reached the agent. */
+  APPROVAL_SETTLED: { error: HOSTED_API_ERROR.APPROVAL_SETTLED },
+  /** A mode that asks named for an agent whose harness never asks; nothing was written. */
+  PERMISSION_MODE_REFUSED: { error: HOSTED_API_ERROR.PERMISSION_MODE_REFUSED },
 } as const satisfies Record<string, HostedRefusal>;
 
 /** A plan's usage limit reached, with when it resets in epoch milliseconds where the provider said, so the words can name it. */
@@ -244,6 +255,11 @@ export function extraRepositoryRefused(
     extraRepositoryRefusal,
     ...(refusedRepository === undefined ? undefined : { refusedRepository }),
   };
+}
+
+/** An answer to an ask that no longer waits refused, named so the words can say how it stands. */
+export function approvalSettled(approvalStatus: ApprovalStatus): HostedRefusal {
+  return { ...HOSTED_REFUSAL.APPROVAL_SETTLED, approvalStatus };
 }
 
 /** A host's daemon below the floor given, named so the daemon can say which version to upgrade to. */
@@ -326,6 +342,22 @@ export const HOSTED_BYTES_HEADERS = {
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
   "cross-origin-resource-policy": "same-origin",
 } as const;
+
+/**
+ * The video a byte route's caller plays, as its `Accept` names it: an MP4
+ * where it names `video/mp4`, as the iOS app does, whose player plays no
+ * WebM, and a WebM otherwise, as the web and the desktop ask nothing. A
+ * recording kept with an MP4 copy is then served that copy, and one kept
+ * without it its WebM, which the caller falls back from.
+ */
+export function playableVideoOf(request: Request): PlayableVideoType {
+  const accepted = (request.headers.get("accept") ?? "")
+    .split(",")
+    .map((range) => range.split(";")[0]?.trim().toLowerCase());
+  return accepted.includes(PLAYABLE_VIDEO_TYPE.MP4)
+    ? PLAYABLE_VIDEO_TYPE.MP4
+    : PLAYABLE_VIDEO_TYPE.WEBM;
+}
 
 /**
  * A store read or write the handler cannot answer without: its failure is

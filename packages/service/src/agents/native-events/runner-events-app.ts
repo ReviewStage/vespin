@@ -16,7 +16,7 @@ import {
   type NativeProjectionRow,
   withNativeProjection,
 } from "@repo/database/models/native-projection-store";
-import { setPlanStatus } from "@repo/database/models/provider-key-store";
+import { setPlanStatus, setPlanUsage } from "@repo/database/models/provider-key-store";
 import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
 import { progressTurns, queuedTurnOf, supersededTurnsOf } from "@repo/database/models/turn-state";
 import {
@@ -25,6 +25,8 @@ import {
   QueuedTurnListener,
   type SettledAgentTurn,
   SettledTurnListener,
+  type StartedAgentTurn,
+  StartedTurnListener,
   type StoreWriter,
   storeWriter,
 } from "@repo/database/models/writer";
@@ -37,8 +39,9 @@ import {
   type ProviderKeyKind,
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
-import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
-import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
+import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox } from "@repo/sandbox";
+import { CARRY_ON_REASON, HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
+import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import {
   Cause,
   Clock,
@@ -59,7 +62,9 @@ import {
   HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
+import type * as HttpClient from "effect/http/HttpClient";
 import { RUN_EVENT, type RunEvent, TURN_FAILURE, TURN_ORIGIN } from "../../core.js";
+import type { GitHubApp } from "../../github/github-app.js";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
@@ -77,10 +82,15 @@ import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
+import { roomAfterLimit, soonestResetBeside } from "../coder-host/agent-runtime-choice.js";
+import { carriedOn } from "../coder-host/carry-on.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
+import { routedSessions } from "../coder-host/runtime-sessions.js";
+import { turnRetried } from "../coder-host/steer.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 import {
   admitRunnerBearer,
   presentedBearer,
@@ -89,7 +99,12 @@ import {
 } from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
-import type { NativeHeld, NativeMoment } from "./native-moments.js";
+import {
+  NATIVE_MOMENT,
+  type NativeHeld,
+  type NativeMoment,
+  PLAN_STATUS,
+} from "./native-moments.js";
 import {
   heldProjection,
   NATIVE_WRITE,
@@ -99,7 +114,8 @@ import {
   turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
-import { redactKeepingPlanCodes } from "./runner-moments.js";
+import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
+import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 
 /**
  * runner-events-app.ts -- where a native harness's runner posts its events, which land in the agent's transcript.
@@ -143,6 +159,10 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * one replaced, is failed as its runner lost before anything else is
  * applied, so its end, which is not coming, waits on no deadline.
  *
+ * An ask a launch whose mode asks holds for a member, and its runner's word
+ * of how one was settled, land beside the transcript in the same
+ * transaction (`runner-approvals.ts`).
+ *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
  * batch's last such reading alone, and once a batch has started or ended a
@@ -176,6 +196,16 @@ type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
 
+/** A batch as the store can keep it: every NUL its events carry replaced (`withoutNul`). */
+function storable(batch: RunnerEventBatch): RunnerEventBatch {
+  return {
+    events: batch.events.map(({ sequence, message }) => ({
+      sequence,
+      message: withoutNul(message),
+    })),
+  };
+}
+
 /**
  * The tokens of a value's JSON as a step's estimate tells them: its bytes
  * over four, rounded up, the rule the retired runtime's steps were estimated by.
@@ -200,11 +230,13 @@ interface Applying {
   readonly read: NativeReader;
   /** Who pays for the agent, as recorded as it started; none for an agent from before payers. */
   readonly payer: AgentPayer | undefined;
+  /** The subscription or API key its latest launch put it on, which the payer's word is written to; none for the account's first. */
+  readonly subscriptionId: string | undefined;
   /** The description or prompt the agent was handed first, whose share of its context the ring estimates. */
   readonly brief: string;
 }
 
-/** The row each plan is kept in, which a turn's word on the plan is written to; a key's payer has none. */
+/** The kind of row each plan is kept in, the agent's subscription among them taking a turn's word on the plan; a key's payer has none. */
 const PLAN_ROW: Partial<
   Record<AgentPayer, { readonly provider: ProviderKeyProvider; readonly kind: ProviderKeyKind }>
 > = {
@@ -281,14 +313,17 @@ export interface RunnerEventsOptions<R = never> {
 }
 
 /**
- * A run's sandbox touched as a batch of its runner's events lands
- * (`@repo/sandbox`'s `touchSandbox`), which logs a touch the sandbox did not
- * confirm, since the next due batch, a minute on, touches it again.
+ * A run's sandbox touched as a batch of its runner's events lands, and its
+ * use recorded (`../sandbox-use.ts`'s `touchAgentSandbox`), which logs a
+ * touch the sandbox did not confirm, since the next due batch, a minute on,
+ * touches it again.
  */
-export function sandboxTouched(alive: RunnerAlive): Effect.Effect<void, never, Sandbox> {
+export function sandboxTouched(
+  alive: RunnerAlive,
+): Effect.Effect<void, never, Sandbox | DatabaseServices> {
   const { sessionId } = alive;
   if (sessionId === undefined) return Effect.void;
-  return touchSandbox(agentSandboxName(sessionId));
+  return touchAgentSandbox(agentSandboxName(sessionId));
 }
 
 /**
@@ -436,9 +471,13 @@ class NativeTurnFailed extends Data.TaggedError("NativeTurnFailed")<{
 /** A failed turn of the batch, which it says once its row is written. */
 type FailedTurn = Extract<NativeWrite, { kind: typeof NATIVE_WRITE.FAILED }>;
 
-/** Whether the payer is the starter's own credential, whose refusal is theirs to mend rather than ours. */
+/** Whether the payer is the starter's own credential, or their machine's own login, whose refusal is theirs to mend rather than ours. */
 function paysOwnCredential(payer: AgentPayer | undefined): boolean {
-  return payer === AGENT_PAYER.API_KEY || (payer !== undefined && PLAN_ROW[payer] !== undefined);
+  return (
+    payer === AGENT_PAYER.API_KEY ||
+    payer === AGENT_PAYER.MAC_SIGN_IN ||
+    (payer !== undefined && PLAN_ROW[payer] !== undefined)
+  );
 }
 
 /**
@@ -520,10 +559,24 @@ function landWrite(
             (handed) =>
               Option.isSome(handed) ? recordNativeHanded(target, handed.value) : Effect.void,
           ),
-          writer.takeAwaitingLine(target, { clientId: write.clientId, turnId: write.turnId }),
+          writer.takeAwaitingLine(target, {
+            clientId: write.clientId,
+            turnId: write.turnId,
+            ...(write.snapshot === undefined
+              ? undefined
+              : {
+                  snapshot: {
+                    commit: write.snapshot.commit,
+                    head: write.snapshot.head ?? null,
+                    branch: write.snapshot.branch ?? null,
+                  },
+                }),
+          }),
         ),
         (result) => reportRefused("a line's taking", result),
       );
+    case NATIVE_WRITE.APPROVAL:
+      return landApprovalEvent(target.conversationId, write.turnId, write.message, now);
     case NATIVE_WRITE.SESSION:
       return Effect.asVoid(
         recordAgentNativeSession(target.userId, applying.agentId, write.sessionId),
@@ -550,26 +603,59 @@ function landWrite(
     case NATIVE_WRITE.FAILED:
       // Said once the batch has landed, so a turn is said failed only once its row is.
       return Effect.void;
+    case NATIVE_WRITE.CARRY_ON:
+    case NATIVE_WRITE.RETRY:
+      // Launched once the batch has landed, so the plan's limit is written before the next launch chooses its payer.
+      return Effect.void;
+    case NATIVE_WRITE.WAIT:
+      // Note that the turn stays open past its progress deadline until the reset, when the minute sweep launches it.
+      return Effect.asVoid(
+        applying.writer.holdTurn(applying.target, {
+          turnId: write.turnId,
+          until: new Date(write.until),
+        }),
+      );
     case NATIVE_WRITE.PLAN_STATUS: {
-      // Note that the row is the starter's credential that pays: its plan's, or, for an agent its API key
-      // pays for, that key's, which a refusal marks invalid; a plan's limit is no key's.
-      const row =
-        applying.payer === AGENT_PAYER.API_KEY
-          ? write.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
-            ? undefined
-            : apiKeyRowOf(applying.model)
-          : applying.payer === undefined
-            ? undefined
-            : PLAN_ROW[applying.payer];
+      // Note that the row is the starter's credential that pays, the one the agent ran on: the plan's
+      // subscription, or, for an agent its API key pays for, that key, which a refusal marks invalid and
+      // a limit, its provider's quota or credit refusing it, marks out of quota.
+      const ownKey = applying.payer === AGENT_PAYER.API_KEY;
+      const row = ownKey
+        ? apiKeyRowOf(applying.model)
+        : applying.payer === undefined
+          ? undefined
+          : PLAN_ROW[applying.payer];
       if (row === undefined) return Effect.void;
       return setPlanStatus(
         target.userId,
         row.provider,
         row.kind,
-        write.status,
+        ownKey && write.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
+          ? PROVIDER_KEY_STATUS.QUOTA_EXCEEDED
+          : write.status,
         write.resetsAt === undefined ? undefined : new Date(write.resetsAt),
         new Date(write.turnOpenedAt ?? now),
         new Date(now),
+        applying.subscriptionId,
+      );
+    }
+    case NATIVE_WRITE.PLAN_USAGE: {
+      // Note that usage is a plan's alone, which no API key's row takes.
+      const row = applying.payer === undefined ? undefined : PLAN_ROW[applying.payer];
+      if (row === undefined) return Effect.void;
+      return setPlanUsage(
+        target.userId,
+        row.provider,
+        row.kind,
+        {
+          usedPercent: write.usedPercent,
+          ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
+          ...(write.model === undefined ? {} : { model: write.model }),
+          ...(write.resetsAt === undefined ? {} : { resetsAt: write.resetsAt }),
+        },
+        new Date(now),
+        new Date(write.turnOpenedAt ?? now),
+        applying.subscriptionId,
       );
     }
   }
@@ -604,6 +690,8 @@ function landWrites(applying: Applying, writes: readonly NativeWrite[], now: num
  * posting, whose runner this launch replaced, failed as their runner lost,
  * or canceled where a Stop was asked of them; and the projection without the
  * turn it held, where that was one of them, so this launch opens its own.
+ * The one turn the projection holds kept open on its plan's limit
+ * (`retrying`) is carried onto this launch instead, which goes on with it.
  */
 function supersededDropped(
   applying: Applying,
@@ -613,7 +701,14 @@ function supersededDropped(
 ) {
   return Effect.gen(function* () {
     const { conversationId } = applying.target;
-    const superseded = yield* supersededTurnsOf(conversationId, launch);
+    const found = yield* supersededTurnsOf(conversationId, launch);
+    if (found.length === 0) return state;
+    // A turn its plan's limit cut short, kept open for the launch on the next payer, is this launch's to go on with.
+    const retrying = state.turn?.retrying === true ? state.turn.id : undefined;
+    if (retrying !== undefined && found.includes(retrying)) {
+      yield* applying.writer.carryTurn(applying.target, { turnId: retrying, attempt: launch });
+    }
+    const superseded = found.filter((turnId) => turnId !== retrying);
     if (superseded.length === 0) return state;
     const failed = yield* settleRunnerLostTurns(
       applying.writer,
@@ -630,6 +725,46 @@ function supersededDropped(
     }
     const { turn, ...rest } = state;
     return turn !== undefined && superseded.includes(turn.id) ? rest : state;
+  });
+}
+
+/** Whether an event's moments end the launch with its turn on the plan's limit, as the projection holds it or the moments say it. */
+function endsOnLimit(state: NativeProjection, moments: readonly NativeMoment[]): boolean {
+  if (!moments.some((moment) => moment.kind === NATIVE_MOMENT.ENDED)) return false;
+  return (
+    state.turn?.limited === true ||
+    moments.some(
+      (moment) => moment.kind === NATIVE_MOMENT.PLAN && moment.status === PLAN_STATUS.LIMIT_REACHED,
+    )
+  );
+}
+
+/** What a batch that ends a turn on the plan's limit reads once: the payers it moves between, or when it may wait until. */
+interface AfterLimit {
+  readonly moved?: UsageLimitMove | undefined;
+  readonly resetsBeside?: number | undefined;
+}
+
+/**
+ * Where a turn the plan's limit, or its key's quota, cut short may go on
+ * with the next payer, the payers it moves between (`roomAfterLimit`), and
+ * where none has room, when the soonest limit among the other subscriptions
+ * resets (`soonestResetBeside`), which it may wait for: only for an agent
+ * its plan or its API key pays for, past the subscription or key it ran on.
+ */
+function roomAfterLimitOf(applying: Applying) {
+  return Effect.gen(function* () {
+    const provider = providerModelOf(applying.model)?.provider;
+    if (provider === undefined || applying.payer === undefined) return {};
+    if (applying.payer !== AGENT_PAYER.API_KEY && PLAN_ROW[applying.payer] === undefined) {
+      return {};
+    }
+    const { userId } = applying.target;
+    const moved = yield* roomAfterLimit(userId, provider, applying.subscriptionId);
+    if (moved !== undefined) return { moved } satisfies AfterLimit;
+    return {
+      resetsBeside: yield* soonestResetBeside(userId, provider, applying.subscriptionId),
+    } satisfies AfterLimit;
   });
 }
 
@@ -660,13 +795,19 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     const { launch } = held;
     const writes: NativeWrite[] = [];
     const reports: string[] = [];
+    // Whether another payer has room, or when a limit resets, read once and only for a batch that ends a turn on the plan's limit.
+    let afterLimit: AfterLimit | undefined;
     for (const { sequence, message } of events) {
       const held: NativeHeld = {
         callName: (callId) => state.turn?.calls[callId],
         session: state.session,
         sequence,
+        planLimited: state.rateLimit !== undefined,
       };
       const moments = applying.read(message, held);
+      if (afterLimit === undefined && endsOnLimit(state, moments)) {
+        afterLimit = yield* roomAfterLimitOf(applying);
+      }
       const projected = projectMoments(state, moments, {
         conversationId,
         sequence,
@@ -675,11 +816,18 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
+        machineLogin: applying.payer === AGENT_PAYER.MAC_SIGN_IN,
+        movedAfterLimit: afterLimit?.moved,
+        resetsBeside: afterLimit?.resetsBeside,
         registered,
         report: (said) => reports.push(said),
       });
       state = projected.state;
       writes.push(...projected.writes);
+      // An ask the runner holds lands under the turn that runs, after the writes that open that turn and before any that end it.
+      if (isApprovalEvent(message)) {
+        writes.push({ kind: NATIVE_WRITE.APPROVAL, turnId: state.turn?.id, message });
+      }
       // A turn starting takes the servers mentioned to the agent since its last turn started
       // (`agent-runtime/servers.ts`), and keeps them for its calls at our own
       // MCP server, which hands them whatever the switches say (`integrations/connection-door.ts`).
@@ -732,6 +880,12 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       idle,
       turns: turnsMovedBy(writes),
       failed: writes.filter((write): write is FailedTurn => write.kind === NATIVE_WRITE.FAILED),
+      retried: writes.flatMap((write) => (write.kind === NATIVE_WRITE.RETRY ? [write] : [])),
+      carriedOn: writes.flatMap((write) =>
+        write.kind === NATIVE_WRITE.CARRY_ON
+          ? [{ turnId: write.turnId, lostSequence: write.lostSequence }]
+          : [],
+      ),
       keepsAlive,
     };
     return sequence === null || (last === undefined && !keepsAlive)
@@ -772,7 +926,13 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   HostedRefusal,
-  HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | Sandbox | R
+  | HttpServerRequest.HttpServerRequest
+  | DatabaseServices
+  | Scope.Scope
+  | Sandbox
+  | GitHubApp
+  | HttpClient.HttpClient
+  | R
 > {
   const { read, ended, idled, alive, title } = options;
   const incoming = yield* HttpServerRequest.HttpServerRequest;
@@ -825,15 +985,20 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     writer,
     read: reader,
     payer: Option.getOrUndefined(routing)?.payer ?? undefined,
+    subscriptionId: Option.getOrUndefined(routing)?.subscriptionId ?? undefined,
     brief: agent.value.prompt ?? agent.value.descriptionSnapshot ?? "",
   };
   // Note that the turns the batch settles are heard once its transaction commits, not as the
   // writer's savepoint inside it ends, so what a listener reads of a turn (its final words, for
   // the Slack thread and the agent's starter) is what the batch wrote, and a rolled back batch
   // tells nobody.
+  const started: StartedAgentTurn[] = [];
   const settled: SettledAgentTurn[] = [];
   const queued: QueuedAgentTurn[] = [];
-  const collecting = Layer.merge(
+  const collecting = Layer.mergeAll(
+    Layer.succeed(StartedTurnListener, {
+      heard: (turn) => Effect.sync(() => void started.push(turn)),
+    }),
     Layer.succeed(SettledTurnListener, {
       heard: (turn) => Effect.sync(() => void settled.push(turn)),
     }),
@@ -845,10 +1010,14 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     withNativeProjection(
       target,
       runnerTokenDigest(bearer),
-      (held) => applyBatch(applying, batch.value, held),
+      (held) => applyBatch(applying, storable(batch.value), held),
       admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );
+  const starting = yield* Effect.serviceOption(StartedTurnListener);
+  if (Option.isSome(starting)) {
+    yield* Effect.forEach(started, starting.value.heard, { discard: true });
+  }
   const listener = yield* Effect.serviceOption(SettledTurnListener);
   if (Option.isSome(listener)) {
     yield* Effect.forEach(settled, listener.value.heard, { discard: true });
@@ -867,17 +1036,57 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,
-      ...(taskId === null ? undefined : { taskId }),
+      taskId,
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
   }
+  // A turn kept open on its plan's limit goes on in a launch on the next payer, once the limit is written;
+  // one whose session the harness could not resume, in a fresh session handed the agent's steps.
+  for (const { turnId, replay } of applied.value.retried) {
+    const what = replay === true ? "a turn whose session was lost" : "a limited turn";
+    yield* afterResponse(
+      `${what}'s retry`,
+      turnRetried({ ...target, turnId }, replay === true).pipe(
+        Effect.flatMap((went) =>
+          went ? Effect.void : Effect.logWarning(`runner-events: ${what} was not retried`),
+        ),
+        Effect.catch((failure) =>
+          Effect.logWarning(`runner-events: ${what} was not retried: ${failure._tag}`),
+        ),
+        Effect.annotateLogs({
+          agentId: agent.value.id,
+          conversationId: target.conversationId,
+          turnId,
+        }),
+      ),
+    );
+  }
+  // A turn whose runner waited for the model's provider goes on by a carry-on line, once the wait's end is written.
+  for (const { turnId, lostSequence } of applied.value.carriedOn) {
+    yield* afterResponse(
+      "a reconnected turn's carry-on",
+      carriedOn(
+        routedSessions,
+        agent.value,
+        turnId,
+        CARRY_ON_REASON.CONNECTION_LOST,
+        lostSequence,
+      ).pipe(
+        Effect.annotateLogs({
+          agentId: agent.value.id,
+          conversationId: target.conversationId,
+          turnId,
+        }),
+      ),
+    );
+  }
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
-  // it up, and a turn's end may have finished its work, or archives the agent with a task moved to
-  // Done while it worked (`tasks/task-finish.ts`).
-  if (taskId !== null && applied.value.turns.started) {
+  // it up, and a turn's end archives the agent with a task moved to Done while it worked
+  // (`tasks/task-finish.ts`).
+  if (applied.value.turns.started) {
     yield* reopenTaskForWork(target.userId, taskId);
   }
-  if (taskId !== null && applied.value.turns.ended) {
+  if (applied.value.turns.ended) {
     yield* settleTaskAfterTurn(target.userId, taskId, agent.value.id);
   }
   // Note that the title runs after the answer, kept awake past it, because the runner need not wait on a model.
@@ -908,10 +1117,10 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, applied.value.applied);
 });
 
-/** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. */
+/** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. Note that a carry-on line is a message to the agent (`carriedOn`), which reaches what any message does. */
 export function runnerEventsApp<R = never>(
   options: RunnerEventsOptions<R> = {},
-): WebRoutes<DatabaseServices | Sandbox | R> {
+): WebRoutes<DatabaseServices | Sandbox | GitHubApp | HttpClient.HttpClient | R> {
   const endpoint = runnerEventsEndpoint(options);
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, RUNNER_EVENTS_PATH, hostedRefusing(endpoint)),

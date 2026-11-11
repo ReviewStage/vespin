@@ -52,9 +52,9 @@ import { useWindowAccount } from "./window-account.js";
  * its key, and the title bar says the rest (`terminal-model.ts`). The tab
  * keeps its terminal while it is hidden (`terminal-session.ts`).
  *
- * The whole tab is left out of the screen recording, because the shell's
+ * The screen is left out of the screen recording, because the shell's
  * own words are drawn on a canvas the text masking cannot reach, and a
- * shell prints whatever its commands print.
+ * shell prints whatever its commands print; the bar over it records masked.
  */
 
 /**
@@ -182,7 +182,7 @@ export function TerminalTab({
       : undefined,
   );
   return (
-    <Fill className="terminal-tab file-view ph-no-capture" data-state={session.state.kind}>
+    <Fill className="terminal-tab file-view" data-state={session.state.kind}>
       {phone ? null : (
         <PaneBar
           middle={

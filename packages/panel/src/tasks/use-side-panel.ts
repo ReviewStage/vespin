@@ -1,4 +1,4 @@
-import { type PagePlace, pagePlaceId } from "@repo/features/page-wire";
+import type { PagePlace } from "@repo/features/page-wire";
 import type { CodeRef } from "@repo/features/task-wire";
 import { CommentsIcon, DocumentIcon } from "@repo/ui";
 import {
@@ -143,8 +143,7 @@ import { useWindowAccount } from "./window-account.js";
  * A fixed tab, a file's, or a Changes tab may be pinned to the sidebar,
  * where it stands under Pinned beside the pinned tasks, newest pinned
  * first, and opens its holder on that tab from anywhere: a task's panel's
- * tab is pinned on the task, and an agent's own page's on the agent
- * (`PinHolder`). The pins are kept here, with the rest of the window's tab
+ * tab is pinned on the task (`PinHolder`). The pins are kept here, with the rest of the window's tab
  * preferences. The strip draws a pinned tab as it draws any other: it
  * closes, moves, and is closed by Close others the same way, and closing it
  * leaves its pin, which opens it again. A subagent's tab is a moment of its
@@ -288,6 +287,7 @@ const sidePanelTabSchema = Schema.Literals(SIDE_PANEL_TABS);
 const changesTabSchema = storedStripTab(STRIP_TAB_KIND.CHANGES, {
   changes: Schema.String,
   number: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+  turn: Schema.optionalKey(Schema.String),
 });
 const anyTabSchema = Schema.Union([sidePanelTabSchema, changesTabSchema]);
 
@@ -323,27 +323,20 @@ const taskPinSchema = Schema.Struct({
   position: Schema.optionalKey(Schema.String),
 });
 
-/** A tab pinned to the sidebar on an agent with no task, from its own page's panel, as a task's is. */
-const agentHolderPinSchema = Schema.Struct({
-  agent: Schema.String,
-  tab: pinnableTabSchema,
-  label: Schema.String,
-  at: Schema.Number,
-  position: Schema.optionalKey(Schema.String),
-});
-
-/** A tab pinned to the sidebar as it is kept: on a task, under `pins`, or on an agent's own page, under `agentPins`. */
-type KeptPin = typeof taskPinSchema.Type | typeof agentHolderPinSchema.Type;
+/** A tab pinned to the sidebar as it is kept, on a task, under `pins`. */
+type KeptPin = typeof taskPinSchema.Type;
 
 /** A tab of a kind the sidebar holds a pin of, of today's kinds. */
 export type PinnableTab = typeof pinnableTabSchema.Type;
 
-/** What a tab is pinned on: the task whose panel holds it, or the agent with no task whose own page's panel does. */
-export type PinHolder = { readonly task: string } | { readonly agent: string };
+/** What a tab is pinned on: the task whose panel holds it. */
+export interface PinHolder {
+  readonly task: string;
+}
 
 /** Whether two pins stand on one holder. */
 export function sameHolder(a: PinHolder, b: PinHolder): boolean {
-  return "task" in a ? "task" in b && a.task === b.task : "agent" in b && a.agent === b.agent;
+  return a.task === b.task;
 }
 
 /** What every pin of a tab holds beside its holder. */
@@ -437,11 +430,10 @@ interface TabOwner {
  * The fixed tabs in the order a task no tab was moved on draws them, which
  * an earlier version's drags set for every task, the chosen tab, each
  * task's own choices of fixed tab, by task id, and the tabs pinned to the
- * sidebar, newest pinned first: those on a task under `pins`, and those
- * on an agent's own page under `agentPins`. Note that a pin on an agent is kept under a key of its own, because an
- * earlier version reading the record, as one a rollback launches does, reads
- * every pin under `pins` as a task's, and would let go of the whole record,
- * open tabs and width among it, over one it could not read.
+ * sidebar, newest pinned first, each on its task, under `pins`. Note that
+ * an earlier version kept the pins on an agent with no task under
+ * `agentPins`, which a read now passes over and the next write leaves out,
+ * since no agent stands on no task any more.
  */
 const sidePanelStateSchema = Schema.Struct({
   open: Schema.Boolean,
@@ -450,7 +442,6 @@ const sidePanelStateSchema = Schema.Struct({
   width: Schema.Number,
   tasks: Schema.optional(Schema.Record(Schema.String, taskTabsSchema)),
   pins: Schema.optional(Schema.Array(taskPinSchema)),
-  agentPins: Schema.optional(Schema.Array(agentHolderPinSchema)),
 });
 
 export type SidePanelState = typeof sidePanelStateSchema.Type;
@@ -517,7 +508,7 @@ const FIRST_LAUNCH: SidePanelState = {
 export interface SidePanelControl {
   /** Whether the panel is drawn: open, and its strip holding a tab; never with nothing in it. */
   open: boolean;
-  /** The stop the panel belongs to: a task, an agent's page, or an Inbox item, two items of one task being two stops; none while no task stands. */
+  /** The stop the panel belongs to: a task or an Inbox item, two items of one task being two stops; none while no task stands. */
   stop: string | undefined;
   /** Whether the toggle or ⌘T asked, with nothing to show, for the "+" menu, which hangs from the toggle rather than an empty panel. */
   toggleAsked: boolean;
@@ -584,8 +575,7 @@ export interface SidePanelControl {
   /**
    * Shows the panel on the tab as a link pressed opens it: a tab the strip
    * already draws is chosen, and any other opens at the strip's end. A
-   * page's tab opened with `place`, a task or an agent on no task other
-   * than the panel's own, reads on that place and is drawn here too
+   * page's tab opened with `place`, a task other than the panel's own, reads on that place and is drawn here too
    * (`OpenPage.shownOn`).
    */
   onOpen: (tab: SidePanelTab, place?: PagePlace) => void;
@@ -675,7 +665,7 @@ export interface OpenTask {
   holds: TaskHolds;
   /** Whether the panel draws none of the task's fixed tabs, standing beside the window's Inbox rather than the task's page, which draws what they show. */
   bare?: true | undefined;
-  /** Where a file opened here reads, as its tab saves it; none where the opener names it, as beside an agent on no task. */
+  /** Where a file opened here reads, as its tab saves it; none where the opener names it. */
   files?: FileReads | undefined;
   /** Where a page opened here stands, as its tab saves it. */
   pages?: PagePlace | undefined;
@@ -711,10 +701,10 @@ function taskTabs(held: HeldState, taskId: string | undefined): TaskTabs {
   return taskId === undefined ? NO_CHOICES : (held.tasks[taskId] ?? NO_CHOICES);
 }
 
-/** A page's tab as the panel holds it: the page, and the task or the agent on no task it stands on, saved as it opened, so it reads there whatever the panel stands beside; none for one opened before its place was known, which reads through the panel's own. */
+/** A page's tab as the panel holds it: the page, and the task it stands on, saved as it opened, so it reads there whatever the panel stands beside; none for one opened before its place was known, which reads through the panel's own. */
 export interface OpenPage extends PageStripTab {
   readonly place?: PagePlace | undefined;
-  /** The panel, by the task or the agent it stands for, a page of another place was last opened beside, whose strip draws it with its own; none for one opened on its own place. */
+  /** The panel, by the task it stands for, a page of another place was last opened beside, whose strip draws it with its own; none for one opened on its own place. */
   readonly shownOn?: string | undefined;
 }
 
@@ -1719,7 +1709,7 @@ function currentTasks(tasks: SidePanelState["tasks"]): HeldState["tasks"] {
 
 /**
  * A kept pin as the hook holds it, on its holder; none for the Inbox's or
- * Comments', a task's or an agent's, since threads open in the window's
+ * Comments', since threads open in the window's
  * Inbox and no panel draws either tab.
  */
 function heldPin(pin: KeptPin): PinnedTab[] {
@@ -1727,7 +1717,7 @@ function heldPin(pin: KeptPin): PinnedTab[] {
   if (retiredKind(tab)) return [];
   const { label, at, position } = pin;
   const fields = position === undefined ? { tab, label, at } : { tab, label, at, position };
-  return ["task" in pin ? { ...fields, task: pin.task } : { ...fields, agent: pin.agent }];
+  return [{ ...fields, task: pin.task }];
 }
 
 /**
@@ -1737,7 +1727,7 @@ function heldPin(pin: KeptPin): PinnedTab[] {
  */
 function settled(state: SidePanelState): HeldState {
   const { tab } = state;
-  const pins: readonly KeptPin[] = [...(state.pins ?? []), ...(state.agentPins ?? [])];
+  const pins: readonly KeptPin[] = state.pins ?? [];
   return {
     ...state,
     // The description's tab leads, since a kept order from before it stood here holds it nowhere.
@@ -1828,14 +1818,10 @@ function stored(state: HeldState): SidePanelState {
     tabs: state.tabs,
     width: state.width,
     tasks: storedTasks(state.tasks),
-    pins: state.pins.flatMap((pin): (typeof taskPinSchema.Type)[] => ("task" in pin ? [pin] : [])),
+    pins: state.pins,
   };
-  const agentPins = state.pins.flatMap((pin): (typeof agentHolderPinSchema.Type)[] =>
-    "agent" in pin ? [pin] : [],
-  );
-  const withAgents = agentPins.length === 0 ? kept : { ...kept, agentPins };
   const tab = state.tab;
-  return tab !== undefined && keptChoice(tab) ? { ...withAgents, tab } : withAgents;
+  return tab !== undefined && keptChoice(tab) ? { ...kept, tab } : kept;
 }
 
 /** What storage holds under the key, or nothing where it refuses the read. */
@@ -1959,7 +1945,7 @@ export function useSidePanel(
   const [moved, setMoved] = useState<HeldState | undefined>(undefined);
   const [fullScreen, setFullScreen] = useState(false);
   const [newTabAsked, setNewTabAsked] = useState(false);
-  // The plan, or the agent's page, whose toggle or ⌘T asked for the "+" menu with nothing to show, which hangs from the toggle.
+  // The plan whose toggle or ⌘T asked for the "+" menu with nothing to show, which hangs from the toggle.
   const [toggleAskedOn, setToggleAskedOn] = useState<string | undefined>(undefined);
   const [seen, setSeen] = useState<OpenTask>(task);
   // The tab a pin, a notification, or a step of the history asked for, while it is still the one chosen, and whether it was asked for on another stop than the one standing, which it is carried to.
@@ -2112,7 +2098,7 @@ export function useSidePanel(
   const narrow = room === SHELL_ROOM.NARROW;
   const shown = state.open && strip.length > 0;
   // Note that the panel belongs to the stop it was opened at, so a new stop
-  // starts with it shut: a task, an agent's page, or an Inbox item, two
+  // starts with it shut: a task or an Inbox item, two
   // items of one task being two stops. A tab asked for on the stop arrived
   // at, as a link, a pin, or a step of the history opens one there, was
   // asked for, so it stands.
@@ -2262,7 +2248,7 @@ export function useSidePanel(
       const beside =
         place === undefined ||
         taskId === undefined ||
-        (pagePlace !== undefined && pagePlaceId(place) === pagePlaceId(pagePlace))
+        (pagePlace !== undefined && place.taskId === pagePlace.taskId)
           ? undefined
           : { place, on: taskId };
       // A page of another place is drawn here as it is opened, before the state naming it lands.

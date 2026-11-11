@@ -30,7 +30,9 @@ import { AgentModelChip } from "./agent-model-chip.js";
  * A Codex agent's menu ends on the ChatGPT plan that pays and a link to
  * manage its usage; no other agent's says what pays. An automation's chip
  * says a choice nothing of the reader's pays for cannot run; a running
- * agent's never does.
+ * agent's never does. A chip handed the agent's permission mode names it
+ * off Full access and offers the modes from its menu's Permissions row,
+ * which stands while the catalog could not be read too.
  */
 
 const MODELS: readonly CatalogModel[] = [
@@ -271,20 +273,20 @@ test("on a Claude Code agent the menu offers Claude models alone with Fast and n
   assert.match(retired.foot, /Fast/u);
 });
 
-test("a Codex agent's menu ends on \"Using ChatGPT plan\" and Manage usage, before its first turn settles too, the link opening ChatGPT's usage settings, while a Claude Code agent's says its Claude plan and the menu of an agent on the retired runtime names no payer", () => {
+test("a Codex agent's menu ends on \"Your Codex plan\" and Manage usage, before its first turn settles too, the link opening ChatGPT's usage settings, while a Claude Code agent's says its Claude plan and the menu of an agent on the retired runtime names no payer", () => {
   const opened: string[] = [];
   fakeAppPlatform({ assetBase: () => "https://app.test/", openWeb: (href) => opened.push(href) });
   const codex = openMenuOn(AGENT_RUNTIME.CODEX, {
     model: "openai/gpt-6.1-sol",
     effort: "low",
   });
-  assert.equal(codex.line, "Using ChatGPT planManage usage");
+  assert.equal(codex.line, "Your Codex planManage usage");
   const link = [...codex.menu.querySelectorAll("a")].find((a) => a.textContent === "Manage usage");
   assert.ok(link, "Manage usage is a link");
   act(() => link.click());
   assert.deepEqual(opened, ["https://chatgpt.com/settings/usage"]);
 
-  assert.equal(openMenuOn(AGENT_RUNTIME.CLAUDE_CODE).line, "Using Claude plan");
+  assert.equal(openMenuOn(AGENT_RUNTIME.CLAUDE_CODE).line, "Your Claude plan");
   assert.equal(openMenuOn(undefined).line, "");
 });
 
@@ -295,7 +297,7 @@ test("a Codex agent its OpenAI API key pays for names the key rather than a plan
     RUNTIME_MODELS,
     { inputTokens: 1000, outputTokens: 200, costUsd: 0.42, payer: AGENT_PAYER.API_KEY },
   );
-  assert.equal(onKey.line, "OpenAI API key · $0.42 so far");
+  assert.equal(onKey.line, "Your OpenAI API key · $0.42 so far");
   // Before its first turn settles, the payer the page names says the same.
   const first = openMenuOn(
     AGENT_RUNTIME.CODEX,
@@ -304,7 +306,7 @@ test("a Codex agent its OpenAI API key pays for names the key rather than a plan
     undefined,
     AGENT_PAYER.API_KEY,
   );
-  assert.equal(first.line, "OpenAI API key");
+  assert.equal(first.line, "Your OpenAI API key");
 });
 
 test("an automation's chip, whose choice a new agent starts on, says a model nothing of the reader's pays for cannot run, while a running agent's chip says nothing of it", () => {
@@ -347,4 +349,123 @@ test("an automation's chip, whose choice a new agent starts on, says a model not
     /Connect Claude.*Opus 5\.5 cannot run until you connect a Claude plan/u,
   );
   assert.doesNotMatch(footOf(false), /cannot run|Connect/u);
+});
+
+test("a chip handed the agent's permission mode names it off Full access, and its menu's Permissions row opens the modes under their question, a pick changing the agent's", () => {
+  const chosen: string[] = [];
+  const view = document.createElement("div");
+  document.body.append(view);
+  const root = createRoot(view);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(AgentModelChip, {
+          model: {
+            choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
+            note: undefined,
+            choose: () => undefined,
+            runtime: AGENT_RUNTIME.CLAUDE_CODE,
+          },
+          models: MODELS,
+          modelsFailed: false,
+          readModels: () => undefined,
+          usage: undefined,
+          permissions: { mode: "ask", note: undefined, choose: (mode) => chosen.push(mode) },
+        }),
+      ),
+    ),
+  );
+
+  const chip = view.querySelector<HTMLButtonElement>(".agent-model-chip button");
+  assert.ok(chip);
+  assert.match(chip.getAttribute("aria-label") ?? "", /Ask for approval$/u);
+  act(() => chip.click());
+  const permissions =
+    [...document.querySelectorAll<HTMLElement>('[aria-haspopup="listbox"]')].find((row) =>
+      row.textContent?.startsWith("Permissions"),
+    ) ?? assert.fail("the menu offers Permissions");
+  act(() => permissions.click());
+  const modes =
+    document.querySelector<HTMLElement>('[aria-label="Permissions"][role="listbox"]') ??
+    assert.fail("Permissions opens its modes");
+  assert.match(modes.textContent ?? "", /^How should actions be approved\?/u);
+  const approve =
+    [...modes.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
+      option.textContent?.startsWith("Approve for me"),
+    ) ?? assert.fail("the modes offer Approve for me");
+  act(() => approve.click());
+
+  assert.deepEqual(chosen, ["auto"]);
+});
+
+test("the menu offers Permissions while the catalog could not be read, the one place the mode is changed", () => {
+  const view = document.createElement("div");
+  document.body.append(view);
+  const root = createRoot(view);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(AgentModelChip, {
+          model: {
+            choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
+            note: undefined,
+            choose: () => undefined,
+            runtime: AGENT_RUNTIME.CLAUDE_CODE,
+          },
+          models: undefined,
+          modelsFailed: true,
+          readModels: () => undefined,
+          usage: undefined,
+          permissions: { mode: "full_access", note: undefined, choose: () => undefined },
+        }),
+      ),
+    ),
+  );
+
+  const chip = view.querySelector<HTMLButtonElement>(".agent-model-chip button");
+  assert.ok(chip);
+  act(() => chip.click());
+  assert.ok(
+    [...document.querySelectorAll<HTMLElement>('[aria-haspopup="listbox"]')].some((row) =>
+      row.textContent?.startsWith("Permissions"),
+    ),
+  );
+});
+
+test("a /model the box runs opens the model menu with its search focused, choosing nothing itself", () => {
+  const view = document.createElement("div");
+  document.body.append(view);
+  const root = createRoot(view);
+  roots.push(root);
+  const chosen: ModelChoice[] = [];
+  const render = (asked: number) =>
+    act(() =>
+      root.render(
+        withQueryClient(
+          createElement(AgentModelChip, {
+            model: {
+              choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
+              note: undefined,
+              choose: (next) => chosen.push(next),
+              runtime: AGENT_RUNTIME.CLAUDE_CODE,
+            },
+            models: RUNTIME_MODELS,
+            modelsFailed: false,
+            readModels: () => undefined,
+            usage: undefined,
+            asked,
+          }),
+        ),
+      ),
+    );
+
+  render(0);
+  assert.equal(view.querySelector('[role="dialog"]'), null);
+  render(1);
+  const menu = view.querySelector('[role="dialog"]');
+  assert.ok(menu, "the menu is open");
+  assert.equal(document.activeElement, menu.querySelector("input"));
+  assert.deepEqual(chosen, []);
 });
