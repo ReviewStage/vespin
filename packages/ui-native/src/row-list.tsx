@@ -2,6 +2,8 @@
 
 import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
+  accessibilityElement,
   accessibilityLabel,
   background,
   buttonStyle,
@@ -11,8 +13,6 @@ import {
   frame,
   listStyle,
   monospacedDigit,
-  navigationBarTitleDisplayMode,
-  navigationTitle,
   refreshable,
   scrollContentBackground,
   shapes,
@@ -44,8 +44,6 @@ type RowListProps = {
   readonly selected?: string | undefined;
   /** Called with the id of the row a person picked. */
   readonly onSelect?: ((id: string) => void) | undefined;
-  /** The title a split view's sidebar heads its column with, small and inline as every screen's title stands. */
-  readonly title?: string | undefined;
   /** What a pull down the list reads again, its spinner standing until it settles; none where a pull reads nothing. */
   readonly onRefresh?: (() => Promise<void>) | undefined;
   readonly children: ReactNode;
@@ -67,7 +65,7 @@ function listGround(colors: BrandColors, look: ListLook): string {
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back.
  */
-export function RowList({ look, selected, onSelect, title, onRefresh, children }: RowListProps) {
+export function RowList({ look, selected, onSelect, onRefresh, children }: RowListProps) {
   const colors = useColors();
   return (
     <List
@@ -80,9 +78,6 @@ export function RowList({ look, selected, onSelect, title, onRefresh, children }
         listStyle(look),
         scrollContentBackground("hidden"),
         background(listGround(colors, look)),
-        ...(title === undefined
-          ? []
-          : [navigationTitle(title), navigationBarTitleDisplayMode("inline")]),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
@@ -119,8 +114,16 @@ function GroupHeader({
 }) {
   const colors = useColors();
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
+  // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
-    <HStack spacing={SPACE.TIGHT + 2} modifiers={[contentShape(shapes.rectangle())]}>
+    <HStack
+      spacing={SPACE.TIGHT + 2}
+      modifiers={[
+        contentShape(shapes.rectangle()),
+        accessibilityElement("combine"),
+        accessibilityAddTraits(["isHeader"]),
+      ]}
+    >
       {folded === undefined ? null : (
         <Image
           systemName={folded ? "chevron.right" : "chevron.down"}
@@ -183,6 +186,7 @@ export function ListSection({
         onPress={() => setFolded((was) => !was)}
         modifiers={[
           buttonStyle("plain"),
+          accessibilityAddTraits(["isHeader"]),
           accessibilityLabel(
             `${title}${count === undefined ? "" : `, ${count}`}, ${folded ? "folded" : "unfolded"}`,
           ),

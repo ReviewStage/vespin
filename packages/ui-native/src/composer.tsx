@@ -1,11 +1,14 @@
-// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
+// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
 
 import {
   Button,
+  Divider,
   HStack,
   Image,
+  Menu,
   ProgressView,
   TextField,
+  Toggle,
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
@@ -25,6 +28,8 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BAR_RADIUS, GlassBar } from "./glass-bar.js";
+import type { SfSymbol } from "./sf-symbol.js";
+import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -34,6 +39,25 @@ const SEND_SIZE = 32;
 
 /** The most lines the field grows to before it scrolls its words. */
 const FIELD_LINES = 6;
+
+/** What the + is named by, whether it opens one act or a menu. */
+const ADD_LABEL = "Add";
+
+/**
+ * What the + offers where it opens a menu rather than one act, in the
+ * menu's order from the +: its acts, such as Photos and Options, then the
+ * choices within it, such as Permissions, each a menu of its own with the
+ * one on checked, then its switches, such as Fast.
+ */
+export type ComposerMenu = {
+  readonly actions: readonly {
+    readonly label: string;
+    readonly symbol: SfSymbol;
+    readonly onPress: () => void;
+  }[];
+  readonly submenus?: readonly BarMenu[] | undefined;
+  readonly switches?: BarMenu["choices"] | undefined;
+};
 
 type ComposerProps = {
   /** What the field says before anything is typed: "Reply", "Add a note". */
@@ -46,8 +70,10 @@ type ComposerProps = {
   readonly sendable?: boolean | undefined;
   /** Called with the words typed once Send is pressed; Send stands disabled where none is given. */
   readonly onSend?: ((words: string) => void) | undefined;
-  /** Opens what the + adds, such as a picture; the + is not drawn where none is given. */
+  /** Opens what the + adds, such as a picture; the + is not drawn where neither this nor `addMenu` is given. */
   readonly onAdd?: (() => void) | undefined;
+  /** What the + opens as a menu in place of `onAdd`'s one act, such as an agent's Photos, Permissions, and Fast. */
+  readonly addMenu?: ComposerMenu | undefined;
   /** Starts dictation, drawn as a mic in Send's place while the field is empty. */
   readonly onDictate?: (() => void) | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
@@ -128,6 +154,40 @@ function SendButton({
   );
 }
 
+/** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
+function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
+  const colors = useColors();
+  const submenus = menu.submenus ?? [];
+  const switches = menu.switches ?? [];
+  return (
+    <Menu
+      label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
+      modifiers={[accessibilityLabel(ADD_LABEL), accessibilityIdentifier("composer-add")]}
+    >
+      {menu.actions.map((action) => (
+        <Button
+          key={action.label}
+          label={action.label}
+          systemImage={action.symbol}
+          onPress={action.onPress}
+        />
+      ))}
+      {submenus.length === 0 && switches.length === 0 ? null : <Divider />}
+      {submenus.map((submenu) => (
+        <BarMenuButton key={submenu.label} menu={submenu} />
+      ))}
+      {switches.map((each) => (
+        <Toggle
+          key={each.label}
+          label={each.label}
+          isOn={each.on}
+          onIsOnChange={() => each.onPress()}
+        />
+      ))}
+    </Menu>
+  );
+}
+
 /** The composer's pieces in a row's order: the +, the field, and Send or the mic, which a bar of glass holds. */
 function ComposerPieces(props: ComposerProps) {
   const {
@@ -137,6 +197,7 @@ function ComposerPieces(props: ComposerProps) {
     sendable = false,
     onSend,
     onAdd,
+    addMenu,
     onDictate,
     onStop,
     stopping = false,
@@ -169,8 +230,10 @@ function ComposerPieces(props: ComposerProps) {
         };
   return (
     <>
-      {onAdd === undefined ? null : (
-        <Button onPress={onAdd} modifiers={[buttonStyle("plain"), accessibilityLabel("Add")]}>
+      {addMenu !== undefined ? (
+        <AddMenu menu={addMenu} />
+      ) : onAdd === undefined ? null : (
+        <Button onPress={onAdd} modifiers={[buttonStyle("plain"), accessibilityLabel(ADD_LABEL)]}>
           <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
         </Button>
       )}

@@ -5,6 +5,7 @@ import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { type ReactNode, useEffect, useState } from "react";
 import { Keyboard, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useReduceTransparency } from "./accessibility.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 
@@ -48,14 +49,38 @@ function useKeyboardHeight(): number {
 }
 
 /**
+ * A bar's solid stand-in for glass: the surface's ground inside the strong
+ * edge, which holds the field's bounds apart from the screen behind it.
+ */
+function SolidBar({ children }: { readonly children: ReactNode }) {
+  const colors = useColors();
+  return (
+    <View
+      style={[
+        styles.bar,
+        {
+          backgroundColor: colors.SURFACE,
+          borderColor: colors.TEXT_MUTED,
+          borderWidth: StyleSheet.hairlineWidth,
+        },
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+/**
  * A bar of glass holding a composer's field and its buttons, floating over
  * the content it scrolls above, as the system's own bars do. Its children
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
  * where it has one. It stands inside
  * the screen's bottom safe area, which the tab bar's height is part of, so
  * the bar sits above the tab bar rather than under it. Note that where
- * Liquid Glass is unavailable, before iOS 26, the bar is drawn on the
- * surface's ground with its edge rather than a hand-drawn copy of glass.
+ * Liquid Glass is unavailable, before iOS 26, or the reader turned on Reduce
+ * Transparency, the bar is drawn solid on the surface's ground inside the
+ * quiet ink rather than a hand-drawn copy of glass, so nothing scrolls
+ * through behind its words.
  */
 export function GlassBar({
   children,
@@ -65,8 +90,8 @@ export function GlassBar({
   /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
   readonly head?: ReactNode;
 }) {
-  const colors = useColors();
   const keyboard = useKeyboardHeight() > 0;
+  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
   const row = <HStack spacing={SPACE.ROW}>{children}</HStack>;
   const content = (
     <Host matchContents={{ vertical: true }} style={styles.content}>
@@ -80,23 +105,12 @@ export function GlassBar({
       )}
     </Host>
   );
-  const bar = isLiquidGlassAvailable() ? (
+  const bar = solid ? (
+    <SolidBar>{content}</SolidBar>
+  ) : (
     <GlassView glassEffectStyle="regular" isInteractive style={styles.bar}>
       {content}
     </GlassView>
-  ) : (
-    <View
-      style={[
-        styles.bar,
-        {
-          backgroundColor: colors.SURFACE,
-          borderColor: colors.CHIP_EDGE,
-          borderWidth: StyleSheet.hairlineWidth,
-        },
-      ]}
-    >
-      {content}
-    </View>
   );
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
   return (

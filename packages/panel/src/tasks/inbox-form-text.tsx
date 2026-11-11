@@ -1,7 +1,7 @@
+import { SERVER_HANDED } from "@repo/features/agent-servers-model";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { INBOX_BOUNDS, type InboxField } from "@repo/features/inbox-wire";
 import type { FieldControl } from "@repo/ui";
-import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { useEffect } from "react";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";

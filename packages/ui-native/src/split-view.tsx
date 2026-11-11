@@ -1,10 +1,9 @@
-// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding the account's photo, its header, its acts, its menu, and its search, and the detail's its path and menu.
+// split-view.tsx -- a regular window's columns side by side, as SwiftUI's own NavigationSplitView: the app's sidebar, the list, and the detail, each column under a bar of its own.
 
 import {
   Divider,
   Menu,
   NavigationSplitView,
-  type NavigationSplitViewVisibility,
   Button as SwiftUIButton,
   Toggle,
   Toolbar,
@@ -12,9 +11,14 @@ import {
   useNativeState,
   ZStack,
 } from "@expo/ui/swift-ui";
-import { navigationSplitViewStyle, searchable } from "@expo/ui/swift-ui/modifiers";
+import {
+  navigationBarTitleDisplayMode,
+  navigationSplitViewStyle,
+  navigationTitle,
+  searchable,
+} from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { AccountBarItem, type BarAccount } from "./account-button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { PathTitle } from "./thread-page.js";
@@ -55,33 +59,45 @@ export type BarSearch = {
   readonly onChange: (text: string) => void;
 };
 
+/** A column's path, small and muted in its bar's middle, after its task's ring, as a pushed page's bar names it. */
+export type BarPath = {
+  readonly path: readonly string[];
+  readonly status?: TaskStatus | undefined;
+};
+
+/**
+ * What a column's bar holds: its title, small and inline as every screen's
+ * stands, which the back button and the reader name it by; the account's photo at its leading edge, what
+ * heads it in its middle (a SwiftUI view such as the workspace switcher, or
+ * a page's path), its menu and its act at its trailing edge, a search field
+ * over its list, and the acts at its foot, as an iPad's sidebar stands
+ * Settings in its bottom bar.
+ */
+export type ColumnBar = {
+  readonly title?: string | undefined;
+  readonly account?: BarAccount | undefined;
+  readonly header?: ReactNode | undefined;
+  readonly path?: BarPath | undefined;
+  readonly menu?: BarMenu | undefined;
+  readonly action?: BarAction | undefined;
+  readonly search?: BarSearch | undefined;
+  readonly foot?: readonly BarAction[] | undefined;
+};
+
 type SplitViewProps = {
-  /** The list, drawn as the sidebar column: a `RowList` in its sidebar look. */
+  /** The app's sidebar: its places, then Pinned and the member's sections, as a `RowList` in its sidebar look. */
   readonly sidebar: ReactNode;
-  /** The account's photo at the leading edge of the sidebar's bar, opening Settings, as a compact window's header stands it. */
-  readonly sidebarAccount?: BarAccount | undefined;
-  /** What heads the sidebar, in its bar's middle where a title would stand, such as the workspace switcher: a SwiftUI view, never a host of its own. */
-  readonly sidebarHeader?: ReactNode | undefined;
+  readonly sidebarBar?: ColumnBar | undefined;
+  /** The list between the sidebar and the detail, such as the Inbox's threads; two columns where none is given. */
+  readonly content?: ReactNode | undefined;
+  readonly contentBar?: ColumnBar | undefined;
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
-  /** An act in the sidebar's bar, by its symbol alone, such as Settings: what a compact window's header holds. */
-  readonly sidebarAction?: BarAction | undefined;
-  /** A menu in the sidebar's bar, such as the Inbox's View options. */
-  readonly sidebarMenu?: BarMenu | undefined;
-  /** A search field over the sidebar's list. */
-  readonly sidebarSearch?: BarSearch | undefined;
-  /**
-   * A middle column between the sidebar and the detail, such as the tasks of
-   * the group the sidebar picked, for a window wide enough to stand three
-   * columns; two columns where none is given.
-   */
-  readonly content?: ReactNode | undefined;
-  /** A menu in the detail's bar, such as a task's ⋯. */
-  readonly detailMenu?: BarMenu | undefined;
-  /** The detail's path, small and muted in its bar's middle, after its task's ring, as a pushed page's bar names it. */
-  readonly detailPath?:
-    | { readonly path: readonly string[]; readonly status?: TaskStatus | undefined }
-    | undefined;
+  readonly detailBar?: ColumnBar | undefined;
+  /** Whether the sidebar stands beside the other columns; hidden, the system's own button in the next column's bar brings it back. */
+  readonly sidebarShown: boolean;
+  /** Called as a person shows or hides the sidebar, with the system's button, a swipe, or a drag. */
+  readonly onSidebarShownChange: (shown: boolean) => void;
 };
 
 /** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
@@ -113,118 +129,151 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
   );
 }
 
-/** The sidebar's column: its list under the bar's acts and menu, and its search where it has one. */
-function SidebarColumn({
-  sidebar,
-  sidebarAccount,
-  sidebarHeader,
-  sidebarAction,
-  sidebarMenu,
-  sidebarSearch,
-}: Omit<SplitViewProps, "detail" | "content" | "detailMenu" | "detailPath">) {
+/** A bar act as SwiftUI's button, its symbol alone, heard by its words. */
+function BarActionButton({ action }: { readonly action: BarAction }) {
+  return (
+    <SwiftUIButton label={action.label} systemImage={action.symbol} onPress={action.onPress} />
+  );
+}
+
+/** Whether a bar holds anything for the toolbar to draw. */
+function barHolds(bar: ColumnBar): boolean {
+  return (
+    bar.account !== undefined ||
+    bar.header !== undefined ||
+    bar.path !== undefined ||
+    bar.menu !== undefined ||
+    bar.action !== undefined ||
+    (bar.foot ?? []).length > 0
+  );
+}
+
+/**
+ * A column under its bar: its view in a `ZStack`, then the bar's items, then
+ * its search where it has one. Note that the view stands in a `ZStack`,
+ * because a column lays several children out one above another, so a sheet
+ * or an alert a screen draws beside a column's page would otherwise take
+ * half its height.
+ */
+function Column({
+  view,
+  bar = {},
+  sidebar = false,
+}: {
+  readonly view: ReactNode;
+  readonly bar?: ColumnBar | undefined;
+  /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
+  readonly sidebar?: boolean | undefined;
+}) {
   const text = useNativeState("");
-  const bar =
-    sidebarAccount === undefined &&
-    sidebarHeader === undefined &&
-    sidebarAction === undefined &&
-    sidebarMenu === undefined ? (
-      sidebar
-    ) : (
-      <Toolbar>
-        {sidebar}
-        <Toolbar.Content>
-          {sidebarAccount === undefined ? null : (
-            <ToolbarItem placement="topBarLeading">
-              <AccountBarItem {...sidebarAccount} />
-            </ToolbarItem>
-          )}
-          {sidebarHeader === undefined ? null : (
-            <ToolbarItem placement="principal">{sidebarHeader}</ToolbarItem>
-          )}
-          {sidebarMenu === undefined ? null : (
-            <ToolbarItem placement="topBarTrailing">
-              <BarMenuButton menu={sidebarMenu} />
-            </ToolbarItem>
-          )}
-          {sidebarAction === undefined ? null : (
-            <ToolbarItem placement="topBarTrailing">
-              <SwiftUIButton
-                label={sidebarAction.label}
-                systemImage={sidebarAction.symbol}
-                onPress={sidebarAction.onPress}
-              />
-            </ToolbarItem>
-          )}
-        </Toolbar.Content>
-      </Toolbar>
-    );
-  if (sidebarSearch === undefined) return bar;
+  const stacked = (
+    <ZStack
+      modifiers={
+        bar.title === undefined
+          ? []
+          : [navigationTitle(bar.title), navigationBarTitleDisplayMode("inline")]
+      }
+    >
+      {view}
+    </ZStack>
+  );
+  const barred = !barHolds(bar) ? (
+    stacked
+  ) : (
+    <Toolbar>
+      {stacked}
+      <Toolbar.Content>
+        {bar.account === undefined ? null : (
+          <ToolbarItem placement="topBarLeading">
+            <AccountBarItem {...bar.account} />
+          </ToolbarItem>
+        )}
+        {bar.header === undefined ? null : (
+          <ToolbarItem placement="principal">{bar.header}</ToolbarItem>
+        )}
+        {bar.path === undefined ? null : (
+          <ToolbarItem placement="principal">
+            <PathTitle path={bar.path.path} status={bar.path.status} />
+          </ToolbarItem>
+        )}
+        {bar.menu === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuButton menu={bar.menu} />
+          </ToolbarItem>
+        )}
+        {bar.action === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarActionButton action={bar.action} />
+          </ToolbarItem>
+        )}
+        {(bar.foot ?? []).map((action) => (
+          <ToolbarItem key={action.label} placement="bottomBar">
+            <BarActionButton action={action} />
+          </ToolbarItem>
+        ))}
+      </Toolbar.Content>
+    </Toolbar>
+  );
+  if (bar.search === undefined) return barred;
   return (
     <Toolbar
       modifiers={[
         searchable(text, {
-          placement: "sidebar",
-          prompt: sidebarSearch.placeholder,
-          onChange: sidebarSearch.onChange,
+          placement: sidebar ? "sidebar" : "automatic",
+          prompt: bar.search.placeholder,
+          onChange: bar.search.onChange,
         }),
       ]}
     >
-      {bar}
+      {barred}
     </Toolbar>
   );
 }
 
 /**
- * The list beside its detail, for a regular-width window such as an iPad's
- * or the unfolded iPhone Duo's. The split view draws each column's
- * navigation bar itself, so the screen around it shows no header of its own.
- * A window wide enough stands a middle column between them (`content`).
- * Note that the columns start out all shown and balanced, because SwiftUI's
- * automatic style hides the sidebar of a portrait iPad until it is asked
- * for, and the list is what the window is wide enough to keep beside the
- * detail; a person may still hide it, which the split view reports back.
- * Note that each column's children stand in a `ZStack`, because a column
- * lays several children out one above another, so a sheet or an alert a
- * screen draws beside a column's page would otherwise take half its height.
+ * The app's columns for a regular-width window, such as an iPad's or the
+ * unfolded iPhone Duo's, as Mail and Files stand theirs: the app's sidebar,
+ * the list it picked, and the selected row's page, or the sidebar and one
+ * page where no list stands between them. The split view draws each
+ * column's navigation bar itself, so the screen around it shows no header
+ * of its own. Whether the sidebar stands is the caller's, so a window too
+ * narrow for three columns can keep it behind the system's button, a menu
+ * bar's command can toggle it, and a person's choice holds as the tabs
+ * change; hidden, the list and the page share the window.
  */
-export function SplitView({ detail, content, detailMenu, detailPath, ...sidebar }: SplitViewProps) {
-  const [columns, setColumns] = useState<NavigationSplitViewVisibility>("all");
+export function SplitView({
+  sidebar,
+  sidebarBar,
+  content,
+  contentBar,
+  detail,
+  detailBar,
+  sidebarShown,
+  onSidebarShownChange,
+}: SplitViewProps) {
+  const hidden = content === undefined ? "detailOnly" : "doubleColumn";
   return (
     <NavigationSplitView
-      columnVisibility={columns}
-      onColumnVisibilityChange={setColumns}
+      columnVisibility={sidebarShown ? "all" : hidden}
+      onColumnVisibilityChange={(visibility) => {
+        // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
+        if (visibility === "automatic") return;
+        onSidebarShownChange(
+          visibility === "all" || (content === undefined && visibility === "doubleColumn"),
+        );
+      }}
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
-        <ZStack>
-          <SidebarColumn {...sidebar} />
-        </ZStack>
+        <Column view={sidebar} bar={sidebarBar} sidebar />
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <ZStack>{content}</ZStack>
+          <Column view={content} bar={contentBar} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>
-        {detailMenu === undefined && detailPath === undefined ? (
-          <ZStack>{detail}</ZStack>
-        ) : (
-          <Toolbar>
-            <ZStack>{detail}</ZStack>
-            <Toolbar.Content>
-              {detailPath === undefined ? null : (
-                <ToolbarItem placement="principal">
-                  <PathTitle path={detailPath.path} status={detailPath.status} />
-                </ToolbarItem>
-              )}
-              {detailMenu === undefined ? null : (
-                <ToolbarItem placement="topBarTrailing">
-                  <BarMenuButton menu={detailMenu} />
-                </ToolbarItem>
-              )}
-            </Toolbar.Content>
-          </Toolbar>
-        )}
+        <Column view={detail} bar={detailBar} />
       </NavigationSplitView.Detail>
     </NavigationSplitView>
   );

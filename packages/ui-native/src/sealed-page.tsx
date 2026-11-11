@@ -8,7 +8,7 @@ import {
 } from "@repo/features/page-theme";
 import { sealedPageDocument } from "@repo/features/sealed-page";
 import { useMemo } from "react";
-import { Linking, StyleSheet, useColorScheme } from "react-native";
+import { Linking, StyleSheet, useColorScheme, useWindowDimensions } from "react-native";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -70,6 +70,23 @@ function themeOf(colors: BrandColors, dark: boolean): PageTheme {
 }
 
 /**
+ * The script that scales every word on the page by the reader's text size,
+ * run before the page's own: WebKit's text size adjustment, which grows the
+ * page's words whatever size its own styles set them at, the theme's or a
+ * fixed one, and never twice, since the theme's size stands at the body's.
+ * Note that a web view takes no Dynamic Type of its own, and that the root
+ * element may not stand yet as the script runs, so it waits for it.
+ */
+function textScaleScript(fontScale: number): string {
+  const percent = `${String(Math.round(fontScale * 100))}%`;
+  return `(function () {
+  var scale = function () { document.documentElement.style.webkitTextSizeAdjust = ${JSON.stringify(percent)}; };
+  if (document.documentElement) scale(); else document.addEventListener("DOMContentLoaded", scale);
+})();
+true;`;
+}
+
+/**
  * Whether the web view may stand at an address: the page handed in alone.
  * Note that a link the reader presses out of the page opens in Safari
  * instead, as the panel opens a page's links outside its frame, and every
@@ -100,19 +117,23 @@ type SealedPageProps = {
  * handed in with the policy that seals it (`@repo/features/sealed-page`),
  * so it fetches, frames, and loads nothing, and stays where it was handed
  * in; its scripts run, so a chart draws and a table sorts. It reads the
- * brand's theme in the window's scheme, and is drawn anew as the scheme
- * flips.
+ * brand's theme in the window's scheme at the reader's text size, and is
+ * drawn anew as either changes.
  */
 export function SealedPage({ html, title }: SealedPageProps) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
+  const { fontScale } = useWindowDimensions();
   const document = useMemo(
     () => sealedPageDocument(html, themeOf(colors, dark)),
     [html, colors, dark],
   );
   return (
     <WebView
+      // Note that the page is drawn anew at a new text size, since its script runs once, before the page.
+      key={fontScale}
       source={{ html: document }}
+      injectedJavaScriptBeforeContentLoaded={textScaleScript(fontScale)}
       originWhitelist={EVERY_ADDRESS}
       onShouldStartLoadWithRequest={staysSealed}
       javaScriptEnabled

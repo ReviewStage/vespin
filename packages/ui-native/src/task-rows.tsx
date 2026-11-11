@@ -10,7 +10,10 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityHint,
+  accessibilityIdentifier,
   accessibilityLabel,
+  accessibilityValue,
   buttonStyle,
   font,
   foregroundStyle,
@@ -24,6 +27,8 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
@@ -39,6 +44,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
 const LINE_PART = "· ";
+
+/** What a pull request's number in an agent's line is heard to do. */
+const OPENS_PULL_REQUEST = "Opens the pull request";
 
 /** What an agent's line says of its state, as the panel's agent mark is heard. */
 const AGENT_STATE_WORDS = { WORKING: "Working", FAILED: "Failed" } as const;
@@ -173,7 +181,14 @@ function PullRequestLink({
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequest.state];
   return (
-    <SwiftUIButton onPress={pullRequest.onPress} modifiers={[buttonStyle("borderless")]}>
+    <SwiftUIButton
+      onPress={pullRequest.onPress}
+      modifiers={[
+        buttonStyle("borderless"),
+        accessibilityValue(PULL_REQUEST_STATE_LABEL[pullRequest.state]),
+        accessibilityHint(OPENS_PULL_REQUEST),
+      ]}
+    >
       <HStack spacing={SPACE.TIGHT}>
         <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
         <Text
@@ -199,7 +214,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER),
+          foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER_TEXT),
         ]}
       >
         {working ? AGENT_STATE_WORDS.WORKING : AGENT_STATE_WORDS.FAILED}
@@ -279,7 +294,16 @@ export function RelationRow({ id, name, status, relation, holding = false }: Rel
       end={<EndWords words={relation} ink={holding ? colors.ATTENTION : undefined} />}
     />
   );
-  return <RowFrame id={id} row={row} />;
+  return (
+    <RowFrame
+      id={id}
+      row={row}
+      heard={{
+        label: name,
+        value: [status === undefined ? undefined : TASK_STATUS_WORDS[status], relation],
+      }}
+    />
+  );
 }
 
 type LinkRowProps = {
@@ -331,12 +355,14 @@ type GroupRowProps = {
   readonly id: string;
   readonly title: string;
   readonly symbol: SfSymbol;
-  /** How many tasks the group holds. */
-  readonly count: number;
+  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given. */
+  readonly count?: number | undefined;
+  /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
+  readonly testId?: string | undefined;
 };
 
-/** A group of tasks a wide window's first column picks: its glyph, its name, and how many tasks it holds. */
-export function GroupRow({ id, title, symbol, count }: GroupRowProps) {
+/** A place a wide window's sidebar picks, such as the Inbox or Tasks: its glyph, its name, and how many it holds. */
+export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
   const colors = useColors();
   const row: ReactElement = (
     <RowHead
@@ -345,10 +371,18 @@ export function GroupRow({ id, title, symbol, count }: GroupRowProps) {
       lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} />}
       title={title}
       ink={colors.TEXT_BODY}
-      end={<EndWords words={String(count)} />}
+      end={count === undefined ? undefined : <EndWords words={String(count)} />}
     />
   );
-  return <RowFrame id={id} row={row} />;
+  const heard = { label: title, value: count === undefined ? [] : [String(count)] };
+  if (testId === undefined) return <RowFrame id={id} row={row} heard={heard} />;
+  return (
+    <RowFrame
+      id={id}
+      row={<HStack modifiers={[accessibilityIdentifier(testId)]}>{row}</HStack>}
+      heard={heard}
+    />
+  );
 }
 
 type WordsRowProps = {
@@ -382,7 +416,7 @@ export function WordsRow({ words, repository, onOpenLink }: WordsRowProps) {
     >
       <RNHostView matchContents={{ vertical: true }}>
         <View>
-          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} />
+          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} headings />
         </View>
       </RNHostView>
     </VStack>

@@ -1,0 +1,100 @@
+# accessibility.yaml -- the main screens at the largest accessibility text size (AX5, Accessibility XXXL): the Inbox, a thread, the Tasks tab, a task's page, an agent's page, New task, and Settings, each shot to check that words wrap rather than cut, rows grow and stack their ends under their titles, chips stand one to a line, and bars do not overflow.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each screen is reached by a launch of its own rather than by going
+# back, since a bar's back button at this size may stand as its chevron
+# alone, and that the content size is a launch argument UIKit reads as the
+# reader's own setting (`-UIPreferredContentSizeCategoryName`), which SwiftUI's
+# text styles and React Native's font scale both follow. Each wait is capped
+# at five seconds, since an agent's page draws its turn still running, whose
+# mark never stops moving.
+---
+# The Inbox, on the host's Inbox fixture as `inbox.yaml` launches it, so no
+# server is reached: each row heard as one element by its title, so a flow
+# still finds it by the words on screen.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-inbox
+# A thread: its title as the page's heading, each message's writer line, and
+# the composer docked at its foot.
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-thread
+# The Tasks tab: each row's status, end marks, and key stacked under its name.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- tapOn: "Tasks"
+- extendedWaitUntil:
+    visible: "Weekly digest email"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-tasks
+# A task's page: its name as a heading, and its status, priority, and
+# assignee chips one to a line.
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: DOWN
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-task
+- scrollUntilVisible:
+    element: "Agents"
+    direction: DOWN
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-task-agents
+# An agent's page: its calls' lines wrapping rather than cut, and the held
+# call's banner over the composer reading what it asks whole.
+- launchApp:
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-agent
+# New task, the sheet the tab bar's round + opens.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-new-task
+# Settings, which the account's photo in the Inbox's bar opens.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- tapOn: "Settings"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-settings

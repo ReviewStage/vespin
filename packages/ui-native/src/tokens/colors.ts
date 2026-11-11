@@ -1,6 +1,7 @@
 // colors.ts -- the brand's colors for the window's color scheme, and the six status tones in them.
 
 import { useColorScheme } from "react-native";
+import { useIncreaseContrast } from "../accessibility.js";
 import { BRAND_COLOR } from "./brand-colors.js";
 
 /** One theme's colors, by the role each names. */
@@ -39,12 +40,38 @@ const TONE_ROLE = {
 } as const satisfies Record<StatusTone, keyof BrandColors>;
 
 /**
- * The brand's colors in the window's color scheme. Note that SwiftUI is
- * handed plain values rather than a dynamic color, so a component reads
- * these on each render and the scheme's change draws it again.
+ * A theme as Increase Contrast reads it, from the brand's own roles rather
+ * than colors of its own: the quiet ink as the body's, the hairline as the
+ * quiet ink, which holds WCAG's 3:1 for a boundary on every ground where the
+ * brand's strong edge does not, and danger's ink as danger's words, as the
+ * system's secondary labels and separators darken where the reader asks.
+ */
+function strongerContrast(colors: BrandColors): BrandColors {
+  return {
+    ...colors,
+    TEXT_MUTED: colors.TEXT_BODY,
+    SIDEBAR_INK: colors.TEXT_BODY,
+    CHIP_EDGE: colors.TEXT_MUTED,
+    DANGER: colors.DANGER_TEXT,
+  };
+}
+
+const STRONGER = {
+  LIGHT: strongerContrast(BRAND_COLOR.LIGHT),
+  DARK: strongerContrast(BRAND_COLOR.DARK),
+} as const;
+
+/**
+ * The brand's colors in the window's color scheme, and stronger where the
+ * reader turned on Increase Contrast. Note that SwiftUI is handed plain
+ * values rather than a dynamic color, so a component reads these on each
+ * render and a change of scheme or of contrast draws it again.
  */
 export function useColors(): BrandColors {
-  return useColorScheme() === "dark" ? BRAND_COLOR.DARK : BRAND_COLOR.LIGHT;
+  const dark = useColorScheme() === "dark";
+  const stronger = useIncreaseContrast();
+  if (stronger) return dark ? STRONGER.DARK : STRONGER.LIGHT;
+  return dark ? BRAND_COLOR.DARK : BRAND_COLOR.LIGHT;
 }
 
 /** The ink a tone is drawn in. */

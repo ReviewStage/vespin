@@ -65,5 +65,6 @@ export * from "./workspace-environment-variable.js";
 export * from "./workspace-experiment.js";
 export * from "./workspace-former-slug.js";
 export * from "./workspace-sandbox-script.js";
+export * from "./workspace-sandbox-script-run.js";
 export * from "./workspace-token-repository.js";
 export * from "./write-receipt.js";

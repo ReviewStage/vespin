@@ -9,6 +9,7 @@ import {
 } from "@repo/features/installed-skill-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { SkillOption } from "@repo/features/skill-mention";
 import { readingWords } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -47,7 +48,6 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import type { SkillOption } from "@repo/ui/skill-mention";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { queryOptions, type UseQueryResult, useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";

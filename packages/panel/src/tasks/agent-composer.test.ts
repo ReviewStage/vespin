@@ -10,12 +10,12 @@ import {
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
 import { type ShownFailureSentry, sendShownFailure } from "@repo/features/shown-failure";
+import type { SkillOption } from "@repo/features/skill-mention";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { pasteCutWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
-import type { SkillOption } from "@repo/ui/skill-mention";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";

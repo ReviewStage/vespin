@@ -1,3 +1,10 @@
+import {
+  namedServers,
+  type ServerGroup,
+  searchServers,
+  serverGroups,
+  serverRows,
+} from "@repo/features/agent-servers-model";
 import { connectionHealth } from "@repo/features/integration-health";
 import {
   INTEGRATION_PROVIDER,
@@ -26,13 +33,6 @@ import {
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
-import {
-  namedServers,
-  type ServerGroup,
-  searchServers,
-  serverGroups,
-  serverRows,
-} from "@repo/ui/agent-servers-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
@@ -51,7 +51,7 @@ import { ReadFailed } from "./marks.js";
  * account alone is named the same way where it carries a name, such as a
  * Google account's email: "Gmail · dean@example.com"), and one for
  * a provider where the account holds none, under Connected or Not connected as the MCP popover
- * sections its servers (`@repo/ui/agent-servers-model`), each section
+ * sections its servers (`@repo/features/agent-servers-model`), each section
  * in the order of the providers' names: its mark and name, and under it where its connection
  * stands once that needs saying — connected, a sign-in under way, or one
  * expired. A sign-in begun waits on the
@@ -90,7 +90,7 @@ import { ReadFailed } from "./marks.js";
  * The page has a search of its own above its rows, for the integrations,
  * apart from Settings' search in the sidebar, which finds pages and rows: it
  * finds what the MCP popover's search finds, by the same words
- * (`@repo/ui/agent-servers-model`'s `searchServers`). Command-F lands in it
+ * (`@repo/features/agent-servers-model`'s `searchServers`). Command-F lands in it
  * while the page shows, and Escape clears it, then lets go of the caret.
  * While a query stands, the page keeps only the rows it found, in their
  * sections, the words marked; a query that finds nothing says so. Settings'

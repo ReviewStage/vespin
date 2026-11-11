@@ -14,6 +14,7 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
@@ -32,9 +33,11 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * once a launch (`push-device.ts`), a tapped
  * notification opens its thread (`notifications.ts`), a Stop pressed on
  * the Live Activity of its running agents goes through the host
- * (`live-activity/`), and its crash reports name it (`crash-reports.ts`).
- * The iPad's menu bar acts on whatever stands in front, its account's
- * commands enabled while one is signed in (`menu-commands/`).
+ * (`live-activity/`), its crash reports name it (`crash-reports.ts`), its
+ * tasks and threads stand in Spotlight, and a Spotlight item tapped or a
+ * screen handed over from another device opens (`system-activity/`). The
+ * iPad's menu bar acts on whatever stands in front, its account's commands
+ * enabled while one is signed in (`menu-commands/`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -48,6 +51,7 @@ function GuardedScreens() {
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
+  useSystemActivity(signedIn);
   useCrashReportAccount();
   // Note that Settings opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs, and as the modal sheet in a compact one.
   const settingsPresentation =
@@ -69,7 +73,7 @@ function GuardedScreens() {
             name="start-agent"
             options={{ presentation: "modal", title: "New agent" }}
           />
-          <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Model" }} />
+          <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Options" }} />
           <Stack.Screen
             name="new-workspace"
             options={{ presentation: "modal", title: "New workspace" }}

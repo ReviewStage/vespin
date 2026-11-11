@@ -13,10 +13,43 @@
  * alone: the editor bundle reads the same words.
  */
 
-import type { TaskSkill } from "@repo/features/task-wire";
+import { PRODUCT_NAME } from "./product-name.js";
+import { TASK_FILE_REFUSAL, type TaskFileRefusal, type TaskSkill } from "./task-wire.js";
+import type { TasksSkillsAnswer } from "./tasks-view.js";
+import { noMatchWords, TERM } from "./words.js";
 
 /** A skill as the composer offers it: its name, what it is for, where it comes from, and, for one of the repository's, its `SKILL.md`, named from the repository's root. */
 export type SkillOption = TaskSkill;
+
+/** The skills a composer offers, as it reads them: the skills, or why they were not read. */
+export type SkillsRead = { readonly skills: readonly SkillOption[] } | { readonly unread: string };
+
+/** What a composer's list of skills says where it has none to offer: still reading, none at all, or none the words typed match. */
+export const SKILL_LIST_NOTE = {
+  READING: "Reading skills…",
+  NONE: "No skills yet",
+  NO_MATCH: noMatchWords(TERM.SKILL),
+} as const;
+
+/** Why a repository's skills were not read, in the list's words. */
+const SKILLS_REFUSAL_LINE = {
+  [TASK_FILE_REFUSAL.NO_REPOSITORY]: "This task has no repository.",
+  [TASK_FILE_REFUSAL.NOT_REACHABLE]: `${PRODUCT_NAME}'s GitHub App no longer reaches this task's repository.`,
+  [TASK_FILE_REFUSAL.UNAVAILABLE]: "GitHub could not be read.",
+  [TASK_FILE_REFUSAL.SECRET]: "This repository's skills could not be read.",
+  [TASK_FILE_REFUSAL.MISSING]: "This repository's skills could not be read.",
+  [TASK_FILE_REFUSAL.NOT_TEXT]: "This repository's skills could not be read.",
+} as const satisfies Record<TaskFileRefusal, string>;
+
+/** What the list says where a read of the skills never answered. */
+export const SKILLS_UNANSWERED = SKILLS_REFUSAL_LINE[TASK_FILE_REFUSAL.UNAVAILABLE];
+
+/** A read of a repository's skills as the list reads it: the skills, or why there are none to offer. */
+export function skillsReadOf(answer: TasksSkillsAnswer): SkillsRead {
+  if ("skills" in answer) return { skills: answer.skills.skills };
+  if (!("refusal" in answer)) return { unread: SKILLS_UNANSWERED };
+  return { unread: SKILLS_REFUSAL_LINE[answer.refusal] };
+}
 
 /** A `/` word the caret stands at the end of: where its slash is, and the letters typed after it. */
 export interface SkillMention {

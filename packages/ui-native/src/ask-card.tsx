@@ -35,6 +35,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { FIELD_WORDS } from "@repo/features/words";
 import { Fragment, type ReactNode } from "react";
+import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -114,11 +115,13 @@ function Card({ children }: { readonly children: readonly ReactNode[] }) {
 /** What the box's last send said where it did not go, under the ask: what the answer lacks, or the refusal, in the danger's ink. */
 export function AskNote({ words }: { readonly words: string }) {
   const colors = useColors();
+  // Note that a note stands because a send did not go, so VoiceOver is told it at once, rather than the reader finding it only by walking the screen.
+  useAnnounced(words, true);
   return (
     <Text
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(colors.DANGER),
+        foregroundStyle(colors.DANGER_TEXT),
         accessibilityIdentifier("ask-note"),
       ]}
     >

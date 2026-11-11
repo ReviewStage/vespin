@@ -1,0 +1,72 @@
+# navigation.yaml -- how the app is found around: an iPad in landscape standing the app sidebar with its places, Pinned and the member's sections, a pinned task opened beside its list from it, Search beside it, and the workspace switcher's menu ending with Settings; and a compact window's switcher and its tab bar minimized as a list scrolls down.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that the window is turned back upright however the flow ends, because
+# a run left in landscape fails every flow after it.
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+# Launched on the host's Inbox fixture, as `tasks.yaml` is, so the sidebar
+# lists the fixture's pinned and sectioned tasks and no server is reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+# A regular window, which stands "Choose an item" beside the Inbox's list, is
+# turned to landscape, wide enough for three columns: the system's tab bar
+# steps aside for the app sidebar, the Inbox with its count, Tasks, and
+# Search, then Pinned and the member's sections with their tasks, the
+# switcher at its head and Settings at its foot. A pinned task opens beside
+# the Tasks list, and the switcher's menu ends with Settings.
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+      - waitForAnimationToEnd
+      - assertVisible: "Pinned"
+      - takeScreenshot: ipad-sidebar
+      - tapOn: "Weekly digest email"
+      - assertVisible: "Created by .*"
+      - waitForAnimationToEnd
+      - takeScreenshot: ipad-sidebar-task
+      - tapOn:
+          id: "search-tab"
+      - assertVisible: "Find a task, an Inbox item, or an agent."
+      - waitForAnimationToEnd
+      - takeScreenshot: ipad-sidebar-search
+      - tapOn: "Inbox"
+      - tapOn:
+          id: "workspace-switcher"
+      - assertVisible: "Workspace settings"
+      - takeScreenshot: ipad-switcher-settings
+      - tapOn:
+          point: "75%, 90%"
+      - setOrientation: PORTRAIT
+      - waitForAnimationToEnd
+# A compact window, the iPhone's, names its workspace in the Inbox's bar,
+# whose menu ends with Settings under Workspace settings, and keeps the
+# system's tab bar, minimizing it as the Tasks list scrolls down, the round +
+# staying on its own glass beside it.
+- runFlow:
+    when:
+      notVisible: "Choose an item"
+    commands:
+      - tapOn:
+          id: "workspace-switcher"
+      - assertVisible: "Workspace settings"
+      - takeScreenshot: switcher-settings
+      - tapOn:
+          point: "50%, 90%"
+      - waitForAnimationToEnd
+      - tapOn: "Tasks"
+      - assertVisible: "Weekly digest email"
+      - waitForAnimationToEnd
+      - takeScreenshot: tab-bar
+      - scroll
+      - waitForAnimationToEnd
+      - takeScreenshot: tab-bar-minimized

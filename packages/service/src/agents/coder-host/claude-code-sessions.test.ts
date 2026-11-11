@@ -57,6 +57,7 @@ import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { setWorkspaceVariable } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
+import { listScriptRuns } from "@repo/database/models/workspace-sandbox-script-run-store";
 import {
   setInstallScript,
   setRepositorySetup,
@@ -82,7 +83,10 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
-import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  CLOUD_SETUP_SCRIPT,
+  REPOSITORY_SCRIPT_KIND,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -3933,9 +3937,24 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           new Date(0),
         );
 
+        api.hooks.runStdout = (args) =>
+          args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG)
+            ? `${CLOUD_SETUP_SCRIPT.INSTALL} 0\n${CLOUD_SETUP_SCRIPT.SETUP} 0\n`
+            : undefined;
+
         const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        // The setup's own stdout said each script exited 0, which is kept as each one's last run in the agent's sandbox.
+        assert.deepEqual(
+          (yield* listScriptRuns(workspace))
+            .map((run) => [run.script, run.repository, run.exitCode, run.agent.id])
+            .sort(),
+          [
+            [CLOUD_SETUP_SCRIPT.INSTALL, null, 0, agent.id],
+            [CLOUD_SETUP_SCRIPT.SETUP, agent.repository?.toLowerCase(), 0, agent.id],
+          ],
+        );
         const own = sandboxOfAgent(api, agent);
         const uploaded = new Map(api.uploads.flatMap((upload) => [...upload]));
         assert.equal(
