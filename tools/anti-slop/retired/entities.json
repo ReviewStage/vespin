@@ -249,7 +249,6 @@
       "allow": ["packages/panel/src/entities/", "packages/panel/src/tasks/tab-look"],
       "baseline": {
         "packages/panel/src/actor-ref.tsx": 1,
-        "packages/panel/src/desktop/agent-archive.tsx": 2,
         "packages/panel/src/desktop/agent-list-row.tsx": 2,
         "packages/panel/src/desktop/main-tabs.tsx": 1,
         "packages/panel/src/desktop/side-panel.tsx": 3,

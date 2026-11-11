@@ -298,7 +298,7 @@ function SelectRow({
         label={field.label}
         selection={typeof field.value === "string" ? field.value : ""}
         onSelectionChange={onChange}
-        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.ACCENT)]}
+        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
       >
         <Text modifiers={[tag("")]}>{CHOOSE}</Text>
         {(field.options ?? []).map((option) => (

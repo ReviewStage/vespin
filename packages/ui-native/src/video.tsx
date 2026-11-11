@@ -98,7 +98,7 @@ export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
             hitSlop={SPACE.ROW}
           >
             <Text
-              style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.ACCENT_TEXT }}
+              style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT_BODY }}
             >
               {OPEN_IN_SAFARI}
             </Text>

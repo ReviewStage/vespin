@@ -179,7 +179,7 @@ export function useInboxReadMarks({
         .catch(unreached)
         .then((answer) => {
           if ("failure" in answer) {
-            refused(until === null ? REMIND_REFUSED.CANCEL : REMIND_REFUSED.SET, answer, {
+            refused(until === null ? REMIND_REFUSED.CLEAR : REMIND_REFUSED.SET, answer, {
               inboxItemId: item.id,
               workspaceId,
             });

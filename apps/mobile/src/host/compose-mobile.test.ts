@@ -25,7 +25,7 @@ import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server
 /** A thread the Inbox profile stages, by its title (`@repo/host/fixture-inbox`). */
 const STAGED_THREAD = "Who can withdraw an invite?";
 
-/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a cipher that seals in the clear, and a sign-in sheet closed at once. */
+/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a cipher that seals in the clear, a sign-in sheet closed at once, and no share token kept. */
 const testDevice: DeviceSeams = {
   fileSystem: NodeFileSystem.layer,
   createId: () => crypto.randomUUID(),
@@ -41,6 +41,7 @@ const testDevice: DeviceSeams = {
     open: () => Promise.resolve({ end: AUTH_SESSION_END.CLOSED }),
     dismiss: () => undefined,
   },
+  keepShareToken: () => true,
 };
 
 /** The device a flow signs in on against the stubbed account service: its sheet granting at once. */
@@ -116,8 +117,17 @@ it.effect(
 );
 
 it.effect(
-  "signs in against the stubbed account service as the ios client, stands signed in at the next launch, and signs out revoking its token",
+  "signs in against the stubbed account service as the ios client, stands signed in at the next launch, and signs out revoking its token and the share sheet's",
   () => {
+    // Each token the share sheet was handed, none standing for its removal.
+    const shared: (string | undefined)[] = [];
+    const device: DeviceSeams = {
+      ...stubDevice,
+      keepShareToken: (kept) => {
+        shared.push(kept?.token);
+        return true;
+      },
+    };
     // Each OAuth form the host posted, by the endpoint it went to and the client it named.
     const posted: (readonly [string, string | null])[] = [];
     const recording: typeof globalThis.fetch = async (input, init) => {
@@ -136,7 +146,7 @@ it.effect(
         const root = yield* ownFolder;
         const answer = yield* Effect.scoped(
           Effect.gen(function* () {
-            const { acts } = yield* standingHost(root, undefined, stubDevice);
+            const { acts } = yield* standingHost(root, undefined, device);
             return yield* Effect.promise(() =>
               acts[ACT_KIND.ACCOUNT_BEGIN_SIGN_IN]({ provider: ACCOUNT_PROVIDER.GITHUB }),
             );
@@ -146,7 +156,7 @@ it.effect(
           account: { status: ACCOUNT_STATUS.SIGNED_IN, email: STUB_ACCOUNT.email },
         });
 
-        const { acts, bridge } = yield* standingHost(root, undefined, stubDevice);
+        const { acts, bridge } = yield* standingHost(root, undefined, device);
         const relaunched = yield* Effect.promise(() => bridge.requestAppState());
         expect(relaunched.account.status).toBe(ACCOUNT_STATUS.SIGNED_IN);
 
@@ -156,6 +166,10 @@ it.effect(
           ["token", "ios"],
           ["revoke", "ios"],
         ]);
+        // The share sheet held the access token while signed in, never the refresh token, and holds nothing once signed out.
+        expect(shared).toContain("stub-access");
+        expect(shared).not.toContain("stub-refresh");
+        expect(shared.at(-1)).toBeUndefined();
       }),
     ).pipe(Effect.ensuring(Effect.sync(() => vi.restoreAllMocks())));
   },

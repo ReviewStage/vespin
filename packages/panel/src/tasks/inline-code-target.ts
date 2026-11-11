@@ -116,8 +116,8 @@ function webTarget(words: string): InlineCodeTarget | undefined {
   return URL.canParse(href) ? { kind: INLINE_CODE_TARGET.WEB, href } : undefined;
 }
 
-/** A path as written, read as a path in the checkout: a relative one as it is, past a leading `./`; an absolute one under the checkout's folder; none for one that climbs out or names no file. */
-function checkoutPath(written: string): string | undefined {
+/** A path as written, read as a path in the checkout: a relative one as it is, past a leading `./`; an absolute one under the checkout's folder, as a harness's own file tools name every file; none for one that climbs out or names no file. */
+export function checkoutPath(written: string): string | undefined {
   let path = written;
   if (path.startsWith("/")) {
     const at = path.indexOf(CHECKOUT_FOLDER);

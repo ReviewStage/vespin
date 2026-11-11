@@ -20,6 +20,7 @@
  * source on its whole transcript, its chip naming the source alone.
  */
 
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { AGENT_PART } from "@repo/features/agent-parts";
 import type {
   AgentAttachment,
@@ -142,8 +143,9 @@ function forkFrom(fork: AgentFork): NonNullable<ForkStart["from"]> {
  * The Start a forked draft sends under its own key: from the source at its
  * message, a note where the box holds anything, its words and the files
  * with them, the servers the draft switched off, none among them as well,
- * and the choice only where one was made, since a fork otherwise runs on
- * the source's.
+ * the choice only where one was made, since a fork otherwise runs on
+ * the source's, and the permission mode only where one was picked, since a
+ * Start naming none starts on the member's Default permissions.
  */
 export function forkStart(input: {
   readonly draftId: string;
@@ -154,9 +156,11 @@ export function forkStart(input: {
   readonly disabledServers: readonly string[];
   /** Where the new agent runs, where one was picked; none for where its source runs. */
   readonly runsOn?: AgentRunsOnRequest | undefined;
+  /** The mode the new agent starts in, where one was picked; none for the member's Default permissions. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
 }): ForkStart {
   const note = input.words.trim();
-  const { attachments, choice, disabledServers, runsOn } = input;
+  const { attachments, choice, disabledServers, runsOn, permissionMode } = input;
   return {
     idempotencyKey: input.draftId,
     from: forkFrom(input.fork),
@@ -166,6 +170,7 @@ export function forkStart(input: {
     disabledServers,
     ...(choice === undefined ? undefined : choiceRequest(choice)),
     ...(runsOn === undefined ? undefined : { runsOn }),
+    ...(permissionMode === undefined ? undefined : { permissionMode }),
   };
 }
 

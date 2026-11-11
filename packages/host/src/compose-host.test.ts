@@ -116,12 +116,16 @@ describe("the host's platform concerns", () => {
             Layer.succeed(ThisMacHost, {
               stateRoot,
               home: stateRoot,
+              launcher: `${stateRoot}/vespin-host`,
               runsHost: false,
               registers: false,
               status: Effect.succeed(THIS_MAC_AGENT_STATUS.NOT_FOUND),
               registeredHere: Effect.succeed(false),
               register: Effect.succeed(Result.fail("no agent in a fixture")),
               unregister: Effect.succeed(Result.fail("no agent in a fixture")),
+              loaded: Effect.succeed(false),
+              install: () => Effect.succeed(Result.fail("no install in a fixture")),
+              uninstall: () => Effect.succeed(Result.fail("no install in a fixture")),
               machine: Effect.succeed({
                 name: "Studio",
                 platform: DEVICE_PLATFORM.DARWIN,

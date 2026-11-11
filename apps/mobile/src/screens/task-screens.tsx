@@ -230,7 +230,7 @@ function rowActs(
           {
             label: WORDS.MARK_DONE,
             symbol: "checkmark.circle",
-            tone: ROW_ACTION_TONE.ACCENT,
+            tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
           },
         ];
@@ -240,7 +240,7 @@ function rowActs(
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
         symbol: pinned ? "pin.slash" : "pin",
-        tone: ROW_ACTION_TONE.ACCENT,
+        tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
@@ -653,12 +653,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             relation={TASK_RELATION_WORDS[TASK_RELATION_KIND.SUB_TASK]}
           />
         ))}
-        <LinkRow
-          symbol="plus"
-          label={WORDS.NEW_SUB_TASK}
-          tone={LINK_ROW_TONE.ACCENT}
-          onPress={() => newSubTask(task)}
-        />
+        <LinkRow symbol="plus" label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
       </ListSection>
       {!related ? null : (
         <ListSection
@@ -675,11 +670,6 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   name={other?.name ?? WORDS.UNLISTED_TASK}
                   status={other?.status}
                   relation={TASK_RELATION_WORDS[kind]}
-                  holding={
-                    kind === TASK_RELATION_KIND.BLOCKED_BY &&
-                    other !== undefined &&
-                    !taskFinished(other)
-                  }
                 />
               );
             }),
@@ -837,7 +827,6 @@ function OverviewAgents({
       <LinkRow
         symbol="plus"
         label={WORDS.NEW_AGENT}
-        tone={LINK_ROW_TONE.ACCENT}
         onPress={() => router.push({ pathname: "/start-agent", params: { task: task.id } })}
       />
       {overview.waitingElsewhere === 0 ? null : (

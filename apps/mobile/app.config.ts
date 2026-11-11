@@ -30,6 +30,19 @@ const APP_GROUP_PLIST_KEY = "VespinAppGroup";
 const APP_GROUPS_ENTITLEMENT = "com.apple.security.application-groups";
 const APP_GROUP_ENTITLEMENTS = { [APP_GROUPS_ENTITLEMENT]: [APP_GROUP] } as const;
 
+/**
+ * The Keychain group the app and its share extension alone share, which
+ * holds one item: the account's current access token, which the share sheet
+ * starts a task with (`modules/share-token/`). Each target names it in its
+ * Info.plist under its own key, so Swift reads it rather than spelling it
+ * again, the team's prefix filled in as it is signed. The app lists its own
+ * group first, so every other item it keeps stays where it was, out of the
+ * extension's reach.
+ */
+const SHARE_KEYCHAIN_GROUP = `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}.share`;
+const SHARE_KEYCHAIN_GROUP_PLIST_KEY = "VespinShareKeychainGroup";
+const KEYCHAIN_GROUPS_ENTITLEMENT = "keychain-access-groups";
+
 const ACCENT_COLOR_NAME = "AccentColor";
 
 // The app's icon: the Icon Composer bundle iOS 26 and later draw, and the
@@ -123,10 +136,11 @@ type PlistValue =
 /**
  * An app extension the app embeds: its target, the bundle id automatic
  * signing registers beside the app's, its Swift (the app's native code),
- * its extension point and, where the point names one, its principal class,
- * the brand's colors its asset catalog holds, by the name its Swift reads
- * each by, Lucide's glyphs it holds as symbols, and the entitlements it is
- * signed with.
+ * its extension point and, where the point names them, its principal class
+ * and attributes, the brand's colors its asset catalog holds, by the name
+ * its Swift reads each by, Lucide's glyphs it holds as symbols, the
+ * entitlements it is signed with, and any other keys its Info.plist carries
+ * over the rest.
  */
 type AppExtension = {
   readonly TARGET: string;
@@ -134,21 +148,24 @@ type AppExtension = {
   readonly SOURCES: readonly ExtensionFile[];
   readonly EXTENSION_POINT: string;
   readonly PRINCIPAL_CLASS?: string;
+  readonly ATTRIBUTES?: Readonly<Record<string, PlistValue>>;
   readonly COLORS?: Readonly<Record<string, keyof typeof BRAND_PALETTE.LIGHT>>;
   readonly SYMBOLS?: readonly string[];
   readonly ENTITLEMENTS?: Readonly<Record<string, PlistValue>>;
+  readonly INFO?: Readonly<Record<string, PlistValue>>;
 };
 
-const EXTENSION_ASSET_CATALOG = "Assets.xcassets";
 const EXTENSION_SWIFT_VERSION = "5.0";
 // What an asset catalog's own Contents.json says, as Xcode writes it.
 const ASSET_CATALOG_INFO = { info: { author: "xcode", version: 1 } };
 
-// Note that each extension's Info.plist is named for its target, because the
-// xcode library's addPbxGroup reuses a file reference of the same path, so a
-// second extension's `Info.plist` would join the first's reference.
+// Note that each extension's Info.plist, entitlements, and asset catalog are
+// named for its target, because the xcode library's addPbxGroup reuses a
+// file reference of the same path, so a second extension's `Info.plist` or
+// `Assets.xcassets` would join the first's reference.
 const extensionPlistName = (extension: AppExtension) => `${extension.TARGET}-Info.plist`;
 const extensionEntitlementsName = (extension: AppExtension) => `${extension.TARGET}.entitlements`;
+const extensionCatalogName = (extension: AppExtension) => `${extension.TARGET}.xcassets`;
 
 // The Inbox widget's snapshot as the app keeps it in the App Group: the
 // widget reads it, and the Notification Service Extension moves it on a push.
@@ -201,6 +218,36 @@ const LIVE_ACTIVITY: AppExtension = {
   },
   SYMBOLS: ["Split"],
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
+};
+
+// The share extension: the system's share sheet offers the app for text and
+// a web link, and its sheet keeps what was shared as New task's draft
+// (`share-extension/`), named in the share sheet as the app is.
+const SHARE_EXTENSION: AppExtension = {
+  TARGET: "ShareExtension",
+  BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.ShareExtension`,
+  SOURCES: [
+    { FROM: "share-extension", NAME: "ShareViewController.swift" },
+    { FROM: "share-extension", NAME: "ShareSheet.swift" },
+    { FROM: "share-extension", NAME: "SharedItems.swift" },
+    { FROM: "share-extension", NAME: "AppGroupFiles.swift" },
+    { FROM: "share-extension", NAME: "ShareStart.swift" },
+    { FROM: "modules/share-token/ios", NAME: "ShareToken.swift" },
+  ],
+  EXTENSION_POINT: "com.apple.share-services",
+  PRINCIPAL_CLASS: "ShareViewController",
+  ATTRIBUTES: {
+    NSExtensionActivationRule: {
+      NSExtensionActivationSupportsText: true,
+      NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+    },
+  },
+  COLORS: { AccentColor: "ACCENT" },
+  ENTITLEMENTS: {
+    ...APP_GROUP_ENTITLEMENTS,
+    [KEYCHAIN_GROUPS_ENTITLEMENT]: [SHARE_KEYCHAIN_GROUP],
+  },
+  INFO: { CFBundleDisplayName: "Vespin", [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP },
 };
 
 // The build number TestFlight orders uploads by: release-ios.yml names its
@@ -369,9 +416,10 @@ ${plistXml(entries, 0)}
 </plist>
 `;
 
-// An extension's Info.plist: its extension point and, where it has one, its
-// principal class, the app's version and build, which App Store Connect
-// refuses an extension to differ from, and the App Group where it shares it.
+// An extension's Info.plist: its extension point and, where it has them, its
+// principal class and attributes, the app's version and build, which App
+// Store Connect refuses an extension to differ from, the App Group where it
+// shares it, and its own keys over the rest.
 const extensionPlist = (extension: AppExtension, version: string, build: string) =>
   plistDocument({
     CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
@@ -388,10 +436,14 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
       ...(extension.PRINCIPAL_CLASS === undefined
         ? undefined
         : { NSExtensionPrincipalClass: `$(PRODUCT_MODULE_NAME).${extension.PRINCIPAL_CLASS}` }),
+      ...(extension.ATTRIBUTES === undefined
+        ? undefined
+        : { NSExtensionAttributes: extension.ATTRIBUTES }),
     },
     ...(extension.ENTITLEMENTS?.[APP_GROUPS_ENTITLEMENT] === undefined
       ? undefined
       : { [APP_GROUP_PLIST_KEY]: APP_GROUP }),
+    ...extension.INFO,
   });
 
 // Note that Expo has no setting for an app extension, so each extension's
@@ -427,7 +479,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
           plistDocument(extension.ENTITLEMENTS),
         );
       if (catalogued) {
-        const catalog = join(folder, EXTENSION_ASSET_CATALOG);
+        const catalog = join(folder, extensionCatalogName(extension));
         mkdirSync(catalog, { recursive: true });
         writeFileSync(
           join(catalog, "Contents.json"),
@@ -435,19 +487,19 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         );
       }
       for (const [name, role] of colors) {
-        const set = join(folder, EXTENSION_ASSET_CATALOG, `${name}.colorset`);
+        const set = join(folder, extensionCatalogName(extension), `${name}.colorset`);
         mkdirSync(set, { recursive: true });
         writeFileSync(join(set, "Contents.json"), `${JSON.stringify(colorSet(role), null, 2)}\n`);
       }
       for (const { name, svg } of symbols)
-        writeSymbolSet(join(folder, EXTENSION_ASSET_CATALOG), name, svg);
+        writeSymbolSet(join(folder, extensionCatalogName(extension)), name, svg);
       return modConfig;
     },
   ]);
   return withXcodeProject(written, (modConfig) => {
     const project = modConfig.modResults;
     const sources = extension.SOURCES.map(copiedName);
-    const resources = catalogued ? [EXTENSION_ASSET_CATALOG] : [];
+    const resources = catalogued ? [extensionCatalogName(extension)] : [];
     const entitlements =
       extension.ENTITLEMENTS === undefined ? [] : [extensionEntitlementsName(extension)];
     if (!project.pbxTargetByName(extension.TARGET)) {
@@ -621,8 +673,16 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // The TestFlight build takes its pushes from production APNs, which
       // the distribution profile release-ios.yml exports it with allows; a
       // simulator build is unsigned and carries no entitlement at all.
-      // The App Group it shares files with its extensions through.
-      entitlements: { "aps-environment": "production", ...APP_GROUP_ENTITLEMENTS },
+      // The App Group it shares files with its extensions through, and the
+      // Keychain group it shares the share sheet's token through, after its own.
+      entitlements: {
+        "aps-environment": "production",
+        ...APP_GROUP_ENTITLEMENTS,
+        [KEYCHAIN_GROUPS_ENTITLEMENT]: [
+          `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}`,
+          SHARE_KEYCHAIN_GROUP,
+        ],
+      },
       // Declared exempt from US export rules, so App Store Connect stops
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
@@ -642,6 +702,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         // reaches no module that loads Effect.
         NSUserActivityTypes: ["dev.vespin.viewing"],
         [APP_GROUP_PLIST_KEY]: APP_GROUP,
+        [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP,
       },
     },
     plugins: [
@@ -688,11 +749,11 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
   });
 
 // The images the screens draw and the flat app icon, written into the asset
-// catalog over the rest, and the Notification Service Extension and the Live
-// Activity's widget extension beside the app, with the Stop intent the
-// widget draws built into the app as well.
+// catalog over the rest, and the Notification Service Extension, the Live
+// Activity's widget extension, and the share extension beside the app, with
+// the Stop intent the widget draws built into the app as well.
 const config = (context?: ConfigContext): ExpoConfig =>
-  [NOTIFICATION_SERVICE, LIVE_ACTIVITY].reduce(
+  [NOTIFICATION_SERVICE, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
     withAppExtension,
     withStopAgentIntent(withMarketingIcon(withImageSets(baseConfig(context)))),
   );

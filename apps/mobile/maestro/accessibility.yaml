@@ -61,14 +61,16 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: accessibility-task-agents
 # An agent's page: its calls' lines wrapping rather than cut, and the held
-# call's banner over the composer reading what it asks whole.
+# call's banner over the composer, which scrolls in place once it would
+# stand taller than a share of the window, so the transcript stays in sight
+# above it.
 - launchApp:
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Add a way to resend an invite that expired."
+    visible: "Waiting on you.*"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000

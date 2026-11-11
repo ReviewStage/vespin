@@ -16,7 +16,9 @@ private let DAEMON = "Contents/Resources/host/lib/vespin-host.mjs"
 @main
 private struct HostLauncher {
     static func main() {
-        let bundle = Bundle.main.bundleURL
+        // Note that the bundle is read from the executable's real path, because one run through a link, as `~/.local/bin/vespin-host`, reads its main bundle as the link's own folder.
+        let bundle = Bundle.main.executableURL!.resolvingSymlinksInPath()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let node = bundle.appendingPathComponent(NODE).path
         let daemon = bundle.appendingPathComponent(DAEMON).path
         let arguments = [node, daemon] + CommandLine.arguments.dropFirst()

@@ -1,3 +1,4 @@
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { CLEAR_FAILED, STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
@@ -386,10 +387,13 @@ export interface AgentsControl {
   ) => string;
   /** Lets the open task's draft's fork go, leaving an ordinary draft with its words and chips. */
   onDropFork: () => void;
-  /** Writes the open task's draft: the words in its box, the choice on its chip, the MCP servers it switched off, or that the refusal it was handed was let go. */
+  /** Writes the open task's draft: the words in its box, the choice on its chip, the MCP servers it switched off, the mode its Permissions row picked, or that the refusal it was handed was let go. */
   onDraftChange: (
     change: Partial<
-      Pick<AgentDraft, "prompt" | "choice" | "disabledServers" | "runsOn" | "refused">
+      Pick<
+        AgentDraft,
+        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
+      >
     >,
   ) => void;
   /**
@@ -420,7 +424,8 @@ export interface AgentsControl {
   /**
    * Starts the draft's agent with the words as its prompt, never the task,
    * and the files attached to them, on the choice where one was made and else the account's default,
-   * with the MCP servers the draft switched off, where `runsOn` names, else where the service decides; the
+   * with the MCP servers the draft switched off, where `runsOn` names, else where the service decides,
+   * in the mode `permissionMode` names, else the member's Default permissions; the
    * agent's tab opens as a Start's does. Answers why it did not start, or
    * nothing once it did.
    */
@@ -431,12 +436,13 @@ export interface AgentsControl {
     attachments: readonly AgentAttachment[],
     disabledServers?: readonly string[],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
   /**
    * Starts the draft's fork: from its source at its message, under the
    * draft's key, with the box's words and files as a note where it holds
    * any, the MCP servers the draft switched off, the choice
-   * where one was made, and the place where one was picked; the agent's tab opens as a Start's does. Answers
+   * where one was made, the place where one was picked, and the mode where one was picked; the agent's tab opens as a Start's does. Answers
    * why it did not start, or nothing once it did.
    */
   startFork: (
@@ -447,6 +453,7 @@ export interface AgentsControl {
     attachments: readonly AgentAttachment[],
     disabledServers?: readonly string[],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
   /** Brings back the archived agent a surface draws alone, as its own page does; none from here, where every agent is a task's. */
   onUnarchive: (() => void | Promise<void>) | undefined;
@@ -544,8 +551,9 @@ export interface AgentsControl {
  * words written so far, the files attached to them, the choice made on its
  * chip, none while it runs on the account's default, or on its source's
  * where it is a fork, the MCP servers switched off for it, where it runs
- * where the developer picked it, and the agent and message it forks, where
- * it is a fork (`fork-model.ts`).
+ * where the developer picked it, the permission mode its Permissions row
+ * picked, and the agent and message it forks, where it is a fork
+ * (`fork-model.ts`).
  */
 export interface AgentDraft {
   readonly id: string;
@@ -556,6 +564,8 @@ export interface AgentDraft {
   readonly fork?: AgentFork | undefined;
   /** Where its agent runs, as its Runs on chip picked it; none until picked, when the service decides (`runs-on.tsx`'s `useStartRunsOn`). */
   readonly runsOn?: AgentRunsOnRequest | undefined;
+  /** The mode its agent starts in, as its Permissions row picked it; none until picked, when it starts on the member's Default permissions (`useNewAgentPermissionMode`). */
+  readonly permissionMode?: AgentPermissionMode | undefined;
   /** Why the service refused the agent of a draft New task handed over (`onHandDraft`), which its tab shows under the box until the next send. */
   readonly refused?: StartFailure | undefined;
 }
@@ -563,7 +573,7 @@ export interface AgentDraft {
 /** What a draft agent holds beside its words and files: its key, what its chips chose, the fork it is, and why New task's start of it was refused. */
 type DraftChoices = Pick<
   AgentDraft,
-  "id" | "choice" | "disabledServers" | "fork" | "runsOn" | "refused"
+  "id" | "choice" | "disabledServers" | "fork" | "runsOn" | "permissionMode" | "refused"
 >;
 
 /** The plan's draft agent: the key and chips held, with the words and files kept for it, or the words kept under their own key where nothing is held, as after a relaunch. */
@@ -582,23 +592,32 @@ function taskDraft(
     // Note that a fork is kept with the words too, so a relaunch keeps the draft a fork.
     ...forkOf(held === undefined ? kept?.place.fork : held.fork),
     ...runsOnOf(held?.runsOn),
+    ...pickedModeOf(held?.permissionMode),
     ...(held?.refused === undefined ? undefined : { refused: held.refused }),
   };
 }
 
-/** What New task hands a task it started whose agent was refused: the key that start carried, the prompt, its files, the choice picked on its chip, none where the chip was left on the account's default, which the draft's tab then reads afresh, the servers its + menu switched off, and why. */
+/** What New task hands a task it started whose agent was refused: the key that start carried, the prompt, its files, the choice picked on its chip, none where the chip was left on the account's default, which the draft's tab then reads afresh, the servers its + menu switched off, the mode its Permissions row picked, none where left on the default, and why. */
 interface HandedDraft {
   readonly id: string;
   readonly prompt: string;
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
   readonly disabledServers: readonly string[];
+  readonly permissionMode?: AgentPermissionMode | undefined;
   readonly refused: StartFailure;
 }
 
 /** A draft's fork as an optional key, absent where it forks nothing. */
 function forkOf(fork: AgentFork | undefined): { readonly fork?: AgentFork } {
   return fork === undefined ? {} : { fork };
+}
+
+/** A draft's permission mode as an optional key, absent where none was picked. */
+function pickedModeOf(permissionMode: AgentPermissionMode | undefined): {
+  readonly permissionMode?: AgentPermissionMode;
+} {
+  return permissionMode === undefined ? {} : { permissionMode };
 }
 
 /** A draft's place as an optional key, absent where none was picked. */
@@ -629,13 +648,14 @@ interface ClosedDraft {
 
 /** What a draft holds beside its words and files, as the drafts hold it. */
 function choicesOf(draft: AgentDraft): DraftChoices {
-  const { id, choice, disabledServers, fork, runsOn, refused } = draft;
+  const { id, choice, disabledServers, fork, runsOn, permissionMode, refused } = draft;
   return {
     id,
     choice,
     disabledServers,
     ...forkOf(fork),
     ...runsOnOf(runsOn),
+    ...pickedModeOf(permissionMode),
     ...(refused === undefined ? undefined : { refused }),
   };
 }
@@ -653,6 +673,7 @@ export function holdsNothing(draft: AgentDraft): boolean {
     draft.choice === undefined &&
     draft.disabledServers.length === 0 &&
     draft.runsOn === undefined &&
+    draft.permissionMode === undefined &&
     draft.refused === undefined
   );
 }
@@ -1207,6 +1228,7 @@ export function useAgents(input: {
       disabledServers: joins ? draft.disabledServers : (source?.disabledServers ?? []),
       fork,
       ...runsOnOf(joins ? draft.runsOn : undefined),
+      ...pickedModeOf(joins ? draft.permissionMode : undefined),
     });
     return id;
   };
@@ -1224,6 +1246,7 @@ export function useAgents(input: {
       choice: draft.choice,
       disabledServers: draft.disabledServers,
       ...runsOnOf(draft.runsOn),
+      ...pickedModeOf(draft.permissionMode),
     });
   };
 
@@ -1235,7 +1258,10 @@ export function useAgents(input: {
 
   const onDraftChange = (
     change: Partial<
-      Pick<AgentDraft, "prompt" | "choice" | "disabledServers" | "runsOn" | "refused">
+      Pick<
+        AgentDraft,
+        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
+      >
     >,
   ) => {
     if (taskId === undefined || draft === undefined) return;
@@ -1248,6 +1274,7 @@ export function useAgents(input: {
       disabledServers: draft.disabledServers,
       ...(draft.fork === undefined ? undefined : { fork: draft.fork }),
       ...runsOnOf(draft.runsOn),
+      ...pickedModeOf(draft.permissionMode),
       ...(draft.refused === undefined ? undefined : { refused: draft.refused }),
       ...choices,
     });
@@ -1268,6 +1295,7 @@ export function useAgents(input: {
       id: handed.id,
       choice: handed.choice,
       disabledServers: handed.disabledServers,
+      ...pickedModeOf(handed.permissionMode),
       refused: handed.refused,
     });
   };
@@ -1342,6 +1370,7 @@ export function useAgents(input: {
     attachments: readonly AgentAttachment[],
     disabledServers: readonly string[] = [],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
     if (taskId === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
     const answer = await askStart(taskId, {
@@ -1351,6 +1380,7 @@ export function useAgents(input: {
       ...(disabledServers.length === 0 ? undefined : { disabledServers }),
       ...(choice === undefined ? undefined : choiceRequest(choice)),
       ...runsOnOf(runsOn),
+      ...pickedModeOf(permissionMode),
     });
     if ("failure" in answer) return { ...startFailureNote(answer, taskId), cause: answer };
     withDraft(taskId, undefined);
@@ -1368,6 +1398,7 @@ export function useAgents(input: {
     attachments: readonly AgentAttachment[],
     disabledServers: readonly string[] = [],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
     if (taskId === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
     const asked = forkStart({
@@ -1378,6 +1409,7 @@ export function useAgents(input: {
       choice,
       disabledServers,
       runsOn,
+      permissionMode,
     });
     const answer = await askStart(taskId, asked);
     if ("failure" in answer) return { ...startFailureNote(answer, taskId ?? null), cause: answer };
