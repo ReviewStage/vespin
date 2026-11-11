@@ -42,6 +42,7 @@ import {
   findRanges,
   matchFrom,
   NO_PAINTING,
+  releaseFolds,
   repaint,
   reveal,
   selectedWords,
@@ -255,7 +256,9 @@ function useFindMatches(
           : matchFrom(ranges, held.ranges[held.at], root);
       paint({ ranges, at });
       const range = ranges[at];
-      if (shown && resume < 0 && range !== undefined) reveal(range, root, folds.current);
+      // Note that a query matching nothing closes what the find opened for the one before it.
+      if (ranges.length === 0) releaseFolds(folds.current);
+      else if (shown && resume < 0 && range !== undefined) reveal(range, root, folds.current);
     };
     search(true);
     return watchText(root, () => search(false));

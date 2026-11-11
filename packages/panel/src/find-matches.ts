@@ -334,14 +334,45 @@ function scrollToRange(range: Range, root: Element): void {
   }
 }
 
+/** What lets go of a fold a find opened, kept by the fold: the listener that hears the reader press its line. */
+const heldFolds = new WeakMap<HTMLDetailsElement, () => void>();
+
+/** Lets go of a fold a find opened, which it then never closes. */
+function letGo(folds: Set<HTMLDetailsElement>, fold: HTMLDetailsElement): void {
+  heldFolds.get(fold)?.();
+  heldFolds.delete(fold);
+  folds.delete(fold);
+}
+
+/**
+ * Holds a fold the find just opened, to close again as it moves off it.
+ * Note that a press on its line, the reader's own, lets go of it, because a
+ * fold the reader closed or opened again since is theirs, and the find's
+ * own toggle is no press.
+ */
+function holdFold(folds: Set<HTMLDetailsElement>, fold: HTMLDetailsElement): void {
+  const press = (event: Event) => {
+    const line = event.target instanceof Element ? event.target.closest("summary") : null;
+    if (line?.parentElement === fold) letGo(folds, fold);
+  };
+  fold.addEventListener("click", press);
+  heldFolds.set(fold, () => fold.removeEventListener("click", press));
+  folds.add(fold);
+}
+
 /** Closes each fold a find opened that does not stand around the match it is at now (`around`), and lets go of it. */
 function closeFolds(folds: Set<HTMLDetailsElement>, around: ReadonlySet<Element>): void {
   for (const fold of folds) {
     if (around.has(fold)) continue;
-    folds.delete(fold);
-    // Note that a fold the reader closed since, or one whose row was let go, is left as it is.
+    letGo(folds, fold);
+    // Note that a fold whose row was let go is left as it is.
     if (fold.isConnected && fold.open) fold.open = false;
   }
+}
+
+/** Closes every fold a find opened and still holds, as a query that matches nothing leaves none to show. */
+export function releaseFolds(folds: Set<HTMLDetailsElement>): void {
+  closeFolds(folds, new Set());
 }
 
 /**
@@ -437,7 +468,7 @@ export function reveal(range: Range, root: Element, folds?: Set<HTMLDetailsEleme
   for (const element of around) {
     if (element instanceof HTMLDetailsElement && !element.open) {
       element.open = true;
-      folds?.add(element);
+      if (folds !== undefined) holdFold(folds, element);
     }
     if (hiddenUntilFound(element)) {
       element.dispatchEvent(new Event(BEFORE_MATCH, { bubbles: true }));

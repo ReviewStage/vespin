@@ -5,6 +5,7 @@ import {
   FIND_DETAILS_LEFT_OUT,
   findRanges,
   NO_PAINTING,
+  releaseFolds,
   repaint,
   reveal,
   selectedWords,
@@ -213,6 +214,8 @@ export function useVirtualFind(input: {
       const next = { ranges, at: current === undefined ? -1 : ranges.indexOf(current) };
       repaint(state.painting, next);
       state.painting = next;
+      // Note that a query matching nothing closes what the find opened for the one before it.
+      if (state.matches.length === 0) releaseFolds(state.folds);
       if (state.pending && current !== undefined && box !== null) {
         state.pending = false;
         reveal(current, box, state.folds);

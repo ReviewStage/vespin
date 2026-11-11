@@ -1892,7 +1892,7 @@ export function TranscriptSubagent({
       </Tool>
     ) : onOpen === undefined ? (
       // The same line as the one that opens a subagent's tab, pressed by nothing.
-      <LineRow data-subagent-row="" data-call-id={callId} {...FIND_DETAIL}>
+      <LineRow data-subagent-row="" data-call-id={callId}>
         {line}
       </LineRow>
     ) : (
@@ -1903,7 +1903,7 @@ export function TranscriptSubagent({
       </Tooltip>
     );
   return (
-    <div className="subagent-row @container/subagent-row text-caption-inline">
+    <div className="subagent-row @container/subagent-row text-caption-inline" {...FIND_DETAIL}>
       {row}
       {errorText === undefined ? null : (
         <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
