@@ -52,7 +52,7 @@ const COMMANDS = {
   [SLASH_COMMAND.NEW]: { glyph: () => <GLYPH.NEW_SESSION />, detail: "Start a fresh session" },
 } as const satisfies Record<SlashCommand, CommandEntry>;
 
-/** Every name a command chip stands for in the box, its alias among them; `/model` opens its menu as it is chosen, so it never stands there as a chip. */
+/** Every name a command chip stands for in the box, its alias among them, each acting on the agent's session; `/model` opens its menu as it is chosen, so it never stands there as a chip. */
 export const COMMAND_NAMES: ReadonlySet<string> = new Set([
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,
@@ -65,12 +65,24 @@ export const SENT_COMMANDS: ReadonlySet<string> = new Set([SLASH_COMMAND.COMPACT
 /** What the card says under a command's name. */
 const COMMAND_KIND = "Command";
 
-/** The listed commands the `/` word's query finds, by name or by alias. */
-export function matchingCommands(query: string): readonly SlashCommand[] {
+/** Which of the commands a box runs: `/model` where it stands beside a model chip, and the ones that act on a session where its agent has one to compact or clear. */
+export interface CommandReach {
+  readonly model: boolean;
+  readonly session: boolean;
+}
+
+/** Whether a box runs a command, by name or by alias: `/model` beside its chip, the rest on a session. */
+export function runsCommand(name: SlashCommand, reach: CommandReach): boolean {
+  return name === SLASH_COMMAND.MODEL ? reach.model : reach.session;
+}
+
+/** The listed commands the box reaches that the `/` word's query finds, by name or by alias. */
+export function matchingCommands(query: string, reach: CommandReach): readonly SlashCommand[] {
   const typed = query.toLowerCase();
   return LISTED_COMMANDS.filter((name) => {
     const entry: CommandEntry = COMMANDS[name];
-    return name.startsWith(typed) || (entry.alias?.startsWith(typed) ?? false);
+    const found = name.startsWith(typed) || (entry.alias?.startsWith(typed) ?? false);
+    return found && runsCommand(name, reach);
   });
 }
 

@@ -78,7 +78,7 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * image pasted or files dropped taken too, MCP servers, which opens the
  * servers popover beside the menu (`agent-servers.tsx`), and, on a task's
  * card, Task relation, which opens the task search beside it
- * (`new-task-relation.tsx`), dictation, the model chip, and the round Start agent button, with File for
+ * (`new-task-relation.tsx`), dictation, the model chip, which `/model` opens as in an agent's box, and the round Start agent button, with File for
  * later before it, drawing the backlog's mark alone where the card is too
  * narrow for its words, as on a phone, where the model chip's words are cut
  * short too, so Start stays at the row's end in the card.
