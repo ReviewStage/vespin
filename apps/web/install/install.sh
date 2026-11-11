@@ -431,6 +431,24 @@ connect_box() {
   exit "$code"
 }
 
+# Waits on the host's setup, printing each step it reaches (the tools its
+# agents run on fetched, then ready), so the script ends once the box can take
+# an agent; ends the script where setup failed, with why. A setup still going
+# after the host's own wait is left to finish, and says how to check on it.
+wait_for_setup() {
+  printf '\n'
+  code=0
+  "$LINK" status --wait || code=$?
+  case "$code" in
+    0) return 0 ;;
+    1)
+      printf '%s Setup failed, and Vespin host keeps trying. To check on it: %s status\n' "$CROSS" "$TYPED_LINK" >&2
+      exit 1
+      ;;
+    *) SETUP_PENDING=true ;;
+  esac
+}
+
 # Enables and starts the systemd user service before the box is connected, so
 # a box connected later by hand is followed too. Note that one already running
 # is left on its release until restart_unit.
@@ -688,10 +706,15 @@ main() {
     restart_unit
   fi
   remove_other_releases
+  wait_for_setup
 
   # Note that nothing says how to upgrade, because the host updates itself to each release.
   printf '\n'
-  ok "Ready. Pick it under a task's Runs on in Vespin."
+  if [ "${SETUP_PENDING:-false}" = true ]; then
+    ok "Installed and connected. It reads Online under a task's Runs on in Vespin once setup finishes."
+  else
+    ok "Ready. Pick it under a task's Runs on in Vespin."
+  fi
   printf 'To remove it: %s uninstall\n' "$TYPED_LINK"
   # Note that a systemd service does not keep a WSL distro up: WSL stops it about
   # 15 seconds after its last window closes, unless instanceIdleTimeout is -1.

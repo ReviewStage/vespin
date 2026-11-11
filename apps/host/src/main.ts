@@ -111,6 +111,9 @@ import {
   LINUX_HOST,
   leaveHostDevice,
   readHostDevice,
+  readSetupStatus,
+  SETUP_STEP,
+  type SetupStatus,
 } from "@repo/host/daemon";
 import { Environment, reporterLayer } from "@repo/host/effect";
 import { armedWatchLayer, reportToStderr } from "@repo/host/node";
@@ -181,7 +184,29 @@ const UNINSTALL_KEEPING_AGENTS = ["uninstall", "--keep-agents"] as const;
 /** The transient systemd unit a removed box's uninstall runs in, apart from the daemon's own unit, which it stops. */
 const UNINSTALL_UNIT = "vespin-host-uninstall";
 
-const COMMAND = { RUN: "run", CONNECT: "connect", LEAVE: "leave", VERSION: "version" } as const;
+const COMMAND = {
+  RUN: "run",
+  CONNECT: "connect",
+  LEAVE: "leave",
+  VERSION: "version",
+  STATUS: "status",
+} as const;
+
+/** How long `status --wait` waits for setup to end, so an install on a slow connection says so rather than hanging. */
+const STATUS_WAIT = Duration.minutes(10);
+
+/** How often `status --wait` reads where setup stands. */
+const STATUS_READ_EVERY = Duration.seconds(2);
+
+/** What `status` says of each step, and the exit code each ends `--wait` with. */
+const STATUS_WORDS = {
+  [SETUP_STEP.SETTING_UP]: "Setting up: fetching Claude Code, Codex, and GitHub's CLI…",
+  [SETUP_STEP.FAILED]: "Failed",
+  [SETUP_STEP.READY]: "Ready: this machine takes agents.",
+} as const;
+
+/** What `status` says before the host has kept any step. */
+const NOT_STARTED_WORDS = "Not set up yet: the host has not started setting up.";
 
 /** The release's own folder, the app's `Contents/Resources/host` for a bundled one: this bundle stands in its `lib/`, whichever way its Node was started. */
 const installFolder = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -578,6 +603,53 @@ const connect = (runtime: HostRuntime, name: string, origin: string) =>
     ),
   );
 
+/** The line `status` prints for where setup stands. */
+function statusLine(status: Option.Option<SetupStatus>): string {
+  if (Option.isNone(status)) return NOT_STARTED_WORDS;
+  const { step, failure } = status.value;
+  return step === SETUP_STEP.FAILED && failure !== undefined
+    ? `${STATUS_WORDS[step]}: ${failure}.`
+    : STATUS_WORDS[step];
+}
+
+/**
+ * Prints where this machine's setup stands. With `wait`, prints each change
+ * until setup is ready (exit 0), failed (exit 1), or `STATUS_WAIT` passes
+ * (exit 2), which the install script runs once the host is started.
+ */
+const status = (runtime: HostRuntime, wait: boolean) =>
+  Effect.gen(function* () {
+    const read = readSetupStatus(runtime.stateRoot);
+    let printed: string | undefined;
+    const print = (line: string) =>
+      Effect.sync(() => {
+        if (line !== printed) process.stdout.write(`${line}\n`);
+        printed = line;
+      });
+    const settled = Effect.gen(function* () {
+      for (;;) {
+        const now = yield* read;
+        yield* print(statusLine(now));
+        if (!wait) return 0;
+        if (Option.isSome(now) && now.value.step === SETUP_STEP.READY) return 0;
+        if (Option.isSome(now) && now.value.step === SETUP_STEP.FAILED) return 1;
+        yield* Effect.sleep(STATUS_READ_EVERY);
+      }
+    });
+    return yield* settled.pipe(
+      Effect.timeoutOrElse({
+        duration: STATUS_WAIT,
+        orElse: () =>
+          Effect.as(
+            print(
+              `Still setting up after ${Duration.format(STATUS_WAIT)}. Run vespin-host status later to check.`,
+            ),
+            2,
+          ),
+      }),
+    );
+  });
+
 /** The services every command runs on, which `nodeServices` provides. */
 type HostServices = Layer.Success<typeof nodeServices>;
 
@@ -603,6 +675,10 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
     return run(runtime, values.bundled === true);
   }
   if (command === COMMAND.LEAVE) return leave(runtime);
+  if (command === COMMAND.STATUS) {
+    const { values } = parseArgs({ args: [...rest], options: { wait: { type: "boolean" } } });
+    return status(runtime, values.wait === true);
+  }
   if (command === COMMAND.CONNECT) {
     const { values } = parseArgs({
       args: [...rest],
@@ -618,7 +694,7 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
   }
   return Effect.sync(() =>
     process.stderr.write(
-      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | version | uninstall [--keep-agents]\n",
+      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | status [--wait] | version | uninstall [--keep-agents]\n",
     ),
   ).pipe(Effect.as(CONNECT_EXIT.USAGE));
 }
