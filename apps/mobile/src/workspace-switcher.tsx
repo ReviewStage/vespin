@@ -89,13 +89,16 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
 
 /**
  * The bar's title where a tab's root names its workspace at its leading
- * edge (`SettingsBarButton`'s `switcher`): none drawn, since the workspace's
- * name already says where the reader is, while the tab's own name still
- * stands as the screen's title, the back button's and the reader's; the
- * tab's name drawn as before the account's workspaces are read.
+ * edge (`SettingsBarButton`'s `switcher`): a title view that draws nothing,
+ * since the workspace's name already says where the reader is; the tab's
+ * name drawn as before the account's workspaces are read. Note that the
+ * title is hidden by an empty view rather than an empty `headerTitle`
+ * string, because a string stands as the native title too, and the tab's
+ * own `title` must stay the screen's name for the back button's history and
+ * the reader.
  */
 export function switcherTitle(switcher: SwitcherProps | undefined): {
-  readonly headerTitle?: string;
+  readonly headerTitle?: () => null;
 } {
-  return switcher === undefined ? {} : { headerTitle: "" };
+  return switcher === undefined ? {} : { headerTitle: () => null };
 }
