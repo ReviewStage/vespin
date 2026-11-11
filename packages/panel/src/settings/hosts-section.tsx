@@ -16,6 +16,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   ANNOUNCE,
+  BUTTON_VARIANT,
+  Button,
   Checkbox,
   CONFIRM_LOSS,
   COPY_FIELD_PROMPT,
@@ -23,6 +25,7 @@ import {
   ConfirmDialog,
   CopyField,
   type DialogConfirm,
+  ExternalIcon,
   OutsideSteps,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
@@ -51,7 +54,7 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { actMutation } from "../act-mutations.js";
+import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
@@ -245,6 +248,10 @@ const THIS_MAC_WORDS = {
   SWITCH: "Run agents on this Mac",
   OFF: "Run your agents on this Mac instead of the cloud.",
   TURN_ON_FAILED: "Could not turn on this Mac. Try again.",
+  NEEDS_APPROVAL: `macOS won't run agents on this Mac until you allow ${PRODUCT_NAME} in System Settings › General › Login Items.`,
+  OPEN_LOGIN_ITEMS: "Open Login Items",
+  STILL_LISTED: `This Mac is off, but ${PRODUCT_NAME} couldn't remove it from your machines. Remove it from the list below.`,
+  FOLDER_LEFT: "This Mac is off, but an agent's folder couldn't be deleted.",
 } as const;
 
 /** What turning This Mac off asks first: it takes the host off this Mac, and its agents' folders where the member leaves that checked. */
@@ -323,14 +330,18 @@ function ThisMacRow({
   host,
   book,
   on,
+  needsApproval,
   onChange,
 }: {
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
   book: PresenceBook;
   on: boolean;
+  /** Whether macOS holds its host until the member allows the app in Login Items. */
+  needsApproval: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
+  const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
   const description = !on ? (
     THIS_MAC_WORDS.OFF
   ) : host === undefined ? (
@@ -341,22 +352,45 @@ function ThisMacRow({
     <StandingLine host={host} book={book} joined={false} />
   );
   return (
-    <SettingsRow
-      leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
-      label={THIS_MAC}
-      description={description}
-      labelsControl
-    >
-      {(control) => (
-        <Switch
-          id={control.controlId}
-          checked={on}
-          label={THIS_MAC_WORDS.SWITCH}
-          describedBy={control["aria-describedby"]}
-          onChange={(next) => onChange(next)}
-        />
-      )}
-    </SettingsRow>
+    <>
+      <SettingsRow
+        leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
+        label={THIS_MAC}
+        description={description}
+        labelsControl
+      >
+        {(control) => (
+          <Switch
+            id={control.controlId}
+            checked={on}
+            label={THIS_MAC_WORDS.SWITCH}
+            describedBy={control["aria-describedby"]}
+            onChange={(next) => onChange(next)}
+          />
+        )}
+      </SettingsRow>
+      {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
+      {on && needsApproval ? (
+        <SettingsRow
+          label={null}
+          description={
+            <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+              {THIS_MAC_WORDS.NEEDS_APPROVAL}
+            </SettingsRowStateLine>
+          }
+        >
+          {() => (
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<ExternalIcon />}
+              onClick={() => openLoginItems()}
+            >
+              {THIS_MAC_WORDS.OPEN_LOGIN_ITEMS}
+            </Button>
+          )}
+        </SettingsRow>
+      ) : null}
+    </>
   );
 }
 
@@ -529,7 +563,26 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         on: false,
         deleteFolders: deleteFolders || agentFolders === 0,
       }),
-    answered: (answer) => ("failure" in answer ? TURN_OFF_REFUSED : ACCEPTED),
+    answered: (answer) => {
+      if ("failure" in answer) return TURN_OFF_REFUSED;
+      // Note that the host's state is gone either way, so what of its removal did not land is said beside the turn off rather than refusing it.
+      if (answer.stillListed === true) {
+        showToast({
+          words: THIS_MAC_WORDS.STILL_LISTED,
+          replayUnmasked: true,
+          tone: STATUS_TONE.ATTENTION,
+        });
+      }
+      if (answer.folderLeft !== undefined) {
+        showToast({
+          words: THIS_MAC_WORDS.FOLDER_LEFT,
+          detail: answer.folderLeft,
+          tone: STATUS_TONE.DANGER,
+          failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
+        });
+      }
+      return ACCEPTED;
+    },
     failed: () => UNREACHED,
   });
   const turningOff = useConfirmDialog(
@@ -571,7 +624,13 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       ) : loaded ? (
         <>
           {thisMac === undefined ? null : (
-            <ThisMacRow host={listedMac} book={book} on={thisMacOn} onChange={switchThisMac} />
+            <ThisMacRow
+              host={listedMac}
+              book={book}
+              on={thisMacOn}
+              needsApproval={thisMac.needsApproval === true}
+              onChange={switchThisMac}
+            />
           )}
           {others.map((host) => {
             const label = machineName(machineOf(host), listed, naming);

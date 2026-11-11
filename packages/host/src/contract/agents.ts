@@ -65,6 +65,7 @@ import {
   hostDoneAnswerViewSchema,
   hostIdParamsSchema,
   pullRequestPartParamsSchema,
+  thisMacHostSetAnswerViewSchema,
   thisMacHostSetParamsSchema,
 } from "@repo/features/agent-view";
 import {
@@ -144,7 +145,7 @@ export const AGENT_ACTS = declaredActs({
   }),
   HOSTS_THIS_MAC_SET: hostAct({
     input: thisMacHostSetParamsSchema,
-    output: hostDoneAnswerViewSchema,
+    output: thisMacHostSetAnswerViewSchema,
     refusal: "Could not change this Mac on this system.",
     panelOnly: true,
     door: ACT.LOCAL_WRITE,

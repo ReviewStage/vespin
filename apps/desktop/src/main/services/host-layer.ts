@@ -70,7 +70,11 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
     // Cloud agents' mirrors stand beside the local agents' clones under the member's own home, `~/.vespin`.
     // Each mirror's attempts are traced on main's Sentry.
     Layer.succeed(MirrorPlatform, { ...mirrorPlatform(os.homedir()), tracer: mainSentryTracer }),
-    thisMacHostLayer(),
+    thisMacHostLayer({
+      stateRoot: config.stateRoot,
+      appVersion: config.appVersion,
+      packaged: config.packaged,
+    }),
     // The account is the OAuth sign-in, its tokens sealed by this Mac's
     // cipher. Its consent is a loopback on this Mac: the browser hands the
     // code back to a `node:http` listener on 127.0.0.1.

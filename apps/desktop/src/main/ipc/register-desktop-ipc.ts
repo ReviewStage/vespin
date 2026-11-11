@@ -30,6 +30,7 @@ import { type ReportHandlers, registerBridgeHost } from "../bridge-host";
 import { installCli } from "../native/cli-install";
 import { readMacResources } from "../native/mac-resources";
 import { spawnMacShell } from "../native/mac-shell";
+import { nativeHelperPath } from "../native/native-helper";
 import type { DesktopServices } from "../services/compose-desktop";
 import { windowPushes } from "../window/window-pushes";
 import { cliProcedures } from "./cli-acts";
@@ -160,6 +161,8 @@ export function registerDesktopIpc(services: DesktopServices): void {
       microphoneRouteWatcher: () => native.microphoneRouteWatcher(),
       recordProductEvent,
       openExternal: config.openExternal,
+      // The helper calls `SMAppService.openSystemSettingsLoginItems()`, which Electron does not wrap (`native/macos/OpenLoginItems.swift`).
+      openLoginItems: () => execFile(nativeHelperPath("open-login-items"), () => undefined),
       copyText: (words) => clipboard.writeText(words),
       copyRich: ({ html, text }) => clipboard.write({ html, text }),
       copyImage: (png) => {

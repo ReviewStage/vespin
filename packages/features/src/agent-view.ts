@@ -413,6 +413,24 @@ export type HostDoneAnswerView = typeof hostDoneAnswerViewSchema.Type;
 /** What removing a host names: its id. */
 export const hostIdParamsSchema = hostIdRequestSchema;
 
+/**
+ * What turning Run agents on this Mac on or off answers: done, with what of
+ * a turn off did not land, or why it could not be. Turned off, the host's
+ * state is gone either way; the service may not have taken its leave, so
+ * the account may still list it (`stillListed`), and an agent's folder may
+ * still stand, the words it could not be removed with (`folderLeft`).
+ */
+export const thisMacHostSetAnswerViewSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    done: EffectSchema.Literal(true),
+    stillListed: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+    folderLeft: EffectSchema.optionalKey(EffectSchema.String),
+  }),
+  hostDoneAnswerViewSchema.members[1],
+]);
+
+export type ThisMacHostSetAnswerView = typeof thisMacHostSetAnswerViewSchema.Type;
+
 /** What turning Run agents on this Mac on or off says: whether it is on, and, turning it off, whether its agents' folders go with it. */
 export const thisMacHostSetParamsSchema = EffectSchema.Struct({
   on: EffectSchema.Boolean,

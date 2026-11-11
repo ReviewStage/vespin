@@ -352,6 +352,26 @@ test("a Mac turned on whose host the service does not list yet reads offline on 
   assert.ok(row.includes("This MacOffline"), row);
 });
 
+test("a Mac turned on whose host macOS holds for approval says so, and opens Login Items to allow it", async () => {
+  let opened = 0;
+  await machinesWithThisMac(
+    [],
+    { machineId: MACHINE_ID, enrolled: true, needsApproval: true },
+    [],
+    {
+      [ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS]: async () => {
+        opened += 1;
+      },
+    },
+  );
+  const page = document.body.textContent ?? "";
+  assert.ok(page.includes("System Settings › General › Login Items"), page);
+
+  await press("Open Login Items");
+
+  assert.equal(opened, 1);
+});
+
 test("This Mac's switch turns it on at once, and off only once the question is answered", async () => {
   const sent: unknown[] = [];
   const answered = async (input: unknown) => {

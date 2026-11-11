@@ -6,19 +6,19 @@
  * at `lib/agent-runner.mjs` (`host-platform.ts`), and runs on the release's
  * own Node. The same bundle runs on every OS, as `process.platform` says
  * (`hostRuntime`). The account install (`apps/web/install/install.sh`)
- * runs it as the account it is installed in, on Linux and on a Mac alike:
- * each release unpacked under `~/.local/share/vespin-host/versions/<version>`,
- * `current` beside them linking to the one that runs, its state under
- * `~/.local/state/vespin-host`, which the release's `vespin-host` names
- * (`vespin-host.sh`), and a systemd user unit or a LaunchAgent running `run`
- * through `current`, and again a minute after any exit. This Mac's host is
- * that same install, which the desktop app starts and stops through launchd
- * (`apps/desktop/src/main/native/this-mac-host.ts`).
+ * runs it as the account it is installed in, on Linux and on a headless
+ * Mac: each release unpacked under
+ * `~/.local/share/vespin-host/versions/<version>`, `current` beside them
+ * linking to the one that runs, its state under `~/.local/state/vespin-host`,
+ * which the release's `vespin-host` names (`vespin-host.sh`), and a systemd
+ * user unit or a LaunchAgent running `run` through `current`, and again a
+ * minute after any exit.
  *
- * The same bundle also ships inside the desktop app, its `lib/` under
- * `Contents/Resources/host`, run on the Node the app carries by the
- * LaunchAgent the app registers through `SMAppService`, whose plist starts
- * it as `run --bundled`. A bundled daemon keeps the account install's state
+ * This Mac's host, on a Mac the desktop app runs on, is the same bundle
+ * shipped inside the app, its `lib/` under `Contents/Resources/host`, run on
+ * the Node the app carries by the LaunchAgent the app registers through
+ * `SMAppService` (`apps/desktop/src/main/native/this-mac-host.ts`), whose
+ * plist starts it as `run --bundled`. A bundled daemon keeps the account install's state
  * root (`DARWIN_HOST.stateRoot`), so the box's record and its agents'
  * folders carry over, but updates with the app rather than itself, and once
  * its box is removed it rests as a refused one does: the app owns the

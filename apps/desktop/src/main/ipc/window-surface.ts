@@ -43,6 +43,8 @@ interface WindowSurfaceDependencies {
   microphoneRouteWatcher: () => MicrophoneRouteWatch | undefined;
   recordProductEvent: RecordProductEvent;
   openExternal: (url: string) => Promise<void>;
+  /** Opens System Settings at Login Items (`SMAppService.openSystemSettingsLoginItems()`). */
+  openLoginItems: () => void;
   /** Writes words to the system's clipboard. */
   copyText: (words: string) => void;
   /** Writes a PNG, its bytes in base64, to the system's clipboard as a picture; answers false where the bytes draw no picture. */
@@ -135,6 +137,10 @@ export function windowSurfaceProcedures(
         "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
       ),
     ),
+    // Login Items, where the member allows the host's agent that macOS holds for them, opened the one way Apple names.
+    [WINDOW_SURFACE_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS]: surfacePort[
+      WINDOW_SURFACE_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS
+    ].handler(() => dependencies.openLoginItems()),
     [WINDOW_SURFACE_ACT_KIND.CONTACT_EMAIL]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.CONTACT_EMAIL
     ].handler(() => dependencies.openExternal(CONTACT_MAILTO)),

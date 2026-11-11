@@ -777,8 +777,8 @@ export const WORKSPACE_ACT_KIND = {
 
 /**
  * What a window asks of the system it is drawn on: the microphone asked for
- * and its route read afresh, the microphone's and the notifications' settings
- * opened, a new mail to the people who make the app, the panel focused, words
+ * and its route read afresh, the microphone's, the notifications', and the
+ * login items' settings opened, a new mail to the people who make the app, the panel focused, words
  * copied, a file saved, a build's label shown or hidden, and feedback sent.
  */
 export const WINDOW_SURFACE_ACT_KIND = {
@@ -792,6 +792,8 @@ export const WINDOW_SURFACE_ACT_KIND = {
   MICROPHONE_ROUTE: "microphone.route",
   MICROPHONE_OPEN_SETTINGS: "microphone.openSettings",
   NOTIFICATIONS_OPEN_SETTINGS: "notifications.openSettings",
+  /** System Settings opened at Login Items, where the member allows the host's agent macOS holds for them. */
+  LOGIN_ITEMS_OPEN_SETTINGS: "loginItems.openSettings",
   /** A new message to the people who make the app, in the system's mail app, to the address main holds. */
   CONTACT_EMAIL: "contact.email",
   WINDOW_FOCUS_PANEL: "window.focusPanel",
@@ -1111,6 +1113,7 @@ export const PORT_ACT_USE = {
   MICROPHONE_ROUTE: ACT_USE.FETCH,
   MICROPHONE_OPEN_SETTINGS: ACT_USE.WRITE,
   NOTIFICATIONS_OPEN_SETTINGS: ACT_USE.WRITE,
+  LOGIN_ITEMS_OPEN_SETTINGS: ACT_USE.WRITE,
   CONTACT_EMAIL: ACT_USE.WRITE,
   WINDOW_FOCUS_PANEL: ACT_USE.WRITE,
   WINDOW_COPY_TEXT: ACT_USE.WRITE,
