@@ -2,19 +2,27 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import { eq } from "drizzle-orm";
 import { Clock, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
+import { device } from "../../schemas/device.js";
 import { DEVICE_LAYOUT, getTestDB } from "../../testing/index.js";
-import { beatDevice, devicesNamed, devicesSeenSince, registerDevice } from "../device-store.js";
+import {
+  beatDevice,
+  devicesNamed,
+  devicesSeenSince,
+  markAwayDevices,
+  registerDevice,
+} from "../device-store.js";
 import { enrollOwnDevice, hostsOf } from "../host-store.js";
 
 /**
  * An account's Macs, over a real dialect: a Mac is registered, beaten, and
  * read by its own account alone, an id another account holds is never taken
  * over, a Mac that stopped beating is no longer read as there, a host's
- * update stands until its own beat names none, and the Macs a read's local agents name are read by their ids alone.
+ * update stands until its own beat names none, a Mac quiet past fresh is marked away once and its next beat clears it, and the Macs a read's local agents name are read by their ids alone.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -162,6 +170,38 @@ it.layer(getTestDB())("the device store", (it) => {
           "Laptop",
           "Studio",
         ]);
+      }),
+  );
+  it.effect(
+    "a Mac quiet past fresh is marked away once, as the sweep finds it, and its next beat clears the mark",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { owner } = yield* openAccounts;
+        const id = randomUUID();
+        yield* registerDevice(owner, { id, name: "Studio", ...DEVICE_LAYOUT });
+        const awayAt = Effect.map(
+          db.select({ awayAt: device.awayAt }).from(device).where(eq(device.id, id)),
+          (rows) => rows[0]?.awayAt ?? null,
+        );
+        const freshMs = 60_000;
+
+        yield* markAwayDevices(yield* Clock.currentTimeMillis, freshMs);
+        const whileFresh = yield* awayAt;
+        yield* TestClock.adjust(freshMs + 1_000);
+        const sweptAt = yield* Clock.currentTimeMillis;
+        yield* markAwayDevices(sweptAt, freshMs);
+        const marked = yield* awayAt;
+        yield* TestClock.adjust(60_000);
+        yield* markAwayDevices(yield* Clock.currentTimeMillis, freshMs);
+        const markedAgain = yield* awayAt;
+        yield* beatDevice(owner, id);
+        const cleared = yield* awayAt;
+
+        assert.equal(whileFresh, null);
+        assert.equal(marked?.getTime(), sweptAt);
+        assert.equal(markedAgain?.getTime(), sweptAt);
+        assert.equal(cleared, null);
       }),
   );
 });

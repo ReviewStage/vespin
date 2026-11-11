@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import type { HostLine } from "@repo/features/host-live";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -158,7 +159,7 @@ test("a host that joins while the page stands is said to be connected in the wai
   await vi.waitFor(() => assert.ok(pageText().includes(`curl -fsSL ${SCRIPT} | sh`)));
   assert.ok(pageText().includes("Waiting for a machine to connect"), pageText());
 
-  hosts.push({ id: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", name: "hel-02" });
+  hosts.push({ id: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", name: "hel-02", calledIn: false });
   act(lay);
   await settle();
 
@@ -219,8 +220,15 @@ async function machinesWithThisMac(
   beats: readonly { readonly deviceId: string; readonly ageMs: number }[] = [],
   procedures: Partial<FakeActPort> = {},
 ): Promise<void> {
-  handBeats(Object.fromEntries(beats.map((beat) => [beat.deviceId, beat.ageMs])));
-  holdHosts(() => hosts);
+  handBeats({});
+  // Note that a host's beat reaches the window as whether the sweep marked it away.
+  const ages = new Map(beats.map((beat) => [beat.deviceId, beat.ageMs]));
+  holdHosts(() =>
+    hosts.map((host) => {
+      const age = ages.get(host.id);
+      return age === undefined ? host : { ...host, away: age > MAC_PRESENCE.FRESH_MS };
+    }),
+  );
   // This Mac is laid as the host holds it, under the account the beats are held for.
   const handed = fakeAppBridgeCalls().requestAppState;
   fakeAppBridge({

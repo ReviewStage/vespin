@@ -22,7 +22,7 @@ import {
   type HostUpdate,
   hostUpdateSchema,
 } from "@repo/features/device-agent-wire";
-import { and, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { DateTime, Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -159,6 +159,7 @@ const upsertDevice = SqlSchema.findAll({
           setup,
           setupFailure,
           lastSeenAt: now,
+          awayAt: null,
         })
         .onConflictDoUpdate({
           target: device.id,
@@ -177,6 +178,7 @@ const upsertDevice = SqlSchema.findAll({
             setup,
             setupFailure,
             lastSeenAt: now,
+            awayAt: null,
           },
           // Moved only where the account registering it is the one holding it.
           setWhere: eq(device.userId, userId),
@@ -203,11 +205,32 @@ const touchDevice = SqlSchema.findAll({
         .update(device)
         .set({
           lastSeenAt: now,
+          awayAt: null,
           ...(updating === undefined
             ? undefined
             : { updatePhase: updating.phase, updateFailure: updating.failure }),
         })
         .where(and(eq(device.id, id), eq(device.userId, userId)))
+        .returning({ id: device.id }),
+    ),
+});
+
+const markAway = SqlSchema.findAll({
+  Request: Schema.Struct({ now: Schema.Date, staleBefore: Schema.Date }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ now, staleBefore }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ awayAt: now })
+        .where(
+          and(
+            isNull(device.awayAt),
+            isNull(device.removedAt),
+            isNotNull(device.home),
+            lt(device.lastSeenAt, staleBefore),
+          ),
+        )
         .returning({ id: device.id }),
     ),
 });
@@ -369,6 +392,19 @@ export function beatDevice(
         };
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(touchDevice({ userId, id, now, updating: said }), (rows) => rows.length > 0),
+  );
+}
+
+/**
+ * Marks away every registered device whose last beat is older than
+ * `freshMs` at `now` and that is not marked already, answering how many it
+ * marked; its next beat or register clears the mark. The scheduled sweep
+ * runs it, so the hosts read wakes as a host goes quiet.
+ */
+export function markAwayDevices(now: number, freshMs: number): DeviceEffect<number> {
+  return Effect.map(
+    markAway({ now: new Date(now), staleBefore: new Date(now - freshMs) }),
+    (rows) => rows.length,
   );
 }
 

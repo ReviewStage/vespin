@@ -55,6 +55,8 @@ export const HOSTS_READ = liveRead({
         calledIn: Schema.optionalKey(Schema.Boolean),
         /** When it joined, in epoch milliseconds. Absent from a service that answers none. */
         joinedAt: Schema.optionalKey(Schema.Number),
+        /** Whether its beat went past fresh since it last beat, as the scheduled sweep found it. Absent from a service that answers none. */
+        away: Schema.optionalKey(Schema.Boolean),
       }),
       key: "id",
       order: [
@@ -75,7 +77,7 @@ export type HostLiveRow = LiveRowOf<typeof HOSTS_READ.parts.hosts>;
 export type HostLine = Pick<
   Host,
   "id" | "name" | "platform" | "machineId" | "model" | "update" | "setup" | "calledIn"
-> & { readonly joinedAt?: number };
+> & { readonly joinedAt?: number; readonly away?: boolean };
 
 const readPlatform = Schema.decodeUnknownOption(Schema.Literals(Object.values(DEVICE_PLATFORM)));
 const readUpdate = Schema.decodeUnknownOption(Schema.Literals(Object.values(HOST_UPDATE)));
@@ -105,6 +107,7 @@ export function hostsOfLiveRows(rows: readonly HostLiveRow[], now: number): read
         ...(setup._tag === "Some" ? { setup: setup.value } : undefined),
         ...(row.calledIn === undefined ? undefined : { calledIn: row.calledIn }),
         ...(row.joinedAt === undefined ? undefined : { joinedAt: row.joinedAt }),
+        ...(row.away === undefined ? undefined : { away: row.away }),
       },
     ];
   });
