@@ -1,7 +1,6 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
-import { VERB } from "@repo/features/words";
+import { BUILD_TOO_OLD_WORDS, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import type { UpdateControl } from "@repo/settings/settings-controls";
@@ -151,7 +150,7 @@ function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Eleme
     return (
       <UpdatePill
         word="Update"
-        hint={`This ${PRODUCT_NAME} is older than the one now live. Check for the update.`}
+        hint={`${BUILD_TOO_OLD_WORDS}. Check for the update.`}
         icon={<UpdateIcon />}
         variant={BUTTON_VARIANT.DANGER_TINT}
         onClick={() => void updates.onCheck()}
