@@ -25,16 +25,7 @@ import {
   STOP_NOTHING_YET,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
-import {
-  AGENT_ATTACHMENT_TYPE,
-  AGENT_BOUNDS,
-  type AgentAttachment,
-  type AgentQueueChange,
-  type AgentStatus,
-  base64Bytes,
-  QUEUE_CHANGE,
-} from "@repo/features/agent-wire";
-import { pictureName } from "@repo/features/file-marker";
+import { type AgentQueueChange, type AgentStatus, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";
@@ -47,59 +38,19 @@ import { AGENT_ENTER } from "@repo/settings";
 import { type AttachedPicture, BUZZ, buzz, type QueuedLine } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { launchImageLibraryAsync } from "expo-image-picker";
 import { useEffect, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
-
-/** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
-const PICTURE_QUALITY = 0.7;
+import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
 
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
-
-/** What a picture the service would refuse says, in the panel's words for a file. */
-const PICTURE_REFUSAL = {
-  TOO_LARGE: (name: string) => `${name} is too large to attach.`,
-  FULL: (most: number) => `A message can carry up to ${most} files.`,
-  TOO_MUCH: "These files are too large to send together.",
-  UNREADABLE: (name: string) => `${name} couldn't be read.`,
-} as const;
-
-/** A picture attached to the message: the name the message carries it under, and the attachment it sends. */
-interface Attached {
-  readonly id: string;
-  readonly file: AgentAttachment;
-}
 
 /** A send out on the act port, not yet answered: what it carries, so a refusal hands it back. */
 interface Sending {
   readonly id: string;
   readonly words: string;
-  readonly pictures: readonly Attached[];
-}
-
-/** The pictures' attachments, in the order they were attached. */
-function filesOf(pictures: readonly Attached[]): readonly AgentAttachment[] {
-  return pictures.map(({ file }) => file);
-}
-
-/** The next picture's name, numbered past every picture the message holds. */
-function nextName(pictures: readonly Attached[], offset: number): string {
-  return pictureName(pictures.length + offset + 1);
-}
-
-/** Why the pictures picked cannot all go with the message, in the panel's words; none where they can. */
-function pictureRefusal(pictures: readonly Attached[]): string | undefined {
-  if (pictures.length > AGENT_BOUNDS.MAX_ATTACHMENTS) {
-    return PICTURE_REFUSAL.FULL(AGENT_BOUNDS.MAX_ATTACHMENTS);
-  }
-  const tooLarge = pictures.find(
-    ({ file }) => base64Bytes(file.data) > AGENT_BOUNDS.MAX_IMAGE_BYTES,
-  );
-  if (tooLarge !== undefined) return PICTURE_REFUSAL.TOO_LARGE(tooLarge.file.name);
-  const total = pictures.reduce((sum, { file }) => sum + base64Bytes(file.data), 0);
-  return total > AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES ? PICTURE_REFUSAL.TOO_MUCH : undefined;
+  readonly pictures: readonly HeldPicture[];
 }
 
 /** What a queue change the host took back says, with where the message went where the service said it left the queue. */
@@ -156,9 +107,9 @@ export function useAgentComposer(
   });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const [words, setWords] = useState("");
-  const [pictures, setPictures] = useState<readonly Attached[]>([]);
   const [sending, setSending] = useState<readonly Sending[]>([]);
   const [note, setNote] = useState<string | undefined>(undefined);
+  const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
   const writing = status !== undefined && agentStillWriting(status);
   // Note that an agent on the retired runtime keeps no queue, and only its starter changes one.
@@ -175,7 +126,7 @@ export function useAgentComposer(
   const handBack = (sent: Sending, refusal: string) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
-    setPictures((held) => [...sent.pictures, ...held]);
+    pictures.putBack(sent.pictures);
     setNote(refusal);
     buzz(BUZZ.ERROR);
   };
@@ -185,18 +136,17 @@ export function useAgentComposer(
   };
   const send = () => {
     const text = words.trim();
-    if (text === "" && pictures.length === 0) return;
-    const refusal = pictureRefusal(pictures);
-    if (refusal !== undefined) {
-      setNote(refusal);
+    if (text === "" && pictures.files === undefined) return;
+    if (pictures.refusal !== undefined) {
+      setNote(pictures.refusal);
       buzz(BUZZ.WARNING);
       return;
     }
-    const sent: Sending = { id: randomUUID(), words: text, pictures };
-    const attachments = pictures.length === 0 ? undefined : { attachments: [...filesOf(pictures)] };
+    const attachments =
+      pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
+    const sent: Sending = { id: randomUUID(), words: text, pictures: pictures.take() };
     setSending((out) => [...out, sent]);
     setWords("");
-    setPictures([]);
     setNote(undefined);
     if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
@@ -232,41 +182,6 @@ export function useAgentComposer(
         console.error("The message did not go.", error);
         handBack(sent, messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED));
       });
-  };
-  // Note that the system's photo picker reads only what the member picks, so no permission is asked for first, and that it covers the screen, so the pictures held as it opened are those it adds to.
-  const attach = () => {
-    launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: true,
-      selectionLimit: Math.max(1, AGENT_BOUNDS.MAX_ATTACHMENTS - pictures.length),
-      quality: PICTURE_QUALITY,
-      base64: true,
-    })
-      .then((picked) => {
-        if (picked.canceled) return;
-        const read = picked.assets.map((asset, index): Attached | string => {
-          const name = nextName(pictures, index);
-          if (asset.base64 === null || asset.base64 === undefined) {
-            return PICTURE_REFUSAL.UNREADABLE(name);
-          }
-          return {
-            id: randomUUID(),
-            file: { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: asset.base64 },
-          };
-        });
-        const unread = read.find((each): each is string => typeof each === "string");
-        const next = [
-          ...pictures,
-          ...read.filter((each): each is Attached => typeof each !== "string"),
-        ];
-        setPictures(next);
-        setNote(unread ?? pictureRefusal(next));
-      })
-      .catch((error: unknown) => console.error("The photo picker did not open.", error));
-  };
-  const detach = (id: string) => {
-    setPictures((held) => held.filter((picture) => picture.id !== id));
-    setNote(undefined);
   };
   const stop = () => {
     setStopping(true);
@@ -322,11 +237,11 @@ export function useAgentComposer(
       setWords(typed);
       setNote(undefined);
     },
-    sendable: pictures.length > 0,
+    sendable: pictures.files !== undefined,
     send,
-    attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
-    attach,
-    detach,
+    attached: pictures.attached,
+    attach: pictures.attach,
+    detach: pictures.detach,
     stop: writing ? stop : undefined,
     stopping,
     queued,
