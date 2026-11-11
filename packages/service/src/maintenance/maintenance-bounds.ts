@@ -44,10 +44,16 @@ export const MAINTENANCE_SWEEP = {
 export const BASE_DRIVE_REFRESH = {
   /**
    * The function duration the refresh's bundle declares: the platform's
-   * longest, since it refills every base drive one after another in the one
-   * call, and a refill that installs again can take minutes.
+   * longest, since it fills or refills many base drives in the one call, and
+   * a fill that clones and installs can take minutes.
    */
   MAX_DURATION_SECONDS: 800,
-  /** The schedule the root `vercel.json` calls the refresh on: once a day, at 08:00 UTC. */
-  CRONTAB: "0 8 * * *",
+  /**
+   * The schedule the root `vercel.json` calls the refresh on: every hour, so
+   * a repository connected since the last run has its drive within the
+   * hour; a drive that stands is refilled on one run a day alone.
+   */
+  CRONTAB: "0 * * * *",
+  /** The UTC hour of the one run a day that refills every base drive that stands. */
+  REFILL_HOUR_UTC: 8,
 } as const;

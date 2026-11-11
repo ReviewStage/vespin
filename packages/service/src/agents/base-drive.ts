@@ -24,14 +24,16 @@
  * apart from the base snapshots' (`agent-base-`) that came before, which are
  * left as they stand for any open still reading them.
  *
- * A launch fills it past its answer where its fork found none, where a fill
+ * Every hour the scheduled refresh (`base-drive-refresh.ts`) fills one for
+ * each repository a workspace's installation grants that has none, so a
+ * repository's first agent forks it rather than cloning, and once a day it
+ * refills every base drive that stands, so each agent's own fetch stays
+ * small, installing again only where that fetch moved a lockfile. A launch
+ * fills it too, past its answer, where its fork found none, where a fill
  * left it unfinished past its grace, or where the agent's fast-forward from
  * it moved a lockfile (`lockfileMoved`), which its install would no longer
  * match; a refill mounts the drive as it stands, fetches the default branch
- * over its checkout, and installs again. Once a day the scheduled refresh
- * (`base-drive-refresh.ts`) refills every base drive that stands the same
- * way, so each agent's own fetch stays small, and installs again only where
- * that fetch moved a lockfile. An agent's delete deletes only the fork it
+ * over its checkout, and installs again. An agent's delete deletes only the fork it
  * owns, which Vercel keeps apart from the base it was forked from; a base
  * drive is deleted with its workspace (`workspace-deletion.ts`), the fill's
  * sandbox under its name with it (`deletedBaseDrive`).

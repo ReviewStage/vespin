@@ -524,7 +524,7 @@
       "requestMethod": "GET"
     },
     "base-drive-refresh": {
-      "schedule": "0 8 * * *",
+      "schedule": "0 * * * *",
       "path": "/api/maintenance/base-drives",
       "requestMethod": "GET"
     }

@@ -1,7 +1,7 @@
 /**
- * base-drive-refresh-app.ts -- the daily base drive refresh as Vercel's cron calls it, under the deployment's `CRON_SECRET`.
+ * base-drive-refresh-app.ts -- the hourly base drive refresh as Vercel's cron calls it, under the deployment's `CRON_SECRET`.
  *
- * The refresh (`agents/base-drive-refresh.ts`) is a group of its own, kept
+ * The refresh (`agents/base-drive-refresh.ts`), which refills the drives that stand on the run at `REFILL_HOUR_UTC` alone, is a group of its own, kept
  * out of the sweep's so its function's longer bound is its alone. It answers
  * a GET under the deployment's own `CRON_SECRET`, compared in constant time,
  * as the sweep does; a deployment missing the secret answers unavailable and
@@ -11,9 +11,9 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { Sandbox } from "@repo/sandbox";
-import { Effect, Layer, type Redacted } from "effect";
+import { Clock, Effect, Layer, type Redacted } from "effect";
 import { type HttpClient, HttpRouter } from "effect/http";
-import { refreshBaseDrives } from "../agents/base-drive-refresh.js";
+import { refillsStanding, refreshBaseDrives } from "../agents/base-drive-refresh.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import type { SandboxRunner } from "../agents/machine/sandbox-machine.js";
 import { HostedEnvironment } from "../environment.js";
@@ -77,10 +77,11 @@ export function baseDriveRefreshApp(
 ): WebRoutes<RefreshServices | HostedEnvironment> {
   const refreshEffect = Effect.fn("web/baseDriveRefreshEffect")(function* (request: Request) {
     const environment = yield* HostedEnvironment;
+    const refillStanding = refillsStanding(yield* Clock.currentTimeMillis);
     return yield* handleBaseDriveRefresh({
       request,
       cronSecret: environment.cronSecret,
-      refresh: refreshBaseDrives(options.run).pipe(Effect.provide(options.image)),
+      refresh: refreshBaseDrives(options.run, refillStanding).pipe(Effect.provide(options.image)),
     });
   });
   return Layer.mergeAll(
