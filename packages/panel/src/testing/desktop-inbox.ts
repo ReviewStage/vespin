@@ -652,6 +652,7 @@ export function mount({
   readerKnown = true,
   toasts = false,
   chosen: firstChosen,
+  byAddress = false,
   drawnWhileOpen = false,
   bundles,
 }: {
@@ -672,6 +673,8 @@ export function mount({
   toasts?: boolean;
   /** The item the Inbox opens on, as a row's press chose it before; none where nothing is chosen yet. */
   chosen?: InboxChoice;
+  /** Whether the item chosen stands at its address alone, held by no door, as a reloaded window opens it. */
+  byAddress?: boolean;
   /** Whether the Inbox is drawn only while open, as the shell draws it. */
   drawnWhileOpen?: boolean;
   /** The bundles the window's surfaces load, where the test hands importers of its own; the window's where none are handed. */
@@ -823,7 +826,7 @@ export function mount({
   const leaves = leavingBy(() => {
     asked.closed += 1;
   });
-  const held = firstChosen === undefined ? null : holdingInboxChoice(firstChosen);
+  const held = firstChosen === undefined || byAddress ? null : holdingInboxChoice(firstChosen);
   const drawn = createElement(Fragment, null, leaves, held, page);
   act(() => world.root?.render(withQueryClient(router.provide(drawn))));
   return { page: container, asked, windowPath: () => router.history.location.pathname };
