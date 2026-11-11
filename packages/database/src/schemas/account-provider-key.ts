@@ -107,6 +107,8 @@ export const accountProviderKey = pgTable(
      * passing for fresh.
      */
     usageAskedAt: timestamptz("usage_asked_at"),
+    /** How many rate-limit reset credits a ChatGPT plan holds, as its usage read last heard; null until heard. */
+    resetCredits: integer("reset_credits"),
     /** Where the credential stands in its provider's one order, its plans and its API key alike, the first paying first. */
     position: integer("position").notNull().default(0),
     /** The name the account gave the subscription or API key; null for the name it is shown by default. */
