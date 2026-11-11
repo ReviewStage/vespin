@@ -13,7 +13,7 @@ import type { WorkspaceTokenRepository } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
-import { type ImageBody, imageBodyOf } from "./image-body.js";
+import { type ImageBody, imageBodyOf, imageBodyUnread } from "./image-body.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import {
   type WorkspaceSentry,
@@ -403,7 +403,9 @@ export class HostedWorkspaceClient {
       if (!callAnswered(answer)) return UNANSWERED;
       if (!answer.response.ok) return refusedAs(unparsedWire(yield* jsonOf(answer.response)));
       const image = yield* imageBodyOf(answer.response, workspacePhotoTypeSchema);
-      return image === undefined ? UNANSWERED : { ok: true, answer: image };
+      return image === undefined || imageBodyUnread(image)
+        ? UNANSWERED
+        : { ok: true, answer: image };
     });
   }
 

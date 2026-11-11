@@ -14,6 +14,8 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -47,6 +49,9 @@ function GuardedScreens() {
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
   useCrashReportAccount();
+  // Note that Settings opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs, and as the modal sheet in a compact one.
+  const settingsPresentation =
+    useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? "formSheet" : "modal";
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
@@ -55,7 +60,10 @@ function GuardedScreens() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
           {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
-          <Stack.Screen name="settings" options={{ presentation: "modal", title: "Settings" }} />
+          <Stack.Screen
+            name="settings"
+            options={{ presentation: settingsPresentation, title: "Settings" }}
+          />
           <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
           <Stack.Screen
             name="start-agent"

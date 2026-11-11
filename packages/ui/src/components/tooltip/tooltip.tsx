@@ -1,4 +1,4 @@
-import { type PointerEvent, type ReactNode, useRef } from "react";
+import { type PointerEvent, type ReactNode, useLayoutEffect, useMemo, useRef } from "react";
 import { HoverCard, HoverCardContent } from "../../shadcn/hover-card.js";
 import { Tooltip, TooltipContent } from "../../shadcn/tooltip.js";
 import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.js";
@@ -98,9 +98,18 @@ export function TooltipPill({
   );
 }
 
+/** A box in the window a card hangs from in its control's place. */
+export interface CardBox {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
 /** A card saying more about its control than a pill holds, as a surface the pointer may cross onto. */
 export function TooltipCard({
   beside = false,
+  at,
   onHover,
   onPress,
   onChoice,
@@ -109,6 +118,8 @@ export function TooltipCard({
 }: TooltipBase & {
   /** Whether it hangs beside its control rather than under it. */
   beside?: boolean;
+  /** Where it hangs from in the window in its control's place, read as it is placed; its control where this answers none. */
+  at?: (() => CardBox | undefined) | undefined;
   /** The pointer arriving on the card, or leaving it; never a finger's touch. */
   onHover?: (over: boolean) => void;
   /** A press begun on the card. */
@@ -121,6 +132,28 @@ export function TooltipCard({
   // a card hung over another of one pointer crossing once for each portal
   // node the move bubbles through, so a crossing already told is heard once.
   const told = useRef<Event | undefined>(undefined);
+  const { anchor } = base;
+  // Note that a box it hangs from stands for the control, read again each time the card is placed, so it follows what it is about as that moves; the latest reading is kept so the card is not placed anew each draw.
+  const latestAt = useRef(at);
+  useLayoutEffect(() => {
+    latestAt.current = at;
+  });
+  const boxed = at !== undefined;
+  const hung = useMemo(
+    () =>
+      !boxed
+        ? anchor
+        : {
+            contextElement: anchor,
+            getBoundingClientRect: () => {
+              const box = latestAt.current?.();
+              return box === undefined
+                ? anchor.getBoundingClientRect()
+                : new DOMRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+            },
+          },
+    [anchor, boxed],
+  );
   const hover = (over: boolean, event: PointerEvent<HTMLElement>) => {
     if (event.pointerType === "touch" || event.nativeEvent === told.current) return;
     told.current = event.nativeEvent;
@@ -129,7 +162,7 @@ export function TooltipCard({
   return (
     <HoverCard open>
       <HoverCardContent
-        anchor={base.anchor}
+        anchor={hung}
         side={beside ? "inline-end" : "bottom"}
         collisionAvoidance={beside ? BESIDE_COLLISION : HINT_COLLISION}
         role="tooltip"

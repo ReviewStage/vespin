@@ -121,7 +121,7 @@ import { useTouchHold } from "../menu/touch-hold.js";
 import type { OneLineHint } from "../one-line/clipped-line.js";
 import { Shortcut } from "../shortcut/shortcut.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
-import { TOOLTIP_CHORD, TooltipCard, TooltipPill } from "./tooltip.js";
+import { type CardBox, TOOLTIP_CHORD, TooltipCard, TooltipPill } from "./tooltip.js";
 
 /**
  * How long after one pill goes the next shows at once. Note that it is the
@@ -192,9 +192,10 @@ type Heard = (typeof HEARD)[keyof typeof HEARD];
 /** What carries a context menu, whose long press is the menu's rather than a hint's (`useMenu`'s `contextMenu`). */
 const LONG_PRESS_MENU = "[data-long-press]";
 
-/** The way into a control's card: waited for as the pointer resting on it waits, a finger's at once. */
+/** The way into a control's card: waited for as the pointer resting on it waits, a finger's at once; and out of it, lingering as the pointer leaving it does. */
 interface CardDoor {
   readonly rest: (touched: boolean) => void;
+  readonly leave: () => void;
 }
 
 /**
@@ -387,6 +388,19 @@ export function hintedControlOf(node: Node): HTMLElement | undefined {
   return standing.findLast((each) => each.holds(node))?.anchor;
 }
 
+/**
+ * The card `control` hangs, raised as the pointer resting on the control
+ * raises it (`over`), or left to linger and go as the pointer leaving it
+ * does, for a pointer this window cannot see that stands for the control:
+ * over an element in a frame the control is pinned to, say. A control
+ * hanging no card is left as it is.
+ */
+export function pointCard(control: HTMLElement, over: boolean): void {
+  const door = cardDoors.get(control);
+  if (over) door?.rest(false);
+  else door?.leave();
+}
+
 /** The chord as `aria-keyshortcuts` spells it, for a control that shows its shortcut without a tooltip. */
 export function commandKeyshortcuts(command: KeyedCommand): string {
   return shortcutAria(APP_SHORTCUTS[command].chord);
@@ -492,6 +506,7 @@ function Hint({
   chord,
   card,
   cardBeside,
+  cardAt,
   leaving,
   hold,
   onCard,
@@ -503,6 +518,7 @@ function Hint({
   chord: ShortcutChord | undefined;
   card: ReactNode;
   cardBeside: boolean;
+  cardAt: (() => CardBox | undefined) | undefined;
   leaving: boolean;
   hold: (element: HTMLElement | null) => void;
   onCard: (over: boolean) => void;
@@ -521,6 +537,7 @@ function Hint({
         {...placed}
         anchor={region ?? anchor}
         beside={cardBeside}
+        at={cardAt}
         onHover={onCard}
         onPress={onCardPress}
         onChoice={onCardChoice}
@@ -560,6 +577,8 @@ function Hint({
  * description the keyboard never enters. `cardRegion` is the row the
  * control stands in, the whole of which counts as the control while its
  * card stands, and which the card hangs from in the control's place.
+ * `cardAt` hangs the card from a box of the caller's instead, read as the
+ * card is placed, for a control that stands apart from what it is about.
  */
 export function Tooltip({
   label,
@@ -568,6 +587,7 @@ export function Tooltip({
   card,
   cardBeside = false,
   cardRegion,
+  cardAt,
   children,
 }: {
   label: string | undefined;
@@ -576,6 +596,8 @@ export function Tooltip({
   card?: ReactNode;
   cardBeside?: boolean | undefined;
   cardRegion?: RefObject<HTMLElement | null> | undefined;
+  /** Where its card hangs from in the window, in the control's place, as a pin's card hangs under what the pin is on; the control where this answers none. */
+  cardAt?: (() => CardBox | undefined) | undefined;
   children: ReactElement<AnchorProps>;
 }): React.JSX.Element {
   const id = useId();
@@ -687,6 +709,11 @@ export function Tooltip({
     if (carded && latest() !== undefined) linger.leave(hide);
     else hide();
   }, [carded, latest, linger, hide]);
+  // Note that the door out of the card reads the latest `leave`, as its way in reads the latest `show`.
+  const leaveRef = useRef(leave);
+  useLayoutEffect(() => {
+    leaveRef.current = leave;
+  });
   // A selection dragged past the card's edge leaves it standing until the
   // press ends, and the pointer then off the card lets it linger.
   const onCard = (over: boolean) => {
@@ -726,6 +753,7 @@ export function Tooltip({
   const control = useRef<HTMLElement | null>(null);
   const doorTo = (element: HTMLElement): CardDoor => ({
     rest: (touched) => showRef.current(element, touched),
+    leave: () => leaveRef.current(),
   });
   const learn = useCallback(
     (element: HTMLElement | null) => {
@@ -944,6 +972,7 @@ export function Tooltip({
           chord={chord}
           card={card}
           cardBeside={cardBeside}
+          cardAt={cardAt}
           leaving={pill.leaving}
           hold={drawPill}
           onCard={onCard}

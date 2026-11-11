@@ -39,6 +39,7 @@ import {
   inboxAgentsTurn,
   inboxWaitsOn,
   openAskOf,
+  optionFileIds,
   optionsCarryMedia,
   recommendedLabels,
   threadNeedsReader,
@@ -1215,10 +1216,13 @@ export function inboxThreadMessages(
     });
     // Note that a file the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
     const drawnIds = new Set(drawn.map(({ attachmentId }) => attachmentId));
+    // An open ask's options stand on its card with their files, which the message draws nowhere else.
+    const onCard =
+      message.ask?.status === INBOX_ASK_STATUS.OPEN ? optionFileIds(message.ask) : new Set();
     const files = inboxCommentFiles(message.files ?? [], message.text, item.id);
     const media = [...files.pictures, ...files.others].flatMap((file): InboxMessageMedia[] => {
       const kind = mediaKindOf(file);
-      return kind === undefined || drawnIds.has(file.attachmentId)
+      return kind === undefined || drawnIds.has(file.attachmentId) || onCard.has(file.attachmentId)
         ? []
         : [{ kind, attachmentId: file.attachmentId, name: file.name, mediaType: file.mediaType }];
     });

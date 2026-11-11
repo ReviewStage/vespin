@@ -27,7 +27,12 @@ import {
   RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
+import {
+  INBOX_FILE_TYPE,
+  INBOX_STATUS,
+  type InboxItem,
+  inboxWaitsOn,
+} from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
@@ -78,7 +83,7 @@ import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js"
 import { useSurfaceOpen } from "../surface-open.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
-import { OpenAskCard, ThreadComposer, threadMenu } from "./inbox-ask.js";
+import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
@@ -282,22 +287,35 @@ function useAgentTitles(): ReadonlyMap<string, string> {
 }
 
 /**
+ * Where a thread stands: a compact window's pushed screen, whose stack's bar
+ * names the path and which draws its own Remind me sheet, or a split view's
+ * detail, which opens the sheet its screen draws outside the split view.
+ */
+type ThreadPlace =
+  | { readonly inStack: true }
+  | { readonly inStack: false; readonly onRemind: (item: InboxItem) => void };
+
+/**
  * A thread's page from its item: its path, its subject, each message with
  * its files as they are read, the open ask's card under them, and the box
  * at its foot that answers or replies, with Remind me and Resolve in its ⋯
  * menu. A compact window's pushed screen docks the box over the screen's
  * foot, above the keyboard, and holds the menu in the stack's bar; a split
  * view's detail stands both in its own column.
+ *
+ * Note that a split view's detail draws no Remind me sheet of its own, and
+ * opens its screen's instead, because the column stacks whatever it is
+ * handed one under the other, so a sheet beside the page would take half
+ * the column's height.
  */
 function ThreadDetail({
   listed,
   readerId,
-  inStack = false,
+  place,
 }: {
   readonly listed: InboxListed;
   readonly readerId: string | undefined;
-  /** Whether it is a compact window's pushed screen, whose stack's bar names the path. */
-  readonly inStack?: boolean;
+  readonly place: ThreadPlace;
 }) {
   const colors = useColors();
   const { holder, item } = listed;
@@ -308,10 +326,10 @@ function ThreadDetail({
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
   );
-  // Note that a file its words draw is read beside the files drawn after them, since its bytes come the same way.
+  // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
   const media = useMemo(
-    () =>
-      messages.flatMap((message) => [
+    () => [
+      ...messages.flatMap((message) => [
         ...message.media,
         ...message.drawn.map(({ kind, attachmentId }) => ({
           kind,
@@ -320,7 +338,14 @@ function ThreadDetail({
           mediaType: "",
         })),
       ]),
-    [messages],
+      ...openAskFiles(item).map((file) => ({
+        kind: file.mediaType === INBOX_FILE_TYPE.WEBM ? INBOX_MEDIA.VIDEO : INBOX_MEDIA.PICTURE,
+        attachmentId: file.attachmentId,
+        name: "",
+        mediaType: file.mediaType,
+      })),
+    ],
+    [messages, item],
   );
   // The videos the words draw in place, by attachment.
   const drawnVideos = useMemo(
@@ -351,7 +376,9 @@ function ThreadDetail({
   useReadOnOpen(listed);
   const answer = useThreadAnswer(listed);
   const remind = useRemindSheet();
-  const menu = threadMenu(item, answer, () => remind.open(item));
+  const inStack = place.inStack;
+  const openRemind = place.inStack ? remind.open : place.onRemind;
+  const menu = threadMenu(item, answer, () => openRemind(item));
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
     stamp:
@@ -406,20 +433,34 @@ function ThreadDetail({
       pictureSource={pictureSource}
       videoAt={videoAt}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
-      ask={<OpenAskCard item={item} answer={answer} />}
+      ask={
+        <OpenAskCard
+          item={item}
+          answer={answer}
+          doors={{
+            source: (attachmentId) => sources.get(attachmentId),
+            openPage: (page) =>
+              openLink(
+                linkOf(
+                  {
+                    kind: LINK_DESTINATION.PAGE,
+                    planId: page.place.taskId,
+                    pageId: page.pageId,
+                  },
+                  workspace?.slug ?? workspace?.id ?? workspaceId ?? "",
+                ),
+              ),
+            openLink,
+            openVideoElsewhere: openOnWeb,
+          }}
+        />
+      }
       {...(inStack
         ? { footRoom: DOCK_ROOM }
         : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
     />
   );
-  if (!inStack) {
-    return (
-      <>
-        {page}
-        {remind.sheet}
-      </>
-    );
-  }
+  if (!inStack) return page;
   return (
     <>
       <Stack.Screen
@@ -475,10 +516,16 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
  * pushed screen reads it, so a link to a thread of a workspace the list does
  * not show still opens it, and one still read, refused, or missing says so.
  */
-function ThreadColumn({ id }: { readonly id: string }) {
+function ThreadColumn({
+  id,
+  onRemind,
+}: {
+  readonly id: string;
+  readonly onRemind: (item: InboxItem) => void;
+}) {
   const { listed, readerId, feed } = useInboxThread(id);
   if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
-  return <ThreadDetail listed={listed} readerId={readerId} />;
+  return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
 }
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
@@ -600,7 +647,7 @@ function InboxSplitScreen({
             selected === undefined ? (
               <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol="tray" />
             ) : (
-              <ThreadColumn key={selected} id={selected} />
+              <ThreadColumn key={selected} id={selected} onRemind={remind.open} />
             )
           }
           sidebarAccount={account}
@@ -638,7 +685,7 @@ export function InboxThreadScreen() {
         options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined ? { title: "" } : {}) }}
       />
       {listed !== undefined ? (
-        <ThreadDetail listed={listed} readerId={readerId} inStack />
+        <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />
       ) : (
         <Screen>
           <ThreadNotDrawn feed={feed} />

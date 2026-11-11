@@ -28,6 +28,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
+import { useOpenSettings } from "../settings-button.js";
 import { useSignOut } from "../sign-out.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
 
@@ -180,6 +181,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const acts = useHostActs();
   const inbox = useInboxActs();
   const signOut = useSignOut();
+  const openSettings = useOpenSettings();
   const subject = useSubject(signedIn);
   const working = useAgentsWorking(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
@@ -215,7 +217,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     }
     switch (command) {
       case MENU_COMMAND.SETTINGS:
-        return router.push("/settings");
+        return openSettings();
       case MENU_COMMAND.SIGN_OUT:
         return setAsking(ASK.SIGN_OUT);
       case MENU_COMMAND.NEW_TASK:
@@ -293,7 +295,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         presented={asking === ASK.SIGN_OUT}
         onAct={() => {
           dismiss();
-          signOut();
+          void signOut();
         }}
         onDismiss={dismiss}
       />

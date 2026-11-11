@@ -29,6 +29,12 @@ export const LINK_HOME = {
 /** The origin every link is written under. */
 export const LINK_ORIGIN = `https://${LINK_HOME.HOST}`;
 
+/** Our own pages a client opens by name rather than as a place of the app: what each release changed, and the docs. */
+export const LINK_PAGE = {
+  CHANGELOG: `${LINK_ORIGIN}/changelog`,
+  DOCS: `${LINK_ORIGIN}/docs`,
+} as const;
+
 /** The scheme a link is written in for the desktop, its colon after it, as `URL.protocol` spells one. */
 const APP_LINK_PROTOCOL = `${LINK_HOME.APP_SCHEME}:`;
 

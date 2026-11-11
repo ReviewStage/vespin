@@ -11,16 +11,17 @@ import { unregisterPushDevice, useFixtureRun } from "./push-device.js";
  * credential still stands, so no push of the account reaches a phone signed
  * out of it (the unregister's own deadline bounds the wait), then the
  * account signed out and its notifications cleared. A press while one runs
- * starts no second one.
+ * starts no second one. Settles once it is done, a failure said on the
+ * console, so Settings' row can show it running.
  */
-export function useSignOut(): () => void {
+export function useSignOut(): () => Promise<void> {
   const acts = useHostActs();
   const fixture = useFixtureRun();
   const signingOut = useRef(false);
   return () => {
-    if (signingOut.current) return;
+    if (signingOut.current) return Promise.resolve();
     signingOut.current = true;
-    unregisterPushDevice(acts, fixture)
+    return unregisterPushDevice(acts, fixture)
       .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
       .then(() => clearAccountNotifications())
       .catch((error: unknown) => console.error("The sign-out did not finish.", error))

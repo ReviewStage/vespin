@@ -1,4 +1,4 @@
-import { LINK_ORIGIN } from "@repo/features/link-home";
+import { LINK_PAGE } from "@repo/features/link-home";
 import { scheduleOnce } from "@repo/runtime/effect";
 import {
   UPDATE_FAILURE,
@@ -25,7 +25,7 @@ export const UPDATE_ENDPOINT = {
   // literal should not need that reading.
   UPDATE_FEED_URL: "https://github.com/ReviewStage/vespin/releases/latest/download/",
   LATEST_RELEASE_PAGE_URL: "https://github.com/ReviewStage/vespin/releases/latest",
-  CHANGELOG_PAGE_URL: `${LINK_ORIGIN}/changelog`,
+  CHANGELOG_PAGE_URL: LINK_PAGE.CHANGELOG,
 } as const;
 
 const UPDATE_CHECK_DEFAULTS = {

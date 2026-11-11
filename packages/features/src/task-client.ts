@@ -38,7 +38,7 @@ import type {
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { HOSTED_CALL_FAILURE } from "./hosted-failure.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
-import { imageBodyOf } from "./image-body.js";
+import { imageBodyOf, imageBodyUnread } from "./image-body.js";
 import { WRITE_UNTAKEN, type WriteUntaken, writeUntakenOf } from "./keyed-write.js";
 import type { LinkPreviewView } from "./link-preview-view.js";
 import { LINK_PREVIEW_QUERY } from "./link-preview-wire.js";
@@ -758,7 +758,9 @@ export class HostedTaskClient {
         return { failure: refused.ok ? TASK_CALL_FAILURE.UNANSWERED : refused.failure };
       }
       const picture = yield* imageBodyOf(answer.response, descriptionAttachmentTypeSchema);
-      return picture ?? { failure: TASK_CALL_FAILURE.UNANSWERED };
+      return picture === undefined || imageBodyUnread(picture)
+        ? { failure: TASK_CALL_FAILURE.UNANSWERED }
+        : picture;
     });
   }
 
