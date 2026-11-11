@@ -16,8 +16,8 @@ export function acknowledgedNote(landed: number, refused: number): string {
   return `Got it: ${countWords(landed, TERM.INBOX_ITEM)}, ${refused} not confirmed`;
 }
 
-/** What a toast says of a reminder set, or canceled, that the service did not take. */
+/** What a toast says of a reminder set, or cleared, that the service did not take, in the words of the act that asked (`REMIND_WORDS`). */
 export const REMIND_REFUSED = {
   SET: "Could not set the reminder",
-  CANCEL: "Could not cancel the reminder",
+  CLEAR: "Could not clear the reminder",
 } as const;

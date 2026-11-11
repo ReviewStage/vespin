@@ -813,8 +813,8 @@ test("one column wide, an answered item that Needs you draws no row for shows no
   layOut(page, 800);
   assert.equal(readTitle(page), "How is a failed email retried?");
   assert.equal(pagerOf(page), null, "no row, so no count");
-  assert.equal(arrowNamed(page, "Previous item").getAttribute("aria-disabled"), "true");
-  act(() => arrowNamed(page, "Next item").click());
+  assert.equal(arrowNamed(page, "Previous inbox item").getAttribute("aria-disabled"), "true");
+  act(() => arrowNamed(page, "Next inbox item").click());
   assert.deepEqual([readTitle(page), pagerOf(page)], ["Expire after 7 days?", "1 of 2"]);
 });
 
