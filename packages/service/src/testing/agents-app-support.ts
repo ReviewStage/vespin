@@ -304,16 +304,7 @@ export function fakeAgentSessions(
     boot: () =>
       Effect.suspend(() => {
         if (options.reachable === false) {
-          return Effect.fail(
-            new SessionUnreachable({
-              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
-              cause: {
-                _tag: "RequestError",
-                reason: { _tag: "TransportError" },
-                message: "refused",
-              } as never,
-            }),
-          );
+          return Effect.fail(refusedSession());
         }
         sessions += 1;
         const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${String(sessions).padStart(22, "0")}`;
