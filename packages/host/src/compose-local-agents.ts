@@ -73,7 +73,13 @@ import {
 } from "./local-agent-box.js";
 import { LAUNCH_NOTE, notedFirstLines, sessionResumed } from "./local-agent-first-lines.js";
 import { answeredLocalAgentRequest } from "./local-agent-requests.js";
-import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-state.js";
+import {
+  forgetOwnedAgent,
+  forgetRunnerGroup,
+  keepOwnedAgent,
+  keepRunnerGroup,
+  ownedAgents,
+} from "./local-agent-state.js";
 
 /**
  * compose-local-agents.ts -- runs on this device the coding agents the account starts on it, each straight on the box in a folder of its own: their runners started, fed, and stopped as the service's lines say, and their tools' reads and commands answered, for as long as its gate stands (`LocalAgentsDependencies.switchedOn`: open but while the service refuses the device, `daemon/host-standing.ts`).
@@ -141,7 +147,10 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  * host's own Node and the CLIs it keeps, as its user, in the agent's folder, with the
  * agent's home and caches there (`local-agent-box.ts`). Stopping it signals
  * its group alone, and kills the group once `KILL_GRACE` has passed, so
- * nothing of the host's or of any other agent's is stopped with it. Its
+ * nothing of the host's or of any other agent's is stopped with it. The
+ * group is kept in the machine's state while it runs (`keepRunnerGroup`),
+ * so one that outlived a daemon killed outright is ended as the next
+ * daemon starts (`daemon/host-runners-left.ts`). Its
  * folder lives as long as the agent: a turn's end lets go of its GitHub
  * token and empties its `tmp`, and the next turn's runner goes on from the
  * rest, its repository and its harness's session, until the agent's
@@ -874,6 +883,11 @@ export function composeLocalAgents(
             }
             const stdin = yield* Queue.unbounded<string>();
             const encoder = new TextEncoder();
+            // Note that the runner's record is forgotten only once its group has been ended as its scope closes, so a daemon killed meanwhile leaves it for the next start (`daemon/host-runners-left.ts`).
+            yield* Scope.addFinalizer(
+              runnerScope,
+              Effect.provideContext(forgetRunnerGroup(kernel.stateRoot, agentId), services),
+            );
             const command = platform.launch({
               agentId,
               folder: layout.folder,
@@ -907,6 +921,7 @@ export function composeLocalAgents(
               return yield* notStarted(line.id);
             }
             const handle = started.value;
+            yield* keepRunnerGroup(kernel.stateRoot, agentId, handle.pid);
             if (withToken) yield* Effect.forkIn(renewingGithub(agentId, hadToken), runnerScope);
             yield* Queue.offer(
               stdin,

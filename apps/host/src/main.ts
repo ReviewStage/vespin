@@ -26,7 +26,11 @@
  * them, and the app removes what else the host left with
  * `@repo/host/daemon`'s `uninstallBundledHost`.
  *
- * `run` is the command the service runs. A box that never connected says
+ * `run` is the command the service runs. It first locks its state root
+ * (`hostLockTaken`), and one that finds another daemon holding it says so
+ * and exits, touching nothing, so a second daemon on the same box, run by
+ * hand or by a second install, never settles the first's turns as runners
+ * gone. A box that never connected says
  * so and watches its state folder until a connect writes its record
  * (`hostDeviceWhen`), rather than exiting for its service to start it
  * over; one that did runs the daemon
@@ -82,6 +86,7 @@ import {
   HOST_CONNECT_OUTCOME,
   HOST_DAEMON_END,
   HOST_LEAVE_OUTCOME,
+  HOST_LOCK,
   HOST_SERVICE,
   type HostPairingCode,
   type HostReleases,
@@ -90,6 +95,7 @@ import {
   hostArch,
   hostDaemon,
   hostDeviceWhen,
+  hostLockTaken,
   hostPlatform,
   hostRefusedRest,
   hostRuntime,
@@ -383,17 +389,25 @@ const removeItself = (service: HostService | undefined) =>
  * secret, until it switched to a newer release, which its service is asked
  * to start at once, or the box was removed, which it removes itself from.
  * `run --bundled`, the app's own LaunchAgent, is handed no releases, so it
- * does neither and runs until launchd stops it.
+ * does neither and runs until launchd stops it. Either exits at once where
+ * another daemon holds the state root's lock.
  */
 const run = (runtime: HostRuntime, bundled: boolean) =>
   Effect.gen(function* () {
+    // Note that a second daemon on the state root leaves before it touches anything, so the two never settle each other's turns as runners gone.
+    if ((yield* hostLockTaken(runtime.stateRoot)) === HOST_LOCK.HELD) {
+      reportToStderr(
+        `${PRODUCT_NAME} host: another ${HOST_COMMAND} already runs on ${runtime.stateRoot}, so this one exits.`,
+      );
+      return 0;
+    }
     if (bundled) return yield* Effect.as(follow(runtime, undefined), 0);
     const service = yield* serviceRunning(runtime);
     const ended = yield* follow(runtime, accountReleases());
     if (ended === HOST_DAEMON_END.UPDATED) yield* restartAsked(service);
     if (ended === HOST_DAEMON_END.REMOVED) yield* removeItself(service);
     return 0;
-  });
+  }).pipe(Effect.scoped);
 
 /** `vespin-host leave`: the box removed from its account on its own secret, as `vespin-host uninstall` asks before it deletes that secret; only a call the service did not take is said, since the uninstall says the rest. */
 const leave = (runtime: HostRuntime) =>
