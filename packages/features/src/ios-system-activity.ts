@@ -20,13 +20,7 @@
 
 import { type InboxListed, inboxMemberName, inboxPreview } from "./inbox-list-model.js";
 import { iosAppRouteOf, iosPullRequestRoute } from "./ios-app-links.js";
-import {
-  LINK_DESTINATION,
-  type LinkDestination,
-  linkOf,
-  readLink,
-  taskLinkStep,
-} from "./link-grammar.js";
+import { LINK_DESTINATION, type LinkDestination, linkOf, readLink } from "./link-grammar.js";
 import { cardTitle } from "./plain-words.js";
 import { TASK_STATUS_WORDS } from "./task-standing-words.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -98,12 +92,16 @@ export function threadActivity(listed: InboxListed, workspaces: readonly Workspa
   };
 }
 
-/** A task's activity: its name and its page, by its number where it has one, as its links name it. */
+/**
+ * A task's activity: its name and its page, by its id. Note that it is named
+ * by its id rather than its number, because a number is its workspace's
+ * alone and the app finds a task by number among every workspace's.
+ */
 export function taskActivity(task: TaskSummary, workspaces: readonly Workspace[]): IosActivity {
   const step = linkWorkspaceStep(task.workspaceId, workspaces);
   return {
     title: task.name,
-    webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId: taskLinkStep(task) }, step),
+    webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, step),
   };
 }
 

@@ -43,18 +43,28 @@ final class ContinuedLinks {
   static let shared = ContinuedLinks()
 
   private var waiting: [[String: Any]] = []
-  /// Where a link goes while JavaScript listens; none while it does not.
-  var sink: (([String: Any]) -> Void)? {
-    didSet {
-      guard let sink else { return }
-      let handed = waiting
-      waiting = []
-      handed.forEach(sink)
-    }
+  /// Where a link goes while JavaScript listens, and the module that listens; none while none does.
+  private var sink: (([String: Any]) -> Void)?
+  private weak var owner: AnyObject?
+
+  /// Hands each link to `sink` from now on, those waiting first, for as long as `owner` listens.
+  func listen(_ owner: AnyObject, _ sink: @escaping ([String: Any]) -> Void) {
+    self.owner = owner
+    self.sink = sink
+    let handed = waiting
+    waiting = []
+    handed.forEach(sink)
+  }
+
+  /// Holds links again once `owner` stops listening or goes, unless another module listens by now, as after a reload.
+  func release(_ owner: AnyObject) {
+    guard self.owner === owner || self.owner == nil else { return }
+    self.owner = nil
+    sink = nil
   }
 
   func hand(_ continued: [String: Any]) {
-    if let sink { sink(continued) } else { waiting.append(continued) }
+    if let sink, owner != nil { sink(continued) } else { waiting.append(continued) }
   }
 }
 
@@ -77,14 +87,19 @@ public final class SystemActivityModule: Module {
 
     OnStartObserving("onContinue") {
       DispatchQueue.main.async {
-        ContinuedLinks.shared.sink = { [weak self] continued in
+        ContinuedLinks.shared.listen(self) { [weak self] continued in
           self?.sendEvent("onContinue", continued)
         }
       }
     }
 
     OnStopObserving("onContinue") {
-      DispatchQueue.main.async { ContinuedLinks.shared.sink = nil }
+      DispatchQueue.main.async { ContinuedLinks.shared.release(self) }
+    }
+
+    // Note that a module torn down, as on a reload, lets go too, so a link handed before the next one listens waits rather than reaching a sink no one hears.
+    OnDestroy {
+      DispatchQueue.main.async { ContinuedLinks.shared.release(self) }
     }
 
     AsyncFunction("setCurrent") { (record: ActivityRecord) in

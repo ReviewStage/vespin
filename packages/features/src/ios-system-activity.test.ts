@@ -83,7 +83,12 @@ describe("a screen's activity, continued on another of the member's devices", ()
       "https://vespin.dev/acme/inbox/item-1",
       "/inbox/item-1",
     ],
-    ["a task", taskActivity(INVITES, [ACME]), "https://vespin.dev/acme/task/42", "/tasks/42"],
+    [
+      "a task",
+      taskActivity(INVITES, [ACME]),
+      "https://vespin.dev/acme/task/task-1",
+      "/tasks/task-1",
+    ],
     [
       "an agent",
       agentActivity({ id: "agent-1", title: "Invites", workspaceId: ACME.id, taskId: INVITES.id }, [
@@ -127,7 +132,7 @@ describe("the Spotlight index", () => {
 
     expect(items).toEqual([
       {
-        id: "https://vespin.dev/acme/task/42",
+        id: "https://vespin.dev/acme/task/task-1",
         domain: SPOTLIGHT_DOMAIN.TASK,
         title: "Resend expired invites",
         summary: "In progress · Acme",
@@ -140,7 +145,7 @@ describe("the Spotlight index", () => {
       },
     ]);
     expect(items.map(({ id }) => iosContinuedRouteOf({ link: id }))).toEqual([
-      "/tasks/42",
+      "/tasks/task-1",
       "/inbox/item-1",
     ]);
   });
@@ -162,7 +167,7 @@ describe("the Spotlight index", () => {
         expect.objectContaining({ id: "https://vespin.dev/other/task/task-2" }),
         expect.objectContaining({ id: "https://vespin.dev/other/inbox/item-2" }),
       ],
-      remove: ["https://vespin.dev/acme/task/42", "https://vespin.dev/acme/inbox/item-1"],
+      remove: ["https://vespin.dev/acme/task/task-1", "https://vespin.dev/acme/inbox/item-1"],
     });
   });
 });
