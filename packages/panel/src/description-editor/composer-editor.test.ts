@@ -175,6 +175,11 @@ test("the words a box opens on stand as they were written, a known skill's /name
   padded.handle.replace("other");
   padded.handle.replace("Fill in ``[`x`](y)`` here");
   assert.equal(padded.drafts.at(-1), "Fill in ``[`x`](y)`` here", "words laid in later are theirs");
+  const bounded = mounted("Fill in `` [`x`](y) `` here", { maxLength: 30 });
+  bounded.handle.replace("x".repeat(31));
+  typeInComposer(bounded.host, "!");
+  pressInComposer(bounded.host, "z", { metaKey: true });
+  assert.equal(bounded.drafts.at(-1), "Fill in `` [`x`](y) `` here", "words refused leave them so");
 
   typeInComposer(box.host, ", please");
   assert.deepEqual(box.drafts, ["Cut it with /release now\nthen tell me, please"]);

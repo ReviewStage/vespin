@@ -927,16 +927,20 @@ function focusedAtCaret(editor: Editor): void {
  * that the box keeps them as given beside its reading of them, which may
  * spell them otherwise (a code span's padding), so whenever it reads so, as
  * once they land or after an edit undone, it hands back the words given;
- * words the bound refused leave the box's own reading.
+ * words the bound refused leave the words before them standing, and their
+ * own words, or the box's reading where it opened on none.
  */
 function laidIn(editor: Editor, state: ComposerState, text: string): void {
   const { doc, schema } = editor.state;
+  const before = state.laid;
   const laying = documentOf(schema, text, state);
   state.laid = { reading: textOf(laying), words: text };
   const tr = editor.state.tr.replaceWith(0, doc.content.size, laying.content);
   commanded(editor, tr.setSelection(TextSelection.atEnd(tr.doc)).setMeta(CHIPPED_META, true));
   const reading = textOf(editor.state.doc);
-  if (reading !== state.laid.reading) state.laid = { reading, words: reading };
+  if (reading !== state.laid.reading) {
+    state.laid = reading === before.reading ? before : { reading, words: reading };
+  }
   if (editor.view.hasFocus()) focusedAtCaret(editor);
 }
 
