@@ -1,3 +1,4 @@
+import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import {
   AGENT_PART,
   type AgentPart,
@@ -196,7 +197,6 @@ import {
   useAgentApprovals,
   useAgentPermissionMode,
   useCallHeld,
-  waitingOnYouWords,
 } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";

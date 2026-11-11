@@ -19,8 +19,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { isLucideSymbol } from "./glyph.js";
+import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
@@ -64,6 +66,15 @@ const PAGE_WORD = "Page";
 
 /** What a pull request's card offers first: its page on GitHub. */
 const REVIEW_WORD = "Review";
+
+/** How near its oldest row the reader scrolls before the page older than it is read, in points. */
+const OLDER_REACH = 400;
+
+/** What stands over the oldest row where the page older than it could not be read, and what reads it again, as the panel says them. */
+const OLDER_WORDS = {
+  FAILED: "Earlier messages could not be read.",
+  RETRY: "Try again",
+} as const;
 
 const styles = StyleSheet.create({
   list: { flex: 1 },
@@ -111,6 +122,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute", alignSelf: "center" },
   jumpFace: {
     width: JUMP_SIZE,
@@ -224,9 +236,12 @@ function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
 /** A call's row: its kind's glyph, its verb in the full ink, what it was done to in the muted one, where it ran, and where it stands; pressed, it opens on its body. */
 function CallRow({
   item,
+  held,
   onToggle,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>;
+  /** The answer the agent holds the call for, where it does. */
+  readonly held: HeldCall | undefined;
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
@@ -288,11 +303,20 @@ function CallRow({
             {item.runOn}
           </Text>
         )}
+        {/* Note that a call held for an answer is not working, so its line says so under it rather than turning. */}
         <StandingMark
-          running={item.standing === CALL_STANDING.RUNNING}
+          running={item.standing === CALL_STANDING.RUNNING && held?.waiting !== true}
           failed={item.standing === CALL_STANDING.FAILED}
         />
       </Pressable>
+      {held === undefined ? null : (
+        <View style={styles.body}>
+          {/* Note that the presses are SwiftUI's, hosted in the row at the height they draw. */}
+          <Host matchContents={{ vertical: true }}>
+            <HeldCallBody held={held} />
+          </Host>
+        </View>
+      )}
       {item.open ? (
         <View style={styles.body}>
           {item.body.map((block) => (
@@ -362,6 +386,8 @@ interface RowDrawing {
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
   readonly pullRequestActs?: ((item: PullRequestItem) => readonly PullRequestAct[]) | undefined;
+  /** The answer the agent holds a call for, by the call's id; none where it holds none. */
+  readonly heldCall?: ((callId: string) => HeldCall | undefined) | undefined;
 }
 
 /** A pull request an agent opened, as the transcript lists it. */
@@ -428,7 +454,9 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.CALL:
-      return <CallRow item={item} onToggle={drawing.onToggle} />;
+      return (
+        <CallRow item={item} held={drawing.heldCall?.(item.callId)} onToggle={drawing.onToggle} />
+      );
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.MEDIA:
@@ -525,42 +553,30 @@ function TranscriptRow({
 }
 
 type AgentHeadProps = {
-  /** The agent's title, the page's heading. */
-  readonly title: string;
   /** The model the agent runs on, as the panel's chip names it. */
   readonly model: string | undefined;
   readonly status: AgentStatus | undefined;
 };
 
 /**
- * The head over the transcript, the path to the agent standing small in the
- * system's bar over it: the agent's title as the page's heading, then where
- * the agent stands and the model it runs on, as the panel's tab and its
- * model chip say them.
+ * The line over the transcript, the agent's title standing in the system's
+ * bar over it: where the agent stands and the model it runs on, as the
+ * panel's tab and its model chip say them; nothing before either is known.
  */
-export function AgentHead({ title, model, status }: AgentHeadProps) {
+export function AgentHead({ model, status }: AgentHeadProps) {
   const colors = useColors();
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
   const said = [words, model].filter((each) => each !== undefined && each !== "").join(" · ");
+  if (said === "") return null;
   return (
-    <View style={styles.head}>
-      <Text
-        accessibilityRole="header"
-        style={{ fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600", color: colors.TEXT }}
-      >
-        {title}
-      </Text>
-      {said === "" ? null : (
-        <View style={styles.headLine}>
-          {state === GLYPH_STATE.WORKING ? (
-            <ActivityIndicator size="small" color={colors.WORKING} />
-          ) : state === GLYPH_STATE.FAILED ? (
-            <SymbolView name="xmark.circle.fill" size={MARK_SIZE.GLYPH} tintColor={colors.DANGER} />
-          ) : null}
-          <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>{said}</Text>
-        </View>
-      )}
+    <View style={[styles.head, styles.headLine]}>
+      {state === GLYPH_STATE.WORKING ? (
+        <ActivityIndicator size="small" color={colors.WORKING} />
+      ) : state === GLYPH_STATE.FAILED ? (
+        <SymbolView name="xmark.circle.fill" size={MARK_SIZE.GLYPH} tintColor={colors.DANGER} />
+      ) : null}
+      <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>{said}</Text>
     </View>
   );
 }
@@ -620,6 +636,43 @@ function JumpToLatest({
   );
 }
 
+/** The pages older than the oldest row held, as the list reads them: whether one is being read, whether the last read failed, and the read. */
+export type OlderPages = {
+  readonly reading: boolean;
+  readonly failed: boolean;
+  /** Reads the page older than the oldest row held, which lands before it, as the reader scrolls up to it; nothing where the last read failed. */
+  readonly onRead: () => void;
+  /** Reads it again once a read failed, as Try again asks. */
+  readonly onRetry: () => void;
+};
+
+/**
+ * What stands over the oldest row while older pages stand: the system's
+ * spinner while one is read, and where it could not be read, why, with Try
+ * again, which reads it again; nothing between reads.
+ */
+function OlderRow({ older }: { readonly older: OlderPages }) {
+  const colors = useColors();
+  if (older.reading) {
+    return (
+      <View style={styles.older}>
+        <ActivityIndicator size="small" color={colors.TEXT_MUTED} />
+      </View>
+    );
+  }
+  if (!older.failed) return null;
+  return (
+    <View style={styles.older}>
+      <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+        {OLDER_WORDS.FAILED}
+      </Text>
+      <Host matchContents>
+        <Button label={OLDER_WORDS.RETRY} look={BUTTON_LOOK.BORDERED} onPress={older.onRetry} />
+      </Host>
+    </View>
+  );
+}
+
 type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   /** The rows, oldest first (`transcriptItems`). */
   readonly items: readonly TranscriptItem[];
@@ -631,6 +684,8 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   readonly now?: number | undefined;
   /** The room left under the newest row, so it scrolls clear of a bar docked over the list's foot (`DOCK_ROOM`). */
   readonly footRoom?: number | undefined;
+  /** The pages older than the oldest row, read as the reader scrolls up to it; none where nothing older stands. */
+  readonly older?: OlderPages | undefined;
 };
 
 /**
@@ -647,6 +702,7 @@ export function AgentTranscript({
   empty,
   now,
   footRoom = 0,
+  older,
   ...drawing
 }: AgentTranscriptProps) {
   const colors = useColors();
@@ -661,8 +717,15 @@ export function AgentTranscript({
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
   }, []);
+  // The older pages as they stand now, which the scroll reads without being made anew for each.
+  const olderNow = useRef(older);
+  olderNow.current = older;
+  // Note that only the reader's own scroll up reads an older page, never the list's scroll as it opens, and a read that failed waits for Try again.
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setAway(fromEnd(event.nativeEvent) > LATEST_REACH);
+    const pages = olderNow.current;
+    if (anchored.current || pages === undefined || pages.reading || pages.failed) return;
+    if (event.nativeEvent.contentOffset.y < OLDER_REACH) pages.onRead();
   }, []);
   const onScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     anchored.current = fromEnd(event.nativeEvent) < ANCHOR_REACH;
@@ -679,7 +742,12 @@ export function AgentTranscript({
         data={items}
         keyExtractor={itemKey}
         renderItem={({ item }) => <TranscriptRow item={item} drawing={rowDrawing} />}
-        ListHeaderComponent={<>{head}</>}
+        ListHeaderComponent={
+          <>
+            {head}
+            {older === undefined ? null : <OlderRow older={older} />}
+          </>
+        }
         // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app.
         ListEmptyComponent={
           empty === undefined ? undefined : (
@@ -692,6 +760,8 @@ export function AgentTranscript({
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
         contentContainerStyle={[styles.content, { paddingLeft: left, paddingRight: right }]}
         contentInsetAdjustmentBehavior="automatic"
+        // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         onContentSizeChange={onContentSizeChange}
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBegin}

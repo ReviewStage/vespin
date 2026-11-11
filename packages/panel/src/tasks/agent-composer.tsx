@@ -1,3 +1,4 @@
+import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -37,7 +38,7 @@ import { modEnterSends } from "../enter-sends.js";
 import { failureShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
-import { type AgentModeControl, DENIES_WAITING } from "./agent-approvals.js";
+import type { AgentModeControl } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
 import {
