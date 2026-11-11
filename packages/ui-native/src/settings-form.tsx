@@ -31,6 +31,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { Avatar } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -321,6 +322,7 @@ const PICKED_MARK_SIZE = 15;
  */
 export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
+  const markSize = useScaledSize(PICKED_MARK_SIZE);
   return (
     <Group modifiers={[accessibilityLabel(label)]}>
       {options.map((option) => (
@@ -340,9 +342,9 @@ export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
             {option.id === picked ? (
               <Image
                 systemName={PICKED_MARK}
-                size={PICKED_MARK_SIZE}
+                size={markSize}
                 color={colors.ACCENT}
-                modifiers={[font({ size: PICKED_MARK_SIZE, weight: "semibold" })]}
+                modifiers={[font({ size: markSize, weight: "semibold" })]}
               />
             ) : null}
           </HStack>
