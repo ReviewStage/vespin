@@ -28,7 +28,7 @@ import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { FollowedAgent } from "@repo/host/app-state-reads";
 import { BUZZ, type HeldAnswer, type HeldCall } from "@repo/ui-native";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 
@@ -102,7 +102,9 @@ export function useAgentApprovals(
   if (fresh !== state || !sameHeld(held, state.held)) setState({ agentId, held });
   // What the agent's row says now, which a message's mark reads as it goes.
   const latest = useRef({ pending, running });
-  latest.current = { pending, running };
+  useEffect(() => {
+    latest.current = { pending, running };
+  }, [pending, running]);
 
   const settle = useCallback(
     (forAgent: string, id: string, change: (ask: Held) => Held) =>

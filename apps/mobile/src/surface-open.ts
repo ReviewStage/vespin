@@ -32,7 +32,9 @@ export function useSurfaceOpen(surface: ProductSurface | undefined, of?: string)
   const layout = LAYOUT_OF_SIZE_CLASS[useWindowSizeClass()];
   // Note that the layout is read as the surface opens, rather than being a reason to count it again.
   const layoutNow = useRef(layout);
-  layoutNow.current = layout;
+  useEffect(() => {
+    layoutNow.current = layout;
+  }, [layout]);
   useEffect(() => {
     if (surface === undefined) return;
     count(PRODUCT_SURFACE_EVENT.SURFACE_OPEN, { surface, layout: layoutNow.current });

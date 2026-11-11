@@ -214,12 +214,13 @@ const NO_PULL_REQUESTS: ReadonlyMap<number, AgentOverviewPullRequest> = new Map(
 
 /** The numbers handed, as the same array while they are the same numbers, so a follow over them is not opened again as the list is drawn again. */
 function useSameNumbers(numbers: readonly number[]): readonly number[] {
-  const held = useRef(numbers);
+  const [held, setHeld] = useState(numbers);
   const same =
-    held.current.length === numbers.length &&
-    held.current.every((number, index) => numbers[index] === number);
-  if (!same) held.current = numbers;
-  return held.current;
+    held.length === numbers.length && held.every((number, index) => numbers[index] === number);
+  // Note that new numbers are taken as they are drawn, as React keeps a value from the last render, rather than through a ref read while drawing.
+  if (same) return held;
+  setHeld(numbers);
+  return numbers;
 }
 
 /**

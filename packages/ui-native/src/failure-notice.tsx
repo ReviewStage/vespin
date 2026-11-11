@@ -20,7 +20,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { AccessibilityInfo, Animated, PanResponder, StyleSheet } from "react-native";
@@ -162,7 +161,7 @@ function NoticeBanner({
   readonly onGone: (serial: number) => void;
 }) {
   const reduceMotion = useReduceMotion();
-  const place = useRef(new Animated.Value(0)).current;
+  const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
   const leave = useCallback(
     (serial: number) => {

@@ -19,7 +19,7 @@ import { pictureName } from "@repo/features/file-marker";
 import type { AttachedPicture } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
 import { launchImageLibraryAsync } from "expo-image-picker";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
 const PICTURE_QUALITY = 0.7;
@@ -81,7 +81,9 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
-  held.current = pictures;
+  useEffect(() => {
+    held.current = pictures;
+  }, [pictures]);
   // Note that the system's photo picker reads only what the member picks, so no permission is asked for first.
   const attach = () => {
     launchImageLibraryAsync({
