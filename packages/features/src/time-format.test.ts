@@ -12,6 +12,7 @@ import {
   playheadText,
   provenanceText,
   runSpanText,
+  sinceHeard,
   sinceText,
   untilText,
   weekdayAndTimeText,
@@ -59,7 +60,7 @@ test("a calendar day is named in UTC whatever the zone the reader is in", () => 
   assert.equal(formatInstant(Date.UTC(2026, 9, 21, 12, 4)), "Oct 21, 12:04 PM UTC");
 });
 
-test("a row and a line say an age with the same count, the line adding ago", () => {
+test("a row, a line, and what a screen reader hears say an age with the same count", () => {
   const now = new Date(2026, 9, 23, 12, 0).getTime();
   const hoursAgo = (hours: number) => now - hours * 3_600_000;
 
@@ -67,6 +68,9 @@ test("a row and a line say an age with the same count, the line adding ago", () 
   assert.equal(agoText(hoursAgo(3), now), "3h ago");
   assert.equal(sinceText(now - 20_000, now), "now");
   assert.equal(agoText(now - 20_000, now), "now");
+  assert.equal(sinceHeard(hoursAgo(3), now), "3 hours ago");
+  assert.equal(sinceHeard(hoursAgo(1), now), "1 hour ago");
+  assert.equal(sinceHeard(now - 20_000, now), "now");
 });
 
 test("a provenance row says an age inside a week and the day past it", () => {

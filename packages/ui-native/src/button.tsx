@@ -10,6 +10,8 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
+  accessibilityElement,
+  accessibilityLabel,
   background,
   buttonStyle,
   controlSize,
@@ -69,10 +71,24 @@ type ButtonProps = {
   readonly onPress: () => void;
 };
 
-/** A button, filled in the accent unless it says otherwise: a primary act is one of the few things drawn in copper. */
+/** The looks the system fills with the tint, whose words then stand on the accent. */
+const FILLED_LOOKS: ReadonlySet<ButtonLook> = new Set([
+  BUTTON_LOOK.PROMINENT,
+  BUTTON_LOOK.GLASS_PROMINENT,
+]);
+
+/**
+ * A button, filled in the accent unless it says otherwise: a primary act is
+ * one of the few things drawn in copper. Note that a filled button's words
+ * stand in the brand's ink on the accent rather than the system's white,
+ * since white on the dark theme's lighter copper reads at under 3:1, where
+ * the brand's dark ink holds WCAG's 4.5:1.
+ */
 export function Button(props: ButtonProps) {
   const { label, symbol, look = BUTTON_LOOK.PROMINENT, size = BUTTON_SIZE.REGULAR } = props;
   const colors = useColors();
+  const accent = props.destructive !== true;
+  const filled = accent && FILLED_LOOKS.has(look);
   return (
     <SwiftUIButton
       label={label}
@@ -82,7 +98,8 @@ export function Button(props: ButtonProps) {
       modifiers={[
         buttonStyle(look),
         controlSize(size),
-        ...(props.destructive === true ? [] : [tint(colors.ACCENT)]),
+        ...(accent ? [tint(colors.ACCENT)] : []),
+        ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
       ]}
     />
@@ -266,11 +283,18 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   return null;
 }
 
-/** A task's field read as a small capsule, such as its status, priority, or assignee: on the surface inside a hairline, never pressed. */
+/** A task's field read as a small capsule, such as its status, priority, or assignee: on the surface inside a hairline, never pressed, and heard as its words once, its mark saying the same. */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
   return (
-    <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
+    <HStack
+      spacing={SPACE.TIGHT + 2}
+      modifiers={[
+        ...capsuleModifiers(colors, false),
+        accessibilityElement("ignore"),
+        accessibilityLabel(props.label),
+      ]}
+    >
       {fieldMark(props, colors)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
