@@ -56,9 +56,10 @@ import type { HeldCall } from "./transcript-blocks.js";
  * started with. Off Full access the model chip wears the mode's glyph
  * before the model's name, so a mode that asks is seen at rest. The host
  * draws a change on the agent's row at once and takes it back where the
- * service refused it, which the composer says under its bar. Only a Claude
- * Code agent asks, so no other is offered a mode: a Codex agent runs with
- * full access for now.
+ * service refused it, which the composer says under its bar. Claude Code
+ * and Codex agents each ask in their own harness's terms, which these words
+ * and hints, Codex's own, fit both; an agent on neither asks nothing, so no
+ * other is offered a mode.
  *
  * A call the agent holds waits on a member's answer (`pendingApprovals`),
  * which the call's own row says, found by the call's id (`toolUseId`): its
@@ -177,7 +178,7 @@ export interface AgentModeControl {
 
 /**
  * The mode chip of an agent: none for an agent that never asks, which is
- * every agent but a Claude Code one. Note that the mode is read off the
+ * every agent on neither Claude Code nor Codex. Note that the mode is read off the
  * agent's row, which the host draws a change on at once, as the model
  * chip's is.
  */
@@ -190,7 +191,12 @@ export function useAgentPermissionMode(input: {
   const latest = useRef(input);
   latest.current = input;
   const writes = useRef(0);
-  if (agent === undefined || agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE) return undefined;
+  if (
+    agent === undefined ||
+    (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
+  ) {
+    return undefined;
+  }
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
     writes.current += 1;
