@@ -57,6 +57,7 @@
 
 import { randomUUID } from "node:crypto";
 import { HOSTED_API_ERROR, type HostedApiError } from "@repo/features";
+import { BOOT_HOLD, BOOT_PHASE, type BootPhase, bootHold } from "@repo/features/agent-boot";
 import { AGENT_QUEUE_BOUNDS, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
 import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
 import { and, asc, count, eq, exists, isNotNull, isNull, lte, max, or, sql } from "drizzle-orm";
@@ -64,8 +65,10 @@ import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
+import { agentBootTable } from "../schemas/agent-boot.js";
 import { agentQueue, queuedMessage } from "../schemas/agent-queue.js";
 import { agentReachableBy } from "./workspace-store.js";
+import type { AwaitingLineMetadata, LineSender } from "./writer.js";
 
 type AgentQueueEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -85,6 +88,8 @@ const QueuedRowSchema = Schema.Struct({
   attachments: Schema.NullOr(Schema.Array(Schema.Unknown)),
   editing: Schema.Boolean,
   claimedAt: Schema.NullOr(Schema.Date),
+  sendKey: Schema.NullOr(Schema.String),
+  line: Schema.NullOr(Schema.Unknown),
 });
 
 /** The columns a queued message is read by, as `QueuedRowSchema` decodes them. */
@@ -95,6 +100,8 @@ const ROW_COLUMNS = {
   attachments: queuedMessage.attachments,
   editing: queuedMessage.editing,
   claimedAt: queuedMessage.claimedAt,
+  sendKey: queuedMessage.sendKey,
+  line: queuedMessage.line,
 };
 
 /**
@@ -107,7 +114,20 @@ interface QueuedFile extends AgentAttachment {
   readonly id: string;
 }
 
-/** One queued message: its id, which its window minted and it goes under, the member who queued it, its words and files, whether a member is editing it, and when the hand-off claimed it to send. */
+/**
+ * What a line a send diverted into the queue named beside its words, so the
+ * hand-off writes it as it was sent: its sender, what carried it, and the
+ * words the servers read where they are not all of its text.
+ */
+export interface QueuedLine {
+  readonly sender: LineSender;
+  readonly metadata?: AwaitingLineMetadata | undefined;
+  readonly serverWords?: string | undefined;
+  /** The words what it mentions is read from where they are not all of its text, as a Start's prompt beside a source's replay; empty where it mentions nothing. */
+  readonly mentionWords?: string | undefined;
+}
+
+/** One queued message: its id, which its window minted and it goes under, the member who queued it, its words and files, whether a member is editing it, when the hand-off claimed it to send, and, for a line a send diverted while the agent boots, the key it was sent under and what it named beside its words. */
 export interface QueuedMessageRow {
   readonly id: string;
   readonly userId: string;
@@ -115,6 +135,8 @@ export interface QueuedMessageRow {
   readonly attachments: readonly QueuedFile[];
   readonly editing: boolean;
   readonly claimedAt: Date | undefined;
+  readonly sendKey: string | undefined;
+  readonly line: QueuedLine | undefined;
 }
 
 /** Why a queue stands paused, and what refused a hand-off where one did. */
@@ -148,6 +170,9 @@ function messageOf(row: typeof QueuedRowSchema.Type): QueuedMessageRow {
     ...row,
     attachments,
     claimedAt: row.claimedAt ?? undefined,
+    sendKey: row.sendKey ?? undefined,
+    // SAFETY: the column is written only by `queueWhileBooting`, from a send's own line.
+    line: (row.line ?? undefined) as QueuedLine | undefined,
   };
 }
 
@@ -225,6 +250,8 @@ const insertMessage = SqlSchema.findAll({
     id: Schema.String,
     text: Schema.String,
     attachments: Schema.NullOr(Schema.Array(QueuedFileSchema)),
+    sendKey: Schema.NullOr(Schema.String),
+    line: Schema.NullOr(Schema.Unknown),
     now: Schema.Date,
   }),
   Result: Schema.Struct({ id: Schema.String }),
@@ -238,9 +265,22 @@ const insertMessage = SqlSchema.findAll({
           createdAt: now,
           updatedAt: now,
         })
-        // Note that a queue repeated under its id keeps the message queued first, in its place.
-        .onConflictDoNothing({ target: queuedMessage.id })
+        // Note that a queue repeated under its id, or a send repeated under its key, keeps the message queued first, in its place.
+        .onConflictDoNothing()
         .returning({ id: queuedMessage.id }),
+    ),
+});
+
+/** The phase of the agent's first launch, where its boot record stands. */
+const findBootPhase = SqlSchema.findAll({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: Schema.Struct({ phase: Schema.Literals(Object.values(BOOT_PHASE)) }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({ phase: agentBootTable.phase })
+        .from(agentBootTable)
+        .where(eq(agentBootTable.agentId, agentId)),
     ),
 });
 
@@ -561,7 +601,7 @@ export function agentQueueNow(agentId: string): AgentQueueEffect<AgentQueueRead>
  * queue's revision on where `body` says it changed anything, so every write
  * lands one after another and every change wakes the queue's readers.
  */
-function underQueueLock<A>(
+export function underAgentQueueLock<A>(
   agentId: string,
   body: AgentQueueEffect<A>,
   changed: (answer: A) => boolean,
@@ -628,28 +668,132 @@ export function queueAgentMessage(
   },
 ): AgentQueueEffect<Option.Option<QueueOutcome>> {
   let inserted = false;
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
-      const [tail] = yield* findTail({ agentId });
-      if ((tail?.size ?? 0) >= AGENT_QUEUE_BOUNDS.MAX_MESSAGES) {
-        return Option.some(QUEUE_OUTCOME.FULL);
-      }
-      const rows = yield* insertMessage({
-        agentId,
-        userId,
-        position: (tail?.last ?? -1) + 1,
-        id: message.id,
-        text: message.text,
-        attachments: filesColumn(message.attachments ?? []),
-        now: yield* DateTime.nowAsDate,
+      const queued = yield* queueLineInLock(agentId, userId, {
+        ...message,
+        sendKey: undefined,
+        line: undefined,
       });
-      inserted = rows.length > 0;
-      return Option.some(QUEUE_OUTCOME.QUEUED);
+      inserted = queued.inserted;
+      return Option.some(queued.outcome);
     }),
     () => inserted,
   );
+}
+
+/**
+ * The phase of the agent's first launch, inside a caller's lock, where its
+ * boot record stands; none where it has none. What the send diversion and
+ * the hand-off both read the one rule by (`bootHold`).
+ */
+export function bootPhaseInLock(agentId: string): AgentQueueEffect<BootPhase | undefined> {
+  return Effect.map(findBootPhase({ agentId }), ([row]) => row?.phase);
+}
+
+/**
+ * A line queued at the end of the agent's queue inside a caller's lock, as
+ * `userId`'s, under `sendKey` where it was sent under a key of its own, with
+ * what it named beside its words; a line repeated under its key keeps the
+ * one queued first. Answers whether it is queued or the queue was full, and
+ * whether it wrote a row.
+ */
+export function queueLineInLock(
+  agentId: string,
+  userId: string,
+  message: {
+    readonly id: string;
+    readonly sendKey: string | undefined;
+    readonly text: string;
+    readonly attachments?: readonly AgentAttachment[] | undefined;
+    readonly line: QueuedLine | undefined;
+  },
+): AgentQueueEffect<{ readonly outcome: QueueOutcome; readonly inserted: boolean }> {
+  return Effect.gen(function* () {
+    const [tail] = yield* findTail({ agentId });
+    if ((tail?.size ?? 0) >= AGENT_QUEUE_BOUNDS.MAX_MESSAGES) {
+      return { outcome: QUEUE_OUTCOME.FULL, inserted: false };
+    }
+    const rows = yield* insertMessage({
+      agentId,
+      userId,
+      position: (tail?.last ?? -1) + 1,
+      id: message.id,
+      text: message.text,
+      attachments: filesColumn(message.attachments ?? []),
+      sendKey: message.sendKey ?? null,
+      line: message.line ?? null,
+      now: yield* DateTime.nowAsDate,
+    });
+    return { outcome: QUEUE_OUTCOME.QUEUED, inserted: rows.length > 0 };
+  });
+}
+
+/**
+ * A line sent to the agent queued instead while its machine boots
+ * (`bootHold`), under the agent's queue lock, so a send racing the boot's
+ * end either finds the boot over or lands before the hand-off reads the
+ * queue. Answers whether it was queued or the queue was full; none where no
+ * boot holds the agent's lines, and the send goes on as it would. For a
+ * caller that already admitted the sender.
+ */
+export function queueWhileBooting(
+  agentId: string,
+  userId: string,
+  message: {
+    readonly id: string;
+    readonly sendKey: string;
+    readonly text: string;
+    readonly attachments?: readonly AgentAttachment[] | undefined;
+    readonly line: QueuedLine;
+  },
+): AgentQueueEffect<Option.Option<QueueOutcome>> {
+  let inserted = false;
+  return underAgentQueueLock(
+    agentId,
+    Effect.gen(function* () {
+      const phase = yield* bootPhaseInLock(agentId);
+      if (bootHold(phase) === BOOT_HOLD.NONE) return Option.none();
+      const queued = yield* queueLineInLock(agentId, userId, message);
+      inserted = queued.inserted;
+      // Note that a boot that failed over an empty queue paused nothing, so its first line held pauses it now,
+      // on the queue's row its revision's move writes.
+      if (inserted && phase === BOOT_PHASE.FAILED) {
+        yield* bumpRevision({ agentId });
+        yield* pauseInLock(agentId, QUEUE_PAUSE.BOOT_FAILED);
+      }
+      return Option.some(queued.outcome);
+    }),
+    () => inserted,
+  );
+}
+
+/** The pause written over the queue inside a caller's lock, naming the refusal for a hand-off refused, answering whether it wrote one; a queue already paused keeps the reason it paused for first. */
+export function pauseInLock(
+  agentId: string,
+  because: QueuePause,
+  refusal?: HostedApiError,
+): AgentQueueEffect<boolean> {
+  return Effect.map(
+    insertPause({ agentId, because, refusal: refusal ?? null }),
+    (paused) => paused.length > 0,
+  );
+}
+
+/** The queue's pause dropped inside a caller's lock where it stood paused for `because`, answering whether it did. */
+export function resumeInLock(agentId: string, because: QueuePause): AgentQueueEffect<boolean> {
+  return Effect.gen(function* () {
+    const [row] = yield* findQueueRow({ agentId });
+    if (row?.pausedBecause !== because) return false;
+    return (yield* deletePause({ agentId })).length > 0;
+  });
+}
+
+/** Whether the queue holds any message, inside a caller's lock. */
+export function queueHoldsInLock(agentId: string): AgentQueueEffect<boolean> {
+  return Effect.map(findTail({ agentId }), ([tail]) => (tail?.size ?? 0) > 0);
 }
 
 /** The files a message keeps as its row writes them, each minted an id: null where it keeps none. */
@@ -672,7 +816,7 @@ export function editQueuedMessage(
   text: string,
   attachments: readonly AgentAttachment[] = [],
 ): AgentQueueEffect<Option.Option<boolean>> {
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
@@ -702,7 +846,7 @@ export function holdQueuedMessage(
   messageId: string,
   held: boolean,
 ): AgentQueueEffect<Option.Option<boolean>> {
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
@@ -724,7 +868,7 @@ export function takeQueuedMessage(
   agentId: string,
   messageId: string,
 ): AgentQueueEffect<Option.Option<Option.Option<QueuedMessageRow>>> {
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
@@ -756,7 +900,7 @@ export function claimQueuedMessage(
   messageId: string,
   edit?: { readonly text: string; readonly attachments?: readonly AgentAttachment[] | undefined },
 ): AgentQueueEffect<Option.Option<Option.Option<QueuedMessageRow>>> {
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
@@ -787,7 +931,7 @@ export function reorderAgentQueue(
   agentId: string,
   order: readonly string[],
 ): AgentQueueEffect<Option.Option<boolean>> {
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
@@ -815,7 +959,7 @@ export function resumeAgentQueue(
   userId: string,
   agentId: string,
 ): AgentQueueEffect<Option.Option<boolean>> {
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
@@ -836,14 +980,7 @@ export function pauseAgentQueue(
   refusal?: HostedApiError,
 ): AgentQueueEffect<void> {
   return Effect.asVoid(
-    underQueueLock(
-      agentId,
-      Effect.map(
-        insertPause({ agentId, because, refusal: refusal ?? null }),
-        (paused) => paused.length > 0,
-      ),
-      (paused) => paused,
-    ),
+    underAgentQueueLock(agentId, pauseInLock(agentId, because, refusal), (paused) => paused),
   );
 }
 
@@ -854,9 +991,13 @@ export function pauseAgentQueue(
  * a time, in order.
  */
 export function claimQueueHead(agentId: string): AgentQueueEffect<Option.Option<QueuedMessageRow>> {
-  return underQueueLock(
+  return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
+      // Note that a boot under way holds the queue: its first message goes once the machine is up.
+      if (bootHold(yield* bootPhaseInLock(agentId)) === BOOT_HOLD.DIVERT_AND_WAIT) {
+        return Option.none();
+      }
       const queue = yield* agentQueueNow(agentId);
       const now = yield* DateTime.nowAsDate;
       if (queue.paused !== undefined) return Option.none();
@@ -877,7 +1018,7 @@ export function releaseQueuedMessage(
   message: Pick<QueuedMessageRow, "id" | "claimedAt">,
 ): AgentQueueEffect<void> {
   return Effect.asVoid(
-    underQueueLock(agentId, released(agentId, message), (wasReleased) => wasReleased),
+    underAgentQueueLock(agentId, released(agentId, message), (wasReleased) => wasReleased),
   );
 }
 
@@ -910,16 +1051,12 @@ export function refuseQueuedMessage(
   refusal: HostedApiError,
 ): AgentQueueEffect<void> {
   return Effect.asVoid(
-    underQueueLock(
+    underAgentQueueLock(
       agentId,
       Effect.gen(function* () {
         const wasReleased = yield* released(agentId, message);
-        const paused = yield* insertPause({
-          agentId,
-          because: QUEUE_PAUSE.REFUSED,
-          refusal,
-        });
-        return wasReleased || paused.length > 0;
+        const paused = yield* pauseInLock(agentId, QUEUE_PAUSE.REFUSED, refusal);
+        return wasReleased || paused;
       }),
       (changed) => changed,
     ),
@@ -940,7 +1077,7 @@ export function dropQueuedMessage(
   message: Pick<QueuedMessageRow, "id" | "claimedAt">,
 ): AgentQueueEffect<void> {
   return Effect.asVoid(
-    underQueueLock(
+    underAgentQueueLock(
       agentId,
       Effect.gen(function* () {
         const dropped = yield* deleteMessage({
