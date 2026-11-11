@@ -74,6 +74,10 @@ const heldBy = (
       return working;
     case KEEP_AWAKE.PLUGGED_IN:
       return Stream.zipLatestWith(working, pluggedIn, (running, plugged) => running || plugged);
+    default: {
+      const unhandled: never = choice;
+      return Stream.die(new Error(`Unhandled keep-awake choice: ${String(unhandled)}`));
+    }
   }
 };
 
