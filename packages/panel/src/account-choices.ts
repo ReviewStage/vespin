@@ -50,14 +50,18 @@ function sameHosts(one: readonly string[], other: readonly string[]): boolean {
   return one.length === other.length && one.every((id, at) => id === other[at]);
 }
 
-/** Asks for the models again whenever the account's hosts, which the models answer offers, join or leave, while `accountId` is held. */
+/** Asks for the models again whenever the account's hosts that called in, which the models answer offers, change, while `accountId` is held. */
 function useModelsFollowHosts(accountId: string | undefined): void {
   const hosts = useQuery(hostsQuery(accountId)).data?.hosts;
   const { mutate: askAgain } = useMutation(modelsRetryMutation());
   const seen = useRef<readonly string[] | undefined>(undefined);
   useEffect(() => {
     if (hosts === undefined) return;
-    const ids = hosts.map((host) => host.id).sort();
+    // Note that the models offer only a host that has called in, so one calling in moves them as one joining does.
+    const ids = hosts
+      .filter((host) => host.calledIn !== false)
+      .map((host) => host.id)
+      .sort();
     const before = seen.current;
     seen.current = ids;
     if (before !== undefined && !sameHosts(before, ids)) askAgain();

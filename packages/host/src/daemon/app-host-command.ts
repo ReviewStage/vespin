@@ -26,8 +26,8 @@ const ACCOUNT_RELEASES = [".local", "share", "vespin-host"] as const;
 /** The host program's folder inside an app bundle (`BUNDLED_HOST.libPath`'s parent), by the real path it runs from. */
 const APP_HOST_FOLDER = /\.app\/Contents\/Resources\/host\/?$/u;
 
-/** The commands the host program answers from inside the app: the one its LaunchAgent runs, and one that reads and changes nothing. */
-const APP_COMMANDS: ReadonlySet<string | undefined> = new Set(["run", "version"]);
+/** The commands the host program answers from inside the app: the one its LaunchAgent runs, and two that read and change nothing. */
+const APP_COMMANDS: ReadonlySet<string | undefined> = new Set(["run", "version", "status"]);
 
 /** What became of the command's link: moved to the launcher, already naming it, or left as the member's own. */
 export const COMMAND_LINK_OUTCOME = {
