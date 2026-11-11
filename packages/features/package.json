@@ -39,6 +39,7 @@
     "./sentry-tunnel": "./src/sentry-tunnel.js",
     "./shown-failure": "./src/shown-failure.js",
     "./live-read": "./src/live-read.js",
+    "./client-identity": "./src/client-identity.js",
     "./live-wire": "./src/live-wire.js",
     "./tasks-model": "./src/tasks-model.js",
     "./transcript-window": "./src/transcript-window.js",

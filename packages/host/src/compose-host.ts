@@ -13,6 +13,7 @@ import {
   HostedTerminalClient,
   HostedWorkspaceClient,
 } from "@repo/features";
+import { type ClientIdentity, clientNamedOnService } from "@repo/features/client-identity";
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import {
   carried,
@@ -49,7 +50,7 @@ import { type HostAssembly, HostAssemblyTag, hostDrain } from "./effect/host.js"
 import { HostKernelTag, HostService } from "./effect/kernel.js";
 import {
   AccountSource,
-  type AppIdentity,
+  AppIdentity,
   type Environment,
   LoopbackListener,
   MirrorPlatform,
@@ -141,6 +142,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
   const platform = new Set<HostPlatformConcern>(chosen);
   const build = Effect.gen(function* () {
     const kernel = yield* HostKernelTag;
+    const identity = yield* AppIdentity;
     const hostService = yield* HostService;
     const shutdownSignal = yield* ShutdownSignal;
     const { report } = yield* Reporter;
@@ -154,14 +156,22 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const openSocket = platform.has(HOST_PLATFORM_CONCERN.TERMINALS)
       ? yield* TerminalSocket
       : undefined;
+    // Every call to the service names this build (`client-identity.ts`), the socket's upgrade among them.
+    const client: ClientIdentity = { platform: identity.platform, version: identity.appVersion };
+    const named = clientNamedOnService(
+      yield* HttpClient.HttpClient,
+      client,
+      kernel.hostedServiceBaseUrl,
+    );
     const http =
       openSocket === undefined
-        ? yield* HttpClient.HttpClient
+        ? named
         : yield* liveSocketClient({
-            http: yield* HttpClient.HttpClient,
+            http: named,
             openSocket,
             credential: account.credential,
             serviceBaseUrl: kernel.hostedServiceBaseUrl,
+            client,
           });
     /** A composer built over the client with each live read on one socket (`live-socket.ts`), which it captures for every call it makes. */
     const served = <A, E, R>(composing: Effect.Effect<A, E, R>) =>

@@ -23,6 +23,7 @@
  * convention (`@repo/features/contract`'s `errors.ts`).
  */
 
+import { presentedClient } from "@repo/features/client-identity";
 import "@orpc/experimental-effect/extensions/effect";
 import { middlewareGen, type WithEffectContext } from "@orpc/experimental-effect";
 import { implement } from "@orpc/server";
@@ -109,6 +110,7 @@ const procedureTraced = middlewareGen<HostedContext, WithEffectContext<WebServic
 }) {
   const procedure = path.join(".");
   const caller = callerTrace(Headers.fromInput(context.request.headers));
+  const client = presentedClient(context.request.headers);
   const options = { kind: "server", parent: Option.getOrUndefined(caller) } as const;
   return yield* Effect.useSpan(procedure, options, (span) => {
     const services = context["effect/context"];
@@ -116,6 +118,9 @@ const procedureTraced = middlewareGen<HostedContext, WithEffectContext<WebServic
       ...Context.get(services, References.CurrentLogAnnotations),
       procedure,
       traceId: span.traceId,
+      ...(client === undefined
+        ? undefined
+        : { client: `${client.platform}/${client.version}`, apiVersion: client.apiVersion }),
     });
     return next({ context: { "effect/context": Context.add(annotated, Tracer.ParentSpan, span) } });
   });
