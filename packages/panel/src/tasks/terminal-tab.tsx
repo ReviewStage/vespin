@@ -10,14 +10,14 @@ import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
   Badge,
-  BUTTON_SIZE,
   BUTTON_VARIANT,
-  Button,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_FLOW,
   Fill,
+  IconButton,
   PaneBar,
+  PlayIcon,
   Shortcut,
   TEXT_BUTTON_TONE,
   TEXT_ELEMENT,
@@ -38,7 +38,7 @@ import { TERMINAL_FIND, type TerminalFind } from "../terminal/contract.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectMirrors } from "../use-app-state.js";
 import { AgentRef, agentSubject, NOTHING_HELD } from "./agent-ref.js";
-import { type RunTabLook, useRunTabLooks } from "./run-action-shells.js";
+import { type RunTabLook, runActionGlyph, useRunTabLooks } from "./run-action-shells.js";
 import { useRunActionPress } from "./run-actions-button.js";
 import { AgentGlyph } from "./tab-look.js";
 import { useHeldShells } from "./terminal-held.js";
@@ -102,12 +102,10 @@ function useScrollbackFind(find: TerminalFind | undefined): FindSource | undefin
 /** What an action's tab says it is, beside where the action stands. */
 const READ_ONLY = "Read-only";
 
-/** What the tab's Run and Stop say: the button's word, and the whole act a reader hears. */
+/** What the tab's Run and Stop say to a reader, its glyph saying it on screen. */
 const RUN_WORDS = {
-  RUN: "Run",
-  STOP: "Stop",
-  RUN_LABEL: (label: string) => `Run ${label}`,
-  STOP_LABEL: (label: string) => `Stop ${label}`,
+  RUN: (label: string) => `Run ${label}`,
+  STOP: (label: string) => `Stop ${label}`,
 } as const;
 
 /** A run action's tab's own press: Stop while its process runs, Run otherwise, which runs it again in this tab. */
@@ -115,25 +113,10 @@ function runControlOf(
   run: RunTabLook,
   label: string,
   press: ReturnType<typeof useRunActionPress>,
-): {
-  readonly words: string;
-  readonly label: string;
-  readonly icon: React.JSX.Element;
-  readonly onPress: () => void;
-} {
+): { readonly label: string; readonly icon: React.JSX.Element; readonly onPress: () => void } {
   return run.running === true
-    ? {
-        words: RUN_WORDS.STOP,
-        label: RUN_WORDS.STOP_LABEL(label),
-        icon: <GLYPH.STOP />,
-        onPress: () => press.stop(run.action),
-      }
-    : {
-        words: RUN_WORDS.RUN,
-        label: RUN_WORDS.RUN_LABEL(label),
-        icon: <GLYPH.RUN_ACTION />,
-        onPress: () => press.run(run.action),
-      };
+    ? { label: RUN_WORDS.STOP(label), icon: <GLYPH.STOP />, onPress: () => press.stop(run.action) }
+    : { label: RUN_WORDS.RUN(label), icon: <PlayIcon />, onPress: () => press.run(run.action) };
 }
 
 /** No cloud tab, which a Local tab hands the run action looks. */
@@ -257,9 +240,10 @@ export function TerminalTab({
     <Fill className="terminal-tab file-view" data-state={session.state.kind}>
       {phone ? null : (
         <PaneBar
+          mark={runLook === undefined ? undefined : runActionGlyph(runLook.action.icon)}
           middle={
             // Note that the name and where the connection stands share one shrinking box, so a long name is cut rather than running past the bar.
-            // Note that each fact stands as its own element a gap apart, never joined by a dot: a run action's standing and read-only as badges, the connection as quiet words.
+            // Note that each fact stands as its own element a gap apart, never joined by a dot: a run action's read-only as a badge, the connection as quiet words.
             <span className="terminal-tab-title inline-flex min-w-0 items-center gap-item-gap overflow-hidden whitespace-nowrap text-muted-foreground">
               <AgentRef
                 subject={subject}
@@ -268,7 +252,6 @@ export function TerminalTab({
                 glyph={<AgentGlyph agent={subject.agent} />}
                 label={subject.name}
               />
-              {runLook?.standing === undefined ? null : <Badge>{runLook.standing}</Badge>}
               {runLook !== undefined && session.state.kind === TERMINAL_STATE.ATTACHED ? (
                 <Badge>{READ_ONLY}</Badge>
               ) : (
@@ -278,16 +261,13 @@ export function TerminalTab({
           }
           actions={
             runControl === undefined ? undefined : (
-              <Button
+              <IconButton
                 variant={BUTTON_VARIANT.QUIET}
-                size={BUTTON_SIZE.COMPACT}
                 icon={runControl.icon}
                 label={runControl.label}
                 disabled={press.busy}
                 onClick={runControl.onPress}
-              >
-                {runControl.words}
-              </Button>
+              />
             )
           }
         />
