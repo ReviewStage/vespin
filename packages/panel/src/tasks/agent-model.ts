@@ -2093,9 +2093,9 @@ function sentLineMessage(line: SentLine): AgentTranscriptMessage {
 }
 
 /**
- * The line an agent New task started is drawn on before its transcript is
- * read: the developer's words as they went, under the id their start's key
- * names, on their way.
+ * The words an agent New task started on, as its tab draws them before the
+ * service has made it: the developer's words as they went, under the id
+ * their start's key names, which that tab draws as its queue's row.
  */
 export function openingLineOf(words: {
   readonly key: string;

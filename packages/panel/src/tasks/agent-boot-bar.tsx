@@ -90,14 +90,12 @@ function UnderWay({ words, since }: { words: string; since: number }): ReactNode
 
 /** The strip over the agent's transcript while its first launch stands, as `bar` says it; nothing where it says nothing. */
 export function AgentBootBar({
-  agentId,
   bar,
-  retries,
+  retry,
 }: {
-  agentId: string;
   bar: BootBar | undefined;
-  /** Whether the reader may boot it again, as only one who may message the agent may. */
-  retries: boolean;
+  /** The agent Retry boots again, where the reader may, as only one who may message it may; none where they may not, and before the agent is made. */
+  retry: string | undefined;
 }): ReactNode {
   const { mutate: boot, isPending } = useMutation(pressMutation(ACT_KIND.AGENTS_BOOT));
   if (bar === undefined) return null;
@@ -135,13 +133,13 @@ export function AgentBootBar({
           tone={STATUS_TONE.DANGER}
           glyph={<AlertIcon />}
           actions={
-            retries ? (
+            retry !== undefined ? (
               <Button
                 size={BUTTON_SIZE.COMPACT}
                 variant={BUTTON_VARIANT.OUTLINE}
                 icon={<RetryIcon />}
                 disabled={isPending}
-                onClick={() => boot({ agentId })}
+                onClick={() => boot({ agentId: retry })}
               >
                 {BOOT_WORDS.RETRY}
               </Button>

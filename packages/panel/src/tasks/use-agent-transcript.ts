@@ -1,4 +1,4 @@
-import type { AgentBoot } from "@repo/features/agent-boot";
+import { type AgentBoot, bootHolds } from "@repo/features/agent-boot";
 import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import {
   type AgentMessagesAnswerView,
@@ -301,7 +301,9 @@ export function useAgentTranscript(input: {
   const subagents = useKeyed(word?.subagents, (standing) => [standing.callId, standing] as const);
   const messages = held?.messages ?? NO_MESSAGES;
   const failed = held?.failure !== undefined;
-  const writing = word === undefined || agentStillWriting(word.status);
+  // Note that an agent whose first launch still holds its first message has no line yet, so its page read empty is no read still out.
+  const writing =
+    word === undefined || (agentStillWriting(word.status) && !bootHolds(word.boot?.phase));
   return {
     messages,
     failure: word?.failureReason,

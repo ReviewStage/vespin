@@ -200,7 +200,7 @@ import {
   useAgentPermissionMode,
   useCallHeld,
 } from "./agent-approvals.js";
-import { AgentBootBar, bootBarOf } from "./agent-boot-bar.js";
+import { AgentBootBar, BOOT_BAR, bootBarOf } from "./agent-boot-bar.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";
 import {
@@ -3159,7 +3159,7 @@ function AgentTabView({
   );
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <AgentBootBar agentId={agent.id} bar={bootBar} retries={controlsQueue} />
+      <AgentBootBar bar={bootBar} retry={controlsQueue ? agent.id : undefined} />
       <MacOwnerProvider value={macOwner}>
         <AgentPicturesProvider value={pictures}>
           <WholePartsProvider value={wholeParts}>
@@ -3379,14 +3379,21 @@ const NO_RETRY = () => undefined;
 
 /** No follow-up ticked. */
 const NO_TICKS: readonly number[] = [];
+/** A queue's controls on a tab whose agent is not made yet, which take nothing. */
+const NO_QUEUE_PRESS = () => undefined;
+const NO_QUEUE_DELETE = () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED } as const);
+/** The transcript of an agent not made yet, which has no line. */
+const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
 
 /**
  * The tab of an agent New task or a Start is still starting, before the
- * service has made it: the developer's words as its first line, where it was
- * started on some, and its working line saying it is starting, over the
- * composer's card, which the agent's own tab takes the place of once the
- * start answers, its words then waiting in its queue until its first launch
- * hands them off, and its model's chip where the start named the model. One started on no words is briefed on the description.
+ * service has made it, drawn as its own tab draws its first launch: the bar
+ * over its empty transcript saying it is starting, counting from the press,
+ * and the developer's words, where it was started on some, as its queue's
+ * row over the composer's card, which nothing on the row acts on yet, and
+ * its model's chip where the start named the model. The agent's own tab
+ * takes its place once the start answers, its words still queued until its
+ * first launch hands them off.
  */
 export function StartingAgentTab({
   line,
@@ -3396,22 +3403,53 @@ export function StartingAgentTab({
   /** The model the start named, which the composer's chip draws; none where the start takes the default. */
   model?: ComposerModel | undefined;
 }): React.JSX.Element {
-  const messages = useMemo(() => (line === undefined ? [] : agentLines([], [line])), [line]);
+  // Note that a start on no words counts from when its tab first drew, which stands for the press.
+  const [drawnAt] = useState(Date.now);
+  const bar = { kind: BOOT_BAR.STARTING, since: line?.sentAt ?? drawnAt } as const;
+  const queued = useMemo(
+    () =>
+      line === undefined
+        ? []
+        : [
+            {
+              id: line.id,
+              text: line.text,
+              // Note that no row of the queue names who queued it, so the starter's id is not owed here.
+              queuedBy: "",
+              ...(line.attachments.length === 0
+                ? undefined
+                : {
+                    files: line.attachments.map(({ name, mediaType }) => ({ name, mediaType })),
+                  }),
+            },
+          ],
+    [line],
+  );
   return (
     <AgentTabFrame>
+      <AgentBootBar bar={bar} retry={undefined} />
       <AgentTranscriptView
-        messages={messages}
+        messages={NO_MESSAGES}
         brief={line === undefined ? AGENT_BRIEF.DESCRIPTION : AGENT_BRIEF.PROMPT}
         reading={false}
         failed={false}
-        working
-        phase={WORKING_PHASE.STARTING}
-        // Note that the line counts from the press, as the agent's own tab goes on counting once the start answers.
-        startedAt={line?.sentAt}
+        working={false}
         onRetry={NO_RETRY}
         overComposer
       />
       <AgentTabFoot>
+        <AgentQueueDock
+          messages={queued}
+          controls={false}
+          paused={undefined}
+          editing={undefined}
+          onMove={NO_QUEUE_PRESS}
+          onSteer={undefined}
+          onEdit={NO_QUEUE_PRESS}
+          onCancelEdit={NO_QUEUE_PRESS}
+          onDelete={NO_QUEUE_DELETE}
+          onResume={NO_QUEUE_PRESS}
+        />
         <ComposerSkeleton model={model} />
       </AgentTabFoot>
     </AgentTabFrame>
