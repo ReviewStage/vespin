@@ -28,6 +28,7 @@ import {
   documentRegion,
   renamedRegion,
   renamedView,
+  SETTLED_STATUS,
   sidebarTasks,
   TASK_MARK,
   TASKS_PAGE,
@@ -1669,21 +1670,29 @@ export function useTasksTab(input: {
     const bound = homeNow.current.boundFor;
     if (!leaveMove() && fixture === undefined && bound !== undefined) unbindTask();
   }, [fixture, leaveMove, unbindTask]);
-  // The agent the column shows while it is live leaves the window for Home once it is archived, by its ⋯ or by its
-  // task marked done or canceled. Note that only the move into archived does, because an archived agent opened from
-  // History is read where it stands.
-  const shownLive = useRef<{ taskId: string; agentId: string } | undefined>(undefined);
+  // The open task leaves the window for Home once it is marked done or canceled, or leaves the list read, as a delete
+  // takes it, since the sidebar draws it no longer. Note that only the move does, and only while the task's own place
+  // is on screen, because a settled task opened from the Tasks page or a link is read where it stands, and a routed
+  // page standing over the task, the Board's among them, keeps its place.
   const shownTaskId = viewed.activeTaskId;
-  const liveIds = agents.agentIds;
+  const openRow = tasks.tasks.find((task) => task.id === shownTaskId);
+  const openSettled =
+    openRow === undefined
+      ? undefined
+      : openRow.status === SETTLED_STATUS.DONE || openRow.status === SETTLED_STATUS.CANCELED;
+  const listReady = tasks.listStatus === TASKS_READ.READY;
+  const openStood = useRef<{ taskId: string; settled: boolean } | undefined>(undefined);
   useEffect(() => {
-    const was = shownLive.current;
-    shownLive.current =
-      shownTaskId !== undefined && columnAgent !== undefined && liveIds?.includes(columnAgent)
-        ? { taskId: shownTaskId, agentId: columnAgent }
-        : undefined;
-    if (was === undefined || was.taskId !== shownTaskId) return;
-    if (archivedIds?.includes(was.agentId) === true) leaveTask();
-  }, [shownTaskId, columnAgent, liveIds, archivedIds, leaveTask]);
+    const was = openStood.current;
+    // Note that a task the list holds no row of yet stands nowhere, so the first row read of it is no move.
+    openStood.current =
+      shownTaskId === undefined || openSettled === undefined
+        ? undefined
+        : { taskId: shownTaskId, settled: openSettled };
+    if (was === undefined || was.taskId !== shownTaskId || !stateShown) return;
+    const removed = openSettled === undefined && listReady;
+    if (removed || (!was.settled && openSettled === true)) leaveTask();
+  }, [shownTaskId, openSettled, listReady, stateShown, leaveTask]);
   // A workspace chosen on purpose, from the switcher, a workspace made, or
   // one left, is listed at once, and the task on screen follows: the task
   // last open there opens again, where it is still that workspace's, or

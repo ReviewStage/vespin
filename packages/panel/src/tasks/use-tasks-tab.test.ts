@@ -21,7 +21,12 @@ import { APP_HOME_LINK, LINK_ORIGIN } from "@repo/features/link-home";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_OWNER } from "@repo/features/page-wire";
-import { DESCRIPTION_ACTOR, TASK_CREATE_RELATION_KIND, type Task } from "@repo/features/task-wire";
+import {
+  DESCRIPTION_ACTOR,
+  TASK_CREATE_RELATION_KIND,
+  TASK_STATUS,
+  type Task,
+} from "@repo/features/task-wire";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
@@ -1066,14 +1071,11 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
 });
 
-test("the agent a column shows, archived, leaves its task for Home, and the column opens a new agent's draft in its place", async () => {
+test("a column whose last agent is archived opens a new agent's draft in its place", async () => {
   const archived = { ...RUNNING_AGENT, archivedAt: 5 };
   const tab = mount(
     { shown: true, tasks: withAgents([RUNNING_AGENT]) },
-    {
-      [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }),
-      [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve(),
-    },
+    { [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }) },
   );
   await settle();
   const column = () => tab.control().mainTabs;
@@ -1090,6 +1092,32 @@ test("the agent a column shows, archived, leaves its task for Home, and the colu
     "a draft, as a task with no agent opens on",
   );
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, shown]);
+});
+
+test("the open task marked done leaves for Home, on any of its tabs, and one opened already done is read where it stands", async () => {
+  const done = { ...listed(), status: TASK_STATUS.DONE };
+  const settled = mount(
+    { shown: true, tasks: { ...OPEN, tasks: [done] } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+  await settle();
+  assert.ok(!settled.told.includes(ACT_KIND.TASKS_CLOSE), "a task opened done stays open");
+  const unread = mount(
+    { shown: true, tasks: { ...OPEN, listStatus: TASKS_READ.READING } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+  await settle();
+  unread.stand({ tasks: { ...OPEN, tasks: [done] } });
+  await settle();
+  assert.ok(!unread.told.includes(ACT_KIND.TASKS_CLOSE), "nor one first read done");
+
+  const tab = mount(
+    { shown: true, tasks: { ...OPEN, tasks: [listed()] } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+  await settle();
+  act(() => tab.control().mainTabs.onChoose(MAIN_TAB.OVERVIEW));
+  tab.stand({ tasks: { ...OPEN, tasks: [done] } });
   await vi.waitFor(() => assert.ok(tab.told.includes(ACT_KIND.TASKS_CLOSE), "the task is left"));
 });
 
@@ -4063,11 +4091,6 @@ test("an archived agent opens in a tab of its task's column, which stays once it
   act(() => tab.control().onShowAgent(TASK.id, AGENT_ID));
   assert.equal(tab.control().agentView.agentId, undefined, "no page of its own stands");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
-  await settle();
-  assert.ok(
-    !tab.told.includes(ACT_KIND.TASKS_CLOSE),
-    "an agent opened archived is read on its task",
-  );
 
   tab.stand({ tasks: withAgents([RUNNING_AGENT]) });
   await settle();
