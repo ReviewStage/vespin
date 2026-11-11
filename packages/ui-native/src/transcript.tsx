@@ -640,8 +640,10 @@ function JumpToLatest({
 export type OlderPages = {
   readonly reading: boolean;
   readonly failed: boolean;
-  /** Reads the page older than the oldest row held, which lands before it. */
+  /** Reads the page older than the oldest row held, which lands before it, as the reader scrolls up to it; nothing where the last read failed. */
   readonly onRead: () => void;
+  /** Reads it again once a read failed, as Try again asks. */
+  readonly onRetry: () => void;
 };
 
 /**
@@ -665,7 +667,7 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
         {OLDER_WORDS.FAILED}
       </Text>
       <Host matchContents>
-        <Button label={OLDER_WORDS.RETRY} look={BUTTON_LOOK.BORDERED} onPress={older.onRead} />
+        <Button label={OLDER_WORDS.RETRY} look={BUTTON_LOOK.BORDERED} onPress={older.onRetry} />
       </Host>
     </View>
   );

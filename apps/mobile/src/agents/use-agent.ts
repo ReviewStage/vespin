@@ -184,7 +184,8 @@ interface OlderAsk {
  * tab reads them (`ACT_KIND.AGENTS_TRANSCRIPT_OLDER`): the host lays each
  * before the messages it holds while they still begin where it was asked,
  * which moves where the next is read below and ends the read. A read that
- * did not answer says so until it is asked again; one the host did not lay,
+ * did not answer says so until Try again asks it again, which a scroll never
+ * does, even one that lands before the failure is drawn; one the host did not lay,
  * since newer messages took their place meanwhile, may be asked again at
  * once. None where nothing older stands.
  */
@@ -193,35 +194,49 @@ export function useOlderPages(agentId: string, before: string | undefined): Olde
   const [asked, setAsked] = useState<OlderAsk | undefined>(undefined);
   // Note that the read out is held apart from what is drawn, since the list may ask twice before it draws the first ask.
   const out = useRef<OlderAsk | undefined>(undefined);
-  const read = useCallback(() => {
-    if (before === undefined) return;
-    const held = out.current;
-    if (held !== undefined && !held.failed && held.agentId === agentId && held.before === before) {
-      return;
-    }
-    const ask: OlderAsk = { agentId, before, failed: false };
-    out.current = ask;
-    setAsked(ask);
-    // An answer settles the ask it answers alone, never a newer one.
-    const settle = (next: OlderAsk | undefined) => {
-      if (out.current !== ask) return;
-      out.current = next;
-      setAsked(next);
-    };
-    acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ kind: TRANSCRIPT_KIND.AGENT, agentId, before }).then(
-      (answer) => {
-        if ("failure" in answer) settle({ ...ask, failed: true });
-        else if (!answer.landed) settle(undefined);
-      },
-      (error: unknown) => {
-        refused("An older page of the transcript")(error);
-        settle({ ...ask, failed: true });
-      },
-    );
-  }, [acts, agentId, before]);
+  const read = useCallback(
+    (again: boolean) => {
+      if (before === undefined) return;
+      const held = out.current;
+      // Note that an ask out is never asked twice, and one that failed is asked again by Try again alone.
+      if (
+        held !== undefined &&
+        held.agentId === agentId &&
+        held.before === before &&
+        (!held.failed || !again)
+      ) {
+        return;
+      }
+      const ask: OlderAsk = { agentId, before, failed: false };
+      out.current = ask;
+      setAsked(ask);
+      // An answer settles the ask it answers alone, never a newer one.
+      const settle = (next: OlderAsk | undefined) => {
+        if (out.current !== ask) return;
+        out.current = next;
+        setAsked(next);
+      };
+      acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ kind: TRANSCRIPT_KIND.AGENT, agentId, before }).then(
+        (answer) => {
+          if ("failure" in answer) settle({ ...ask, failed: true });
+          else if (!answer.landed) settle(undefined);
+        },
+        (error: unknown) => {
+          refused("An older page of the transcript")(error);
+          settle({ ...ask, failed: true });
+        },
+      );
+    },
+    [acts, agentId, before],
+  );
   if (before === undefined) return undefined;
   const here = asked !== undefined && asked.agentId === agentId && asked.before === before;
-  return { reading: here && !asked.failed, failed: here && asked.failed, onRead: read };
+  return {
+    reading: here && !asked.failed,
+    failed: here && asked.failed,
+    onRead: () => read(false),
+    onRetry: () => read(true),
+  };
 }
 
 /** Reads the agent's transcript anew where it could not be read, as the panel's Try again does (`ACT_KIND.AGENTS_TRANSCRIPT_RETRY`). */
