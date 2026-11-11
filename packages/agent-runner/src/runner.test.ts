@@ -1484,7 +1484,14 @@ it.effect(
       for (const tool of ["Glob", "Grep", "TaskCreate", "TaskUpdate"]) {
         assert.ok(options.allowedTools?.includes(tool), tool);
       }
-      for (const tool of ["ListAgents", "CronCreate", "PushNotification", "AskUserQuestion"]) {
+      // The CLI's own wakeup among them, since it holds the sandbox up for the whole wait.
+      for (const tool of [
+        "ListAgents",
+        "CronCreate",
+        "PushNotification",
+        "AskUserQuestion",
+        "ScheduleWakeup",
+      ]) {
         assert.ok(options.disallowedTools?.includes(tool), tool);
       }
       const worker = options.agents?.worker;

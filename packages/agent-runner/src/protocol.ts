@@ -132,8 +132,10 @@ export const INSTALLED_SKILLS = {
  * to-do tool (TaskCreate and its siblings replaced TodoWrite), so each is
  * listed to be offered; and that a tool beside one of our own, or one no
  * headless agent can use, is denied, so the agent has one way to do each
- * thing. SendMessage stays, because the Agent tool continues a subagent
- * with it.
+ * thing: `ScheduleWakeup` among them, because our `schedule_wakeup` ends
+ * the turn and lets the sandbox stop while the agent waits, where the CLI's
+ * holds the CLI, and so its sandbox, up for the whole wait. SendMessage
+ * stays, because the Agent tool continues a subagent with it.
  */
 export const CLAUDE_CODE_TOOLS = {
   ADDED: ["Glob", "Grep", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"],
@@ -145,6 +147,7 @@ export const CLAUDE_CODE_TOOLS = {
     "RemoteTrigger",
     "PushNotification",
     "AskUserQuestion",
+    "ScheduleWakeup",
   ],
 } as const;
 
@@ -176,8 +179,8 @@ const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
 /**
  * The built-in tools a launch whose mode asks runs unasked, by the names the
  * CLI gives them: those that only read, the checkout or the web, load a
- * skill's instructions or a deferred tool, or keep the agent's own to-do list
- * and wakeups. Every MCP server the launch hands the CLI, ours and each
+ * skill's instructions or a deferred tool, or keep the agent's own to-do
+ * list. Every MCP server the launch hands the CLI, ours and each
  * integration's, runs unasked beside them by its `mcp__<server>` rule, so
  * what asks is a file edit, a shell command, and a server the checkout adds.
  */
@@ -193,7 +196,6 @@ export const CLAUDE_CODE_UNASKED_TOOLS = [
   "TaskUpdate",
   "TaskList",
   "TaskGet",
-  "ScheduleWakeup",
 ] as const;
 
 /** The harness a launch runs, spelled as `conversations.runtime` spells it. */

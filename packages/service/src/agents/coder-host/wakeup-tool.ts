@@ -1,14 +1,14 @@
 /**
- * wakeup-tool.ts -- `schedule_wakeup`: a coding agent's booking of a wakeup for later, on a harness with no wakeup of its own.
+ * wakeup-tool.ts -- `schedule_wakeup`: a coding agent's booking of a wakeup for later, on either harness.
  *
- * Claude Code's CLI schedules its own wakeups (`ScheduleWakeup`) and its
- * runner holds the session through the wait. Codex has nothing of the kind,
- * so a Codex agent waiting on something slow, its pull request's checks
- * most of all, is offered this tool in its place (`../tool-catalog/gates.ts`'s
- * `WAKEUP` gate): it books a prompt and a delay, ends its turn, and the
- * scheduled sweep hands the prompt back as a line of the agent's own once
- * the delay has run (`../../maintenance/wakeup-sweep.ts`), which opens its
- * next turn as the CLI's wakeup opens Claude Code's. A message that reaches
+ * An agent waiting on something slow, its pull request's checks most of
+ * all, books a prompt and a delay, ends its turn, and the scheduled sweep
+ * hands the prompt back as a line of the agent's own once the delay has run
+ * (`../../maintenance/wakeup-sweep.ts`), which opens its next turn. Note
+ * that Claude Code's CLI is denied its own `ScheduleWakeup`
+ * (`@repo/agent-runner`'s `CLAUDE_CODE_TOOLS`), because the runner would
+ * hold the CLI, and so its sandbox, up for the whole wait, where this one
+ * lets the sandbox stop once the turn has ended. A message that reaches
  * the agent first, GitHub's that every check finished among them, opens a
  * turn as any message does, so the wakeup pre-empts nothing and is canceled
  * then with `stop`. One booking stands per agent: booking again replaces
@@ -74,7 +74,7 @@ const SCHEDULE_WAKEUP_INPUT = Schema.Struct({
 
 const readInput = Schema.decodeUnknownResult(SCHEDULE_WAKEUP_INPUT);
 
-/** `schedule_wakeup` as a coding agent on a harness with no wakeup of its own is offered it: its name, its words, and its input. */
+/** `schedule_wakeup` as a coding agent is offered it: its name, its words, and its input. */
 export const SCHEDULE_WAKEUP_TOOL = {
   name: AGENT_TOOL.SCHEDULE_WAKEUP,
   description:
