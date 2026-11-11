@@ -76,9 +76,9 @@ it was continued from, and in the sandbox otherwise; an agent on your own
 machine keeps its work there. A workspace
 repository's default branch may be kept on a drive cloud agents start from.
 Each workspace also keeps one drive holding the default branch of every
-repository it connects, with its dependencies installed, shared by its cloud
-agents: those its installation grants and those a member added on their own
-token alike, the latter cloned with that member's token.
+repository it connects, shared by its cloud agents: those its installation
+grants and those a member added on their own token alike, the latter cloned
+with that member's token.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
 Apart from them, we generally do not keep copies of repository content beyond
 what lands in an agent's transcript, except a pull request's number, title,

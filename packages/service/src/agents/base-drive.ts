@@ -202,13 +202,12 @@ export const readBaseDrive = (of: BaseDriveOf) =>
   );
 
 /** The dependencies installed in the checkout the sandbox holds, or the refusal in the installer's own words. */
-export const installDependencies = Effect.fn("web/installCheckoutDependencies")(function* (
+const installDependencies = Effect.fn("web/installCheckoutDependencies")(function* (
   sandbox: RepositorySandbox,
-  folder: string = REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
 ) {
   const installed = yield* runInSandbox(
     sandbox,
-    { command: INSTALL_SCRIPT, workingDirectory: folder },
+    { command: INSTALL_SCRIPT, workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT },
     REPOSITORY_REFUSAL.CHECKOUT_FAILED,
   );
   if (installed.exitCode !== 0) {
@@ -220,14 +219,14 @@ export const installDependencies = Effect.fn("web/installCheckoutDependencies")(
 });
 
 /** The commit the checkout stands at; none where git could not say, as for a sandbox that holds no checkout. */
-export const checkoutCommit = (
-  sandbox: RepositorySandbox,
-  folder: string = REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
-) =>
+export const checkoutCommit = (sandbox: RepositorySandbox) =>
   Effect.map(
     runInSandbox(
       sandbox,
-      { command: "git rev-parse HEAD", workingDirectory: folder },
+      {
+        command: "git rev-parse HEAD",
+        workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
+      },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     ),
     (ran) => (ran.exitCode === 0 ? ran.stdout.trim() : undefined),
@@ -258,17 +257,13 @@ export const lockfileMoved = (sandbox: RepositorySandbox, since: string) =>
  * so an install made there still matches; a diff git could not make reads
  * as a move.
  */
-export const lockfilesUnmoved = (
-  sandbox: RepositorySandbox,
-  since: string,
-  folder: string = REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
-) =>
+const lockfilesUnmoved = (sandbox: RepositorySandbox, since: string) =>
   Effect.map(
     runInSandbox(
       sandbox,
       {
         command: LOCKFILE_DIFF_SCRIPT,
-        workingDirectory: folder,
+        workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
         env: { [BASE_COMMIT_VARIABLE]: since },
       },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,

@@ -1,5 +1,5 @@
 /**
- * workspace-drive.ts -- one drive per workspace holding every repository it connects, each in a folder of its own with its dependencies installed.
+ * workspace-drive.ts -- one drive per workspace holding every repository it connects, each in a folder of its own.
  *
  * A workspace's drive holds the default branch of every repository its
  * GitHub installations grant, and of every repository a member added to it
@@ -14,9 +14,8 @@
  * brings each to its default branch in its folder, fetched where it stands
  * and cloned where it does not (`syncWorkspaceRepository`), on a read token
  * for that repository alone at the firewall for the run, its installation's
- * or its adder's own; and installs its dependencies where it was cloned or
- * the fetch moved a lockfile. A repository that fails is logged and the next
- * one goes on, so one broken repository never leaves the rest unfilled. Then
+ * or its adder's own. No dependency is installed on it. A repository that
+ * fails is logged and the next one goes on, so one broken repository never leaves the rest unfilled. Then
  * every folder of a repository no longer listed is deleted
  * (`prunedWorkspaceFolders`), so a disconnected repository leaves the drive;
  * a listing that failed fills nothing, so nothing is deleted on a GitHub
@@ -36,13 +35,7 @@ import { causeKind } from "@repo/runtime/effect";
 import { deletedIfStill, filledDrive, Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Effect, Option } from "effect";
 import { GitHubApp } from "../github/github-app.js";
-import {
-  BASE_STATE,
-  checkoutCommit,
-  installDependencies,
-  lockfilesUnmoved,
-  readOf,
-} from "./base-drive.js";
+import { BASE_STATE, readOf } from "./base-drive.js";
 import {
   firewallSessionOf,
   repositoryFirewallOver,
@@ -96,7 +89,7 @@ const heldRepositories = (workspace: BaseDriveWorkspace) =>
     return [...installed, ...onTokens];
   });
 
-/** One repository brought to its default branch in its folder, on a read token minted for it now, its dependencies installed where it was cloned or a lockfile moved; nothing where the workspace no longer reaches it. */
+/** One repository brought to its default branch in its folder, on a read token minted for it now, nothing where the workspace no longer reaches it. */
 const heldOne = (sandbox: RepositorySandbox, workspaceId: string, held: HeldRepository) =>
   Effect.gen(function* () {
     const reached = yield* (yield* GitHubApp).repositoryReadToken(
@@ -106,26 +99,22 @@ const heldOne = (sandbox: RepositorySandbox, workspaceId: string, held: HeldRepo
     );
     if (Option.isNone(reached)) return;
     const { repository, token, access } = reached.value;
-    const folder = workspaceFolderOf(repository.fullName);
-    const path = `${WORKSPACE_DRIVE.MOUNT}/${folder}`;
-    const before = yield* Effect.orElseSucceed(checkoutCommit(sandbox, path), () => undefined);
     yield* syncWorkspaceRepository(
       sandbox,
-      { fullName: repository.fullName, branch: repository.defaultBranch, folder },
+      {
+        fullName: repository.fullName,
+        branch: repository.defaultBranch,
+        folder: workspaceFolderOf(repository.fullName),
+      },
       token,
       access,
     );
-    // Note that a lockfile diff that failed reads as moved, since an install too many costs only time.
-    const unmoved =
-      before !== undefined &&
-      (yield* Effect.orElseSucceed(lockfilesUnmoved(sandbox, before, path), () => false));
-    if (!unmoved) yield* installDependencies(sandbox, path);
   });
 
 /**
  * The workspace's drive filled as its repositories stand now, from the image
- * given: each one brought to its default branch in its folder and installed
- * where it moved, one after another, a failure logged and passed by, then
+ * given: each one brought to its default branch in its folder, one after
+ * another, a failure logged and passed by, then
  * every folder of a repository no longer connected deleted. Answers whether
  * this call filled it: false where another fill holds it.
  */
