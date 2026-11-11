@@ -108,10 +108,17 @@ appId: dev.vespin.ios
     id: "PXGGridLayout-Info"
     index: 0
     optional: true
-- tapOn:
-    text: "Photo, .*"
-    index: 0
-    optional: true
+# Note that the photo's other name is tapped only while nothing is picked,
+# because on iOS 27.2 both names find the same photo, and a second tap
+# takes it back.
+- runFlow:
+    when:
+      visible: "Select Photos"
+    commands:
+      - tapOn:
+          text: "Photo, .*"
+          index: 0
+          optional: true
 - tapOn: "Add|Done"
 - extendedWaitUntil:
     visible: "Picture 1"
