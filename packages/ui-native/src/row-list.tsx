@@ -2,6 +2,8 @@
 
 import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
+  accessibilityElement,
   accessibilityLabel,
   background,
   buttonStyle,
@@ -120,8 +122,16 @@ function GroupHeader({
 }) {
   const colors = useColors();
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
+  // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
-    <HStack spacing={SPACE.TIGHT + 2} modifiers={[contentShape(shapes.rectangle())]}>
+    <HStack
+      spacing={SPACE.TIGHT + 2}
+      modifiers={[
+        contentShape(shapes.rectangle()),
+        accessibilityElement("combine"),
+        accessibilityAddTraits(["isHeader"]),
+      ]}
+    >
       {folded === undefined ? null : (
         <Image
           systemName={folded ? "chevron.right" : "chevron.down"}
@@ -184,6 +194,7 @@ export function ListSection({
         onPress={() => setFolded((was) => !was)}
         modifiers={[
           buttonStyle("plain"),
+          accessibilityAddTraits(["isHeader"]),
           accessibilityLabel(
             `${title}${count === undefined ? "" : `, ${count}`}, ${folded ? "folded" : "unfolded"}`,
           ),

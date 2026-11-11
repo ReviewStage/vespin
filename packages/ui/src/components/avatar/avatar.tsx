@@ -1,5 +1,5 @@
+import { identityHue, identityLetter } from "@repo/features/workspace-tile";
 import { type ReactNode, useState, useSyncExternalStore } from "react";
-import { identityHue, identityLetter } from "../../actor-model.js";
 import { UserIcon } from "../../icons/lucide-glyphs.js";
 import { ReplayMask } from "../../session-replay-marks.js";
 import {

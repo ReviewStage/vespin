@@ -210,6 +210,9 @@ export const MEMORY: MemorySummary = {
   forgettable: true,
   createdAt: 1,
   updatedAt: 2,
+  source: null,
+  recalls30d: 0,
+  lastRecalledAt: null,
 };
 
 export const KEPT: ProviderKeySummary = {

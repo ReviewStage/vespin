@@ -13,7 +13,9 @@
  * queued, its queue steered, its turn stopped, and its model and effort
  * changed, and an agent archived from its row; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
- * and the phone's own push registration,
+ * Settings' Account page: Share usage data, support access, and the
+ * account's deletion; a workspace made from the switcher, which New
+ * workspace names; and the phone's own push registration,
  * which no other client has a place for. Nothing else says which share, so
  * this table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has
  * a row, and a kind added without one, or a row whose act is gone, does not
@@ -96,7 +98,13 @@ const IOS = {
   DESK_TOOLS: byDesign("iOS v1 leaves the terminal and the live view to the desktop and the web"),
   DICTATION: byDesign("iOS uses the keyboard's own dictation"),
   DIFF: byDesign("iOS v1 opens the diff on GitHub"),
-  FEEDBACK: notYet("iOS v1 sends no feedback or contact mail"),
+  CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
+  CONTACT_MAIL: byDesign(
+    "iOS writes the contact mail itself through openURL (Settings › Send feedback)",
+  ),
+  FEEDBACK: notYet(
+    "iOS sends feedback as mail; the panel's form with pictures isn't built there yet",
+  ),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
@@ -104,7 +112,7 @@ const IOS = {
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
   ONE_SCREEN: byDesign("The app is one screen, with no panel to bring forward or preview"),
   PRESENCE: byDesign("The phone isn't a desk; presence comes from the desktop and the web only"),
-  SETTINGS: byDesign("iOS v1 opens Settings in Safari"),
+  SETTINGS: byDesign("iOS's Settings opens this page on vespin.dev in Safari"),
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
@@ -143,8 +151,8 @@ export const CLIENT_PARITY = {
   ),
   [PORT_ACT_KIND.ACCOUNT_CANCEL_SIGN_IN]: panel(IOS.SIGN_IN_SHEET),
   [PORT_ACT_KIND.ACCOUNT_SIGN_OUT]: EVERYWHERE,
-  [PORT_ACT_KIND.ACCOUNT_DELETE]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.ACCOUNT_SUPPORT_ACCESS]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.ACCOUNT_DELETE]: EVERYWHERE,
+  [PORT_ACT_KIND.ACCOUNT_SUPPORT_ACCESS]: EVERYWHERE,
 
   [PORT_ACT_KIND.PROVIDER_KEYS_FOLLOW]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.PROVIDER_KEYS_RETRY]: panel(IOS.SETTINGS),
@@ -307,7 +315,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.PORT_FORWARD_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.PORT_SHARE_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
 
-  [PORT_ACT_KIND.SETTING_UPDATE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.SETTING_UPDATE]: EVERYWHERE,
   [PORT_ACT_KIND.SETTINGS_RESET]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.EXPERIMENT_SET]: panel(IOS.SETTINGS),
 
@@ -379,7 +387,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.UPDATE_INSTALL]: desktopOnly(WEB.UPDATER, IOS.UPDATER),
   [PORT_ACT_KIND.UPDATE_MOVE_TO_APPLICATIONS]: desktopOnly(WEB.UPDATER, IOS.UPDATER),
   [PORT_ACT_KIND.UPDATE_OPEN_RELEASE]: desktopOnly(WEB.UPDATER, IOS.UPDATER),
-  [PORT_ACT_KIND.UPDATE_OPEN_CHANGELOG]: desktopOnly(WEB.UPDATER, IOS.UPDATER),
+  [PORT_ACT_KIND.UPDATE_OPEN_CHANGELOG]: desktopOnly(WEB.UPDATER, IOS.CHANGELOG),
 
   [PORT_ACT_KIND.MICROPHONE_REQUEST]: desktopOnly(WEB.MICROPHONE, IOS.DICTATION),
   [PORT_ACT_KIND.MICROPHONE_ROUTE]: desktopOnly(WEB.MICROPHONE, IOS.DICTATION),
@@ -389,7 +397,7 @@ export const CLIENT_PARITY = {
     byDesign("Allows the host the app carries on the Mac it is on, which a tab is not"),
     byDesign("Allows the host the app carries on the Mac it is on, which a phone is not"),
   ),
-  [PORT_ACT_KIND.CONTACT_EMAIL]: panel(IOS.FEEDBACK),
+  [PORT_ACT_KIND.CONTACT_EMAIL]: panel(IOS.CONTACT_MAIL),
   [PORT_ACT_KIND.WINDOW_FOCUS_PANEL]: panel(IOS.ONE_SCREEN),
   [PORT_ACT_KIND.WINDOW_COPY_TEXT]: panel(IOS.COPY),
   [PORT_ACT_KIND.WINDOW_COPY_IMAGE]: panel(IOS.COPY),
@@ -403,7 +411,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
   [PORT_ACT_KIND.FEEDBACK_SEND]: panel(IOS.FEEDBACK),
 
-  [PORT_ACT_KIND.WORKSPACE_CREATE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_RENAME]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_EXPERIMENT_SET]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_INVITE]: panel(IOS.SETTINGS),

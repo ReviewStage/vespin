@@ -28,6 +28,8 @@ import { Effect, Option, Result, Schema } from "effect";
 import { matchWorkspaceMemories } from "../../accounts/workspace-memories.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { standingContext } from "../agent-runtime/standing-context.js";
+import { recallSource } from "../memory-provenance.js";
+import { recordMemoryRecalls } from "../memory-tools.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import type { SessionTurn } from "../sessions/agent-sessions.js";
 import { experimentOnIn, experimentOnSinceIn } from "../workspace-experiment-on.js";
@@ -165,14 +167,22 @@ const taskOf = (
  * (`matchWorkspaceMemories`), as the turn's message hands them, where its
  * workspace has Memory on; nothing where it is off or none match. They are
  * found as the member who started the agent, so only a workspace they are a
- * member of is searched. A store that fails is logged and hands nothing, as
- * `search_memory` carries on without memory.
+ * member of is searched, and each is logged as recalled by the agent and its
+ * turn's line (`recordMemoryRecalls`), as a search's are. A store that fails
+ * is logged and hands nothing, as `search_memory` carries on without memory;
+ * a recall that cannot be logged hands the memories all the same.
  */
 const memoriesOf = (agent: Agent, words: string) =>
   Effect.gen(function* () {
     if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.MEMORY))) return undefined;
     const found = yield* matchWorkspaceMemories(agent.userId, agent.organizationId, words);
-    return found.length === 0 ? undefined : memoriesWithLead(found);
+    if (found.length === 0) return undefined;
+    yield* recordMemoryRecalls(
+      { workspaceId: agent.organizationId, userId: agent.userId },
+      found.map((memory) => memory.id),
+      yield* recallSource(agent),
+    );
+    return memoriesWithLead(found);
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(undefined)),

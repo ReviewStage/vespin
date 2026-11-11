@@ -98,7 +98,7 @@ export function PullRequestCard({
         </Text>
       )}
       {deletions === undefined ? null : (
-        <Text modifiers={[...count, foregroundStyle(colors.DANGER)]}>
+        <Text modifiers={[...count, foregroundStyle(colors.DANGER_TEXT)]}>
           {lineCount("−", deletions)}
         </Text>
       )}

@@ -1,0 +1,56 @@
+# workspace.yaml -- the workspace switcher: the chosen workspace named in the Inbox's bar, its menu open with every workspace, New workspace, and Workspace settings, another chosen and the Inbox and Tasks following it, and New workspace's sheet.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose account is in its own
+# workspace and in Relay, a team of six that holds no tasks or threads
+# (`@repo/host/fixture-inbox`), so a switch shows at once and no server is
+# reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+# The switcher stands as the bar's title in a compact window and heads the
+# sidebar in a regular one, heard as the workspace and who shares it.
+- assertVisible:
+    id: "workspace-switcher"
+- waitForAnimationToEnd
+- takeScreenshot: workspace-inbox
+- tapOn:
+    id: "workspace-switcher"
+- assertVisible: "Relay"
+- assertVisible: "New workspace"
+- assertVisible: "Workspace settings"
+- waitForAnimationToEnd
+- takeScreenshot: workspace-menu
+# Relay holds no threads, so the Inbox empties once it is chosen, and Tasks
+# follows the same choice.
+- tapOn: "Relay"
+- assertNotVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+- takeScreenshot: workspace-switched
+- tapOn: "Tasks"
+- assertNotVisible: "Weekly digest email"
+# The choice outlives a relaunch, as the phone keeps it.
+- stopApp
+- launchApp:
+    arguments:
+      fixture: inbox
+- assertNotVisible: "Recorded the invite flow"
+# New workspace opens its sheet, a team's name and Create.
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: "New workspace"
+- assertVisible:
+    id: "new-workspace-name"
+- waitForAnimationToEnd
+- takeScreenshot: workspace-new
+- tapOn: "Cancel"
+# Back to the account's own workspace, whose threads stand again.
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: "Ada Lovelace"
+- assertVisible: "Recorded the invite flow"

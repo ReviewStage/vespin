@@ -1,16 +1,23 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a choice among a few, and an act.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, and an act.
 
 import {
   Form,
   HStack,
+  Image,
   LabeledContent,
   Picker,
+  Spacer,
   Button as SwiftUIButton,
   Text,
+  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityLabel,
   background,
+  buttonStyle,
+  contentShape,
+  disabled,
   font,
   foregroundStyle,
   labelsHidden,
@@ -18,10 +25,11 @@ import {
   pickerStyle,
   scrollContentBackground,
   scrollDismissesKeyboard,
+  shapes,
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { Avatar } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -30,6 +38,55 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
+
+/** Where a `PushRow` goes, and the mark at its end that says so, as iOS's own Settings marks them. */
+export const PUSH_ROW_GOES = {
+  /** A page of Settings, pushed over this one: the system's chevron. */
+  PAGE: "chevron.right",
+  /** Out of the app, to Safari or iOS's own Settings: the arrow out. */
+  OUT: "arrow.up.right",
+} as const satisfies Record<string, SfSymbol>;
+
+export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
+
+/** The size of the mark at a `PushRow`'s end, as small as iOS draws its chevron. */
+const GOES_MARK_SIZE = 13;
+
+/** The mark at a row's end that says where a press goes, in the muted ink. */
+function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
+  const colors = useColors();
+  return <Image systemName={goes} size={GOES_MARK_SIZE} color={colors.TEXT_MUTED} />;
+}
+
+/**
+ * A row's content made one press, as a Form's navigation row is: the whole
+ * row takes the press, its words keep their own ink rather than the tint a
+ * button lends, and VoiceOver hears it by its label.
+ */
+function PressedRow({
+  label,
+  onPress,
+  children,
+}: {
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly children: ReactElement;
+}) {
+  const colors = useColors();
+  return (
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("plain"),
+        contentShape(shapes.rectangle()),
+        accessibilityLabel(label),
+        listRowBackground(colors.SURFACE),
+      ]}
+    >
+      {children}
+    </SwiftUIButton>
+  );
+}
 
 /**
  * The form a settings screen is: its sections (`ListSection`) of the rows
@@ -64,12 +121,18 @@ type AccountRowProps = {
   readonly picture?: string | undefined;
   /** A quiet line under the address, such as how the account signed in. */
   readonly detail?: string | undefined;
+  /** Where a press goes, such as the Account page from Settings' head; a row with none takes no press. */
+  readonly onPress?: (() => void) | undefined;
 };
 
-/** Who is signed in: their photo or monogram, their name, their address, and how they signed in. */
-export function AccountRow({ name, email, picture, detail }: AccountRowProps) {
+/**
+ * Who is signed in: their photo or monogram, their name, their address, and
+ * how they signed in. Pressed, it goes to its page, the chevron at its end,
+ * as the account heads iOS's own Settings.
+ */
+export function AccountRow({ name, email, picture, detail, onPress }: AccountRowProps) {
   const colors = useColors();
-  return (
+  const face = (
     <HStack spacing={SPACE.ROW + 2} modifiers={[listRowBackground(colors.SURFACE)]}>
       <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />
       <VStack alignment="leading" spacing={2}>
@@ -94,7 +157,85 @@ export function AccountRow({ name, email, picture, detail }: AccountRowProps) {
           </Text>
         )}
       </VStack>
+      {onPress === undefined ? null : (
+        <>
+          <Spacer />
+          <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+        </>
+      )}
     </HStack>
+  );
+  return onPress === undefined ? (
+    face
+  ) : (
+    <PressedRow label={name} onPress={onPress}>
+      {face}
+    </PressedRow>
+  );
+}
+
+type PushRowProps = {
+  readonly label: string;
+  /** The glyph before the words, an SF Symbol in the muted ink. */
+  readonly symbol?: SfSymbol | undefined;
+  /** Where the row stands, at its end before the mark, such as a page's current choice. */
+  readonly detail?: string | undefined;
+  readonly goes: PushRowGoes;
+  readonly onPress: () => void;
+};
+
+/**
+ * A row a press takes somewhere: a page of Settings, with the chevron at its
+ * end, or out of the app, with the arrow out, its words in the ink and what
+ * stands at its end in the muted ink.
+ */
+export function PushRow({ label, symbol, detail, goes, onPress }: PushRowProps) {
+  const colors = useColors();
+  return (
+    <PressedRow label={label} onPress={onPress}>
+      <HStack spacing={SPACE.ROW}>
+        {symbol === undefined ? null : (
+          <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
+        )}
+        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
+        <Spacer />
+        {detail === undefined ? null : (
+          <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{detail}</Text>
+        )}
+        <GoesMark goes={goes} />
+      </HStack>
+    </PressedRow>
+  );
+}
+
+type ToggleRowProps = {
+  readonly label: string;
+  /** A quiet line under the label, saying what the switch does. */
+  readonly detail?: string | undefined;
+  readonly on: boolean;
+  /** Whether it cannot be turned now, such as while the setting is unread. */
+  readonly disabled?: boolean | undefined;
+  readonly onChange: (on: boolean) => void;
+};
+
+/** A setting turned on or off, as the system's switch, in the brand's copper, with what it does under its name. */
+export function ToggleRow({ label, detail, on, disabled: off = false, onChange }: ToggleRowProps) {
+  const colors = useColors();
+  return (
+    <Toggle
+      isOn={on}
+      onIsOnChange={onChange}
+      modifiers={[tint(colors.ACCENT), disabled(off), listRowBackground(colors.SURFACE)]}
+    >
+      <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
+      {detail === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {detail}
+        </Text>
+      )}
+    </Toggle>
   );
 }
 

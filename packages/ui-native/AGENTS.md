@@ -158,6 +158,37 @@ navigation, tab bar, swipes, menus, sheets and glass.
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's sidebar keeps its labels.
 
+## Accessibility
+
+Dynamic Type, VoiceOver, the contrast settings, and Reduce Motion are held
+here once, so a screen gets them by composing these pieces.
+
+- **Settings** come from `accessibility.ts`, one store per setting shared by
+  every component: `useReduceMotion` (a custom motion is left out, as Jump to
+  latest's scroll), `useReduceTransparency` (`GlassBar` and Jump to latest
+  stand solid on `SURFACE` inside `CHIP_EDGE_STRONG`), `useIncreaseContrast`
+  (`useColors` gives the quiet inks the body's, the hairline the strong edge,
+  and danger the words' ink). Bold Text and Button Shapes need nothing of
+  ours: SwiftUI's text styles and React Native's system face take Bold Text,
+  and the system's buttons draw their own shapes.
+- **Dynamic Type.** Past `useAccessibilitySize`, a row stacks its end under
+  its title, a page's chips stand one to a line, and a line's words wrap
+  rather than cut; a mark drawn at a size of its own grows with
+  `useScaledSize`, as `@ScaledMetric` would.
+- **VoiceOver.** A row hands `RowFrame` what it is heard as (`RowHeard`): one
+  element whose label is its title, so Voice Control and the Maestro flows
+  find it by the words on screen, and whose value says its marks in words
+  (unread, needs you, its status, its time by `sinceHeard`). A row holding a
+  button of its own, such as `AgentRow`'s pull request, stays apart instead.
+  A group header, a page's heading, and a message's writer line are headings;
+  a glyph its words already say is hidden. What happens out of the reader's
+  sight is told with `useAnnounced`: an agent's change of state,
+  a held call, and a send refused (`AskNote`).
+- **Contrast.** Words stand in an ink that holds WCAG's 4.5:1 on the ground
+  they stand on (danger's words in `DANGER_TEXT`, a filled button's in
+  `ON_ACCENT`), checked against `@repo/brand`'s table, which
+  `@repo/ui`'s `brand-contrast.test.ts` holds.
+
 ## Words
 
 - **Words match the panel's** (`docs/DESIGN.md`): a row's time is
