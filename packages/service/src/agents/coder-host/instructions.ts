@@ -265,7 +265,8 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     serve:
       "Start the app from your shell in the background (with `&` and its output sent to a file), which keeps a server running until you stop it",
     started: STOP_BEFORE_TURN_END,
-    readFile: "your shell (`cat`, or `sed -n` for a range), or Codex's `view_image` for a picture",
+    readFile:
+      "your shell (`cat`, or `sed -n` for a range), or Codex's `view_image` for a picture; for a PDF, `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; for a HEIC photo, `heif-dec <file> <out>.jpg`, then `view_image`",
     glob: "your shell (`rg --files`, or `ls`)",
     searchWeb: "Search the public web with Codex's own web search",
     skills: `A word like \`/name\` in the developer's message names one of your skills, which Codex finds under the checkout's \`.agents/skills\`, or, for one your developer installed into ${PRODUCT_NAME}, under \`${NATIVE_SKILLS_PATH.INSTALLED}/${INSTALLED_SKILLS.SKILLS}\`: read that skill's \`SKILL.md\` before anything else, and follow what it says. Where neither has such a skill, read \`.agents/skills/<name>/SKILL.md\` or \`.claude/skills/<name>/SKILL.md\` on the default branch, and follow that instead.`,

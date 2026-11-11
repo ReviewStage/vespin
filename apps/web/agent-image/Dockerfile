@@ -28,11 +28,15 @@ ARG DEBIAN_FRONTEND=noninteractive
 # Python and pip; tmux, which holds each Terminal tab's shell so it outlives any connection to it;
 # GitHub's CLI; the everyday tools the agents' earlier image carried; and an ffmpeg that writes
 # H.264, which Playwright's own does not, so the service keeps an MP4 of each recording an agent
-# makes for a phone that plays no WebM (`packages/service/src/agents/machine/phone-video.ts`).
+# makes for a phone that plays no WebM (`packages/service/src/agents/machine/phone-video.ts`);
+# and poppler's `pdftotext` and `pdftoppm`, which Claude Code's Read of a PDF page range and
+# Codex's shell read a PDF with, and libheif's `heif-dec` with its HEVC decoder, which turns an
+# iPhone's HEIC photo into a JPEG an agent can look at.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       python3 python3-pip python-is-python3 tmux gh \
       curl jq ripgrep unzip zstd procps bind9-dnsutils ffmpeg \
+      poppler-utils libheif-examples libheif-plugin-libde265 \
  && rm -rf /var/lib/apt/lists/*
 COPY tmux.conf /etc/tmux.conf
 

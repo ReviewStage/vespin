@@ -573,7 +573,7 @@ function runnerContent(
     return [
       {
         type: "text" as const,
-        text: `[${name} (${mediaType}) was attached: it is at ${path} in your sandbox, read it from there]`,
+        text: `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
       },
     ];
   });
