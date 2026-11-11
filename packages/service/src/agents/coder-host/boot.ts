@@ -91,7 +91,7 @@ export const bootBecameReady = Effect.fn("web/bootBecameReady")(function* (
   attempt: number,
   sessionsFor: QueueSessions = routedSessions,
 ) {
-  const moved = yield* agentBootRunnerUp(agent.id, yield* DateTime.nowAsDate, undefined, attempt);
+  const moved = yield* agentBootRunnerUp(agent.id, yield* DateTime.nowAsDate, attempt);
   if (Option.isNone(moved)) return;
   yield* queueAtTouch(sessionsFor, agent);
 });
