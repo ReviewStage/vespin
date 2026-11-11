@@ -177,7 +177,7 @@ function SearchStackScreen() {
  * beside its mailboxes. A row found opens in its own tab, beside its list.
  */
 function SearchSplitScreen() {
-  const { setQuery, results, question, remind } = useSearchScreen();
+  const { query, setQuery, results, question, remind } = useSearchScreen();
   const sidebar = useAppSidebar(SIDEBAR_PLACE.SEARCH, useSidebarTasks());
   return (
     <>
@@ -188,7 +188,7 @@ function SearchSplitScreen() {
           detail={results}
           detailBar={{
             title: SEARCH_TITLE,
-            search: { placeholder: SEARCH_EVERYTHING, onChange: setQuery },
+            search: { placeholder: SEARCH_EVERYTHING, text: query, onChange: setQuery },
           }}
         />
         <StatusQuestionAsk question={question} />

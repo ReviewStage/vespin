@@ -650,7 +650,7 @@ function InboxSplitScreen({
             bar: {
               title: INBOX_TITLE,
               menu,
-              search: { placeholder: SEARCH_INBOX, onChange: setSearch },
+              search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
             },
           })}
           detail={
