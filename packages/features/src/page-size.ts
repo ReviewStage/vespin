@@ -1,4 +1,5 @@
 import { Schema as EffectSchema } from "effect";
+import { PAGE_THEME_WORN_EVENT } from "./page-theme.js";
 
 /**
  * page-size.ts -- how tall a plan's page is as drawn: the height the page's frame hands the window, which a page drawn in written words is drawn at.
@@ -34,14 +35,21 @@ export const pageSizeSchema = EffectSchema.Struct({
  * frame's own height, so a page shorter than the frame says how short it is,
  * and posts it as the page is read, once loaded, and whenever the root or
  * the body changes size where the window can say so, once a height, so a
- * page that holds still posts nothing more.
+ * page that holds still posts nothing more. It posts nothing until the
+ * page wears the theme the window hands it (`PAGE_THEME_WORN_EVENT`), because
+ * the page is laid out in the browser's own type and at full width until then:
+ * a frame loaded again, as a transcript row scrolled out and back is, would
+ * otherwise stand at that height a moment before the themed one, and the log
+ * around it would move twice each time.
  */
 export const PAGE_SIZE_SCRIPT = `(() => {
   "use strict";
   const TYPE = ${JSON.stringify(PAGE_SIZE_TYPE)};
   let posted = -1;
+  let themed = false;
 
   const post = () => {
+    if (!themed) return;
     const root = document.documentElement.getBoundingClientRect().height;
     const height = Math.ceil(Math.max(root, document.body === null ? 0 : document.body.scrollHeight));
     if (height === posted) return;
@@ -60,6 +68,10 @@ export const PAGE_SIZE_SCRIPT = `(() => {
   if (document.readyState === "loading") addEventListener("DOMContentLoaded", watch, { once: true });
   else watch();
   addEventListener("load", post, { once: true });
+  addEventListener(${JSON.stringify(PAGE_THEME_WORN_EVENT)}, () => {
+    themed = true;
+    post();
+  });
 })();`;
 
 /** How a page drawn in words is fitted: not yet heard from, as tall as its own content, or filling whatever frame holds it. */
