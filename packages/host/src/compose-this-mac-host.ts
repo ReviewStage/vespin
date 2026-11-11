@@ -222,14 +222,14 @@ export function composeThisMacHost(
       kernel.emit(GATEWAY_EVENT.THIS_MAC_HOST_CHANGED, carried(held));
     });
 
-    /** Whether this run read the host as the account's while signed in, so a sign-out after it is the sign-out of the host's own account. */
-    const ownedHere = MutableRef.make(false);
+    /** The device this run last read as the account's while signed in, so a sign-out after it is the sign-out of that host's own account; none where the last read was not. */
+    const ownedHere = MutableRef.make<string | undefined>(undefined);
 
-    /** Whether the record's device is the account's, as the service lists its hosts; one that is is kept as read here. */
+    /** Whether the record's device is the account's, as the service lists its hosts; the answer kept as read here. */
     const accountOwns = (record: HostDevice) =>
       Effect.flatMap(dependencies.hostListed(record.deviceId), (listed) => {
         if (Option.isNone(listed)) return Effect.fail("read the account's hosts");
-        if (listed.value) MutableRef.set(ownedHere, true);
+        MutableRef.set(ownedHere, listed.value ? record.deviceId : undefined);
         return Effect.succeed(listed.value);
       });
 
@@ -382,17 +382,19 @@ export function composeThisMacHost(
      * The host stopped and kept from starting at the next login once its
      * account signed out, its files kept. Note that no account can be asked
      * whether it owns the record once nobody is signed in, so only a host this
-     * run read as the account's is stopped, since another build of the app,
-     * signed in, may be running one this run never owned; a refused one
-     * already rests.
+     * run read as the account's, under the device it read, is stopped, since
+     * another build of the app, signed in, may be running one this run never
+     * owned; a refused one already rests.
      */
     const stoppedSignedOut = Effect.gen(function* () {
-      if (!host.runsHost || !MutableRef.get(ownedHere)) return;
+      const owned = MutableRef.get(ownedHere);
+      if (!host.runsHost || owned === undefined) return;
       const record = yield* ownServiceRecord;
       if (Option.isNone(record) || record.value.refused === true) return;
+      if (record.value.deviceId !== owned) return;
       const stopped = yield* host.stop;
       if (Result.isFailure(stopped)) return yield* Effect.fail(`stop it: ${stopped.failure}`);
-      MutableRef.set(ownedHere, false);
+      MutableRef.set(ownedHere, undefined);
       report("this Mac's host was stopped, since its account signed out");
     });
 
