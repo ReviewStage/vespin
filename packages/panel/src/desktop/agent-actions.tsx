@@ -38,9 +38,9 @@ import {
 } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
-import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
+import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
-import type { MenuAction, MenuEntry } from "./action-menu.js";
+import type { MenuAction, MenuEntry, MenuSubmenu } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { useAgentDelete } from "./agent-delete.js";
 import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
@@ -115,6 +115,8 @@ export interface AgentMenuDoors {
   onOpenLocal?: (() => void) | undefined;
   /** Opens a new tab of the agent's cloud browser in the side panel: a phone's, which lists the panel's tabs nowhere else (`task-pane-switcher.tsx`). */
   onOpenBrowser?: (() => void) | undefined;
+  /** Run ›, the agent's run actions: a phone's, which has no room for the Run button the tab row stands (`run-actions-button.tsx`). */
+  run?: MenuSubmenu | undefined;
   /** Opens the agent in its full place, its tab on its task, from where it stands apart from it: beside the Inbox. */
   onOpenInTask?: (() => void) | undefined;
   /** Opens the Slack message the agent was started from, for an agent started from Slack whose link Slack answered. */
@@ -134,7 +136,7 @@ export interface AgentMenuDoors {
  * groups every menu of the window keeps: Copy link, Open in new tab in a
  * browser, and the transcript's two
  * copies; Rename; Show terminal,
- * Show browser where a phone offers it, Open in task, for an agent drawn
+ * Show browser and Run › where a phone offers them, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
  * Add repository…, Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
  * terminal, Open in task, and Permanently delete print ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O,
@@ -146,7 +148,7 @@ export interface AgentMenuDoors {
 export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   const { links, onCopy, onRename, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
-  const { onOpenBrowser, onOpenInSlack } = doors;
+  const { onOpenBrowser, onOpenInSlack, run } = doors;
   const { addRepository, moveTo, archive, deletion, subject } = doors;
   const copies: MenuEntry[] = [
     ...(links ?? []),
@@ -191,6 +193,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
     ...(onOpenBrowser === undefined
       ? []
       : [commandAction(PANEL_COMMAND.SHOW_BROWSER, onOpenBrowser, subject)]),
+    ...(run === undefined ? [] : [run]),
     ...(onOpenInTask === undefined
       ? []
       : [commandAction(PANEL_COMMAND.OPEN_IN_TASK, onOpenInTask, subject)]),
@@ -220,6 +223,7 @@ export type AgentDoors = Pick<
   | "onOpenTerminal"
   | "onOpenLocal"
   | "onOpenBrowser"
+  | "run"
   | "onOpenInSlack"
   | "addRepository"
   | "moveTo"
@@ -238,6 +242,7 @@ const NOT_ON_A_ROW = {
   onOpenTerminal: "The terminal opens in a side panel, and a row has none.",
   onOpenLocal: "The Local tab opens in a side panel, and a row has none.",
   onOpenBrowser: "The browser opens in a side panel, and a row has none.",
+  run: "A run action's shell opens in a side panel, and a row has none.",
   onCopy: "A task's row offers no transcript copy either, so an agent's row offers none.",
 } as const satisfies Partial<Record<keyof AgentDoors, string>>;
 
@@ -258,6 +263,14 @@ export interface AgentTerminalDoors {
   readonly onOpenLocal?: ((agentId: string) => void) | undefined;
   /** Whether the platform runs terminals, which ⌘J and New terminal stand on. */
   readonly terminals: boolean;
+  /** Shows a shell the service started for the agent, as a run action's, in a Terminal tab of its own; none where the platform runs no terminals. */
+  readonly onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
+}
+
+/** A shell the service started, as a Terminal tab names and attaches to it. */
+export interface ShownShell {
+  readonly id: string;
+  readonly title: string;
 }
 
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */
@@ -302,8 +315,10 @@ export function useAgentTerminalDoors(
       .data === true;
   const openTerminal = useOpenTerminal(sidePanel, onShown);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, sidePanel, onShown);
+  const showShell = useShowShellTab(sidePanel, onShown);
   return {
     terminals,
+    onShowShell: terminals ? showShell : undefined,
     onOpenTerminal: terminals ? (agentId) => openTerminal(agentId, TERMINAL_ASK.SHOW) : undefined,
     onOpenLocal: locals ? (agentId) => openLocal(agentId, false) : undefined,
   };
@@ -367,11 +382,13 @@ export function useAgentActions(
     readonly terminals: Pick<AgentTerminalDoors, "onOpenTerminal" | "onOpenLocal">;
     /** Opens a new tab of an agent's cloud browser in the side panel; none where the surface offers none, as off a phone. */
     readonly onOpenBrowser?: ((agentId: string) => void) | undefined;
+    /** Run ›, the agent's run actions, where the surface offers them in its menu, as a phone's ⋯ does; none elsewhere. */
+    readonly run?: MenuSubmenu | undefined;
     /** Closes what shows the agent, its tab or its page, once its delete landed. */
     readonly onDeleted?: (() => void) | undefined;
   },
 ): AgentActions {
-  const { label, shown, terminals, onOpenBrowser, onDeleted } = input;
+  const { label, shown, terminals, onOpenBrowser, run, onDeleted } = input;
   const subject = shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id);
   // Note that a surface builds the agent's menu on its draw, so it is drawn again as the keys acting on the agent change.
   useShortcutTargetOn(subject);
@@ -423,6 +440,7 @@ export function useAgentActions(
         agent.archivedAt !== undefined || local || onOpenBrowser === undefined
           ? undefined
           : () => onOpenBrowser(agent.id),
+      run: agent.archivedAt !== undefined ? undefined : run,
       onOpenInSlack: slackUrl === undefined ? undefined : () => appPlatform().openWeb(slackUrl),
       addRepository: added.action,
       moveTo,

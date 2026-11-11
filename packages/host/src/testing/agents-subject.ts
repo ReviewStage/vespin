@@ -591,6 +591,8 @@ function fakeService() {
         return { agent: AGENT };
       }),
     warm: () => Effect.succeed({ warm: true as const }),
+    runAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    stopRunAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
