@@ -41,7 +41,10 @@ import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { afterEach, vi } from "vitest";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
+import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
+import { keptAfterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
@@ -161,17 +164,31 @@ interface Answer {
 /** The native harnesses the webhook's wakes reach, writing down each with the account it acted for. */
 const HARNESS = recordingHarness();
 
-/** The group over the test's database, the GitHub given, and the secret given (and any other values held), answering one request. */
+/** Where a case watches the group fill a workspace's drive: its sandboxes, and the work it kept past the answer. */
+interface Filling {
+  readonly sandbox: ReturnType<typeof memorySandbox>;
+  readonly after: ReturnType<typeof keptAfterResponse>;
+}
+
+/** The fills of a workspace's drive, their checkout run straight on the test's own runtime. */
+const DRIVE_FILLS = Layer.succeed(WorkspaceDriveFills, {
+  run: (effect) => Effect.runPromise(effect),
+  image: Effect.succeed("agent-image:fixture"),
+});
+
+/** The group over the test's database, the GitHub given, and the secret given (and any other values held), answering one request; filling the workspace's drive where `filling` watches it. */
 const answer = (
   github: FakeGitHub,
   secret: string | undefined,
   request: Request,
   held: Partial<HostedEnvironmentValues> = {},
+  filling?: Filling,
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
     const services = Layer.mergeAll(
-      memorySandbox().layer,
+      filling === undefined ? memorySandbox().layer : filling.sandbox.layer,
+      filling === undefined ? Layer.empty : Layer.merge(filling.after.layer, DRIVE_FILLS),
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -390,6 +407,46 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         assert.deepEqual(suspended, [{ login, active: false }]);
         assert.deepEqual(unsuspended, [{ login, active: true }]);
         assert.deepEqual(deleted, [{ login, active: false }]);
+      }),
+  );
+
+  it.effect(
+    "repositories added to an installation have its workspace's drive filled with them past the answer",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const installation = installationOfRelay();
+        const github = githubReaching([installation]);
+        const { id: workspaceId } = yield* (yield* fakeWorkspaceSeams).createOrganization({
+          name: "Acme",
+          slug: `acme-${randomUUID()}`,
+          userId: owner,
+          metadata: {},
+        });
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+        const filling = { sandbox: memorySandbox(), after: keptAfterResponse() };
+        const added = {
+          action: "added",
+          installation: { id: installation.id },
+          repositories_added: [{ full_name: RELAY_FULL_NAME }],
+        };
+
+        const answered = yield* answer(
+          github,
+          SECRET,
+          delivery("installation_repositories", added),
+          {},
+          filling,
+        );
+        yield* filling.after.run.pipe(Effect.provide(github.layer));
+
+        const drive = workspaceDriveName(workspaceId);
+        const folders = filling.sandbox.state.commands.flatMap(
+          (command) => command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER] ?? [],
+        );
+        assert.deepEqual(answered, { status: 200, body: { read: 0 } });
+        assert.deepEqual([...filling.sandbox.state.drives.keys()], [drive]);
+        assert.deepEqual(folders, ["acme/relay"]);
       }),
   );
 

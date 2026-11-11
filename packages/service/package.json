@@ -63,6 +63,7 @@
     "./agents/coder-host/transcript": "./src/agents/coder-host/transcript.js",
     "./agents/coder-host/usage": "./src/agents/coder-host/usage.js",
     "./agents/host-install-script-app": "./src/agents/host-install-script-app.js",
+    "./agents/workspace-drive": "./src/agents/workspace-drive.js",
     "./agents/workspace-mcp/app": "./src/agents/workspace-mcp/app.js",
     "./agents/workspace-mcp/sandbox-door": "./src/agents/workspace-mcp/sandbox-door.js",
     "./agents/native-events/native-title": "./src/agents/native-events/native-title.js",

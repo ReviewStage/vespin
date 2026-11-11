@@ -63,6 +63,7 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import { Effect, Layer, Option } from "effect";
 import { type HttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { workspaceDriveRegenerated } from "../agents/workspace-drive.js";
 import { sessionCredential } from "../auth/session-credential.js";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { hostedNotFoundRoute, type SessionUserIdResolver } from "../http/http-effect.js";
@@ -265,6 +266,8 @@ const connectInstallation = /* @__PURE__ */ Effect.fn("web/connectInstallation")
   // Note that a connect repeated for an installation the workspace holds links it as before, which is no new connection, so what it holds is read first.
   const held = yield* installationsOfWorkspace(organizationId);
   const linked = yield* linkInstallationAs(userId, organizationId, installation.value);
+  // Note that every link regenerates the workspace's drive, a repeated connect among them, which finds it as it stands.
+  if (linked === LINK_OUTCOME.LINKED) yield* workspaceDriveRegenerated(organizationId);
   if (
     linked === LINK_OUTCOME.LINKED &&
     !held.some((each) => each.installationId === installationId)

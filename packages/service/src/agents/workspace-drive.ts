@@ -21,21 +21,34 @@
  * a listing that failed fills nothing, so nothing is deleted on a GitHub
  * that did not answer.
  *
- * The daily refresh fills every workspace's drive (`base-drive-refresh.ts`),
- * and the drive is deleted with its workspace (`workspace-deletion.ts`). The
- * fill's sandbox writes its firewall under the workspace's first owner.
+ * The drive is regenerated past the request's answer whenever a repository
+ * is connected or disconnected: a workspace connecting its installation
+ * (`github-install-app.ts`), GitHub creating, unsuspending, or deleting an
+ * installation, or adding repositories to it or removing them
+ * (`github-webhook-app.ts`), and a member adding or removing a repository on
+ * their token (`workspace-repositories.ts`). The daily refresh fills every
+ * workspace's drive the same way (`base-drive-refresh.ts`), and the drive is
+ * deleted with its workspace (`workspace-deletion.ts`). The fill's sandbox
+ * writes its firewall under the workspace's first owner.
  */
 
 import { createHash } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
-import type { BaseDriveWorkspace } from "@repo/database/models/base-drive-repositories";
+import {
+  type BaseDriveWorkspace,
+  baseDriveWorkspaceOfInstallation,
+  workspaceDriveOwner,
+} from "@repo/database/models/base-drive-repositories";
 import { listWorkspaceTokenRepositories } from "@repo/database/models/workspace-token-repository-store";
 import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import { causeKind } from "@repo/runtime/effect";
 import { deletedIfStill, filledDrive, Sandbox } from "@repo/sandbox";
-import { Cause, Clock, Effect, Option } from "effect";
+import { Cause, Clock, Context, Effect, Layer, Option } from "effect";
 import { GitHubApp } from "../github/github-app.js";
+import { GitHubBackground } from "../github/github-rate-gate.js";
+import { afterResponse } from "../http/after-response.js";
 import { BASE_STATE, readOf } from "./base-drive.js";
+import { AgentImage } from "./coder-host/agent-image.js";
 import {
   firewallSessionOf,
   repositoryFirewallOver,
@@ -55,6 +68,28 @@ export const WORKSPACE_DRIVE = {
   /** Where the drive is mounted: each repository's folder stands under it. */
   MOUNT: REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE,
 } as const;
+
+/** What fills a workspace's drive in a function that may: the edge's runner a fill's checkout runs through, and the agents' image it opens from. */
+interface WorkspaceDriveFillsService {
+  readonly run: SandboxRunner;
+  readonly image: Effect.Effect<string, unknown>;
+}
+
+/** The fills of workspace drives a function offers, provided beside its native agents (`apps/web/server/native-agents.ts`). */
+export class WorkspaceDriveFills extends Context.Service<
+  WorkspaceDriveFills,
+  WorkspaceDriveFillsService
+>()("WorkspaceDriveFills") {}
+
+/** The fills on the runner given, over the agents' image the function ships. */
+export function workspaceDriveFillsLayer(
+  run: SandboxRunner,
+): Layer.Layer<WorkspaceDriveFills, never, AgentImage> {
+  return Layer.effect(
+    WorkspaceDriveFills,
+    Effect.map(AgentImage, (agentImage) => ({ run, image: agentImage.reference })),
+  );
+}
 
 /** One repository the drive holds, as the workspace reaches it: its name, and the member whose own token reaches it where the installation does not. */
 interface HeldRepository {
@@ -157,3 +192,35 @@ export const fillWorkspaceDrive = Effect.fn("web/fillWorkspaceDrive")(function* 
       }),
   );
 });
+
+/** The workspace's drive regenerated past the answer, where the function fills drives; its GitHub reads in the background lane, since no member waits on them. */
+const regeneratedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
+  Effect.gen(function* () {
+    const fills = yield* Effect.serviceOption(WorkspaceDriveFills);
+    const sandbox = yield* Effect.serviceOption(Sandbox);
+    if (Option.isNone(fills) || Option.isNone(sandbox) || Option.isNone(workspace)) return;
+    const { run, image } = fills.value;
+    yield* afterResponse(
+      "A workspace's drive",
+      Effect.flatMap(image, (reference) =>
+        fillWorkspaceDrive(run, reference, workspace.value),
+      ).pipe(
+        Effect.provideService(GitHubBackground, true),
+        Effect.provideService(Sandbox, sandbox.value),
+      ),
+    );
+  });
+
+/** The workspace's drive regenerated past the answer, as a repository of it is connected or disconnected; a workspace the store could not read regenerates nothing. */
+export const workspaceDriveRegenerated = (workspaceId: string) =>
+  Effect.flatMap(
+    Effect.orElseSucceed(workspaceDriveOwner(workspaceId), () => Option.none()),
+    regeneratedFor,
+  );
+
+/** The drive of the workspace an installation is linked to regenerated past the answer, as GitHub says its repositories changed. */
+export const installationDriveRegenerated = (installationId: number) =>
+  Effect.flatMap(
+    Effect.orElseSucceed(baseDriveWorkspaceOfInstallation(installationId), () => Option.none()),
+    regeneratedFor,
+  );
