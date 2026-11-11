@@ -59,16 +59,35 @@ const MAX_ADDRESS_CHARS = 1_024;
 export const INBOX_PICTURE_IN_WORDS =
   /(?<!\\)!\[((?:\\.|[^[\]\\\n]){0,1000})\]\([ \t]*(<[^<>\n]{1,1024}>|[^\s()<>]{1,1024})/gu;
 
-/**
- * What closes a picture after its destination: its caption in double or
- * single quotes, if any, and its closing parenthesis; bounded as the
- * opening is.
- */
-const PICTURE_CLOSE =
-  /[ \t]{0,100}(?:"(?:\\.|[^"\\\n]){0,1000}"[ \t]{0,100}|'(?:\\.|[^'\\\n]){0,1000}'[ \t]{0,100})?\)/uy;
-
 /** A destination that names a scheme, `https:`, `data:`, or our own, and so no file in the agent's sandbox. */
 const SCHEMED = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
+
+/** Where a run of spaces and tabs from the place given ends. */
+function blanksEndAt(text: string, from: number): number {
+  let at = from;
+  while (text[at] === " " || text[at] === "\t") at += 1;
+  return at;
+}
+
+/**
+ * Where a picture closes, read on from its destination: past its caption in
+ * double or single quotes, if any, and its closing parenthesis; nothing
+ * where the words close it no way a picture closes. Note that it is a scan
+ * rather than a regular expression, so it reads each character once.
+ */
+function pictureClosedAt(text: string, from: number): number | undefined {
+  let at = blanksEndAt(text, from);
+  const quote = text[at];
+  if (quote === '"' || quote === "'") {
+    at += 1;
+    while (text[at] !== quote) {
+      if (at >= text.length || text[at] === "\n") return undefined;
+      at += text[at] === "\\" ? 2 : 1;
+    }
+    at = blanksEndAt(text, at + 1);
+  }
+  return text[at] === ")" ? at + 1 : undefined;
+}
 
 /** An item of the Inbox as its link names it: under its task, or under its agent. */
 export type InboxItemPlace = Extract<
@@ -156,13 +175,12 @@ export function withoutSandboxPictures(text: string, cut: (path: string) => bool
   for (const match of text.matchAll(INBOX_PICTURE_IN_WORDS)) {
     const path = inboxPictureDestination(match[2] ?? "");
     const opened = match.index + match[0].length;
-    PICTURE_CLOSE.lastIndex = opened;
-    const close = PICTURE_CLOSE.exec(text);
-    if (SCHEMED.test(path) || insideCode(text, match.index) || close === null || !cut(path)) {
+    const closed = pictureClosedAt(text, opened);
+    if (SCHEMED.test(path) || insideCode(text, match.index) || closed === undefined || !cut(path)) {
       continue;
     }
     kept += text.slice(at, match.index);
-    at = opened + close[0].length;
+    at = closed;
   }
   return kept + text.slice(at);
 }
