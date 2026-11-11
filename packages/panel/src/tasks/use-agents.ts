@@ -1418,9 +1418,8 @@ export function useAgents(input: {
   };
 
   // Note that a side chat goes at once rather than through a draft, so a refusal is said in a toast.
-  const sideUnanswered = useRef<{ agentId: string; question: string; key: string } | undefined>(
-    undefined,
-  );
+  // The key each side question the service never answered went under, by its source agent, then its words.
+  const sideUnanswered = useRef(new Map<string, Map<string, string>>());
   const startSide = async (
     fork: AgentFork,
     question: string,
@@ -1429,11 +1428,8 @@ export function useAgents(input: {
     const source = standing?.find((agent) => agent.id === fork.agentId);
     // Note that the same question asked again of the same agent after the service never answered
     // goes under the key it went under, so the service answers the side chat it may have started.
-    const held = sideUnanswered.current;
-    const key =
-      held !== undefined && held.agentId === fork.agentId && held.question === question
-        ? held.key
-        : mintKey();
+    const ofAgent = sideUnanswered.current.get(fork.agentId) ?? new Map<string, string>();
+    const key = ofAgent.get(question) ?? mintKey();
     const asked = sideChatStart({
       key,
       fork,
@@ -1441,10 +1437,13 @@ export function useAgents(input: {
       disabledServers: source?.disabledServers ?? [],
     });
     const answer = await askStart(taskId, asked);
-    sideUnanswered.current =
-      "failure" in answer && answer.failure === AGENT_CALL_FAILURE.UNANSWERED
-        ? { agentId: fork.agentId, question, key }
-        : undefined;
+    // Note that an answer lets go of its own question's key alone, so another still unanswered keeps its own.
+    if ("failure" in answer && answer.failure === AGENT_CALL_FAILURE.UNANSWERED) {
+      sideUnanswered.current.set(fork.agentId, ofAgent.set(question, key));
+    } else {
+      ofAgent.delete(question);
+      if (ofAgent.size === 0) sideUnanswered.current.delete(fork.agentId);
+    }
     if (!("failure" in answer)) return answer.agent;
     failed(startFailureNote(answer, taskId).text, {
       surface: FAILURE_SURFACE.AGENT_START,
