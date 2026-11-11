@@ -562,4 +562,9 @@ test("with Done and follow-ups on, the follow-ups a done turn offered stand in t
     tab.sent.map((each) => each.text),
     ["Keep the link valid for a week.\n\nFollow-ups:\n- Let an admin revoke an invitation"],
   );
+
+  // The ticks went with that message, so the next one carries the box's words alone.
+  await tab.answer(0, TAKEN);
+  await tab.send("Then run the tests.");
+  assert.equal(tab.sent[1]?.text, "Then run the tests.");
 });
