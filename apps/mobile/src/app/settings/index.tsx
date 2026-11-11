@@ -100,7 +100,7 @@ export default function SettingsScreen() {
   useSurfaceOpen(PRODUCT_SURFACE.SETTINGS);
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const { chosen, choose } = useChosenWorkspace(workspaces);
+  const { chosen } = useChosenWorkspace(workspaces);
   const notifications = useNotificationPermission();
   const device = usePushDeviceKey();
   const push = usePushDeviceStanding(device);
@@ -138,12 +138,6 @@ export default function SettingsScreen() {
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.WORKSPACE)}
                 testId="settings-workspace"
-              />
-              <PickRows
-                label="Workspace"
-                options={workspaces.map(({ id, name }) => ({ id, label: name }))}
-                picked={chosen?.id}
-                onPick={choose}
               />
             </ListSection>
           )}
