@@ -286,6 +286,16 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
           console.error("The feedback mail did not open.", error),
         );
         return;
+      // Note that Remind Me's presets were set above, by the time each sets.
+      case MENU_COMMAND.REMIND_HOUR:
+      case MENU_COMMAND.REMIND_TOMORROW:
+      case MENU_COMMAND.REMIND_NEXT_WEEK:
+        return;
+      default: {
+        // Note that a command with no case fails to compile, and one the native side sends that this build does not know is said rather than thrown, since a throw in a native event's listener ends a Release build.
+        const unhandled: never = command;
+        console.error(`The menu command ${String(unhandled)} has no handler.`);
+      }
     }
   };
 
