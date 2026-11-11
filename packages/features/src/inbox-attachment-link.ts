@@ -173,6 +173,8 @@ export function withoutSandboxPictures(text: string, cut: (path: string) => bool
   let kept = "";
   let at = 0;
   for (const match of text.matchAll(INBOX_PICTURE_IN_WORDS)) {
+    // A picture written inside the caption of one already cut out went with it.
+    if (match.index < at) continue;
     const path = inboxPictureDestination(match[2] ?? "");
     const opened = match.index + match[0].length;
     const closed = pictureClosedAt(text, opened);
