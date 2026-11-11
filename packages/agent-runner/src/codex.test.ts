@@ -3,15 +3,7 @@
  */
 
 import assert from "node:assert/strict";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { it } from "@effect/vitest";
@@ -1521,24 +1513,6 @@ it.effect(
     }),
 );
 
-/** A checkout with its git folder, and a home with none of the package caches yet, each a folder of the test's own. */
-function permissionFolders() {
-  const cwd = mkdtempSync(join(tmpdir(), "vespin-codex-checkout-"));
-  mkdirSync(join(cwd, ".git"));
-  const home = mkdtempSync(join(tmpdir(), "vespin-codex-home-"));
-  const caches = [join(home, ".npm"), join(home, ".cache"), join(home, ".local", "share", "pnpm")];
-  return {
-    cwd,
-    home,
-    writableRoots: [join(cwd, ".git"), ...caches],
-    caches,
-    [Symbol.dispose]: () => {
-      rmSync(cwd, { recursive: true, force: true });
-      rmSync(home, { recursive: true, force: true });
-    },
-  };
-}
-
 /** The sleep turn's command, as app-server asks to run it outside the sandbox. */
 const COMMAND_ASK: RecordedMessage = {
   id: 41,
@@ -1585,20 +1559,15 @@ function posted(service: ReturnType<typeof fakeService>, type: string) {
 }
 
 it.effect(
-  "in Ask for approval, runs Codex's workspace sandbox with git and the package caches writable, holds an ask for the member, answers Always allow as acceptForSession, and declines an MCP form",
+  "in Ask for approval, runs Codex's workspace sandbox on its own defaults, holds an ask for the member, answers Always allow as acceptForSession, and declines an MCP form",
   () =>
     Effect.gen(function* () {
-      using folders = permissionFolders();
       const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
       const { spawned, write, run } = yield* launch(
         [sleepTurnAsking(COMMAND_ASK, ELICITATION)],
         service,
-        {
-          ...ENV,
-          HOME: folders.home,
-        },
       );
-      yield* write({ ...CONFIG, cwd: folders.cwd, permissionMode: PERMISSION_MODE.ASK });
+      yield* write({ ...CONFIG, permissionMode: PERMISSION_MODE.ASK });
       yield* write(message("Run sleep 600.", LINE.FIRST));
       yield* service.seen;
       const [process] = spawned;
@@ -1640,24 +1609,20 @@ it.effect(
       assert.equal(override(process, "approval_policy"), '"on-request"');
       assert.equal(override(process, "approvals_reviewer"), '"user"');
       assert.equal(override(process, "sandbox_mode"), '"workspace-write"');
-      assert.equal(
-        override(process, "sandbox_workspace_write.writable_roots"),
-        `[${folders.writableRoots.map((root) => JSON.stringify(root)).join(", ")}]`,
-      );
-      assert.equal(override(process, "sandbox_workspace_write.network_access"), "true");
+      // Codex's own workspace defaults: nothing writable beside the checkout, and the network off.
+      assert.equal(override(process, "sandbox_workspace_write.writable_roots"), undefined);
+      assert.equal(override(process, "sandbox_workspace_write.network_access"), undefined);
       const [thread] = received(process, "thread/start");
       assert.equal(thread?.approvalPolicy, "on-request");
       assert.equal(thread?.approvalsReviewer, "user");
       assert.equal(thread?.sandbox, "workspace-write");
       assert.deepEqual(received(process, "turn/start")[0]?.sandboxPolicy, {
         type: "workspaceWrite",
-        writableRoots: folders.writableRoots,
-        networkAccess: true,
+        writableRoots: [],
+        networkAccess: false,
         excludeTmpdirEnvVar: false,
         excludeSlashTmp: false,
       });
-      // A cache the home did not hold is made, since a sandboxed command cannot make it.
-      assert.ok(folders.caches.every((cache) => existsSync(cache)));
     }),
 );
 
@@ -1710,13 +1675,9 @@ it.effect(
   "in Approve for me, Codex's automatic review answers, a command it denied says why on its row, and an ask still waiting as the launch ends is resolved before its end",
   () =>
     Effect.gen(function* () {
-      using folders = permissionFolders();
       const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
-      const { spawned, write, run } = yield* launch([sleepTurnAsking(...REVIEWED)], service, {
-        ...ENV,
-        HOME: folders.home,
-      });
-      yield* write({ ...CONFIG, cwd: folders.cwd, permissionMode: PERMISSION_MODE.AUTO });
+      const { spawned, write, run } = yield* launch([sleepTurnAsking(...REVIEWED)], service);
+      yield* write({ ...CONFIG, permissionMode: PERMISSION_MODE.AUTO });
       yield* write(message("Run sleep 600.", LINE.FIRST));
       yield* service.seen;
       yield* write({ type: INPUT_LINE.STOP });
@@ -1747,45 +1708,5 @@ it.effect(
         [APPROVAL_BY.ENDED],
       );
       assert.equal(kinds(service.applied).at(-1), RUNNER_EVENT.END);
-    }),
-);
-
-it.effect(
-  "in a mode that asks, a worktree's git folders are writable as Git lays them out, and never a folder its commondir or a forged .git file points at",
-  () =>
-    Effect.gen(function* () {
-      const root = realpathSync(mkdtempSync(join(tmpdir(), "vespin-codex-worktree-")));
-      const clone = join(root, "clone", ".git");
-      const own = join(clone, "worktrees", "agent");
-      const checkout = join(root, "agent");
-      const secret = join(root, "secret");
-      mkdirSync(join(clone, "objects"), { recursive: true });
-      writeFileSync(join(clone, "HEAD"), "ref: refs/heads/main\n");
-      mkdirSync(own, { recursive: true });
-      mkdirSync(checkout);
-      mkdirSync(secret);
-      writeFileSync(join(checkout, ".git"), `gitdir: ${own}\n`);
-      writeFileSync(join(own, "gitdir"), `${join(checkout, ".git")}\n`);
-      // An earlier command pointed the shared folder elsewhere, which the next launch must not follow.
-      writeFileSync(join(own, "commondir"), `${secret}\n`);
-      const roots = (env: Record<string, string>) =>
-        Effect.gen(function* () {
-          const { spawned, write, run } = yield* launch([STOPPED], fakeService(), env);
-          yield* write({ ...CONFIG, cwd: checkout, permissionMode: PERMISSION_MODE.ASK });
-          yield* write({ type: INPUT_LINE.STOP });
-          yield* Fiber.join(run);
-          return override(spawned[0], "sandbox_workspace_write.writable_roots");
-        });
-
-      const laidOut = yield* roots(ENV);
-      // A `.git` file naming a folder that does not name this checkout back makes nothing writable.
-      const decoy = join(secret, "worktrees", "agent");
-      mkdirSync(decoy, { recursive: true });
-      writeFileSync(join(checkout, ".git"), `gitdir: ${decoy}\n`);
-      const forged = yield* roots(ENV);
-      rmSync(root, { recursive: true, force: true });
-
-      assert.equal(laidOut, `[${[own, clone].map((path) => JSON.stringify(path)).join(", ")}]`);
-      assert.equal(forged, "[]");
     }),
 );
