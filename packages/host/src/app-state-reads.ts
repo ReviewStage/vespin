@@ -18,6 +18,7 @@ import type { IntegrationStatusesAnswer } from "@repo/features/integration-live"
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { HOST_LIVE } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
 import {
   type AccountExperiment,
@@ -194,6 +195,38 @@ export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
+
+/** What a window shows may be behind for: this machine offline, the service not answering, or live updates catching up, the machine's own network first, since nothing else can be read without it. */
+export const LIVE_MARK = {
+  MAC_OFFLINE: "mac-offline",
+  SERVICE_OFFLINE: "service-offline",
+  CATCHING_UP: "catching-up",
+} as const;
+
+export type LiveMark = (typeof LIVE_MARK)[keyof typeof LIVE_MARK];
+
+/** Each mark's word and the hint that says why, which the panel's Offline pill and the iOS app's offline notice say alike. */
+export const LIVE_MARK_WORDS = {
+  [LIVE_MARK.MAC_OFFLINE]: { word: "Offline", hint: "You're offline." },
+  [LIVE_MARK.SERVICE_OFFLINE]: {
+    word: "Offline",
+    hint: "Can't connect. Check your internet connection.",
+  },
+  [LIVE_MARK.CATCHING_UP]: {
+    word: "Catching up",
+    hint: "Live updates fell behind. What you see may be out of date.",
+  },
+} as const satisfies Record<LiveMark, { readonly word: string; readonly hint: string }>;
+
+/** What may be behind now, or none, which redraws its readers only as it turns. */
+export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined => {
+  const { network } = state;
+  if (!network.online) return LIVE_MARK.MAC_OFFLINE;
+  const live = state.tasks.live;
+  if (!network.reachable || live === HOST_LIVE.OFFLINE) return LIVE_MARK.SERVICE_OFFLINE;
+  if (live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
+  return undefined;
+};
 
 /** Where the task list's read stands: not yet asked, on its way, read, or refused. */
 export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;

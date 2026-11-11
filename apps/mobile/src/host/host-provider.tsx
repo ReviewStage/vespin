@@ -12,6 +12,7 @@ import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
   launchFixtureProfile,
+  launchRefusesWrites,
   launchStubsAuthServer,
   launchUpdateNeeded,
 } from "./launch-arguments.js";
@@ -81,6 +82,7 @@ function launchOptions(): MobileHostStartOptions {
     errorReporting: crashReportsErrorReporting,
     fixture: launchFixtureProfile(),
     fixtureUpdateNeeded: launchUpdateNeeded(),
+    fixtureRefusesWrites: launchRefusesWrites(),
     appVersion: Constants.expoConfig?.version ?? UNVERSIONED,
     stateRoot: hostStateRoot(),
   };

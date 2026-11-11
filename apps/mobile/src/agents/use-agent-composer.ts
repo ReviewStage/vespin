@@ -64,6 +64,7 @@ import { useEffect, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
+import { useWrite } from "../use-write.js";
 
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
@@ -152,6 +153,7 @@ export function useAgentComposer(
   onMessage?: (taken: Promise<boolean>) => void,
 ): AgentComposer {
   const acts = useHostActs();
+  const write = useWrite();
   const { data: enterQueues = false } = useQuery({
     ...appStateQuery,
     select: (state) => selectAppSettingsView(state)?.agentEnter === AGENT_ENTER.QUEUE,
@@ -191,11 +193,9 @@ export function useAgentComposer(
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
     pictures.putBack(sent.pictures);
     setNote(refusal);
-    buzz(BUZZ.ERROR);
   };
   const settled = (sent: Sending) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
-    buzz(BUZZ.SUCCESS);
   };
   const send = () => {
     const text = words.trim();
@@ -211,17 +211,21 @@ export function useAgentComposer(
     setSending((out) => [...out, sent]);
     setWords("");
     setNote(undefined);
+    // A send refused says why in the composer, where its words go back, rather than in the notice.
+    const saying = {
+      inPlace: (words: string) => handBack(sent, words),
+      went: BUZZ.SUCCESS,
+    } as const;
     if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
-      acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change })
-        .then((answer) => {
-          if ("failure" in answer) handBack(sent, queueRefusalWords(change.change, answer.failure));
-          else settled(sent);
-        })
-        .catch((error: unknown) => {
-          console.error("The queued message did not go.", error);
-          handBack(sent, queueRefusalWords(change.change, AGENT_CALL_FAILURE.UNANSWERED));
-        });
+      write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change }), {
+        ...saying,
+        refused: (answer) =>
+          "failure" in answer ? queueRefusalWords(change.change, answer.failure) : undefined,
+        unanswered: queueRefusalWords(change.change, AGENT_CALL_FAILURE.UNANSWERED),
+      }).then((went) => {
+        if (went) settled(sent);
+      });
       return;
     }
     const message = acts[ACT_KIND.AGENTS_MESSAGE]({
@@ -236,44 +240,45 @@ export function useAgentComposer(
         () => false,
       ),
     );
-    message
-      .then((answer) => {
-        if ("failure" in answer) handBack(sent, messageFailureWords(answer.failure));
-        else settled(sent);
-      })
-      .catch((error: unknown) => {
-        console.error("The message did not go.", error);
-        handBack(sent, messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED));
-      });
+    write(() => message, {
+      ...saying,
+      refused: (answer) => ("failure" in answer ? messageFailureWords(answer.failure) : undefined),
+      unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+    }).then((went) => {
+      if (went) settled(sent);
+    });
   };
   const stop = () => {
     setStopping(true);
     setNote(undefined);
-    acts[ACT_KIND.AGENTS_STOP]({ agentId })
-      .then((answer) => {
-        if ("failure" in answer) throw new Error(`The stop was refused: ${answer.failure}.`);
-        if (agentStillWriting(answer.agent.status)) {
+    // Note that a Stop taken while the agent still writes is no refusal: the agent stops at its next step, and the composer says so.
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_STOP]({ agentId }).then((answer) => {
+          if (!("failure" in answer) && agentStillWriting(answer.agent.status)) {
+            setStopping(false);
+            setNote(STOP_NOTHING_YET);
+          }
+          return answer;
+        }),
+      {
+        refused: (answer) => ("failure" in answer ? STOP_FAILED : undefined),
+        unanswered: STOP_FAILED,
+        inPlace: (words) => {
           setStopping(false);
-          setNote(STOP_NOTHING_YET);
-        }
-      })
-      .catch((error: unknown) => {
-        console.error("The stop did not go.", error);
-        setStopping(false);
-        setNote(STOP_FAILED);
-        buzz(BUZZ.ERROR);
-      });
+          setNote(words);
+        },
+      },
+    );
   };
   const change = (next: AgentQueueChange) => {
     setNote(undefined);
-    acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next })
-      .then((answer) => {
-        if ("failure" in answer) setNote(queueRefusalWords(next.change, answer.failure));
-      })
-      .catch((error: unknown) => {
-        console.error("The queue change did not go.", error);
-        setNote(queueRefusalWords(next.change, AGENT_CALL_FAILURE.UNANSWERED));
-      });
+    write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next }), {
+      refused: (answer) =>
+        "failure" in answer ? queueRefusalWords(next.change, answer.failure) : undefined,
+      unanswered: queueRefusalWords(next.change, AGENT_CALL_FAILURE.UNANSWERED),
+      inPlace: setNote,
+    });
   };
   const queue = transcript?.word?.queue;
   const held = queue?.messages ?? [];

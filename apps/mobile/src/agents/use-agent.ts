@@ -9,6 +9,7 @@
  * transcript the host still holds, as one shown lately, draws at once.
  */
 
+import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
@@ -21,20 +22,14 @@ import {
   selectFollowedAgent,
   selectTranscript,
 } from "@repo/host/app-state-reads";
-import {
-  BUZZ,
-  buzz,
-  latestStep,
-  NO_TOGGLES,
-  type OlderPages,
-  transcriptItems,
-} from "@repo/ui-native";
+import { BUZZ, latestStep, NO_TOGGLES, type OlderPages, transcriptItems } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedVideo } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
 const AGENT_MEDIA_PREFIX = "agent";
@@ -97,24 +92,28 @@ export function useAgentRowActs(): {
   readonly archive: (agentId: string) => void;
 } {
   const acts = useHostActs();
-  return useMemo(() => {
-    const told = (what: string) =>
-      [
-        (answer: object) => buzz("failure" in answer ? BUZZ.ERROR : BUZZ.SUCCESS),
-        (error: unknown) => {
-          console.error(`${what} did not go.`, error);
-          buzz(BUZZ.ERROR);
-        },
-      ] as const;
-    return {
+  const write = useWrite();
+  return useMemo(
+    () => ({
       stop: (agentId) => {
-        acts[ACT_KIND.AGENTS_STOP]({ agentId }).then(...told("The stop"));
+        write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
+          refused: (answer) => ("failure" in answer ? STOP_FAILED : undefined),
+          unanswered: STOP_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
       },
       archive: (agentId) => {
-        acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }).then(...told("The archive"));
+        write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }), {
+          refused: (answer) => ("failure" in answer ? ARCHIVE_FAILED : undefined),
+          unanswered: ARCHIVE_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
       },
-    };
-  }, [acts]);
+    }),
+    [acts, write],
+  );
 }
 
 /**

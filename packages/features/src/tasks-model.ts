@@ -236,6 +236,9 @@ export function startFailureNote(failure: StartCallFailure): string {
 /** What a task's name says, where it was edited, when the service refused the rename. */
 export const RENAME_FAILED_NOTE = "The task could not be renamed. Try again.";
 
+/** What a task's delete says, where it was asked, when the service refused it. */
+export const DELETE_FAILED_NOTE = "The task could not be deleted. Try again.";
+
 /** Names drawn over the ones a view carries, by task id: a name being typed. */
 export type TaskNames = ReadonlyMap<string, string>;
 

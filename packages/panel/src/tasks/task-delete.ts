@@ -2,19 +2,17 @@
  * task-delete.ts -- a task's delete, and several at once, as each place asking it holds its own mutation over it.
  */
 
+import { DELETE_FAILED_NOTE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useQuery } from "@tanstack/react-query";
 import { type ActedResult, askKept, sendAct } from "../act.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 
-/** Why a delete the service did not carry was refused. */
-const DELETE_REFUSED_NOTE = "The task could not be deleted. Try again.";
-
 /** What a delete the service did not carry answers, so the task stays and says why. */
 const DELETE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: DELETE_REFUSED_NOTE,
+  reason: DELETE_FAILED_NOTE,
 };
 
 /** A task's delete as each place asking it holds its own mutation over it, run through `run`, answering whether it was deleted. */

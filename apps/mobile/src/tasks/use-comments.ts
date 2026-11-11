@@ -23,19 +23,16 @@ import {
 } from "@repo/features/description-comment-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import {
-  COMMENT_SUBJECT,
-  DESCRIPTION_COMMENT_CALL_FAILURE,
-  type TasksCommentAnswer,
-} from "@repo/features/tasks-view";
+import { COMMENT_SUBJECT } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUZZ, buzz, type ThreadMessage } from "@repo/ui-native";
+import { BUZZ, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useWrite } from "../use-write.js";
 
 /** No threads read yet. */
 const NO_THREADS: readonly DescriptionCommentThread[] = [];
@@ -129,6 +126,7 @@ interface SentReply {
  */
 export function useCommentReply(taskId: string, threadId: string): CommentReply {
   const acts = useHostActs();
+  const write = useWrite();
   const [words, setWords] = useState("");
   const [sent, setSent] = useState<SentReply | undefined>(undefined);
   const [sending, setSending] = useState(false);
@@ -142,22 +140,27 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       setSending(true);
       setNote(undefined);
       setWords("");
-      acts[ACT_KIND.TASKS_COMMENT_ACT]({
-        planId: taskId,
-        threadId,
-        action: { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey: key, words: kept },
-      })
-        .catch((): TasksCommentAnswer => ({ failure: DESCRIPTION_COMMENT_CALL_FAILURE.UNANSWERED }))
-        .then((answer) => {
-          if ("thread" in answer) {
-            buzz(BUZZ.SUCCESS);
-            setSent(undefined);
-            return;
-          }
-          buzz(BUZZ.ERROR);
-          // Note that words typed while it was out stay, after the reply given back, so neither is lost.
-          setWords((now) => (now.trim() === "" ? kept : `${kept}\n\n${now}`));
-          setNote(NOT_POSTED);
+      // Note that a reply refused says why under the box, where its words go back, rather than in the notice.
+      write(
+        () =>
+          acts[ACT_KIND.TASKS_COMMENT_ACT]({
+            planId: taskId,
+            threadId,
+            action: { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey: key, words: kept },
+          }),
+        {
+          refused: (answer) => ("thread" in answer ? undefined : NOT_POSTED),
+          unanswered: NOT_POSTED,
+          inPlace: (said) => {
+            // Note that words typed while it was out stay, after the reply given back, so neither is lost.
+            setWords((now) => (now.trim() === "" ? kept : `${kept}\n\n${now}`));
+            setNote(said);
+          },
+          went: BUZZ.SUCCESS,
+        },
+      )
+        .then((went) => {
+          if (went) setSent(undefined);
         })
         .finally(() => setSending(false));
     };
@@ -168,5 +171,5 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       send,
       note,
     };
-  }, [acts, taskId, threadId, words, sent, sending, note]);
+  }, [acts, write, taskId, threadId, words, sent, sending, note]);
 }

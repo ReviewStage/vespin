@@ -104,6 +104,7 @@
     "./inbox-live": "./src/inbox-live.js",
     "./inbox-wire": "./src/inbox-wire.js",
     "./inbox-writes": "./src/inbox-writes.js",
+    "./inbox-write-words": "./src/inbox-write-words.js",
     "./inbox-ask-words": "./src/inbox-ask-words.js",
     "./inbox-draft": "./src/inbox-draft.js",
     "./inbox-list-model": "./src/inbox-list-model.js",

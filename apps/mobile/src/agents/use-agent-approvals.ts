@@ -27,9 +27,10 @@ import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features
 import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { FollowedAgent } from "@repo/host/app-state-reads";
-import { BUZZ, buzz, type HeldAnswer, type HeldCall } from "@repo/ui-native";
+import { BUZZ, type HeldAnswer, type HeldCall } from "@repo/ui-native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 
 /** One ask as the page holds it, its failure in words. */
 type Held = HeldAsk<HeldAnswer, string>;
@@ -54,11 +55,6 @@ export interface AgentApprovals {
   readonly banner: WaitingBanner | undefined;
   /** Says a message went while calls waited, which the service denies them with once it takes it; one not taken takes that back. */
   readonly messageSent: (taken: Promise<boolean>) => void;
-}
-
-/** Whether the service took the answer, which the phone buzzes success for. Note that a refusal carrying the status the call already settled to, as when another reader answered it first, still settles the row but buzzes as a refusal, since this press did not land. */
-function took(answered: AgentApprovalAnswerView): boolean {
-  return "approval" in answered;
 }
 
 /** An ask once its answer came back: settled as the answer says, or offered again with why it did not go. */
@@ -94,6 +90,7 @@ export function useAgentApprovals(
   agentId: string,
 ): AgentApprovals {
   const acts = useHostActs();
+  const write = useWrite();
   const pending = agent?.pendingApprovals ?? NO_ASKS;
   const running = agent?.status === AGENT_STATUS.RUNNING;
   const [state, setState] = useState<{
@@ -120,19 +117,28 @@ export function useAgentApprovals(
   const answer = useCallback(
     (approvalId: string, press: HeldAnswer) => {
       settle(agentId, approvalId, (ask) => ({ ...ask, answering: press, error: undefined }));
-      acts[ACT_KIND.AGENTS_ANSWER_APPROVAL]({ agentId, approvalId, answer: press })
-        .then((answered) => {
-          buzz(took(answered) ? BUZZ.SUCCESS : BUZZ.ERROR);
-          settle(agentId, approvalId, (ask) => answeredAsk(ask, answered));
-        })
-        .catch((error: unknown) => {
-          console.error("The answer did not go.", error);
-          buzz(BUZZ.ERROR);
-          const words = answerFailedOf(AGENT_CALL_FAILURE.UNANSWERED).words;
-          settle(agentId, approvalId, (ask) => ({ ...ask, answering: undefined, error: words }));
-        });
+      // Note that an answer refused says why under the call it answered, rather than in the notice. One refused because another reader settled the call first still buzzes as a refusal, since this press did not land, but its row reads settled rather than failed.
+      write(
+        () =>
+          acts[ACT_KIND.AGENTS_ANSWER_APPROVAL]({ agentId, approvalId, answer: press }).then(
+            (answered) => {
+              settle(agentId, approvalId, (ask) => answeredAsk(ask, answered));
+              return answered;
+            },
+          ),
+        {
+          refused: (answered) =>
+            "failure" in answered ? answerFailedOf(answered.failure).words : undefined,
+          unanswered: answerFailedOf(AGENT_CALL_FAILURE.UNANSWERED).words,
+          inPlace: (words) =>
+            settle(agentId, approvalId, (ask) =>
+              ask.settled === undefined ? { ...ask, answering: undefined, error: words } : ask,
+            ),
+          went: BUZZ.SUCCESS,
+        },
+      );
     },
-    [acts, agentId, settle],
+    [acts, write, agentId, settle],
   );
 
   // Note that the asks are marked as the message goes, since the service may take them off before it answers, and a message not taken takes the mark back.

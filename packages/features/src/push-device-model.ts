@@ -23,6 +23,9 @@ export const PUSH_NOTIFY_CHOICES: readonly { readonly id: PushNotify; readonly l
 /** What the choices mean, under them. */
 export const PUSH_NOTIFY_FOOTER = `When I'm away holds a notification while you're using ${PRODUCT_NAME} on a computer, and sends it if you step away with it still waiting.`;
 
+/** What the phone says when the service did not take a "Notify me" choice, which is put back. */
+export const PUSH_NOTIFY_REFUSED = "Notify me could not be changed. Try again.";
+
 /** How a phone's pushes stand where none failed: working, or none sent yet. */
 const PUSH_STANDING_WORDS = {
   WORKING: "Working",

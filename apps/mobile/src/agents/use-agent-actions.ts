@@ -14,7 +14,7 @@
  * where it was opened from, since the agent leaves its task's list.
  */
 
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { ARCHIVE_FAILED } from "@repo/features/agent-refusal-words";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { archiveStopWords } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
@@ -25,6 +25,7 @@ import { setStringAsync } from "expo-clipboard";
 import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 import { useFollowedAgent } from "./use-agent.js";
 
 /** Why each act did not take, said over the composer. */
@@ -32,7 +33,7 @@ const ACT_FAILED = {
   RENAME: "The agent could not be renamed.",
   PIN: "The agent could not be pinned.",
   UNPIN: "The agent could not be unpinned.",
-  ARCHIVE: "The agent could not be archived.",
+  ARCHIVE: ARCHIVE_FAILED,
   COPY: "The link could not be copied.",
 } as const;
 
@@ -66,6 +67,7 @@ export interface AgentActions {
 /** The menu of the agent `agentId` names, whose address on vespin.dev is `address`. */
 export function useAgentActions(agentId: string, address: string): AgentActions {
   const acts = useHostActs();
+  const write = useWrite();
   const agent = useFollowedAgent(agentId);
   const select = useMemo(() => selectAgentPinned(agentId), [agentId]);
   const { data: pinned = false } = useQuery({ ...appStateQuery, select });
@@ -75,25 +77,19 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
 
   /** Sends an act, saying `failed` where the service refused it or never answered, and buzzing as it lands. */
   const send = (
-    sent: Promise<{ readonly failure: string } | object>,
+    sent: () => Promise<{ readonly failure: string } | object>,
     failed: string,
     onTaken?: () => void,
   ) => {
     setNote(undefined);
-    sent
-      .catch((error: unknown) => {
-        console.error(failed, error);
-        return { failure: AGENT_CALL_FAILURE.UNANSWERED };
-      })
-      .then((answer) => {
-        if ("failure" in answer) {
-          setNote(failed);
-          buzz(BUZZ.ERROR);
-          return;
-        }
-        buzz(BUZZ.SUCCESS);
-        onTaken?.();
-      });
+    write(sent, {
+      refused: (answer) => ("failure" in answer ? failed : undefined),
+      unanswered: failed,
+      inPlace: setNote,
+      went: BUZZ.SUCCESS,
+    }).then((went) => {
+      if (went) onTaken?.();
+    });
   };
 
   return {
@@ -110,11 +106,11 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
     },
     rename: (title) => {
       if (title === "" || title === agent?.title) return;
-      send(acts[ACT_KIND.AGENTS_RENAME]({ agentId, title }), ACT_FAILED.RENAME);
+      send(() => acts[ACT_KIND.AGENTS_RENAME]({ agentId, title }), ACT_FAILED.RENAME);
     },
     pin: () =>
       send(
-        acts[ACT_KIND.AGENTS_PIN]({ agentId, pinned: !pinned }),
+        () => acts[ACT_KIND.AGENTS_PIN]({ agentId, pinned: !pinned }),
         pinned ? ACT_FAILED.UNPIN : ACT_FAILED.PIN,
       ),
     archiveQuestion: working
@@ -122,7 +118,7 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
       : { title: ARCHIVE_AT_REST.title, message: undefined, act: ARCHIVE_AT_REST.act },
     archive: (onArchived) =>
       send(
-        acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }),
+        () => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }),
         ACT_FAILED.ARCHIVE,
         onArchived,
       ),

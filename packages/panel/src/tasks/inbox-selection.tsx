@@ -1,6 +1,7 @@
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { type InboxListed, isUnread } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { markedNote } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type SelectionGlyphAct, STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
@@ -10,7 +11,7 @@ import { COMMAND_PLACE, commandWords, PANEL_COMMAND } from "../command-items.js"
 import { useToast } from "../toast.js";
 import type { InboxResolver } from "./inbox-close.js";
 import { type InboxRemindMany, REMIND_ME, remindManyGroups } from "./inbox-remind.js";
-import { markedNote, useInboxPresses } from "./inbox-writes.js";
+import { useInboxPresses } from "./inbox-writes.js";
 import type { MarkSaying } from "./use-inbox-read-marks.js";
 
 /**
