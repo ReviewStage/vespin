@@ -672,23 +672,13 @@ export function queueAgentMessage(
     agentId,
     Effect.gen(function* () {
       if (!(yield* reaches(userId, agentId))) return Option.none();
-      const [tail] = yield* findTail({ agentId });
-      if ((tail?.size ?? 0) >= AGENT_QUEUE_BOUNDS.MAX_MESSAGES) {
-        return Option.some(QUEUE_OUTCOME.FULL);
-      }
-      const rows = yield* insertMessage({
-        agentId,
-        userId,
-        position: (tail?.last ?? -1) + 1,
-        id: message.id,
-        text: message.text,
-        attachments: filesColumn(message.attachments ?? []),
-        sendKey: null,
-        line: null,
-        now: yield* DateTime.nowAsDate,
+      const queued = yield* queueLineInLock(agentId, userId, {
+        ...message,
+        sendKey: undefined,
+        line: undefined,
       });
-      inserted = rows.length > 0;
-      return Option.some(QUEUE_OUTCOME.QUEUED);
+      inserted = queued.inserted;
+      return Option.some(queued.outcome);
     }),
     () => inserted,
   );
@@ -780,10 +770,14 @@ export function queueWhileBooting(
   );
 }
 
-/** The pause written over the queue inside a caller's lock, answering whether it wrote one. */
-export function pauseInLock(agentId: string, because: QueuePause): AgentQueueEffect<boolean> {
+/** The pause written over the queue inside a caller's lock, naming the refusal for a hand-off refused, answering whether it wrote one; a queue already paused keeps the reason it paused for first. */
+export function pauseInLock(
+  agentId: string,
+  because: QueuePause,
+  refusal?: HostedApiError,
+): AgentQueueEffect<boolean> {
   return Effect.map(
-    insertPause({ agentId, because, refusal: null }),
+    insertPause({ agentId, because, refusal: refusal ?? null }),
     (paused) => paused.length > 0,
   );
 }
@@ -986,14 +980,7 @@ export function pauseAgentQueue(
   refusal?: HostedApiError,
 ): AgentQueueEffect<void> {
   return Effect.asVoid(
-    underAgentQueueLock(
-      agentId,
-      Effect.map(
-        insertPause({ agentId, because, refusal: refusal ?? null }),
-        (paused) => paused.length > 0,
-      ),
-      (paused) => paused,
-    ),
+    underAgentQueueLock(agentId, pauseInLock(agentId, because, refusal), (paused) => paused),
   );
 }
 
@@ -1068,12 +1055,8 @@ export function refuseQueuedMessage(
       agentId,
       Effect.gen(function* () {
         const wasReleased = yield* released(agentId, message);
-        const paused = yield* insertPause({
-          agentId,
-          because: QUEUE_PAUSE.REFUSED,
-          refusal,
-        });
-        return wasReleased || paused.length > 0;
+        const paused = yield* pauseInLock(agentId, QUEUE_PAUSE.REFUSED, refusal);
+        return wasReleased || paused;
       }),
       (changed) => changed,
     ),
