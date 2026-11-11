@@ -116,19 +116,30 @@ enum MenuBar {
     self.toggled = Set(toggled)
     guard #available(iOS 26.0, *) else { return }
     UIMainMenuSystem.shared.setNeedsRebuild()
+    UIMainMenuSystem.shared.setNeedsRevalidate()
   }
 
-  /// Shows or hides the tab bar's sidebar, and rebuilds the menu so its item reads as its next press would.
+  /// Shows or hides the tab bar's sidebar, where the window stands one.
   static func toggleSidebar() {
-    guard let tabs = frontTabs(), tabs.mode == .tabSidebar else { return }
+    guard let tabs = sidebarTabs() else { return }
     tabs.sidebar.isHidden.toggle()
-    guard #available(iOS 26.0, *) else { return }
-    UIMainMenuSystem.shared.setNeedsRebuild()
+  }
+
+  /// Words and enables a command as it is shown or pressed, so it reads as what stands in front now rather than when the menu was built.
+  static func validate(_ command: UICommand, id: String) {
+    guard let known = commands.first(where: { $0.id == id }) else { return }
+    let look = look(of: known)
+    command.title = look.title
+    command.image = look.image
+    command.attributes = look.enabled ? [] : .disabled
+  }
+
+  /// Whether a command may act now: one JavaScript said may, or the sidebar's where the window stands one.
+  static func mayAct(_ id: String) -> Bool {
+    id == "sidebar" ? sidebarTabs() != nil : enabled.contains(id)
   }
 
   private static func build(_ builder: UIMenuBuilder) {
-    let sidebarHidden = frontTabs()?.sidebar.isHidden == true
-    toggled = sidebarHidden ? toggled.union(["sidebar"]) : toggled.subtracting(["sidebar"])
     // The application menu: About and the system's Settings, then Vespin Settings… on ⌘, and Sign Out.
     let mine = elements(.application)
     let settings = mine.filter { ($0 as? UICommand)?.propertyList as? String == "settings" }
@@ -178,28 +189,36 @@ enum MenuBar {
   }
 
   private static func element(_ command: Command) -> UIMenuElement {
-    let on = toggled.contains(command.id)
-    let title = on ? command.toggledTitle ?? command.title : command.title
-    let image = UIImage(systemName: on ? command.toggledSymbol ?? command.symbol : command.symbol)
+    let look = look(of: command)
     let action = #selector(UIApplication.vespinMenuCommand(_:))
     let made: UICommand
     if let input = command.input {
       made = UIKeyCommand(
-        title: title, image: image, action: action, input: input,
+        title: look.title, image: look.image, action: action, input: input,
         modifierFlags: command.modifiers, propertyList: command.id)
     } else {
-      made = UICommand(title: title, image: image, action: action, propertyList: command.id)
+      made = UICommand(title: look.title, image: look.image, action: action, propertyList: command.id)
     }
-    if !isEnabled(command) { made.attributes = .disabled }
+    if !look.enabled { made.attributes = .disabled }
     if command.nonRepeatable, #available(iOS 26.0, *) { made.repeatBehavior = .nonRepeatable }
     return made
   }
 
-  /// Whether a command may act: as JavaScript says, and the sidebar's where the window stands one.
-  private static func isEnabled(_ command: Command) -> Bool {
-    guard command.id == "sidebar" else { return enabled.contains(command.id) }
-    guard let tabs = frontTabs() else { return false }
-    return tabs.mode == .tabSidebar && tabs.traitCollection.horizontalSizeClass == .regular
+  /// How a command reads now: toggled as JavaScript says, the sidebar's as the sidebar stands, and enabled where it may act.
+  private static func look(of command: Command) -> (title: String, image: UIImage?, enabled: Bool) {
+    let on =
+      command.id == "sidebar" ? sidebarTabs()?.sidebar.isHidden ?? true : toggled.contains(command.id)
+    let title = on ? command.toggledTitle ?? command.title : command.title
+    let image = UIImage(systemName: on ? command.toggledSymbol ?? command.symbol : command.symbol)
+    return (title, image, mayAct(command.id))
+  }
+
+  /// The tab bar controller of the window in front, where it stands a sidebar: a regular window's, never a compact one's bottom bar.
+  private static func sidebarTabs() -> UITabBarController? {
+    guard let tabs = frontTabs(), tabs.mode != .tabBar,
+      tabs.traitCollection.horizontalSizeClass == .regular
+    else { return nil }
+    return tabs
   }
 
   /// The system's own items with their keys taken off, so ⌘, opens Vespin's Settings rather than the app's page in the Settings app.
@@ -242,12 +261,19 @@ enum MenuBar {
 extension UIApplication {
   /// The action of every command of Vespin's, which reaches here at the end of the responder chain whatever is focused.
   @objc func vespinMenuCommand(_ sender: UICommand) {
-    guard let id = sender.propertyList as? String else { return }
+    guard let id = sender.propertyList as? String, MenuBar.mayAct(id) else { return }
     if id == "sidebar" {
       MenuBar.toggleSidebar()
       return
     }
     NotificationCenter.default.post(name: menuCommandPosted, object: nil, userInfo: ["command": id])
+  }
+
+  /// Each of Vespin's commands worded and enabled as it is shown or pressed; every other command as UIKit validates it.
+  override public func validate(_ command: UICommand) {
+    guard command.action == #selector(vespinMenuCommand(_:)), let id = command.propertyList as? String
+    else { return super.validate(command) }
+    MenuBar.validate(command, id: id)
   }
 
   /// Edit's Search ⌘F, the system's own item in its search style, which opens Search.
