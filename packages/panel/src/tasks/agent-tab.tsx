@@ -287,6 +287,7 @@ import { EditComposer } from "./edit-composer.js";
 import { ForkedToLine, useForkOffered } from "./fork-action.js";
 import { type ForkCut, forkCutOf, openReply } from "./fork-model.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
+import { TranscriptUsageLimitNotice, WaitingLimitContext } from "./limit-reset.js";
 import {
   CommentLineHead,
   GitHubLineCard,
@@ -1208,7 +1209,7 @@ function AgentPartView({
 }): ReactNode {
   switch (part.kind) {
     case AGENT_PART.USAGE_LIMIT:
-      return <UsageLimitNotice notice={part.notice} />;
+      return <TranscriptUsageLimitNotice notice={part.notice} />;
     case AGENT_PART.CONNECTION_LOST:
       return <ConnectionLostNotice notice={part.notice} />;
     case AGENT_PART.COMPACTED:
@@ -2536,6 +2537,11 @@ function AgentTranscriptView({
       <UsageLimitNotice notice={{ agent: usageLimitAgentOf(keyProvider), resetsAt: null }} />
     ) : undefined;
   useTurnEndSaid(ended, working);
+  // The reset the agent's turn waits on, which its pause's notice offers a reset credit against.
+  const waitingLimit = useMemo(
+    () => (waitsUntil === undefined || agentId === undefined ? undefined : { agentId, waitsUntil }),
+    [agentId, waitsUntil],
+  );
   // Note that the card stands alone in the end line's place, without its press, since its own presses answer the failure.
   const signInCard =
     ended?.unstarted === DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN && signIn !== undefined ? (
@@ -2691,104 +2697,106 @@ function AgentTranscriptView({
     });
     return (
       <TranscriptAgent value={agentId}>
-        <LiveDoors value={live}>
-          <ConnectionNames needed={callsServer}>
-            <Conversation list={log} onNearTop={onOlder}>
-              {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
-              {olderFailed && onOlder !== undefined ? (
-                <div
-                  className={`${FLOATING_OVER_LOG_CLASS} top-ui-8 z-1 max-w-conversation-older bg-well px-list-inset py-tight-gap`}
-                >
-                  <ErrorState
-                    failure={unreadShown(FAILURE_SURFACE.AGENT_TRANSCRIPT_OLDER_READ)}
-                    onRetry={onOlder}
+        <WaitingLimitContext value={waitingLimit}>
+          <LiveDoors value={live}>
+            <ConnectionNames needed={callsServer}>
+              <Conversation list={log} onNearTop={onOlder}>
+                {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
+                {olderFailed && onOlder !== undefined ? (
+                  <div
+                    className={`${FLOATING_OVER_LOG_CLASS} top-ui-8 z-1 max-w-conversation-older bg-well px-list-inset py-tight-gap`}
                   >
-                    {OLDER_FAILED_LINE}
-                  </ErrorState>
-                </div>
-              ) : null}
-              {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
-              <ConversationContent
-                className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
-                streams
-              >
-                <ConversationRows
-                  keys={rowKeys}
-                  estimate={ROW_ESTIMATE_PX}
-                  gap={0}
-                  rowClassName={rowClassOf}
-                  handle={rowsHandle}
-                  ownLast={ownLast}
+                    <ErrorState
+                      failure={unreadShown(FAILURE_SURFACE.AGENT_TRANSCRIPT_OLDER_READ)}
+                      onRetry={onOlder}
+                    >
+                      {OLDER_FAILED_LINE}
+                    </ErrorState>
+                  </div>
+                ) : null}
+                {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
+                <ConversationContent
+                  className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
+                  streams
                 >
-                  {(at) => {
-                    const entry = entries[at];
-                    if (entry === undefined) return null;
-                    const { row, index, piece } = entry;
-                    const { message } = row;
-                    const tails = piece === undefined || piece.last;
-                    return (
-                      <>
-                        <SteadyAgentMessage
-                          message={
-                            message === first && opening !== undefined ? opening.brief : message
-                          }
-                          description={message === description}
-                          taskId={message === description ? taskId : undefined}
-                          lead={lead}
-                          moving={working && index === placed.length - 1}
-                          forkCut={forkCutOf(message, open)}
-                          delegation={delegation}
-                          todos={todos}
-                          briefTitle={briefTitle}
-                          origin={message === description ? origin : undefined}
-                          sender={
-                            message === task
-                              ? briefSender
-                              : messageSender(message, readerId, members, former)
-                          }
-                          wakeupDelay={
-                            isWakeupLine(message)
-                              ? wakeupDelayOf(placed[index - 1]?.message)
-                              : undefined
-                          }
-                          arrived={arrivals.get(message.id) ?? NO_ARRIVED}
-                          piece={piece}
-                        />
-                        {!tails ? null : message === first &&
-                          opening !== undefined &&
-                          replay !== undefined ? (
-                          <>
-                            <ReplayCard
-                              replay={opening.replay}
-                              sentAt={first.sentAt}
-                              place={replay}
-                              taskId={taskId}
-                            />
-                            {opening.note === undefined ? null : (
-                              <SteadyAgentMessage
-                                message={opening.note}
-                                description={false}
-                                lead={lead}
-                                moving={false}
-                                delegation={delegation}
-                                sender={briefSender}
+                  <ConversationRows
+                    keys={rowKeys}
+                    estimate={ROW_ESTIMATE_PX}
+                    gap={0}
+                    rowClassName={rowClassOf}
+                    handle={rowsHandle}
+                    ownLast={ownLast}
+                  >
+                    {(at) => {
+                      const entry = entries[at];
+                      if (entry === undefined) return null;
+                      const { row, index, piece } = entry;
+                      const { message } = row;
+                      const tails = piece === undefined || piece.last;
+                      return (
+                        <>
+                          <SteadyAgentMessage
+                            message={
+                              message === first && opening !== undefined ? opening.brief : message
+                            }
+                            description={message === description}
+                            taskId={message === description ? taskId : undefined}
+                            lead={lead}
+                            moving={working && index === placed.length - 1}
+                            forkCut={forkCutOf(message, open)}
+                            delegation={delegation}
+                            todos={todos}
+                            briefTitle={briefTitle}
+                            origin={message === description ? origin : undefined}
+                            sender={
+                              message === task
+                                ? briefSender
+                                : messageSender(message, readerId, members, former)
+                            }
+                            wakeupDelay={
+                              isWakeupLine(message)
+                                ? wakeupDelayOf(placed[index - 1]?.message)
+                                : undefined
+                            }
+                            arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                            piece={piece}
+                          />
+                          {!tails ? null : message === first &&
+                            opening !== undefined &&
+                            replay !== undefined ? (
+                            <>
+                              <ReplayCard
+                                replay={opening.replay}
+                                sentAt={first.sentAt}
+                                place={replay}
+                                taskId={taskId}
                               />
-                            )}
-                          </>
-                        ) : null}
-                        {earlierOmitted && message === description ? (
-                          <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
-                        ) : null}
-                        {at === entries.length - 1 ? trailing : null}
-                      </>
-                    );
-                  }}
-                </ConversationRows>
-              </ConversationContent>
-              <ConversationScrollButton />
-            </Conversation>
-          </ConnectionNames>
-        </LiveDoors>
+                              {opening.note === undefined ? null : (
+                                <SteadyAgentMessage
+                                  message={opening.note}
+                                  description={false}
+                                  lead={lead}
+                                  moving={false}
+                                  delegation={delegation}
+                                  sender={briefSender}
+                                />
+                              )}
+                            </>
+                          ) : null}
+                          {earlierOmitted && message === description ? (
+                            <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
+                          ) : null}
+                          {at === entries.length - 1 ? trailing : null}
+                        </>
+                      );
+                    }}
+                  </ConversationRows>
+                </ConversationContent>
+                <ConversationScrollButton />
+              </Conversation>
+            </ConnectionNames>
+          </LiveDoors>
+        </WaitingLimitContext>
       </TranscriptAgent>
     );
   }

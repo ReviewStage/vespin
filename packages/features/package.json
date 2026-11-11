@@ -181,6 +181,7 @@
     "./workspace-environment-wire": "./src/workspace-environment-wire.js",
     "./workspace-sandbox-setup-wire": "./src/workspace-sandbox-setup-wire.js",
     "./repository-reach-wire": "./src/repository-reach-wire.js",
+    "./reset-credit-wire": "./src/reset-credit-wire.js",
     "./terminal-view": "./src/terminal-view.js",
     "./terminal-wire": "./src/terminal-wire.js",
     "./sandbox-tunnel-wire": "./src/sandbox-tunnel-wire.js",

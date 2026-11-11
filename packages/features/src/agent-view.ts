@@ -26,6 +26,7 @@ import {
 } from "./agent-wire.js";
 import { accountContract } from "./contract/account.js";
 import { agentPullRequestsContract } from "./contract/agent-pull-requests.js";
+import { agentResetCreditsContract } from "./contract/agent-reset-credits.js";
 import { agentsContract } from "./contract/agents.js";
 import { dictationContract } from "./contract/dictation.js";
 import { githubTokenContract } from "./contract/github-token.js";
@@ -856,6 +857,12 @@ export type AgentPinParams = typeof agentPinParamsSchema.Type;
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
+
+/** How many reset credits the plan an agent waits on holds, as the window hears it read (`reset-credit-wire.ts`), or why not. */
+export const agentResetCreditsAnswerViewSchema = answerView(agentResetCreditsContract.read);
+
+/** A reset credit spent on the limit an agent waits on, as the window hears it: how it went and whether the agent carries on, or why not. */
+export const agentResetCreditUseAnswerViewSchema = answerView(agentResetCreditsContract.use);
 
 /** One agent taken back to just before one of the developer's lines, as the window names the line by its message id. */
 export const agentRewindParamsSchema = EffectSchema.Struct({

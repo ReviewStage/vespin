@@ -46,6 +46,7 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken } from "@repo/sandbox/vercel/testing";
 import { TURN_STATUS, type WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -64,6 +65,7 @@ import {
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { RUNNER_EVENTS_PATH, runnerEventsApp } from "../native-events/runner-events-app.js";
+import { spentResetCredit } from "../reset-credits.js";
 import { SESSION_SEND_OUTCOME } from "../sessions/agent-sessions.js";
 import { launchUrl } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
@@ -733,6 +735,68 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
           [turn?.status, agentFailureOf(turn)],
           [TURN_STATUS.FAILED, AGENT_FAILURE.PLAN_LIMIT],
         );
+      }),
+  );
+});
+
+it.layer(SUITE)("a Codex turn waiting on its ChatGPT plan's limit", (it) => {
+  it.effect(
+    "carries on before the reset once a reset credit is spent, a retry of a spend ChatGPT did not answer sending the same key, and a later press spending nothing",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const spec = HARNESS[CONVERSATION_RUNTIME.CODEX];
+        const { userId, agent, sessions, sequence, launches } = yield* accountWith(
+          CONVERSATION_RUNTIME.CODEX,
+          false,
+          FALLBACK.NONE,
+        );
+        const reached = reaching(userId, sessions);
+        const post = yield* eventsRoute(reached);
+        const sent = yield* writtenLine(agent, "Fix the invitations.");
+        const opened = yield* sessions.open(sent);
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+        const [first] = yield* launches;
+        assert.ok(first !== undefined);
+        const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
+        const limited = numbered(first.firstSequence, spec.limited(sent.lineId, resetsAt));
+        sequence.next = first.firstSequence + limited.length;
+        assert.equal(yield* post(first, limited), 200);
+
+        // ChatGPT takes nothing the first time it is asked to spend, and spends one the second.
+        const answers = [
+          jsonResponse({}, HTTP_STATUS.SERVER_ERROR),
+          jsonResponse({ code: "reset", windows_reset: 1 }),
+        ];
+        const chatgpt = recordingHttpClient(
+          () => answers.shift() ?? jsonResponse({ code: "already_redeemed" }),
+        );
+        const spend = spentResetCredit(userId, keyRing(), agent.id).pipe(
+          Effect.provide(Layer.merge(chatgpt.layer, reached)),
+          Effect.result,
+        );
+        const unanswered = yield* spend;
+        const retried = yield* spend;
+        const later = yield* spend;
+
+        const keys = chatgpt.requests.map((request) => {
+          const body = request.init.body;
+          return JSON.parse(
+            typeof body === "string" ? body : new TextDecoder().decode(body as Uint8Array),
+          ).redeem_request_id;
+        });
+        assert.ok(Result.isFailure(unanswered));
+        assert.deepEqual(
+          [retried, later].map((each) => Result.getOrUndefined(each)),
+          [
+            { outcome: "reset", resumed: true },
+            { outcome: "nothingToReset", resumed: false },
+          ],
+        );
+        assert.equal(keys.length, 2, "the later press asks ChatGPT nothing");
+        assert.equal(keys[0], keys[1]);
+        assert.equal((yield* launches).length, 2, "the turn went on before its reset");
       }),
   );
 });

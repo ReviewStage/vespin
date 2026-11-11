@@ -1175,6 +1175,16 @@ export class HostedAgentClient {
     );
   }
 
+  /** How many rate-limit reset credits the plan the agent waits on holds; none where it waits on no plan's limit. */
+  resetCredits(agentId: string) {
+    return hostedCall(this.#hosted.agentResetCredits.read, { id: agentId });
+  }
+
+  /** One reset credit spent on the limit the agent waits on, at most once for that limit, answering how it went and whether the agent carries on. */
+  useResetCredit(agentId: string) {
+    return hostedCall(this.#hosted.agentResetCredits.use, { id: agentId });
+  }
+
   /** Runs one of the agent's repository's run actions in its running sandbox, answering the shell that runs it. */
   runAction(
     agentId: string,

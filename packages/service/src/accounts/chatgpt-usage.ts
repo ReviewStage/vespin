@@ -31,6 +31,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import {
   CHATGPT_ACCESS,
+  type ChatGptAccess,
   OPENAI_CALL_TIMEOUT,
   refreshChatGptAccess,
 } from "./chatgpt-credentials.js";
@@ -84,6 +85,21 @@ function storedWindow(window: typeof WindowAnswerSchema.Type): StoredUsageWindow
   };
 }
 
+/** A request to ChatGPT's backend as Codex's client sends it for a plan: its access token, and the ChatGPT workspace it pays from, where it names one. */
+export function asPlan(
+  request: HttpClientRequest.HttpClientRequest,
+  access: Extract<ChatGptAccess, { readonly outcome: typeof CHATGPT_ACCESS.READY }>,
+): HttpClientRequest.HttpClientRequest {
+  const { chatgptAccountId } = access.plan;
+  return request.pipe(
+    HttpClientRequest.setHeader("accept", "application/json"),
+    HttpClientRequest.bearerToken(Redacted.value(access.accessToken)),
+    chatgptAccountId === undefined
+      ? (same) => same
+      : HttpClientRequest.setHeader(ACCOUNT_HEADER, chatgptAccountId),
+  );
+}
+
 /** Whether the plan's reading and its last ask are old enough, or absent, that ChatGPT may be asked. */
 function due(row: ProviderKeyRow, since: Date): boolean {
   if (!ASKED_STATUSES.has(row.status)) return false;
@@ -101,14 +117,7 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
   const access = yield* refreshChatGptAccess(userId, ring, undefined, row.id, true);
   if (access.outcome !== CHATGPT_ACCESS.READY) return Option.none<StoredUsageWindow[]>();
   const client = yield* HttpClient.HttpClient;
-  const { chatgptAccountId } = access.plan;
-  const request = HttpClientRequest.get(CHATGPT_USAGE_URL).pipe(
-    HttpClientRequest.setHeader("accept", "application/json"),
-    HttpClientRequest.bearerToken(Redacted.value(access.accessToken)),
-    chatgptAccountId === undefined
-      ? (same) => same
-      : HttpClientRequest.setHeader(ACCOUNT_HEADER, chatgptAccountId),
-  );
+  const request = asPlan(HttpClientRequest.get(CHATGPT_USAGE_URL), access);
   // A request that failed or timed out is no answer, and its cause is dropped unread, since it may quote the token.
   const answered = yield* client.execute(request).pipe(
     Effect.flatMap((response) =>

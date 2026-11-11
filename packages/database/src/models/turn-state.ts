@@ -70,7 +70,7 @@ import { agentTable } from "../schemas/agent.js";
 import { agentRunnerRecord } from "../schemas/agent-runner-record.js";
 import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { messages, turns } from "../schemas/storage.js";
-import { TurnUsageColumnSchema } from "./columns.js";
+import { InstantColumnSchema, TurnUsageColumnSchema } from "./columns.js";
 
 type TurnStateEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -462,6 +462,29 @@ const findQueued = SqlSchema.findOneOption({
     ),
 });
 
+/** The conversation's open turn no Stop was asked of that waits on a limit's reset, the soonest reset first. */
+const findWaiting = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String, waitsUntil: InstantColumnSchema }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: turns.id, waitsUntil: turns.waitsUntil })
+        .from(turns)
+        .where(
+          and(
+            eq(turns.userId, userId),
+            eq(turns.conversationId, conversationId),
+            inArray(turns.status, [...TURN_OPEN]),
+            isNull(turns.cancelRequestedAt),
+            isNotNull(turns.waitsUntil),
+          ),
+        )
+        .orderBy(asc(turns.waitsUntil), asc(turns.id))
+        .limit(1),
+    ),
+});
+
 const findStatus = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
   Result: Schema.Struct({ status: TurnStatusSchema }),
@@ -670,6 +693,33 @@ const releaseWaited = SqlSchema.findAll({
               )
               .orderBy(asc(turns.waitsUntil), asc(turns.id))
               .limit(limit),
+          ),
+        )
+        .returning({
+          userId: turns.userId,
+          conversationId: turns.conversationId,
+          turnId: turns.id,
+          status: turns.status,
+        }),
+    ),
+});
+
+/** The conversation's running and queued turns no Stop was asked of that wait on a limit's reset, their wait cleared now. */
+const releaseConversationWaits = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: WaitedTurnSchema,
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({ waitsUntil: null })
+        .where(
+          and(
+            eq(turns.userId, userId),
+            eq(turns.conversationId, conversationId),
+            inArray(turns.status, [TURN_STATUS.RUNNING, TURN_STATUS.QUEUED]),
+            isNull(turns.cancelRequestedAt),
+            isNotNull(turns.waitsUntil),
           ),
         )
         .returning({
@@ -1134,6 +1184,16 @@ export function turnAwaitedByLine(
   );
 }
 
+/** The conversation's open turn, no Stop asked of, that waits on a usage limit's reset, and when that reset is; none where no turn waits. */
+export function waitingTurnOf(
+  target: TurnTarget,
+): TurnStateEffect<Option.Option<{ readonly turnId: string; readonly waitsUntil: Date }>> {
+  return Effect.map(
+    findWaiting({ userId: target.userId, conversationId: target.conversationId }),
+    Option.map((row) => ({ turnId: row.id, waitsUntil: row.waitsUntil })),
+  );
+}
+
 /** Where the conversation's turn named stands; none where no such turn does. */
 export function turnStatusOf(
   conversationId: string,
@@ -1238,6 +1298,22 @@ export function releaseWaitedTurns(
   limit: number,
 ): TurnStateEffect<readonly WaitedTurn[]> {
   return releaseWaited({ at, limit });
+}
+
+/**
+ * The conversation's running and queued turns, no Stop asked of, that wait
+ * on a limit's reset, their wait cleared before it, as a reset credit spent
+ * on the limit clears it: answers them, for a launch now as the sweep's
+ * release has, and none where no turn waited, so of two releases at once
+ * only one hands a turn on.
+ */
+export function releaseConversationWaitedTurns(
+  target: TurnTarget,
+): TurnStateEffect<readonly WaitedTurn[]> {
+  return releaseConversationWaits({
+    userId: target.userId,
+    conversationId: target.conversationId,
+  });
 }
 
 /** Settles the turn a rewind keeps as its conversation's first, its work dropped, with no Stop or failure on it. */

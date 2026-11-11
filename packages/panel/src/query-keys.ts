@@ -55,6 +55,8 @@ export const QUERY_ROOT = {
   /** A cloud agent's listening ports and its shared link, as a host that forwards none asks the service for them (`tasks/agent-forward.tsx`). */
   AGENT_PORTS: "agent-ports",
   AGENT_SHARED_PORT: "agent-shared-port",
+  /** The reset credits a Codex agent's plan holds while the agent waits on its limit (`tasks/limit-reset.tsx`). */
+  AGENT_RESET_CREDITS: "agent-reset-credits",
   /** A cloud agent's shells and where its sandbox stands, as its Run button reads which run actions run (`tasks/run-actions-button.tsx`). */
   AGENT_SHELLS: "agent-shells",
   /** What this Mac spends on the app, read every few seconds while the Resources popover stands open (`desktop/mac-resources.tsx`). */

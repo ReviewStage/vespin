@@ -288,6 +288,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaces: INTERNAL,
   },
   agentPages: { frame: SCREEN_ONLY },
+  // Note that a reset credit is the member's own to spend, so it is offered on the limit's notice alone and no agent spends one.
+  agentResetCredits: { read: SCREEN_ONLY, use: SECURITY },
   agents: {
     // Note that an ask is held for a person's own answer, so no agent answers one for them.
     answerApproval: SECURITY,
