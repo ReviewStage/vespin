@@ -238,6 +238,7 @@ export type AgentClient = Pick<
   | "warm"
   | "runAction"
   | "stopRunAction"
+  | "boot"
   | "delete"
   | "agent"
   | "pullRequest"
@@ -1041,6 +1042,7 @@ function composed(
     AGENTS_REWIND: ({ agentId, messageId, restoreFiles }) =>
       asked(client.rewind(agentId, messageId, restoreFiles === true)),
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
+    AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),

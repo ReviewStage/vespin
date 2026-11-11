@@ -325,6 +325,14 @@ export const AGENT_ACTS = declaredActs({
     unanswered: AGENT_UNANSWERED,
     byHand: true,
   }),
+  AGENTS_BOOT: hostAct({
+    input: agentStopParamsSchema,
+    output: agentAgentAnswerSchema,
+    refusal: "Could not start the agent's machine again on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
   AGENTS_WARM: hostAct({
     input: agentStopParamsSchema,
     output: agentWarmAnswerViewSchema,

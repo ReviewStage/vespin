@@ -1,5 +1,5 @@
 /**
- * boot.ts -- an agent's first launch: its machine booted with its first message waiting in its queue, the queue handed on once the machine is up, and a boot that failed said.
+ * boot.ts -- an agent's first launch: its machine booted with its first message waiting in its queue, the queue handed on once the machine is up, a boot that failed said, and Retry.
  *
  * A Start's first message waits in the agent's queue from the moment its
  * boot begins (`beginAgentBoot`), as every line sent to the agent while it
@@ -10,22 +10,26 @@
  * launched warm. Once the runner is up the boot hands its queue on
  * (`bootBecameReady`), which opens the first turn on the first message; a
  * machine that could not come up fails the boot with why and pauses its
- * queue, the messages kept.
+ * queue, the messages kept for Retry (`retryBoot`). A boot that never says
+ * either way is failed by the minute sweep past its deadline
+ * (`reconcile.ts`).
  */
 
 import {
   agentBootRunnerUp,
   beginAgentBoot,
   failAgentBoot,
+  rebootAgent,
 } from "@repo/database/models/agent-boot-store";
 import type { QueuedLine } from "@repo/database/models/agent-queue-store";
 import type { Agent } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
-import type { BootFailure } from "@repo/features/agent-boot";
+import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { DateTime, Effect, Option } from "effect";
 import { afterResponse } from "../../http/after-response.js";
-import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
+import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
+import { controlsAgent } from "../agent-reach.js";
 import {
   type AgentSessions,
   describeUnreachable,
@@ -148,4 +152,28 @@ export const startBoot = Effect.fn("web/startBoot")(function* (
   // Note that the first message goes through the very sessions that booted its machine.
   yield* machineCameUp(agent, boot.up, FIRST_ATTEMPT, () => Effect.succeed(sessions));
   return { outcome: boot.outcome, sessionId: boot.sessionId } as const;
+});
+
+/**
+ * A failed first launch booted again by a member who controls the agent:
+ * its queue's boot pause lifted and a machine of its own opened, past any
+ * the failed boot left. Refused as invalid where its boot is not failed,
+ * and failed again at once where the machine could not even be asked for.
+ * Every move it makes names the reboot's attempt, so a stale earlier boot
+ * can neither release nor fail this one.
+ */
+export const retryBoot = Effect.fn("web/retryBoot")(function* (userId: string, agent: Agent) {
+  if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  const rebooted = yield* hostedStoreOrUnavailable(
+    rebootAgent(agent.id, yield* DateTime.nowAsDate),
+  );
+  if (Option.isNone(rebooted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  const { attempt } = rebooted.value;
+  const boot = yield* booted(yield* routedSessions(agent.userId), agent);
+  if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
+    yield* hostedStoreOrUnavailable(bootFailed(agent, BOOT_FAILURE.MACHINE_UNAVAILABLE, attempt));
+    return;
+  }
+  yield* claimedFor(agent, boot.sessionId);
+  yield* machineCameUp(agent, boot.up, attempt, routedSessions);
 });

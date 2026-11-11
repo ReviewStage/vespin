@@ -1801,6 +1801,11 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
+  [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, status: AGENT_STATUS.STARTING } };
+  },
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
     agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),

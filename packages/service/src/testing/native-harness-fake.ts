@@ -123,20 +123,23 @@ export function scriptedHarness(
     };
   };
   return {
-    sessions: (_runtime, account) =>
-      Option.some(
+    sessions: (_runtime, account) => {
+      // Note that one script stands for the lookup, so its boot and its sends read the same state.
+      const scripted = bootedScript(account);
+      return Option.some(
         Effect.succeed({
           answer: () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE),
-          ...bootedScript(account),
-          retry: (sessionId, message) => bootedScript(account).send(sessionId, message),
+          ...scripted,
+          retry: (sessionId, message) => scripted.send(sessionId, message),
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
           checkOut: () => Effect.succeed(checkout),
           halt: () => Effect.succeed(true),
           deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
           warm: () => Effect.void,
-          boot: bootedScript(account).boot ?? bootedAtOnce,
+          boot: scripted.boot ?? bootedAtOnce,
         }),
-      ),
+      );
+    },
   };
 }
 
