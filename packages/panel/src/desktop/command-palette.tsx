@@ -272,6 +272,11 @@ type PaletteKind = Exclude<PaletteFilter, typeof PALETTE_FILTER.ALL>;
 
 const PALETTE_FILTERS: readonly PaletteFilter[] = Object.values(PALETTE_FILTER);
 
+/** The filters while no task is open, which offer no This task, since it would list nothing. */
+const TASKLESS_FILTERS: readonly PaletteFilter[] = PALETTE_FILTERS.filter(
+  (each) => each !== PALETTE_FILTER.THIS_TASK,
+);
+
 /** Each filter's name, which is also each kind's heading under All. */
 const FILTER_LABEL = {
   [PALETTE_FILTER.ALL]: "All",
@@ -1721,9 +1726,11 @@ function revealChecked(band: HTMLElement): void {
  * moving there would bring it.
  */
 function PaletteFilters({
+  filters,
   filter,
   onFilter,
 }: {
+  filters: readonly PaletteFilter[];
   filter: PaletteFilter;
   onFilter: (filter: PaletteFilter) => void;
 }): React.JSX.Element {
@@ -1736,7 +1743,7 @@ function PaletteFilters({
       <ReplayUnmask>
         <ChoiceBar
           label="Filter"
-          items={PALETTE_FILTERS.map((each) => ({ value: each, label: FILTER_LABEL[each] }))}
+          items={filters.map((each) => ({ value: each, label: FILTER_LABEL[each] }))}
           value={filter}
           onChange={onFilter}
           look={CHOICE_BAR_LOOK.FILL}
@@ -1871,6 +1878,8 @@ export function CommandPalette({
   const directory = useWorkspaceDirectory(tasks.workspace);
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
+  // Note that This task is offered only while a task is open, as its rows are (`agentRows`), since it would list nothing otherwise.
+  const filters = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
   // How many times ⌘K has opened the palette, each of which chooses its first row.
   const [openings, setOpenings] = useState(0);
   const [query, setQuery] = useState("");
@@ -1996,7 +2005,7 @@ export function CommandPalette({
       const step = arrowStep(event, query);
       if (step !== 0) {
         event.preventDefault();
-        setFilter(steppedFilter(PALETTE_FILTERS, filter, step));
+        setFilter(steppedFilter(filters, filter, step));
         return;
       }
       const pressed = commandForKey(
@@ -2008,9 +2017,9 @@ export function CommandPalette({
       // claims their chords for its filters while it stands.
       event.preventDefault();
       if (pressed === APP_COMMAND.COMMAND_PALETTE) setOpen(false);
-      else setFilter(steppedFilter(PALETTE_FILTERS, filter, pressed === APP_COMMAND.BACK ? -1 : 1));
+      else setFilter(steppedFilter(filters, filter, pressed === APP_COMMAND.BACK ? -1 : 1));
     },
-    [sought, query, filter],
+    [sought, query, filter, filters],
   );
 
   const tokens = searchTokens(sought);
@@ -2239,7 +2248,7 @@ export function CommandPalette({
       .flatMap((tier) => ranked(tier, sought, limit, byRow))
       .slice(0, limit);
   };
-  const kinds = PALETTE_FILTERS.filter((each): each is PaletteKind =>
+  const kinds = filters.filter((each): each is PaletteKind =>
     filter === PALETTE_FILTER.ALL ? each !== PALETTE_FILTER.ALL : each === filter,
   );
   // Each kind's word for its rows' absence: still reading, refused, or a line of its own.
@@ -2305,7 +2314,10 @@ export function CommandPalette({
   // The render a key paints the field in draws the ranking already standing, and only the
   // render the words sought catch up in ranks them, so no key waits on the ranking.
   if (open) stood.current = sought === query ? rank() : stood.current;
-  const band = useMemo(() => <PaletteFilters filter={filter} onFilter={setFilter} />, [filter]);
+  const band = useMemo(
+    () => <PaletteFilters filters={filters} filter={filter} onFilter={setFilter} />,
+    [filters, filter],
+  );
 
   return (
     <>
