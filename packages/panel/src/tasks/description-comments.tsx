@@ -3868,17 +3868,18 @@ function draftPinAt(
 /**
  * A page's comments over the page itself, as the description's folded margin draws
  * its own: each element holding open threads pinned with the face of who
- * started them, the pointer over a pin outlining its element faintly and
- * told the first comment whole, and a press opening its threads in a card
- * under the pin, or closing them, where the column beside the page does not
- * stand to open them in;
+ * started them, the pointer over a pin, or over its element in the page,
+ * told every comment on it, and a press opening its threads in a card
+ * under the element, where the comment that started them was written and
+ * clear of what they are on, or closing them, where the column beside the
+ * page does not stand to open them in;
  * the thread being started, in a card by the element it was started from;
  * while the page is picking an element, a line saying so, with Whole page
  * and Cancel; and Reply by words selected in the page, which quotes them
  * into the comment being written, or starts one on the element holding
  * them. A comment being started may be held in the reader's review
  * instead, pinned dashed to its element until the review is sent, its pin
- * opening the comments held there in a card under it, as a posted
+ * opening the comments held there in a card under the element, as a posted
  * pin opens its threads, column or no column, since the column lists
  * posted threads alone. A comment started and let go with words of the
  * writer's own left in it is pinned where it was started, the muted pencil
@@ -4071,11 +4072,11 @@ export function PageCommentLayer({
       )}
       <RectFloat
         open={floats && opened.length > 0}
-        // Note that a thread opens under its pin, or by its element where its pin is not yet drawn, as one just started is.
+        // Note that a thread opens under its element, where the comment that started it was written, clear of what it is on; under its pin where the element is not measured.
         anchor={() =>
           at === undefined
             ? inWindow(room.current, PAGE_TOP)
-            : (pinBox(postedPins.current, at) ?? inWindow(room.current, marks.get(at) ?? undefined))
+            : (inWindow(room.current, marks.get(at) ?? undefined) ?? pinBox(postedPins.current, at))
         }
         side={POPOVER_SIDE.BELOW}
         // Note that a held reply's edit standing open in a thread holds the card, so a stray press never drops its words.
@@ -4108,8 +4109,8 @@ export function PageCommentLayer({
         anchor={() =>
           heldOpen === undefined
             ? undefined
-            : (pinBox(heldPins.current, heldOpen) ??
-              inWindow(room.current, marks.get(heldOpen) ?? undefined))
+            : (inWindow(room.current, marks.get(heldOpen) ?? undefined) ??
+              pinBox(heldPins.current, heldOpen))
         }
         side={POPOVER_SIDE.BELOW}
         // Note that an edit standing open in the card holds it, so its words are never lost to a stray press.
