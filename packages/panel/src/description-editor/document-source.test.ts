@@ -245,6 +245,14 @@ test("an empty task item left at the end of a checklist is saved as a checkbox t
   assert.equal(reopened.handedOver(), "- [x] testing here\n- [ ] then\n");
 });
 
+test("an empty numbered item, as an agent writes one under a heading, opens as a line the caret stands in, and what is typed there is saved in it", () => {
+  const { editor, handedOver } = opened("## Beats\n\n1.\n");
+
+  typedAtEnd(editor, "Hook");
+
+  assert.equal(handedOver(), "## Beats\n\n1. Hook\n");
+});
+
 /** A blank line left before "One.", another between it and "Two." typed under it, and a third after. */
 function blankLinesAround(editor: Editor): void {
   editor.commands.setTextSelection(Selection.atStart(editor.state.doc).from);
