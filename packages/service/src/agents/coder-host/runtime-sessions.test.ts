@@ -9,6 +9,7 @@ import {
   readAgent,
   readAgentByKey,
   readAgentRouting,
+  recordAgentNativeSession,
 } from "@repo/database/models/agent-store";
 import { type DeviceRegistration, registerDevice } from "@repo/database/models/device-store";
 import { enrollOwnDevice, removeHost } from "@repo/database/models/host-store";
@@ -81,6 +82,7 @@ import {
   type SessionMessage,
 } from "../sessions/agent-sessions.js";
 import { macOffers, THIS_MAC } from "./agent-runtime-choice.js";
+import { clearedAgent } from "./clear.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import { rewoundAgent } from "./rewind.js";
 import {
@@ -666,6 +668,47 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           assert.deepEqual(
             [yield* standing(onRetired), yield* standing(onClaudeCode), yield* standing(unhalted)],
             [0, 0, 1],
+          );
+        }),
+    );
+
+    it.effect(
+      "a clear ends a Claude Code agent's runner, lets its session go, and marks the transcript, and refuses an agent on the retired runtime with nothing stopped",
+      () =>
+        Effect.gen(function* () {
+          const { owner, taskId } = yield* openTeam;
+          const onRetired = yield* agentOn(owner, taskId, "eve");
+          const onClaudeCode = yield* agentOn(owner, taskId, "claude_code");
+          const { claudeCode, native } = runtimes();
+          const writer = storeWriter({ tools: CODER_TOOL_SET });
+          const nativeSession = `${NATIVE_SESSION_PREFIX.claude_code}000000000001-${randomUUID()}`;
+          const target = { userId: owner, conversationId: onClaudeCode.conversationId };
+          yield* claimRuntimeSession(target, nativeSession, new Date(0));
+          yield* recordAgentNativeSession(owner, onClaudeCode.id, "cli-session");
+
+          const retired = yield* clearedAgent(writer, owner, onRetired).pipe(
+            Effect.provide(native),
+            Effect.result,
+          );
+          const cleared = yield* clearedAgent(writer, owner, onClaudeCode).pipe(
+            Effect.provide(native),
+            Effect.result,
+          );
+
+          assert.deepEqual(retired, Result.fail(HOSTED_REFUSAL.INVALID_REQUEST));
+          assert.ok(Result.isSuccess(cleared));
+          assert.deepEqual(claudeCode.calls, [
+            `halt:${nativeSession}:${onClaudeCode.conversationId}`,
+          ]);
+          const routing = yield* readAgentRouting(owner, onClaudeCode.id);
+          assert.equal(Option.getOrUndefined(routing)?.nativeSession, null);
+          const rows = yield* (yield* Database)
+            .select({ parts: messages.parts })
+            .from(messages)
+            .where(eq(messages.conversationId, onClaudeCode.conversationId));
+          assert.deepEqual(
+            rows.flatMap((row) => (row.parts as { type: string }[]).map((part) => part.type)),
+            ["data-session-cleared"],
           );
         }),
     );
@@ -1398,7 +1441,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Start handed words or the description on a task with no repository runs in the cloud with no checkout, as one on no task does, and one naming a branch there is refused rather than dropping it",
+      "a Start handed words or the description on a task with no repository runs in the cloud with no checkout, and one naming a branch there is refused rather than dropping it",
       () =>
         Effect.gen(function* () {
           const { owner, workspaceId } = yield* openStarter(true);

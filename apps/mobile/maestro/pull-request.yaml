@@ -66,6 +66,10 @@ appId: dev.vespin.ios
       fixture: inbox
 - tapOn: "Tasks"
 - tapOn: "Teammate invitations"
+# Note that iOS never hears a chip as an element of its own, since it stands
+# in its line as a view, so the line is found by what it is heard as
+# (`heardLine`), "Pull request: pull request #128 …", and pressed at its
+# middle, where the chip stands.
 - scrollUntilVisible:
     element: ".*#128 Invite a teammate by email"
     direction: DOWN

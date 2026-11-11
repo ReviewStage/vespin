@@ -19,6 +19,7 @@ export const APP_SETTING_ID = {
   PREFER_BUILT_IN_MICROPHONE: "prefer_built_in_microphone",
   AGENT_ENTER: "agent_enter",
   COMMIT_AUTHOR: "commit_author",
+  AGENT_PERMISSION_MODE: "agent_permission_mode",
   QUIET_DURING_MEETINGS: "quiet_during_meetings",
   ANNOUNCE_SESSIONS: "announce_sessions",
   SHOW_IN_DOCK: "show_in_dock",
@@ -60,6 +61,7 @@ export const APP_SETTING_ID = {
   ONBOARDING_SURVEY: "onboarding_survey",
   SOUND_WHEN: "sound_when",
   COMPLETION_SOUND: "completion_sound",
+  ASK_SOUND: "ask_sound",
   TURN_NOTIFICATIONS: "turn_notifications",
   PULL_REQUEST_OPEN: "pull_request_open",
 } as const;

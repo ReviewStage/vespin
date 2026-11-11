@@ -6,7 +6,9 @@
  * it launched with, and a warm runner idle on another mode is launched
  * again as the next message reaches it (`runner-sessions.ts`'s
  * `launchFingerprint`). Only Claude Code asks; a Codex runner reads no mode
- * and runs every call unasked, so a mode that asks is refused for it.
+ * and runs every call unasked, so a mode that asks is refused for it. A
+ * new agent starts on its starter's Default permissions where its harness
+ * takes that mode (`startingPermissionMode`).
  */
 
 import { PERMISSION_MODE, type PermissionMode } from "@repo/agent-runner/protocol";
@@ -41,6 +43,22 @@ export function launchPermissionMode(
   return mode === AGENT_PERMISSION_MODE.FULL_ACCESS
     ? undefined
     : { permissionMode: RUNNER_MODE_OF[mode] };
+}
+
+/**
+ * The mode a new agent starts on: its starter's default where its harness
+ * takes that mode, full access otherwise, and on an automation's agent,
+ * whose turns no member watches to answer an ask.
+ */
+export function startingPermissionMode(
+  runtime: ConversationRuntime,
+  chosen: AgentPermissionMode | undefined,
+  automated: boolean,
+): AgentPermissionMode {
+  const mode = automated ? undefined : chosen;
+  return mode !== undefined && harnessTakesMode(runtime, mode)
+    ? mode
+    : AGENT_PERMISSION_MODE.FULL_ACCESS;
 }
 
 /** Whether the agent's harness takes the mode: full access on any, and a mode that asks on Claude Code alone. */

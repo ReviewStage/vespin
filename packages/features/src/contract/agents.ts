@@ -9,11 +9,10 @@
  * for the agent it made and 200 for the one a retry under the same key
  * already made, so it answers its status beside its body
  * (`outputStructure: "detailed"`). A Start from an agent is keyed by that
- * agent rather than a task (`POST /api/agents/{id}/agents`), so an agent with
- * no task is continued and forked as one on a task is; its body is a Start's,
+ * agent rather than a task (`POST /api/agents/{id}/agents`), the new agent
+ * landing on that agent's task; its body is a Start's,
  * whose `from` names the path's agent. A delete (`DELETE /api/agents/{id}`)
- * takes the agent for good, as a task's delete takes a task. No path starts
- * a fresh agent on no task. Outputs are the
+ * takes the agent for good, as a task's delete takes a task. Outputs are the
  * wire schemas flipped (`packages/service/src/orpc/base.ts`).
  *
  * Every procedure declares its own refusals (`declaredProcedure`).
@@ -286,7 +285,7 @@ export const agentsContract = {
     )
     .input(exactBodyInput(idParams, agentStartRequestSchema))
     .output(EffectSchema.flip(startAnswerSchema)),
-  /** An agent started from the one the path names, continuing it or forking it, in that agent's own place: its task, or its workspace and repository where it has no task. */
+  /** An agent started from the one the path names, continuing it or forking it, in that agent's own place, its task. */
   startFrom: declaredProcedure
     .errors(refuses(...START_REFUSALS))
     .meta(bodyCap(MAXIMUM_START_BODY_BYTES))
@@ -338,15 +337,38 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/stop` }))
     .input(idParams)
     .output(EffectSchema.flip(agentAnswerSchema)),
+  /**
+   * One agent's harness started on a fresh session in the same agent
+   * (`coder-host/clear.ts`), its transcript kept; refused while the agent
+   * works, and for one on no harness.
+   */
+  clear: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.AGENT_NOT_READY,
+        HOSTED_API_ERROR.INVALID_REQUEST,
+      ),
+    )
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/clear` }))
+    .input(idParams)
+    .output(EffectSchema.flip(agentAnswerSchema)),
   /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`). */
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/warm` }))
     .input(idParams)
     .output(EffectSchema.flip(agentWarmAnswerSchema)),
-  /** One agent taken back to just before one of the developer's lines, stopped first where it still works. */
+  /** One agent taken back to just before one of the developer's lines, stopped first where it still works, its files put back too where asked and a snapshot of them stands. */
   rewind: declaredProcedure
-    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING,
+      ),
+    )
     .meta(bodyCap(CHOICE_BODY_BYTES))
     .meta(
       openapi({

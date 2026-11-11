@@ -74,7 +74,6 @@ import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wi
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
-import { PAGE_OWNER, type PageOwner } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
@@ -487,6 +486,7 @@ const LOCAL_AGENT_REFUSAL_WORDS = {
   [LOCAL_AGENT_REFUSAL.PREPARING]: `Not started: the device it would run on is still getting ready for local agents, downloading Claude Code, Codex, and GitHub's CLI. Try again in a few minutes, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. Ask the member to turn Bring your own machine off and on in Settings › Machines on that Mac, or to restart vespin-host on that Linux server, to try again, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN]: `Not started: the repository is reached on the member's own GitHub token, and the device it would run on has a vespin-host too old to work in such a repository on its own GitHub sign-in. Ask the member to update that host, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+  [LOCAL_AGENT_REFUSAL.PERMISSION_MODES]: `Not started: the agent's permission mode asks before it acts, and the device it would run on has a vespin-host too old to ask, which would run it with full access. Ask the member to update ${PRODUCT_NAME} on that machine, or to switch the agent to Full access.`,
 } as const satisfies Record<
   Exclude<LocalAgentRefusal, typeof LOCAL_AGENT_REFUSAL.NOT_OWNER>,
   string
@@ -791,15 +791,6 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
           "for the task you work on.",
       ),
     ),
-    repository: Schema.optionalKey(
-      describeWire(
-        Schema.NullOr(githubRepositoryFullNameSchema),
-        "Where you work on no task and name none, the GitHub repository of the task made for the " +
-          "agent, as owner/name, which the workspace's GitHub installation must reach; null for " +
-          "none. Leave it out for the repository you work in, if any. A task's agent works in the " +
-          "task's own.",
-      ),
-    ),
     prompt: Schema.optionalKey(describeWire(START_PROMPT, START_WORDS[wordsOf(on)].prompt)),
     note: Schema.optionalKey(describeWire(START_PROMPT, START_WORDS[wordsOf(on)].note)),
     images: Schema.optionalKey(
@@ -988,12 +979,15 @@ const UPDATE_TASK_CALL = Schema.Struct({
 
 const readTaskUpdate = Schema.decodeUnknownResult(UPDATE_TASK_CALL);
 /**
- * A start as a call carries it: one the app made under the tool's earlier words
+ * A start as a call carries it: the coding agent's input, and the repository
+ * of the task a member's call makes, which the member's own tool names
+ * (`member-mcp/tools.ts`). One the app made under the tool's earlier words
  * names its prompt `task`, and one made before `create_task` may name a
  * `newTask`, which is read only to be refused with where to go now.
  */
 const START_AGENT_CALL = Schema.Struct({
   ...START_AGENT_INPUT.fields,
+  repository: Schema.optionalKey(Schema.NullOr(githubRepositoryFullNameSchema)),
   task: Schema.optionalKey(START_PROMPT),
   newTask: Schema.optionalKey(Schema.Unknown),
 });
@@ -3211,37 +3205,25 @@ function pageCut(html: string): PageCut {
 
 /**
  * What a page read says it stands on, where that is of the caller's
- * workspace: its task, by name, and whether it is the caller's own, or the
- * coding agent on no task that showed it, by name, and whether that is the
- * caller; nothing for an owner of another workspace.
+ * workspace: its task, by name, and whether it is the caller's own; nothing
+ * for a task of another workspace.
  */
-type PageStanding =
-  | {
-      readonly task: { readonly id: string; readonly name: string | null };
-      readonly isYourTask: boolean;
-    }
-  | { readonly agent: { readonly id: string; readonly name: string }; readonly isYours: boolean };
+interface PageStanding {
+  readonly task: { readonly id: string; readonly name: string | null };
+  readonly isYourTask: boolean;
+}
 
-const pageStandingOf = (caller: AgentCaller, owner: PageOwner) =>
+const pageStandingOf = (caller: AgentCaller, taskId: string) =>
   Effect.gen(function* () {
-    const userId = callerUserId(caller);
-    if (owner.kind === PAGE_OWNER.TASK) {
-      if (!(yield* taskOfCallerWorkspace(caller, owner.taskId))) return Option.none<PageStanding>();
-      const names = yield* taskNamesOf(userId, [owner.taskId]);
-      return Option.some<PageStanding>({
-        task: { id: owner.taskId, name: names.get(owner.taskId)?.name ?? null },
-        isYourTask: owner.taskId === callerTask(caller),
-      });
-    }
-    const found = yield* workspaceAgentOf(caller, owner.agentId);
-    if (Option.isNone(found)) return Option.none<PageStanding>();
+    if (!(yield* taskOfCallerWorkspace(caller, taskId))) return Option.none<PageStanding>();
+    const names = yield* taskNamesOf(callerUserId(caller), [taskId]);
     return Option.some<PageStanding>({
-      agent: { id: owner.agentId, name: agentName(found.value.agent) },
-      isYours: callerAgent(caller)?.id === owner.agentId,
+      task: { id: taskId, name: names.get(taskId)?.name ?? null },
+      isYourTask: taskId === callerTask(caller),
     });
   });
 
-/** One call of `read_page`: a version of a page of the caller's workspace, on a task or on an agent with no task, its HTML cut to the bound, or why there is none. */
+/** One call of `read_page`: a version of a page on a task of the caller's workspace, its HTML cut to the bound, or why there is none. */
 export function runReadPage(
   call: AgentReadCall,
   input: UnparsedWireValue,
@@ -3260,9 +3242,9 @@ export function runReadPage(
       const userId = callerUserId(caller);
       const found = yield* readPageById(userId, asked.success.pageId, asked.success.version);
       if (Option.isNone(found)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
-      const { owner, page, newestVersion } = found.value;
+      const { taskId, page, newestVersion } = found.value;
       // A page of another workspace, even one the member is also in, is none of the caller's.
-      const standing = yield* pageStandingOf(caller, owner);
+      const standing = yield* pageStandingOf(caller, taskId);
       if (Option.isNone(standing)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
       const cut = pageCut(page.html);
       return {

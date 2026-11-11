@@ -29,7 +29,7 @@ import type { DescriptionDocumentBinding } from "./description-notes.js";
  * plan its address names (`lookedTaskOf`), once that plan stands in the
  * agent's own workspace (`../agents/coder-host/agent-doors.ts`), so an
  * agent sees a picture in any description of its workspace, its own task's or
- * another's, and one on no task sees one too.
+ * another's.
  *
  * A description may hold a video an agent recorded, which no model is handed in any
  * form: a look at one is refused, pointing the model at its alt text and

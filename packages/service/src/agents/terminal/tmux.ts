@@ -123,6 +123,17 @@ export function startTerminal(terminalId: string, title: string | undefined): Co
   );
 }
 
+/**
+ * A word handed to tmux as itself. tmux reads an argument that ends in `;`
+ * as the end of its command, and one ending in `\;` as ending in `;`, so a
+ * command like `find . -exec rm {} \;`, or a label or variable that ends in
+ * one, would be cut short or lose its backslash; a `\` before the last `;`
+ * hands back the word as written.
+ */
+function literal(word: string): string {
+  return word.endsWith(";") ? `${word.slice(0, -1)}\\;` : word;
+}
+
 /** What a run action's shell is started with: the action's id, its label for the tab, its command, and the workspace's variables its shell holds. */
 export interface RunActionStart {
   readonly actionId: string;
@@ -139,15 +150,15 @@ export interface RunActionStart {
 export function startRunAction(terminalId: string, run: RunActionStart): CommandAsk {
   const environment = Object.entries(run.environment).flatMap(([name, value]) => [
     "-e",
-    `${name}=${value}`,
+    literal(`${name}=${value}`),
   ]);
   const target = optionTargetOf(terminalId);
   return tmux([
     ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
     ...environment,
-    ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, run.label],
+    ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, literal(run.label)],
     ...[";", "set-option", "-t", target, TMUX.RUN_ACTION_OPTION, run.actionId],
-    ...[";", "send-keys", "-t", target, "-l", run.command],
+    ...[";", "send-keys", "-t", target, "-l", literal(run.command)],
     ...[";", "send-keys", "-t", target, "Enter"],
   ]);
 }
@@ -156,7 +167,7 @@ export function startRunAction(terminalId: string, run: RunActionStart): Command
 export function typeIntoTerminal(terminalId: string, command: string): CommandAsk {
   const target = optionTargetOf(terminalId);
   return tmux([
-    ...["send-keys", "-t", target, "-l", command],
+    ...["send-keys", "-t", target, "-l", literal(command)],
     ...[";", "send-keys", "-t", target, "Enter"],
   ]);
 }

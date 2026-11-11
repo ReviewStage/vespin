@@ -15,7 +15,7 @@ import { type UnparsedWireValue, wireUuidSchema } from "../core.js";
 import { assigneeIdOf, memberLinkWrittenSchema } from "./task-assignee.js";
 
 /**
- * workspace-agents.ts -- the coding agents of one workspace as an agent's tools read them: on any task or none, by any member, one task's alone where asked, each with its task's name.
+ * workspace-agents.ts -- the coding agents of one workspace as an agent's tools read them: on any task, by any member, one task's alone where asked, each with its task's name.
  *
  * The agent tools every coding agent is offered
  * (`agent-tools.ts`) list and find the agents here. A list names the archived
@@ -108,10 +108,7 @@ export const AGENT_LIST_INPUT = Schema.Struct({
     ),
   ),
   taskStatus: Schema.optionalKey(
-    describeWire(
-      taskStatusSchema,
-      "Only the agents on a task that stands here, such as done; an agent on no task matches none.",
-    ),
+    describeWire(taskStatusSchema, "Only the agents on a task that stands here, such as done."),
   ),
   offset: Schema.optionalKey(
     describeWire(

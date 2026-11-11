@@ -168,47 +168,53 @@
 }
 
 /* A fence open in the editor stands in the code card's frame, as the drawn
-   text draws it (`@repo/ui`'s `CodeCard`): its border, its ground, a header
-   naming its language (`description-editor/code-title.ts`), and its lines in
-   the card's type and inset, so opening the text moves no block. Note that
-   the header stays put while long lines scroll sideways under it, and that
-   the lines stand uncolored while they are edited. */
-.description-document-text pre {
-  padding: 0 0 var(--ui-row-inset);
+   text draws it (`@repo/ui`'s `CodeCard`): its border, its ground, the
+   card's own header, drawn by the panel (`description-editor/code-block-view.ts`),
+   and its lines in the card's type and inset, so opening the text moves no
+   block. Note that the header stays put while long lines scroll sideways
+   under it, that the lines wear the card's body class, so the prose's bare
+   fence (`@repo/ui`'s prose.css) leaves them alone and a phone fades them as
+   it fades the card's, and that the lines stand uncolored while they are
+   edited. */
+/* Note that only a figure's own side margins are dropped, since its gaps
+   above and below are the text's rhythm (`@repo/ui`'s prose.css). */
+.description-document-text .description-code-block {
+  margin-inline: 0;
   border: 1px solid var(--ui-color-border);
   border-radius: var(--ui-control-radius);
   background: var(--ui-color-code-ground);
-  color: var(--ui-color-code-text);
-  font-family: var(--ui-font-mono);
-  tab-size: 2;
 }
 
-.description-document-text pre::before {
-  position: sticky;
-  left: 0;
-  display: flex;
-  align-items: center;
-  height: var(--ui-control-height);
-  margin-bottom: var(--ui-row-inset);
-  padding-left: var(--ui-list-inset);
-  border-bottom: 1px solid var(--ui-color-border);
-  background: var(--ui-color-fill-hover);
-  color: var(--ui-color-text);
-  content: attr(data-code-title);
-  font-family: var(--ui-font-sans);
-  font-size: var(--ui-type-caption-size);
-  font-weight: var(--ui-type-label-weight);
-  line-height: var(--ui-type-caption-leading);
-  white-space: nowrap;
+/* Note that the frame clips nothing, as the drawn card does, so the language
+   menu hung from the header stands whole over what follows; the header's
+   fill takes the frame's top corners instead, down through the element the
+   panel draws it in. */
+.description-document-text .description-code-head,
+.description-document-text .description-code-head > *,
+.description-document-text .description-code-head .ui-code-card-header {
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+}
+
+.description-document-text .description-code-block > pre {
+  margin: 0;
+  padding: var(--ui-row-inset) 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  color: var(--ui-color-code-text);
+  font-family: var(--ui-font-mono);
+  text-align: left;
+  tab-size: 2;
 }
 
 /* Note that the lines take the card's smaller type, never the block, whose
    own size the gap above it is measured in (`@repo/ui`'s prose.css). */
-.description-document-text pre > code {
+.description-document-text .description-code-block > pre > code {
   display: block;
   padding: 0 var(--ui-list-inset);
   font-size: var(--ui-type-caption-size);
   line-height: var(--ui-type-reading-leading);
+  white-space: pre;
 }
 
 /* A divider is pressed anywhere in the gap around its line, as a Notion or
@@ -1441,18 +1447,6 @@
   padding-inline-end: calc(var(--ui-control-height) + var(--ui-space-4));
 }
 
-/* A suggested change is GitHub's ```suggestion block, drawn under its name
-   rather than as code in a language, as the transcript heads one. */
-.comment-editor-text pre:has(> code.language-suggestion)::before {
-  display: block;
-  margin-bottom: var(--ui-tight-gap);
-  color: var(--ui-color-text);
-  content: "Suggested change";
-  font-family: var(--ui-font-sans);
-  font-size: var(--ui-type-caption-size);
-  font-weight: var(--ui-weight-medium);
-}
-
 /* Who opened it and when, one phrase after their face. */
 .pull-request-branch-row > .pull-request-branches {
   flex: 0 1 auto;
@@ -2218,16 +2212,6 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   }
 
   .message-box-actions:has(.agent-context-button) .message-box-more {
-    display: inline-flex;
-  }
-
-  /* The permission mode chip goes into the ⋯ too, which offers the modes
-     in its place (`agent-approvals.tsx`). */
-  .message-box .agent-mode-button {
-    display: none;
-  }
-
-  .message-box-actions:has(.agent-mode-button) .message-box-more {
     display: inline-flex;
   }
 }

@@ -1125,6 +1125,14 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.agents.stopRunAction, { id: agentId, action: actionId });
   }
 
+  /** Starts one agent's harness on a fresh session in the same agent, answering it as it then stands. */
+  clear(agentId: string): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.agents.clear, { id: agentId }, { as: AGENT_NOT_FOUND_RENAMES }),
+      unansweredBare,
+    );
+  }
+
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
@@ -1134,11 +1142,19 @@ export class HostedAgentClient {
   rewind(
     agentId: string,
     messageId: string,
+    restoreFiles = false,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     return hostedCall(
       this.#hosted.agents.rewind,
-      { params: { id: agentId }, body: { messageId } },
-      { as: AGENT_NOT_FOUND_RENAMES, deadline: HOSTED_DEADLINE.STEER },
+      {
+        params: { id: agentId },
+        body: { messageId, ...(restoreFiles ? { restoreFiles: true } : undefined) },
+      },
+      {
+        as: AGENT_NOT_FOUND_RENAMES,
+        // A rewind that puts the files back waits on the restore, two minutes on a Mac, past the steer's bound.
+        deadline: restoreFiles ? HOSTED_DEADLINE.REWIND_FILES : HOSTED_DEADLINE.STEER,
+      },
     );
   }
 

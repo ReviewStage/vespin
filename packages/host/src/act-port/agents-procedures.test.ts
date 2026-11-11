@@ -84,6 +84,7 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_REWIND]: "Could not rewind the agent on this system.",
+  [AGENT_ACT_KIND.AGENTS_CLEAR]: "Could not start a new session for the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_WARM]: "Could not keep the agent warm on this system.",
   [AGENT_ACT_KIND.AGENTS_PORTS]: "Could not read the agent's ports on this system.",
   [AGENT_ACT_KIND.AGENTS_PORT_SHARED]: "Could not read the agent's shared link on this system.",
@@ -136,6 +137,7 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   },
   AGENTS_STOP: { agentId: AGENT_ID },
   AGENTS_REWIND: { agentId: AGENT_ID, messageId: "m-1" },
+  AGENTS_CLEAR: { agentId: AGENT_ID },
   AGENTS_WARM: { agentId: AGENT_ID },
   AGENTS_PORTS: { agentId: AGENT_ID },
   AGENTS_PORT_SHARED: { agentId: AGENT_ID },
@@ -174,6 +176,7 @@ const NOTED_ACTS = [
   "AGENTS_ADD_REPOSITORY",
   "AGENTS_STOP",
   "AGENTS_REWIND",
+  "AGENTS_CLEAR",
   "AGENTS_ARCHIVE",
   "AGENTS_PIN",
 ] as const satisfies readonly (keyof NotedActs)[];

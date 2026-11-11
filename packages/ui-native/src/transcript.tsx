@@ -19,6 +19,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { isLucideSymbol } from "./glyph.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
@@ -624,8 +625,8 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   readonly items: readonly TranscriptItem[];
   /** What stands over the oldest row, such as the agent's head. */
   readonly head: ReactNode;
-  /** What stands in the rows' place while there are none, such as a read under way. */
-  readonly empty?: ReactNode;
+  /** The empty state that stands in the rows' place while there are none, such as a read under way. */
+  readonly empty?: EmptyStateProps | undefined;
   /** What the times count from; now where none is given. */
   readonly now?: number | undefined;
   /** The room left under the newest row, so it scrolls clear of a bar docked over the list's foot (`DOCK_ROOM`). */
@@ -679,7 +680,14 @@ export function AgentTranscript({
         keyExtractor={itemKey}
         renderItem={({ item }) => <TranscriptRow item={item} drawing={rowDrawing} />}
         ListHeaderComponent={<>{head}</>}
-        ListEmptyComponent={<>{empty}</>}
+        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app.
+        ListEmptyComponent={
+          empty === undefined ? undefined : (
+            <Host matchContents={{ vertical: true }}>
+              <EmptyState {...empty} />
+            </Host>
+          )
+        }
         ListFooterComponent={<View style={{ height: foot }} />}
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
         contentContainerStyle={[styles.content, { paddingLeft: left, paddingRight: right }]}

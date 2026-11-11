@@ -76,12 +76,14 @@ import {
   queueDeviceAgentLine,
   queueDeviceAgentRequest,
   withdrawDeviceAgentRequest,
+  withdrawUnclaimedDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
 import { deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
 import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_MACHINE, MAC_PRESENCE } from "@repo/features/agent-wire";
+import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_BOUNDS,
   DEVICE_AGENT_LINE_KIND,
@@ -95,6 +97,7 @@ import {
   deviceAgentLaunchPayloadSchema,
   deviceAgentLaunchSecretsSchema,
   deviceAgentLayoutIn,
+  deviceAgentRestorePayloadSchema,
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
@@ -134,6 +137,7 @@ import {
   type MachinePlace,
   type MachineRunning,
   type OpenedPlace,
+  RESTORE_OUTCOME,
   RUNNER_RECORD,
   type RunnerCredential,
   type RunnerHandle,
@@ -147,6 +151,8 @@ export const MAC_MACHINE = {
   POLL: Duration.millis(250),
   /** How long a read of a runner's exit waits where its caller names no wait, as a sandbox's does. */
   EXIT_WAIT: Duration.seconds(2),
+  /** How long a restore of the worktree waits for its Mac to settle the line, which a large worktree takes a while over. */
+  RESTORE_WAIT: Duration.minutes(2),
   /**
    * The first host release whose bundled runner keeps the CLI's transcript
    * at the service where its config names `transcriptsUrl`, and reads a
@@ -186,6 +192,7 @@ const nameOfAgent = Brand.nominal<MachineName>();
 
 const encodeFilesPayload = Schema.encodeSync(deviceAgentFilesPayloadSchema);
 const encodeLaunchPayload = Schema.encodeSync(deviceAgentLaunchPayloadSchema);
+const encodeRestorePayload = Schema.encodeSync(deviceAgentRestorePayloadSchema);
 const encodeSecrets = Schema.encodeSync(Schema.fromJsonString(deviceAgentLaunchSecretsSchema));
 
 /** Whether the Mac's host, by the version it last called with, runs a runner that keeps the CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`). */
@@ -334,6 +341,7 @@ function deviceMachineOver(
         linesRead: false,
         transcriptsKept: kept,
         diskSessions: true,
+        permissionModes: device.value.capabilities.includes(DEVICE_CAPABILITY.PERMISSION_MODES),
       };
       return layout;
     });
@@ -416,16 +424,26 @@ function deviceMachineOver(
       return answer.value;
     });
 
-  /** The runner's exit as its launch line was settled: its code, gone where it settled with none or the line is gone, null while it runs. */
-  const exitOf = (pin: DeviceAgentPin, handle: RunnerHandle) =>
-    Effect.map(
-      stored(deviceAgentLineStanding(pin.userId, handle.command)),
-      (standing): CommandExit => {
-        if (Option.isNone(standing)) return COMMAND_GONE;
-        if (!standing.value.settled) return null;
-        return standing.value.exitCode ?? COMMAND_GONE;
-      },
-    );
+  /** A line's exit as the Mac settled it: its code, gone where it settled with none or the line is gone, null while it stands unsettled. */
+  const exitOfLine = (pin: DeviceAgentPin, lineId: string) =>
+    Effect.map(stored(deviceAgentLineStanding(pin.userId, lineId)), (standing): CommandExit => {
+      if (Option.isNone(standing)) return COMMAND_GONE;
+      if (!standing.value.settled) return null;
+      return standing.value.exitCode ?? COMMAND_GONE;
+    });
+
+  /** The runner's exit as its launch line was settled, as `exitOfLine` reads it. */
+  const exitOf = (pin: DeviceAgentPin, handle: RunnerHandle) => exitOfLine(pin, handle.command);
+
+  /** Whether the agent's Mac registered that it takes a restore line (`DEVICE_CAPABILITY.RESTORE_CHECKOUT`). */
+  const restoresCheckout = (pin: DeviceAgentPin) =>
+    pin.deviceId === null
+      ? Effect.succeed(false)
+      : Effect.map(stored(deviceLayout(pin.userId, pin.deviceId)), (standing) =>
+          Option.exists(standing, (device) =>
+            device.capabilities.includes(DEVICE_CAPABILITY.RESTORE_CHECKOUT),
+          ),
+        );
 
   /** Whether the agent's Mac registered that it launches an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   const signsInOwnGithub = (pin: DeviceAgentPin) =>
@@ -676,6 +694,42 @@ function deviceMachineOver(
             ? answer.bytes
             : undefined,
       ),
+
+    // A restore line put the worktree back, which its Mac settles with the restore's exit; a Mac whose host
+    // takes no such line restores nothing, and one away is refused as every line to it is.
+    restoreCheckout: (session, snapshot) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+        if (Option.isNone(pin)) return RESTORE_OUTCOME.MISSING;
+        // A Mac away or removed is refused by name before its host's release is read, which a removed host has none of.
+        yield* refuseAway(pin.value);
+        if (!(yield* restoresCheckout(pin.value))) return RESTORE_OUTCOME.UNSUPPORTED;
+        const id = randomUUID();
+        yield* queued(pin.value, {
+          id,
+          kind: DEVICE_AGENT_LINE_KIND.RESTORE,
+          payload: encodeRestorePayload(snapshot),
+        });
+        // Note that a line the Mac has not taken by the time the wait ends is withdrawn, because a Mac
+        // back later would otherwise put the files back under whatever the agent has done since.
+        const settled = yield* heldUntil(
+          exitOfLine(pin.value, id),
+          (exit) => exit !== null,
+          deviceTopics(pin.value.userId),
+          MAC_MACHINE.POLL,
+          MAC_MACHINE.RESTORE_WAIT,
+        ).pipe(
+          Effect.ensuring(
+            Effect.ignore(stored(withdrawUnclaimedDeviceAgentLine(pin.value.userId, id))),
+          ),
+        );
+        const exit = Option.match(settled, { onNone: () => null, onSome: ({ read }) => read });
+        if (exit === 0) return RESTORE_OUTCOME.RESTORED;
+        if (exit === CHECKOUT_RESTORE_EXIT.MISSING) return RESTORE_OUTCOME.MISSING;
+        // A follower from before the line settles it with no exit, having acted on nothing.
+        if (exit === COMMAND_GONE) return RESTORE_OUTCOME.UNSUPPORTED;
+        return RESTORE_OUTCOME.FAILED;
+      }),
 
     // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
     phoneVideo: () => Effect.succeed(undefined),

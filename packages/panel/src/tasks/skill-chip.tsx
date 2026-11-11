@@ -1,8 +1,10 @@
 import { fileMarker, fileMarkers } from "@repo/features/file-marker";
 import { skillWord } from "@repo/features/skill-word";
+import { isSlashCommand } from "@repo/features/slash-command";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import {
   holdsSlashWord,
+  leadingCommandToken,
   type SkillOption,
   skillTokens,
   type TextRange,
@@ -18,6 +20,7 @@ import {
   useState,
 } from "react";
 import { afterPaint } from "../after-paint.js";
+import { CommandRef, SENT_COMMANDS } from "./command-ref.js";
 import { WordFilesContext } from "./file-chips.js";
 import type { SkillSource } from "./skill-picker.js";
 import { opensFile, SkillRef, type SkillSubject, type SkillWithFile } from "./skill-ref.js";
@@ -61,6 +64,12 @@ const SKILL_ELEMENT = {
   NAME: "name",
 } as const;
 
+/** The element the command a message opens with is written in as, its name its attribute. */
+const COMMAND_ELEMENT = {
+  TAG: "app-command",
+  NAME: "name",
+} as const;
+
 /** The element a file's marker is written in as, its name its attribute. */
 const FILE_ELEMENT = {
   TAG: "app-file-chip",
@@ -92,6 +101,15 @@ function skillChip(text: string, token: TextRange): WordChip {
   return {
     ...token,
     element: `<${SKILL_ELEMENT.TAG} ${SKILL_ELEMENT.NAME}="${name}">${skillWord(name)}</${SKILL_ELEMENT.TAG}>`,
+  };
+}
+
+/** The leading command's chip, written in as its element, the `/name` it stands for its content. */
+function commandChip(text: string, token: TextRange): WordChip {
+  const name = text.slice(token.start + 1, token.end);
+  return {
+    ...token,
+    element: `<${COMMAND_ELEMENT.TAG} ${COMMAND_ELEMENT.NAME}="${name}">${skillWord(name)}</${COMMAND_ELEMENT.TAG}>`,
   };
 }
 
@@ -148,13 +166,21 @@ function FileElement({ node }: MarkdownNodeProps): ReactNode {
   return files.chip(name);
 }
 
+/** The element the leading command was written in as: its chip, or its `/name` as words where it names no command. */
+function CommandElement({ node }: MarkdownNodeProps): ReactNode {
+  const name = String(node?.properties[COMMAND_ELEMENT.NAME] ?? "");
+  return isSlashCommand(name) ? <CommandRef name={name} /> : skillWord(name);
+}
+
 /** What the chips a message's words may hold are drawn with, and the tags and attributes each is written in as. */
 const CHIP_COMPONENTS: MarkdownComponents = {
   [SKILL_ELEMENT.TAG]: SkillElement,
+  [COMMAND_ELEMENT.TAG]: CommandElement,
   [FILE_ELEMENT.TAG]: FileElement,
 };
 const CHIP_TAGS = {
   [SKILL_ELEMENT.TAG]: [SKILL_ELEMENT.NAME],
+  [COMMAND_ELEMENT.TAG]: [COMMAND_ELEMENT.NAME],
   [FILE_ELEMENT.TAG]: [FILE_ELEMENT.NAME],
 } as const;
 
@@ -234,10 +260,13 @@ export function SentWords({
 }): ReactNode {
   const skills = useKnownSkills(holdsSlashWord(text));
   const files = useContext(WordFilesContext);
+  // Note that the command a message opens with is its chip even where a skill shares its name, since the command is what ran.
+  const leading = leadingCommandToken(text, SENT_COMMANDS);
   const chips = [
-    ...(skills === undefined ? [] : skillTokens(text, new Set(skills.keys()))).map((token) =>
-      skillChip(text, token),
-    ),
+    ...(leading === undefined ? [] : [commandChip(text, leading)]),
+    ...(skills === undefined ? [] : skillTokens(text, new Set(skills.keys())))
+      .filter((token) => token.start !== leading?.start)
+      .map((token) => skillChip(text, token)),
     ...fileMarkers(text)
       .filter((marker) => files?.names.has(marker.name) === true)
       .map((marker) => fileChip(marker.start, marker.end, marker.name)),

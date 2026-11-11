@@ -869,6 +869,7 @@
   --spacing-menu-label: calc(var(--ui-row-inset) + var(--ui-menu-glyph) + var(--ui-icon-gap));
   --spacing-submenu-reach: calc(100% + 9px - var(--ui-submenu-shift, 0px));
   --spacing-submenu: 200px; /* off-scale: a submenu's width */
+  --spacing-submenu-hinted: 280px; /* off-scale: a submenu whose rows wear a hint under their names */
   --spacing-ui-32: var(--ui-space-32);
   --spacing-disclosure-row: 36px; /* off-scale: a file row's height */
   /* A place in a column standing tall enough for a face. */
@@ -1102,6 +1103,11 @@
     var(--ui-popover-room, 100vh)
   );
   --spacing-popover-narrow: var(--ui-popover-width-narrow);
+  /* The Resources popover's card, a table of three columns wide, and a
+     process's name stepped in a short way for each process above it
+     (`--resource-depth`), so a deep tree still leaves its names room. */
+  --spacing-popover-wide: var(--ui-popover-width-wide);
+  --spacing-resource-nest: calc(var(--resource-depth, 0) * var(--ui-space-12));
   --spacing-page-versions-end: calc(var(--ui-control-gap) - var(--ui-space-2));
   --spacing-image-diff-side: 200px; /* off-scale: a side's least before two stop fitting to a row */
   --spacing-snippet-pending: calc(var(--snippet-rows) * var(--snippet-row));

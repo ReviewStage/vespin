@@ -78,6 +78,7 @@ import { harnessOf, nativeRuntimeOfSession } from "./native-runtime.js";
 import { reconciledBeforeWrite } from "./reconcile.js";
 import { failedCallRefusal, NativeAgentSessions, routedSessions } from "./runtime-sessions.js";
 import { agentStatusOf } from "./status.js";
+import { TURN_PUBLISH, TurnQueue } from "./turn-delivery.js";
 
 /**
  * steer.ts -- the developer's words handed to a coding agent: the one path a message takes, from the message box or any other sender.
@@ -436,9 +437,8 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const runtime = yield* admittedRuntime(userId, agent, yield* Effect.fromResult(read.routing));
   if (yield* Effect.fromResult(read.repeated)) return { outcome: STEER_OUTCOME.REPEATED };
   const held = yield* Effect.fromResult(read.task);
-  if (held !== undefined && Option.isNone(held))
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  const task = held === undefined ? undefined : Option.getOrUndefined(held);
+  if (Option.isNone(held)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  const task = held.value;
   // An archived agent names nothing.
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const workspace = yield* Effect.fromResult(read.workspace);
@@ -470,7 +470,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
           : hostedStoreOrUnavailable(
               readMentioned(userId, pointed, {
                 task,
-                agentId: agent.id,
                 workspaceId: agent.organizationId,
               }),
             ),
@@ -500,7 +499,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
         pointed,
         task,
         reads,
-        agent.id,
         yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
       );
   const running = yield* Effect.fromResult(read.running);
@@ -705,31 +703,39 @@ const WAITED_TURNS = { RESUME_LIMIT: 100 } as const;
 
 /**
  * The turns held open for a usage limit's reset whose reset has passed at
- * `now` (`releaseWaitedTurns`), each handed on to a launch as a limited
- * turn's retry is (`turnRetried`), past the sweep's answer, since a launch
- * may take most of a minute; a sweep's worth, answering how many. A launch
- * its plan refuses again leaves the turn open to its progress deadline, which
- * the sweep's reap then fails it at.
+ * `now` (`releaseWaitedTurns`), a sweep's worth, answering how many: a
+ * running one handed on to a launch as a limited turn's retry is
+ * (`turnRetried`), past the sweep's answer, since a launch may take most of
+ * a minute; a queued one, whose launch the limit refused, published for its
+ * delivery again, unkeyed, since its first publish's id may still be kept.
+ * A launch its plan refuses again holds a queued turn once more, and leaves
+ * a running one open to its progress deadline, which the sweep's reap then
+ * fails it at.
  */
 export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurns")(function* (
   now: number,
 ) {
   const released = yield* releaseWaitedTurns(new Date(now), WAITED_TURNS.RESUME_LIMIT);
+  const queue = yield* TurnQueue;
   yield* Effect.forEach(
     released,
     (turn) =>
-      afterResponse(
-        "a waited turn's retry",
-        turnRetried(turn).pipe(
-          Effect.flatMap((went) =>
-            went ? Effect.void : Effect.logWarning("a turn past its limit's reset was not retried"),
+      turn.status === TURN_STATUS.QUEUED
+        ? queue.publish(turn, TURN_PUBLISH.UNKEYED)
+        : afterResponse(
+            "a waited turn's retry",
+            turnRetried(turn).pipe(
+              Effect.flatMap((went) =>
+                went
+                  ? Effect.void
+                  : Effect.logWarning("a turn past its limit's reset was not retried"),
+              ),
+              Effect.catch((failure) =>
+                Effect.logWarning(`a turn past its limit's reset was not retried: ${failure._tag}`),
+              ),
+              Effect.annotateLogs({ conversationId: turn.conversationId, turnId: turn.turnId }),
+            ),
           ),
-          Effect.catch((failure) =>
-            Effect.logWarning(`a turn past its limit's reset was not retried: ${failure._tag}`),
-          ),
-          Effect.annotateLogs({ conversationId: turn.conversationId, turnId: turn.turnId }),
-        ),
-      ),
     { discard: true },
   );
   return released.length;

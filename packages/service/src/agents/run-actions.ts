@@ -3,7 +3,7 @@
  *
  * A repository's run actions are kept with its cloud setup
  * (`workspace-sandbox-setup-wire.ts`), and a member runs one in a cloud
- * agent's sandbox from the Run menu in the agent's message box. With the
+ * agent's sandbox from the Run button over its tabs, ⌘K, or a phone's ⋯. With the
  * experiment off, an agent on a Mac, an agent with no repository, or an id
  * that is not one of the repository's actions, the action is not found, so
  * nothing is run that the workspace has not chosen and listed.

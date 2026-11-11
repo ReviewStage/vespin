@@ -117,7 +117,6 @@ import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-m
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
 import { modelChoiceSchema } from "@repo/features/models-wire";
-import { PAGE_OWNER } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   PULL_REQUEST_CHAPTERS_STATE,
@@ -608,15 +607,13 @@ const readAsMember = <R, RRead>(
     return yield* read(memberCaller(member, workspace.value));
   });
 
-/** The workspace of the task, the agent, or the agent with no task a page stands on, as the member reaches it. */
+/** The workspace of the task a page stands on, as the member reaches it. */
 const pageWorkspace = (userId: string, pageId: string) =>
-  Effect.flatMap(readPageById(userId, pageId, undefined), (found) => {
-    if (Option.isNone(found)) return Effect.succeed(Option.none<string>());
-    const { owner } = found.value;
-    return owner.kind === PAGE_OWNER.TASK
-      ? readTaskWorkspace(userId, owner.taskId)
-      : agentWorkspace(userId, { id: owner.agentId });
-  });
+  Effect.flatMap(readPageById(userId, pageId, undefined), (found) =>
+    Option.isNone(found)
+      ? Effect.succeed(Option.none<string>())
+      : readTaskWorkspace(userId, found.value.taskId),
+  );
 
 /** A list's input: the workspace it is about, by its slug, where the member has more than one. */
 const WORKSPACE_INPUT = Schema.optionalKey(

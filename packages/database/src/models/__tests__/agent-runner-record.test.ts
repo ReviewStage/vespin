@@ -49,6 +49,7 @@ const runningIn = (agentId: string, sandboxName: string): AgentRunnerRecord => (
   sandboxName,
   firstSequence: 7,
   fingerprint: "launch-digest",
+  permissionMode: null,
   sandboxSessionId: `sbs_${sandboxName}`,
   commandId: "cmd_1",
 });

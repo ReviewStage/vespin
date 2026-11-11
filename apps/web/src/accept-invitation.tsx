@@ -10,7 +10,6 @@ import {
 } from "@repo/features/workspace-invitation-wire";
 import { QUERY_ROOT } from "@repo/panel/query-keys";
 import {
-  type AuthAction,
   AuthMark,
   AuthPage,
   AVATAR_SHAPE,
@@ -23,7 +22,7 @@ import {
 import { queryOptions, skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { openAppFromMac } from "./open-app";
 import { WEB_APP_URL } from "./SiteChrome";
 import { useSocialSignIn } from "./sign-in-choices";
@@ -62,12 +61,13 @@ const INVITATION_ERROR = {
 /** The HTTP status Better Auth answers an expired, used, canceled, or unknown invitation with. */
 const SPENT_STATUS = 400;
 
-/** What the page shows: the work under way, a sign-in, the invitation to accept, or how it stands now. */
+/** What the page shows: the work under way, a sign-in, the invitation to accept, how it stands now, or the workspace being opened. */
 const VIEW = {
   WORKING: "working",
   SIGN_IN: "sign-in",
   OFFER: "offer",
   SAID: "said",
+  OPENING: "opening",
 } as const;
 
 type View =
@@ -85,7 +85,11 @@ type View =
       readonly body: string;
       /** How it ended, badged on the mark: settled, failed, or neither. */
       readonly tone: LandingTone | undefined;
-      readonly action: AuthAction | undefined;
+    }
+  | {
+      /** The reader is in the workspace, and the page is taking them to it. */
+      readonly kind: typeof VIEW.OPENING;
+      readonly title: string;
     }
   | {
       readonly kind: typeof VIEW.OFFER;
@@ -98,29 +102,20 @@ type View =
 
 const WORKING: View = { kind: VIEW.WORKING };
 
-/** The way on the web app offers, to a reader with no Mac app to open. */
-const OPEN_ON_THE_WEB = { label: `Open ${PRODUCT_NAME} on the web`, href: WEB_APP_URL } as const;
-
-/** How the offer names the role it joins as. */
+/** How the offer names the role it joins as: an admin alone, since a member is what joining makes anyone. */
 const ROLE_WORDS = {
-  [INVITATION_ROLE.MEMBER]: "a member",
-  [INVITATION_ROLE.ADMIN]: "an admin",
+  [INVITATION_ROLE.MEMBER]: "",
+  [INVITATION_ROLE.ADMIN]: ", as an admin",
 } as const satisfies Record<WorkspaceInvitation["role"], string>;
-
-/** The way into the workspace once in it: the Mac app on a Mac, else the web app. */
-function openTheWorkspace(): AuthAction {
-  return openAppFromMac() ?? OPEN_ON_THE_WEB;
-}
 
 const SPENT: View = said(
   "This invitation is no longer valid",
-  "It has expired, already been used, or been canceled. Ask whoever invited you for a new link.",
+  "It has expired, already been used, or been canceled.",
   LANDING_TONE.DANGER,
-  OPEN_ON_THE_WEB,
 );
 
-function said(title: string, body: string, tone?: LandingTone, action?: AuthAction): View {
-  return { kind: VIEW.SAID, title, body, tone, action };
+function said(title: string, body: string, tone?: LandingTone): View {
+  return { kind: VIEW.SAID, title, body, tone };
 }
 
 function signIn(title: string, body: string, footnote?: string): View {
@@ -129,9 +124,9 @@ function signIn(title: string, body: string, footnote?: string): View {
     : { kind: VIEW.SIGN_IN, title, body, footnote };
 }
 
-/** The workspace the reader is in, as joined now or found joined already. */
-function inWorkspace(title: string, body: string): View {
-  return said(title, body, LANDING_TONE.COMPLETE, openTheWorkspace());
+/** The workspace the reader is in, as joined now or found joined already, which the page opens. */
+function inWorkspace(title: string): View {
+  return { kind: VIEW.OPENING, title };
 }
 
 /** Who the invitation is for, where its link says, and who the browser is signed in as. */
@@ -221,10 +216,7 @@ function offerView(
 ): View {
   if ("member" in answer) {
     const { workspaceName } = answer.member;
-    return inWorkspace(
-      `You're already in ${workspaceName}`,
-      `It's in your sidebar in ${PRODUCT_NAME}.`,
-    );
+    return inWorkspace(`You're already in ${workspaceName}`);
   }
   if ("refused" in answer) {
     if (answer.refused === INVITATION_OFFER_REFUSAL.NOT_RECIPIENT) {
@@ -270,10 +262,7 @@ function readView(
 async function accept(offer: { id: string; name: string }, addresses: Addresses): Promise<View> {
   const accepted = await authClient.organization.acceptInvitation({ invitationId: offer.id });
   if (accepted.error) return refused(accepted.error, addresses);
-  return inWorkspace(
-    `You joined ${offer.name}`,
-    `${offer.name} is in your sidebar in ${PRODUCT_NAME}. You can close this tab.`,
-  );
+  return inWorkspace(`You joined ${offer.name}`);
 }
 
 function titleOf(view: View): string {
@@ -282,14 +271,15 @@ function titleOf(view: View): string {
   return view.title;
 }
 
-function descriptionOf(view: View): string | undefined {
+function descriptionOf(view: View): React.ReactNode {
   if (view.kind === VIEW.WORKING) return undefined;
+  if (view.kind === VIEW.OPENING) return undefined;
   if (view.kind !== VIEW.OFFER) return view.body;
   const as = ROLE_WORDS[view.role];
   if (view.inviter === undefined) {
-    return `You're invited to work in ${view.name} on ${PRODUCT_NAME}, as ${as}.`;
+    return `You're invited to work in ${view.name} on ${PRODUCT_NAME}${as}.`;
   }
-  return `${view.inviter} invited you to work in ${view.name} on ${PRODUCT_NAME}, as ${as}.`;
+  return `${view.inviter} invited you to work in ${view.name} on ${PRODUCT_NAME}${as}.`;
 }
 
 /** The mark each view opens on: the invitation's workspace on its offer, else the app's, badged as it ended. */
@@ -297,7 +287,22 @@ function markOf(view: View): React.JSX.Element {
   if (view.kind === VIEW.OFFER) {
     return <Avatar name={view.name} size={AVATAR_SIZE.PAGE} shape={AVATAR_SHAPE.TILE} decorative />;
   }
+  if (view.kind === VIEW.OPENING) return <AuthMark tone={LANDING_TONE.COMPLETE} />;
   return <AuthMark tone={view.kind === VIEW.SAID ? view.tone : undefined} />;
+}
+
+/**
+ * Takes a reader in the workspace to it once: the Mac app on a Mac, whose
+ * browser asks first, and the web app anywhere else. Note that the page is
+ * replaced rather than left in history, because going back to it would
+ * read the reader as a member and send them on again.
+ */
+function useOpenWorkspace(view: View): void {
+  const opening = view.kind === VIEW.OPENING;
+  useEffect(() => {
+    if (!opening) return;
+    window.location.replace(openAppFromMac()?.href ?? WEB_APP_URL);
+  }, [opening]);
 }
 
 /**
@@ -348,6 +353,8 @@ function AcceptInvitation(): React.JSX.Element {
     joining.data ??
     (session.isPending ? WORKING : readView(query, signedIn, offer.isError, offer.data));
 
+  useOpenWorkspace(view);
+
   const join = (invitation: { id: string; name: string }) => {
     if (joining.isPending) return;
     joining.mutate(invitation);
@@ -357,13 +364,7 @@ function AcceptInvitation(): React.JSX.Element {
     return <SignInCard title={view.title} body={view.body} footnote={view.footnote} />;
   }
   return (
-    <AuthPage
-      mark={markOf(view)}
-      title={titleOf(view)}
-      description={descriptionOf(view)}
-      action={view.kind === VIEW.SAID ? view.action : undefined}
-      footnote={view.kind === VIEW.OFFER ? `You'll join as ${signedIn ?? ""}.` : undefined}
-    >
+    <AuthPage mark={markOf(view)} title={titleOf(view)} description={descriptionOf(view)}>
       {view.kind === VIEW.OFFER ? (
         <Button
           variant={BUTTON_VARIANT.PRIMARY}

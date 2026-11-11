@@ -223,6 +223,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_QUEUE: "agents.queue",
   AGENTS_STOP: "agents.stop",
   AGENTS_REWIND: "agents.rewind",
+  /** One agent's harness started on a fresh session in the same agent, its transcript kept (`/clear`, `coder-host/clear.ts`). */
+  AGENTS_CLEAR: "agents.clear",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
@@ -596,6 +598,15 @@ export const MAC_TERMINAL_ACT_KIND = {
 } as const;
 
 /**
+ * What this Mac spends on the app (`mac-resources.ts`): each of its
+ * processes' CPU and memory now, read from the process table by the
+ * desktop's main, which a panel asks every few seconds while it shows them.
+ */
+export const MAC_RESOURCES_ACT_KIND = {
+  MAC_RESOURCES_READ: "macResources.read",
+} as const;
+
+/**
  * A shell on this Mac (`mac-shells.ts`): the developer's login shell opened
  * in a folder for the asking panel, attached, and closed, answered by the
  * desktop's main, which holds it. What it prints travels on the port an
@@ -823,6 +834,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_COMMAND_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...PORT_FORWARD_ACT_KIND,
@@ -936,6 +948,7 @@ export const PORT_ACT_USE = {
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,
+  AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
@@ -1011,6 +1024,8 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+
+  MAC_RESOURCES_READ: ACT_USE.FETCH,
 
   MAC_SHELL_MIRROR: ACT_USE.WRITE,
   MAC_SHELL_OPEN: ACT_USE.WRITE,
@@ -1156,6 +1171,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...TERMINAL_ACT_KIND,

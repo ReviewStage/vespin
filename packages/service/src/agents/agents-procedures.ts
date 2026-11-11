@@ -15,7 +15,7 @@
  * 201 for the agent it made or 200 for the one a retry under the same key
  * made before; a blank one hands the agent nothing. A Start from an agent
  * (`POST /api/agents/{id}/agents`) takes the same path in the place that
- * agent stands in, its task or, with none, its workspace and repository,
+ * agent stands in, its task,
  * and answers alike. The calls into an agent
  * (`GET /api/agents/{id}/calls`) are read as a task's are, by the agent. A change
  * (`PATCH /api/agents/{id}`) names one of a title, an archive, a pin, a
@@ -86,6 +86,7 @@ import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import {
+  clearedAgentById,
   deletedAgent,
   resumedAgentSandbox,
   rewoundAgentById,
@@ -311,7 +312,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     });
   return {
     /**
-     * A workspace's agents, on a task or with none, newest started first,
+     * A workspace's agents, on any task, newest started first,
      * the archived ones left out unless `archived=include` asks, narrowed to
      * one repository where the query names one and to agents whose title or
      * task's name holds the query's words where it names some, as the plan
@@ -556,10 +557,19 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       yield* warmedAgent(context.userId, input.id);
       return { warm: true as const };
     }),
+    /** The agent's harness started on a fresh session in the same agent (`agent-lifecycle.ts`), answered as it then stands. */
+    clear: signedIn.clear.effect(function* ({ input, context }) {
+      return { agent: yield* clearedAgentById(writer, context.userId, input.id) };
+    }),
     /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {
       return {
-        agent: yield* rewoundAgentById(context.userId, input.params.id, input.body.messageId),
+        agent: yield* rewoundAgentById(
+          context.userId,
+          input.params.id,
+          input.body.messageId,
+          input.body.restoreFiles === true,
+        ),
       };
     }),
     /**
@@ -661,7 +671,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
           const ran = yield* sandboxOrUpstream(
-            sandbox.run(sessionId, randomUUID(), {
+            // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
+            sandbox.run(sessionId, action.id, {
               actionId: action.id,
               label: action.label,
               command: action.command,

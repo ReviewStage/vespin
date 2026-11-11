@@ -331,6 +331,8 @@ const TASK_SURFACES = {
     "file-tree",
     "crumb-tree",
     "popover-narrow",
+    "popover-wide",
+    "resource-nest",
     "page-versions-end",
     "image-diff-side",
     "snippet-pending",

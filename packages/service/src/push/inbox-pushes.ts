@@ -16,8 +16,7 @@
  * An alert says the thread's or the agent's title over the message's first
  * line, its Markdown chips said by their labels, and carries, beside Apple's
  * `aps`, the ids the app opens the thread and answers it by (`InboxPushIds`).
- * Its `thread-id` groups the phone's notifications by task, or by agent for
- * one with no task; its `category` is the actions the app offers on it
+ * Its `thread-id` groups the phone's notifications by task; its `category` is the actions the app offers on it
  * (`PUSH_CATEGORY`): a decide that takes one option offers each as a button,
  * whose labels the payload's `options` carries for the app's service
  * extension to set, since a category's actions are otherwise fixed; any other
@@ -126,7 +125,7 @@ interface InboxPushIds {
   /** The agent's message the alert is about: the ask an answer names, or the post a reply follows. */
   readonly messageId: string;
   readonly agentId: string;
-  /** The task the thread stands on; absent for an agent with no task. */
+  /** The task the thread stands on; optional on the wire, for a released app, and always sent. */
   readonly taskId?: string;
   /** The thread's revision, which a nod or a close names. */
   readonly revision: number;
@@ -136,7 +135,7 @@ interface InboxPushIds {
 export interface ThreadPushPost {
   readonly item: InboxItem;
   readonly asked: boolean;
-  readonly taskId: string | null;
+  readonly taskId: string;
 }
 
 /** Words clipped to a bound, with an ellipsis where they were cut. */
@@ -269,7 +268,7 @@ function threadPostNotification(
     itemId: item.id,
     messageId: message.id,
     agentId: item.agentId,
-    ...(taskId === null ? undefined : { taskId }),
+    taskId,
     revision: item.revision,
   };
   const { category, ...actions } = actionsOf(message);
@@ -280,7 +279,7 @@ function threadPostNotification(
     payload: {
       aps: {
         alert: alertOf(item.title, firstLine(message.text)),
-        "thread-id": taskId ?? item.agentId,
+        "thread-id": taskId,
         category,
         "mutable-content": 1,
         sound: "default",
@@ -398,8 +397,7 @@ function stillWaitingPost(userId: string, itemId: string) {
       (asks || item.unread === true);
     if (!waiting) return Option.none<ThreadPushPost>();
     const home = yield* readInboxItemHome(userId, itemId);
-    const taskId = Option.match(home, { onNone: () => null, onSome: (each) => each.planId });
-    return Option.some({ item, asked: asks, taskId });
+    return Option.map(home, ({ planId }) => ({ item, asked: asks, taskId: planId }));
   });
 }
 

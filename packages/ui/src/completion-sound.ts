@@ -5,8 +5,13 @@
  * Settings' preview all call `playCompletionSound`. Every sound is a
  * recipe: a few oscillators under a gain envelope, a filtered sweep, or a
  * short burst of noise, scheduled on the one shared `AudioContext` and
- * ended well under 1.2 s. The envelopes keep each peak modest and the set
- * at about one loudness, so the softest pick is never drowned by the loudest.
+ * ended well under 1.2 s. The envelopes keep the set at about one loudness,
+ * so the softest pick is never drowned by the loudest. A sine or triangle
+ * note is two voices a few cents apart, which warms a bare tone.
+ *
+ * Every sound leaves through one bus made with the context (`Bus`): a
+ * short room, a convolution with decaying noise mixed under the dry sound,
+ * then a master level that lifts the set toward a system alert's loudness.
  *
  * A browser keeps a context made outside a press suspended (Safari on iOS
  * runs a context only from a gesture), so a sound asked for while the
@@ -14,6 +19,10 @@
  * minutes later, on some unrelated press, would say nothing true. The ask
  * tries to resume the context, and the first press anywhere on the page
  * resumes it, so the chimes after that play.
+ *
+ * One sound sounds at a time. The same sound asked for while it sounds is
+ * dropped, so a burst is never a loud stack; another sound cuts the one
+ * sounding short and plays, since the news it tells is the newer.
  *
  * A sound never raises an error: where Web Audio is missing or refuses, it
  * is silent.
@@ -29,10 +38,30 @@ const ATTACK = 0.01;
 const TAIL = 0.02;
 /** The bandpass Q a filtered sweep is shaped by: wide enough that a sawtooth keeps most of its level through it. */
 const SWEEP_FILTER_Q = 1.5;
+/** How far apart, in cents, the two voices of a sine or triangle note sit. */
+const DETUNE_CENTS = 4;
+/** How long the room rings, in seconds. */
+const ROOM_LENGTH = 0.7;
+/** How steeply the room's ring dies away: higher is a smaller room. */
+const ROOM_DECAY = 3.2;
+/** How much of the room is mixed under the dry sound. */
+const ROOM_MIX = 0.22;
+/**
+ * The bus's lift, about 5.5 dB, which brings the set closer to a system
+ * alert's loudness while the loudest recipe's peak, Pop's, stays about 1 dB
+ * under clipping. Note that there is no limiter behind it, because a
+ * browser's compressor pulls a short sound down by several decibels more
+ * than a long one and would undo the set's even loudness.
+ */
+const MASTER_LEVEL = 1.9;
+/** How long a sound cut short takes to fade, which keeps the cut from clicking. */
+const CUT = 0.03;
 
-/** One sound being scheduled: where it starts, and how far its latest note reaches. */
+/** One sound being scheduled: where it starts, where it plays into, and how far its latest note reaches. */
 interface Stage {
   readonly context: AudioContext;
+  /** The sound's own gain, into the bus, which cutting it short fades. */
+  readonly out: GainNode;
   readonly at: number;
   /** Seconds from `at` to the end of the last note, which is how long the sound occupies the speakers. */
   end: number;
@@ -65,6 +94,8 @@ interface Burst {
   gain: number;
   /** The bandpass's center: low is a thud, high is a tick. */
   filterHz: number;
+  /** The bandpass's Q: higher rings more like a struck body. */
+  q?: number;
 }
 
 /** A gain node that swells to `gain` and dies away over `length`. */
@@ -82,14 +113,20 @@ function reach(stage: Stage, until: number): void {
 }
 
 function tone(stage: Stage, { when, hz, length, gain, wave = "sine" }: Tone): void {
-  const { context, at } = stage;
-  const oscillator = context.createOscillator();
-  oscillator.type = wave;
-  oscillator.frequency.value = hz;
-  const amp = envelope(stage, when, length, gain);
-  oscillator.connect(amp).connect(context.destination);
-  oscillator.start(at + when);
-  oscillator.stop(at + when + length + TAIL);
+  const { context, at, out } = stage;
+  // Note that a square wave keeps one voice, because two beating squares sound broken rather than warm.
+  const detunes = wave === "sine" || wave === "triangle" ? [-DETUNE_CENTS, DETUNE_CENTS] : [0];
+  const amp = envelope(stage, when, length, gain / detunes.length);
+  amp.connect(out);
+  for (const cents of detunes) {
+    const oscillator = context.createOscillator();
+    oscillator.type = wave;
+    oscillator.frequency.value = hz;
+    oscillator.detune.value = cents;
+    oscillator.connect(amp);
+    oscillator.start(at + when);
+    oscillator.stop(at + when + length + TAIL);
+  }
   reach(stage, when + length + TAIL);
 }
 
@@ -97,7 +134,7 @@ function sweep(
   stage: Stage,
   { when, fromHz, toHz, length, gain, wave = "sine", filterHz }: Sweep,
 ): void {
-  const { context, at } = stage;
+  const { context, at, out } = stage;
   const oscillator = context.createOscillator();
   oscillator.type = wave;
   oscillator.frequency.setValueAtTime(fromHz, at + when);
@@ -105,13 +142,13 @@ function sweep(
   const amp = envelope(stage, when, length, gain);
   oscillator.connect(amp);
   if (filterHz === undefined) {
-    amp.connect(context.destination);
+    amp.connect(out);
   } else {
     const filter = context.createBiquadFilter();
     filter.type = "bandpass";
     filter.frequency.value = filterHz;
     filter.Q.value = SWEEP_FILTER_Q;
-    amp.connect(filter).connect(context.destination);
+    amp.connect(filter).connect(out);
   }
   oscillator.start(at + when);
   oscillator.stop(at + when + length + TAIL);
@@ -119,8 +156,8 @@ function sweep(
 }
 
 /** White noise fading to nothing, through a bandpass: a key's strike, not a note. */
-function burst(stage: Stage, { when, length, gain, filterHz }: Burst): void {
-  const { context, at } = stage;
+function burst(stage: Stage, { when, length, gain, filterHz, q }: Burst): void {
+  const { context, at, out } = stage;
   const frames = Math.floor(context.sampleRate * length);
   const buffer = context.createBuffer(1, frames, context.sampleRate);
   const samples = buffer.getChannelData(0);
@@ -132,9 +169,10 @@ function burst(stage: Stage, { when, length, gain, filterHz }: Burst): void {
   const filter = context.createBiquadFilter();
   filter.type = "bandpass";
   filter.frequency.value = filterHz;
+  if (q !== undefined) filter.Q.value = q;
   const amp = context.createGain();
   amp.gain.value = gain;
-  source.connect(filter).connect(amp).connect(context.destination);
+  source.connect(filter).connect(amp).connect(out);
   source.start(at + when);
   reach(stage, when + length);
 }
@@ -146,10 +184,32 @@ function bell(stage: Stage, when: number, hz: number, length: number, gain: numb
   tone(stage, { when, hz: hz * 5.4, length: length * 0.25, gain: gain * 0.12 });
 }
 
+/** A knuckle on wood: a sharp tick of noise over a low thud that drops in pitch. */
+function knock(stage: Stage, when: number): void {
+  burst(stage, { when, length: 0.06, gain: 1.1, filterHz: 900, q: 3 });
+  sweep(stage, { when, fromHz: 220, toHz: 140, length: 0.12, gain: 0.3 });
+}
+
 const RECIPES: Record<CompletionSound, (stage: Stage) => void> = {
   [COMPLETION_SOUND.CHIME]: (stage) => {
     tone(stage, { when: 0, hz: 1318.5, length: 0.45, gain: 0.22 });
     tone(stage, { when: 0.12, hz: 1760, length: 0.6, gain: 0.22 });
+  },
+  [COMPLETION_SOUND.DONE]: (stage) => {
+    // A rising major third that settles: finished, nothing asked.
+    tone(stage, { when: 0, hz: 784, length: 0.5, gain: 0.24 });
+    tone(stage, { when: 0.11, hz: 987.8, length: 0.8, gain: 0.24 });
+  },
+  [COMPLETION_SOUND.KNOCK]: (stage) => {
+    // No pitch at all, so it is never mistaken for a finish.
+    knock(stage, 0);
+    knock(stage, 0.16);
+  },
+  [COMPLETION_SOUND.QUESTION]: (stage) => {
+    // Three rising notes that stop short of home, as a question does.
+    tone(stage, { when: 0, hz: 659.3, length: 0.18, gain: 0.28, wave: "triangle" });
+    tone(stage, { when: 0.12, hz: 880, length: 0.18, gain: 0.28, wave: "triangle" });
+    tone(stage, { when: 0.24, hz: 1108.7, length: 0.5, gain: 0.28, wave: "triangle" });
   },
   [COMPLETION_SOUND.PING]: (stage) => {
     tone(stage, { when: 0, hz: 1568, length: 0.35, gain: 0.34, wave: "triangle" });
@@ -234,13 +294,53 @@ const RECIPES: Record<CompletionSound, (stage: Stage) => void> = {
   },
 };
 
-let shared: AudioContext | undefined;
-/** The shared context's time at which the sound now playing ends. */
-let busyUntil = 0;
+/** The one context every sound plays on, and the bus every sound leaves through. */
+interface Player {
+  readonly context: AudioContext;
+  readonly bus: AudioNode;
+}
+
+/** The sound sounding now: which, its own gain, and the context's time at which it ends. */
+interface Sounding {
+  readonly sound: CompletionSound;
+  readonly out: GainNode;
+  readonly until: number;
+}
+
+let shared: Player | undefined;
+let sounding: Sounding | undefined;
+
+/** A small room's ring: two channels of noise dying away, which a convolver turns into a room around the sound. */
+function roomOf(context: AudioContext): ConvolverNode {
+  const frames = Math.floor(context.sampleRate * ROOM_LENGTH);
+  const ring = context.createBuffer(2, frames, context.sampleRate);
+  for (let channel = 0; channel < 2; channel++) {
+    const samples = ring.getChannelData(channel);
+    for (let frame = 0; frame < frames; frame++) {
+      samples[frame] = (Math.random() * 2 - 1) * (1 - frame / frames) ** ROOM_DECAY;
+    }
+  }
+  const room = context.createConvolver();
+  room.buffer = ring;
+  return room;
+}
+
+/** The bus: the dry sound and its room, lifted by the master level, out to the speakers. */
+function busOf(context: AudioContext): AudioNode {
+  const input = context.createGain();
+  const master = context.createGain();
+  master.gain.value = MASTER_LEVEL;
+  const wet = context.createGain();
+  wet.gain.value = ROOM_MIX;
+  input.connect(master);
+  input.connect(roomOf(context)).connect(wet).connect(master);
+  master.connect(context.destination);
+  return input;
+}
 
 /** Resumes a context a browser kept suspended, on the first press anywhere. */
 function resumeOnPress(): void {
-  shared?.resume().catch(() => undefined);
+  shared?.context.resume().catch(() => undefined);
 }
 
 /** Tries to bring a context that is not running back, now and on the next press anywhere. */
@@ -250,35 +350,50 @@ function resumeSoon(context: AudioContext): void {
   document.addEventListener("pointerdown", resumeOnPress, { capture: true, once: true });
 }
 
-/** The one context every sound plays on, made on first use; absent where the platform has no Web Audio. */
-function sharedContext(): AudioContext | undefined {
-  if (shared?.state === "closed") {
+/** The one player every sound plays on, made on first use; absent where the platform has no Web Audio. */
+function sharedPlayer(): Player | undefined {
+  if (shared?.context.state === "closed") {
     shared = undefined;
-    busyUntil = 0;
+    sounding = undefined;
   }
   if (shared !== undefined) return shared;
   if (typeof AudioContext === "undefined") return undefined;
-  shared = new AudioContext();
+  const context = new AudioContext();
+  shared = { context, bus: busOf(context) };
   return shared;
 }
 
+/** Fades the sound sounding now to nothing, so the next one plays alone. */
+function cut(context: AudioContext, { out }: Sounding): void {
+  out.gain.setValueAtTime(out.gain.value, context.currentTime);
+  out.gain.linearRampToValueAtTime(0, context.currentTime + CUT);
+}
+
 /**
- * Plays `sound` now, unless one is still sounding: a second call within a
- * sound's length plays nothing, so a burst of finishes is one chime and never
- * a loud stack. A context that is not running, as a browser leaves one made
- * outside a press, plays nothing. Returns nothing and throws nothing.
+ * Plays `sound` now. The same sound asked for while it still sounds plays
+ * nothing, so a burst of finishes is one chime and never a loud stack;
+ * another sound cuts it short and plays. A context that is not running, as
+ * a browser leaves one made outside a press, plays nothing. Returns nothing
+ * and throws nothing.
  */
 export function playCompletionSound(sound: CompletionSound): void {
   try {
-    const context = sharedContext();
-    if (context === undefined || context.currentTime < busyUntil) return;
+    const player = sharedPlayer();
+    if (player === undefined) return;
+    const { context, bus } = player;
+    const now = context.currentTime;
+    const still = sounding !== undefined && now < sounding.until ? sounding : undefined;
+    if (still?.sound === sound) return;
     if (context.state !== "running") {
       resumeSoon(context);
       return;
     }
-    const stage: Stage = { context, at: context.currentTime, end: 0 };
+    if (still !== undefined) cut(context, still);
+    const out = context.createGain();
+    out.connect(bus);
+    const stage: Stage = { context, out, at: now, end: 0 };
     RECIPES[sound](stage);
-    busyUntil = stage.at + stage.end;
+    sounding = { sound, out, until: stage.at + stage.end };
   } catch {
     // A sound is never worth an error.
   }

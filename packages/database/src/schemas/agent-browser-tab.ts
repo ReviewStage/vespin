@@ -48,8 +48,10 @@ export const agentBrowserTab = pgTable(
     conversationId: uuid("conversation_id")
       .notNull()
       .references(() => conversations.id, { onDelete: "cascade" }),
-    /** The task the agent is on; null for an agent on none. */
-    taskId: uuid("task_id").references(() => task.id, { onDelete: "cascade" }),
+    /** The task the agent is on. */
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
     /** The browser's CDP target id for the tab, such as `9A3F…`; unique within the agent's browser. */
     targetId: text("target_id").notNull(),
     /** The page's address as it last stood, cut at the Browser tab's bound. */

@@ -57,7 +57,7 @@ export interface ReachedAgent {
 }
 
 /**
- * The agent the path names, on a task or with none, where the account may
+ * The agent the path names, where the account may
  * read it (`readVisibleAgent`), its task included, or not found; its
  * conversation is targeted under the member who started it, which is whom
  * the conversation belongs to.

@@ -467,13 +467,13 @@ function DescriptionDocument({
     agents: tasks.agents,
   });
   // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
-  const descriptionsOn = useWorkspaceExperiment(
+  const shownWorkspaceId =
     region.kind === DOCUMENT_REGION.READY
       ? region.task.workspaceId
       : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
-          tasks.workspace?.id),
-    EXPERIMENT.DESCRIPTIONS,
-  );
+        tasks.workspace?.id);
+  const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
+  const turnEndOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.TURN_END);
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
   const comments = useDescriptionComments(
     useMemo(
@@ -796,14 +796,37 @@ function DescriptionDocument({
   }, [threadsAgent, onThreadsShown]);
   // Note that the dock stands, quiet, while the agent's threads are all settled, the one way into them from its card.
   const { open: boardOpen, settled: boardSettled } = inbox.board;
+  // An ask the bar answers from its row's buttons is sent as the Inbox's Send sends it, with the words drafted on its card.
+  const chooseAnswer = useSteadyDoor((item: InboxItem, label: string) =>
+    inbox.onMessage(item, { ...inbox.draftOf(item), choices: [label] }),
+  );
+  const { sending: inboxSending } = inbox;
   const threads = useMemo(() => {
     if (tabAgent === undefined) return undefined;
     const posted = [...boardOpen, ...boardSettled]
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
-    return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
-  }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
+    return posted.length === 0
+      ? undefined
+      : {
+          waiting,
+          posted,
+          onOpen: openWaitingThread,
+          turnEnd: turnEndOn,
+          onChoose: chooseAnswer,
+          sending: inboxSending,
+        };
+  }, [
+    tabAgent,
+    boardOpen,
+    boardSettled,
+    waitingOf,
+    openWaitingThread,
+    turnEndOn,
+    chooseAnswer,
+    inboxSending,
+  ]);
   const reader = useMemo(() => ({ readerId: tasks.me }), [tasks.me]);
   const editAgents = useMemo(() => ({ control: agents, onOpen: openAgent }), [agents, openAgent]);
   // The task's own menu, as the task's page holds it keyed by the task
@@ -1018,17 +1041,7 @@ function DescriptionDocument({
       ),
     [openedId, pages, openPageTab],
   );
-  // A task that lists no agent offers New agent under its title, since its Agents group draws none;
-  // note that a phone's group stands for archived agents too, its head offering New agent itself.
-  const agentsGrouped = room === SHELL_ROOM.NARROW && (agents.archived?.length ?? 0) > 0;
-  const firstAgentStart = useMemo(
-    () =>
-      agents.agents?.length === 0 && !agentsGrouped
-        ? newAgentStarts(mainTabs, agents)[0]
-        : undefined,
-    [agents, mainTabs, agentsGrouped],
-  );
-  // The task's starts, sub-tasks, and relations stand over its agents, the head keyed once by the
+  // The task's sub-tasks and relations stand over its agents, the head keyed once by the
   // task, so another task's groups start as they open and no draft of this one's stands there.
   const descriptionHead = useCallback(
     (room: DescriptionRoom) =>
@@ -1044,13 +1057,12 @@ function DescriptionDocument({
           tasks={tasks}
           door={relations}
           room={room}
-          newAgent={firstAgentStart}
           agents={planAgents}
           pages={planPages}
           onOpenTask={openTask}
         />
       ),
-    [openedId, opened, tasks, relations, openTask, firstAgentStart, planAgents, planPages],
+    [openedId, opened, tasks, relations, openTask, planAgents, planPages],
   );
   // A row in a transcript that opens a tab hangs that tab's card, read as
   // the tab reads it, so an agent, a subagent, or a file is previewed alike wherever named.

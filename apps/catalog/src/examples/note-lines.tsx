@@ -1,7 +1,9 @@
 import {
   ArrowRightIcon,
+  CompactedLine,
   INLINE_REF_LOOK,
   InlineRef,
+  NewSessionLine,
   NOTE_LINE_LOOK,
   NoteLine,
   UserIcon,
@@ -14,7 +16,9 @@ import { CatalogSection } from "../section";
  * stand, the same line as a status, and the quiet list line at the start of
  * a room, and the line that stands at a sidebar's rows' inset; a
  * transcript's quiet line, selectable, and its trail led by a glyph and
- * naming the agents that continued it, wrapping in a narrow column.
+ * naming the agents that continued it, wrapping in a narrow column; and
+ * the trails a coding agent's session leaves: compacted, with and without
+ * the tokens it held, and started afresh.
  */
 
 /** Nothing happens on a press: the catalog opens nowhere. */
@@ -72,6 +76,13 @@ function NoteLines(): React.JSX.Element {
               onPress={press}
             />
           </NoteLine>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="note-line-session" title="A session compacted, and started afresh">
+        <div className="catalog-narrow">
+          <CompactedLine notice={{ tokensBefore: 148_000 }} />
+          <CompactedLine notice={{ tokensBefore: null }} />
+          <NewSessionLine />
         </div>
       </CatalogSection>
     </>
