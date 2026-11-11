@@ -19,7 +19,7 @@
  * on its line, and answers; the turn the message awaits is delivered through
  * its queue (`turn-delivery.ts`), whose consumer opens the agent's place with
  * its repository checked out, writes the skills its member installed into
- * the app beside it (`native-skills.ts`), and launches the runner
+ * the app beside it in the cloud (`native-skills.ts`), and launches the runner
  * (`deliverTurn`). A launch there that cannot succeed is the agent's failed
  * turn. On a Mac, whose runner takes its lines on its stdin, the open
  * launches it itself, a line its Mac takes up. The place, the launch, and every
@@ -303,10 +303,10 @@ export interface RunnerSessionsOptions {
   readonly transcriptsUrl: string;
   /** The integrations the agent is handed as its launch starts, each an MCP server of its own beside ours. */
   readonly integrations: (agent: Agent) => Effect.Effect<readonly IntegrationServer[]>;
-  /** Our coder instructions for the agent, naming its checkout and installed skills where its machine keeps them, which the harness's config carries. */
+  /** Our coder instructions for the agent, naming its checkout and the files the service reads back where its machine keeps them, which the harness's config carries. */
   readonly instructions: (
     agent: Agent,
-    place: Pick<MachineLayout, "checkoutPath" | "installedSkills" | "sharedFiles">,
+    place: Pick<MachineLayout, "checkoutPath" | "sharedFiles">,
   ) => Effect.Effect<string>;
   /** One past the last event the store applied of the conversation's runner, where a launch numbers its events from. */
   readonly nextSequence: (
@@ -953,10 +953,29 @@ export const runnerSessions = <
       });
 
     /**
-     * The member's installed skills, less the repository's, uploaded for the
-     * launch to install (`native-skills.ts`), as a new place opens; nothing
-     * where there are none. A write that fails is logged, and the agent opens
-     * without them rather than not at all.
+     * The files of the member's installed skills, less the repository's, for
+     * the launch to install (`native-skills.ts`); none on a machine that
+     * installs none (`MachineLayout`'s `skillsUpload`), as a device, whose
+     * harnesses find whatever skills the machine's own home holds, so no
+     * skill is even read for it.
+     */
+    const installedSkillFiles = (
+      target: ConversationTarget,
+      agent: Agent,
+      layout: MachineLayout,
+    ) => {
+      const upload = layout.skillsUpload;
+      return upload === undefined
+        ? Effect.succeed<readonly SandboxFile[]>([])
+        : Effect.map(nativeSkills(target, agent, harness.skillRoots), (skills) =>
+            nativeSkillFiles(skills, upload),
+          );
+    };
+
+    /**
+     * The member's installed skills uploaded for the launch to install, as a
+     * new place opens; nothing where there are none. A write that fails is
+     * logged, and the agent opens without them rather than not at all.
      */
     const writeInstalledSkills = (place: MachinePlace, files: readonly SandboxFile[]) =>
       (files.length === 0 ? Effect.void : machine.writeFiles(place, files)).pipe(
@@ -1645,9 +1664,7 @@ export const runnerSessions = <
             setup: Effect.provideContext(sandboxSetupOf(agent, kind), services),
             beside: Effect.all(
               [
-                Effect.map(nativeSkills(target, agent, harness.skillRoots), (skills) =>
-                  nativeSkillFiles(skills, layout.skillsUpload),
-                ),
+                installedSkillFiles(target, agent, layout),
                 Effect.exit(
                   prepared(
                     agent,
@@ -1755,8 +1772,8 @@ export const runnerSessions = <
             sent,
             ready,
             place.created
-              ? Effect.flatMap(nativeSkills(target, agent, harness.skillRoots), (skills) =>
-                  writeInstalledSkills(running, nativeSkillFiles(skills, layout.skillsUpload)),
+              ? Effect.flatMap(installedSkillFiles(target, agent, layout), (files) =>
+                  writeInstalledSkills(running, files),
                 )
               : Effect.void,
             resumedPath(place.created, wasUp),

@@ -115,7 +115,9 @@ import {
   agentMachineChoice,
   agentRuntimeChoice,
   LocalAgentRefused,
+  localAgentRuntimeChoice,
   markedUnconnected,
+  modelRuntimeOf,
 } from "./agent-runtime-choice.js";
 import type { NativeRuntime } from "./native-runtime.js";
 import { startingPermissionMode } from "./permission-mode.js";
@@ -562,14 +564,21 @@ const starterOf = (ask: Pick<StartAsk, "startedBy" | "automationOrigin">) =>
       : SERVER_AGENT_STARTER.MEMBER;
 
 /**
- * The runtime a new agent's conversation is recorded on, with its payer,
- * by the account's routing (`agentRuntimeChoice`): the credential Settings
- * chose, a blank Start, a continue and a fork alike.
- * Where no credential of
- * the account's pays, the Start is refused by name, the provider beside
- * it, and nothing is written.
+ * The runtime a new agent's conversation is recorded on, with its payer: on
+ * a device, the model's harness on that machine's own login
+ * (`localAgentRuntimeChoice`), which needs no credential of the account's;
+ * in the cloud, by the account's routing (`agentRuntimeChoice`): the
+ * credential Settings chose, a blank Start, a continue and a fork alike.
+ * Where no credential of the account's pays for a cloud agent, the Start is
+ * refused by name, the provider beside it, and nothing is written.
  */
-function startRuntimeOf(userId: string, model: string, keys: AccountKeyRows) {
+function startRuntimeOf(
+  userId: string,
+  model: string,
+  keys: AccountKeyRows,
+  machine: AgentMachineKind,
+) {
+  if (machine === AGENT_MACHINE.DEVICE) return localAgentRuntimeChoice(model);
   return Effect.catch(agentRuntimeChoice(userId, model, keys), (failure) =>
     failure instanceof AgentCredentialMissing
       ? Effect.fail(credentialMissing(failure.provider))
@@ -580,9 +589,8 @@ function startRuntimeOf(userId: string, model: string, keys: AccountKeyRows) {
 /**
  * Where a new agent runs (`agentMachineChoice`): a sandbox, or the starter's
  * Mac the Start names where it is one Start offers them, and one that works
- * in a repository reached on the starter's own token where its host does so
- * on its own GitHub sign-in; refused by name where it is not, and nothing is
- * written.
+ * in a repository where its host does so on its own GitHub sign-in; refused
+ * by name where it is not, and nothing is written.
  */
 function startMachineOf(
   userId: string,
@@ -591,9 +599,9 @@ function startMachineOf(
     readonly deviceId?: string | undefined;
   },
   runtime: NativeRuntime,
-  githubAccess: GitHubAccess | undefined,
+  inRepository: boolean,
 ) {
-  return Effect.catch(agentMachineChoice(userId, asked, runtime, githubAccess), (failure) =>
+  return Effect.catch(agentMachineChoice(userId, asked, runtime, inRepository), (failure) =>
     failure instanceof LocalAgentRefused
       ? Effect.fail(localAgentRefused(failure.reason))
       : hostedStoreOrUnavailable(Effect.fail(failure)),
@@ -930,7 +938,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     ask,
     inherited,
     acceptedChoiceRead(userId, rules.choice),
-    (model, keys) => startRuntimeOf(userId, model, keys),
+    modelRuntimeOf,
     (fitter, noteFiles) => landingOf(userId, ask, fitter, noteFiles, ask.landed),
   );
   const { choice, keys, permissionMode } = read;
@@ -979,8 +987,13 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     member,
     carried !== undefined,
   );
-  const runtime = yield* startRuntimeOf(userId, choice.model, keys);
-  const placed = yield* startMachineOf(userId, where.asked, runtime.runtime, reached?.access);
+  const runtime = yield* startRuntimeOf(userId, choice.model, keys, where.asked.machine);
+  const placed = yield* startMachineOf(
+    userId,
+    where.asked,
+    runtime.runtime,
+    landing.repository !== null,
+  );
   const started = yield* hostedStoreOrUnavailable(
     createAgent(userId, {
       ...brief,

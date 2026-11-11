@@ -193,7 +193,7 @@ export const AGENT_PAYER = {
   CHATGPT_SUBSCRIPTION: "chatgpt_plan",
   API_KEY: "api_key",
   APP: "app",
-  /** A local agent's own Mac, by its harness's login there, as an agent started before every host launched on the account's saved credential records it; such an agent now launches on that saved credential. */
+  /** A local agent's own machine, by its harness's login there, which every local agent runs on and no credential of the account's pays for. */
   MAC_SIGN_IN: "mac_sign_in",
 } as const;
 
@@ -287,7 +287,7 @@ export const LOCAL_AGENT_REFUSAL = {
   SETUP_FAILED: "setup-failed",
   /** The device is another member's, and only its owner starts agents on it; the refusal carries the device and its owner (`refusedDeviceSchema`) where the service named them. */
   NOT_OWNER: "not-owner",
-  /** The repository is reached on the starter's own GitHub token, and the device's host is a build from before it runs such an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
+  /** The agent works in a repository, and the device's host is a build from before it runs every such agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   GITHUB_SIGN_IN: "github-sign-in",
   /** The agent's mode asks before it acts, and the device's host is a build from before it runs an agent in a mode (`DEVICE_CAPABILITY.PERMISSION_MODES`), which would run it with full access. */
   PERMISSION_MODES: "permission-modes",
@@ -471,6 +471,8 @@ export const AGENT_FAILURE = {
   ABANDONED: "abandoned",
   /** The account's own API key for the model's provider was refused, out of quota, or can no longer be read; it is replaced in Settings. */
   PROVIDER_KEY: "provider_key",
+  /** A local agent's machine is not signed in to the agent's harness, Claude Code or Codex, or its sign-in was refused; it is signed in on that machine. */
+  MACHINE_SIGN_IN: "machine_sign_in",
   /** The agent's session never started, so no turn ran; a new agent is the way on. */
   NOT_STARTED: "not_started",
   /** The agent ran a fast version on the account's own key while we ran Fast on our own key alone; no agent fails this way now, and one that did still reads as this. */

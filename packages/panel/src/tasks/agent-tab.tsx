@@ -455,9 +455,13 @@ const TURN_FAILURE_CAUSE: ReadonlyMap<AgentFailure, { readonly code: AgentFailur
 /**
  * The failures a turn ends on that something outside named as a refusal,
  * reported as one: the account's own API key, which its provider refused and
- * the reader mends in Settings.
+ * the reader mends in Settings, and a local agent's machine's own sign-in,
+ * which the reader mends on that machine.
  */
-const REFUSED_TURN_FAILURES: ReadonlySet<AgentFailure> = new Set([AGENT_FAILURE.PROVIDER_KEY]);
+const REFUSED_TURN_FAILURES: ReadonlySet<AgentFailure> = new Set([
+  AGENT_FAILURE.PROVIDER_KEY,
+  AGENT_FAILURE.MACHINE_SIGN_IN,
+]);
 
 /** What the tab says where its transcript could not be read. */
 const TRANSCRIPT_FAILED_LINE = "The transcript could not be read.";

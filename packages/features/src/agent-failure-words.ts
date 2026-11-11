@@ -36,6 +36,8 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.GITHUB]: "GitHub refused or could not be reached",
   [AGENT_FAILURE.ABANDONED]: "it ran out of time",
   [AGENT_FAILURE.PROVIDER_KEY]: "your API key was refused or cannot be read",
+  [AGENT_FAILURE.MACHINE_SIGN_IN]:
+    "the machine isn't signed in to Claude Code or Codex; sign in to it on that machine, then send a message",
   [AGENT_FAILURE.NOT_STARTED]: "the agent never started",
   [AGENT_FAILURE.FAST_ON_OWN_KEY]:
     "Fast isn't available on your own API key; choose the model with Fast off",

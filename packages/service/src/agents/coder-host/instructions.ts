@@ -269,7 +269,6 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     glob: "your shell (`rg --files`, or `ls`)",
     searchWeb: "Search the public web with Codex's own web search",
     skills: `A word like \`/name\` in the developer's message names one of your skills, which Codex finds under the checkout's \`.agents/skills\`, or, for one your developer installed into ${PRODUCT_NAME}, under \`${NATIVE_SKILLS_PATH.INSTALLED}/${INSTALLED_SKILLS.SKILLS}\`: read that skill's \`SKILL.md\` before anything else, and follow what it says. Where neither has such a skill, read \`.agents/skills/<name>/SKILL.md\` or \`.claude/skills/<name>/SKILL.md\` on the default branch, and follow that instead.`,
-    // Note that no path is named, because a local agent's Mac keeps the installed skills in a folder of its own, which Codex lists beside each skill.
     installedSkills: `A word like \`/name\` in the developer's message names one of the skills your developer installed into ${PRODUCT_NAME}, which Codex lists among your skills: read that skill's \`SKILL.md\` before anything else, and follow what it says.`,
     browser: browserWords("your shell"),
     todos:
@@ -532,13 +531,18 @@ const STARTED_REPORT_WORDS = `reports back to you: once its turn ends, its final
 /** How an agent another started reaches it before its final report: with `message_agent`, by the starter's id. */
 const STARTER_REACH_WORDS = `with \`${MESSAGE_AGENT_TOOL.name}\` and that agent's id`;
 
+/** The words given as a paragraph of their own, ending on a blank line; nothing where there are none. */
+function paragraphOf(words: string): string {
+  return words === "" ? "" : `${words}\n\n`;
+}
+
 /** What the instructions say of where the agent works, which differs for an agent with a repository and one with none. */
 interface WorkWords {
   /** From the opening line through how it works, and, with a repository, how it publishes. */
   readonly work: string;
   /** How it searches the public web. */
   readonly search: string;
-  /** How a skill is loaded: the repository's and the installed ones, or the installed ones alone with no repository; ending on a blank line. */
+  /** How a skill is loaded: the repository's and the installed ones, or the installed ones alone with no repository, ending on a blank line; nothing for a local agent. */
   readonly skills: string;
   /** What a link the developer pointed at names, up to a task's link. */
   readonly links: string;
@@ -560,23 +564,22 @@ const EXAMPLE_WORKSPACE = "acme";
 export interface CoderMachine {
   readonly local: boolean;
   readonly checkoutPath: string;
-  /** Where the machine keeps the skills the member installed into the app. */
-  readonly installedSkills: string;
   /** Where the agent saves a file the service reads back (`MachineLayout`'s `sharedFiles`). */
   readonly sharedFiles: string;
 }
 
-/** A sandbox of the agent's own, its checkout and installed skills where every sandbox keeps them. */
+/** A sandbox of the agent's own, its checkout where every sandbox keeps it. */
 const SANDBOX_MACHINE: CoderMachine = {
   local: false,
   checkoutPath: CODER.CHECKOUT_PATH,
-  installedSkills: NATIVE_SKILLS_PATH.INSTALLED,
   sharedFiles: SHARED_FILES_DIRECTORY,
 };
 
 /**
- * A harness's words on the machine given: a local agent's folders in place of
- * the sandbox's, its checkout and its installed skills; and no word of a
+ * A harness's words on the machine given: a local agent's checkout in place
+ * of the sandbox's, and no word of skills, since a local agent is handed
+ * none of its member's installed skills and its harness finds whatever
+ * skills the machine's own home holds by itself; and no word of a
  * browser of ours where the agent is not offered one (`../tool-catalog/catalog.ts`'s
  * `offers`), as a local agent is not.
  */
@@ -586,7 +589,8 @@ function toolsOn(tools: ToolWords, machine: CoderMachine, standing: AgentStandin
   return {
     ...offered,
     sandbox: tools.sandbox.replaceAll(`\`${CODER.CHECKOUT_PATH}\``, `\`${machine.checkoutPath}\``),
-    skills: tools.skills.replaceAll(NATIVE_SKILLS_PATH.INSTALLED, machine.installedSkills),
+    skills: "",
+    installedSkills: "",
   };
 }
 
@@ -766,9 +770,7 @@ ${tools.browser}`,
     search: `${tools.searchWeb} when a fact lies outside the repository, such as a library's documentation. A query leaves for the public web, so never put the repository's code, names, or paths into one.
 
 ${tools.integrations}`,
-    skills: `${tools.skills}
-
-`,
+    skills: paragraphOf(tools.skills),
     links: `A link in the developer's message whose label starts with \`@\`, such as \`[@session-store.ts](https://github.com/acme/app/blob/HEAD/apps/web/session-store.ts)\`, is something they pointed you at. A GitHub \`blob\` link into your repository names a file of your checkout: read it with ${tools.readFile} at that path before you act on it, since it may have changed on your branch; one pinned to a commit with \`#L3-L5\` names those lines as they stood at that commit. A GitHub \`tree\` link into your repository names a folder: look through it with ${tools.glob}.`,
     worker: {
       readOnly:
@@ -817,9 +819,7 @@ Where the ${words.brief} is unclear, say so plainly in your final message rather
     search: `${tools.searchWeb} when a fact lies outside what you were handed, such as a library's documentation. A query leaves for the public web, so never put private names or words into one.
 
 ${tools.integrations}`,
-    skills: `${tools.installedSkills}
-
-`,
+    skills: paragraphOf(tools.installedSkills),
     links: `A link in the developer's message whose label starts with \`@\`, such as \`[@session-store.ts](https://github.com/acme/app/blob/HEAD/apps/web/session-store.ts)\`, is something they pointed you at.`,
     worker: {
       readOnly:
@@ -997,11 +997,10 @@ export interface AgentInstructionsContext {
   readonly harness: CoderHarness;
   /** The repositories it works in beside its own, where each is checked out; none for an agent in one repository or none. */
   readonly extraRepositories?: readonly ExtraCheckout[] | undefined;
-  /** Where the agent's machine keeps its checkout, its installed skills, and the files the service reads back; where every sandbox keeps them, where unsaid. */
+  /** Where the agent's machine keeps its checkout and the files the service reads back; where every sandbox keeps them, where unsaid. */
   readonly place?:
     | {
         readonly checkoutPath: string;
-        readonly installedSkills: string;
         readonly sharedFiles: string;
       }
     | undefined;
@@ -1036,7 +1035,6 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
     {
       local: agent.machine === AGENT_MACHINE.DEVICE,
       checkoutPath: context.place?.checkoutPath ?? SANDBOX_MACHINE.checkoutPath,
-      installedSkills: context.place?.installedSkills ?? SANDBOX_MACHINE.installedSkills,
       sharedFiles: context.place?.sharedFiles ?? SANDBOX_MACHINE.sharedFiles,
     },
     context.extraRepositories,

@@ -85,15 +85,17 @@ export interface MachinePlace {
  * Where a machine keeps an agent's things, decided from the agent alone, so
  * a launch names them before the machine is asked anything: its checkout,
  * where the harness starts and the instructions name, where the member's
- * installed skills are installed and where they are written for that, the
- * folder a message's files are written under, the Claude Code CLI and the
+ * installed skills are installed and where they are written for that, none
+ * on a machine whose agents are handed none, the folder a message's files are written under, the Claude Code CLI and the
  * Codex a launch runs, none where the harness's own default stands, and the
  * home Codex keeps its threads in.
  */
 export interface MachineLayout {
   readonly checkoutPath: string;
-  readonly installedSkills: string;
-  readonly skillsUpload: string;
+  /** Where the member's installed skills are installed, which a launch's config names: a sandbox's; none on a device, whose harnesses find whatever skills the machine's own home holds. */
+  readonly installedSkills: string | undefined;
+  /** Where the member's installed skills are written for that; none where they are not installed. */
+  readonly skillsUpload: string | undefined;
   readonly attachments: string;
   /** Where the agent saves a file the service reads back, a screenshot it shows or a page it posts: a folder the service's reads reach on that machine. */
   readonly sharedFiles: string;

@@ -11,9 +11,8 @@
  * `layout` and `open` answer at once, from the agent and the agents folder
  * its Mac registered, or its home folder where it named none, with no round
  * trip: the agent's folder there holds
- * its worktree, which the Mac makes as it takes the launch line, the files
- * a message carries, and the skills its member installed into the app
- * (`deviceAgentLayout`). A Mac whose release bundles a runner that keeps the
+ * its worktree, which the Mac makes as it takes the launch line, and the
+ * files a message carries (`deviceAgentLayout`). A Mac whose release bundles a runner that keeps the
  * CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`), by the
  * host version it last called with, has it kept there, as a sandbox's is,
  * its runner mirroring Codex's threads from their default under the
@@ -89,7 +88,6 @@ import {
   DEVICE_AGENT_LINE_KIND,
   DEVICE_AGENT_REQUEST_KIND,
   DEVICE_CAPABILITY,
-  DEVICE_GITHUB_ACCESS,
   type DeviceAgentAnswer,
   type DeviceAgentLaunchPayload,
   type DeviceAgentObject,
@@ -100,7 +98,6 @@ import {
   deviceAgentRestorePayloadSchema,
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { hostVersionMeets } from "@repo/features/host-wire";
 import {
   COMMAND_GONE,
@@ -324,9 +321,10 @@ function deviceMachineOver(
       const kept = keepsTranscripts(device.value.version);
       const layout: MachineLayout = {
         checkoutPath: folders.checkoutPath,
-        installedSkills: folders.installedSkills,
-        // Note that the Mac writes the skills where they are installed, since no root installs them after.
-        skillsUpload: folders.installedSkills,
+        // Note that a local agent is handed none of the skills its member installed into the app, and
+        // its harness finds whatever skills the machine's own home holds.
+        installedSkills: undefined,
+        skillsUpload: undefined,
         attachments: folders.attachments,
         // Note that the Mac answers reads inside the agent's folder alone, so what we read back is saved in its temp folder, never `/tmp`.
         sharedFiles: folders.temp,
@@ -443,7 +441,7 @@ function deviceMachineOver(
           ),
         );
 
-  /** Whether the agent's Mac registered that it launches an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
+  /** Whether the agent's Mac registered that it launches every agent in a repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   const signsInOwnGithub = (pin: DeviceAgentPin) =>
     pin.deviceId === null
       ? Effect.succeed(false)
@@ -471,8 +469,7 @@ function deviceMachineOver(
     deliverCredentials: (_agent, credentials) => handedOnMac(credentials),
 
     // The worktree is the device's to make of its shared clone as it takes the launch line, on the
-    // agent's own GitHub token, or the device's own GitHub sign-in for an agent on its starter's
-    // token, so the open asks the device nothing and leaves nothing to finish.
+    // device's own GitHub sign-in, so the open asks the device nothing and leaves nothing to finish.
     open: (ask, use) =>
       Effect.gen(function* () {
         const [layout, beside] = yield* Effect.all(
@@ -608,10 +605,10 @@ function deviceMachineOver(
           { concurrency: "unbounded" },
         );
         if (Option.isNone(agent)) return yield* new LaunchRefused({ reason: "no agent" });
-        const onOwnSignIn =
-          hasRepository(agent.value) && agent.value.githubAccess === GITHUB_ACCESS.TOKEN;
-        // Note that an agent on its starter's own token whose host is a build from before it, as one whose host went back to an older release since its Start, is refused here too, since that host would ask for a token the service never hands a device.
-        if (onOwnSignIn && !(yield* signsInOwnGithub(pin))) {
+        // Note that an agent in a repository whose host is a build from before it works in every repository on its own GitHub
+        // sign-in, as one whose host went back to an older release since its Start, is refused, since that host would ask for a
+        // token the service never hands a device.
+        if (hasRepository(agent.value) && !(yield* signsInOwnGithub(pin))) {
           yield* Effect.ignore(launch.abandon(ready));
           return yield* new LaunchRefused({ reason: "host predates its own github sign-in" });
         }
@@ -633,7 +630,6 @@ function deviceMachineOver(
             firstSequence: mark.firstSequence,
             ...(mark.fingerprint === undefined ? {} : { fingerprint: mark.fingerprint }),
             ...(commitsBy === undefined ? {} : { identity: commitsBy }),
-            ...(onOwnSignIn ? { githubAccess: DEVICE_GITHUB_ACCESS.TOKEN } : {}),
           };
           yield* queued(pin, {
             id,

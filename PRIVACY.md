@@ -136,29 +136,21 @@ agent pushed. Nothing is read from your machine, and a continue only stops the
 agent there. To tell your machines apart, each sends us a keyed hash of its
 hardware or machine id, never the id itself, and a Mac sends its model name.
 
-When such an agent starts, we send that machine a copy of the Anthropic or
-OpenAI credential it runs on, sealed until the machine picks it up, when we
-erase that copy; your saved credential stays saved. For an agent on your
-ChatGPT plan, the machine instead fetches an access token from us while the
-agent runs. For a Claude agent, the credential sits in the agent's environment
-for that run, so any command the agent runs can read it. A Codex agent keeps it
-out of the commands it runs, but its commands still have full access to that
-machine's account. We take exact copies of a credential sent with the launch
-out of what the agent sends back to us, so a command that prints it does not
-put it in the transcript. A ChatGPT plan's access token is not taken out this
-way.
+When such an agent starts, it runs on the Claude Code or Codex login already
+set up on that machine, never on a credential you saved in Vespin: we send that
+machine none of your Anthropic or OpenAI credentials, and its work counts
+against that login's plan or key. If the machine has no such login, the agent's
+turn fails and says to sign in on that machine. The agent and every command it
+runs have full access to that machine's account, that login included.
 
-For a repository the Vespin GitHub App reaches, an agent on your machine gets
-a GitHub token from us that lasts an hour and works only for that repository.
-For a repository reached only on your own GitHub token, we never send that
-token to your Mac. Instead, the agent uses the GitHub sign-in already set up on
-that Mac for its account: your `gh` login, your Git credential helper and
-settings, and your SSH keys and SSH agent. **Such an agent acts as whoever is
-signed in on that Mac, with every repository and permission that sign-in has,
-not just the task's repository.** Such an agent runs only on a Mac, never on
-another machine you add. Before it starts, it checks that the
-sign-in reaches the repository. If it doesn't, the agent doesn't start, and its
-transcript says to sign in with `gh auth login` or set up SSH.
+An agent on your machine also uses the GitHub sign-in already set up on that
+machine for its account: your `gh` login, your Git credential helper and
+settings, and your SSH keys and SSH agent. We never send that machine a GitHub
+token. **Such an agent acts as whoever is signed in on that machine, with every
+repository and permission that sign-in has, not just the task's repository.**
+Before it starts, it checks that the sign-in reaches the repository. If it
+doesn't, the agent doesn't start, and its transcript says to sign in with
+`gh auth login` or set up SSH.
 
 ### Usage data and screen recordings
 

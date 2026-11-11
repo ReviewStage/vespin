@@ -99,11 +99,10 @@ test("a Claude Code or Codex agent is told of its browser, which Vespin's MCP se
   }
 });
 
-test("a local agent is told its folders on its machine, and no browser", () => {
+test("a local agent is told its folders on its machine, and no browser and no skills of the app's", () => {
   const MAC = {
     local: true,
     checkoutPath: "/Users/dev/.vespin/agents/a1/repository",
-    installedSkills: "/Users/dev/.vespin/agents/a1/installed-skills",
     sharedFiles: "/Users/dev/.vespin/agents/a1/tmp",
   };
   for (const repository of ["Acme/Relay", null]) {
@@ -121,29 +120,17 @@ test("a local agent is told its folders on its machine, and no browser", () => {
       );
       const label = `${harness} ${repository ?? "no repository"}`;
       assert.ok(!words.includes("## Your browser"), label);
+      // Note that its harness finds whatever skills the machine's own home holds, so it is told of none.
+      assert.ok(!words.includes("A word like `/name`"), label);
       if (repository !== null) assert.ok(words.includes(`\`${MAC.checkoutPath}\``), label);
     }
   }
-  const codex = coderInstructions(
-    "Acme/Relay",
-    AGENT_BRIEF.PROMPT,
-    TASK_ADDRESS,
-    standingFor("Acme/Relay", { local: MAC.local }),
-    undefined,
-    null,
-    false,
-    CODER_HARNESS.CODEX,
-    MAC,
-  );
-  // Codex is pointed at the skills its member installed where the Mac keeps them.
-  assert.ok(codex.includes(`\`${MAC.installedSkills}/`));
 });
 
 test("a local agent is told it runs straight on its machine with full access to it, how to work a branch its machine's clone holds, and to save pages where its machine reads them", () => {
   const HOST = {
     local: true,
     checkoutPath: "/home/vespin-host/.vespin/agents/a1/repository",
-    installedSkills: "/home/vespin-host/.vespin/agents/a1/installed-skills",
     sharedFiles: "/home/vespin-host/.vespin/agents/a1/tmp",
   };
   const told = ["straight on one of the developer's own machines", "full access"];

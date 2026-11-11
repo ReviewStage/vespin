@@ -36,7 +36,6 @@ import {
 } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { DEVICE_CAPABILITY, DEVICE_SETUP } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
@@ -1107,6 +1106,9 @@ const PLAN_CATALOG = modelCatalogOf([
 /** How the owner's ChatGPT sign-in stands: none, one Codex launches on, one OpenAI signed out, or one sealed under a key the ring no longer holds. */
 type SignIn = "none" | "signed_in" | "signed_out" | "rotated_out";
 
+/** A host as every host registers now: one that works in every repository on its own GitHub sign-in. */
+const HOST_LAYOUT = { ...DEVICE_LAYOUT, capabilities: [DEVICE_CAPABILITY.GITHUB_SIGN_IN] };
+
 /** A workspace connected to GitHub, its owner keeping a Claude setup-token and a ChatGPT sign-in where asked. */
 const openStarter = (setupToken: boolean, chatGpt: SignIn = "none") =>
   Effect.gen(function* () {
@@ -1300,31 +1302,28 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Start naming one of its starter's devices runs only with that device there lately, pinned to it on the model's harness, paid for by a plan in Vespin; Codex on a device with none checked, a repository reached on the starter's own token on a host from before it works in one on its own GitHub sign-in, or the device gone or away, is refused by name and leaves no agent",
+      "a Start naming one of its starter's devices runs only with that device there lately, pinned to it on the model's harness, on the machine's own login with nothing saved in Vespin; Codex on a device with none checked, a repository on a host from before it works in every repository on its own GitHub sign-in, or the device gone or away, is refused by name and leaves no agent",
       () =>
         Effect.gen(function* () {
           const cases = [
             {
               name: "a Mac there, Claude",
               mac: true,
-              chatGpt: "none",
               model: "anthropic/claude-opus-5.5",
               refused: undefined,
-              runs: ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
+              runs: ["claude_code", AGENT_PAYER.MAC_SIGN_IN],
             },
             {
-              name: "a GPT model on a Mac that checked a Codex, the ChatGPT plan saved in Vespin",
+              name: "a GPT model on a Mac that checked a Codex",
               mac: true,
               codex: true,
-              chatGpt: "signed_in",
               model: "openai/gpt-5.5",
               refused: undefined,
-              runs: ["codex", AGENT_PAYER.CHATGPT_SUBSCRIPTION],
+              runs: ["codex", AGENT_PAYER.MAC_SIGN_IN],
             },
             {
               name: "the device gone",
               mac: false,
-              chatGpt: "none",
               model: "anthropic/claude-opus-5.5",
               refused: LOCAL_AGENT_REFUSAL.MAC_AWAY,
             },
@@ -1332,14 +1331,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               name: "the device registered, but away",
               mac: true,
               away: true,
-              chatGpt: "none",
               model: "anthropic/claude-opus-5.5",
               refused: LOCAL_AGENT_REFUSAL.MAC_AWAY,
             },
             {
               name: "a GPT model on a Mac that checked no Codex",
               mac: true,
-              chatGpt: "signed_in",
               model: "openai/gpt-5.5",
               refused: LOCAL_AGENT_REFUSAL.CODEX,
             },
@@ -1347,31 +1344,19 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               name: "the device there, but still getting ready",
               mac: true,
               setup: DEVICE_SETUP.PREPARING,
-              chatGpt: "none",
               model: "anthropic/claude-opus-5.5",
               refused: LOCAL_AGENT_REFUSAL.PREPARING,
             },
             {
-              name: "a repository reached on the starter's own token, on a host that works in one on its own GitHub sign-in",
+              name: "a repository on a host from before it works in every repository on its own GitHub sign-in",
               mac: true,
-              ownToken: true,
-              signsIn: true,
-              chatGpt: "none",
-              model: "anthropic/claude-opus-5.5",
-              refused: undefined,
-              runs: ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
-            },
-            {
-              name: "a repository reached on the starter's own token, on a host from before it works in one on its own GitHub sign-in",
-              mac: true,
-              ownToken: true,
-              chatGpt: "none",
+              predatesOwnSignIn: true,
               model: "anthropic/claude-opus-5.5",
               refused: LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN,
             },
           ] as const;
           for (const each of cases) {
-            const { owner, workspaceId } = yield* openStarter(true, each.chatGpt);
+            const { owner, workspaceId } = yield* openStarter(false);
             const deviceId = randomUUID();
             if (each.mac) {
               yield* registerDevice(owner, {
@@ -1380,9 +1365,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 ...DEVICE_LAYOUT,
                 ...("codex" in each ? { codexExecutable: CODEX_EXECUTABLE } : undefined),
                 ...("setup" in each ? { setup: each.setup } : undefined),
-                ...("signsIn" in each
-                  ? { capabilities: [DEVICE_CAPABILITY.GITHUB_SIGN_IN] }
-                  : undefined),
+                capabilities: "predatesOwnSignIn" in each ? [] : [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
               });
             }
             const task = yield* createTask(owner, {
@@ -1393,18 +1376,9 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             if ("away" in each)
               yield* TestClock.adjust(Duration.sum(THIS_MAC.FRESH, Duration.seconds(1)));
             const { native } = runtimes();
-            // Note that a repository reached on the starter's own token is handed as the task's own start reached it, so no GitHub read decides its access.
             const ask = {
               ...startOn(task.id, each.model),
               runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
-              ...("ownToken" in each
-                ? {
-                    reached: {
-                      repository: `${RELAY.owner}/${RELAY.name}`,
-                      access: GITHUB_ACCESS.TOKEN,
-                    },
-                  }
-                : undefined),
             };
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(
@@ -1492,7 +1466,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const { owner, workspaceId } = yield* openStarter(true);
           const deviceId = randomUUID();
-          yield* registerDevice(owner, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
+          yield* registerDevice(owner, { id: deviceId, name: "Studio", ...HOST_LAYOUT });
           const teammate = yield* openGithubUser();
           yield* joinWorkspace(workspaceId, teammate);
           yield* saveApiKey(teammate, PROVIDER_KEY_PROVIDER.ANTHROPIC);
@@ -1600,12 +1574,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const { owner, workspaceId } = yield* openStarter(true);
           const studio = randomUUID();
-          yield* registerDevice(owner, { id: studio, name: "Studio", ...DEVICE_LAYOUT });
+          yield* registerDevice(owner, { id: studio, name: "Studio", ...HOST_LAYOUT });
           const teammate = yield* openGithubUser();
           yield* joinWorkspace(workspaceId, teammate);
           yield* saveApiKey(teammate, PROVIDER_KEY_PROVIDER.ANTHROPIC);
           const den = randomUUID();
-          yield* registerDevice(teammate, { id: den, name: "Den", ...DEVICE_LAYOUT });
+          yield* registerDevice(teammate, { id: den, name: "Den", ...HOST_LAYOUT });
           const onStudio = { machine: AGENT_MACHINE.DEVICE, deviceId: studio } as const;
           const inCloud = { machine: AGENT_MACHINE.VERCEL } as const;
           const taskIn = () =>
@@ -1699,41 +1673,19 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Mac is offered as running a provider's models only where the account pays for its harness in Vespin, and GPT models only on a Mac that checked a Codex",
+      "a Mac is offered as running Claude models whatever the account saved in Vespin, since its agents run on its own logins, and GPT models only on a Mac that checked a Codex",
       () =>
         Effect.gen(function* () {
           const cases = [
+            { name: "no Codex checked", codex: false, providers: [MODEL_PROVIDER.ANTHROPIC] },
             {
-              name: "a Claude plan",
-              plan: true,
-              chatGpt: "none",
-              codex: false,
-              providers: [MODEL_PROVIDER.ANTHROPIC],
-            },
-            {
-              name: "no credential",
-              plan: false,
-              chatGpt: "none",
-              codex: false,
-              providers: [],
-            },
-            {
-              name: "a ChatGPT plan, the Mac with no Codex checked",
-              plan: false,
-              chatGpt: "signed_in",
-              codex: false,
-              providers: [],
-            },
-            {
-              name: "a ChatGPT plan, a Codex checked",
-              plan: false,
-              chatGpt: "signed_in",
+              name: "a Codex checked",
               codex: true,
-              providers: [MODEL_PROVIDER.OPENAI],
+              providers: [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.OPENAI],
             },
           ] as const;
           for (const each of cases) {
-            const { owner } = yield* openStarter(each.plan, each.chatGpt);
+            const { owner } = yield* openStarter(false);
             yield* registerDevice(owner, {
               id: randomUUID(),
               name: "Studio",

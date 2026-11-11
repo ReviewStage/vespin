@@ -5,8 +5,10 @@
  * (`sessions/agent-sessions.ts`), on the launch machinery every native
  * harness shares (`runner-sessions.ts`). What is Claude Code's own: the
  * runner's config names the image's `claude` and appends our coder
- * instructions to Claude Code's prompt; each launch chooses who pays for
- * the agent's turns and records it on its row (`turnPayerOf`): the first of
+ * instructions to Claude Code's prompt; a local agent's launch runs on its
+ * machine's own login and carries no credential (`AGENT_PAYER.MAC_SIGN_IN`);
+ * a cloud agent's chooses who pays for
+ * the agent's turns and records it on its row (`launchPayerOf`): the first of
  * the account's subscriptions with room, whose token, opened from its sealed
  * `claude_setup_token` row, is the launch's credential, or, where none has
  * room, the account's API key opened as `ANTHROPIC_API_KEY`, never both, since
@@ -15,8 +17,7 @@
  * refused, unreadable, or at a limit whose named reset is still ahead; the
  * launch declares the credential, which the agent's machine
  * hands over (`launchCredential`): held at a sandbox's firewall, the CLI's
- * variable carrying a placeholder minted for the launch, and on a host the
- * variable's own; and every message to a running runner
+ * variable carrying a placeholder minted for the launch; and every message to a running runner
  * goes behind a `model` line with the agent's model, effort, and fast mode
  * as they stand: a fast version runs its base model with Claude Code's own
  * fast mode on, which Anthropic bills to the account's usage credits. The
@@ -41,7 +42,7 @@ import {
 } from "@repo/database/models/provider-key-seal";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { AGENT_PAYER } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
@@ -60,7 +61,7 @@ import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-sessions.js";
 import { WORKER_DENIED_TOOLS } from "../tool-catalog/catalog.js";
 import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
-import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
+import { launchPayerOf, roomAfterLimit } from "./agent-runtime-choice.js";
 import { claudeCodeCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import { launchPermissionMode } from "./permission-mode.js";
@@ -119,6 +120,9 @@ function launchCredential(
     ],
   };
 }
+
+/** A local agent's launch, on its machine's own Claude Code login: no credential of the account's. */
+const ON_MACHINE_LOGIN: HarnessLaunch = { env: {} };
 
 /**
  * The half of Claude Code agents whose launches keep the main conversation's
@@ -280,7 +284,9 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         integrations: yield* options.integrations(agent),
         // Note that a host's older runner, bundled before Claude Code's command sandbox was removed, refuses a config without domains.
         allowedDomains: [],
-        installedSkills: layout.installedSkills,
+        ...(layout.installedSkills === undefined
+          ? undefined
+          : { installedSkills: layout.installedSkills }),
         // Note that the agent's mode is read at each launch, so a change reaches it from its next turn.
         ...mode,
       };
@@ -291,11 +297,13 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   // Note that the subscription the runner launched on is asked first, so a message to a live runner on a refused or limited plan is
   // refused as a launch would be, unless another payer has room (`roomAfterLimit`), as the turn's relaunch on that payer would
   // choose it, which the message then reaches; a runner idle on another credential than a launch would now choose is launched
-  // again before it gets here (`staleWarm`); an agent on its API key has no plan to ask, and its runner holds the key it launched with.
+  // again before it gets here (`staleWarm`); an agent on its API key or its machine's own login has no plan to ask, and its runner
+  // holds what it launched with.
   const ahead = (agent: Agent) => {
     const effort = effortOf(agent.effort);
     const model = providerModelOf(agent.model);
     const asked = Effect.gen(function* () {
+      if (agent.machine === AGENT_MACHINE.DEVICE) return;
       const recorded = yield* recordedPayer(agent);
       if (recorded.payer === AGENT_PAYER.API_KEY) return;
       yield* standingPlan(recorded.subscriptionId).pipe(
@@ -327,7 +335,8 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     // Note that a launch carries one credential alone, the key or the plan's token, because the CLI prefers the key where both are set.
     launch: (agent) =>
       Effect.gen(function* () {
-        const turn = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
+        const turn = yield* launchPayerOf(userId, agent, MODEL_PROVIDER.ANTHROPIC);
+        if (turn.payer === AGENT_PAYER.MAC_SIGN_IN) return ON_MACHINE_LOGIN;
         return yield* turn.payer === AGENT_PAYER.API_KEY
           ? apiKeyCredential(turn.subscriptionId)
           : planCredential(turn.subscriptionId);
