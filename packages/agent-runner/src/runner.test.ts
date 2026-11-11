@@ -1041,6 +1041,8 @@ it.effect.each([
         toolUseId: "toolu_Bash",
         toolName: "Bash",
         title: BASH_ASK.title,
+        // The CLI's suggested rule names a prefix, which the member's Always allow keeps past the launch.
+        commandPrefix: ["cat"],
       });
       // The ask carries the start of a long command, while the CLI is handed it whole.
       const command = String(input.command);
@@ -1119,11 +1121,16 @@ it.effect.each([
   { mode: PERMISSION_MODE.ASK, cliMode: "default", asking: true },
   { mode: PERMISSION_MODE.AUTO, cliMode: "auto", asking: true },
 ])(
-  "starts the CLI in $cliMode for $mode, asking the member only where the mode does, and never of a read or an MCP tool",
+  "starts the CLI in $cliMode for $mode, asking the member only where the mode does, and never of a read, an MCP tool, or an always-allowed command",
   ({ mode, cliMode, asking }) =>
     Effect.gen(function* () {
       const { cli, write, run } = yield* launch(SHORT_TURN, fakeService());
-      yield* write({ ...CONFIG, permissionMode: mode });
+      // The starter's always-allowed commands, one no plain prefix, which would widen its rule.
+      const allowedCommands = [
+        ["pnpm", "test"],
+        ["git", "log;rm"],
+      ];
+      yield* write({ ...CONFIG, permissionMode: mode, allowedCommands });
       yield* write(FIRST_MESSAGE);
       yield* Fiber.join(run);
 
@@ -1138,6 +1145,10 @@ it.effect.each([
       for (const asked of ["Bash", "Edit", "Write", "NotebookEdit"]) {
         assert.ok(!options.allowedTools?.includes(asked), asked);
       }
+      assert.deepEqual(
+        options.allowedTools?.filter((rule) => rule.startsWith("Bash(")),
+        asking ? ["Bash(pnpm test *)"] : [],
+      );
     }),
 );
 
