@@ -160,6 +160,14 @@ const REFUSAL_ROWS: { readonly [Name in keyof typeof WORKSPACE_ACTS]: RefusalRow
     refusal: "Could not save that setup script on this system.",
     payload: { ...WORKSPACE, repository: "acme/relay", script: "pnpm install" },
   },
+  WORKSPACE_RUN_ACTIONS_PUT: {
+    refusal: "Could not save those run actions on this system.",
+    payload: {
+      ...WORKSPACE,
+      repository: "acme/relay",
+      actions: [{ label: "Dev server", command: "pnpm dev" }],
+    },
+  },
   WORKSPACE_GITHUB_CONNECT: {
     refusal: "Could not connect GitHub to that workspace on this system.",
     payload: WORKSPACE,

@@ -132,6 +132,7 @@ const DECLARED_TABLES = [
   "workspace_experiment",
   "workspace_former_slug",
   "workspace_install_script",
+  "workspace_repository_run_action",
   "workspace_repository_setup",
   "workspace_token_repository",
   "write_receipt",

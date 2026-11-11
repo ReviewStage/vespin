@@ -61,6 +61,7 @@ import type { WorkspaceVariable } from "@repo/features/workspace-environment-wir
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
+  type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
@@ -643,7 +644,7 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
 
 /* ----- Settings › Cloud environment's scripts ----- */
 
-/** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, and an archive script for one. */
+/** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, an archive script for one, and run actions for one. */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
     script: [
@@ -668,7 +669,47 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       updatedAt: NOW - HOUR,
     },
   ],
+  runActions: [
+    {
+      repository: "acme/relay",
+      actions: [
+        { id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01", label: "Dev server", command: "pnpm dev" },
+        {
+          id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a02",
+          label: "Storybook",
+          command: "cd packages/ui && pnpm storybook",
+        },
+      ],
+      updatedAt: NOW - HOUR,
+    },
+  ],
 };
+
+/** The setup a run actions save leaves, an empty list removing the repository's, an action keeping its id only where it is already the repository's and only once, as the service keeps them. */
+function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) {
+  const others = (acmeSandboxSetup.runActions ?? []).filter(
+    (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
+  );
+  const keepable = new Set(
+    (acmeSandboxSetup.runActions ?? [])
+      .filter((each) => each.repository.toLowerCase() === repository.toLowerCase())
+      .flatMap((each) => each.actions.map((action) => action.id)),
+  );
+  const named = actions.map(({ id, label, command }) => ({
+    id: id !== undefined && keepable.delete(id) ? id : crypto.randomUUID(),
+    label,
+    command,
+  }));
+  const lists =
+    named.length === 0 ? others : [...others, { repository, actions: named, updatedAt: NOW }];
+  acmeSandboxSetup = {
+    ...acmeSandboxSetup,
+    runActions: lists.sort((one, other) =>
+      one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
+    ),
+  };
+  return acmeSandboxSetup;
+}
 
 /** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
 function sandboxSetupAnswer(
@@ -749,6 +790,8 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script, kind }) =>
     sandboxSetupAnswer(repository, script, kind),
+  [ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: ({ repository, actions }) =>
+    runActionsAnswer(repository, actions),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>
     skillContent(id) ?? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND },
   // The command-line tool installed on this Mac, as Settings' MCP page's Install asks, without running the install script: a fixture run reaches no network and installs nothing.

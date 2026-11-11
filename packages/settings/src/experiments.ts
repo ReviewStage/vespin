@@ -22,6 +22,8 @@ export const EXPERIMENT = {
   REWIND_FILES: "rewind-files",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
   TURN_END: "turn-end",
+  /** Run actions: each repository's commands, kept in Settings › Cloud environment, that a member runs in a cloud agent's sandbox from the Run button over its tabs, ⌘K, or a phone's ⋯. */
+  RUN_ACTIONS: "run-actions",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -42,6 +44,7 @@ export type ExperimentScope = (typeof EXPERIMENT_SCOPE)[keyof typeof EXPERIMENT_
  */
 export const WORKSPACE_EXPERIMENT_LIST = [
   EXPERIMENT.REWIND_FILES,
+  EXPERIMENT.RUN_ACTIONS,
   EXPERIMENT.DESCRIPTIONS,
   EXPERIMENT.MEMORY,
   EXPERIMENT.TURN_END,
@@ -94,6 +97,15 @@ export const EXPERIMENTS = [
     name: "Done and follow-ups",
     detail:
       "When an agent finishes, the bar over its box says what it needs from you, or that it's done, with follow-ups to send.",
+    owner: "Dean",
+    since: "2026-11-10",
+  },
+  {
+    key: EXPERIMENT.RUN_ACTIONS,
+    name: "Run actions",
+    detail:
+      "Keep each repository's commands, such as its dev server, in Cloud environment, " +
+      "and run one in a cloud agent's sandbox from the Run button over its tabs or ⌘K.",
     owner: "Dean",
     since: "2026-11-10",
   },

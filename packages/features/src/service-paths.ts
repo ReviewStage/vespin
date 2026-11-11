@@ -440,6 +440,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SANDBOX_SETUP_INSTALL: "/api/workspaces/sandbox-setup/install",
   /** A repository's setup script saved by an owner or admin (PUT), answering the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_REPOSITORY: "/api/workspaces/sandbox-setup/repository",
+  /** A repository's run actions saved, its whole list in order, by an owner or admin, an empty list removing it (PUT) (`workspace-sandbox-setup-wire.ts`). */
+  WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS: "/api/workspaces/sandbox-setup/run-actions",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */
