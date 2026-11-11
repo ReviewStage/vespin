@@ -27,7 +27,12 @@ import {
   callerWorkspace,
   callerWorkspaceId,
 } from "./agent-tools.js";
-import { type MemoryProvenance, recallSource, rememberProvenance } from "./memory-provenance.js";
+import {
+  forgetProvenance,
+  type MemoryProvenance,
+  recallSource,
+  rememberProvenance,
+} from "./memory-provenance.js";
 import { EXPERIMENT_OFF_REFUSAL, experimentOnIn } from "./workspace-experiment-on.js";
 
 /**
@@ -67,11 +72,10 @@ import { EXPERIMENT_OFF_REFUSAL, experimentOnIn } from "./workspace-experiment-o
  * forget what they mark, as the Memory digest automation does. A listing
  * is no recall, so it logs none. A forget follows Settings' rule
  * (`forgetWorkspaceMemory`): the starter's own words, or any where they
- * own or administer the workspace. Note that a forget is refused nothing
- * for where its turn's words came from, an automation's run included,
- * unlike a keep, because forgetting adds no words to what the workspace
- * holds, and the member's answer that asks for it is what such a run acts
- * on.
+ * own or administer the workspace. And a forget is held to a keep's
+ * provenance (`forgetProvenance`): never on a turn an automation opened or
+ * that read the web, so no page or prompt deletes what the team kept,
+ * while the turn a member's answer on the agent's thread opens may.
  */
 
 /** What a memory call acts in: the agent's workspace, the member whose words it keeps, and, for a coding agent's call, where it comes from. */
@@ -216,7 +220,9 @@ export const FORGET_MEMORY_TOOL = {
     "search finds it. Forget a memory only where a member asked you to, such as by their " +
     "answer on a thread you posted, never to tidy up on your own. The member who started you " +
     "may forget a memory in their own words, and one in any member's where they own or " +
-    "administer the workspace; any other is refused. Answers `accepted` with the memory's id " +
+    "administer the workspace; any other is refused. It is refused too on a turn an " +
+    "automation opened or one that read the web or drove the browser, so forget on the turn " +
+    "the member's own words open. Answers `accepted` with the memory's id " +
     "and how many memories the workspace then holds, a memory already gone among it, or " +
     "`rejected` with the reason.",
   inputSchema: FORGET_INPUT,
@@ -464,7 +470,7 @@ function agentMemory(
 const recallProvenance = (agent: Agent): Effect.Effect<MemoryProvenance, never, DatabaseServices> =>
   Effect.map(recallSource(agent), (source) => ({ refusal: undefined, source }));
 
-/** Where a call that adds no words comes from, refusing nothing and reading nothing: the agent alone. */
+/** Where a listing comes from, refusing nothing and reading nothing: the agent alone, since a listing changes nothing and logs no recall. */
 const unguarded = (agent: Agent): Effect.Effect<MemoryProvenance, never, never> =>
   Effect.succeed({ refusal: undefined, source: { agentId: agent.id, messageId: null } });
 
@@ -492,10 +498,10 @@ export function runAgentListMemories(
   return agentMemory(call, (memory) => runListMemoriesSince(memory, input), unguarded);
 }
 
-/** One call of `forget_memory` from a coding agent, as its starter's Forget in Settings, on any turn (`unguarded`): an automation's run forgets what a member's answer asked it to. */
+/** One call of `forget_memory` from a coding agent, as its starter's Forget in Settings, refused on a turn whose words are no member's (`forgetProvenance`): an automation's run forgets on the turn a member's answer opens. */
 export function runAgentForget(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return agentMemory(call, (memory) => runForget(memory, input), unguarded);
+  return agentMemory(call, (memory) => runForget(memory, input), forgetProvenance);
 }

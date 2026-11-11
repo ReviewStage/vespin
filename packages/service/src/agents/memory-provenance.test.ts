@@ -26,11 +26,11 @@ import {
 } from "../core.js";
 import { recordingSessions } from "../testing/recording-sessions.js";
 import { AGENT_CALLER, type AgentCall } from "./agent-tools.js";
-import { MEMORY_PROVENANCE_REFUSAL } from "./memory-provenance.js";
+import { FORGET_PROVENANCE_REFUSAL, MEMORY_PROVENANCE_REFUSAL } from "./memory-provenance.js";
 import { runAgentForget, runAgentRemember } from "./memory-tools.js";
 
 /**
- * memory-provenance.test.ts -- a coding agent's `save_memory` refused on a turn whose words are no member's, and its `forget_memory` not.
+ * memory-provenance.test.ts -- a coding agent's `save_memory` and `forget_memory` refused on a turn whose words are no member's.
  *
  * Through `runAgentRemember`, over a real dialect, with the turn under way
  * written as the relay writes it: a turn an automation's run opened keeps
@@ -39,7 +39,8 @@ import { runAgentForget, runAgentRemember } from "./memory-tools.js";
  * turn whose journal already holds a web read, the retired runtime's or Claude Code's; a
  * turn a member's own line opened, which read nothing of the web, keeps the
  * memory, as from the agent and that line; a turn that settled refuses nothing; and a forget is
- * refused nothing on a turn an automation opened, as the Memory digest's runs forget. Synthetic accounts,
+ * held to the same rule, done on the turn a member's own line opens, as their answer on the
+ * Memory digest's thread does. Synthetic accounts,
  * workspaces, and words throughout.
  */
 
@@ -235,27 +236,44 @@ it.layer(getTestDB())("a remember's provenance", (it) => {
     }),
   );
 
-  it.effect("a turn an automation's run opened still forgets a memory its starter may forget", () =>
-    Effect.gen(function* () {
-      const { agent, workspaceId } = yield* openAgent();
-      const db = yield* Database;
-      const [kept] = yield* db
-        .insert(memory)
-        .values({
-          organizationId: workspaceId,
-          userId: agent.userId,
-          text: FACT,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning({ id: memory.id });
-      assert.ok(kept !== undefined);
-      yield* writeTurn(agent, { sender: MESSAGE_SENDER.AUTOMATION, name: "Memory digest" }, []);
+  it.effect(
+    "a forget is refused on a turn an automation opened or one that read the web, and done on the turn a member's line opens, as their answer on a thread does",
+    () =>
+      Effect.gen(function* () {
+        const cases = [
+          {
+            opener: { sender: MESSAGE_SENDER.AUTOMATION, name: "Memory digest" },
+            called: [],
+            refusal: FORGET_PROVENANCE_REFUSAL.AUTOMATION,
+          },
+          {
+            opener: { sender: MESSAGE_SENDER.MEMBER },
+            called: [AGENT_TOOL.READ_WEB_PAGE],
+            refusal: FORGET_PROVENANCE_REFUSAL.WEB_READ,
+          },
+          { opener: { sender: MESSAGE_SENDER.MEMBER }, called: [], refusal: undefined },
+        ] as const;
+        for (const { opener, called, refusal } of cases) {
+          const { agent, workspaceId } = yield* openAgent();
+          const db = yield* Database;
+          const [kept] = yield* db
+            .insert(memory)
+            .values({
+              organizationId: workspaceId,
+              userId: agent.userId,
+              text: FACT,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .returning({ id: memory.id });
+          assert.ok(kept !== undefined);
+          yield* writeTurn(agent, opener, called);
 
-      const answer = yield* runAgentForget(agentCall(agent), { memoryId: kept.id });
+          const answer = yield* runAgentForget(agentCall(agent), { memoryId: kept.id });
 
-      assert.equal(answer.status, ACTION_RESULT_STATUS.ACCEPTED);
-      assert.deepEqual(yield* listMemories(workspaceId), []);
-    }),
+          assert.equal(answer.reason, refusal, opener.sender);
+          assert.equal((yield* listMemories(workspaceId)).length, refusal === undefined ? 0 : 1);
+        }
+      }),
   );
 });
