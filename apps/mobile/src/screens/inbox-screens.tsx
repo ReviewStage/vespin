@@ -596,9 +596,9 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
   return { show, search, setSearch, listing, acts, scopes, menu, remind };
 }
 
-// A compact window: the list under the workspace switcher, standing as the
-// Stack's inline title, and the scope pills, the account's photo opening
-// Settings at the bar's leading edge, and its search and its ⋯ menu as round
+// A compact window: the list under the scope pills, the account's photo
+// opening Settings and the workspace switcher beside it at the bar's leading
+// edge, and its search and its ⋯ menu as round
 // glass buttons at its trailing one, each row pushing its thread as the Stack's
 // next screen.
 function InboxStackList(words: InboxSearch) {
@@ -618,7 +618,7 @@ function InboxStackList(words: InboxSearch) {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (

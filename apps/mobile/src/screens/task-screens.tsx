@@ -973,9 +973,8 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
   return { search, setSearch, listing, status, deletion, refreshTasks };
 }
 
-// A compact window: the tree under the workspace switcher, standing as the
-// Stack's inline title, the account's photo opening Settings at the bar's
-// leading edge and its search a round glass button at its trailing one, each
+// A compact window: the tree, the account's photo opening Settings and the
+// workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
 // row pushing its task as the Stack's next screen.
 function TasksStackList(words: TasksSearch) {
   const router = useRouter();
@@ -994,7 +993,7 @@ function TasksStackList(words: TasksSearch) {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Screen>
         <TasksTree
           listing={listing}
