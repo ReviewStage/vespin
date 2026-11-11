@@ -1050,9 +1050,17 @@ type ItemsAnswer = Exclude<
   { failure: string }
 >;
 
+/** A row of a read as the fake holds it: its fields by name, each still to be read. */
+type RowFields = Readonly<Record<string, unknown>>;
+
+/** Whether `row` is a row whose fields can be read by name, rather than a primitive or nothing. */
+function isRow(row: unknown): row is RowFields {
+  return typeof row === "object" && row !== null;
+}
+
 /** A row's text field `name`; none where it carries none. */
 function textOf(row: unknown, name: string): string | undefined {
-  const value = typeof row === "object" && row !== null ? Reflect.get(row, name) : undefined;
+  const value = isRow(row) ? row[name] : undefined;
   return typeof value === "string" ? value : undefined;
 }
 
@@ -1091,8 +1099,7 @@ function bySyncId(
       const id = itemIdOf(stamp);
       const row = id === undefined ? undefined : items.rows.get(id);
       if (id === undefined || typeof row !== "object" || row === null) return [];
-      const unread =
-        typeof stamp === "object" && stamp !== null ? Reflect.get(stamp, "unread") : undefined;
+      const unread = isRow(stamp) ? stamp.unread : undefined;
       return [[id, { stamp, row: { ...row, unread } }] as const];
     }),
   );

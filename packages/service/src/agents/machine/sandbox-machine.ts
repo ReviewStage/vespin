@@ -216,7 +216,7 @@ import {
   type RunnerRecord,
   type SandboxSetup,
 } from "./agent-machine.js";
-import { makePhoneVideo, phoneVideoOf } from "./phone-video.js";
+import { phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
 
 /**
  * Where a message's files that the harness takes no block of are written
@@ -829,7 +829,7 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
 
     phoneVideo: (session, path) =>
       Effect.flatMap(runningSession(session), (running) =>
-        Effect.map(api.run(running, makePhoneVideo(path)), phoneVideoOf),
+        Effect.map(api.run(running, phoneVideoAsk(path)), phoneVideoOf),
       ),
   };
 }

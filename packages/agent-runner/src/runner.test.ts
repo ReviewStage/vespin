@@ -79,6 +79,7 @@ import {
   WARM_TURNS,
   WORKFLOW_TURN,
 } from "./testing/recorded-stream.js";
+import { ProfilerImport } from "./trace.js";
 
 const BEARER = "runner-bearer-for-tests";
 /**
@@ -770,11 +771,6 @@ it.effect(
 
 it.effect("takes its line from the read on a traced launch whose profiler cannot load", () =>
   Effect.gen(function* () {
-    // A sandbox whose disk predates the profiler's binary cannot load its module.
-    vi.doMock("@sentry/profiling-node", () => {
-      throw new Error("Cannot find module './sentry_cpu_profiler-linux-x64-glibc-137.node'");
-    });
-    yield* Effect.addFinalizer(() => Effect.sync(() => vi.doUnmock("@sentry/profiling-node")));
     const service = fakeService();
     const linesUrl = "https://app.test/runner/lines";
     const uuid = "00000000-0000-4000-8000-0000000000ab";
@@ -792,9 +788,15 @@ it.effect("takes its line from the read on a traced launch whose profiler cannot
         lines: [{ seq: 12, text: JSON.stringify({ ...FIRST_MESSAGE, uuid }) }],
       });
     };
+    // A sandbox whose disk predates the profiler's binary cannot load its module.
+    const unloadable = Layer.succeed(ProfilerImport, () =>
+      Promise.reject(
+        new Error("Cannot find module './sentry_cpu_profiler-linux-x64-glibc-137.node'"),
+      ),
+    );
     const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
       ...service,
-      layer: fakeHttpClientLayer(respond),
+      layer: Layer.merge(fakeHttpClientLayer(respond), unloadable),
     });
     // Note that the trace names no DSN, so Sentry sends nothing from the test.
     const trace = {

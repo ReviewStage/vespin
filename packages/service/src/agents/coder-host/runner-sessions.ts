@@ -194,6 +194,7 @@ import {
   Duration,
   Effect,
   Exit,
+  Match,
   Option,
   Redacted,
   Result,
@@ -647,7 +648,11 @@ function launchFingerprint(
     credential: Redacted.value(each.value),
   }));
   // Note that one slot is digested alone, under the key it was digested by, as the one a launch could hold before credentials were declared.
-  const swapped = slots.length === 0 ? undefined : slots.length === 1 ? slots[0] : slots;
+  const swapped = Match.value(slots.length).pipe(
+    Match.when(0, () => undefined),
+    Match.when(1, () => slots[0]),
+    Match.orElse(() => slots),
+  );
   // Note that full access is digested as nothing, as every launch before modes was, so its runners stay warm across the change.
   const asks = mode === AGENT_PERMISSION_MODE.FULL_ACCESS ? undefined : mode;
   return createHash("sha256")

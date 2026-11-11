@@ -12,9 +12,12 @@
 
 import { existsSync, watch } from "node:fs";
 import { dirname, join } from "node:path";
-import { Cause, Effect, Layer, Option, Queue, Stream } from "effect";
+import { Cause, Data, Effect, Layer, Option, Queue, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as PlatformError from "effect/PlatformError";
+
+/** A watch's moves, made as the file system's own. */
+const WatchEvent = Data.taggedEnum<FileSystem.WatchEvent>();
 
 /** The file system's watch backend for a host on Node: each watch laid at once, and heard from its first move. */
 export const armedWatchLayer = Layer.succeed(FileSystem.WatchBackend, {
@@ -35,13 +38,16 @@ export const armedWatchLayer = Layer.succeed(FileSystem.WatchBackend, {
     };
     watcher.on("change", (event, name) => {
       // A move that names nothing is told as one of nothing in particular, which its watcher checks as it checks the first.
-      if (typeof name !== "string") return tell({ _tag: "Update", path: "" });
+      if (typeof name !== "string") return tell(WatchEvent.Update({ path: "" }));
       const stands = existsSync(join(directory, name));
-      tell({ _tag: event !== "rename" ? "Update" : stands ? "Create" : "Remove", path: name });
+      tell(
+        WatchEvent[event !== "rename" ? "Update" : stands ? "Create" : "Remove"]({ path: name }),
+      );
     });
     watcher.on("error", (cause) =>
       fail(
         PlatformError.systemError({
+          // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
           _tag: "Unknown",
           module: "FileSystem",
           method: "watch",
@@ -58,7 +64,7 @@ export const armedWatchLayer = Layer.succeed(FileSystem.WatchBackend, {
             heard = queue;
             for (const move of held.splice(0)) Queue.offerUnsafe(queue, move);
             // Note that the first move after those held says the watch is armed, because a change made before it was laid was heard by nobody.
-            Queue.offerUnsafe(queue, { _tag: "Update", path: "" });
+            Queue.offerUnsafe(queue, WatchEvent.Update({ path: "" }));
             if (failure !== undefined) Queue.failCauseUnsafe(queue, Cause.fail(failure));
           }),
           () => Effect.sync(() => watcher.close()),

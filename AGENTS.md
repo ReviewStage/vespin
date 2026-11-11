@@ -228,8 +228,10 @@ pnpm check:affected                      # what changed since origin/main, from 
 - `[review]` Use real code first, then a fake, then a stub, and replace only
   what crosses a process boundary: provider HTTP, Apple, the model, the OS,
   the clock. An Effect service is replaced by a test `Layer` on its tag;
-  anything else by `vi.spyOn`, restored with `vi.restoreAllMocks()`. Never
-  `vi.mock` a module of this repository.
+  anything else by `vi.spyOn`, restored with `vi.restoreAllMocks()`.
+- `[check: anti-slop/no-module-mocking]` Never mock a module (`vi.mock`,
+  `vi.doMock`), this repository's or a library's: pass the dependency in
+  through a seam the code already takes, or `vi.spyOn` an object it reads.
 - `[review]` An Effect test is `it.effect` and moves time with
   `TestClock.adjust`. It never runs an effect itself (`Effect.run*`,
   `Runtime.run*`, `ManagedRuntime.make`) or waits on the clock (`setTimeout`,

@@ -16,6 +16,7 @@ import {
   Fiber,
   Layer,
   Logger,
+  Match,
   Queue,
   Stream,
 } from "effect";
@@ -568,16 +569,17 @@ it.effect(
       // The store answers the thread's file a line a page, so the restore joins both pages in order.
       vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
         const call = JSON.parse(String(init?.body));
-        const answer =
-          call.call === "listSubkeys"
-            ? { subkeys: [subpath, segment, escaping] }
-            : call.call === "loadPage"
-              ? call.key.subpath === segment
-                ? { entries: segmentKept, next: null }
-                : call.after === null
-                  ? { entries: kept.slice(0, 1), next: 1 }
-                  : { entries: kept.slice(1), next: null }
-              : {};
+        const answer = Match.value(call.call).pipe(
+          Match.when("listSubkeys", () => ({ subkeys: [subpath, segment, escaping] })),
+          Match.when("loadPage", () =>
+            call.key.subpath === segment
+              ? { entries: segmentKept, next: null }
+              : call.after === null
+                ? { entries: kept.slice(0, 1), next: 1 }
+                : { entries: kept.slice(1), next: null },
+          ),
+          Match.orElse(() => ({})),
+        );
         return new Response(JSON.stringify(answer));
       });
       const service = fakeService("What exact line");

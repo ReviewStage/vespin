@@ -10,7 +10,7 @@
  */
 
 import path from "node:path";
-import { Clock, Duration, Effect, Queue, Schedule, Stream } from "effect";
+import { Clock, Context, Duration, Effect, Queue, Schedule, Stream } from "effect";
 import { app, BrowserWindow, type ProcessMetric } from "electron";
 
 /** How often every window's working set is read. */
@@ -76,6 +76,37 @@ interface FollowedPage {
   getURL(): string;
 }
 
+/** A process of the app's, as the system measures it: its type, its working set in kilobytes, and its CPU time. */
+interface MeasuredProcess {
+  readonly pid: number;
+  readonly type: ProcessMetric["type"];
+  readonly memory: { readonly workingSetSize: number };
+  readonly cpu: { readonly cumulativeCPUUsage?: number | undefined };
+}
+
+/** A window of the app's, as a sample reads where it stands and the page behind it. */
+interface SampledWindow {
+  isDestroyed(): boolean;
+  isFocused(): boolean;
+  isVisible(): boolean;
+  isMinimized(): boolean;
+  readonly webContents: FollowedPage & { readonly id: number };
+}
+
+/** What the system says of the app's processes and windows. */
+interface AppProcessesShape {
+  readonly metrics: () => readonly MeasuredProcess[];
+  readonly windows: () => readonly SampledWindow[];
+}
+
+/** The app's processes and windows: Electron's, unless a test stands its own in. */
+export const AppProcesses = Context.Reference<AppProcessesShape>("@repo/desktop/AppProcesses", {
+  defaultValue: () => ({
+    metrics: () => app.getAppMetrics(),
+    windows: () => BrowserWindow.getAllWindows(),
+  }),
+});
+
 /** A window as its responsiveness is followed: Electron's own events on it, and its page. */
 export interface FollowedWindow {
   on(event: WindowEvent, listener: () => void): unknown;
@@ -120,8 +151,8 @@ function documentOf(page: FollowedPage): string {
 }
 
 /** The working set of one process, in bytes, as the system last measured it. */
-function workingSetOf(pid: number): number | undefined {
-  const metric = app.getAppMetrics().find((each) => each.pid === pid);
+function workingSetOf(processes: AppProcessesShape, pid: number): number | undefined {
+  const metric = processes.metrics().find((each) => each.pid === pid);
   return metric === undefined ? undefined : metric.memory.workingSetSize * BYTES_PER_KILOBYTE;
 }
 
@@ -158,8 +189,8 @@ function workingAgentsRung(count: number): WorkingAgents {
 }
 
 /** Where the app's windows stand now. */
-function windowStateNow(): WindowState {
-  const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed());
+function windowStateNow(processes: AppProcessesShape): WindowState {
+  const windows = processes.windows().filter((window) => !window.isDestroyed());
   if (windows.some((window) => window.isFocused())) return WINDOW_STATE.FOCUSED;
   if (windows.some((window) => window.isVisible() && !window.isMinimized())) {
     return WINDOW_STATE.VISIBLE;
@@ -189,7 +220,7 @@ export function followResponsiveness(
   window: FollowedWindow,
   report: (episode: UnresponsiveEpisode) => Effect.Effect<void>,
 ): Effect.Effect<void> {
-  return Effect.suspend(() => {
+  return Effect.flatMap(AppProcesses, (processes) => {
     let since:
       | { readonly at: number; readonly document: string; readonly workingSetBytes?: number }
       | undefined;
@@ -212,7 +243,7 @@ export function followResponsiveness(
       if (since !== undefined) return Effect.void;
       return Effect.map(Clock.currentTimeMillis, (at) => {
         const page = window.webContents;
-        const workingSetBytes = workingSetOf(page.getOSProcessId());
+        const workingSetBytes = workingSetOf(processes, page.getOSProcessId());
         since = {
           at,
           document: documentOf(page),
@@ -232,15 +263,15 @@ export function followResponsiveness(
 export function sampleWindowMemory(
   crossed: (crossing: WorkingSetCrossing) => void,
 ): Effect.Effect<void> {
-  return Effect.suspend(() => {
+  return Effect.flatMap(AppProcesses, (processes) => {
     // The pages past the bound on the last sample, by their contents' id.
     let over = new Set<number>();
     const sample = Effect.sync(() => {
       const now = new Set<number>();
-      for (const window of BrowserWindow.getAllWindows()) {
+      for (const window of processes.windows()) {
         if (window.isDestroyed()) continue;
         const page = window.webContents;
-        const workingSetBytes = workingSetOf(page.getOSProcessId());
+        const workingSetBytes = workingSetOf(processes, page.getOSProcessId());
         if (workingSetBytes === undefined || workingSetBytes <= WORKING_SET_BOUND_BYTES) continue;
         now.add(page.id);
         if (!over.has(page.id)) crossed({ document: documentOf(page), workingSetBytes });
@@ -266,7 +297,7 @@ export function sampleProcessCpu(
   workingAgents: () => number,
   summarized: (summary: CpuSummary) => void,
 ): Effect.Effect<void> {
-  return Effect.suspend(() => {
+  return Effect.flatMap(AppProcesses, (processes) => {
     // Each process's cumulative CPU seconds on the last sample, by its pid, and when that was.
     let last: { readonly at: number; readonly cpuSeconds: ReadonlyMap<number, number> } | undefined;
     let spanStart: number | undefined;
@@ -297,7 +328,7 @@ export function sampleProcessCpu(
       Effect.sync(() => {
         const cpuSeconds = new Map<number, number>();
         const byKind = new Map<ProcessKind, number>();
-        for (const metric of app.getAppMetrics()) {
+        for (const metric of processes.metrics()) {
           const kind = KIND_OF_PROCESS_TYPE[metric.type];
           const seconds = metric.cpu.cumulativeCPUUsage;
           if (kind === undefined || seconds === undefined) continue;
@@ -313,7 +344,7 @@ export function sampleProcessCpu(
             samples.push(percent);
             percents.set(kind, samples);
           }
-          count(windowStates, windowStateNow());
+          count(windowStates, windowStateNow(processes));
           count(agentRungs, workingAgentsRung(workingAgents()));
         }
         last = { at, cpuSeconds };

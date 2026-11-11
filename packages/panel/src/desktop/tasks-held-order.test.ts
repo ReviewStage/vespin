@@ -19,6 +19,7 @@ import {
   type TasksDisplay,
   type TasksFilter,
 } from "@repo/ui/tasks-page-model";
+import { Match } from "effect";
 import { Activity, act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
@@ -407,11 +408,11 @@ test("in the List filtered to Todo, a task a teammate brings into Todo comes in,
 
   draw(
     TASKS.map((each) =>
-      each.number === 42
-        ? { ...each, status: TASK_STATUS.TODO }
-        : each.number === 41
-          ? { ...each, priority: TASK_PRIORITY.URGENT }
-          : each,
+      Match.value(each.number).pipe(
+        Match.when(42, () => ({ ...each, status: TASK_STATUS.TODO })),
+        Match.when(41, () => ({ ...each, priority: TASK_PRIORITY.URGENT })),
+        Match.orElse(() => each),
+      ),
     ),
     { filter: todo },
   );

@@ -190,7 +190,7 @@ const postBatch = Effect.fn("agent-runner/postBatch")(function* (
  * the caller's scope; a post the service refuses for good stops it, and `drain`
  * reports that failure.
  */
-export const makeEventSink = Effect.fn("agent-runner/makeEventSink")(function* (
+export const openEventSink = Effect.fn("agent-runner/openEventSink")(function* (
   options: SinkOptions,
 ): Effect.fn.Return<EventSink, never, HttpClient.HttpClient | Scope.Scope> {
   const client = yield* HttpClient.HttpClient;

@@ -653,7 +653,13 @@ test("while an edit's save is out, Add memory opens nothing over its card", asyn
   chooseMenuItem("Edit");
   await writeInField(page, "Deployments go out from main.");
   pressInField(page, "Save");
-  await settle();
+  // Note that the save's pending state reaches the page on the query client's
+  // own next task, so the card is waited on until it holds still for it.
+  await vi.waitFor(async () => {
+    await settle();
+    const box = field(page) ?? assert.fail("no card");
+    assert.equal(composerEditor(box).editor?.isEditable, false);
+  });
 
   act(() => button(page, "Add memory").click());
   await settle();

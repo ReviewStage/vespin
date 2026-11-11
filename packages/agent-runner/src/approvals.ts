@@ -122,7 +122,7 @@ function abortOf(signal: AbortSignal): Effect.Effect<void> {
 }
 
 /** The launch's asks, none waiting yet. */
-export const makeApprovals = Effect.fn("agent-runner/makeApprovals")(function* (sink: EventSink) {
+export const openApprovals = Effect.fn("agent-runner/openApprovals")(function* (sink: EventSink) {
   const waiting = yield* Ref.make<Waiting>(new Map());
   return { sink, waiting } satisfies Approvals;
 });

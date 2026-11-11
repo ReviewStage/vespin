@@ -424,15 +424,20 @@ export interface PressedRows {
 
 /** Of `whole`, the fields `like` names. */
 function fieldsLike<Fields extends object>(whole: Fields, like: Fields): Fields {
+  const kept: Partial<Fields> = {};
+  for (const key in like) {
+    if (Object.hasOwn(like, key)) kept[key] = whole[key];
+  }
   // SAFETY: each key is one of `like`'s own, so the fields kept are of `Fields`, as `like` is.
-  return Object.fromEntries(
-    Object.keys(like).map((key) => [key, Reflect.get(whole, key)]),
-  ) as Fields;
+  return kept as Fields;
 }
 
 /** Whether `now` holds each field `wanted` names, by value. */
 function holdsEach<Fields extends object>(now: Fields, wanted: Fields): boolean {
-  return Object.entries(wanted).every(([key, value]) => Object.is(Reflect.get(now, key), value));
+  for (const key in wanted) {
+    if (Object.hasOwn(wanted, key) && !Object.is(now[key], wanted[key])) return false;
+  }
+  return true;
 }
 
 /**

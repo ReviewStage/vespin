@@ -142,10 +142,10 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Note that the name GitHub resolved is asked, not the one typed, so a renamed repository's old name is the one held.
   if (reached !== undefined) {
     yield* checkTreeRepository(userId, taskId, reached.repository).pipe(
-      Effect.catch((failure) =>
-        failure._tag === "TaskTreeRepositoryLocked"
-          ? Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED)
-          : hostedStoreOrUnavailable(Effect.fail(failure)),
+      Effect.catchTag(
+        "TaskTreeRepositoryLocked",
+        () => Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED),
+        (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
       ),
     );
   }
@@ -200,18 +200,14 @@ export const taskChangeWritten = (
     moveGuard,
     doneTaskArchive(archivedBy, stopped),
   ).pipe(
-    Effect.catch((failure) => {
-      switch (failure._tag) {
-        case "MoveRefused":
-          return Effect.fail(failure.refusal);
-        case "TaskAssigneeNotMember":
-          return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-        case "TaskTreeRepositoryLocked":
-          return Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED);
-        default:
-          return hostedStoreOrUnavailable(Effect.fail(failure));
-      }
-    }),
+    Effect.catchTags(
+      {
+        MoveRefused: (refused) => Effect.fail(refused.refusal),
+        TaskAssigneeNotMember: () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST),
+        TaskTreeRepositoryLocked: () => Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED),
+      },
+      (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
+    ),
   );
 
 /** The change followed through once it commits: the agents its move to Done archived let go of as an archive by hand does, and a move to Done or Canceled counted. */

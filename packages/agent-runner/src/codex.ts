@@ -136,7 +136,7 @@ import {
   denyForMessage,
   denyWaiting,
   holdAsk,
-  makeApprovals,
+  openApprovals,
   settleAsk,
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
@@ -1686,7 +1686,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   const heard = { count: 0 };
   const provider = providerOf(auth);
   const permissions = permissionsOf(config.permissionMode);
-  const approvals = yield* makeApprovals(context.sink);
+  const approvals = yield* openApprovals(context.sink);
   const opened = yield* openAppServer(
     { context, signals, model: config.model, auth, heard, permissions, approvals },
     config.threadId,

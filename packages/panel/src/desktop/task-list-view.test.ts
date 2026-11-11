@@ -5,6 +5,7 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/t
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { Match } from "effect";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -108,11 +109,11 @@ const TASKS = [
 
 /** `TASKS` with Dean on Fix flaky deploy and Charles on Retry webhooks, Billing empty states with no one on it. */
 const ASSIGNED = TASKS.map((each) =>
-  each.id === "t-2"
-    ? { ...each, assignee: { userId: DEAN, name: "Dean Stratakos" } }
-    : each.id === "t-1"
-      ? { ...each, assignee: { userId: CHARLES, name: "Charles Pan" } }
-      : each,
+  Match.value(each.id).pipe(
+    Match.when("t-2", () => ({ ...each, assignee: { userId: DEAN, name: "Dean Stratakos" } })),
+    Match.when("t-1", () => ({ ...each, assignee: { userId: CHARLES, name: "Charles Pan" } })),
+    Match.orElse(() => each),
+  ),
 );
 
 /** The window's router the sidebar last mounted stands under, which its doors move. */

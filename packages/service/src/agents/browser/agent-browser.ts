@@ -58,6 +58,7 @@ import {
   Effect,
   Exit,
   Layer,
+  Match,
   PubSub,
   Ref,
   Result,
@@ -71,7 +72,7 @@ import { jsonOf } from "../../http/http-effect.js";
 import type { RelaySocket } from "../../terminal/relay.js";
 import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
-import { makePhoneVideo, phoneVideoOf } from "../machine/phone-video.js";
+import { phoneVideoAsk, phoneVideoOf } from "../machine/phone-video.js";
 import { type SandboxPtyService, sandboxPtyOf } from "../sandbox-pty.js";
 import {
   BRIDGE_WORD,
@@ -490,13 +491,12 @@ export function agentBrowserOver(
             !(failure._tag === "SnapshotGone" || failure._tag === "ImageNotReady"),
         }),
         Effect.mapError((failure) =>
-          failure._tag === "BrowserUnreachable"
-            ? failure
-            : failure._tag === "SnapshotGone"
-              ? unreachable(BROWSER_UNREACHABLE.SNAPSHOT_GONE)
-              : failure._tag === "ImageNotReady"
-                ? unreachable(BROWSER_UNREACHABLE.STARTING)
-                : sandboxUnavailable(),
+          Match.value(failure).pipe(
+            Match.tag("BrowserUnreachable", (refused) => refused),
+            Match.tag("SnapshotGone", () => unreachable(BROWSER_UNREACHABLE.SNAPSHOT_GONE)),
+            Match.tag("ImageNotReady", () => unreachable(BROWSER_UNREACHABLE.STARTING)),
+            Match.orElse(() => sandboxUnavailable()),
+          ),
         ),
       );
     });
@@ -548,7 +548,7 @@ export function agentBrowserOver(
         return { ok: false, reason: RECORDING_FAILURE.ENCODER } satisfies BrowserRecordingRead;
       }
       // Note that a copy the sandbox could not make leaves the recording its WebM alone, never refused.
-      const mp4Bytes = yield* api.run(running, makePhoneVideo(file.path)).pipe(
+      const mp4Bytes = yield* api.run(running, phoneVideoAsk(file.path)).pipe(
         Effect.map(phoneVideoOf),
         Effect.catch(() => Effect.succeed(undefined)),
       );

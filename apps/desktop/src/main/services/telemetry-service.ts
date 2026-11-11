@@ -20,7 +20,7 @@ import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import * as Sentry from "@sentry/electron/main";
-import { Effect, Exit, type Layer, Option, Scope, Stream, Tracer } from "effect";
+import { Data, Effect, Exit, type Layer, Option, Scope, Stream, Tracer } from "effect";
 import {
   type CpuSummary,
   sampleProcessCpu,
@@ -32,6 +32,9 @@ import type { DesktopConfig } from "./desktop-config";
 
 /** How long the quit waits for a queued crash report to leave; a flush must not hold a quit. */
 const CRASH_REPORT_FLUSH_MS = 2_000;
+
+/** A span's status, made as Effect's tracer makes its own. */
+const SpanStatus = Data.taggedEnum<Tracer.SpanStatus>();
 
 declare const PACKAGED_SENTRY_DSN: string;
 /**
@@ -131,7 +134,7 @@ class MainSentrySpan implements Tracer.Span {
     this.links = options.links;
     this.kind = options.kind;
     this.sampled = sentry.isRecording();
-    this.status = { _tag: "Started", startTime: options.startTime };
+    this.status = SpanStatus.Started({ startTime: options.startTime });
   }
 
   get spanId(): string {
@@ -145,7 +148,7 @@ class MainSentrySpan implements Tracer.Span {
   end(endTime: bigint, exit: Exit.Exit<unknown, unknown>): void {
     if (Exit.isFailure(exit)) this.sentry.setStatus({ code: SPAN_STATUS_ERROR });
     this.sentry.end(Number(endTime / 1_000_000n));
-    this.status = { _tag: "Ended", startTime: this.status.startTime, endTime, exit };
+    this.status = SpanStatus.Ended({ startTime: this.status.startTime, endTime, exit });
   }
 
   attribute(key: string, value: unknown): void {

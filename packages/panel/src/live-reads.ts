@@ -359,14 +359,19 @@ function isLiveReadId(id: unknown): id is LiveReadId {
   return typeof id === "string" || typeof id === "number";
 }
 
+/** A record of a read's document: its fields by name, each a record below or a value. */
+type DocumentRecord = Readonly<Record<string, unknown>>;
+
+/** Whether `value` is a record whose fields can be read by name, rather than a primitive or nothing. */
+function isDocumentRecord(value: unknown): value is DocumentRecord {
+  return typeof value === "object" && value !== null;
+}
+
 /** What `value` holds at `path`, record by record; none where it holds none. */
 function valueAt(value: unknown, path: readonly string[]): unknown {
   let at = value;
   for (const segment of path) {
-    at =
-      typeof at === "object" && at !== null && Object.hasOwn(at, segment)
-        ? Reflect.get(at, segment)
-        : undefined;
+    at = isDocumentRecord(at) && Object.hasOwn(at, segment) ? at[segment] : undefined;
   }
   return at;
 }

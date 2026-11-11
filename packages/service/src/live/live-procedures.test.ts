@@ -749,20 +749,28 @@ it.layer(getTestDB())("a task's live reads", (it) => {
 /** A row a statement answered, column by column. */
 type KeptRow = Readonly<Record<string, unknown>>;
 
+/** The database client's members by key, as the keeping client forwards each one it leaves alone. */
+type ClientMembers = { readonly [key: PropertyKey]: unknown };
+
+/** The database client's members as their own types, which read as `ClientMembers` with each one unknown. */
+type TypedMembers = { readonly [Key in keyof SqlClient.SqlClient]: SqlClient.SqlClient[Key] };
+
 /**
  * The test's database client, keeping every row a statement run on it as
  * text (`unsafe`, which a poll's sealer reads through) answers, so a test
  * sees what left the database rather than how often it was asked.
  */
 function keepingRows(sql: SqlClient.SqlClient, kept: KeptRow[]): SqlClient.SqlClient {
+  const typed: TypedMembers = sql;
+  const members: ClientMembers = typed;
   return new Proxy(sql, {
-    get: (target, key, receiver) =>
+    get: (target, key) =>
       key === "unsafe"
         ? (text: string, params?: ReadonlyArray<unknown>) =>
             Effect.tap(target.unsafe<KeptRow>(text, params), (rows) =>
               Effect.sync(() => kept.push(...rows)),
             )
-        : Reflect.get(target, key, receiver),
+        : members[key],
   });
 }
 

@@ -1210,6 +1210,9 @@ class PageSelect extends EventTarget {
   }
 }
 
+/** A function the browser is sent, as the page calls it on the select with its arguments' values. */
+type SelectFunction = (this: PageSelect, ...values: unknown[]) => unknown;
+
 /** The page's answer to `Runtime.callFunctionOn`: the function the browser was sent, called on the select, its value returned by value. */
 function callOnSelect(select: PageSelect, params: FakeCdpCommand["params"]): FakeCdpAnswer {
   const declaration = String(params.functionDeclaration);
@@ -1217,10 +1220,11 @@ function callOnSelect(select: PageSelect, params: FakeCdpCommand["params"]): Fak
   // Note that the page's own class is the fake's, so the function's guard reads it as a select.
   const made: unknown = new Function("HTMLSelectElement", `return (${declaration});`)(PageSelect);
   assert.equal(typeof made, "function");
-  const called = Reflect.apply(
-    made as (...values: unknown[]) => unknown,
+  // SAFETY: the declaration the browser is sent is a function the page calls on the element.
+  const onSelect = made as SelectFunction;
+  const called = onSelect.call(
     select,
-    args.map((arg: { readonly value?: unknown }) => arg.value),
+    ...args.map((arg: { readonly value?: unknown }) => arg.value),
   );
   return { result: { result: { type: "object", value: called } } };
 }

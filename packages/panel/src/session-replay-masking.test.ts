@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import type { PostHog } from "posthog-js/dist/module.no-external";
 import { afterEach, expect, test, vi } from "vitest";
 import { sessionReplay } from "./session-replay.js";
 
@@ -11,15 +12,13 @@ import { sessionReplay } from "./session-replay.js";
 
 type Mask = (name: string, value: string, element?: Element) => string;
 
-const client = vi.hoisted(() => ({
+const client = {
   init: vi.fn(),
   opt_in_capturing: vi.fn(),
   register: vi.fn(),
   identify: vi.fn(),
   startSessionRecording: vi.fn(),
-}));
-
-vi.mock("posthog-js/dist/module.no-external", () => ({ default: client }));
+};
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -36,6 +35,7 @@ async function mask(): Promise<Mask> {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
+    importClient: () => Promise.resolve(client as unknown as PostHog),
   })({ permitted: true, appVersion: "0.0.0", packaged: true, accountId: "user-1" });
   await vi.waitFor(() => expect(client.init).toHaveBeenCalledOnce());
   const options = client.init.mock.calls[0]?.[1] as {

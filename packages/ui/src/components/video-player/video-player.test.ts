@@ -234,7 +234,7 @@ test("comma and period, like the frame buttons, pause the video and step one fra
 test("Full screen opens the video in the browser's own player where the browser fills the screen with no element", () => {
   const { video, pressButton } = mountPlayer();
   pressButton("Full screen");
-  expect(Reflect.get(video, "webkitDisplayingFullscreen")).toBe(true);
+  expect("webkitDisplayingFullscreen" in video && video.webkitDisplayingFullscreen).toBe(true);
 });
 
 /** Draws a player in the viewer, as the file viewer an Expand opens does, and answers its video. */

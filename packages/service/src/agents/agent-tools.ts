@@ -2240,18 +2240,17 @@ const startTaskOf = (
     );
     return Result.succeed(made.task.task.id);
   }).pipe(
-    Effect.catch((failure) => {
-      if (!("_tag" in failure)) return Effect.succeed(Result.fail(startRefusalWords(failure)));
-      switch (failure._tag) {
-        case "SqlError":
-        case "SchemaError":
-        case "EffectDrizzleQueryError":
-          return Effect.fail(failure);
-        // The member gone from the workspace refuses its assignee; no parent or relation is asked, so no other refusal comes.
-        default:
-          return Effect.succeed(Result.fail(START_AGENT_REFUSAL.NO_WORKSPACE));
-      }
-    }),
+    Effect.catchTag(
+      ["SqlError", "SchemaError", "EffectDrizzleQueryError"],
+      Effect.fail,
+      (refused) =>
+        Effect.succeed(
+          Result.fail(
+            // The member gone from the workspace refuses its assignee; no parent or relation is asked, so no other refusal comes.
+            "_tag" in refused ? START_AGENT_REFUSAL.NO_WORKSPACE : startRefusalWords(refused),
+          ),
+        ),
+    ),
   );
 
 /**

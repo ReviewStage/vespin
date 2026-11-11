@@ -373,6 +373,11 @@ export interface SessionReplayShell {
   /** The recorder's bundle, imported where the shell's bundler put it; it registers itself as it runs. */
   readonly importRecorder: BundleImporter<unknown>;
   /**
+   * The client's bundle, the library's "no-external" build unless a test
+   * stands its own client in.
+   */
+  readonly importClient?: BundleImporter<PostHog>;
+  /**
    * Where the client keeps its person and its consent in the window's
    * storage, in place of the library's names for them, which are its
    * project key's. A shell whose origin runs another client of the same
@@ -585,6 +590,12 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
   let identified: SignedInBootstrap | undefined;
   /** The workspace the running recording is filed under, as last grouped, cleared with the person by every `reset`. */
   let grouped: string | undefined;
+  // The "no-external" client: the full build without the surveys, product
+  // tours, web vitals, and the rest we never turn on, and without the
+  // recorder, which is a bundle of its own.
+  const importClient =
+    shell.importClient ??
+    (() => import("posthog-js/dist/module.no-external").then((module) => module.default));
 
   /**
    * Files what is recorded from here on under the workspace the window lists,
@@ -730,12 +741,9 @@ export function sessionReplay(shell: SessionReplayShell): ApplySessionReplay {
         failed();
         return;
       }
-      // The "no-external" client: the full build without the surveys, product
-      // tours, web vitals, and the rest we never turn on, and without the
-      // recorder, which is a bundle of its own.
-      void import("posthog-js/dist/module.no-external").then((module) => {
+      void importClient().then((loaded) => {
         loading = false;
-        client = module.default;
+        client = loaded;
         if (started && latest) record(client, key, latest);
       }, failed);
     };

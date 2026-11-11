@@ -3,7 +3,7 @@
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { app, type BrowserWindow, dialog, type MessageBoxOptions } from "electron";
+import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { MAXIMUM_REVIVALS_PER_LOAD } from "./renderer-revival";
 
 /** The answer that reloads: the default button, which Return and Esc both press, so no key quits. */
@@ -18,14 +18,23 @@ const RELOAD_OR_QUIT: MessageBoxOptions = {
   cancelId: RELOAD_ANSWER,
 };
 
+/** Electron's doors the question is asked through: the app it brings forward, and the sheet. */
+export interface ReloadQuestionDoors {
+  readonly app: Pick<Electron.App, "focus">;
+  readonly dialog: Pick<Electron.Dialog, "showMessageBox">;
+}
+
 /**
  * Asks, as a sheet on the window, whether to reload it once more. The window
  * is shown first, because a renderer that never loaded never showed it, and
  * a blank window with no question on it is what this is here to end.
  */
-export async function askReloadPanel(window: BrowserWindow): Promise<boolean> {
-  if (process.platform === "darwin") app.focus({ steal: true });
+export async function askReloadPanel(
+  window: BrowserWindow,
+  doors: ReloadQuestionDoors,
+): Promise<boolean> {
+  if (process.platform === "darwin") doors.app.focus({ steal: true });
   window.show();
-  const { response } = await dialog.showMessageBox(window, RELOAD_OR_QUIT);
+  const { response } = await doors.dialog.showMessageBox(window, RELOAD_OR_QUIT);
   return response === RELOAD_ANSWER;
 }

@@ -48,7 +48,7 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
-import { DIALOG_SIZE, Dialog, makeWait, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
+import { createWait, DIALOG_SIZE, Dialog, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
 import { HistoryIcon } from "lucide-react";
@@ -129,10 +129,10 @@ const TASK_WORDS = "Task";
 const PERSON_WORDS = "Profile";
 
 /** The hold before the cards show: the window's one, as it has one switcher, so each press held afresh calls off the one before. */
-const holdWait = makeWait();
+const holdWait = createWait();
 
 /** The wait before a still is taken of the screen the window settled on, each settle calling off the one before. */
-const settleWait = makeWait();
+const settleWait = createWait();
 
 /** A still kept of a screen. */
 interface HeldStill {

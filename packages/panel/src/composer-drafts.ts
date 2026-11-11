@@ -8,7 +8,7 @@ import {
   type InboxReplyKind,
   inboxFormValueSchema,
 } from "@repo/features/inbox-wire";
-import { makeWait, type Wait } from "@repo/ui";
+import { createWait, type Wait } from "@repo/ui";
 import { createStore, type ReadonlyStore, Store, useSelector } from "@tanstack/react-store";
 import { Duration, Effect, Equal, Schema, SchemaTransformation } from "effect";
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -520,7 +520,7 @@ const storeLaterByOwner = new Map<Owner, Wait>();
  * of keys writes once, after the last.
  */
 function storeLater(owner: Owner): void {
-  const wait = storeLaterByOwner.get(owner) ?? makeWait();
+  const wait = storeLaterByOwner.get(owner) ?? createWait();
   storeLaterByOwner.set(owner, wait);
   wait.start(
     Effect.andThen(

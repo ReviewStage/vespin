@@ -42,7 +42,7 @@ interface TrackedWindow {
  * the events a batch carries — so a single oversized batch is braked on
  * arrival rather than on the one after it.
  */
-export function makeRateBrake(config: RateBrakeConfig): RateBrake {
+export function createRateBrake(config: RateBrakeConfig): RateBrake {
   const tracked = new Map<string, TrackedWindow>();
 
   return {

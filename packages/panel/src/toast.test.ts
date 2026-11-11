@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { HostedUnanswered } from "@repo/features/hosted-link";
 import {
   FAILURE_CONDITION,
   FAILURE_SURFACE,
@@ -334,12 +335,11 @@ test("a failure toast for a hosted call that never answered reports what the hos
         surface: FAILURE_SURFACE.AGENT_START,
         cause: {
           failure: "unanswered",
-          cause: {
-            _tag: "HostedUnanswered",
+          cause: new HostedUnanswered({
             fault: "network",
             errorName: "TypeError",
             traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
-          },
+          }),
         },
       },
     }),

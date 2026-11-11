@@ -53,18 +53,17 @@ type GitHubAskFailure = GitHubWorkspaceReadFailure | { readonly _tag: "Repositor
 export function githubReadRefusal<A, R>(
   effect: Effect.Effect<A, GitHubAskFailure, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
-  return Effect.catch(effect, (failure) => {
-    switch (failure._tag) {
-      case "RepositoryNotReachable":
-        return Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
-      case "SqlError":
-      case "EffectDrizzleQueryError":
-      case "SchemaError":
-        return hostedStoreOrUnavailable(Effect.fail(failure));
-      default:
-        return githubReadOrRefusal(Effect.fail(failure));
-    }
-  });
+  return effect.pipe(
+    Effect.catchTags(
+      {
+        RepositoryNotReachable: () => Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE),
+        SqlError: (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
+        EffectDrizzleQueryError: (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
+        SchemaError: (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
+      },
+      (failure) => githubReadOrRefusal(Effect.fail(failure)),
+    ),
+  );
 }
 
 /** What the agent published, from the instance's kept answers, its failures as the refusals a route answers. */
@@ -78,10 +77,10 @@ const keptPublished = /* @__PURE__ */ Effect.fnUntraced(function* (
   const ended = status !== AGENT_STATUS.STARTING && status !== AGENT_STATUS.RUNNING;
   return yield* Cache.get(published, new PublishedKey({ userId, agentId: agent.id, ended })).pipe(
     // The row stood a statement ago; an agent gone between the two is not found, as it would be on the next ask.
-    Effect.catch((failure) =>
-      failure._tag === "NoSuchAgent"
-        ? Effect.fail(HOSTED_REFUSAL.NOT_FOUND)
-        : githubReadRefusal(Effect.fail(failure)),
+    Effect.catchTag(
+      "NoSuchAgent",
+      () => Effect.fail(HOSTED_REFUSAL.NOT_FOUND),
+      (failure) => githubReadRefusal(Effect.fail(failure)),
     ),
   );
 });
