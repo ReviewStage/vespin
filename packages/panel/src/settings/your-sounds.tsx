@@ -20,7 +20,6 @@ import {
   DIALOG_TONE,
   Dialog,
   DialogActions,
-  FormField,
   IconButton,
   PlusIcon,
   SettingsSection,
@@ -65,7 +64,8 @@ import type { ChoiceMenu } from "./schema-rows.js";
  * your-sounds.tsx -- the sounds the account keeps of its own, in Settings' Notifications: listed first in each sound's pop-up, added from it or from the + beside Play under a name the member gives, and listed apart to play, rename, or remove.
  *
  * Each of the account's two sounds lists its own sounds by name under
- * Yours, then Simple and Playful, and pins Add a sound… at its menu's foot;
+ * Yours, then Simple and Playful, and pins Add a sound… at its menu's foot,
+ * with Rename this sound… and Remove this sound… while it plays one of them;
  * the + beside Play adds one too, so adding never hides in the menu. A
  * picked file is read on this machine first (`sound-clip.ts`'s
  * `clipOfFile`) and refused under its row in a sentence naming the file;
@@ -86,6 +86,8 @@ const SOUND_WORDS = {
   READING: "Loading",
   RENAME: "Rename…",
   REMOVE: "Remove…",
+  RENAME_THIS: "Rename this sound…",
+  REMOVE_THIS: "Remove this sound…",
   NAME_LABEL: "Name",
   NAME_TITLE: "Name this sound",
   RENAME_TITLE: "Rename sound",
@@ -124,6 +126,12 @@ type Naming =
   | { readonly slot: SoundClipSlot; readonly read: Extract<ClipRead, { clip: string }> }
   | { readonly sound: Sound };
 
+/** What a sound of the account's own is renamed and removed by, from its row's menu or the list. */
+interface SoundManage {
+  readonly rename: (sound: Sound) => void;
+  readonly remove: (sound: Sound) => void;
+}
+
 /** One of the account's two sounds: its choice of a sound of its own, its menu's additions, and its +. */
 interface Slot {
   readonly menu: ChoiceMenu;
@@ -139,6 +147,7 @@ function useSlot(
   view: SettingsRowsInput,
   sounds: AccountSounds | undefined,
   add: (slot: SoundClipSlot) => void,
+  manage: SoundManage,
   refusal: string | undefined,
 ): Slot {
   const field = FIELD_OF_SLOT[slot];
@@ -146,6 +155,7 @@ function useSlot(
   const write = useSettingRowWrite(field, (value: string) => settingFromOption(field, value, view));
   const { mutate: sendChoice } = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
+  const playing = stored ? chosenSound(sounds, slot) : undefined;
   const chosen = chosenSound(sounds, slot)?.id;
   const choose = (id: string) => {
     sendChoice({ slot, id });
@@ -160,7 +170,26 @@ function useSlot(
         chosen,
         pick: choose,
       },
-      foot: [{ id: "add", label: SOUND_WORDS.ADD, icon: <PlusIcon />, onPress: () => add(slot) }],
+      // Note that the sound this row plays is renamed and removed from its own menu, so its acts are never only in a list further down.
+      foot: [
+        { id: "add", label: SOUND_WORDS.ADD, icon: <PlusIcon />, onPress: () => add(slot) },
+        ...(playing === undefined
+          ? []
+          : [
+              {
+                id: "rename",
+                label: SOUND_WORDS.RENAME_THIS,
+                icon: <GLYPH.RENAME />,
+                onPress: () => manage.rename(playing),
+              },
+              {
+                id: "remove",
+                label: SOUND_WORDS.REMOVE_THIS,
+                icon: <TrashIcon />,
+                onPress: () => manage.remove(playing),
+              },
+            ]),
+      ],
       // Note that a refusal names the picked file; the row masks its error for session replay.
       error: refusedShown(refusal, FAILURE_SURFACE.SOUND_CLIP_WRITE),
     },
@@ -231,22 +260,19 @@ function useNameDialog(
           />
         }
       >
-        <FormField label={SOUND_WORDS.NAME_LABEL}>
-          {(control) => (
-            <ReplayMask>
-              <TextField
-                ref={field}
-                field={control}
-                autoComplete={TEXT_FIELD_AUTO_COMPLETE.OFF}
-                maxLength={SOUND_CLIP_BOUNDS.MAX_NAME_CHARS}
-                value={name}
-                disabled={form.settling}
-                onEnter={form.submit}
-                onChange={setName}
-              />
-            </ReplayMask>
-          )}
-        </FormField>
+        {/* Note that the title already asks for the name, so the field is named for a reader alone and stands under it. */}
+        <ReplayMask>
+          <TextField
+            ref={field}
+            label={SOUND_WORDS.NAME_LABEL}
+            autoComplete={TEXT_FIELD_AUTO_COMPLETE.OFF}
+            maxLength={SOUND_CLIP_BOUNDS.MAX_NAME_CHARS}
+            value={name}
+            disabled={form.settling}
+            onEnter={form.submit}
+            onChange={setName}
+          />
+        </ReplayMask>
       </Dialog>
     );
   return {
@@ -359,8 +385,17 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
     refuse(slot, undefined);
     picker.open();
   };
-  const finish = useSlot(SOUND_CLIP_SLOT.FINISH, view, sounds, add, refusals.finish);
-  const ask = useSlot(SOUND_CLIP_SLOT.ASK, view, sounds, add, refusals.ask);
+  // Note that these are hoisted, since the remove's confirm is held below the rows that offer it.
+  const manage: SoundManage = { rename: askRename, remove: askRemove };
+  function askRename(sound: Sound) {
+    naming.ask({ sound }, sound.name);
+  }
+  function askRemove(sound: Sound) {
+    setRemoving(sound);
+    remove.ask();
+  }
+  const finish = useSlot(SOUND_CLIP_SLOT.FINISH, view, sounds, add, manage, refusals.finish);
+  const ask = useSlot(SOUND_CLIP_SLOT.ASK, view, sounds, add, manage, refusals.ask);
   const slots = { [SOUND_CLIP_SLOT.FINISH]: finish, [SOUND_CLIP_SLOT.ASK]: ask } as const;
 
   const [removing, setRemoving] = useState<Sound>();
@@ -399,14 +434,7 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
     },
     list:
       list.length === 0 ? null : (
-        <SoundList
-          sounds={list}
-          onRename={(sound) => naming.ask({ sound }, sound.name)}
-          onRemove={(sound) => {
-            setRemoving(sound);
-            remove.ask();
-          }}
-        />
+        <SoundList sounds={list} onRename={askRename} onRemove={askRemove} />
       ),
     drawn: (
       <>

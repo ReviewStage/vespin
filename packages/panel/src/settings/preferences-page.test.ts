@@ -272,9 +272,11 @@ test("each sound lists the account's own sounds by name, the one it plays chosen
   );
 
   // The finish plays the account's own Glass, so its pop-up names it.
-  await vi.waitFor(() => menuOf(page, "When an agent finishes: Glass"));
+  const finish = await vi.waitFor(() => menuOf(page, "When an agent finishes: Glass"));
+  assert.ok(finish.includes("Rename this sound…") && finish.includes("Remove this sound…"));
   const ask = menuOf(page, "When something needs you: Knock");
   assert.ok(ask.includes("Glass"), "either sound may pick any of the account's own");
   assert.ok(ask.includes("Add a sound…"));
+  assert.ok(!ask.includes("Remove this sound…"), "a sound playing a recipe manages none");
   assert.ok(page.textContent?.includes("Your sounds"));
 });
