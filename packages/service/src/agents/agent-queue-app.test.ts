@@ -11,13 +11,14 @@ import {
 import { readAgent } from "@repo/database/models/agent-store";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { storeWriter } from "@repo/database/models/writer";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace } from "@repo/database/testing";
 import { AGENT_QUEUE_BOUNDS, QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_KIND,
   AGENT_MACHINE,
+  AGENT_SENDER,
   agentMessagesAnswerSchema,
   agentQueueAnswerSchema,
   QUEUE_CHANGE,
@@ -29,6 +30,7 @@ import { noNetwork } from "@repo/wire/testing";
 import { Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import {
+  MESSAGE_ROLE,
   RUN_EVENT,
   RUN_STATUS,
   RUN_TURN_ORIGIN,
@@ -54,6 +56,7 @@ import {
   SIZED_PNG,
   SNAPSHOT,
   sessionCookieOf,
+  userTexts,
 } from "../testing/agents-app-support.js";
 import { LOCAL_AGENT_ENVIRONMENT } from "../testing/local-agent.js";
 import { harnessFor, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
@@ -538,6 +541,44 @@ it.layer(SUITE)("an agent's queue", (it) => {
           ["First"],
         );
         assert.deepEqual(queue?.paused, { because: QUEUE_PAUSE.TURN_FAILED });
+      }),
+  );
+
+  it.effect(
+    "a line held in the queue while the agent booted goes as the sender it recorded, not as the member it was queued under",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { ask, owner, handedOn, stored } = yield* queuedBehindEndedTurn(agentSessions, []);
+        const text = "Triage the failures.";
+
+        yield* handedOn({
+          id: randomUUID(),
+          userId: owner,
+          text,
+          attachments: [],
+          editing: false,
+          claimedAt: new Date(0),
+          sendKey: randomUUID(),
+          line: {
+            sender: {
+              kind: MESSAGE_SENDER.AUTOMATION,
+              automationId: undefined,
+              name: "Nightly triage",
+            },
+          },
+        });
+
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: stored.id })),
+        );
+        const sent = page.messages.find(
+          (message) =>
+            message.role === MESSAGE_ROLE.USER && userTexts({ messages: [message] })[0] === text,
+        );
+        assert.deepEqual(sent?.sentBy, { name: "Nightly triage", kind: AGENT_SENDER.AUTOMATION });
       }),
   );
 
