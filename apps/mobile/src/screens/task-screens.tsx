@@ -332,30 +332,51 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
   return listed.find((task) => task.id === place.planId || String(task.number) === place.planId);
 }
 
+/** Each task's drops, counted as they are made, and the newest of them the service took, so an older drop's follow-up never undoes a newer one. */
+const dropsMade = new Map<string, number>();
+const dropsLanded = new Map<string, number>();
+
+/** Counts a drop of a task and answers whether, once its move lands, it is still the newest the service took. */
+function countDrop(taskId: string): (landed: boolean) => boolean {
+  const drop = (dropsMade.get(taskId) ?? 0) + 1;
+  dropsMade.set(taskId, drop);
+  return (landed) => {
+    if (!landed) return false;
+    const newest = dropsLanded.get(taskId) ?? 0;
+    if (newest > drop) return false;
+    dropsLanded.set(taskId, drop);
+    return true;
+  };
+}
+
 /**
  * What a task dropped on a group's header does there, keeping it in one
  * place as the panel's drag does: onto Pinned it leaves the section the
  * member keeps it in, a pinned task's stored entry among them, and is
  * pinned once that is taken; onto a section it is put in it, and onto a
  * repository group it leaves its section, each unpinning it once the move
- * is taken. A refused move leaves the task where it stood.
+ * is taken. A refused move leaves the task where it stood, and a drop's
+ * pin or unpin is skipped where a newer drop of the same task has landed
+ * first, while a refused newer one leaves the older to finish.
  */
 function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummary) => void {
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
+      const newest = countDrop(task.id);
       if (listing.sectionOf(task.id) === undefined) {
-        listing.pin(task.id, true);
+        if (newest(true)) listing.pin(task.id, true);
         return;
       }
       void listing.place(task.id, null).then((landed) => {
-        if (landed) listing.pin(task.id, true);
+        if (newest(landed)) listing.pin(task.id, true);
       });
     };
   }
   const sectionId = group.kind === TASK_TREE_GROUP.SECTION ? group.key : null;
   return (task) => {
+    const newest = countDrop(task.id);
     void listing.place(task.id, sectionId).then((landed) => {
-      if (landed && task.pinnedAt !== undefined) listing.pin(task.id, false);
+      if (newest(landed) && task.pinnedAt !== undefined) listing.pin(task.id, false);
     });
   };
 }
