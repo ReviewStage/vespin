@@ -2,15 +2,21 @@
 
 import { Host, HStack, VStack } from "@expo/ui/swift-ui";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { type ReactNode, useEffect, useState } from "react";
-import { Keyboard, StyleSheet, View } from "react-native";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { Keyboard, type LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 
-/** The room a docked screen's content leaves at its foot so its last words scroll clear of the bar, in points. */
-export const DOCK_ROOM = 72;
+/** The room a docked bar takes above the screen's bottom safe area before it is measured, in points: a bare field's, with its gap. */
+const DOCK_ROOM_UNMEASURED = 72;
+
+/** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, in points; none outside a dock. */
+const DockRoom = createContext(0);
+
+/** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
+const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
 
 /** How round the bar stands: a rounded field, as a composer's is. */
 export const BAR_RADIUS = 24;
@@ -91,6 +97,7 @@ export function GlassBar({
   readonly head?: ReactNode;
 }) {
   const keyboard = useKeyboardHeight() > 0;
+  const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
   const row = <HStack spacing={SPACE.ROW}>{children}</HStack>;
   const content = (
@@ -112,13 +119,18 @@ export function GlassBar({
       {content}
     </GlassView>
   );
+  // Note that a docked bar tells its dock how tall it stands, its gap with it, as its head grows and shrinks, so the content under it scrolls clear of all of it.
+  const onLayout =
+    measure === undefined
+      ? undefined
+      : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
   return (
     <SafeAreaView
       edges={keyboard ? ["left", "right"] : ["bottom", "left", "right"]}
       style={styles.gap}
     >
-      {bar}
+      <View onLayout={onLayout}>{bar}</View>
     </SafeAreaView>
   );
 }
@@ -127,7 +139,9 @@ export function GlassBar({
  * A screen with a bar pinned at its foot, such as a thread's composer: the
  * screen's content fills it, the bar floating over its foot as the system's
  * bars do, and rising with the keyboard so the field stays above it. The
- * content leaves room at its own foot for the bar (`DOCK_ROOM`).
+ * content leaves room at its own foot for the bar as tall as it stands
+ * (`useDockRoom`): a composer's head, such as a call waiting on an answer
+ * and the queue, grows it well past a bare field.
  */
 export function GlassDock({
   children,
@@ -138,10 +152,18 @@ export function GlassDock({
 }) {
   // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
   const keyboard = useKeyboardHeight();
+  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
   return (
     <View style={styles.dock}>
-      {children}
-      <View style={[styles.docked, { bottom: keyboard }]}>{bar}</View>
+      <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      <View style={[styles.docked, { bottom: keyboard }]}>
+        <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
+      </View>
     </View>
   );
+}
+
+/** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, which the content leaves under its last row so it scrolls clear of the bar; none outside a dock. */
+export function useDockRoom(): number {
+  return useContext(DockRoom);
 }

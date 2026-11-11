@@ -28,13 +28,14 @@ import {
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
+import { useDockRoom } from "./glass-bar.js";
 import { isLucideSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
@@ -777,8 +778,6 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   readonly empty?: EmptyStateProps | undefined;
   /** What the times count from; now where none is given. */
   readonly now?: number | undefined;
-  /** The room left under the newest row, so it scrolls clear of a bar docked over the list's foot (`DOCK_ROOM`). */
-  readonly footRoom?: number | undefined;
   /** The pages older than the oldest row, read as the reader scrolls up to it; none where nothing older stands. */
   readonly older?: OlderPages | undefined;
 };
@@ -796,7 +795,6 @@ export function AgentTranscript({
   head,
   empty,
   now,
-  footRoom = 0,
   older,
   ...drawing
 }: AgentTranscriptProps) {
@@ -807,8 +805,12 @@ export function AgentTranscript({
   // Whether the reader stands at the newest row, which the list keeps in view as rows land; it opens there.
   const anchored = useRef(true);
   const [away, setAway] = useState(false);
+  // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
+  const [width, setWidth] = useState(0);
+  const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
-  const foot = bottom + TAB_BAR_ROOM + footRoom;
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
+  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
@@ -832,7 +834,10 @@ export function AgentTranscript({
     if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
   }, []);
   return (
-    <View style={[styles.list, { backgroundColor: colors.GROUND }]}>
+    <View
+      style={[styles.list, { backgroundColor: colors.GROUND }]}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+    >
       <FlatList
         ref={list}
         data={items}
@@ -854,7 +859,10 @@ export function AgentTranscript({
         }
         ListFooterComponent={<View style={{ height: foot }} />}
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
-        contentContainerStyle={[styles.content, { paddingLeft: left, paddingRight: right }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingLeft: left + sides, paddingRight: right + sides },
+        ]}
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}

@@ -8,14 +8,17 @@ builds a control of its own.
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow` (a
-  task on one line, its sub-tasks folded under the panel's chevron), a task
-  page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and `WordsRow` for its
-  description), `GroupRow` (a place a regular window's sidebar opens, such
-  as the Inbox with its count), `SplitView` (the app's sidebar, the list,
-  and the detail, or the list and the detail, each column under its own
-  `ColumnBar`: its inline title, the account's photo, a header such as the
-  workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an act, a
-  search, and the acts at its foot, the sidebar shown or hidden as its
+  task on one line, its sub-tasks folded under the panel's chevron), each
+  row's acts behind a swipe from either edge, a full swipe running the
+  first, and in its long press menu, which lifts the row's preview
+  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open, a
+  task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
+  `WordsRow` for its description), `GroupRow` (a place a regular window's
+  sidebar opens, such as the Inbox with its count), `SplitView` (the app's
+  sidebar, the list, and the detail, or the list and the detail, each column
+  under its own `ColumnBar`: its inline title, the account's photo, a header
+  such as the workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
+  act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an

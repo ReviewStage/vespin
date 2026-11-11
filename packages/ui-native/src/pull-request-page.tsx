@@ -271,7 +271,9 @@ const CANCEL = { LABEL: "Cancel", ROLE: "cancel" } as const;
  * and the act is pressed in the bar or on a card, which this cannot stand
  * on; an alert stands centered whatever presents it. It stands in a host
  * of its own, the size of nothing, so a screen draws it beside whatever it
- * shows and presents it from a press anywhere. A gated ask holds the
+ * shows and presents it from a press anywhere: beside its `Screen`, never
+ * inside that host, where a screen drawing it took no press and no key at
+ * all on the simulators (the Tasks list and Search did). A gated ask holds the
  * system's field in the alert, its act dimmed until the field holds the
  * gate's words exactly.
  */

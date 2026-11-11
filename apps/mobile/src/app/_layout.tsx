@@ -53,8 +53,8 @@ function GuardedScreens() {
   useLiveActivity(signedIn);
   useSystemActivity(signedIn);
   useCrashReportAccount();
-  // Note that Settings opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs, and as the modal sheet in a compact one.
-  const settingsPresentation =
+  // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
+  const sheetPresentation =
     useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? "formSheet" : "modal";
   return (
     <>
@@ -66,17 +66,23 @@ function GuardedScreens() {
           {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
           <Stack.Screen
             name="settings"
-            options={{ presentation: settingsPresentation, title: "Settings" }}
+            options={{ presentation: sheetPresentation, title: "Settings" }}
           />
-          <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
+          <Stack.Screen
+            name="start-task"
+            options={{ presentation: sheetPresentation, title: "New task" }}
+          />
           <Stack.Screen
             name="start-agent"
-            options={{ presentation: "modal", title: "New agent" }}
+            options={{ presentation: sheetPresentation, title: "New agent" }}
           />
-          <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Options" }} />
+          <Stack.Screen
+            name="agent-model"
+            options={{ presentation: sheetPresentation, title: "Options" }}
+          />
           <Stack.Screen
             name="new-workspace"
-            options={{ presentation: "modal", title: "New workspace" }}
+            options={{ presentation: sheetPresentation, title: "New workspace" }}
           />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn && !updateNeeded}>

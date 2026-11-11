@@ -33,7 +33,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { type RowAction, RowFrame, RowHead, rowPlacement } from "./list-row.js";
+import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { AgentTile, FailedMark, TaskStatusMark, ToneGlyph, WorkingMark } from "./marks.js";
 import { PageHeader } from "./page-header.js";
@@ -169,7 +169,10 @@ type AgentRowProps = {
         readonly onPress: () => void;
       }
     | undefined;
-  readonly trailingActions?: readonly RowAction[] | undefined;
+  /** What a swipe from the trailing edge reveals, such as Stop or Archive, the first of it on a full swipe. */
+  readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** What its long press lifts over its menu (`AgentPreview`). */
+  readonly preview?: ReactElement | undefined;
 };
 
 /** An agent's pull request in its line: its state's glyph and its number, pressed to open it. */
@@ -262,7 +265,9 @@ export function AgentRow(props: AgentRowProps) {
       )}
     </VStack>
   );
-  return <RowFrame id={id} row={row} trailingActions={props.trailingActions} />;
+  return (
+    <RowFrame id={id} row={row} trailingActions={props.trailingActions} preview={props.preview} />
+  );
 }
 
 type RelationRowProps = {
