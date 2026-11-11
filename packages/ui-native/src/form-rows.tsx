@@ -5,10 +5,13 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
+  contentShape,
   font,
+  frame,
   lineLimit,
   listRowBackground,
   pickerStyle,
+  shapes,
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -73,8 +76,10 @@ type AttachRowProps = {
 /**
  * The pictures a sheet sends with its words, as a row under them: the +, as
  * a composer's field leads with it, then each picture attached as the
- * composer's head draws it, a capsule taken off on a press. Pictures
- * dropped on the row, on an iPad, are attached as the + attaches them.
+ * composer's head draws it, a capsule taken off on a press. While nothing
+ * is attached, the + takes a tap across the whole row, since the row is
+ * heard as Add picture from edge to edge. Pictures dropped on the row, on
+ * an iPad, are attached as the + attaches them.
  */
 export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }: AttachRowProps) {
   const colors = useColors();
@@ -95,7 +100,19 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
           ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ]}
       >
-        <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image
+          systemName="plus"
+          size={MARK_SIZE.LEAD + 2}
+          color={colors.TEXT_MUTED}
+          modifiers={
+            pictures.length === 0
+              ? [
+                  frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+                  contentShape(shapes.rectangle()),
+                ]
+              : []
+          }
+        />
       </Button>
       <AttachedPictures pictures={pictures} onDetach={onDetach} />
     </HStack>

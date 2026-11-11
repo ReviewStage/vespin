@@ -83,8 +83,9 @@ appId: dev.vespin.ios
 # A picture attaches through the sheet's +, which opens the system's photo
 # picker on the library `media/invite-bug.png` was added to. Note that the
 # picker's grid names its photos differently by iOS version, so it is tried
-# by each name, as Maestro's own gallery recipe does; and that a sheet with
-# a picture and no words keeps it as a draft too.
+# by each name, as Maestro's own gallery recipe does, and confirms with Add,
+# or Done as iOS 27.2 names it; and that a sheet with a picture and no words
+# keeps it as a draft too.
 - launchApp:
     arguments:
       fixture: inbox
@@ -98,6 +99,9 @@ appId: dev.vespin.ios
 - takeScreenshot: new-task-add
 - tapOn:
     id: "new-task-attach"
+- extendedWaitUntil:
+    visible: "Select up to .*"
+    timeout: 10000
 - waitForAnimationToEnd
 - takeScreenshot: new-task-picker
 - tapOn:
@@ -108,7 +112,7 @@ appId: dev.vespin.ios
     text: "Photo, .*"
     index: 0
     optional: true
-- tapOn: "Add"
+- tapOn: "Add|Done"
 - extendedWaitUntil:
     visible: "Picture 1"
     timeout: 5000
