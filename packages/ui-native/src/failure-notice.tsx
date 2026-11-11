@@ -2,6 +2,7 @@
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
+  accessibilityElement,
   accessibilityIdentifier,
   buttonStyle,
   fixedSize,
@@ -111,6 +112,8 @@ function NoticeBody({
             shape: "roundedRectangle",
             cornerRadius: BAR_RADIUS,
           }),
+          // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
+          accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
         ]}
       >
