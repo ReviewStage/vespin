@@ -36,8 +36,9 @@ builds a control of its own.
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass sliding down from the top with
   the refusal's words and Try again, said aloud by VoiceOver, faded rather
-  than slid where the reader reduces motion, standing in a window of its own
-  over sheets, and said once for a stretch offline, `failure-notice-model.ts`),
+  than slid where the reader reduces motion, standing over the app's root
+  view (not a `FullWindowOverlay`, whose window never drew on iOS 27.2), and
+  said once for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's

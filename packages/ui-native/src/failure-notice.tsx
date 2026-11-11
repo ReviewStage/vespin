@@ -24,7 +24,6 @@ import {
 } from "react";
 import { AccessibilityInfo, Animated, PanResponder, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FullWindowOverlay } from "react-native-screens";
 import { useReduceMotion } from "./accessibility.js";
 import {
   NO_NOTICE,
@@ -148,10 +147,11 @@ function NoticeBody({
 /**
  * The banner: slides down under the status bar as a notice arrives, or
  * fades in where the reader reduces motion, stands until its time is up,
- * a swipe up, or Try again, and slides away. Note that it stands in a
- * window of its own (`FullWindowOverlay`), so it draws over a sheet as
- * well as the tabs, as the system's banners do, and passes every touch
- * outside it through to the screen under it.
+ * a swipe up, or Try again, and slides away. Note that it stands over the
+ * app's root view, above the tabs, and passes every touch outside it
+ * through to the screen under it; it does not stand in a window of its own
+ * (`FullWindowOverlay`), because on iOS 27.2 that window never drew, so no
+ * notice showed at all. A sheet open over the root covers it.
  */
 function NoticeBanner({
   notice,
@@ -235,18 +235,16 @@ function NoticeBanner({
         ],
       };
   return (
-    <FullWindowOverlay>
-      <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
-        <Animated.View
-          style={[styles.lane, arriving]}
-          pointerEvents="box-none"
-          accessibilityLiveRegion="polite"
-          {...swipe.panHandlers}
-        >
-          <NoticeBody notice={drawn} onRetry={retry} />
-        </Animated.View>
-      </SafeAreaView>
-    </FullWindowOverlay>
+    <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
+      <Animated.View
+        style={[styles.lane, arriving]}
+        pointerEvents="box-none"
+        accessibilityLiveRegion="polite"
+        {...swipe.panHandlers}
+      >
+        <NoticeBody notice={drawn} onRetry={retry} />
+      </Animated.View>
+    </SafeAreaView>
   );
 }
 
