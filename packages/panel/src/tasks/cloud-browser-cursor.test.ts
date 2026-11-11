@@ -13,8 +13,7 @@ import { CloudBrowserPane } from "./cloud-browser-pane.js";
 
 /**
  * The agent's pointer over a cloud Browser tab's live view: drawn at the
- * agent's point scaled onto the drawn page, out of the recording and the
- * pointer's way; hidden while a member drives the tab, faded once the agent
+ * agent's point scaled onto the drawn page, out of the pointer's way; hidden while a member drives the tab, faded once the agent
  * has stood idle, and held still where motion is reduced. A synthetic task
  * and tab throughout, the live view over a fake door, the clock pinned, and
  * the pane's body 640 by 600 pixels, which fits a 1280 by 800 page at half
@@ -121,7 +120,7 @@ function pointer(): HTMLElement | null {
   return document.querySelector<HTMLElement>(".cloud-browser-cursor");
 }
 
-test("the agent's pointer stands at its point scaled onto the drawn page, out of the recording and the pointer's way, and moves with the agent", async () => {
+test("the agent's pointer stands at its point scaled onto the drawn page, out of the pointer's way, and moves with the agent", async () => {
   const { redraw } = await paneOf(CLICKED);
   const drawn = pointer();
   assert.ok(drawn, "the pointer is drawn over the page");
@@ -129,7 +128,6 @@ test("the agent's pointer stands at its point scaled onto the drawn page, out of
   assert.equal(drawn.style.getPropertyValue("--cloud-browser-cursor-y"), "150px");
   assert.ok(drawn.hasAttribute("data-shown"), "shown while the agent is active");
   assert.equal(drawn.hasAttribute("data-flip-x") || drawn.hasAttribute("data-flip-y"), false);
-  assert.ok(drawn.classList.contains("ph-no-capture"), "left out of the recording");
   assert.equal(drawn.getAttribute("aria-hidden"), "true");
   assert.equal(drawn.querySelector("canvas"), null, "never part of the frame");
   assert.ok(drawn.querySelector(".cloud-browser-cursor-ripple"), "a click ripples at its point");

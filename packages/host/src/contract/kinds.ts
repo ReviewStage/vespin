@@ -3,9 +3,9 @@
  *
  * Kept free of every import, oRPC and every schema among them, so `acts.ts`
  * can spell these kinds in `ACT_KIND` without resolving the contract behind
- * them, and so the lint rule `anti-slop/no-follow-outside-host-read` can
- * load this file as it stands to read `PORT_ACT_USE`: that is why each
- * kind's use is declared here rather than on its procedure, and why a
+ * them, and so `PORT_ACT_USE` can be read from this file as it stands:
+ * that is why each kind's use is declared here rather than on its
+ * procedure, and why a
  * declared act (`declared-act.ts`) reads its kind and use from here by its
  * name rather than restating them. A kind here is the key of its procedure
  * in `actContract`, so the panel's act door calls a kind by its own name.
@@ -872,8 +872,7 @@ export const PORT_ACT_KIND = {
 export type PortActKind = (typeof PORT_ACT_KIND)[keyof typeof PORT_ACT_KIND];
 
 /**
- * What an act kind does with what it answers, which the panel's lint rule
- * `anti-slop/no-follow-outside-host-read` reads: a READ answers data that
+ * What an act kind does with what it answers: a READ answers data that
  * can change while a surface shows it, so a surface reads it only through
  * a live read's query, over what the host holds; a FETCH answers what cannot
  * change for what was asked, such as content read once, a lookup as a link

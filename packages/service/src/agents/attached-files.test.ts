@@ -3,6 +3,7 @@ import { keptImageOf, lineParts, receivedPartsOf } from "@repo/database/models/a
 import { COALESCED_LINE_SEPARATOR } from "@repo/database/models/message-reads";
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import { PICTURE_OMISSION } from "@repo/features/conversation-picture-wire";
+import { Match } from "effect";
 import { test } from "vitest";
 import { type MessageReceivedPart, receivedMessage, turnContent } from "./attached-files.js";
 
@@ -40,11 +41,14 @@ test("the harness is handed the words, then the text files, then the images and 
 
   assert.deepEqual(
     handed.map((part) =>
-      part.type === "text"
-        ? (/Attached file: (\S+)/u.exec(part.text)?.[1] ?? part.text)
-        : part.type === "file"
-          ? part.filename
-          : part.type,
+      Match.value(part).pipe(
+        Match.when(
+          { type: "text" },
+          (text) => /Attached file: (\S+)/u.exec(text.text)?.[1] ?? text.text,
+        ),
+        Match.when({ type: "file" }, (file) => file.filename),
+        Match.orElse((other) => other.type),
+      ),
     ),
     ["Match these.", "brief.txt", "note.txt", "brief.png", "note.png"],
   );
@@ -54,11 +58,14 @@ test("the harness is handed the words, then the text files, then the images and 
 function handedOrder(handed: ReturnType<typeof turnContent>): string[] {
   assert.ok(Array.isArray(handed));
   return handed.map((part) =>
-    part.type === "text"
-      ? (/Attached file: (\S+)/u.exec(part.text)?.[1] ?? part.text)
-      : part.type === "file"
-        ? (part.filename ?? part.mediaType)
-        : part.type,
+    Match.value(part).pipe(
+      Match.when(
+        { type: "text" },
+        (text) => /Attached file: (\S+)/u.exec(text.text)?.[1] ?? text.text,
+      ),
+      Match.when({ type: "file" }, (file) => file.filename ?? file.mediaType),
+      Match.orElse((other) => other.type),
+    ),
   );
 }
 

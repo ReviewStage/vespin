@@ -12,8 +12,8 @@ import { type ActUse, PORT_ACT_KIND, PORT_ACT_USE } from "./kinds.js";
  * directly from a composer's handler table (`host-acts.ts`), relayed by
  * `act-port/declared-acts.ts`, with no Gateway method between them. Its
  * kind and use are read from `kinds.ts` by the name a call site spells,
- * never restated, so `PORT_ACT_USE` stays the one place the lint rule
- * reads a kind's use from. An act that does work of its own at the window,
+ * never restated, so `PORT_ACT_USE` stays the one place a kind's use is
+ * read from. An act that does work of its own at the window,
  * a follow's hold, a dialog, an address opened, keeps a procedure written
  * by hand, built on its declaration (`byHand`), which calls the composer's
  * handler itself and does its own work around it. A live read is not a plain act: its variant

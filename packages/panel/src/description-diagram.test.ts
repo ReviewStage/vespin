@@ -177,14 +177,13 @@ function Version({ previous, now }: { previous: string; now: string }): ReactNod
   });
 }
 
-test("a Mermaid fence on a plan's page draws as the picture the diagram bundle answered, out of the screen recording", async () => {
+test("a Mermaid fence on a plan's page draws as the picture the diagram bundle answered", async () => {
   const code = "sequenceDiagram\n  Admin->>Service: Invite";
 
   const page = await drawn(createElement(DescriptionBody, { task: taskWith(mermaidFence(code)) }));
 
   assert.deepEqual(pictures(page), [pictureOf(code, DIAGRAM_APPEARANCE.LIGHT)]);
   assert.equal(page.querySelector(".description-diagram pre"), null);
-  assert.ok(page.querySelector(".description-diagram")?.classList.contains("ph-no-capture"));
 });
 
 test("a diagram's picture is named for its title, or its first line where it has none", async () => {

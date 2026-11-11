@@ -3091,7 +3091,7 @@ test("a schedule Vespin cannot read is not created, and the refusal is announced
   );
 });
 
-test("a webhook made in the window shows its secret once, with Copy, left out of the screen recording and the app state, and gone once Done is pressed", async () => {
+test("a webhook made in the window shows its secret once, with Copy kept out of the app state, and gone once Done is pressed", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
 
@@ -3103,7 +3103,6 @@ test("a webhook made in the window shows its secret once, with Copy, left out of
 
   const field = copyFieldValue(page, "secret");
   assert.equal(field?.textContent, MADE_SECRET);
-  assert.ok(field?.closest(".ph-no-capture"), "the secret is left out of the screen recording");
   assert.match(page.textContent ?? "", /You won't be able to see this again/u);
   assert.ok(
     !JSON.stringify(appStateIn(testQueryClientNow()) ?? {}).includes(MADE_SECRET),

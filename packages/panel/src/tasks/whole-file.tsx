@@ -372,7 +372,7 @@ export function WholeFile({
     );
   }
   return (
-    <Fill className="whole-file ph-no-capture relative">
+    <Fill className="whole-file relative">
       <ScrollArea ref={host}>{null}</ScrollArea>
       {!drawn ? (
         <div className="absolute inset-0 flex">

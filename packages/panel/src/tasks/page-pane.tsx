@@ -133,9 +133,9 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * but a page: the frame hands its press to the pane
  * (`@repo/features/page-link`), which opens it as any link of the window
  * opens (`useOpenLink`), a site in the browser and a link of ours in the
- * window. Reload draws the page again. What the page draws is the
- * task's, so the frame is left out of the screen recording (`ph-no-capture`);
- * the comment pins and cards over it record masked.
+ * window. Reload draws the page again. The frame is of an
+ * opaque origin, so the screen recording never reads the page; the comment
+ * pins and cards over it record masked.
  *
  * The bar's code toggle shows the version's HTML in the frame's place, as a
  * File tab draws a file (`file-tab.tsx`): the same numbered, colored lines
@@ -484,7 +484,7 @@ function PageFrame({
     <div ref={room} className="page-view-room relative flex min-h-0 flex-1">
       <iframe
         ref={frame}
-        className={cn("ph-no-capture block min-h-0 w-full flex-1 border-0", !loaded && "invisible")}
+        className={cn("block min-h-0 w-full flex-1 border-0", !loaded && "invisible")}
         title={title}
         src={src}
         sandbox={PAGE_SANDBOX}

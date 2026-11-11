@@ -49,14 +49,22 @@ type PrintedPart =
   | { readonly tool: string; readonly subject: string | undefined; readonly settled: boolean }
   | undefined;
 
-function stringField(part: object, key: string): string | undefined {
-  const value: unknown = Reflect.get(part, key);
+/** A stored part, or a call's input, as a terminal reads it: its fields by name, each still to be read. */
+type PartFields = Readonly<Record<string, unknown>>;
+
+/** Whether `value` is an object whose fields can be read by name, rather than a primitive or nothing. */
+function isPartFields(value: unknown): value is PartFields {
+  return typeof value === "object" && value !== null;
+}
+
+function stringField(part: PartFields, key: string): string | undefined {
+  const value = part[key];
   return typeof value === "string" ? value : undefined;
 }
 
 /** What a call acted on, as one short line, from the first input key that names it. */
 function subjectOf(input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) return undefined;
+  if (!isPartFields(input)) return undefined;
   for (const key of SUBJECT_KEYS) {
     const value = stringField(input, key)?.trim().split("\n")[0];
     if (value !== undefined && value.length > 0) {
@@ -67,7 +75,7 @@ function subjectOf(input: unknown): string | undefined {
 }
 
 /** One stored part as a terminal reads it. */
-function printedPart(part: object): PrintedPart {
+function printedPart(part: PartFields): PrintedPart {
   const type = stringField(part, "type") ?? "";
   const state = stringField(part, "state");
   if (type === TEXT_PART.TYPE) {
@@ -82,7 +90,7 @@ function printedPart(part: object): PrintedPart {
   if (tool === undefined) return undefined;
   return {
     tool,
-    subject: subjectOf(Reflect.get(part, "input")),
+    subject: subjectOf(part.input),
     settled: state !== TOOL_PART_STATE.INPUT_STREAMING,
   };
 }
@@ -108,7 +116,7 @@ export function transcriptPartLines(
   let index = printed;
   for (; index < message.parts.length; index += 1) {
     const stored = message.parts[index];
-    const part = typeof stored === "object" && stored !== null ? printedPart(stored) : undefined;
+    const part = isPartFields(stored) ? printedPart(stored) : undefined;
     if (part === undefined) continue;
     if (!part.settled && !ended) break;
     if ("words" in part) {
@@ -133,8 +141,7 @@ export function transcriptCallPlace(
 ): TranscriptCallPlace | undefined {
   for (const message of messages) {
     const index = message.parts.findIndex(
-      (part) =>
-        typeof part === "object" && part !== null && stringField(part, "toolCallId") === callId,
+      (part) => isPartFields(part) && stringField(part, "toolCallId") === callId,
     );
     if (index >= 0) return { messageId: message.id, index };
   }
@@ -148,17 +155,17 @@ function callWords(value: unknown): string {
 
 /** One call read whole as a terminal prints it: its tool and where it stands, its input, and its output or its error, each whole. */
 export function wholeCallLines(stored: unknown): readonly string[] {
-  const part = typeof stored === "object" && stored !== null ? stored : {};
+  const part = isPartFields(stored) ? stored : {};
   const printed = printedPart(part);
   const tool = printed !== undefined && "tool" in printed ? printed.tool : "call";
   const state = stringField(part, "state");
   const error = stringField(part, "errorText");
-  const output: unknown = Reflect.get(part, "output");
+  const output = part.output;
   return [
     `${tool}${state === undefined ? "" : ` (${state})`}`,
     "",
     "Input:",
-    callWords(Reflect.get(part, "input")),
+    callWords(part.input),
     ...(state === TOOL_PART_STATE.OUTPUT_ERROR
       ? ["", "Error:", error ?? ""]
       : output === undefined

@@ -5,7 +5,7 @@
  * both tools where none is named. For each tool it picks the newest stable
  * release npm has held for at least `MIN_AGE_HOURS` (or the version named),
  * and where that is newer than the pin, it rewrites every place the release
- * lives together, as `tools/anti-slop/guards/agent-pins.ts` holds them:
+ * lives together:
  * `src/pins.ts`'s sandbox pin and `HOST_CLI_VERSION`, each host pin's
  * address, size, SHA-256, and file digests, the image's `ARG`s
  * (`apps/web/agent-image/Dockerfile`), and, for Claude, this package's SDK

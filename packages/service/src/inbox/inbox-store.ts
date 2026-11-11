@@ -1107,12 +1107,22 @@ const ScopeSchema = Schema.Struct({
   userId: Schema.String,
   scope: Schema.Literals(Object.values(INBOX_SCOPE)),
   id: Schema.String,
+  /** The one workspace the read keeps to, where a coding agent reads beyond its own threads; none for a member's read, which `itemVisibleTo` bounds. */
+  workspaceId: Schema.optionalKey(Schema.String),
 });
 
 type InboxScope = typeof ScopeSchema.Type;
 
-/** The rows a scope names: the task's, the agent's, or the workspace's where the account may read them (`itemVisibleTo`), or the agent's own under the account that started it, which its tools read as it acts as itself. */
+/** The rows a scope names, kept to its workspace where it names one. */
 function inScope(scope: InboxScope) {
+  const named = scopeRows(scope);
+  return scope.workspaceId === undefined
+    ? named
+    : and(named, eq(inboxItem.organizationId, scope.workspaceId));
+}
+
+/** The rows a scope names: the task's, the agent's, or the workspace's where the account may read them (`itemVisibleTo`), or the agent's own under the account that started it, which its tools read as it acts as itself. */
+function scopeRows(scope: InboxScope) {
   switch (scope.scope) {
     case INBOX_SCOPE.TASK:
       return and(eq(inboxItem.taskId, scope.id), itemVisibleTo(scope.userId));
@@ -2629,6 +2639,27 @@ export function memberAgentInboxItems(
     { userId, scope: INBOX_SCOPE.AGENT_OF_WORKSPACE, id: agentId },
     INBOX_BOUNDS.MAX_ITEMS_READ,
     userId,
+  );
+}
+
+/**
+ * The threads a coding agent reads beyond its own: one other agent's, or
+ * one task's, of the agent's own workspace alone, as the member it acts for
+ * may read them (`itemVisibleTo`), every open one and then the latest
+ * settled as many as its own read is told (`MAX_SETTLED_TOLD`). Note that
+ * it is handed no member's key, since the reader is no window that sent one.
+ */
+export function agentReachedInboxItems(
+  reader: { readonly userId: string; readonly workspaceId: string },
+  of: { readonly agentId: string } | { readonly taskId: string },
+): InboxStoreEffect<readonly InboxItem[]> {
+  const named =
+    "agentId" in of
+      ? { scope: INBOX_SCOPE.AGENT_OF_WORKSPACE, id: of.agentId }
+      : { scope: INBOX_SCOPE.TASK, id: of.taskId };
+  return scopeItems(
+    { userId: reader.userId, workspaceId: reader.workspaceId, ...named },
+    INBOX_BOUNDS.MAX_SETTLED_TOLD,
   );
 }
 

@@ -45,15 +45,11 @@ export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch
   const { inboxTasks } = useListedInbox(tasks);
   const standing = tasks.listed.tasks;
   // Note that nothing is followed while no search asks.
-  const holdings = useMemo(
-    () =>
-      asked
-        ? taskHoldings(
-            inboxTasks.filter((holding) => standing.some((task) => task.id === holding.taskId)),
-          )
-        : NO_HOLDINGS,
-    [asked, inboxTasks, standing],
-  );
+  const holdings = useMemo(() => {
+    if (!asked) return NO_HOLDINGS;
+    const standingIds = new Set(standing.map((task) => task.id));
+    return taskHoldings(inboxTasks.filter((holding) => standingIds.has(holding.taskId)));
+  }, [asked, inboxTasks, standing]);
   const read = useHolderInboxItems(holdings);
   const items = useMemo(() => {
     const groups = asked ? inboxGroups(read.items, { tasks: inboxTasks, listed: standing }) : [];

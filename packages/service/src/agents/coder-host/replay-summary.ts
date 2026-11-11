@@ -419,7 +419,8 @@ export function withinWindow(
     if (held.kept.length > 0) {
       const room = Math.max(0, stepsBytes(held.kept) - over * BYTES_PER_TOKEN);
       const fewer = newestStepsWithin(held.kept, room);
-      held = { ...held, kept: fewer.length < held.kept.length ? fewer : held.kept.slice(1) };
+      const kept = fewer.length < held.kept.length ? fewer : held.kept.slice(1);
+      held = { kept, summary: held.summary };
     } else if (held.summary !== undefined) {
       held = { kept: held.kept, summary: undefined };
     } else {

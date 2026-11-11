@@ -218,7 +218,7 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * moment in the shared tooltip, and an agent this window does not list, one
  * started on another Mac, still leads with a glyph. The pane shows words an
  * agent wrote and pictures of what it rendered: the recording masks its
- * words and leaves its pictures out (`ph-no-capture`), and the viewer, drawn over the
+ * words and the pictures' addresses, and the viewer, drawn over the
  * window outside it, is out of it on its own.
  *
  * Words selected anywhere in the thread but the draft reply stand Reply

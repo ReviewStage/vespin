@@ -9,7 +9,11 @@ import { menuBarDrawer } from "./app-menu";
 import { bootstrapDesktop } from "./bootstrap";
 import { offerMoveToApplications } from "./move-to-applications";
 import { composeDesktop, DesktopTag } from "./services/compose-desktop";
-import { initializeCrashReporting, mainSentry } from "./services/telemetry-service";
+import {
+  initializeCrashReporting,
+  mainSentry,
+  reportThisMacToSentry,
+} from "./services/telemetry-service";
 import { PAGE_SCHEME_PRIVILEGES } from "./window/page-protocol";
 
 /**
@@ -66,7 +70,10 @@ const config = bootstrapDesktop({
   argv: process.argv,
   environment: process.env,
   resourceDirectory: __dirname,
-  report: reportToStderr,
+  report: (message) => {
+    reportToStderr(message);
+    reportThisMacToSentry(message);
+  },
   openExternal: (url) => shell.openExternal(url),
   quit: () => app.quit(),
   showMenuBar: menuBarDrawer({ appName: app.name, packaged: app.isPackaged }, (template) =>

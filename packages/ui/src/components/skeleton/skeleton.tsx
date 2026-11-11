@@ -19,8 +19,7 @@ import { SkeletonBlock } from "../../shadcn/skeleton.js";
  *
  * Only a component named `*Skeleton` draws these, through the components
  * the loaded surface draws with, so the blocks stand in the surface's own
- * boxes rather than a copy of them (`anti-slop/skeleton-through-components`,
- * root AGENTS.md's Layout). A block is shadcn/ui's skeleton
+ * boxes rather than a copy of them (`packages/ui/README.md`'s Skeletons). A block is shadcn/ui's skeleton
  * (`../../shadcn/skeleton.tsx`) drawn in Tailwind utilities over the theme,
  * each shape's box picked here; its breath alone is a rule of its own
  * (`skeleton.css`).

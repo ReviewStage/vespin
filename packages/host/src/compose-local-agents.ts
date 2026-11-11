@@ -37,6 +37,7 @@ import {
 } from "@repo/features/device-agent-wire";
 import { cappedExponential } from "@repo/wire/effect";
 import {
+  Clock,
   Config,
   Duration,
   Effect,
@@ -74,6 +75,7 @@ import {
   keepOwnedAgent,
   keepRunnerGroup,
 } from "./local-agent-state.js";
+import { keepSetupStatus, SETUP_STEP, type SetupStep } from "./setup-status.js";
 
 /**
  * compose-local-agents.ts -- runs on this device the coding agents the account starts on it, each straight on the box in a folder of its own: their runners started, fed, and stopped as the service's lines say, and their tools' reads and commands answered, for as long as its gate stands (`LocalAgentsDependencies.switchedOn`: open but while the service refuses the device, `daemon/host-standing.ts`).
@@ -460,6 +462,16 @@ export function composeLocalAgents(
      * as failed still, until one lands. `registered` registers the
      * device with where its setup stands.
      */
+    /** Where this machine's setup stands, kept in its state for `vespin-host status` and the install script. */
+    const keptStatus = (step: SetupStep, failure?: string) =>
+      Effect.flatMap(Clock.currentTimeMillis, (at) =>
+        keepSetupStatus(kernel.stateRoot, {
+          step,
+          at,
+          ...(failure === undefined ? undefined : { failure }),
+        }),
+      ).pipe(Effect.provideContext(services));
+
     const readyForOpening = (
       registered: (
         setup: DeviceSetupRegister,
@@ -477,6 +489,9 @@ export function composeLocalAgents(
                   ? { setup: DEVICE_SETUP.PREPARING }
                   : { setup: DEVICE_SETUP.FAILED, setupFailure: failure };
               const preparing = asked(registered(standing)).pipe(
+                Effect.tap(() =>
+                  failure === undefined ? keptStatus(SETUP_STEP.SETTING_UP) : Effect.void,
+                ),
                 Effect.andThen(Effect.forkIn(presence(), scope)),
                 Effect.asVoid,
               );
@@ -486,6 +501,7 @@ export function composeLocalAgents(
           if (Result.isSuccess(ready)) return true;
           report(`the local agents' setup failed: ${ready.failure.detail}`);
           failure = ready.failure.detail;
+          yield* keptStatus(SETUP_STEP.FAILED, failure);
           yield* asked(registered({ setup: DEVICE_SETUP.FAILED, setupFailure: failure }));
           // Note that the device stays listed with why while it waits, and the wait ends early as the gate shuts.
           const waited = yield* Effect.race(
@@ -1367,6 +1383,8 @@ export function composeLocalAgents(
         if (!(yield* readyForOpening(registered))) return true;
         const shellVariables = yield* shellEnvironment;
         if (!(yield* asked(registered({})))) return false;
+        // Note that the machine says it is ready only once the service took it as ready.
+        yield* keptStatus(SETUP_STEP.READY);
         yield* Effect.scoped(follow(folder, shellVariables));
         return true;
       });

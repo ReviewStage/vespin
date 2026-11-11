@@ -73,7 +73,6 @@ test("a Mermaid code block stays code, its diagram drawn under it, and a block i
   ]);
   const preview = host.querySelector(".description-diagram-preview");
   assert.equal(preview?.getAttribute("contenteditable"), "false");
-  assert.ok(preview?.classList.contains("ph-no-capture"));
   assert.equal(handle.markdown(), TEXT);
 });
 

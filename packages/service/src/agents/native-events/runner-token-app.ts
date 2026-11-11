@@ -52,7 +52,7 @@ import {
   hostedRefusing,
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
-import { makeRateBrake, type RateBrake } from "../../http/rate-brake.js";
+import { createRateBrake, type RateBrake } from "../../http/rate-brake.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { CODEX_TOKEN_MARGIN } from "../coder-host/codex-sessions.js";
 import { admitRunnerBearer, presentedBearer, presentedLaunch } from "../workspace-mcp/bearer.js";
@@ -147,7 +147,7 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
 export function runnerTokenApp(): WebRoutes<
   DatabaseServices | HostedEnvironment | HttpClient.HttpClient
 > {
-  const endpoint = runnerTokenEndpoint(makeRateBrake(RUNNER_TOKEN_BRAKE));
+  const endpoint = runnerTokenEndpoint(createRateBrake(RUNNER_TOKEN_BRAKE));
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, RUNNER_TOKEN_PATH, hostedRefusing(endpoint)),
     hostedNotFoundRoute,

@@ -36,13 +36,15 @@ export class WorkspacePlugin extends Context.Service<WorkspacePlugin, WorkspaceS
 export function pluginWriteOrUnavailable<A, R>(
   effect: Effect.Effect<A, StoreFailure | Cause.UnknownError, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
-  return Effect.catch(effect, (failure) =>
-    failure._tag === "UnknownError"
-      ? Effect.andThen(
-          Effect.logWarning("Workspace not made: UnknownError"),
-          Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
-        )
-      : hostedStoreOrUnavailable(Effect.fail(failure)),
+  return Effect.catchTag(
+    effect,
+    "UnknownError",
+    () =>
+      Effect.andThen(
+        Effect.logWarning("Workspace not made: UnknownError"),
+        Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
+      ),
+    (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
   );
 }
 

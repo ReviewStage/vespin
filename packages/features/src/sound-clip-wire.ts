@@ -1,6 +1,7 @@
 import { Schema as EffectSchema, Result } from "effect";
 import { Base64 } from "effect/encoding";
 import { AUDIO_TYPE, type AudioType, sniffAudioType } from "./audio-signature.js";
+import { MAX_REQUEST_DATA_URL_BYTES } from "./request-body-limit.js";
 import { wireUuidSchema } from "./service-wire.js";
 
 /**
@@ -54,7 +55,7 @@ export const SOUND_CLIP_BOUNDS = {
    * choice of ours: no bound is set on how long a clip plays, or how many an
    * account keeps.
    */
-  MAX_BYTES: 3_300_000,
+  MAX_BYTES: MAX_REQUEST_DATA_URL_BYTES,
   /** The most characters a sound's name holds, as other names are bounded. */
   MAX_NAME_CHARS: 64,
 } as const;

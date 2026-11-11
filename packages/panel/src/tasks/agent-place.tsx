@@ -33,7 +33,7 @@ import { machineName, useThisMac } from "../machine-name.js";
 import { useOpenSettings } from "../open-settings.js";
 import { Picker } from "../settings/picker-row.js";
 import type { PlaceMove } from "./move-agent.js";
-import { CLOUD_ROW, DeviceGlyph, rowRequest, runsOnRows } from "./runs-on.js";
+import { CLOUD_ROW, DeviceGlyph, DeviceStandingGlyph, rowRequest, runsOnRows } from "./runs-on.js";
 import {
   SANDBOX_STATE_WORDS,
   SandboxStateGlyph,
@@ -65,7 +65,9 @@ import {
  * judged from how long ago the service says it last beat, the label adds
  * that it is offline ("Charles's MacBook Pro · Offline"), as the Runs on
  * chips do, its glyph in the attention tone, since the agent's messages
- * wait for it to come back. The beat comes from the window's shared presence
+ * wait for it to come back. The glyph wears the device's standing dot, as
+ * its row in the menu of places does (`runs-on.tsx`'s
+ * `DeviceStandingGlyph`), so the chip and the row it checks read alike. The beat comes from the window's shared presence
  * read (`device-presence.ts`), so a device that keeps beating never reads
  * offline for want of a read; where that read fails and the beat held is
  * old, the label says it cannot check rather than that the device is away.
@@ -361,11 +363,19 @@ function MacChip({
     standing === DEVICE_STANDING.ONLINE ||
     standing === DEVICE_STANDING.CHECKING;
   const name = machineName({ deviceId: mac.deviceId, name: mac.name }, [], thisMac);
+  // Note that the platform is read off the move's list, because the agent's own record names none.
+  const listed = move?.devices.find((device) => device.deviceId === mac.deviceId);
   return (
     <PlaceChip
       here={mac.deviceId}
       move={move}
-      glyph={<DeviceGlyph device={undefined} />}
+      glyph={
+        standing === undefined ? (
+          <DeviceGlyph device={listed} />
+        ) : (
+          <DeviceStandingGlyph device={listed} standing={standing} hinted={false} />
+        )
+      }
       words={macWords(name, standing)}
       sub={standing === DEVICE_STANDING.ONLINE ? RUNS_ON_WORDS.ONLINE : undefined}
       note={DEVICE_NOTE}

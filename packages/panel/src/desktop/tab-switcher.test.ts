@@ -34,8 +34,7 @@ import { TabSwitcher } from "./tab-switcher.js";
  * visit and draws nothing; a hold draws the cards, the screen here first and
  * dimmed, each named as Back's list names its step and wearing its place's
  * glyph; ⇧ steps back, Escape goes nowhere, a card pressed is gone to, and a
- * still of the work area left is kept for its card, out of the session
- * recording. The cards stand in a modal dialog that holds focus while they
+ * still of the work area left is kept for its card. The cards stand in a modal dialog that holds focus while they
  * show and hands it back to where it was as they go, fading out on the exit
  * token, or at once where motion is held. A browser keeps ⌃Tab for its own
  * tabs, so a window that is no desktop app leaves it.
@@ -338,7 +337,7 @@ test("a card pressed while the cards show is gone to", async () => {
   assert.equal(document.querySelector(DIALOG), null);
 });
 
-test("the screen left is taken as a still of the work area for its card, drawn as it lands while the cards show, and the session recording leaves it out", async () => {
+test("the screen left is taken as a still of the work area for its card, drawn as it lands while the cards show", async () => {
   handCapabilities(DESKTOP_CAPABILITIES);
   const taken: unknown[] = [];
   let answer: (still: string) => void = () => undefined;
@@ -368,7 +367,6 @@ test("the screen left is taken as a still of the work area for its card, drawn a
 
   assert.deepEqual(taken, [{ x: 240, y: 0, width: 1040, height: 800 }]);
   const preview = cards()[0]?.querySelector(".ui-tab-card-preview");
-  assert.ok(preview?.classList.contains("ph-no-capture"));
   assert.equal(preview?.querySelector("img")?.getAttribute("src"), STILL);
   assert.equal(cards()[1]?.querySelector("img"), null, "a screen with no still wears its glyph");
 });

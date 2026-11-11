@@ -23,9 +23,9 @@ const DIAGRAM_LANGUAGE = "mermaid";
 /** The node a fence opens as. */
 const CODE_BLOCK = "codeBlock";
 
-/** The classes the preview's element wears: the read view's figure, the preview's own place, and out of the screen recording, since a picture of words cannot be masked. */
+/** The classes the preview's element wears: the read view's figure and the preview's own place. */
 const PREVIEW_CLASS =
-  "description-diagram description-diagram-preview ph-no-capture mt-tight-gap mb-block-gap px-card-compact py-list-inset select-none";
+  "description-diagram description-diagram-preview mt-tight-gap mb-block-gap px-card-compact py-list-inset select-none";
 
 /** How the panel draws a block's diagram into an element, answering what takes it down. */
 type DiagramDrawer = (element: HTMLElement, diagram: EditorDiagram) => () => void;

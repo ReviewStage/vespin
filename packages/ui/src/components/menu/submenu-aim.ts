@@ -16,7 +16,7 @@
 
 import { Duration, Effect } from "effect";
 import { useCallback, useEffect, useRef } from "react";
-import { makeWait } from "../../wait.js";
+import { createWait } from "../../wait.js";
 
 /** How long the pointer rests on a row before that row takes it from a submenu, or opens its own: as long as Base UI waits to open a submenu. */
 const AIM_REST = Duration.millis(100);
@@ -43,7 +43,7 @@ interface PutOff {
 }
 
 /** The window's one put-off move: taken once the pointer has rested `AIM_REST`, each new one calling off the last. */
-const aimRest = makeWait();
+const aimRest = createWait();
 
 /** Which side of the line from `a` to `b` the point `p` stands on: its sign. */
 function sideOf(a: Point, b: Point, p: Point): number {

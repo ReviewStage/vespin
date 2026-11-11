@@ -47,13 +47,13 @@ import { useSelectionToolbar } from "./selection-toolbar.js";
  * (`./selection-toolbar.tsx`), which stands aside while a list the box
  * opened stands, as its `aria-expanded` says. The field's
  * look is its own (`.agent-composer-input`, tasks.css), in the body type,
- * and unrecorded (`ph-no-capture`), the same in both boxes. Each key pressed
+ * the same in both boxes. Each key pressed
  * in it is timed to the paint after it, how long and nothing of the key
  * (`../panel-spans.ts`), the same in every box.
  */
 
 /** The editor's class, and the inert field's before it mounts. */
-const FIELD_CLASS = "ph-no-capture agent-composer-input";
+const FIELD_CLASS = "agent-composer-input";
 
 /**
  * The field's room in its card, which sizes the field from one line to its

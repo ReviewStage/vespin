@@ -18,6 +18,15 @@ import path from "node:path";
 import { withoutAccessTokens } from "@repo/features/sentry-breadcrumbs";
 import { app, type BrowserWindow } from "electron";
 
+/** A window opening, as Electron's `app` announces it. */
+type WindowOpened = (event: Electron.Event, window: BrowserWindow) => void;
+
+/** Where windows are announced as they open: Electron's `app`, unless a test stands one in. */
+interface WindowsOpening {
+  on(event: "browser-window-created", listener: WindowOpened): unknown;
+  removeListener(event: "browser-window-created", listener: WindowOpened): unknown;
+}
+
 /** The document a window's page is, by its file's name, such as `index.html`. */
 function documentName(url: string): string {
   return URL.canParse(url) ? path.posix.basename(new URL(url).pathname) : url;
@@ -51,13 +60,15 @@ function reportErrorsOf(
  * stops it, for the windows already open as for those to come. The caller
  * decides the build: a packaged one calls nothing.
  */
-export function reportRendererErrors(report: (line: string) => void): () => void {
+export function reportRendererErrors(
+  report: (line: string) => void,
+  windows: WindowsOpening = app,
+): () => void {
   let reporting = true;
-  const opened = (_event: Electron.Event, window: BrowserWindow) =>
-    reportErrorsOf(window, report, () => reporting);
-  app.on("browser-window-created", opened);
+  const opened: WindowOpened = (_event, window) => reportErrorsOf(window, report, () => reporting);
+  windows.on("browser-window-created", opened);
   return () => {
     reporting = false;
-    app.removeListener("browser-window-created", opened);
+    windows.removeListener("browser-window-created", opened);
   };
 }

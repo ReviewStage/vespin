@@ -19,9 +19,8 @@
  * pointer is theirs then. Reduced motion holds it still: no rock, no bob,
  * no press, and a move jumps.
  *
- * The arrow takes no pointer events, is no part of the frame the canvas
- * draws, and is left out of the screen recording (`ph-no-capture`); a point
- * and a kind are no page content.
+ * The arrow takes no pointer events, and is no part of the frame the
+ * canvas draws; a point and a kind are no page content.
  */
 
 import type { AgentBrowserTabCursor } from "@repo/features/agent-browser-tab-wire";
@@ -126,7 +125,7 @@ export function CloudBrowserCursor({
   };
   return (
     <div
-      className="cloud-browser-cursor ph-no-capture"
+      className="cloud-browser-cursor"
       aria-hidden="true"
       data-shown={shown ? "" : undefined}
       data-still={still ? "" : undefined}

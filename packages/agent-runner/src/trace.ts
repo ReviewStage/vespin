@@ -33,7 +33,7 @@
  */
 
 import * as Sentry from "@sentry/node";
-import { Effect, type Scope } from "effect";
+import { Context, Effect, type Scope } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import type { RunnerHarness, RunnerMessage, RunnerTrace } from "./protocol.js";
@@ -143,16 +143,26 @@ function sentryOptions(
 /** Sentry's Node profiler, imported only for a launch handed a trace. */
 type ProfilingNode = typeof import("@sentry/profiling-node");
 
+/** How the profiler's module is imported: the installed one, or one a test stands in that cannot load. */
+export const ProfilerImport = Context.Reference<() => Promise<ProfilingNode>>(
+  "@repo/agent-runner/ProfilerImport",
+  { defaultValue: () => () => import("@sentry/profiling-node") },
+);
+
 /**
  * Sentry's Node profiler, or none where its module did not load, which says
  * why in the runner's log. Note that the module throws as it is imported
  * where its binary is missing or built for another Node, so the import's
  * failure is the profiler's absence rather than the launch's.
  */
-const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.tryPromise({
-  try: () => import("@sentry/profiling-node"),
-  catch: (cause) => (cause instanceof Error ? cause.message.split("\n", 1)[0] : String(cause)),
-}).pipe(
+const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.flatMap(
+  ProfilerImport,
+  (importProfiler) =>
+    Effect.tryPromise({
+      try: importProfiler,
+      catch: (cause) => (cause instanceof Error ? cause.message.split("\n", 1)[0] : String(cause)),
+    }),
+).pipe(
   Effect.catch((why) =>
     Effect.as(
       Effect.logWarning(`agent-runner: the startup is traced without a profile: ${why}`),

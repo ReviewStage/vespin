@@ -84,7 +84,7 @@ import {
   hostedStoreOrUnavailable,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { makeRateBrake } from "../http/rate-brake.js";
+import { createRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted, keyRingMiddleware } from "../orpc/base.js";
 import {
   checkFastAccess,
@@ -250,8 +250,8 @@ function subscriptionShapeOf(
 
 /** The provider keys' procedures, braked per instance, each to a signed-in caller on a deployment that holds a ring. */
 export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
-  const brake = makeRateBrake(SAVE_BRAKE);
-  const pollBrake = makeRateBrake(DEVICE_POLL_BRAKE);
+  const brake = createRateBrake(SAVE_BRAKE);
+  const pollBrake = createRateBrake(DEVICE_POLL_BRAKE);
   const signingKeys = chatGptSigningKeys();
   const keyed = hosted.account.use(accountMiddleware(seams.resolveUserId)).use(keyRingMiddleware);
   return {

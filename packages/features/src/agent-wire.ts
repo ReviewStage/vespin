@@ -29,6 +29,7 @@ import {
   REACTION,
 } from "./pull-request-write-wire.js";
 import { readMarkSchema } from "./read-mark.js";
+import { MAX_REQUEST_FILES_BYTES } from "./request-body-limit.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { trimmedText } from "./text-schema.js";
 import { TRIGGER_PROVIDER } from "./trigger-catalog.js";
@@ -130,12 +131,12 @@ export const AGENT_BOUNDS = {
   MAX_ATTACHMENT_NAME_CHARS: 255,
   /** The most bytes one image may hold as it travels; the desktop re-encodes a larger one smaller. */
   MAX_IMAGE_BYTES: 1_500_000,
-  /** The most bytes one PDF may hold. */
-  MAX_PDF_BYTES: 3_000_000,
+  /** The most bytes one PDF may hold: as many as the message's files together, since one PDF may be all it carries. */
+  MAX_PDF_BYTES: MAX_REQUEST_FILES_BYTES,
   /** The most bytes one text file may hold: about 25,000 tokens of code, inlined whole for the model. */
   MAX_TEXT_BYTES: 100_000,
-  /** The most bytes every file of one message holds together, which base64 grows by a third and which stays under a function's request body limit. */
-  MAX_ATTACHMENTS_BYTES: 3_000_000,
+  /** The most bytes every file of one message holds together, which base64 grows by a third and which stays under a function's request body limit (`request-body-limit.ts`). */
+  MAX_ATTACHMENTS_BYTES: MAX_REQUEST_FILES_BYTES,
 } as const;
 
 /**

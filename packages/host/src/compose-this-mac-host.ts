@@ -244,8 +244,11 @@ export function composeThisMacHost(
       Effect.map(host.machine, (machine) => machine.machineId),
     );
 
-    /** Whether the last try at keeping the host running failed, until one lands. */
+    /** Whether the last try at keeping the host running failed starting it, until one lands. */
     const keepFailed = MutableRef.make(false);
+
+    /** Whether the try under way reached a step that starts the host, past the reads before it. */
+    const starting = MutableRef.make(false);
 
     /** This Mac as the windows draw it: which machine it is, the device its record names, where it was enrolled with this app's service, whether it stands unrefused, how many agents' folders its host made, whether its agent waits on the member's approval, and whether the app could not start its host. */
     const read = Effect.map(
@@ -412,8 +415,11 @@ export function composeThisMacHost(
     /** The account's host running where it stands: its agent registered where macOS holds none, or where another version of the app registered it, or, where this build does not register, the install script run where launchd holds no account install; nothing is enrolled here, since only turning This Mac on enrolls it. */
     const keepRunning = oneAtATime(
       Effect.gen(function* () {
+        MutableRef.set(starting, false);
         if (HOST_RELEASE === undefined || !host.runsHost) return;
         if (Option.isNone(yield* standing)) return;
+        // Note that only a step that starts the host fails it on the windows' row, never a read before it.
+        MutableRef.set(starting, true);
         if (!host.registers) {
           if (!(yield* host.loaded)) yield* installed;
           return;
@@ -564,7 +570,7 @@ export function composeThisMacHost(
               Effect.andThen(
                 Effect.sync(() => {
                   report(`this Mac's host: could not ${step}, so it is tried again`);
-                  MutableRef.set(keepFailed, kept.running);
+                  MutableRef.set(keepFailed, kept.running && MutableRef.get(starting));
                 }),
                 tellThisMac,
               ),

@@ -112,6 +112,14 @@ export const device = pgTable(
     createdAt: createdAt(),
     /** When the device last beat, or registered. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),
+    /**
+     * When the scheduled sweep found the device's beat past fresh
+     * (`MAC_PRESENCE.FRESH_MS`); null while it beats, as its next beat or
+     * register sets it. Unlike when it was last seen, which every beat
+     * rewrites, it moves only as the device goes away or comes back, so the
+     * hosts read follows it.
+     */
+    awayAt: timestamptz("away_at"),
   },
   (table) => [
     // Start reads the account's Macs that beat lately.

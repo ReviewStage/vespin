@@ -147,16 +147,11 @@ import { ReadFailed } from "./marks.js";
  * row (`onKeys`) so its note follows a save at once, and setup reads for
  * whether either harness can start an agent (`onConnected`). The lists
  * stand under the mask mark, since a saved key's hint, a plan's email, its
- * name, and its usage are the account's, and the field a secret is pasted
- * into is kept out of the screen recording, which masks a field's
- * characters but not their count.
+ * name, and its usage are the account's.
  *
  * Disconnecting a plan or removing a key asks first, over the window
  * (`ConfirmDialog`).
  */
-
-/** The class PostHog's recorder leaves out of a recording, element and children alike. */
-const NO_CAPTURE = "ph-no-capture";
 
 /** Where ChatGPT's usage settings are, which Manage usage opens as OpenAI's guidelines ask. */
 const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
@@ -735,22 +730,20 @@ function CredentialPasteSteps({
   });
   useEffect(() => field.current?.focus(), []);
   return (
-    <div className={NO_CAPTURE}>
-      <PasteSteps
-        first={kind.first}
-        fieldRef={field}
-        label={kind.label}
-        placeholder={kind.placeholder}
-        saved={held}
-        busy={secret.saving}
-        busyWords={kind.running}
-        error={refusedShown(secret.rejection, FAILURE_SURFACE.AGENT_KEY_SAVE)}
-        value={secret.pasted}
-        onChange={secret.change}
-        onSave={secret.paste}
-        onEscape={onEscape}
-      />
-    </div>
+    <PasteSteps
+      first={kind.first}
+      fieldRef={field}
+      label={kind.label}
+      placeholder={kind.placeholder}
+      saved={held}
+      busy={secret.saving}
+      busyWords={kind.running}
+      error={refusedShown(secret.rejection, FAILURE_SURFACE.AGENT_KEY_SAVE)}
+      value={secret.pasted}
+      onChange={secret.change}
+      onSave={secret.paste}
+      onEscape={onEscape}
+    />
   );
 }
 

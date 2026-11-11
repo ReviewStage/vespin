@@ -2,7 +2,6 @@ import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot
 import type { TaskSummary } from "@repo/features/task-wire";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
-import { HOST_CAPABILITY } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -70,12 +69,7 @@ import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
 import { useTaskLooks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import {
-  appStateQuery,
-  selectAdminAccess,
-  selectAdminAccessPending,
-  selectCapability,
-} from "../use-app-state.js";
+import { appStateQuery, selectAdminAccess, selectAdminAccessPending } from "../use-app-state.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ADMIN_TITLE, adminFrame } from "./admin-frame.js";
 import {
@@ -602,13 +596,9 @@ function usePlaceCommands(
       ? () => overTasks(onReopenClosedTab)
       : undefined,
   );
-  // The page lists an installed app's chords, and stands nowhere else (`pages.tsx`).
-  const desktopApp =
-    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
-    true;
   useAppCommand(
     APP_COMMAND.KEYBOARD_SHORTCUTS,
-    pastGate && desktopApp
+    pastGate
       ? // Choosing the page opens Settings on it, one step (`settings-link.ts`).
         () => settings.onViewChange(SETTINGS_VIEW.SHORTCUTS)
       : undefined,

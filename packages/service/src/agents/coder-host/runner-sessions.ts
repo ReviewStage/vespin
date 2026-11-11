@@ -194,6 +194,7 @@ import {
   Duration,
   Effect,
   Exit,
+  Match,
   Option,
   Redacted,
   Result,
@@ -354,8 +355,6 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
     firstSequence: number,
     rewindBefore: string | undefined,
   ) => Effect.Effect<RunnerConfig, E | LaunchRefused, RunnerServices>;
-  /** The checkout's folders the harness finds a repository's skills in, whose names it keeps over an installed skill's. */
-  readonly skillRoots: readonly string[];
   /** What goes ahead of a message to a runner already running. */
   readonly ahead: (agent: Agent) => Effect.Effect<HarnessAhead, E | LaunchRefused, RunnerServices>;
   /** How a message opening with the command named is handed to the harness (`harness-commands.ts`). */
@@ -573,7 +572,7 @@ function runnerContent(
     return [
       {
         type: "text" as const,
-        text: `[${name} (${mediaType}) was attached: it is at ${path} in your sandbox, read it from there]`,
+        text: `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
       },
     ];
   });
@@ -649,7 +648,11 @@ function launchFingerprint(
     credential: Redacted.value(each.value),
   }));
   // Note that one slot is digested alone, under the key it was digested by, as the one a launch could hold before credentials were declared.
-  const swapped = slots.length === 0 ? undefined : slots.length === 1 ? slots[0] : slots;
+  const swapped = Match.value(slots.length).pipe(
+    Match.when(0, () => undefined),
+    Match.when(1, () => slots[0]),
+    Match.orElse(() => slots),
+  );
   // Note that full access is digested as nothing, as every launch before modes was, so its runners stay warm across the change.
   const asks = mode === AGENT_PERMISSION_MODE.FULL_ACCESS ? undefined : mode;
   return createHash("sha256")
@@ -983,9 +986,7 @@ export const runnerSessions = <
       const upload = layout.skillsUpload;
       return upload === undefined
         ? Effect.succeed<readonly SandboxFile[]>([])
-        : Effect.map(nativeSkills(target, agent, harness.skillRoots), (skills) =>
-            nativeSkillFiles(skills, upload),
-          );
+        : Effect.map(nativeSkills(target, agent), (skills) => nativeSkillFiles(skills, upload));
     };
 
     /**

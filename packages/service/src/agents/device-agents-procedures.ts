@@ -100,7 +100,7 @@ import {
   hostedStoreOrUnavailable,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { makeRateBrake } from "../http/rate-brake.js";
+import { createRateBrake } from "../http/rate-brake.js";
 import {
   actsForDevice,
   bearerOnlyMiddleware,
@@ -241,7 +241,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
   const signedIn = hosted.deviceAgents.use(bearerOnlyMiddleware(seams.resolveUserId));
   const pairing = hosted.deviceAgents.use(pairingHostMiddleware);
   const polling = hosted.deviceAgents.use(pollSecretMiddleware);
-  const startBrake = makeRateBrake(PAIRING_START_BRAKE);
+  const startBrake = createRateBrake(PAIRING_START_BRAKE);
   return {
     startPairing: pairing.startPairing.effect(function* ({ context, input }) {
       const ip = requestAddressOf(context.request);

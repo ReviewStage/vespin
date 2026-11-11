@@ -200,6 +200,16 @@ it was started, and durations, never your messages, the agent's work, or its
 environment; it sends no error reports. An agent running on your own machine
 sends Sentry nothing.
 
+A machine you run Vespin's host on, This Mac or one you installed it on,
+sends Sentry the host's own lines about its setup and running: that it
+connected, fetched the tools its agents run on, became ready, or could not,
+in Vespin's own words, with the host's version and operating system. A line
+saying something failed is sent as an error report. These never carry your
+agents' messages, their work, what a tool or a terminal printed, or a
+credential. The Mac app sends the same of setting up This Mac's host. The
+host on This Mac also keeps these lines in `~/Library/Logs/Vespin Host/` on
+your Mac.
+
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
 the next time you open the app), and reports of a screen that could not be
 drawn. It uses Sentry's default data collection, so reports may include error
@@ -476,11 +486,14 @@ its last use. When you delete your account:
   ends, since Sentry offers no way to erase one account's reports.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your
   agents already did at those services stays there.
-- **Google and GitHub sign-in:** we ask Google and GitHub to revoke the tokens
-  your sign-in left with us, so our GitHub App can no longer act as you; if
-  one cannot be reached in a few seconds, your account is deleted anyway and
-  that token stays valid until it expires (about eight hours for GitHub's, an
-  hour for Google's).
+- **Google and GitHub sign-in:** we ask GitHub to revoke your authorization
+  of our GitHub App, which ends every token it gave us for you: the access
+  token, good for about eight hours, and the refresh token that renews it,
+  good for about six months. We ask Google to revoke the token your Google
+  sign-in left, an access token good for about an hour; we never ask Google
+  for one that renews itself. If either cannot be reached in a few seconds,
+  your account is deleted anyway, we keep no copy of its tokens, and they
+  stay valid at the provider until they expire.
 
 ## 8\. Your rights and choices
 

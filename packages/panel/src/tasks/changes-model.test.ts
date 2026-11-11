@@ -6,6 +6,7 @@ import {
   PATCH_OMITTED,
 } from "@repo/features/agent-wire";
 import { createPatch } from "diff";
+import { Match } from "effect";
 import { test } from "vitest";
 import { DIFF_SELECTION_SIDE } from "../diff-view/contract.js";
 import {
@@ -418,7 +419,13 @@ test("a changed file's text before is its text after with each hunk turned back,
     ["lines removed alone", [...lines.slice(0, 10), ...lines.slice(14)]],
     [
       "two hunks far apart",
-      lines.map((line, at) => (at === 3 ? "three" : at === 33 ? "thirty-three" : line)),
+      lines.map((line, at) =>
+        Match.value(at).pipe(
+          Match.when(3, () => "three"),
+          Match.when(33, () => "thirty-three"),
+          Match.orElse(() => line),
+        ),
+      ),
     ],
   ];
   const before = `${lines.join("\n")}\n`;

@@ -183,6 +183,7 @@ const followingDevice = (
           return target === undefined
             ? Effect.fail(
                 systemError({
+                  // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
                   _tag: "InvalidData",
                   module: "FileSystem",
                   method: "readLink",

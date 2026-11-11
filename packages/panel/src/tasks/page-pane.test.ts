@@ -53,7 +53,7 @@ import { PagePane } from "./page-pane.js";
 
 /**
  * A page's tab as the developer meets it: the page drawn in a frame that
- * runs its scripts and nothing else, out of the screen recording, at its
+ * runs its scripts and nothing else, at its
  * newest version until they step back through the earlier ones, or its
  * HTML drawn as a File tab draws a file. Synthetic tasks and pages
  * throughout; main's read of a version's source is a door answering each
@@ -184,13 +184,12 @@ beforeEach(() => {
   }));
 });
 
-test("a page is drawn at its newest version in a frame that runs its own scripts alone, left out of the recording", () => {
+test("a page is drawn at its newest version in a frame that runs its own scripts alone", () => {
   const { container, frame } = mount(FUNNEL);
 
   assert.equal(frame().getAttribute("src"), versionUrl(3));
   assert.equal(frame().getAttribute("sandbox"), "allow-scripts");
   assert.equal(frame().getAttribute("allow"), "");
-  assert.ok(frame().closest(".ph-no-capture"));
   assert.match(container.textContent ?? "", /Invite funnel.*Version 3 of 3/);
 });
 
@@ -231,7 +230,6 @@ test("View source draws the version's HTML as a File tab's numbered, colored lin
   const tag = wholeFileRoot(container)?.querySelector<HTMLElement>('[data-line="1"] span');
   assert.equal(tag?.textContent, "<");
   assert.match(tag?.getAttribute("style") ?? "", /--diffs-token/);
-  assert.ok(container.querySelector(".whole-file")?.closest(".ph-no-capture"));
 
   await press("View page");
 

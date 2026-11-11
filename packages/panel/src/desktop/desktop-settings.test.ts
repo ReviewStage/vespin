@@ -454,15 +454,16 @@ test("a platform without Mac commands or updates lists no This Mac page, draws A
   }
 });
 
-test("a browser, which is no installed app, draws Appearance without Zoom and This Mac without Startup, lists no Keyboard shortcuts page, heads its last group This device, and its search finds none of them; the desktop draws them all", () => {
+test("a browser, which is no installed app, draws Appearance without Zoom and This Mac without Startup, heads its last group This device, and its search finds neither, while it lists Keyboard shortcuts as the desktop does; the desktop draws them all", () => {
   const drawnOn = (capabilities: readonly HostCapability[]) => {
     const page = mount(createElement(SettingsHarness, { capabilities }));
     const groups = pageGroups(page);
     const appearance = openPage(page, "Appearance").textContent ?? "";
     const thisMac = openPage(page, "This Mac").textContent ?? "";
-    const found = ["Zoom", "Open Vespin at login", "Keyboard shortcuts"].flatMap((words) =>
-      foundUnder(page, words),
-    );
+    // Note that the Keyboard shortcuts page is left out, because a picture's zoom keys are found there on every platform.
+    const found = ["Zoom", "Open Vespin at login"]
+      .flatMap((words) => foundUnder(page, words))
+      .filter((section) => section !== "Keyboard shortcuts");
     act(() => root?.unmount());
     root = undefined;
     document.body.innerHTML = "";
@@ -487,7 +488,7 @@ test("a browser, which is no installed app, draws Appearance without Zoom and Th
   assert.equal(desktop.startup, true);
   assert.notDeepEqual(desktop.found, []);
   assert.equal(browser.last?.heading, "This device");
-  assert.equal(browser.last?.rows.includes("Keyboard shortcuts"), false);
+  assert.ok(browser.last?.rows.includes("Keyboard shortcuts"));
   assert.equal(browser.zoom, false);
   assert.equal(browser.login, false);
   assert.equal(browser.startup, false);

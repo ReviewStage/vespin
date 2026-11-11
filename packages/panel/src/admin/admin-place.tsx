@@ -40,13 +40,11 @@ export interface AdminPlaceProps {
 /**
  * The Admin place's views under the app's doors: what stands in the
  * window's work column (`desktop/desktop-admin.tsx`). Every view
- * names other accounts, so the views are blocked from the screen recording
- * whole (`ph-no-capture`, `session-replay.ts`), past the masking of their
- * words, as the Inbox is.
+ * names other accounts, whose words the screen recording masks.
  */
 export function AdminPlace(props: AdminPlaceProps): React.JSX.Element {
   return (
-    <div className="flex min-h-0 flex-1 flex-col ph-no-capture">
+    <div className="admin-place flex min-h-0 flex-1 flex-col">
       <AppAdminDoors>
         <AdminViews {...props} />
       </AppAdminDoors>

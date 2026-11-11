@@ -368,13 +368,17 @@ async function until(ready: () => boolean): Promise<void> {
   for (let turn = 0; turn < 200 && !ready(); turn += 1) await nextTurn();
 }
 
+/** A level of a held slice: its keys by id, each holding a level below or a key's read. */
+type SliceLevel = Readonly<Record<string, unknown>>;
+
+/** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
+function isSliceLevel(value: unknown): value is SliceLevel {
+  return typeof value === "object" && value !== null;
+}
+
 /** What `held` holds at `at`, the key's path in its slice. */
 function readAt(held: unknown, at: readonly string[]): unknown {
-  return at.reduce<unknown>(
-    (level, id) =>
-      typeof level === "object" && level !== null ? Reflect.get(level, id) : undefined,
-    held,
-  );
+  return at.reduce<unknown>((level, id) => (isSliceLevel(level) ? level[id] : undefined), held);
 }
 
 it.effect(

@@ -56,7 +56,6 @@ import { HostedEnvironment } from "../../environment.js";
 import { SERVER_AGENT_HARNESS } from "../../events/server-events.js";
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { LaunchRefused, type MachineLayout } from "../machine/agent-machine.js";
-import { SKILL_ROOT } from "../repository-skills.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-sessions.js";
 import { WORKER_DENIED_TOOLS } from "../tool-catalog/catalog.js";
@@ -64,7 +63,7 @@ import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
 import { launchPayerOf, roomAfterLimit } from "./agent-runtime-choice.js";
 import { claudeCodeCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
-import { launchPermissionMode } from "./permission-mode.js";
+import { launchAllowedCommands, launchPermissionMode } from "./permission-mode.js";
 import {
   type HarnessLaunch,
   type RunnerHarness,
@@ -287,8 +286,9 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         ...(layout.installedSkills === undefined
           ? undefined
           : { installedSkills: layout.installedSkills }),
-        // Note that the agent's mode is read at each launch, so a change reaches it from its next turn.
+        // Note that the agent's mode and its starter's always-allowed commands are read at each launch, so a change reaches it from its next turn.
         ...mode,
+        ...(yield* launchAllowedCommands(agent, mode)),
       };
       return written;
     });
@@ -342,8 +342,6 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
           : planCredential(turn.subscriptionId);
       }),
     config,
-    // Note that Claude Code reads a checkout's skills from `.claude/skills` alone.
-    skillRoots: [SKILL_ROOT.CLAUDE],
     commandRoute: claudeCodeCommandRoute,
     ahead,
   };

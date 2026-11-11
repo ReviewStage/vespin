@@ -220,10 +220,10 @@ export const workspaceTokenRepositories = /* @__PURE__ */ Effect.fnUntraced(func
   // a store that cannot name the installations is the outage it is, so a row the App covers never shows on a guess.
   const throughApp = yield* app.workspaceRepositories(workspaceId).pipe(
     Effect.tapError(logWorkspaceReadFailure),
-    Effect.catch((failure) =>
-      failure._tag === "GitHubAppNotConfigured" || failure._tag === "GitHubUnavailable"
-        ? Effect.succeed(Option.none<readonly GitHubRepository[]>())
-        : Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
+    Effect.catchTag(
+      ["GitHubAppNotConfigured", "GitHubUnavailable"],
+      () => Effect.succeed(Option.none<readonly GitHubRepository[]>()),
+      () => Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
     ),
   );
   const reached = new Set(

@@ -198,6 +198,9 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.TASKS_PIN, () => false],
 ]);
 
+/** The port's members by key, as the fixture reads each one before it answers or forwards it. */
+type PortMembers = { readonly [key: PropertyKey]: unknown };
+
 /**
  * The act port a fixture run's screens act through: each act the profile
  * answers, such as a mark, a thread's file read, or a reply or a resolve on
@@ -223,8 +226,9 @@ export function fixtureActs(
   refusesWrites = false,
 ): ActPortClient {
   return new Proxy(acts, {
-    get(target, kind, receiver) {
-      const sent: unknown = Reflect.get(target, kind, receiver);
+    get(target, kind) {
+      const port: PortMembers = target;
+      const sent = port[kind];
       if (typeof kind !== "string" || typeof sent !== "function") return sent;
       return (payload: unknown, ...rest: unknown[]) => {
         // SAFETY: the port is keyed by act kind.
@@ -240,7 +244,7 @@ export function fixtureActs(
           kind as PortActKind,
           payload as PortActPayload<PortActKind>,
         );
-        if (staged === undefined) return Reflect.apply(sent, target, [payload, ...rest]);
+        if (staged === undefined) return sent.call(target, payload, ...rest);
         // SAFETY: as above.
         keepMove(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
         // SAFETY: as above.

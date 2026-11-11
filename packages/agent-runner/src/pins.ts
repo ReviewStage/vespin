@@ -1,8 +1,8 @@
 /**
  * pins.ts -- what a coding agent's sandbox pins of Claude Code and Codex: their versions and where the image puts them, read by the image, the sessions, and the protocol generator alike.
  *
- * The image (`apps/web/agent-image/Dockerfile`, which
- * `tools/anti-slop/guards/agent-pins.ts` holds to these) installs
+ * The image (`apps/web/agent-image/Dockerfile`, whose `ARG`s must match
+ * these) installs
  * exactly these, the sessions (`claude-code-sessions.ts`,
  * `codex-sessions.ts`) point the runner at the paths, the runner bundles
  * the same Agent SDK (this package's `package.json`), and Codex's
@@ -231,9 +231,9 @@ export const NODE_MAC_PIN: AgentToolPin = {
 /**
  * The Agent SDK release every host's own Claude Code is, and the Codex and
  * GitHub CLI releases beside it, each written out in its pins below rather
- * than read off `CLAUDE_CODE_PIN` and `CODEX_PIN`, so a bump fails the
- * repository check (`tools/anti-slop/guards/agent-pins.ts`) until each
- * pin's address, size, and digests are read off the new release too.
+ * than read off `CLAUDE_CODE_PIN` and `CODEX_PIN`, so a bump reads each
+ * pin's address, size, and digests off the new release too
+ * (`scripts/bump-agent-pins.mjs`).
  */
 const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.322", CODEX: "0.167.0", GH: "2.103.3" } as const;
 

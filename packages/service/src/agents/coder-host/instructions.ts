@@ -133,6 +133,10 @@ const CHECKS_WAIT = {
 } as const;
 
 /** The harnesses whose instructions differ in the tools they name: Claude Code and Codex, which each run their own. */
+/** How Codex reads an attached PDF or HEIC photo, since it has no Read tool: it goes with every Codex agent's checkout or sandbox words. */
+const CODEX_DOCUMENT_WORDS =
+  " To read an attached PDF, run `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; to look at a HEIC photo, convert it with `heif-dec <file> <out>.jpg`, then `view_image`.";
+
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
   CODEX: CONVERSATION_RUNTIME.CODEX,
@@ -157,8 +161,6 @@ interface ToolWords {
   readonly sandbox: string;
   /** How a server is kept running for a screenshot. */
   readonly serve: string;
-  /** What becomes of what the agent started, once its turn ends. */
-  readonly started: string;
   /** The tool a file or a picture is read with, and the one a folder is looked through with. */
   readonly readFile: string;
   readonly glob: string;
@@ -203,10 +205,6 @@ Where the developer should see a running app for themselves, such as a dev serve
 `;
 }
 
-/** What Codex tells an agent of what it started: its runner stays up past the turn (`runner-sessions.ts`'s warm launch), and what it started with it. */
-const STOP_BEFORE_TURN_END =
-  "Stop every process you started in the background, a server among them, before you end your turn, because one left running holds its port and your sandbox past it.";
-
 /**
  * How an agent waits on its checks, on either harness: with our
  * `schedule_wakeup` (`wakeup-tool.ts`), whose turn ends once it has booked
@@ -245,8 +243,6 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every Bash command runs there, and Read, Write, Glob, and Grep resolve a relative path from it. ${COMMAND_DESCRIPTION_INSTRUCTION}`,
     serve:
       "Start the app with Bash in the background (`run_in_background`), which keeps a server running until you stop it",
-    started:
-      "Stop every background task you started, a server or a Monitor among them, with TaskStop before you end your turn, because one left running holds your session open.",
     readFile: "Read",
     glob: "Glob",
     searchWeb: "Search the public web with WebSearch and read a page with WebFetch",
@@ -260,11 +256,10 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     integrations: NATIVE_INTEGRATION_WORDS,
   },
   [CODER_HARNESS.CODEX]: {
-    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.`,
-    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.`,
+    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.${CODEX_DOCUMENT_WORDS}`,
+    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.${CODEX_DOCUMENT_WORDS}`,
     serve:
       "Start the app from your shell in the background (with `&` and its output sent to a file), which keeps a server running until you stop it",
-    started: STOP_BEFORE_TURN_END,
     readFile: "your shell (`cat`, or `sed -n` for a range), or Codex's `view_image` for a picture",
     glob: "your shell (`rg --files`, or `ls`)",
     searchWeb: "Search the public web with Codex's own web search",
@@ -634,9 +629,9 @@ function checkoutReachWords(machine: CoderMachine, standing: AgentStanding): str
 /** How the agent looks at what it built before it publishes: on the sandbox's Playwright, display, and browser, or on the developer's machine with whatever the repository runs. */
 function seeingWords(tools: ToolWords, machine: CoderMachine): string {
   if (machine.local) {
-    return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with whatever the repository or the machine has for it, such as Playwright from the shell, look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words; a WebM of a flow plays there too, kept under 4 MB. ${tools.started}`;
+    return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with whatever the repository or the machine has for it, such as Playwright from the shell, look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words; a WebM of a flow plays there too, kept under 4 MB.`;
   }
-  return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with Playwright, whose \`playwright\` command, package, and Chromium are installed: \`playwright screenshot --wait-for-timeout=2000 http://localhost:3000 ${SHARED_FILES_DIRECTORY}/home.png\`, saving every picture, video, and page you show or post under \`${SHARED_FILES_DIRECTORY}/\` (\`mkdir -p ${SHARED_FILES_DIRECTORY}\` where it is missing) or the checkout, which ${PRODUCT_NAME} reads, never in a temp folder of your harness's own, which only you can read, or, for a page that needs a click, a viewport, or a dark color scheme, a short CommonJS script of your own that requires \`playwright\`, run with \`NODE_PATH="${PLAYWRIGHT_PIN.PREFIX}/lib/node_modules:$(npm root -g)" node shot.cjs\` so it finds the installed package rather than one of the checkout's. An Electron app runs here too, on the X display \`xvfb-run -a\` gives it: fetch its binary first, which an install on Linux often skips, with \`node node_modules/electron/install.js\` from the app's own folder, then start it with \`--disable-gpu\`, without which its window never draws, or drive it from such a script with Playwright's \`_electron.launch\`, choosing its window by URL, since the first one open may be a hidden one. Look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words. Where what you built is a flow rather than a screen, such as a form to fill in and submit, record it as a video: in your browser, \`record\` before the flow and \`stop_recording\` with a caption after it, which keeps the video in your transcript; or, in such a script, draw your pointer, its clicks, and its typing into the page as ${PRODUCT_NAME} draws them, with \`await page.addInitScript({ path: "${RECORDING_CURSOR_FILE.PATH}" })\` before \`page.goto\`, and start it once the page has drawn, never before it loads, which a dev server's first compile can leave blank for seconds: after \`page.goto\`, \`page.screencast.start({ path: "${SHARED_FILES_DIRECTORY}/flow.webm", size: { width: 1280, height: 800 } })\`, and after the flow \`page.screencast.stop()\`, which writes the WebM that \`${AGENT_TOOL.SHOW_IMAGE}\` plays in your transcript; before each click, hover what you click and wait a moment, \`await target.hover()\` then \`await page.waitForTimeout(300)\`, so the pointer has glided there when the press lands; keep it to the steps that matter, under 4 MB. ${tools.started}`;
+  return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with Playwright, whose \`playwright\` command, package, and Chromium are installed: \`playwright screenshot --wait-for-timeout=2000 http://localhost:3000 ${SHARED_FILES_DIRECTORY}/home.png\`, saving every picture, video, and page you show or post under \`${SHARED_FILES_DIRECTORY}/\` (\`mkdir -p ${SHARED_FILES_DIRECTORY}\` where it is missing) or the checkout, which ${PRODUCT_NAME} reads, never in a temp folder of your harness's own, which only you can read, or, for a page that needs a click, a viewport, or a dark color scheme, a short CommonJS script of your own that requires \`playwright\`, run with \`NODE_PATH="${PLAYWRIGHT_PIN.PREFIX}/lib/node_modules:$(npm root -g)" node shot.cjs\` so it finds the installed package rather than one of the checkout's. An Electron app runs here too, on the X display \`xvfb-run -a\` gives it: fetch its binary first, which an install on Linux often skips, with \`node node_modules/electron/install.js\` from the app's own folder, then start it with \`--disable-gpu\`, without which its window never draws, or drive it from such a script with Playwright's \`_electron.launch\`, choosing its window by URL, since the first one open may be a hidden one. Look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words. Where what you built is a flow rather than a screen, such as a form to fill in and submit, record it as a video: in your browser, \`record\` before the flow and \`stop_recording\` with a caption after it, which keeps the video in your transcript; or, in such a script, draw your pointer, its clicks, and its typing into the page as ${PRODUCT_NAME} draws them, with \`await page.addInitScript({ path: "${RECORDING_CURSOR_FILE.PATH}" })\` before \`page.goto\`, and start it once the page has drawn, never before it loads, which a dev server's first compile can leave blank for seconds: after \`page.goto\`, \`page.screencast.start({ path: "${SHARED_FILES_DIRECTORY}/flow.webm", size: { width: 1280, height: 800 } })\`, and after the flow \`page.screencast.stop()\`, which writes the WebM that \`${AGENT_TOOL.SHOW_IMAGE}\` plays in your transcript; before each click, hover what you click and wait a moment, \`await target.hover()\` then \`await page.waitForTimeout(300)\`, so the pointer has glided there when the press lands; keep it to the steps that matter, under 4 MB.`;
 }
 
 /**

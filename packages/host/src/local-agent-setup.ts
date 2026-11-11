@@ -33,7 +33,7 @@ export interface AgentCliPins {
   readonly gh: AgentToolPin;
 }
 
-/** The agent CLIs a device keeps under its state root, for the builds given (`LocalAgentPlatformSeam.clis`), each had in turn. */
+/** The agent CLIs a device keeps under its state root, for the builds given (`LocalAgentPlatformSeam.clis`), all fetched side by side. */
 export function localAgentClis(stateRoot: string, pins: AgentCliPins): LocalAgentClis {
   const wanted = [
     { pin: pins.claude, failure: SETUP_FAILURE.CLAUDE_CODE },
@@ -50,12 +50,17 @@ export function localAgentClis(stateRoot: string, pins: AgentCliPins): LocalAgen
       Effect.gen(function* () {
         // Note that the device says it is getting ready once, whichever of the fetches begins first.
         const once = yield* Effect.cached(preparing);
-        for (const { pin, failure } of wanted) {
-          const had = yield* localAgentTool(stateRoot, pin, once);
-          if (Option.isNone(had)) {
-            return yield* new LocalAgentClisUnavailable({ detail: failure });
-          }
-        }
+        // Note that the tools are fetched side by side, and the first that could not be had says why.
+        const had = yield* Effect.forEach(
+          wanted,
+          ({ pin, failure }) =>
+            Effect.map(localAgentTool(stateRoot, pin, once), (tool) =>
+              Option.isNone(tool) ? failure : undefined,
+            ),
+          { concurrency: "unbounded" },
+        );
+        const failed = had.find((failure) => failure !== undefined);
+        if (failed !== undefined) return yield* new LocalAgentClisUnavailable({ detail: failed });
       }),
   };
 }

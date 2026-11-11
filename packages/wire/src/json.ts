@@ -232,18 +232,12 @@ export function resolveOptions<K extends string>(
     readonly nonNegative?: readonly K[];
   },
 ): ResolvedNumericOptions<K> {
-  let resolved = { ...defaults };
+  const resolved: { [P in K]: number } = { ...defaults };
   for (const key of bounds.positive ?? []) {
-    resolved = {
-      ...resolved,
-      [key]: positiveInteger(options[key], defaults[key]),
-    };
+    resolved[key] = positiveInteger(options[key], defaults[key]);
   }
   for (const key of bounds.nonNegative ?? []) {
-    resolved = {
-      ...resolved,
-      [key]: nonNegativeNumber(options[key], defaults[key]),
-    };
+    resolved[key] = nonNegativeNumber(options[key], defaults[key]);
   }
   return resolved;
 }

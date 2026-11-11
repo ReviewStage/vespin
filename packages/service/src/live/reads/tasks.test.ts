@@ -753,6 +753,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           title: "Run pnpm test?",
           description: "In the checkout",
           input: { command: "pnpm test" },
+          commandPrefix: null,
           at: new Date(NOW - 10_000),
         });
         const liveOf = Effect.map(liveRowsOf(owner), (rows) =>

@@ -178,7 +178,8 @@ export function browserCommandKey(browser: SystemNaming = navigator): CommandKey
  * live view is a socket the page opens itself (`web-browser-live.ts`); and the way to the Mac
  * app is offered only on the `linkPlatform` that can open it, a Mac; a
  * chord's Command is pressed with the browser's own `commandKey`, Ctrl off a
- * Mac; and a maintainer's sign-in as the member ends through Better Auth's
+ * Mac, and one the browser keeps for its own tabs with its `browser` chord
+ * (`browserTab`); and a maintainer's sign-in as the member ends through Better Auth's
  * admin plugin (`auth-client.ts`).
  */
 export function webPlatform(
@@ -191,6 +192,7 @@ export function webPlatform(
 ): AppPlatform {
   const platform: AppPlatform = {
     commandKey,
+    browserTab: true,
     copyText: (words) => navigator.clipboard.writeText(words),
     copyImage: copyPng,
     copyRich: copyRichText,

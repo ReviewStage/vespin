@@ -37,6 +37,8 @@ interface MaintenanceSweeps {
   releaseHeldPushes: (now: number) => SweepRead<number>;
   /** Refreshes the Live Activity of every member with one standing on a phone, a sweep's worth, answering how many members (`push/live-activities.ts`'s `refreshLiveActivities`). */
   refreshLiveActivities: (now: number) => SweepRead<number>;
+  /** Marks away every host whose beat went past fresh and is not marked yet, so the hosts read wakes as it goes quiet, answering how many (`device-store.ts`'s `markAwayDevices`). */
+  markAwayHosts: (now: number) => SweepRead<number>;
   /** Queues the release of the cloud agents' sandboxes unused past their keep, and of those whose release stands unfinished, a sweep's worth, or only logs them where deleting is off (`agents/session-sandboxes.ts`'s `releaseUnusedSandboxes`). */
   releaseSandboxes: (now: number) => SweepRead<SandboxReleaseSweep>;
 }
@@ -73,6 +75,8 @@ interface MaintenanceSweepAnswer {
   heldPushes: Swept<number>;
   /** Members whose Live Activity was refreshed. */
   liveActivities: Swept<number>;
+  /** Hosts that went quiet, marked away. */
+  awayHosts: Swept<number>;
   /** Cloud agents' sandboxes due for release, and the releases published. */
   sandboxReleases: Swept<SandboxReleaseSweep>;
 }
@@ -116,6 +120,7 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     resumed: yield* isolated("resumeWaitedTurns", sweeps.resumeWaitedTurns(now)),
     heldPushes: yield* isolated("releaseHeldPushes", sweeps.releaseHeldPushes(now)),
     liveActivities: yield* isolated("refreshLiveActivities", sweeps.refreshLiveActivities(now)),
+    awayHosts: yield* isolated("markAwayHosts", sweeps.markAwayHosts(now)),
     sandboxReleases: yield* isolated("releaseSandboxes", sweeps.releaseSandboxes(now)),
   };
 });

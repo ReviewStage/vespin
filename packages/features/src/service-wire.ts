@@ -187,6 +187,8 @@ export const HOSTED_API_ERROR = {
   APPROVAL_SETTLED: "approval-settled",
   /** A permission mode that asks was named for an agent whose harness runs every call unasked, as Codex does; only a Claude Code agent asks. Nothing was written. */
   PERMISSION_MODE_REFUSED: "permission-mode-refused",
+  /** The member always allows as many commands as they may (`ALLOWED_COMMAND_BOUNDS.MAX_COMMANDS`), so a new one is refused until one is removed; nothing was written. */
+  ALLOWED_COMMANDS_FULL: "allowed-commands-full",
 } as const;
 
 export type HostedApiError = (typeof HOSTED_API_ERROR)[keyof typeof HOSTED_API_ERROR];
