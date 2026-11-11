@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, MEMORY_SAVE_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
@@ -89,6 +89,8 @@ let saveAnswer: (save: {
 }) => PortActResult<typeof ACT_KIND.MEMORIES_SAVE> = () => ({
   failure: AGENT_CALL_FAILURE.UNANSWERED,
 });
+/** What a save waits on before the test's service answers it; nothing from the start. */
+let saveHeld: Promise<void> = Promise.resolve();
 /** Whether the host has read nothing yet, so it lays no memories. */
 let readsNothing = false;
 /** Each workspace's memories as the test's host lays them on the document, under the version it last delivered. */
@@ -145,8 +147,10 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       stored = { ...stored, [workspaceId]: after };
       return Promise.resolve(done({ memories: after }));
     }
-    case ACT_KIND.MEMORIES_SAVE:
-      return Promise.resolve(done(saveAnswer(request.payload)));
+    case ACT_KIND.MEMORIES_SAVE: {
+      const { payload } = request;
+      return saveHeld.then(() => done(saveAnswer(payload)));
+    }
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
   }
@@ -160,6 +164,7 @@ beforeEach(() => {
   readFails = false;
   refuseForget = false;
   saveAnswer = () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+  saveHeld = Promise.resolve();
   readsNothing = false;
   laid = NO_KEYS_HELD;
   version = 1;
@@ -578,4 +583,33 @@ test("Edit saves the memory's new words in place of the memory it edits", async 
       .map((request) => request.payload),
     [{ workspaceId: ACME.id, text: corrected, replaces: DEPLOYS.id }],
   );
+});
+
+test("an edit whose memory is deleted while it saves stays closed, never reopening as an empty Add memory", async () => {
+  const answering = Promise.withResolvers<void>();
+  saveHeld = answering.promise;
+  saveAnswer = () => ({ failure: MEMORY_SAVE_FAILURE.NOT_FOUND });
+  const { page } = await mount();
+  openMenu(page, DEPLOYS);
+  chooseMenuItem("Edit");
+  const editor = document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("no editor");
+  const field = editor.querySelector("textarea") ?? assert.fail("no field");
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+      field,
+      "Deployments go out from main.",
+    );
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  act(() => button(editor, "Save").click());
+  await settle();
+
+  // Another member deletes the memory while the save is out.
+  act(() => lay(ACME.id, { rows: [TESTS] }));
+  // Note that the card is checked as a yes or no, because a failure's diff of an element would print the whole document.
+  await vi.waitFor(() => assert.ok(document.querySelector('[role="dialog"]') === null, "put away"));
+  answering.resolve();
+  await settle();
+
+  assert.ok(document.querySelector('[role="dialog"]') === null, "no card stands");
 });

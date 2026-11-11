@@ -821,6 +821,8 @@ function useMemoryEditor(workspaceId: string, listed: ReadonlySet<string>) {
       refused={form.refusal !== undefined}
       onDismiss={form.dismiss}
       onExited={() => {
+        // Note that a card put away mid-save, its memory deleted under it, keeps what it edited, so the save's answer finds no question standing rather than one for a new memory.
+        if (saving.isPending) return;
         setEditing(undefined);
         setText("");
       }}
