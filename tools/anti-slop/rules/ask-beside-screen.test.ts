@@ -48,5 +48,15 @@ tester.run("ask-beside-screen", askBesideScreenRule, {
       filename: MOBILE_FILE,
       errors: [{ messageId: "insideScreen", data: { name: "ConfirmAsk" } }],
     },
+    {
+      code: "function A() { return <Screen><SplitView detail={<ConfirmAsk presented />} /></Screen>; }",
+      filename: MOBILE_FILE,
+      errors: [{ messageId: "insideScreen", data: { name: "ConfirmAsk" } }],
+    },
+    {
+      code: 'function A() { return <Screen>{[<ConfirmAsk key="confirm" presented />]}</Screen>; }',
+      filename: MOBILE_FILE,
+      errors: [{ messageId: "insideScreen", data: { name: "ConfirmAsk" } }],
+    },
   ],
 });
