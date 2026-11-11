@@ -11,7 +11,7 @@ import {
 } from "@repo/features/search-found-model";
 import { EmptyState, LIST_LOOK, ListSection, RowList, Screen } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SearchBarCommands } from "react-native-screens";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
@@ -103,8 +103,11 @@ export function SearchScreen() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const field = useRef<SearchBarCommands>(null);
+  // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
-  typed.current = query;
+  useEffect(() => {
+    typed.current = query;
+  }, [query]);
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents.
   const { setStatus, question } = useStatusAsk(found.listing);
