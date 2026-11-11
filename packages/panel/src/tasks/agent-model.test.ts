@@ -191,6 +191,15 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
     ],
   };
   assert.deepEqual(lastTurnEnding([twice])?.followUps, ["Add a Members page", "Resend"]);
+  // A line the turn took in under way stands after its journal yet waits on no turn; one no turn took does.
+  const line = (taken: boolean): AgentTranscriptMessage => ({
+    id: taken ? "steer" : "next",
+    role: MESSAGE_ROLE.USER,
+    parts: [{ type: "text", text: "Keep the link valid for a week." }],
+    ...(taken ? { arrivedIn: { journalId: twice.id, afterStep: 1 } } : {}),
+  });
+  assert.equal(lastTurnEnding([twice, line(true)])?.messageId, twice.id);
+  assert.equal(lastTurnEnding([twice, line(false)]), undefined);
   // A later call refused stands for the turn, which then replies in its own words.
   const refused: AgentTranscriptMessage = {
     ...turn,

@@ -2068,7 +2068,8 @@ export function finishedReplyLead(
 export function lastTurnEnding(
   messages: readonly AgentTranscriptMessage[],
 ): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
-  const last = messages.at(-1);
+  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next.
+  const last = messages.findLast((message) => message.arrivedIn === undefined);
   if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
   const ending = endTurnOf(agentParts(last));
   return ending === undefined ? undefined : { messageId: last.id, followUps: ending.followUps };
