@@ -1,22 +1,22 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { MOTION_DELAY_MS } from "@repo/brand";
 import { AGENT_ARCHIVER, AGENT_STATUS, type AgentArchivedBy } from "@repo/features/agent-wire";
-import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, test, vi } from "vitest";
+import { afterEach, test } from "vitest";
+import type { AgentsControl } from "../tasks/use-agents.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { agentsControl } from "../testing/tasks-control.js";
-import { ArchivedAgents } from "./agent-archive.js";
+import { PlanAgents } from "./plan-agents.js";
 
 /**
- * agent-archive.test.ts -- an archived agent's row under the summary's
- * Archived fold hangs the agent's tab's card, saying it was archived, and
- * by whom and why where the service said; a press on it opens the agent,
- * whose tab is gone; and its Unarchive is busy while the service answers.
+ * plan-agents-archived.test.ts -- a phone's Overview folds the task's
+ * archived agents under Archived, standing as the reader left it; an
+ * archived agent's row hangs the agent's tab's card, saying it was
+ * archived, and by whom and why where the service said; and a press on it
+ * opens the agent, whose tab is gone.
  */
 
 const roots: Root[] = [];
@@ -28,7 +28,54 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-/** A summary's Archived fold, its one archived agent drawn, `onOpen` hearing a row opened. */
+/** A phone's Overview agents over `agents`, every archived one folded under Archived, `onOpen` hearing an archived row opened. */
+function drawPhoneAgents(
+  agents: AgentsControl,
+  onOpen: (agentId: string) => void = () => undefined,
+): HTMLElement {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(PlanAgents, {
+          agents,
+          held: { agents: new Map(), workers: new Map() },
+          tab: undefined,
+          folded: false,
+          waiting: new Map(),
+          shown: true,
+          onOpenAgent: () => undefined,
+          onOpenPullRequest: () => undefined,
+          newAgent: undefined,
+          phone: { onOpenArchived: onOpen, onOpenInbox: () => undefined },
+        }),
+      ),
+    ),
+  );
+  return container;
+}
+
+/** The Archived fold's own button, apart from the Agents group's over it. */
+function archivedFold(container: HTMLElement): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(
+    (button) => button.textContent?.startsWith("Archived") === true,
+  );
+}
+
+/** The archived agent's row's press. */
+function archivedRow(container: HTMLElement): HTMLButtonElement {
+  return (
+    [
+      ...container.querySelectorAll<HTMLButtonElement>('[aria-label="Archived agents"] li button'),
+    ].find((button) => button.textContent === "Retry audit") ??
+    assert.fail("the archived agent is listed")
+  );
+}
+
+/** The Overview, its one archived agent drawn, `onOpen` hearing a row opened. */
 function drawArchived(onOpen: (agentId: string) => void = () => undefined): HTMLElement {
   const agents = agentsControl({
     archived: [
@@ -45,19 +92,38 @@ function drawArchived(onOpen: (agentId: string) => void = () => undefined): HTML
       },
     ],
   });
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  roots.push(root);
-  act(() =>
-    root.render(withQueryClient(createElement(ArchivedAgents, { agents, shown: true, onOpen }))),
-  );
-  return container;
+  return drawPhoneAgents(agents, onOpen);
 }
 
-test("an unfolded Archived stands open as the summary is drawn again, and one never unfolded stays folded", () => {
-  const fold = (container: HTMLElement) =>
-    container.querySelector<HTMLButtonElement>("button[aria-expanded]");
+test("the archived agents fold under a group header that counts them folded and lists them unfolded", () => {
+  const agent = {
+    planId: "plan-1",
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    createdAt: 1,
+    status: AGENT_STATUS.CANCELED,
+    turnId: null,
+    archivedAt: 2,
+  } as const;
+  const container = drawPhoneAgents(
+    agentsControl({
+      archived: [
+        { ...agent, id: "agent-1", title: "Retry audit" },
+        { ...agent, id: "agent-2", title: "Spike" },
+      ],
+    }),
+  );
+  const fold = () => archivedFold(container) ?? assert.fail("Archived is drawn");
+
+  assert.equal(fold().getAttribute("aria-expanded"), "false");
+  assert.equal(fold().textContent, "Archived2 archived agents");
+  act(() => fold().click());
+  assert.equal(fold().getAttribute("aria-expanded"), "true");
+  assert.ok(container.querySelector('[aria-label="Archived agents"]'), "the agents are listed");
+});
+
+test("an unfolded Archived stands open as the Overview is drawn again, and one never unfolded stays folded", () => {
+  const fold = archivedFold;
   const first = drawArchived();
   assert.equal(fold(first)?.getAttribute("aria-expanded"), "false");
   act(() => fold(first)?.click());
@@ -76,13 +142,8 @@ test("an unfolded Archived stands open as the summary is drawn again, and one ne
 
 test("an archived agent's row hangs its tab's card beside it, its name and when it was archived", () => {
   const container = drawArchived();
-  const fold = container.querySelector<HTMLButtonElement>("button[aria-expanded]");
-  act(() => fold?.click());
-  const row = container.querySelector<HTMLElement>(
-    '[aria-label="Archived agents"] .ui-list-row-main',
-  );
-  assert.ok(row, "the archived agent is listed");
-  restOn(row);
+  act(() => archivedFold(container)?.click());
+  restOn(archivedRow(container));
   const card = document.querySelector(".ui-tooltip-card [data-agent-card]");
   assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, "Retry audit");
   assert.match(card?.querySelector(".ui-hover-card-corner")?.textContent ?? "", /^Archived · /u);
@@ -91,12 +152,8 @@ test("an archived agent's row hangs its tab's card beside it, its name and when 
 test("a press on an archived agent's row opens it, whose tab is gone", () => {
   const opened: string[] = [];
   const container = drawArchived((agentId) => opened.push(agentId));
-  act(() => container.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click());
-  const row =
-    container.querySelector<HTMLButtonElement>(
-      '[aria-label="Archived agents"] .ui-list-row-main',
-    ) ?? assert.fail("the archived agent is listed");
-  act(() => row.click());
+  act(() => archivedFold(container)?.click());
+  act(() => archivedRow(container).click());
   assert.deepEqual(opened, ["agent-8"]);
 });
 
@@ -123,22 +180,9 @@ function archivedCardNotes(me: string | undefined, archivedBy: AgentArchivedBy):
     }),
     me,
   };
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  roots.push(root);
-  act(() =>
-    root.render(
-      withQueryClient(
-        createElement(ArchivedAgents, { agents, shown: true, onOpen: () => undefined }),
-      ),
-    ),
-  );
-  act(() => container.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click());
-  const row = container.querySelector<HTMLElement>(
-    '[aria-label="Archived agents"] .ui-list-row-main',
-  );
-  restOn(row ?? assert.fail("the row is drawn"));
+  const container = drawPhoneAgents(agents);
+  act(() => archivedFold(container)?.click());
+  restOn(archivedRow(container));
   return [
     ...document.querySelectorAll(".ui-tooltip-card [data-agent-card] .ui-hover-card-note"),
   ].map((note) => note.textContent ?? "");
@@ -173,62 +217,4 @@ test("an archived agent's card says who archived it, an agent or Vespin for a me
   ]);
   assert.deepEqual(byApp, ["Archived by Vespin for you"]);
   assert.deepEqual(withTask, ["Archived with its task by Dean Stratakos"]);
-});
-
-test("an archived agent's Unarchive is named Unarchiving while the service answers, shows its ring once the settle delay has passed, and clears when it answers", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  try {
-    let answer: () => void = () => undefined;
-    let unarchives = 0;
-    const agents = agentsControl({
-      archived: [
-        {
-          id: "agent-8",
-          planId: "plan-1",
-          model: "anthropic/claude-opus-5.5",
-          effort: "high",
-          title: "Retry audit",
-          createdAt: 1,
-          status: AGENT_STATUS.COMPLETED,
-          turnId: null,
-          archivedAt: 2,
-        },
-      ],
-      onArchive: () => {
-        unarchives += 1;
-        return new Promise((resolve) => {
-          answer = () => resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
-        });
-      },
-    });
-    const container = document.createElement("div");
-    document.body.append(container);
-    const root = createRoot(container);
-    roots.push(root);
-    act(() =>
-      root.render(
-        withQueryClient(
-          createElement(ArchivedAgents, { agents, shown: true, onOpen: () => undefined }),
-        ),
-      ),
-    );
-    act(() => container.querySelector<HTMLButtonElement>("button[aria-expanded]")?.click());
-    const unarchive =
-      container.querySelector<HTMLButtonElement>(".ui-list-row-actions button") ??
-      assert.fail("the Unarchive");
-    const ring = () => unarchive.querySelector(".ui-spinner-ring") !== null;
-
-    act(() => unarchive.click());
-    assert.equal(unarchive.getAttribute("aria-label"), "Unarchiving");
-    assert.equal(ring(), false);
-    act(() => vi.advanceTimersByTime(MOTION_DELAY_MS.SETTLE));
-    assert.equal(ring(), true);
-    act(() => unarchive.click());
-    assert.equal(unarchives, 1, "a second press waits for the first");
-    await act(async () => answer());
-    assert.equal(unarchive.getAttribute("aria-label"), "Unarchive");
-    assert.equal(ring(), false);
-  } finally {
-    vi.useRealTimers();
-  }
 });

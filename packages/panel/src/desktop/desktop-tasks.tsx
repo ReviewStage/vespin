@@ -112,7 +112,6 @@ import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
-import { ArchivedAgents } from "./agent-archive.js";
 import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
 import {
@@ -1017,9 +1016,7 @@ function DescriptionDocument({
         phone={
           room === SHELL_ROOM.NARROW
             ? {
-                archived: (
-                  <ArchivedAgents agents={agents} shown={tasks.shown} onOpen={openAgentColumn} />
-                ),
+                onOpenArchived: openAgent,
                 onOpenInbox: () => {
                   if (openedId !== undefined) tasks.onShowInbox({ taskId: openedId });
                 },
@@ -1054,9 +1051,14 @@ function DescriptionDocument({
   const planPages = useMemo(
     () =>
       openedId === undefined ? null : (
-        <PlanPages pages={pages} place={{ taskId: openedId }} onOpenPage={openPageTab} />
+        <PlanPages
+          pages={pages}
+          place={{ taskId: openedId }}
+          shown={tasks.shown}
+          onOpenPage={openPageTab}
+        />
       ),
-    [openedId, pages, openPageTab],
+    [openedId, pages, tasks.shown, openPageTab],
   );
   // The task's sub-tasks and relations stand over its agents, the head keyed once by the
   // task, so another task's groups start as they open and no draft of this one's stands there.
