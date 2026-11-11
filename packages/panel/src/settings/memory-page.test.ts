@@ -43,7 +43,8 @@ import { MemorySection } from "./memory-page.js";
  * offers to try again. The memories agents recall most stand first, one no
  * agent was handed in the window says so, and Edit saves a memory's words
  * from the field it opens in their place, which goes with a memory deleted
- * while it saves. Synthetic workspaces, members, and memories.
+ * while it saves; Add memory saves a new one from a draft row, which stands
+ * under a refusal. Synthetic workspaces, members, and memories.
  */
 
 const READER = "user-reader";
@@ -622,4 +623,25 @@ test("an edit whose memory is deleted while it saves goes with it, and its answe
   await settle();
 
   assert.ok(field(page) === null, "no field stands");
+});
+
+test("Add memory writes a new one in a draft row atop the table, saves it replacing nothing, and keeps the draft under a refusal", async () => {
+  saveAnswer = () => ({ failure: MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL });
+  const { page } = await mount();
+
+  act(() => button(page, "Add memory").click());
+  await writeInField(page, "Release notes are written before the tag is pushed.");
+  assert.ok(rows(page)[0]?.querySelector(".memory-field") !== null, "the draft stands first");
+  pressInField(page, "Save");
+  await settle();
+
+  assert.deepEqual(
+    sent
+      .filter((request) => request.kind === ACT_KIND.MEMORIES_SAVE)
+      .map((request) => request.payload),
+    [{ workspaceId: ACME.id, text: "Release notes are written before the tag is pushed." }],
+  );
+  await vi.waitFor(() =>
+    assert.match(field(page)?.textContent ?? "", /looks like it holds a credential/u),
+  );
 });

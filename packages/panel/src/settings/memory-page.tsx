@@ -884,7 +884,12 @@ function MemoryField({
       className="memory-field"
       data-variant={REPLY_VARIANT.EDIT}
       beforeSend={
-        <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
+        <Button
+          variant={BUTTON_VARIANT.QUIET}
+          size={BUTTON_SIZE.COMPACT}
+          disabled={busy}
+          onClick={onCancel}
+        >
           <ReplayUnmask>{EDITOR_WORDS.CANCEL}</ReplayUnmask>
         </Button>
       }
@@ -904,7 +909,8 @@ function refusalNote(result: ActionResult): ComposerNote | undefined {
  * The field a memory's words are edited in, or a new one's written in, and
  * its save through the one save act, naming the memory it replaces where it
  * edits one. The field stands until the service takes the words, and says
- * under them why it refused while they stay written. An edit goes with its
+ * under them why it refused while they stay written, and neither Cancel nor
+ * Esc puts it away while a save is out. An edit goes with its
  * memory: one deleted meanwhile puts the field away, and the answer that
  * follows finds no opening of its own standing, so it opens nothing again.
  */
@@ -955,7 +961,10 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
       busy={saving.isPending}
       onChange={(text) => setEditing((was) => (was === undefined ? was : { ...was, text }))}
       onSave={save}
-      onCancel={() => setEditing(undefined)}
+      // Note that a save out holds the field until it answers, so its refusal has a field to stand under.
+      onCancel={() => {
+        if (!saving.isPending) setEditing(undefined);
+      }}
     />
   );
   return {
@@ -1184,7 +1193,9 @@ export function MemorySection({
     // Note that the keepers are read in the workspace Settings shows, which may not be the one the window's tasks stand in.
     <MemberDirectory workspace={workspace} readerId={readerId}>
       <ReplayMask>
+        {/* Note that the list is drawn anew for each workspace, so a draft, an edit, a search, or a choice never carries into another. */}
         <MemoryList
+          key={workspace.id}
           readerId={readerId}
           memories={memories.data}
           workspaceId={workspace.id}
