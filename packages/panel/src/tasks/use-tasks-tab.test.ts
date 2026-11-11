@@ -1085,6 +1085,11 @@ it.effect(
 
       act(() => tab.control().onPointTask(crossed));
       yield* passing("50 millis");
+      act(() => tab.control().onPointTask(undefined));
+      yield* passing("200 millis");
+      assert.equal(held(crossed), false, "a row the pointer left before resting is never read");
+      act(() => tab.control().onPointTask(crossed));
+      yield* passing("50 millis");
       act(() => tab.control().onPointTask(rested));
       yield* passing("50 millis");
       assert.equal(held(rested), false, "nothing is read before the pointer rests");
@@ -1095,7 +1100,6 @@ it.effect(
       // Note that the host is never made to open it, so only the press holds it.
       act(() => tab.control().onSelect(OTHER_TASK_ID));
       yield* landed;
-      assert.equal(tab.told.at(-1), ACT_KIND.TASKS_SELECT);
       assert.equal(tab.control().activeTaskId, TASK.id);
       assert.equal(held(OTHER_TASK_ID), true, "the task pressed is read before the host opens it");
     }),

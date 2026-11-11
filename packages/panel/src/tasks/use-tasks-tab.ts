@@ -354,8 +354,8 @@ export interface TasksControl {
    * home page, asked for or standing.
    */
   boundFor: string | undefined;
-  /** Reads `taskId`'s description ahead of a press the pointer says is coming, so the task opens on it drawn. */
-  onPointTask: (taskId: string) => void;
+  /** Reads `taskId`'s description once the pointer rests on its row, ahead of a press it says is coming, so the task opens on it drawn; none calls off a rest begun, as the pointer leaving the row does. */
+  onPointTask: (taskId: string | undefined) => void;
   listFailed: boolean;
   /** Whether the list drawn is one the service answered, rather than the empty one before the first read lands. */
   listRead: boolean;
@@ -1357,9 +1357,9 @@ export function useTasksTab(input: {
   );
   const pointRest = useWait();
   const pointTask = useCallback(
-    (taskId: string) => {
+    (taskId: string | undefined) => {
       if (fixture !== undefined) return;
-      if (pointedHold.current?.taskId === taskId) {
+      if (taskId === undefined || pointedHold.current?.taskId === taskId) {
         pointRest.stop();
         return;
       }
