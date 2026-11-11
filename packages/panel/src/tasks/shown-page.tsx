@@ -252,5 +252,14 @@ export function ShownNewestPage({
 }): ReactNode {
   const page = useQuery(pagesQuery(place)).data?.find((each) => each.id === pageId);
   if (page === undefined) return null;
-  return <ShownPage place={place} pageId={page.id} version={page.version} title={page.title} />;
+  // Note that a new version is a frame of its own, so its fit is never the last version's.
+  return (
+    <ShownPage
+      key={page.version}
+      place={place}
+      pageId={page.id}
+      version={page.version}
+      title={page.title}
+    />
+  );
 }
