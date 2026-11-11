@@ -227,6 +227,46 @@ function Headings(): React.JSX.Element {
   );
 }
 
+/** A page's sections, a task's Overview's: a row's height, the chevron standing at rest open or folded, and a section that folds nothing keeping the chevron's cell, so every label stands on one edge. */
+function Sections(): React.JSX.Element {
+  return (
+    <div className="catalog-narrow">
+      <GroupHeader
+        label="Sub-tasks"
+        look={GROUP_LOOK.SECTION}
+        heading={GROUP_HEADING.NONE}
+        actions={
+          <IconButton
+            label="New sub-task"
+            icon={<PlusIcon />}
+            size={BUTTON_SIZE.COMPACT}
+            onClick={ignore}
+          />
+        }
+        actionsShown={GROUP_ACTIONS.AT_REST}
+      />
+      <GroupHeader
+        label="Agents"
+        look={GROUP_LOOK.SECTION}
+        heading={GROUP_HEADING.NONE}
+        count={{ value: TASKS.length, noun: "agents" }}
+        fold={{ defaultOpen: true }}
+      >
+        <Rows names={TASKS} />
+      </GroupHeader>
+      <GroupHeader
+        label="Pages"
+        look={GROUP_LOOK.SECTION}
+        heading={GROUP_HEADING.NONE}
+        count={{ value: TASKS.length, noun: "pages" }}
+        fold={{ defaultOpen: false }}
+      >
+        <Rows names={TASKS} />
+      </GroupHeader>
+    </div>
+  );
+}
+
 function GroupHeaders(): React.JSX.Element {
   return (
     <>
@@ -259,6 +299,12 @@ function GroupHeaders(): React.JSX.Element {
         title="The sidebar's heads, set apart over their rows"
       >
         <Headings />
+      </CatalogSection>
+      <CatalogSection
+        id="group-header-sections"
+        title="A page's sections, the chevron standing open or folded"
+      >
+        <Sections />
       </CatalogSection>
       <CatalogSection id="group-header-editing" title="A group named in place">
         <Renamed />

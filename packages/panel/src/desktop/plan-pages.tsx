@@ -109,7 +109,7 @@ export function PlanPages({
         <GroupHeader
           heading={GROUP_HEADING.NONE}
           label={PAGES_LIST}
-          look={GROUP_LOOK.HEADING}
+          look={GROUP_LOOK.SECTION}
           count={{
             value: listed.length,
             noun: listed.length === 1 ? TERM.PAGE.one : TERM.PAGE.many,

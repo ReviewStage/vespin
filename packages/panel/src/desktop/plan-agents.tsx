@@ -206,7 +206,7 @@ function PlanArchivedAgents({
     <div className="plan-agents-archived mt-list-gap">
       <GroupHeader
         heading={GROUP_HEADING.NONE}
-        look={GROUP_LOOK.HEADING}
+        look={GROUP_LOOK.SECTION}
         label={ARCHIVED.LABEL}
         fold={{ open: unfolded, onOpenChange: setUnfolded }}
         count={foldedCount(!unfolded, archived.length, ARCHIVED_NOUN)}
@@ -333,7 +333,7 @@ export function PlanAgents({
             key={holds ? "holds" : "empty"}
             heading={GROUP_HEADING.NONE}
             label={AGENTS_LIST}
-            look={GROUP_LOOK.HEADING}
+            look={GROUP_LOOK.SECTION}
             actions={newAgent === undefined ? undefined : <NewAgentAction start={newAgent} />}
             actionsShown={GROUP_ACTIONS.AT_REST}
             // Note that a group over no agent, standing for its read again or its archived agents, counts none.

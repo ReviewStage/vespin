@@ -47,8 +47,8 @@ import { chipSubmenu } from "./standing-submenus.js";
  *
  * Two groups stand under the byline, ahead of the Agents, each the shape
  * every group of the head takes, a `GroupHeader` over a list
- * (`related-tasks.tsx`), its head a heading's, its words alone at rest with
- * no glyph, its chevron brought by the pointer or the keyboard. Sub-tasks stands on every task, an empty head
+ * (`related-tasks.tsx`), its head a section's (`GROUP_LOOK.SECTION`), its
+ * words with no glyph and its chevron standing open or folded. Sub-tasks stands on every task, an empty head
  * where it has none, which folds nothing until it holds a row or a draft,
  * so its + is where a first sub-task starts as it is where every later one
  * does; Task relations stands only while it holds a row. Sub-tasks counts how many of the task's own sub-tasks are finished of all of
@@ -391,7 +391,7 @@ export function PlanRelations({
         <GroupHeader
           heading={GROUP_HEADING.NONE}
           label={GROUP_WORDS.SUB_TASKS}
-          look={GROUP_LOOK.HEADING}
+          look={GROUP_LOOK.SECTION}
           mark={
             count.total === 0 ? undefined : (
               <ProgressCount
@@ -447,7 +447,7 @@ export function PlanRelations({
           <GroupHeader
             heading={GROUP_HEADING.NONE}
             label={GROUP_WORDS.RELATIONS}
-            look={GROUP_LOOK.HEADING}
+            look={GROUP_LOOK.SECTION}
             count={{
               value: relations.length,
               noun: relations.length === 1 ? RELATIONS_NOUN.one : RELATIONS_NOUN.many,
