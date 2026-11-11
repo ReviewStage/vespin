@@ -1,6 +1,7 @@
 import { Schema as EffectSchema } from "effect";
 import { githubRepositoryFullNameSchema } from "./link-grammar.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
+import { looseTaskSectionIconSchema, taskSectionIconSchema } from "./task-section-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
 
 /**
@@ -104,11 +105,19 @@ const runActionCommandSchema = EffectSchema.String.check(
   EffectSchema.isPattern(/\S/u),
 );
 
-/** One run action as it is kept: its id, which a run of it is known by while the list around it changes, its label, and its command. */
+/**
+ * One run action as it is kept: its id, which a run of it is known by while
+ * the list around it changes, its label, its command, the icon it wears
+ * where it wears one, a sidebar section's kind of icon, and whether it is
+ * the repository's default, the Run button's and ⌥⌘R's.
+ */
 export const runActionSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   label: EffectSchema.String,
   command: EffectSchema.String,
+  icon: EffectSchema.optionalKey(looseTaskSectionIconSchema),
+  /** Present, and true, on the list's one default; absent on every other action. */
+  isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type RunAction = typeof runActionSchema.Type;
@@ -116,7 +125,7 @@ export type RunAction = typeof runActionSchema.Type;
 const repositoryRunActionsSchema = EffectSchema.Struct({
   /** `owner/name` as its latest save spelled it. */
   repository: EffectSchema.String,
-  /** Its actions in their order: the first is the Run button's. */
+  /** Its actions in their order: the default is the Run button's, or the first where none is. */
   actions: EffectSchema.Array(runActionSchema),
   /** When the list was last saved, in epoch milliseconds. */
   updatedAt: countedNumber,
@@ -150,11 +159,13 @@ export const workspaceRepositorySetupPutRequestSchema = EffectSchema.Struct({
   kind: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(REPOSITORY_SCRIPT_KIND))),
 });
 
-/** One run action as a save names it: the id it was read with, to keep its runs known as it, or none for an action new to the list, which the service names. */
+/** One run action as a save names it: the id it was read with, to keep its runs known as it, or none for an action new to the list, which the service names; its icon, none for the menu's own; and whether it is the default, the first so named being kept as it where several are. */
 const runActionPutSchema = EffectSchema.Struct({
   id: EffectSchema.optionalKey(wireUuidSchema),
   label: runActionLabelSchema,
   command: runActionCommandSchema,
+  icon: EffectSchema.optionalKey(taskSectionIconSchema),
+  isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /** Saving a repository's run actions (PUT to `/run-actions`), the whole list in its order, replacing the one that stood under any casing of its name; an empty list removes it. */

@@ -34,7 +34,7 @@ import { lineRuns } from "./code-card.js";
  * takes the accent, as a changed setting's does, so an unsaved edit is seen
  * from across the page. Where it is handed `onSave`, ⌘S (Ctrl+S off a Mac)
  * in it answers it, as in any code editor, the browser's own Save Page never
- * opening; where it is handed `onEscape`, Escape in it answers that, as the
+ * opening, and so does ⌘↩ (Ctrl+Enter), as a form's multi-line field is sent; where it is handed `onEscape`, Escape in it answers that, as the
  * text field's does. A key an input method is composing is the input
  * method's.
  */
@@ -83,15 +83,17 @@ const ZERO_WIDTH_SPACE = "\u200b";
 const LATIN_LETTER = /^[a-z]$/i;
 
 /**
- * Whether a key is the save chord: ⌘S on a Mac, Ctrl+S elsewhere, with no
- * other modifier. The character is read, as the app's shortcuts read it, so
- * a Dvorak S is S; the physical S key answers too where its character is no
- * Latin letter, as on a Cyrillic or Greek layout, which would type none.
+ * Whether a key is a save chord: ⌘S or ⌘↩ on a Mac, Ctrl+S or Ctrl+Enter
+ * elsewhere, with no other modifier. The character is read, as the app's
+ * shortcuts read it, so a Dvorak S is S; the physical S key answers too
+ * where its character is no Latin letter, as on a Cyrillic or Greek layout,
+ * which would type none.
  */
 function savingKey(event: KeyboardEvent): boolean {
   const key = event.key.toLowerCase();
   const isS = key === "s" || (event.code === "KeyS" && !LATIN_LETTER.test(key));
-  return isS && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
+  const saves = isS || event.key === "Enter";
+  return saves && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
 }
 
 /** One line as drawn beneath: in its colors where they spell it, plain where they do not. */

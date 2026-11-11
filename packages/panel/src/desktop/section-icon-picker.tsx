@@ -1082,6 +1082,7 @@ export function SectionIconWell({
   size,
   variant,
   disabled,
+  title = "Section icon",
 }: {
   icon: TaskSectionIcon | undefined;
   open: boolean;
@@ -1091,6 +1092,8 @@ export function SectionIconWell({
   size?: ButtonSize | undefined;
   variant?: ButtonVariant | undefined;
   disabled?: boolean | undefined;
+  /** What the picker is called: a section's icon, or a run action's. */
+  title?: string | undefined;
 }): React.JSX.Element {
   const search = useRef<HTMLInputElement | null>(null);
   const label = icon === undefined ? "Add icon" : "Change icon";
@@ -1098,7 +1101,7 @@ export function SectionIconWell({
     <PopoverIconButton
       icon={sectionGlyph(icon) ?? <SmilePlusIcon className="text-muted-foreground" />}
       label={label}
-      title="Section icon"
+      title={title}
       open={open}
       onOpenChange={onOpenChange}
       size={size ?? BUTTON_SIZE.CONTROL}

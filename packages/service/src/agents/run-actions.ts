@@ -44,5 +44,11 @@ export const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const actions = yield* hostedStoreOrUnavailable(readRunActions(agent.organizationId, repository));
   const action = actions.find((each) => each.id === actionId);
   if (action === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  return { id: action.id, label: action.label, command: action.command };
+  return {
+    id: action.id,
+    label: action.label,
+    command: action.command,
+    ...(action.icon === null ? undefined : { icon: action.icon }),
+    ...(action.isDefault ? { isDefault: true } : undefined),
+  };
 });

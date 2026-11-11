@@ -157,6 +157,29 @@ const taskSectionIconReadSchema = EffectSchema.Union([
   ),
 ]);
 
+/**
+ * An icon as a list that is not a section's carries it, a run action's
+ * among them: a glyph's color as any text, so a color a newer service added
+ * fails nothing, and the value reads the same on both sides of the act
+ * port. `knownTaskSectionIcon` reads it as an icon to draw.
+ */
+export const looseTaskSectionIconSchema = EffectSchema.Union([
+  emojiIconSchema,
+  EffectSchema.Struct({
+    ...glyphIconSchema.fields,
+    color: EffectSchema.optionalKey(EffectSchema.String),
+  }),
+]);
+
+export type LooseTaskSectionIcon = typeof looseTaskSectionIconSchema.Type;
+
+/** A loosely carried icon as one to draw: a glyph's color off the palette read as none, so it wears the text's own. */
+export function knownTaskSectionIcon(icon: LooseTaskSectionIcon): TaskSectionIcon {
+  if (icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return icon;
+  const { color, ...glyph } = icon;
+  return isIconColor(color) ? { ...glyph, color } : glyph;
+}
+
 /** A section's title: its ends trimmed, never blank, and bounded. */
 export const taskSectionTitleSchema = EffectSchema.Trim.check(
   EffectSchema.isNonEmpty(),

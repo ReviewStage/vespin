@@ -51,7 +51,13 @@ function removes(script: string): boolean {
 function runActionLists(rows: readonly WorkspaceRunAction[]): RepositoryRunActions[] {
   const lists: RepositoryRunActions[] = [];
   for (const row of rows) {
-    const action = { id: row.id, label: row.label, command: row.command };
+    const action = {
+      id: row.id,
+      label: row.label,
+      command: row.command,
+      ...(row.icon === null ? undefined : { icon: row.icon }),
+      ...(row.isDefault ? { isDefault: true } : undefined),
+    };
     const last = lists.at(-1);
     if (last !== undefined && last.repository.toLowerCase() === row.repository.toLowerCase()) {
       lists[lists.length - 1] = {

@@ -1,5 +1,6 @@
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
+import { knownTaskSectionIcon } from "@repo/features/task-section-wire";
 import { SANDBOX_STATE, type TerminalSummary } from "@repo/features/terminal-wire";
 import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -7,13 +8,23 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { PlayIcon, SplitButton, STATUS_TONE, useMenu } from "@repo/ui";
+import {
+  GAP,
+  INLINE_REF_LOOK,
+  Inline,
+  InlineRef,
+  PlayIcon,
+  SplitButton,
+  STATUS_TONE,
+  useMenu,
+} from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { askAct } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuSubmenu } from "../desktop/action-menu.js";
+import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { useOpenSettings } from "../open-settings.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import {
@@ -37,10 +48,11 @@ import { listedAgentIn } from "./use-workspace-agents.js";
  * own buttons and over the side panel its Terminal tab opens in
  * (`RunActionsButton`); ⌘K, whose open task lists each as Run or Stop
  * (`runPaletteRows`); and a phone's ⋯, which has no room for the button
- * (`runSubmenu`). The button's main part runs the list's first action, or
- * stops it while it runs, as ⌥⌘R does in the desktop app; its chevron
- * drops every action, each a run or, while it runs, a stop, and the way to
- * edit them. A press is the only thing that runs one: a stopped sandbox is
+ * (`runSubmenu`). The button's main part runs the repository's default
+ * action, or the list's first where none is the default, or stops it while
+ * it runs, as ⌥⌘R does in the desktop app; its chevron drops every action,
+ * each with its icon, a run or, while it runs, a stop, under the agent it
+ * runs in, and the way to edit them. A press is the only thing that runs one: a stopped sandbox is
  * resumed by the press, as opening its Terminal tab resumes it, and the
  * action's shell is then shown in the side panel's Terminal tab. Which
  * actions run is read off the agent's shells, each marked with the action
@@ -54,6 +66,7 @@ const SHELLS_EVERY_MS = 5_000;
 const WORDS = {
   MENU: "Run actions",
   SUBMENU: "Run",
+  SUBMENU_IN: "Run in",
   EDIT: "Edit run actions…",
   RUNNING: "Running",
   RUN: (label: string) => `Run ${label}`,
@@ -155,8 +168,10 @@ interface OfferedAction {
 /** An agent's run actions as every place that offers them reads them (`useRunActions`). */
 export interface RunOffer {
   readonly agentId: string;
-  /** The actions in the list's order, the first the one the button's main part and ⌥⌘R press. */
+  /** The actions in the list's order. */
   readonly actions: readonly [OfferedAction, ...OfferedAction[]];
+  /** The one the button's main part and ⌥⌘R press: the default, or the first where none is. */
+  readonly primary: OfferedAction;
   /** Whether a press is still under way, which holds the button and ⌥⌘R. */
   readonly busy: boolean;
   /** Whether ⌥⌘R answers here: the desktop app, with the agent on screen. */
@@ -218,9 +233,14 @@ export function useRunActions(
   };
   const [first, ...rest] = actions;
   if (first === undefined) return undefined;
+  const listedActions: readonly [OfferedAction, ...OfferedAction[]] = [
+    offer(first),
+    ...rest.map(offer),
+  ];
   return {
     agentId,
-    actions: [offer(first), ...rest.map(offer)],
+    actions: listedActions,
+    primary: listedActions.find((each) => each.action.isDefault === true) ?? listedActions[0],
     busy,
     keyed: desktop && shown,
     subject: shortcutSubject(SHORTCUT_SUBJECT.AGENT, agentId),
@@ -233,17 +253,28 @@ function actionLabel({ action, runs }: OfferedAction): string {
   return runs ? WORDS.STOP(action.label) : action.label;
 }
 
-/** The actions as a menu lists them, the first printing ⌥⌘R where it acts on the agent, then the way to edit them. */
+/** An action's glyph: Stop while it runs, otherwise its own icon, or the play triangle where it wears none. */
+function actionGlyph({ action, runs }: OfferedAction): React.JSX.Element {
+  if (runs) return <GLYPH.STOP />;
+  return (
+    (action.icon === undefined ? undefined : sectionGlyph(knownTaskSectionIcon(action.icon))) ?? (
+      <PlayIcon />
+    )
+  );
+}
+
+/** The actions as a menu lists them, the primary printing ⌥⌘R where it acts on the agent, then the way to edit them. */
 function runItems(offer: RunOffer): MenuAction[][] {
-  const items = offer.actions.map((offered, index): MenuAction => {
+  const items = offer.actions.map((offered): MenuAction => {
     const item: MenuAction = {
+      key: offered.action.id,
       label: actionLabel(offered),
       detail: offered.action.command,
-      icon: offered.runs ? <GLYPH.STOP /> : <PlayIcon />,
+      icon: actionGlyph(offered),
       replayMasked: true,
       onSelect: offered.onPress,
     };
-    return index === 0
+    return offered === offer.primary
       ? { ...item, command: APP_COMMAND.RUN_ACTION, subject: offer.subject }
       : item;
   });
@@ -256,7 +287,7 @@ export function runSubmenu(offer: RunOffer | undefined): MenuSubmenu | undefined
   return { label: WORDS.SUBMENU, icon: <PlayIcon />, items: runItems(offer).flat() };
 }
 
-/** One action as ⌘K lists it: Run or Stop and its name, its command or that it runs, and ⌥⌘R on the first where the key acts. */
+/** One action as ⌘K lists it: Run or Stop and its name, its command or that it runs, and ⌥⌘R on the primary where the key acts. */
 export interface RunPaletteRow {
   readonly id: string;
   readonly label: string;
@@ -269,31 +300,35 @@ export interface RunPaletteRow {
 /** The actions as ⌘K lists them, each worded as the act it is. */
 export function runPaletteRows(offer: RunOffer | undefined): readonly RunPaletteRow[] {
   if (offer === undefined) return [];
-  return offer.actions.map((offered, index) => ({
+  return offer.actions.map((offered) => ({
     id: offered.action.id,
     label: offered.runs ? WORDS.STOP(offered.action.label) : WORDS.RUN(offered.action.label),
     detail: offered.runs ? WORDS.RUNNING : offered.action.command,
-    icon: offered.runs ? <GLYPH.STOP /> : <PlayIcon />,
-    keyed: index === 0 && offer.keyed,
+    icon: actionGlyph(offered),
+    keyed: offered === offer.primary && offer.keyed,
     onPress: offered.onPress,
   }));
 }
 
 /**
- * The Run button: its main part runs the first action, or stops it while
- * it runs, and its chevron drops every action; it answers ⌥⌘R on the agent
+ * The Run button: its main part runs the primary action, or stops it while
+ * it runs, and its chevron drops every action under the agent they run in,
+ * named by its glyph and name as a mention is; it answers ⌥⌘R on the agent
  * shown in the desktop app. Its words name the agent it acts on.
  */
 export function RunActionsButton({
   offer,
+  agentGlyph,
   agentName,
 }: {
   offer: RunOffer;
+  /** The glyph the agent's tab wears, which its menu's heading names it with. */
+  agentGlyph: React.JSX.Element;
   /** The agent the button acts on, as its tab names it, which its hint and menu say. */
   agentName: string;
 }): React.JSX.Element {
   const menu = useMenu(true);
-  const [first] = offer.actions;
+  const first = offer.primary;
   useShortcutTarget(offer.keyed ? offer.subject : undefined, RUN_KEYS);
   useAppCommand(APP_COMMAND.RUN_ACTION, offer.keyed && !offer.busy ? first.onPress : undefined);
   const said = first.runs ? WORDS.STOP(first.action.label) : WORDS.RUN(first.action.label);
@@ -313,7 +348,17 @@ export function RunActionsButton({
       {menu.drawn && (
         <ActionMenu
           label={WORDS.MENU}
-          heading={WORDS.IN(WORDS.SUBMENU, agentName)}
+          heading={
+            <Inline gap={GAP.ICON} wrap={false}>
+              {WORDS.SUBMENU_IN}
+              <InlineRef
+                look={INLINE_REF_LOOK.PILL}
+                glyph={agentGlyph}
+                label={agentName}
+                hint={false}
+              />
+            </Inline>
+          }
           menu={menu.drawn}
           groups={runItems(offer)}
           onClose={menu.close}

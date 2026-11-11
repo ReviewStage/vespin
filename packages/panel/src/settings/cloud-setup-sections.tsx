@@ -1,5 +1,10 @@
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  knownTaskSectionIcon,
+  TASK_SECTION_ICON_KIND,
+  type TaskSectionIcon,
+} from "@repo/features/task-section-wire";
 import { momentText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
@@ -16,36 +21,33 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import {
-  ArrowDownIcon,
-  ArrowUpIcon,
   AVATAR_SIZE,
+  Badge,
   BUTTON_VARIANT,
   Button,
   CONFIRM_LOSS,
   CodeEditor,
   ConfirmDialog,
-  DIALOG_TONE,
-  Dialog,
-  DialogActions,
-  FormField,
   GAP,
   GlyphSlot,
   INLINE_REF_LOOK,
   Inline,
   InlineRef,
   OneLine,
+  PlayIcon,
   PlusIcon,
   POPOVER_ALIGN,
   RepositoryPicture,
+  SETTINGS_ORDER_HANDLE,
   SETTINGS_ROW_CONTROLS,
-  SETTINGS_ROW_INDENT,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
+  SettingsOrderedRows,
   SettingsRowControlHold,
+  SettingsRowMark,
   type SettingsRowSkeletonShape,
   SettingsRowsSkeleton,
   SettingsSection,
-  Stack,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -56,7 +58,7 @@ import {
   TrashIcon,
   useConfirmDialog,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import { StarIcon, StarOffIcon } from "@repo/ui/icons";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
@@ -67,11 +69,12 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
 import { useTypedCodeColoring } from "../code-coloring.js";
 import { useConfirmAct } from "../confirm-act.js";
-import { useFormDialog } from "../desktop/use-form-dialog.js";
+import { SectionIconWell, sectionGlyph } from "../desktop/section-icon-picker.js";
+import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
@@ -95,7 +98,7 @@ import { MenuRow } from "./menu-row.js";
  * Bash's colors with its lines numbered, at least a few lines tall; an owner
  * or admin edits each in place, as a file is edited, its border taking the
  * accent and Discard and Save standing at its row's end once it differs from
- * what is saved, ⌘S and Escape in it pressing them, in a line
+ * what is saved, ⌘S or ⌘↩ and Escape in it pressing them, in a line
  * that already stands as tall as they are, so neither their arrival nor the
  * first character typed moves the page; types the install script into its
  * empty row where none is saved
@@ -106,7 +109,10 @@ import { MenuRow } from "./menu-row.js";
  * a cloud sandbox, so an owner sees whether it works without starting an
  * agent: when, in which agent's sandbox, whose name opens the agent so its
  * Terminal shows the log, and how it exited, a failure in the danger ink;
- * a script saved since that run says it has not run since.
+ * a script saved since that run says it has not run since. A repository's
+ * run actions are edited in place the same way, each with its label and
+ * icon leading its row, dragged by its grip to another place, and one made
+ * the Run button's default from its ⋯.
  */
 
 /** A script's row while the setup is read. */
@@ -242,7 +248,7 @@ function ScriptEditor({
   autoFocus?: boolean;
   /** Whether it holds an edit not yet saved, which its border says. */
   changed: boolean;
-  /** What ⌘S in it does: the row's Save, where it may save now. */
+  /** What ⌘S or ⌘↩ in it does: the row's Save, where it may save now. */
   onSave: (() => void) | undefined;
   /** What Escape in it does: the row's Discard or Cancel, while either stands. */
   onLeave: (() => void) | undefined;
@@ -412,7 +418,7 @@ function ScriptRow({
   const save = () => saving.mutate({ target, script: shown });
   const editing = changed || added !== undefined;
   const leave = added === undefined ? discard : added.onCancel;
-  // Note that ⌘S answers only what the row's Save would: an edit that may be saved, with no save already out.
+  // Note that ⌘S and ⌘↩ answer only what the row's Save would: an edit that may be saved, with no save already out.
   const saveKey = editing && savable(shown) && !saving.isPending ? save : undefined;
   const actions =
     manages && script !== ""
@@ -625,11 +631,18 @@ function RepositoryScriptsSection({
   );
 }
 
-/** Which run action the dialog writes: a new one at the end of a repository's list, or the one at `index` in it. */
-interface RunActionTarget {
-  readonly repository: string;
-  readonly index?: number | undefined;
+/** A run action as its row edits it: its label, its command, and its icon. */
+interface RunActionDraft {
+  readonly label: string;
+  readonly command: string;
+  readonly icon: TaskSectionIcon | undefined;
 }
+
+/** A new action's draft, before anything is typed. */
+const EMPTY_DRAFT: RunActionDraft = { label: "", command: "", icon: undefined };
+
+/** What the run actions' list is called to a reader, which names no repository so a screen recording carries none. */
+const RUN_ACTIONS_LIST = "Run actions";
 
 /** Every repository's run actions as the setup answers them. */
 type RunActionLists = readonly RepositoryRunActions[];
@@ -639,30 +652,65 @@ interface RunActionWritten {
   readonly id: string | undefined;
   readonly label: string;
   readonly command: string;
+  readonly icon: TaskSectionIcon | undefined;
+  readonly isDefault: boolean;
 }
 
-/** A repository's run actions as the answer holds them; none where it holds no list. */
-function runActionsOf(lists: RunActionLists, repository: string): readonly RunAction[] {
-  return lists.find((each) => sameRepository(each.repository, repository))?.actions ?? [];
+/** An action as saved, written back as it stands. */
+function writtenOf(action: RunAction): RunActionWritten {
+  return {
+    id: action.id,
+    label: action.label,
+    command: action.command,
+    icon: action.icon === undefined ? undefined : knownTaskSectionIcon(action.icon),
+    isDefault: action.isDefault === true,
+  };
+}
+
+/** An action as saved, as its row starts editing it. */
+function draftOf(action: RunAction): RunActionDraft {
+  return {
+    label: action.label,
+    command: action.command,
+    icon: action.icon === undefined ? undefined : knownTaskSectionIcon(action.icon),
+  };
+}
+
+/** Whether two icons are one: the same emoji, or the same glyph in the same color. */
+function sameIcon(one: TaskSectionIcon | undefined, other: TaskSectionIcon | undefined): boolean {
+  if (one === undefined || other === undefined) return one === other;
+  if (one.kind === TASK_SECTION_ICON_KIND.EMOJI || other.kind === TASK_SECTION_ICON_KIND.EMOJI) {
+    return (
+      one.kind === other.kind && "emoji" in one && "emoji" in other && one.emoji === other.emoji
+    );
+  }
+  return one.glyph === other.glyph && one.color === other.color;
+}
+
+/** Whether two drafts say the same: label, command, and icon. */
+function sameDraft(one: RunActionDraft, other: RunActionDraft): boolean {
+  return (
+    one.label === other.label && one.command === other.command && sameIcon(one.icon, other.icon)
+  );
 }
 
 /** Whether an action may be saved as typed: a label and a command, each within its bound. */
-function runActionSavable(label: string, command: string): boolean {
-  const name = label.trim();
+function runActionSavable(draft: RunActionDraft): boolean {
+  const name = draft.label.trim();
   return (
     name !== "" &&
     name.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS &&
-    command.trim() !== "" &&
-    command.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_COMMAND_CHARS
+    draft.command.trim() !== "" &&
+    draft.command.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_COMMAND_CHARS
   );
 }
 
 /**
  * A save of a repository's whole list of run actions, an empty one removing
  * it, its answer drawn over the page at once. Note that the section holds
- * one for every row and its card, and each control stands still while it is
- * out, because a save writes the whole list as its control last read it, so
- * a second press under the first would write over the first's change.
+ * one for every row, and each control stands still while it is out, because
+ * a save writes the whole list as its control last read it, so a second
+ * press under the first would write over the first's change.
  */
 function useSaveRunActions(workspaceId: string) {
   const queries = useQueryClient();
@@ -677,10 +725,14 @@ function useSaveRunActions(workspaceId: string) {
       sendAct(ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT, {
         workspaceId,
         repository,
-        // An action new to the list names no id, and the service names it.
-        actions: actions.map(({ id, label, command }) =>
-          id === undefined ? { label, command } : { id, label, command },
-        ),
+        // An action new to the list names no id, and the service names it; an icon and the default are named only where they stand.
+        actions: actions.map(({ id, label, command, icon, isDefault }) => ({
+          ...(id === undefined ? undefined : { id }),
+          label,
+          command,
+          ...(icon === undefined ? undefined : { icon }),
+          ...(isDefault ? { isDefault: true } : undefined),
+        })),
       }),
     onSuccess: (answer) => drawAnswer(queries, workspaceId, answer),
   });
@@ -690,140 +742,105 @@ function useSaveRunActions(workspaceId: string) {
 type RunActionSave = ReturnType<typeof useSaveRunActions>;
 
 /**
- * The card that adds a run action to a repository, or edits one: its label
- * and its command, the command colored as Bash. Saving writes the
- * repository's whole list with the action added at its end or changed in
- * its place.
+ * A repository's run actions in the order the service keeps, a drag drawn
+ * at once and saved as the whole list; the list rests on the order sent
+ * until the save answers, and its refusal is said under the repository's
+ * row as any save's is.
  */
-function useRunActionDialog(saving: RunActionSave, lists: RunActionLists) {
-  const [target, setTarget] = useState<RunActionTarget | undefined>(undefined);
-  const [label, setLabel] = useState("");
-  const [command, setCommand] = useState("");
-  const lines = useTypedCodeColoring(SCRIPT_LANGUAGE, command);
-  const act = useConfirmAct(saving, {
-    send: () => {
-      const repository = target?.repository ?? "";
-      const standing = runActionsOf(lists, repository);
-      const typed = { label: label.trim(), command };
-      const index = target?.index;
-      const actions =
-        index === undefined
-          ? [...standing, { id: undefined, ...typed }]
-          : standing.map((each, at) => (at === index ? { ...each, ...typed } : each));
-      return saving.mutateAsync({ repository, actions });
-    },
-    answered: () => ACCEPTED,
-    failed: rejected,
-  });
-  const confirm = useConfirmDialog(
-    { subject: true, surfaceOpen: true },
-    act,
-    confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
-  );
-  const form = useFormDialog(confirm, target !== undefined && runActionSavable(label, command));
-  const edited =
-    target?.index === undefined ? undefined : runActionsOf(lists, target.repository)[target.index];
-  const open = (next: RunActionTarget) => {
-    const shown =
-      next.index === undefined ? undefined : runActionsOf(lists, next.repository)[next.index];
-    setTarget(next);
-    setLabel(shown?.label ?? "");
-    setCommand(shown?.command ?? "");
-    confirm.ask();
+function useRunActionOrder(
+  saving: RunActionSave,
+  repository: string,
+  actions: readonly RunAction[],
+): { ordered: readonly RunAction[]; move: (from: number, to: number) => void } {
+  const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
+  const byId = new Map(actions.map((action) => [action.id, action]));
+  // Note that an action added or removed meanwhile is drawn where the service says, after those sent.
+  const ordered =
+    sentOrder === undefined
+      ? actions
+      : [
+          ...sentOrder.flatMap((id) => byId.get(id) ?? []),
+          ...actions.filter((action) => !sentOrder.includes(action.id)),
+        ];
+  const move = (from: number, to: number) => {
+    const next = [...ordered];
+    const [moved] = next.splice(from, 1);
+    if (moved === undefined || from === to) return;
+    next.splice(to, 0, moved);
+    setSentOrder(next.map((action) => action.id));
+    void saving
+      .mutateAsync({ repository, actions: next.map(writtenOf) })
+      .catch(() => undefined)
+      .then(() => setSentOrder(undefined));
   };
-  const dialog = (
-    <Dialog
-      open={form.open}
-      title={edited === undefined ? "Add run action" : `Edit ${edited.label}`}
-      replayUnmasked
-      titleReplayMasked={edited !== undefined}
-      busy={form.settling}
-      refused={form.refusal !== undefined}
-      onDismiss={form.dismiss}
-      actions={
-        <DialogActions
-          onCancel={form.dismiss}
-          act={{ verb: "Save", tone: DIALOG_TONE.PRIMARY, running: "Saving", ...form.act }}
-        />
-      }
-    >
-      <Stack>
-        <FormField label="Label">
-          {(control) => (
-            <ReplayMask>
-              <TextField
-                field={control}
-                placeholder="Dev server"
-                maxLength={WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS}
-                disabled={form.settling}
-                value={label}
-                onChange={setLabel}
-                onEnter={form.submit}
-              />
-            </ReplayMask>
-          )}
-        </FormField>
-        <FormField
-          label="Command"
-          description="Runs from the checkout with the workspace's environment variables."
-          error={replayMaskedError(form.refusal)}
-        >
-          {(control) => (
-            <ReplayMask>
-              <CodeEditor
-                id={control.id}
-                label="Command"
-                describedBy={control["aria-describedby"]}
-                invalid={control["aria-invalid"]}
-                value={command}
-                onChange={setCommand}
-                lines={lines}
-                placeholder="pnpm dev"
-                rows={MIN_SCRIPT_LINES}
-                readOnly={form.settling}
-              />
-            </ReplayMask>
-          )}
-        </FormField>
-      </Stack>
-    </Dialog>
-  );
-  return { open, dialog };
+  return { ordered, move };
 }
 
 /**
- * One run action's row, under its repository's: its label, its command
- * under it, and for an owner or admin a ⋯ with Edit, Move up, Move down,
- * and Remove, a removal asking first.
+ * One run action's row, edited in place as a script is: its icon's well
+ * and its label leading the row, its command under it, colored as Bash with
+ * its lines numbered, and Discard and Save at the row's end once any of the
+ * three differs from what is saved, ⌘S or ⌘↩ in the command and Enter in the
+ * label pressing Save, Escape pressing Discard. A saved action's ⋯ makes it
+ * the repository's default, or lets the default go, and removes it, a
+ * removal asking first. An action just added stands the same way, its caret
+ * in its label and Cancel at its end, until it is saved, when the saved list
+ * draws it in its place. A member reads each with its icon, read-only.
  */
 function RunActionRow({
   saving,
   repository,
   actions,
-  index,
+  action,
   manages,
-  onEdit,
+  added,
 }: {
-  /** The section's one save, which every row and the card share (`useSaveRunActions`). */
+  /** The section's one save, which every row shares (`useSaveRunActions`). */
   saving: RunActionSave;
   repository: string;
-  /** The repository's whole list, which every change saves anew. */
+  /** The repository's whole list as saved, which every change saves anew. */
   actions: readonly RunAction[];
-  index: number;
+  /** The action as saved; none for one just added. */
+  action: RunAction | undefined;
   manages: boolean;
-  onEdit: () => void;
-}): React.JSX.Element | null {
-  const action = actions[index];
-  const save = (next: readonly RunActionWritten[]) => saving.mutate({ repository, actions: next });
-  const moved = (by: number) => {
-    const next = [...actions];
-    const [taken] = next.splice(index, 1);
-    if (taken !== undefined) next.splice(index + by, 0, taken);
-    return next;
+  /** An action just added and not yet saved: what Cancel does to let it go. */
+  added?: { readonly onCancel: () => void } | undefined;
+}): React.JSX.Element {
+  const saved = action === undefined ? EMPTY_DRAFT : draftOf(action);
+  const [edited, setEdited] = useState<RunActionDraft | undefined>(undefined);
+  const [picking, setPicking] = useState(false);
+  const busy = saving.isPending;
+  // An edit the saved action now agrees with, its own save's or another's, is let go.
+  if (edited !== undefined && added === undefined && sameDraft(edited, saved) && !busy) {
+    setEdited(undefined);
+  }
+  const shown = edited ?? saved;
+  const changed = edited !== undefined && !sameDraft(edited, saved);
+  const editing = changed || added !== undefined;
+  const edit = (patch: Partial<RunActionDraft>) => setEdited({ ...shown, ...patch });
+  const typed = { label: shown.label.trim(), command: shown.command, icon: shown.icon };
+  const save = () => {
+    const standing = actions.map(writtenOf);
+    const next =
+      action === undefined
+        ? [...standing, { id: undefined, isDefault: false, ...typed }]
+        : standing.map((each) => (each.id === action.id ? { ...each, ...typed } : each));
+    saving.mutate({ repository, actions: next }, { onSuccess: () => added?.onCancel() });
   };
+  const discard = () => {
+    saving.reset();
+    setEdited(undefined);
+  };
+  const leave = added === undefined ? discard : added.onCancel;
+  const canSave = runActionSavable(shown);
+  // Note that ⌘S, ⌘↩, and Enter answer only what the row's Save would: an edit that may be saved, with no save already out.
+  const saveKey = editing && canSave && !busy ? save : undefined;
   const removeAct = useConfirmAct(saving, {
     send: () =>
-      saving.mutateAsync({ repository, actions: actions.filter((_, at) => at !== index) }),
+      saving.mutateAsync({
+        repository,
+        actions: actions.filter((each) => each.id !== action?.id).map(writtenOf),
+      }),
     answered: () => ACCEPTED,
     failed: rejected,
   });
@@ -832,48 +849,111 @@ function RunActionRow({
     removeAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
   );
-  if (action === undefined) return null;
-  const busy = saving.isPending;
-  const menu = manages
-    ? [
-        [
-          { label: "Edit", icon: <GLYPH.RENAME />, disabled: busy, onSelect: onEdit },
-          {
-            label: "Move up",
-            icon: <ArrowUpIcon />,
-            disabled: busy || index === 0,
-            onSelect: () => save(moved(-1)),
-          },
-          {
-            label: "Move down",
-            icon: <ArrowDownIcon />,
-            disabled: busy || index === actions.length - 1,
-            onSelect: () => save(moved(1)),
-          },
-        ],
-        [
-          {
-            label: "Remove",
-            icon: <TrashIcon />,
-            danger: true,
-            disabled: busy,
-            onSelect: removal.ask,
-          },
-        ],
-      ]
-    : [];
+  const isDefault = action?.isDefault === true;
+  const setDefault = (on: boolean) =>
+    saving.mutate({
+      repository,
+      actions: actions.map((each) => ({
+        ...writtenOf(each),
+        isDefault: on && each.id === action?.id,
+      })),
+    });
+  const menu =
+    manages && action !== undefined
+      ? [
+          [
+            isDefault
+              ? {
+                  label: "Remove default",
+                  icon: <StarOffIcon />,
+                  disabled: busy,
+                  onSelect: () => setDefault(false),
+                }
+              : {
+                  label: "Make default",
+                  icon: <StarIcon />,
+                  disabled: busy,
+                  onSelect: () => setDefault(true),
+                },
+          ],
+          [
+            {
+              label: "Remove",
+              icon: <TrashIcon />,
+              danger: true,
+              disabled: busy,
+              onSelect: removal.ask,
+            },
+          ],
+        ]
+      : [];
   return (
     <>
       <MenuRow
-        thing={action.label}
+        thing={action?.label ?? "New run action"}
         actions={menu}
         row={{
-          label: <ReplayMask>{action.label}</ReplayMask>,
-          description: <ReplayMask>{action.command}</ReplayMask>,
-          indent: SETTINGS_ROW_INDENT.MARK,
+          leading: manages ? (
+            <SectionIconWell
+              icon={shown.icon}
+              title="Run action icon"
+              open={picking}
+              onOpenChange={(open) => setPicking(open)}
+              onIcon={(icon) => edit({ icon })}
+              disabled={busy}
+            />
+          ) : (
+            <SettingsRowMark>{sectionGlyph(shown.icon) ?? <PlayIcon />}</SettingsRowMark>
+          ),
+          label: manages ? (
+            <ReplayMask>
+              <TextField
+                label="Label"
+                placeholder="Dev server"
+                maxLength={WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS}
+                readOnly={busy}
+                autoFocus={added !== undefined}
+                value={shown.label}
+                onChange={(label) => edit({ label })}
+                onEnter={saveKey}
+                onEscape={editing && !busy ? leave : undefined}
+              />
+            </ReplayMask>
+          ) : (
+            <ReplayMask>
+              <OneLine>{shown.label}</OneLine>
+            </ReplayMask>
+          ),
+          adornment: isDefault ? <Badge>Default</Badge> : undefined,
+          // Note that Discard and Save stay beside the label at any width, the label giving way, since dropping under it would move the editor at a phone's width.
+          controls: SETTINGS_ROW_CONTROLS.BESIDE,
+          control: editing ? (
+            <EditActions
+              leave={added === undefined ? "Discard" : "Cancel"}
+              saving={busy}
+              canSave={canSave}
+              onLeave={leave}
+              onSave={save}
+            />
+          ) : manages ? (
+            <SettingsRowControlHold />
+          ) : undefined,
+          below: (
+            <ScriptEditor
+              label="Command"
+              value={shown.command}
+              onChange={(command) => edit({ command })}
+              placeholder="pnpm dev"
+              editable={manages}
+              busy={busy}
+              changed={changed}
+              onSave={saveKey}
+              onLeave={editing && !busy ? leave : undefined}
+            />
+          ),
         }}
       />
-      {manages ? (
+      {manages && action !== undefined ? (
         <ConfirmDialog
           open
           confirm={removal}
@@ -891,13 +971,19 @@ function RunActionRow({
   );
 }
 
+/** An action an owner or admin added to a repository and has not yet saved, known by a key of its own until it is. */
+interface AddedRunAction {
+  readonly repository: string;
+  readonly key: number;
+}
+
 /**
  * Each repository's run actions, behind the Run actions experiment: a row
- * for the repository with its Add action, and a row for each action under
- * it, in its order. An owner or admin adds one from Add action, to a
- * repository already listed or one picked in the repository menu, and
- * edits, moves, or removes one from its ⋯; every change saves the
- * repository's whole list.
+ * for the repository with its Add action, and its actions under it in their
+ * order, each edited in place. An owner or admin adds one from Add action,
+ * to a repository already listed or one picked in the repository menu,
+ * drags one by its grip to another place, and makes one the default or
+ * removes it from its ⋯; every change saves the repository's whole list.
  */
 function RunActionsSection({
   workspaceId,
@@ -914,69 +1000,102 @@ function RunActionsSection({
   pictures: boolean;
 }): React.JSX.Element {
   const saving = useSaveRunActions(workspaceId);
-  const dialog = useRunActionDialog(saving, lists);
-  // A repository whose list is full is left out of Add action's menu, as its own row's Add action stands still, so no card opens on a save the service would refuse.
-  const full = lists
-    .filter((list) => list.actions.length >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS)
-    .map((list) => list.repository);
+  const [added, setAdded] = useState<readonly AddedRunAction[]>([]);
+  const nextKey = useRef(0);
+  const addedTo = (repository: string) =>
+    added.filter((each) => sameRepository(each.repository, repository));
+  const countOf = (repository: string) =>
+    runActionsOf(lists, repository).length + addedTo(repository).length;
+  const add = (repository: string) => {
+    if (countOf(repository) >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS) return;
+    nextKey.current += 1;
+    const key = nextKey.current;
+    setAdded((now) => [...now, { repository, key }]);
+  };
+  const letGo = (key: number) => setAdded((now) => now.filter((each) => each.key !== key));
+  // Note that a repository with only an unsaved action stands after the saved ones, so the row being typed in does not jump as the list is read again.
+  const repositories = [
+    ...lists.map((list) => list.repository),
+    ...added
+      .map((each) => each.repository)
+      .filter(
+        (repository, at, all) =>
+          !lists.some((list) => sameRepository(list.repository, repository)) &&
+          all.findIndex((other) => sameRepository(other, repository)) === at,
+      ),
+  ];
+  // A repository whose list is full is left out of Add action's menu, as its own row's Add action stands still, so no row opens on a save the service would refuse.
+  const full = repositories.filter(
+    (repository) => countOf(repository) >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS,
+  );
   return (
     <SettingsSection
       title="Run actions"
-      caption="Listed in each cloud agent's Run menu, the first on its button. Each runs in a Terminal tab of the agent's sandbox when pressed."
+      caption="Listed in each cloud agent's Run menu, the default on its button. Each runs in a Terminal tab of the agent's sandbox when pressed."
       action={
         manages ? (
           <AddRepositoryButton
             workspaceId={workspaceId}
             label="Add action"
             taken={full}
-            onPick={(repository) => {
-              if (!saving.isPending) dialog.open({ repository });
-            }}
+            onPick={add}
           />
         ) : undefined
       }
     >
       {read ?? (
         <>
-          {lists.length === 0 ? <SettingsLine>No run actions yet.</SettingsLine> : null}
-          {lists.map((list) => (
+          {repositories.length === 0 ? <SettingsLine>No run actions yet.</SettingsLine> : null}
+          {repositories.map((repository) => (
             <RunActionsOfRepository
-              key={list.repository.toLowerCase()}
+              key={repository.toLowerCase()}
               saving={saving}
-              repository={list.repository}
-              actions={list.actions}
+              repository={repository}
+              actions={runActionsOf(lists, repository)}
+              added={manages ? addedTo(repository) : []}
               manages={manages}
               pictures={pictures}
-              onAdd={() => dialog.open({ repository: list.repository })}
-              onEdit={(index) => dialog.open({ repository: list.repository, index })}
+              full={countOf(repository) >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS}
+              onAdd={() => add(repository)}
+              onLetGo={letGo}
             />
           ))}
         </>
       )}
-      {manages ? dialog.dialog : null}
     </SettingsSection>
   );
 }
 
-/** One repository's row and its run actions' rows under it. */
+/** A repository's run actions as the answer holds them; none where it holds no list. */
+function runActionsOf(lists: RunActionLists, repository: string): readonly RunAction[] {
+  return lists.find((each) => sameRepository(each.repository, repository))?.actions ?? [];
+}
+
+/** One repository's row, its saved run actions under it, dragged by their grips, and those added to it not yet saved after them. */
 function RunActionsOfRepository({
   saving,
   repository,
   actions,
+  added,
   manages,
   pictures,
+  full,
   onAdd,
-  onEdit,
+  onLetGo,
 }: {
   saving: RunActionSave;
   repository: string;
   actions: readonly RunAction[];
+  added: readonly AddedRunAction[];
   manages: boolean;
   pictures: boolean;
+  /** Whether its list holds as many actions as it may, saved and added together. */
+  full: boolean;
   onAdd: () => void;
-  onEdit: (index: number) => void;
+  onLetGo: (key: number) => void;
 }): React.JSX.Element {
-  const full = actions.length >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS;
+  const order = useRunActionOrder(saving, repository, actions);
+  const drag = useRowDrag(order.move, { handle: SETTINGS_ORDER_HANDLE });
   // Why the last save of this repository's list was refused, said under its row, whichever control sent it.
   const refused = saving.variables?.repository === repository ? saving.error : null;
   return (
@@ -990,7 +1109,7 @@ function RunActionsOfRepository({
                 {
                   label: "Add action",
                   icon: <PlusIcon />,
-                  disabled: full || saving.isPending,
+                  disabled: full,
                   onSelect: onAdd,
                 },
               ]
@@ -1012,17 +1131,45 @@ function RunActionsOfRepository({
           error: saveRefusal(refused),
         }}
       />
-      {actions.map((action, index) => (
-        <RunActionRow
-          key={action.id}
-          saving={saving}
-          repository={repository}
-          actions={actions}
-          index={index}
-          manages={manages}
-          onEdit={() => onEdit(index)}
+      {order.ordered.length === 0 ? null : (
+        <SettingsOrderedRows
+          label={RUN_ACTIONS_LIST}
+          // Note that a drag waits while a save is out, since it saves the whole list as it reads it now.
+          onPointerDown={manages && !saving.isPending ? drag : undefined}
+          gutter={manages}
+          rows={order.ordered.map((action) => ({
+            key: action.id,
+            row: (
+              <RunActionRow
+                saving={saving}
+                repository={repository}
+                actions={order.ordered}
+                action={action}
+                manages={manages}
+              />
+            ),
+          }))}
         />
-      ))}
+      )}
+      {added.length === 0 ? null : (
+        <SettingsOrderedRows
+          label={RUN_ACTIONS_LIST}
+          gutter
+          rows={added.map((each) => ({
+            key: String(each.key),
+            row: (
+              <RunActionRow
+                saving={saving}
+                repository={repository}
+                actions={order.ordered}
+                action={undefined}
+                manages={manages}
+                added={{ onCancel: () => onLetGo(each.key) }}
+              />
+            ),
+          }))}
+        />
+      )}
     </>
   );
 }
