@@ -760,6 +760,20 @@ export function ListRow({
   const pressElement = useRef<HTMLButtonElement | null>(null);
   // Note that the row a hint hangs its card beside is the press's parent, the item.
   const rowElement = useRef<HTMLElement | null>(null);
+  // Whether the pointer stands on the press, so a press taken away under it is heard leaving, which no `pointerleave` says.
+  const pointed = useRef(false);
+  const steadyPoint = useRef(onPoint);
+  steadyPoint.current = onPoint;
+  const point = (over: boolean) => {
+    pointed.current = over;
+    onPoint?.(over);
+  };
+  useEffect(
+    () => () => {
+      if (pointed.current) steadyPoint.current?.(false);
+    },
+    [],
+  );
   const pressRef = useCallback(
     (element: HTMLButtonElement | null) => {
       pressElement.current = element;
@@ -949,8 +963,8 @@ export function ListRow({
       aria-describedby={describedAs === undefined ? undefined : describedId}
       aria-description={chosen && describedAs === undefined ? SELECTION_WORDS.SELECTED : undefined}
       disabled={disabled}
-      onPointerEnter={onPoint === undefined ? undefined : () => onPoint(true)}
-      onPointerLeave={onPoint === undefined ? undefined : () => onPoint(false)}
+      onPointerEnter={onPoint === undefined ? undefined : () => point(true)}
+      onPointerLeave={onPoint === undefined ? undefined : () => point(false)}
       tabIndex={tabbable === false ? -1 : undefined}
       {...(tabbable === undefined ? rovingItem() : {})}
       {...(choosable ? selectableRow(selectKey) : {})}
