@@ -8,7 +8,9 @@
  * runs this module's task, foreground or background, which removes every
  * notification still shown for that thread. A notification is matched by the
  * thread its payload names rather than by its request's identifier, so it is
- * found however iOS named it. The task is defined when this module loads,
+ * found however iOS named it. It also moves the Inbox widget's snapshot,
+ * taking the thread's row away with the badge the push carries, so the
+ * widget stays current while the app is closed (`inbox-widget/`). The task is defined when this module loads,
  * which the app's entry (`index.ts`) does before anything else, since a
  * background launch loads the bundle for the task alone.
  */
@@ -22,6 +24,7 @@ import {
   registerTaskAsync,
 } from "expo-notifications";
 import { defineTask } from "expo-task-manager";
+import { settleInboxWidget } from "./inbox-widget/inbox-widget-file.js";
 
 /** The background task's name, as `expo-task-manager` registers it. */
 const SETTLED_PUSH_TASK = "inbox-settled-push";
@@ -49,6 +52,13 @@ function settledItemOf(payload: NotificationTaskPayload): string | undefined {
   return push?.kind === PUSH_KIND.SETTLED ? push.itemId : undefined;
 }
 
+/** The badge a background push carries, the member's Inbox count, or none where it names none. */
+function badgeOf(payload: NotificationTaskPayload): number | undefined {
+  if ("actionIdentifier" in payload) return undefined;
+  const badge = payload.aps?.badge;
+  return typeof badge === "number" ? badge : undefined;
+}
+
 defineTask<NotificationTaskPayload>(SETTLED_PUSH_TASK, ({ data, error }) => {
   if (error !== null && error !== undefined) {
     console.error("The background push could not be read.", error);
@@ -56,6 +66,11 @@ defineTask<NotificationTaskPayload>(SETTLED_PUSH_TASK, ({ data, error }) => {
   }
   const itemId = settledItemOf(data);
   if (itemId === undefined) return Promise.resolve(BackgroundNotificationTaskResult.NoData);
+  try {
+    settleInboxWidget(itemId, badgeOf(data));
+  } catch (failure) {
+    console.error("The Inbox widget was not moved by the settled thread.", failure);
+  }
   return dismissThreadNotifications(itemId).then(
     () => BackgroundNotificationTaskResult.NewData,
     (failure: unknown) => {
