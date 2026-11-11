@@ -13,8 +13,10 @@ import { PlanPages } from "./plan-pages.js";
 /**
  * plan-pages.test.ts -- a task's pages stand as rows of their own list in
  * its Overview: a row's ⋯ offers the page's Copy link, and the pages are
- * chosen together by their boxes, a row chosen among several copying every
- * chosen page's link, a line each in the order the group lists them.
+ * chosen together by their boxes, a row chosen among several opening every
+ * chosen page in a tab of its own where the window opens tabs, and copying
+ * every chosen page's link, a line each, both in the order the group lists
+ * them.
  * Synthetic pages throughout.
  */
 
@@ -31,10 +33,17 @@ const MOCKUP = page("3c1d2e4f-5a6b-4c7d-8e9f-0a1b2c3d4e52", "Invite email mockup
 let root: Root | undefined;
 /** What the window handed main's clipboard. */
 let copied: string[] = [];
+/** The links the window opened in tabs of their own, as a browser's does. */
+let tabbed: string[] = [];
 
 beforeEach(() => {
   copied = [];
-  fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
+  tabbed = [];
+  fakeAppPlatform({
+    ...QUIET_PANEL,
+    ...copyingInto(copied),
+    openInTab: (link: string) => tabbed.push(link),
+  });
 });
 
 afterEach(() => {
@@ -74,7 +83,7 @@ function menuItems(): HTMLElement[] {
   return [...(menu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
 }
 
-test("a page's ⋯ offers Copy link, and pages chosen together copy every link chosen, a line each in the group's order", async () => {
+test("a page's ⋯ offers Copy link, and pages chosen together open in tabs of their own and copy every link chosen, in the group's order", async () => {
   const { host, opened } = mount([FUNNEL, MOCKUP]);
   const rows = [...host.querySelectorAll('[aria-label="Pages"] li')];
   const rowOf = (title: string) =>
@@ -89,21 +98,29 @@ test("a page's ⋯ offers Copy link, and pages chosen together copy every link c
   assert.equal(copied.length, 1);
   assert.match(copied[0] ?? "", new RegExp(FUNNEL.id, "u"));
 
-  // Note that the later page is chosen first, so the copy's order is the group's and not the choosing's.
-  for (const title of [MOCKUP.title, FUNNEL.title]) {
-    const box = rowOf(title).querySelector<HTMLElement>('[role="checkbox"]');
-    act(() => (box ?? assert.fail(`${title} draws its box`)).click());
-  }
+  // Note that the later page is chosen first, so the order is the group's and not the choosing's.
+  const chooseBoth = () => {
+    for (const title of [MOCKUP.title, FUNNEL.title]) {
+      const box = rowOf(title).querySelector<HTMLElement>('[role="checkbox"]');
+      act(() => (box ?? assert.fail(`${title} draws its box`)).click());
+    }
+    act(() => moreOf(MOCKUP.title).click());
+  };
+  chooseBoth();
   assert.deepEqual(opened, [], "choosing opens nothing");
-  act(() => moreOf(MOCKUP.title).click());
   const menu = document.querySelector('[role="menu"]:not([data-leaving])');
   assert.match(menu?.textContent ?? "", /2 pages/u);
-  const items = menuItems();
   assert.deepEqual(
-    items.map((item) => item.textContent),
-    ["Copy links"],
+    menuItems().map((item) => item.textContent),
+    ["Open in new tabs", "Copy links"],
   );
-  await act(async () => items[0]?.click());
+  await act(async () => menuItems()[0]?.click());
+  assert.equal(tabbed.length, 2);
+  assert.match(tabbed[0] ?? "", new RegExp(FUNNEL.id, "u"));
+  assert.match(tabbed[1] ?? "", new RegExp(MOCKUP.id, "u"));
+
+  chooseBoth();
+  await act(async () => menuItems()[1]?.click());
   const links = (copied[1] ?? "").split("\n");
   assert.equal(links.length, 2);
   assert.match(links[0] ?? "", new RegExp(FUNNEL.id, "u"));

@@ -1,14 +1,13 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
-import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
-  ArchiveIcon,
   BUTTON_SIZE,
   GROUP_ACTIONS,
   GROUP_HEADING,
+  GROUP_LOOK,
   GroupAction,
   GroupHeader,
   IconButton,
@@ -23,7 +22,6 @@ import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import { Schema } from "effect";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
@@ -208,7 +206,7 @@ function PlanArchivedAgents({
     <div className="plan-agents-archived mt-list-gap">
       <GroupHeader
         heading={GROUP_HEADING.NONE}
-        glyph={<ArchiveIcon />}
+        look={GROUP_LOOK.HEADING}
         label={ARCHIVED.LABEL}
         fold={{ open: unfolded, onOpenChange: setUnfolded }}
         count={foldedCount(!unfolded, archived.length, ARCHIVED_NOUN)}
@@ -335,7 +333,7 @@ export function PlanAgents({
             key={holds ? "holds" : "empty"}
             heading={GROUP_HEADING.NONE}
             label={AGENTS_LIST}
-            glyph={<EntityGlyph kind={ENTITY_KIND.AGENT} />}
+            look={GROUP_LOOK.HEADING}
             actions={newAgent === undefined ? undefined : <NewAgentAction start={newAgent} />}
             actionsShown={GROUP_ACTIONS.AT_REST}
             // Note that a group over no agent, standing for its read again or its archived agents, counts none.
