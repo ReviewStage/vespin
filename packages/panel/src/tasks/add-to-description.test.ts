@@ -289,15 +289,6 @@ test("a transcript off a plan's page offers no Add to description", async () => 
   assert.ok(document.querySelector(".attachment-viewer"), "the viewer opened");
   assert.equal(viewerButton("Add to description"), undefined);
 });
-
-test("a planless agent's transcript, whose page names a workspace and no plan, offers no Add to description", async () => {
-  const AGENT = { agentId: "agent-1" };
-  await opened(await drawn({ ...PAGE, holder: AGENT, doors: { ...PAGE.doors, holder: AGENT } }));
-
-  assert.ok(document.querySelector(".attachment-viewer"), "the viewer opened");
-  assert.equal(viewerButton("Add to description"), undefined);
-});
-
 /** Runs the body with the window's `blob:` addresses stood in, which jsdom makes none of. */
 async function withBlobs(body: () => Promise<void>): Promise<void> {
   const own = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };

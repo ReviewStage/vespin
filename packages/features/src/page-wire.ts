@@ -106,39 +106,24 @@ export type PageVersion = typeof pageVersionSchema.Type;
 
 export const taskPageVersionAnswerSchema = EffectSchema.Struct({ page: pageVersionSchema });
 
-/** What a page stands on: the task it was shown on, or the coding agent on no task that showed it. */
+/** What a page stands on: the task it was shown on. */
 export const PAGE_OWNER = {
   TASK: "task",
-  AGENT: "agent",
 } as const;
 
 /**
  * What a page stands on, by its id: a task, whose pages every agent on it
- * and the app show and revise, or a coding agent on no task, whose pages are
- * its own. Its rule of who may read the page is the owner's.
+ * and the app show and revise. Its rule of who may read the page is the
+ * task's.
  */
-export type PageOwner =
-  | { readonly kind: typeof PAGE_OWNER.TASK; readonly taskId: string }
-  | { readonly kind: typeof PAGE_OWNER.AGENT; readonly agentId: string };
+export type PageOwner = { readonly kind: typeof PAGE_OWNER.TASK; readonly taskId: string };
 
 /** The task as what its pages stand on. */
 export function taskPageOwner(taskId: string): PageOwner {
   return { kind: PAGE_OWNER.TASK, taskId };
 }
 
-/**
- * What a reader names a page's owner by as it crosses to the window: a
- * task, or a coding agent on no task, by its id alone, the field naming
- * which, as a frame's address and a page's link name it.
- */
-export const pagePlaceSchema = EffectSchema.Union([
-  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
-  EffectSchema.Struct({ agentId: EffectSchema.NonEmptyString }),
-]);
+/** What a reader names a page's task by as it crosses to the window, as a frame's address and a page's link name it. */
+export const pagePlaceSchema = EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString });
 
 export type PagePlace = typeof pagePlaceSchema.Type;
-
-/** The id a page's owner is named by, a task's or an agent's, which never collide, as a key of what is held of it. */
-export function pagePlaceId(place: PagePlace): string {
-  return "taskId" in place ? place.taskId : place.agentId;
-}

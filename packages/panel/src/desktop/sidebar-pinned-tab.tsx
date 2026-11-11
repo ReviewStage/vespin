@@ -58,7 +58,7 @@ import { PullRequestLine, RepositoryDetail } from "./task-card.js";
  * sidebar-pinned-tab.tsx -- a tab pinned to the sidebar, or an agent on a task pinned as its tab: its row under Pinned, its Unpin, and its menu.
  *
  * A fixed tab, a file's, or an agent's Changes pinned from its menu in a
- * task's side panel, or in an agent's own page's, and an agent on a task
+ * task's side panel, and an agent on a task
  * the reader pinned on the account, from its tab's menu in the task's
  * column or anywhere else the agent is drawn, stands under Pinned beside
  * the pinned tasks, as a row in the task rows' own shape: the tab's glyph,
@@ -526,7 +526,7 @@ function PinnedAgentRow({
   );
 }
 
-/** One tab pinned to the sidebar, on a task or an agent's own page the sidebar lists, or an agent on a listed task pinned as its tab. */
+/** One tab pinned to the sidebar, on a task the sidebar lists, or an agent on a listed task pinned as its tab. */
 export function SidebarPinnedTab({
   tasks,
   pin: kept,

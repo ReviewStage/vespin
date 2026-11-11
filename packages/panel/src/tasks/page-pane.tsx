@@ -20,7 +20,7 @@ import {
   type PagePicked,
   pagePickAnswerSchema,
 } from "@repo/features/page-pick";
-import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
+import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeLines, TasksPageSourceAnswer } from "@repo/features/tasks-view";
 import { readingWords } from "@repo/features/words";
@@ -163,7 +163,7 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * dragged wider or narrower by its left edge, one width for every page,
  * and shut by a drag past its least width. The bar's comment controls stand
  * at its end, Comment then that toggle, as the tree's toggle ends a File
- * tab's bar. A page an agent on no task showed has no comments.
+ * tab's bar.
  */
 
 /** What a frame drawing a page lets it do: run its own scripts, and nothing else. */
@@ -746,7 +746,7 @@ export function PagePane({
   findActive,
   comments,
 }: {
-  /** The plan the page stands on, or the agent on no task that showed it. */
+  /** The task the page stands on. */
   place: PagePlace;
   page: PageLine;
   /** Whether the panel holds the window's keys, so the tab's find answers ⌘F. */
@@ -863,9 +863,7 @@ export function PagePane({
       ? []
       : [
           openPageInBrowserItem(
-            "taskId" in place
-              ? { kind: LINK_DESTINATION.PAGE, planId: place.taskId, pageId: page.id }
-              : { kind: LINK_DESTINATION.PAGE, agentId: place.agentId, pageId: page.id },
+            { kind: LINK_DESTINATION.PAGE, planId: place.taskId, pageId: page.id },
             workspace,
           ),
         ];
@@ -908,7 +906,7 @@ export function PagePane({
     <FindScope
       className="page-view-find"
       active={findActive}
-      subject={{ task: pagePlaceId(place), tab: pageTab(page.id) }}
+      subject={{ task: place.taskId, tab: pageTab(page.id) }}
     >
       <Fill className="page-view file-view">
         {phone ? (

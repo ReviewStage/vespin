@@ -96,7 +96,7 @@ export type CardSubject =
   | { readonly kind: typeof TAB_KIND.FILE; readonly path: string }
   | {
       readonly kind: typeof TAB_KIND.PAGE;
-      /** What the page stands on, its plan or its agent on no task. */
+      /** The task the page stands on. */
       readonly place: PagePlace;
       readonly pageId: string;
       /** The page's title as the place knows it, which its card names it by until the page is read. */

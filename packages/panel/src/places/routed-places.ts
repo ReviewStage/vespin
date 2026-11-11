@@ -458,9 +458,9 @@ export const ROUTED_PLACE = {
     listedOnly: false,
     title: (tasks, under) => (tasks.agentView.agentId === undefined ? under() : { label: "Agent" }),
     named: () => undefined,
-    links: ({ tasks, at, listed, under }) => {
+    links: ({ tasks, listed, under }) => {
       const { agentId } = tasks.agentView;
-      return agentId === undefined ? under() : agentPageLinks(tasks, at, listed, agentId);
+      return agentId === undefined ? under() : agentPageLinks(listed, agentId);
     },
     narrowBack: undefined,
     narrowInstead: undefined,
