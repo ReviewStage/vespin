@@ -206,6 +206,14 @@ export const TILE_ROUNDING = 0.28;
 const TILE_GLYPH_SCALE = 0.5;
 
 /**
+ * The share of an agent's tile its harness's mark stands at. Note that it
+ * is larger than a glyph's, because a mark is a picture with its own margins
+ * (Clawd is wider than tall, so its square canvas leaves room above and
+ * below it), and at a glyph's share it read as a speck at a row's size.
+ */
+const TILE_MARK_SCALE = 0.72;
+
+/**
  * The image sets each harness's mark is drawn from, which the app's config
  * writes into its asset catalog (`apps/mobile/app.config.ts`): Claude Code's
  * Clawd from the brand's path in its own clay, and Codex's picture from the
@@ -249,7 +257,11 @@ export function AgentTile({
       ) : (
         <Image
           assetName={HARNESS_MARK_ASSET[harness]}
-          modifiers={[resizable(), frame({ width: glyph, height: glyph }), accessibilityHidden()]}
+          modifiers={[
+            resizable(),
+            frame({ width: size * TILE_MARK_SCALE, height: size * TILE_MARK_SCALE }),
+            accessibilityHidden(),
+          ]}
         />
       )}
     </ZStack>

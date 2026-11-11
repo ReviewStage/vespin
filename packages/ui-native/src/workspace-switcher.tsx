@@ -42,7 +42,7 @@ const BAR_TILE_SIZE = 22;
 /** The widest the name stands in a bar, so a long one is cut short rather than pushing the bar's other buttons off it. */
 const NAME_MAX_WIDTH = 180;
 
-/** The chevron after the name, which says the name opens a menu. */
+/** The chevron after the name, which says the name opens a menu, in the body's ink, since the muted ink faded into a dark bar's glass. */
 const CHEVRON_SIZE = 10;
 
 /** What a flow finds the switcher by. */
@@ -169,7 +169,7 @@ export function WorkspaceSwitcherMenu({
           <Image
             systemName="chevron.down"
             size={CHEVRON_SIZE}
-            color={colors.TEXT_MUTED}
+            color={colors.TEXT_BODY}
             modifiers={[accessibilityHidden()]}
           />
         </HStack>
