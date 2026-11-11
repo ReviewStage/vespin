@@ -227,8 +227,8 @@ jobs:
           # Note that a read codesign refuses fails the run rather than
           # reading as empty, and that every bundle must be entitled to the
           # App Group, which the widget and the share sheet read the app's
-          # snapshots from. The group is matched as text, because plutil's
-          # -extract splits its dotted key.
+          # snapshots from. The group is read with PlistBuddy, whose key path
+          # splits on colons, because plutil's -extract splits the key's dots.
           for bundle in "$app" "$app/PlugIns/NotificationService.appex" "$app/PlugIns/AgentsLiveActivity.appex" "$app/PlugIns/ShareExtension.appex"; do
             bundle_name=$(basename "$bundle")
             echo "--- $bundle_name"
@@ -252,7 +252,10 @@ jobs:
               echo "error: the exported $bundle_name is signed for development" >&2
               exit 1
             fi
-            if ! grep -q "<string>group.dev.vespin.ios</string>" <<< "$bundle_entitlements"; then
+            entitlements_file="$key_directory/$bundle_name.entitlements.plist"
+            printf '%s' "$bundle_entitlements" > "$entitlements_file"
+            if ! /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups" "$entitlements_file" 2>/dev/null \
+              | grep -Eq '^[[:space:]]*group\.dev\.vespin\.ios$'; then
               echo "error: the exported $bundle_name is not entitled to the App Group group.dev.vespin.ios" >&2
               exit 1
             fi
