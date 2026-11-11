@@ -1,3 +1,4 @@
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind, ContextWindow } from "@repo/features/agent-wire";
 import type { ChaptersPick } from "@repo/features/chapters-model-choice";
 import type { LinkOpen } from "@repo/features/link-open";
@@ -53,6 +54,13 @@ export const accountPreference = pgTable("account_preference", {
    * as the link choice is, for the same reason.
    */
   commitAuthor: text("commit_author").$type<CommitAuthor>(),
+  /**
+   * How a new Claude Code agent's actions are approved, the mode it starts
+   * on (`@repo/features`'s `AGENT_PERMISSION_MODE`); null until the account
+   * chooses, which reads as full access. A part of the snapshot of its own,
+   * as the commit author is, for the same reason.
+   */
+  agentPermissionMode: text("agent_permission_mode").$type<AgentPermissionMode>(),
   /**
    * Whether the account finished its setup after sign-in, so setup stands
    * once for the account rather than once on each device; null until it

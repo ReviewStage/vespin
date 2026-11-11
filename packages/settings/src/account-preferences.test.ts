@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { test } from "vitest";
@@ -85,6 +86,7 @@ test("the snapshot's preferences part carries only the keys v0.18.0 reads, whate
     pullRequestOpen: PULL_REQUEST_OPEN.GITHUB,
     agentEnter: AGENT_ENTER.QUEUE,
     commitAuthor: COMMIT_AUTHOR.APP,
+    agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
     setupFinished: true,
     setupPlace: '{"audience":"me","at":1}',
     soundWhen: SOUND_WHEN.BACKGROUND,

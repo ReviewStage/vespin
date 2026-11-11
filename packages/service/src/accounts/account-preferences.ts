@@ -172,7 +172,8 @@ export const readOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
  * where the account's links open, `pullRequestOpen`, where its pull
  * requests open, `agentEnter`, what Enter does in an
  * agent's box while it works, `commitAuthor`, who authors an agent's
- * commits, `setupFinished`, whether the account
+ * commits, `agentPermissionMode`, the mode a new agent starts on,
+ * `setupFinished`, whether the account
  * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
  * `completionSound`, when and which sound plays as an agent finishes,
  * `askSound`, which sound plays as something new needs the account,
@@ -195,6 +196,7 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.pullRequestOpen === undefined &&
     body.agentEnter === undefined &&
     body.commitAuthor === undefined &&
+    body.agentPermissionMode === undefined &&
     body.setupFinished === undefined &&
     body.setupPlace === undefined &&
     body.soundWhen === undefined &&
@@ -236,6 +238,16 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     const commitAuthor = ownPreferenceFromWire("commitAuthor", body.commitAuthor);
     if (commitAuthor === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.commitAuthor = commitAuthor;
+  }
+  if (body.agentPermissionMode !== undefined) {
+    const agentPermissionMode = ownPreferenceFromWire(
+      "agentPermissionMode",
+      body.agentPermissionMode,
+    );
+    if (agentPermissionMode === undefined) {
+      return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    }
+    write.agentPermissionMode = agentPermissionMode;
   }
   if (body.setupFinished !== undefined) {
     const setupFinished = ownPreferenceFromWire("setupFinished", body.setupFinished);

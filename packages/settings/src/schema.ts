@@ -47,6 +47,13 @@ import {
 } from "./mac-commands.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
 import {
+  isPermissionMode,
+  PERMISSION_MODE_DEFAULT,
+  PERMISSION_MODE_HINT,
+  PERMISSION_MODE_LABEL,
+  PERMISSION_MODE_LIST,
+} from "./permission-mode.js";
+import {
   isPullRequestOpen,
   PULL_REQUEST_OPEN_DEFAULT,
   PULL_REQUEST_OPEN_LABEL,
@@ -354,6 +361,31 @@ export const APP_SETTING_SCHEMA = {
     section: SETTING_SECTION.AGENTS,
     order: 450,
     // Nothing to run per write: an agent reads the choice as its first session starts.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  /*
+   * How a new agent's actions are approved: the mode a Claude Code agent
+   * starts on, Full access until the account chooses (`permission-mode.ts`).
+   * An account preference riding a part of the snapshot of its own, as the
+   * commit author does, since the service reads it as an agent starts
+   * wherever it was chosen. A running agent's own is changed from its
+   * model menu.
+   */
+  agentPermissionMode: choiceSetting({
+    field: "agentPermissionMode",
+    id: APP_SETTING_ID.AGENT_PERMISSION_MODE,
+    label: "Default permissions",
+    values: PERMISSION_MODE_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => PERMISSION_MODE_LABEL[choice],
+    optionHint: (choice) => PERMISSION_MODE_HINT[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isPermissionMode),
+    default: PERMISSION_MODE_DEFAULT,
+    page: SETTINGS_PAGE.AGENTS,
+    section: SETTING_SECTION.NEW_AGENTS,
+    order: 100,
+    // Nothing to run per write: the service reads the choice as an agent starts.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: accountDrawn,
   }),

@@ -38,11 +38,13 @@ export function SelectRow<Value extends string | number>({
   labelReplayUnmasked?: boolean | undefined;
   detail?: string | undefined;
   value: Value;
-  /** Each option's token and words, the faces it shows where it has some, and why it cannot be picked now where it cannot. */
+  /** Each option's token and words, the faces or glyph it shows where it has some, what it does under its name where that is said, and why it cannot be picked now where it cannot. */
   options: readonly {
     value: Value;
     label: string;
     faces?: React.ReactNode;
+    icon?: React.ReactNode;
+    hint?: string | undefined;
     disabled?: string | undefined;
   }[];
   parse: (raw: string) => Value | undefined;
@@ -78,11 +80,13 @@ export function SelectRow<Value extends string | number>({
       action={action}
       value={String(value)}
       valueLabel={chosen?.label ?? String(value)}
-      valueIcon={chosen?.faces}
+      valueIcon={chosen?.faces ?? chosen?.icon}
       rows={options.map((option) => ({
         id: String(option.value),
         label: option.label,
         ...(option.faces === undefined ? undefined : { faces: option.faces }),
+        ...(option.icon === undefined ? undefined : { icon: option.icon }),
+        ...(option.hint === undefined ? undefined : { detail: option.hint, detailUnder: true }),
         disabled: option.disabled,
       }))}
       placeholder={placeholder}

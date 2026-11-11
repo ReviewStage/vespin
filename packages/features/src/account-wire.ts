@@ -11,7 +11,7 @@ import { Schema as EffectSchema } from "effect";
  * the way by its owner: the settings readers on the service and in the
  * host's preferences client, `modelChoiceSchema` for the default
  * (`models-wire.ts`), `chaptersModelFrom` for the chapters model
- * (`chapters-model-choice.ts`). A write carries any of the fifteen parts and is read the
+ * (`chapters-model-choice.ts`). A write carries any of the sixteen parts and is read the
  * same way, a part the service does not take refused there.
  */
 
@@ -22,6 +22,7 @@ export const accountPreferencesAnswerSchema = EffectSchema.Struct({
   pullRequestOpen: EffectSchema.optionalKey(EffectSchema.Unknown),
   agentEnter: EffectSchema.optionalKey(EffectSchema.Unknown),
   commitAuthor: EffectSchema.optionalKey(EffectSchema.Unknown),
+  agentPermissionMode: EffectSchema.optionalKey(EffectSchema.Unknown),
   setupFinished: EffectSchema.optionalKey(EffectSchema.Unknown),
   setupPlace: EffectSchema.optionalKey(EffectSchema.Unknown),
   soundWhen: EffectSchema.optionalKey(EffectSchema.Unknown),
@@ -42,13 +43,14 @@ export const accountPreferencesAnswerSchema = EffectSchema.Struct({
 
 export type AccountPreferencesAnswerWire = typeof accountPreferencesAnswerSchema.Type;
 
-/** A write (PUT): any of the snapshot's fifteen parts, each read by its owner on the service. */
+/** A write (PUT): any of the snapshot's sixteen parts, each read by its owner on the service. */
 export const accountPreferencesWriteSchema = EffectSchema.Struct({
   preferences: EffectSchema.optionalKey(EffectSchema.Unknown),
   linkOpen: EffectSchema.optionalKey(EffectSchema.Unknown),
   pullRequestOpen: EffectSchema.optionalKey(EffectSchema.Unknown),
   agentEnter: EffectSchema.optionalKey(EffectSchema.Unknown),
   commitAuthor: EffectSchema.optionalKey(EffectSchema.Unknown),
+  agentPermissionMode: EffectSchema.optionalKey(EffectSchema.Unknown),
   setupFinished: EffectSchema.optionalKey(EffectSchema.Unknown),
   setupPlace: EffectSchema.optionalKey(EffectSchema.Unknown),
   soundWhen: EffectSchema.optionalKey(EffectSchema.Unknown),
