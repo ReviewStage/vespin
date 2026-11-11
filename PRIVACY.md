@@ -476,6 +476,11 @@ its last use. When you delete your account:
   ends, since Sentry offers no way to erase one account's reports.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your
   agents already did at those services stays there.
+- **Google and GitHub sign-in:** we ask Google and GitHub to revoke the tokens
+  your sign-in left with us, so our GitHub App can no longer act as you; if
+  one cannot be reached in a few seconds, your account is deleted anyway and
+  that token stays valid until it expires (about eight hours for GitHub's, an
+  hour for Google's).
 
 ## 8\. Your rights and choices
 
