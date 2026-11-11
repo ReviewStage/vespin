@@ -59,6 +59,11 @@
  * (`@repo/host/daemon`'s `leaveHostDevice`), and exits by whether the
  * service took it (`LEAVE_EXIT`).
  *
+ * Run from inside the app, through its launcher or the link the app moves
+ * `~/.local/bin/vespin-host` to (`@repo/host/daemon`'s
+ * `appHostCommandLinked`), every command but `run` and `version` says the
+ * app runs this Mac's host and exits 1, changing nothing.
+ *
  * `connect` is run as the box is set up or by hand: it prints the link and
  * the code a member approves in the app, waits for them to, and exits by how
  * the connect ended (`CONNECT_EXIT`), never printing the poll secret or the
@@ -83,6 +88,8 @@ import { HOST_COMMAND, HOST_WIRE, hostInstallCommand } from "@repo/features/host
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  APP_RUNS_HOST_WORDS,
+  appRefusesCommand,
   connectHostDevice,
   HOST_CONNECT_OUTCOME,
   HOST_DAEMON_END,
@@ -161,6 +168,15 @@ const COMMAND = { RUN: "run", CONNECT: "connect", LEAVE: "leave", VERSION: "vers
 
 /** The release's own folder, the app's `Contents/Resources/host` for a bundled one: this bundle stands in its `lib/`, whichever way its Node was started. */
 const installFolder = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+
+/** The release's folder by its real path, as a link to the app's launcher or an account install's `current` resolves it; the folder as it stands where it cannot be read. */
+function realInstallFolder(): string {
+  try {
+    return realpathSync(installFolder);
+  } catch {
+    return installFolder;
+  }
+}
 
 /**
  * The account install's releases, where this release's own real path
@@ -519,6 +535,10 @@ type HostServices = Layer.Success<typeof nodeServices>;
 /** The command the process was started with, as the exit code it ends with. */
 function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServices> {
   const [command, ...rest] = argv;
+  // Note that the app owns the host it carries, its registration and its record, so its copy answers only its LaunchAgent's run and version, and changes nothing behind it.
+  if (appRefusesCommand(realInstallFolder(), command)) {
+    return Effect.sync(() => process.stderr.write(`${APP_RUNS_HOST_WORDS}\n`)).pipe(Effect.as(1));
+  }
   if (command === COMMAND.VERSION) {
     return Effect.sync(() => process.stdout.write(`${VERSION}\n`)).pipe(Effect.as(0));
   }

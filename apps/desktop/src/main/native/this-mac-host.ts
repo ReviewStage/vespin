@@ -50,6 +50,9 @@ const SERVICE = { type: "agentService", serviceName: "dev.vespin.host.plist" } a
 const STANDALONE_LABEL = "dev.vespin.host.standalone";
 const STANDALONE_PLIST = ["Library", "LaunchAgents", `${STANDALONE_LABEL}.plist`] as const;
 
+/** The launcher inside the bundle, by its path under `Contents` (`BUNDLED_HOST.launcherPath`), which the account install's `vespin-host` command is linked to once the agent is registered. */
+const LAUNCHER = ["MacOS", "vespin-host"] as const;
+
 /** The daemon's script inside the bundle, and the arguments the agent's plist starts it with: how its process reads in the process table. */
 const DAEMON_RUN = { script: "host/lib/vespin-host.mjs", args: "run --bundled" } as const;
 
@@ -161,6 +164,7 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
   return {
     stateRoot: DARWIN_HOST.stateRoot(os.homedir()),
     home: os.homedir(),
+    launcher: path.join(path.dirname(process.resourcesPath), ...LAUNCHER),
     runsHost:
       process.platform === "darwin" &&
       (process.arch === "arm64" || app.runningUnderARM64Translation),

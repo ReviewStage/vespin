@@ -116,6 +116,7 @@ describe("the host's platform concerns", () => {
             Layer.succeed(ThisMacHost, {
               stateRoot,
               home: stateRoot,
+              launcher: `${stateRoot}/vespin-host`,
               runsHost: false,
               registers: false,
               status: Effect.succeed(THIS_MAC_AGENT_STATUS.NOT_FOUND),

@@ -314,6 +314,8 @@ export interface ThisMacHostSeam {
   readonly stateRoot: string;
   /** The home the host runs with, under which its agents' folders stand. */
   readonly home: string;
+  /** The launcher inside this app (`Contents/MacOS/vespin-host`), by its absolute path, which `~/.local/bin/vespin-host` is linked to once the agent is registered. */
+  readonly launcher: string;
   /** Whether this Mac can run the host: Apple silicon. */
   readonly runsHost: boolean;
   /** Whether this build registers and unregisters the agent: a build signed for release alone; any other reads its status and leaves it as it stands. */

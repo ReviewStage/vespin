@@ -28,6 +28,7 @@ import { type AppThisMacHost, type AppThisMacHosts, NO_KEYS_HELD } from "./app-s
 import type { AccountComposer } from "./compose-account.js";
 import type { Composer } from "./composer.js";
 import type { AGENT_ACTS } from "./contract/index.js";
+import { appHostCommandLinked, COMMAND_LINK_OUTCOME } from "./daemon/app-host-command.js";
 import { HOST_LEAVE_OUTCOME } from "./daemon/host-leave.js";
 import { uninstallBundledHost } from "./daemon/host-uninstall.js";
 import { Reporter, THIS_MAC_AGENT_STATUS, ThisMacHost } from "./effect/seams.js";
@@ -93,16 +94,21 @@ import type { RunMode } from "./run-mode.js";
  * record. A record the service refused, the host removed from Settings ›
  * Machines anywhere, has its agent unregistered and the host removed, its
  * agents' folders kept, as the account install removes itself, since a
- * bundled host rests rather than removing itself.
+ * bundled host rests rather than removing itself. Once the agent is
+ * registered, `~/.local/bin/vespin-host` is moved to the app's launcher
+ * where it stands nowhere or links into the account install
+ * (`appHostCommandLinked`), so the command a member types reaches the host
+ * that runs.
  *
  * A record is the account's where the service lists its device among the
  * account's hosts; another account's, or one enrolled with another service
  * than the app's, as a development build pointed at a Preview would see, is
- * left alone, since there is only one such host on a Mac. Note that the
- * Mac is enrolled only where no host of the account stands, because an
- * enroll keys the device again and refuses the secret its host runs on; so
- * once a record stands, a step that failed is tried again by registering
- * again, never by enrolling. A step that failed is tried again after
+ * left alone, since there is only one such host on a Mac, and turning This
+ * Mac on or off over another account's answers that it is
+ * (`anotherAccount`). Note that the Mac is enrolled only where no host of
+ * the account stands, because an enroll keys the device again and refuses
+ * the secret its host runs on; so once a record stands, a step that failed
+ * is tried again by registering again, never by enrolling. A step that failed is tried again after
  * `RETRY`, for as long as what the app keeps the host at stands, and nothing
  * is shown of it: launchd and the host's own setup carry the rest. A Mac the
  * host cannot run on (`ThisMacHost`'s `runsHost`) is never enrolled.
@@ -159,12 +165,18 @@ const sameThisMac = (one: AppThisMacHost, other: AppThisMacHost) =>
   one.machineId === other.machineId &&
   one.enrolled === other.enrolled &&
   one.agentFolders === other.agentFolders &&
-  one.needsApproval === other.needsApproval;
+  one.needsApproval === other.needsApproval &&
+  one.releasedOnly === other.releasedOnly;
 
 /** What turning This Mac on or off answers: done, or that it could not be. */
 const DONE = { done: true } as const satisfies ThisMacHostSetAnswerView;
 const UNDONE = {
   failure: AGENT_CALL_FAILURE.UNANSWERED,
+} as const satisfies ThisMacHostSetAnswerView;
+/** What turning This Mac on or off answers where its host is another account's, which only that account, or an uninstall on this Mac, may remove. */
+const ANOTHER_ACCOUNTS = {
+  failure: AGENT_CALL_FAILURE.NOT_FOUND,
+  anotherAccount: true,
 } as const satisfies ThisMacHostSetAnswerView;
 
 export interface ThisMacHostDependencies {
@@ -233,6 +245,7 @@ export function composeThisMacHost(
         enrolled: Option.isSome(record) && record.value.refused !== true,
         agentFolders: folders.length,
         needsApproval: status === THIS_MAC_AGENT_STATUS.REQUIRES_APPROVAL,
+        ...(host.registers ? undefined : { releasedOnly: true }),
       }),
     );
 
@@ -293,11 +306,26 @@ export function composeThisMacHost(
         return true;
       }).pipe(Effect.uninterruptible);
 
-    /** The agent registered, which starts the host on the record it stands on. */
+    /** `~/.local/bin/vespin-host` moved to the app's launcher, where it stands nowhere or links into the account install; one that could not be is said, and tried again at the next register. */
+    const commandLinked = appHostCommandLinked({ home: host.home, launcher: host.launcher }).pipe(
+      Effect.flatMap((outcome) =>
+        outcome === COMMAND_LINK_OUTCOME.LINKED
+          ? Effect.sync(() => report("vespin-host now runs this Mac's host"))
+          : Effect.void,
+      ),
+      Effect.catch((failure) =>
+        Effect.sync(() =>
+          report(`this Mac's host: could not link vespin-host: ${failure.message}`),
+        ),
+      ),
+    );
+
+    /** The agent registered, which starts the host on the record it stands on, and the command a member types moved to it. */
     const registered = Effect.gen(function* () {
       const done = yield* host.register;
       if (Result.isFailure(done)) return yield* Effect.fail(`register it: ${done.failure}`);
       report("this Mac's host was registered");
+      yield* commandLinked;
       // Note that macOS may hold the agent for the member's approval, which nothing else would tell the windows.
       yield* tellThisMac;
     });
@@ -367,25 +395,25 @@ export function composeThisMacHost(
     /** A pulse each time This Mac was turned on or off, so the loop reads it again at once. */
     const turned = yield* PubSub.sliding<void>(1);
 
-    /** This Mac turned on: enrolled where none of the account's stands unrefused, never over another account's standing host; whether it is on. */
+    /** This Mac turned on: enrolled where none of the account's stands unrefused, never over another account's standing host, which is answered as that; done where it is on. */
     const turnedOn = oneAtATime(
       Effect.gen(function* () {
-        if (HOST_RELEASE === undefined || !host.runsHost || !host.registers) return false;
+        if (HOST_RELEASE === undefined || !host.runsHost || !host.registers) return UNDONE;
         const record = yield* readHostDevice(host.stateRoot);
-        if (Option.isSome(record) && !ownService(record.value)) return false;
+        if (Option.isSome(record) && !ownService(record.value)) return UNDONE;
         if (Option.isSome(record) && record.value.refused !== true) {
-          return yield* accountOwns(record.value);
+          return (yield* accountOwns(record.value)) ? DONE : ANOTHER_ACCOUNTS;
         }
         const deviceId = Option.map(record, (kept) => kept.deviceId);
-        if (!(yield* enrolled(deviceId, HOST_RELEASE.VERSION))) return false;
+        if (!(yield* enrolled(deviceId, HOST_RELEASE.VERSION))) return UNDONE;
         MutableRef.update(turns, (count) => count + 1);
-        return true;
+        return DONE;
       }),
     ).pipe(
       Effect.catch((step) =>
         Effect.sync(() => {
           report(`this Mac's host: could not ${step}`);
-          return false;
+          return UNDONE;
         }),
       ),
     );
@@ -406,7 +434,7 @@ export function composeThisMacHost(
           const device = yield* readHostDevice(host.stateRoot);
           if (Option.isSome(device) && !ownService(device.value)) return UNDONE;
           const record = Option.filter(device, (kept) => kept.refused !== true);
-          if (Option.isSome(record) && !(yield* accountOwns(record.value))) return UNDONE;
+          if (Option.isSome(record) && !(yield* accountOwns(record.value))) return ANOTHER_ACCOUNTS;
           const exit = yield* removed(deleteFolders);
           if (Exit.isSuccess(exit)) {
             report("this Mac's host was removed");
@@ -539,11 +567,7 @@ export function composeThisMacHost(
       /** Run agents on this Mac turned on or off; done, or that it could not be, its windows told where it now stands. */
       HOSTS_THIS_MAC_SET: ({ on, deleteFolders }) =>
         Effect.gen(function* () {
-          const answer = on
-            ? (yield* turnedOn)
-              ? DONE
-              : UNDONE
-            : yield* turnedOff(deleteFolders ?? true);
+          const answer = on ? yield* turnedOn : yield* turnedOff(deleteFolders ?? true);
           yield* tellThisMac;
           yield* PubSub.publish(turned, undefined);
           return answer;
