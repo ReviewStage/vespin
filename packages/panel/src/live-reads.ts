@@ -426,8 +426,9 @@ function firstAnswer<Read extends LiveReadName>(
     };
     settle();
     if (answered) return;
+    // Note that only a write of the document is heard, because every observer of it reports each write again (`observerResultsUpdated`), a thousand times a push in a long transcript.
     stop = client.getQueryCache().subscribe((event) => {
-      if (isAppState(event.query)) settle();
+      if (isAppState(event.query) && event.type === "updated") settle();
     });
     return Effect.sync(() => stop());
   });
