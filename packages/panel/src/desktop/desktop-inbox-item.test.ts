@@ -442,7 +442,7 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
   );
 });
 
-test("a page's link alone on its line, naming its task by the task's number, is the page's row with the page itself drawn under it", async () => {
+test("a page's bare link alone on its line, naming its task by the task's number, is the page's row named by its title, with the page itself drawn under it", async () => {
   const numbered = { ...BILLING, number: 182 };
   handState(
     {},
@@ -463,7 +463,7 @@ test("a page's link alone on its line, naming its task by the task's number, is 
     },
   );
   const link = `https://vespin.dev/stage/task/182/page/${FUNNEL.id}`;
-  world.inboxes.set(BILLING.id, [saying(THRESHOLD, `[@${FUNNEL.title}](${link})`), RETRY]);
+  world.inboxes.set(BILLING.id, [saying(THRESHOLD, link), RETRY]);
   const { page } = mount({ chosen: ON_THRESHOLD, standing: [numbered, INVITES] });
   await settle();
   // Note that the page is drawn once its task's pages reach their query.
@@ -474,6 +474,12 @@ test("a page's link alone on its line, naming its task by the task's number, is 
         ?.getAttribute("src"),
       pageFrameUrl({ taskId: BILLING.id, pageId: FUNNEL.id, version: FUNNEL.version }),
     ),
+  );
+  // The row is named by the page's own title, read with its task's pages, though no task is open.
+  assert.equal(
+    page.querySelector('[data-inbox-message-text] [data-lone-link="page"] .ui-list-row-title')
+      ?.textContent,
+    FUNNEL.title,
   );
   // A task listed anew, as a teammate's or an agent's lands in the window, leaves the page loaded rather than drawing it again.
   const frame = page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`);
