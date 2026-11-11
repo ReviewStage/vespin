@@ -23,6 +23,9 @@ import {
 /** Our page among Y Combinator's companies, which the hero's backing chip opens. */
 const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
 
+/** The made-up member's face in the landing's screens: a Pexels portrait (free to use, no attribution asked), served beside About's photos. */
+const MEMBER_PICTURE = "/assets/landing/sam-reyes.jpg";
+
 /**
  * The landing: the one line beside the copper ball, then a section for each
  * of the product's features over the app's own screens at work, and the
@@ -33,6 +36,7 @@ export function App(): React.JSX.Element {
   return (
     <LandingPage
       bar={<SiteNavigation current={{ page: SITE_PAGE.HOME }} />}
+      memberPicture={MEMBER_PICTURE}
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
       title="An inbox for all your coding agents."

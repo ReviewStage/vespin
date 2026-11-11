@@ -1,5 +1,6 @@
 import { type ReactNode, useId } from "react";
 import { MarkOrb } from "../../marks/mark-orb.js";
+import { MemberPictureProvider } from "./landing-desktop.js";
 import { LANDING_FIELD, LandingField, type LandingFieldPattern } from "./landing-field.js";
 import { LANDING_SCENE, type LandingScene, LandingSceneView } from "./landing-scenes.js";
 import { SiteFrame, SiteRule } from "./site-frame.js";
@@ -134,6 +135,7 @@ export function LandingPage({
   children,
   close,
   footer,
+  memberPicture,
 }: {
   /** The site's wordmark and links, laid across the bar. */
   bar: ReactNode;
@@ -153,6 +155,8 @@ export function LandingPage({
   close: { readonly title: ReactNode; readonly lead?: ReactNode; readonly actions: ReactNode };
   /** The site's closing links and notices. */
   footer: ReactNode;
+  /** The address of the made-up member's picture the screens draw; none draws their letter. */
+  memberPicture?: string | undefined;
 }): React.JSX.Element {
   const closeId = `${useId()}close`;
   return (
@@ -169,7 +173,7 @@ export function LandingPage({
             <MarkOrb />
           </div>
         </div>
-        {children}
+        <MemberPictureProvider picture={memberPicture}>{children}</MemberPictureProvider>
         <SiteRule />
         <section className="ui-landing-close" aria-labelledby={closeId}>
           <div>

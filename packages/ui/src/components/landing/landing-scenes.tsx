@@ -106,7 +106,9 @@ import {
   DESKTOP_PLACE,
   DesktopSidebar,
   MEMBER,
+  MemberFace,
   SidePanelToggle,
+  useMemberPicture,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
 import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-story.js";
@@ -464,6 +466,7 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
  */
 function QuestionThread({ step }: { step: number }): React.JSX.Element {
   const sent = step >= 5;
+  const memberPicture = useMemberPicture();
   return (
     <div className="ui-landing-thread">
       <header className="ui-landing-subject">
@@ -483,14 +486,18 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
         </li>
         {sent ? (
           <li className="ui-landing-comment ui-landing-enter">
-            <Comment author={{ name: MEMBER }} at={STORY_NOW} now={STORY_NOW}>
+            <Comment
+              author={{ name: MEMBER, picture: memberPicture }}
+              at={STORY_NOW}
+              now={STORY_NOW}
+            >
               <AskChoices picked readOnly />
               <Text>{QUESTION.NOTE}</Text>
             </Comment>
           </li>
         ) : null}
         <li className="ui-landing-comment">
-          <Comment author={{ name: MEMBER }} nameRef="You">
+          <Comment author={{ name: MEMBER, picture: memberPicture }} nameRef="You">
             {sent ? (
               <ReplyComposer placeholder="Reply" sendable={false} />
             ) : (
@@ -1074,7 +1081,7 @@ function PhoneInbox(): React.JSX.Element {
         end={TOOLBAR_INSET.COLUMN}
         lead={
           <IconButton
-            icon={<Avatar name={MEMBER} size={AVATAR_SIZE.ACCOUNT} decorative />}
+            icon={<MemberFace size={AVATAR_SIZE.ACCOUNT} />}
             label="Account"
             onClick={still}
           />
