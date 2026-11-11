@@ -2,6 +2,7 @@ import {
   keepIdentity,
   LEGACY_APP_WORD,
   literalsReadingLegacy,
+  literalsReadingUnknown,
   MESSAGE_ROLE,
   TURN_ORIGIN,
   TURN_STATUS,
@@ -448,6 +449,12 @@ export const AGENT_STATUS = {
 
 export type AgentStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS];
 
+/** An agent's status as a reader decodes it: one this build does not know is a state a newer service writes of an agent not yet ended, since every ending is already a word here, so it reads as running. */
+export const agentStatusSchema = literalsReadingUnknown(
+  Object.values(AGENT_STATUS),
+  AGENT_STATUS.RUNNING,
+);
+
 /**
  * Why a turn ended failed, as one fixed word: the service maps the turn's
  * own record to these, so nothing a provider or the runtime said travels
@@ -491,47 +498,10 @@ export const AGENT_FAILURE = {
 
 export type AgentFailure = (typeof AGENT_FAILURE)[keyof typeof AGENT_FAILURE];
 
-/**
- * A word of a fixed vocabulary as a reader decodes it, read by `read`, which
- * takes a word this build does not know as one it does rather than refusing
- * the whole answer, so a service that writes one more word than a desktop
- * knows still answers that desktop. Note that its encoded side is typed as
- * the vocabulary alone, because a write never names a word outside it, so an
- * answer's encoded type stays the one its callers hold; its guard lets any
- * word in only for the decode to read it.
- */
-function wordReadingUnknown<const Values extends ReadonlyArray<string>>(
-  values: Values,
-  read: (word: string) => Values[number],
-) {
-  return EffectSchema.declare(
-    (input: unknown): input is Values[number] => typeof input === "string",
-  ).pipe(
-    EffectSchema.decodeTo(
-      EffectSchema.Literals(values),
-      SchemaTransformation.transform({
-        decode: read,
-        encode: (word): Values[number] => word,
-      }),
-    ),
-  );
-}
-
-const FAILURE_WORDS: ReadonlySet<string> = new Set(Object.values(AGENT_FAILURE));
-
-function isAgentFailure(word: string): word is AgentFailure {
-  return FAILURE_WORDS.has(word);
-}
-
-/** A failure word as a reader takes it: one this build does not know reads as `other`, a failure it has no words for. */
-function agentFailureOfWord(word: string): AgentFailure {
-  return isAgentFailure(word) ? word : AGENT_FAILURE.OTHER;
-}
-
-/** A failure word as a reader decodes it (`agentFailureOfWord`). */
-export const agentFailureSchema = wordReadingUnknown(
+/** A failure word as a reader decodes it: one this build does not know reads as `other`, a failure it has no words for. */
+export const agentFailureSchema = literalsReadingUnknown(
   Object.values(AGENT_FAILURE),
-  agentFailureOfWord,
+  AGENT_FAILURE.OTHER,
 );
 
 const TURN_STATUS_WORDS: ReadonlySet<string> = new Set(Object.values(TURN_STATUS));
@@ -562,7 +532,7 @@ export function turnStatusOfWord(word: string): TurnStatus {
 const agentTurnSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   queuedAt: countedNumber,
-  status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
+  status: literalsReadingUnknown(Object.values(TURN_STATUS), TURN_STATUS.RUNNING),
   stopAsked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   failure: EffectSchema.optionalKey(agentFailureSchema),
   waitsUntil: EffectSchema.optionalKey(countedNumber),
@@ -1257,7 +1227,7 @@ export const agentSummarySchema = EffectSchema.Struct({
   ),
   /** Epoch milliseconds the agent was started. */
   createdAt: countedNumber,
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   /**
    * The newest turn the status is read from, by the service's own id for
    * it; nothing before the first turn. A message that opens a new turn moves
@@ -2680,7 +2650,7 @@ export type AgentDelegationStart = typeof agentDelegationStartSchema.Type;
  */
 const agentSubagentStandingSchema = EffectSchema.Struct({
   callId: agentCallIdSchema,
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   model: EffectSchema.String,
   effort: EffectSchema.String,
   startedAt: countedNumber,
@@ -2735,7 +2705,7 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * service older than it.
    */
   earlier: EffectSchema.optionalKey(EffectSchema.String),
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   /** When the run that status is read from began, as the agent's summary says it, so a tab following the transcript counts the run a new turn opened. */
   runStartedAt: EffectSchema.optionalKey(countedNumber),
   /**

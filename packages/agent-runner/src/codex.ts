@@ -93,12 +93,12 @@
  * with approval `never`: the machine is the boundary, a host's box, to which
  * an agent there has full access, or the cloud's sandbox, whose firewall
  * holds every credential and leaves only placeholders inside. Ask for
- * approval and Approve for me run Codex's workspace sandbox with the network
- * on and approval `on-request`, so Codex asks only to run a command outside
- * it or to write outside the checkout. The checkout's git folders (a
- * worktree's own and the clone's it shares) and the home caches package
- * managers keep (`PACKAGE_CACHES`) are writable beside the checkout, so a
- * commit, a push, and an install run unasked. Under Ask for approval the
+ * approval and Approve for me run Codex's workspace sandbox on its own
+ * defaults, as the Codex app does: the checkout writable, its `.git`
+ * protected, the network off, and approval `on-request`, so Codex asks to run
+ * a command outside the sandbox, to reach the network, or to write outside
+ * the checkout, a commit and an install among them, with no extras of
+ * ours. Under Ask for approval the
  * member answers each ask (`approvals.ts`): Allow is Codex's `accept`, Always
  * allow its `acceptForSession`, which keeps the rule in the session rather
  * than writing one into `CODEX_HOME`, Deny or a message sent meanwhile its
@@ -116,17 +116,9 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { Data, Duration, Effect, Exit, Fiber, Option, Queue, Schema, Scope, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
@@ -576,37 +568,8 @@ function featureOverrides(auth: CodexAuth): (readonly [string, string])[] {
   ];
 }
 
-/**
- * The folders under the member's home that package managers keep their
- * caches in (npm's, pnpm's store, and the shared `~/.cache` beside them),
- * writable under the workspace sandbox so an install runs unasked, and made
- * where they are missing, since a command cannot make one under a home it
- * does not write.
- */
-const PACKAGE_CACHES = [".npm", ".cache", join(".local", "share", "pnpm")] as const;
-
 /** Codex's own folder under a home, where it keeps its login and threads unless `CODEX_HOME` names another. */
 const CODEX_HOME_FOLDER = ".codex";
-
-/** A worktree's `.git` file, naming the folder its git state is in. */
-const GITDIR_LINE = /^gitdir:\s*(.+)$/m;
-
-/**
- * The git folders a commit in the checkout writes: its `.git` folder, or,
- * in a worktree, the folder its `.git` file names and the clone's own it
- * shares (`commondir`); none where the checkout holds no git.
- */
-function gitFoldersOf(cwd: string): string[] {
-  const dotGit = join(cwd, ".git");
-  const found = statSync(dotGit, { throwIfNoEntry: false });
-  if (found === undefined) return [];
-  if (found.isDirectory()) return [dotGit];
-  const gitdir = GITDIR_LINE.exec(readFileSync(dotGit, "utf8"))?.[1]?.trim();
-  if (gitdir === undefined) return [];
-  const own = resolve(cwd, gitdir);
-  const common = join(own, "commondir");
-  return existsSync(common) ? [own, resolve(own, readFileSync(common, "utf8").trim())] : [own];
-}
 
 /**
  * How a launch runs Codex for its mode: the approval policy and sandbox
@@ -644,20 +607,13 @@ const REVIEWER_OF = {
 >;
 
 /**
- * The mode's permissions: full access as it always ran, or the workspace
- * sandbox with the network on, the checkout's git folders and, where the
- * launch knows its home, the package caches (`PACKAGE_CACHES`) writable
- * beside the checkout, and approval `on-request`.
+ * The mode's permissions: full access as it always ran, or Codex's
+ * workspace sandbox on its own defaults (no writable root beside the
+ * checkout, the network off) with approval `on-request`, as the Codex app
+ * runs its Ask for approval and Approve for me.
  */
-function permissionsOf(
-  mode: PermissionMode | undefined,
-  cwd: string,
-  home: string | undefined,
-): CodexPermissions {
+function permissionsOf(mode: PermissionMode | undefined): CodexPermissions {
   if (mode === undefined || mode === PERMISSION_MODE.FULL_ACCESS) return FULL_ACCESS;
-  const caches =
-    home === undefined || home === "" ? [] : PACKAGE_CACHES.map((cache) => join(home, cache));
-  const writableRoots = [...gitFoldersOf(cwd), ...caches];
   const approvalsReviewer = REVIEWER_OF[mode];
   return {
     approvalPolicy: "on-request",
@@ -665,8 +621,8 @@ function permissionsOf(
     sandbox: "workspace-write",
     sandboxPolicy: {
       type: "workspaceWrite",
-      writableRoots,
-      networkAccess: true,
+      writableRoots: [],
+      networkAccess: false,
       excludeTmpdirEnvVar: false,
       excludeSlashTmp: false,
     },
@@ -674,24 +630,9 @@ function permissionsOf(
       ["approval_policy", toml("on-request")],
       ["approvals_reviewer", toml(approvalsReviewer)],
       ["sandbox_mode", toml("workspace-write")],
-      ["sandbox_workspace_write.writable_roots", `[${writableRoots.map(toml).join(", ")}]`],
-      ["sandbox_workspace_write.network_access", "true"],
     ],
   };
 }
-
-/** The package caches the mode's sandbox names writable, made where missing; one that cannot be made is let be, and an install there asks. */
-const makeCaches = (permissions: CodexPermissions, home: string | undefined) =>
-  Effect.forEach(
-    home === undefined || home === "" || permissions === FULL_ACCESS
-      ? []
-      : PACKAGE_CACHES.map((cache) => join(home, cache)),
-    (folder) =>
-      Effect.try(() => mkdirSync(folder, { recursive: true })).pipe(
-        Effect.catch(() => Effect.logWarning("agent-runner: a package cache could not be made")),
-      ),
-    { discard: true },
-  );
 
 /**
  * App-server's argv: our provider and its credential where the launch
@@ -1744,9 +1685,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   );
   const heard = { count: 0 };
   const provider = providerOf(auth);
-  const home = context.env.HOME;
-  const permissions = permissionsOf(config.permissionMode, config.cwd, home);
-  yield* makeCaches(permissions, home);
+  const permissions = permissionsOf(config.permissionMode);
   const approvals = yield* makeApprovals(context.sink);
   const opened = yield* openAppServer(
     { context, signals, model: config.model, auth, heard, permissions, approvals },

@@ -100,9 +100,9 @@ const FLIP_WORDS = {
   },
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
-      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over every cloud agent's tabs, and Run rows in ⌘K, that run one in the agent's sandbox when pressed.`,
+      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over every cloud agent's tabs, with Run rows in ⌘K and a phone's ⋯ menu, that runs one in the agent's sandbox when pressed.`,
     off: (workspace: string) =>
-      `Hides the Run button, its ⌘K rows, and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
+      `Hides the Run button, its rows in ⌘K and the ⋯ menu, and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
   },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>

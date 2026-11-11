@@ -8,8 +8,8 @@
  * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its retry, its
  * pictures, and a thread's answer, reply, and resolve; the Tasks tab: its
- * tree, read from the same list, a task's status set, and a task's
- * description and pages followed; an agent's page: a message sent or
+ * tree, read from the same list, a task's status set, pin, and read mark,
+ * and a task's description and pages followed; an agent's page: a message sent or
  * queued, its queue steered, and its turn stopped; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
  * and the phone's own push registration,
@@ -86,7 +86,7 @@ const WEB = {
 const IOS = {
   ADMIN: byDesign("iOS v1 opens the admin dashboard in Safari"),
   AGENTS: notYet("iOS v1 has no agent screens"),
-  AUTOMATIONS: byDesign("iOS v1 opens Automations in Safari"),
+  AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
   COMPOSER: notYet(
     "iOS's New task and New agent sheets offer no Try again, skills, or warm-keeping yet",
   ),
@@ -212,6 +212,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PORT_SHARED]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_PORT_SHARE]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_PORT_UNSHARE]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_RUN_ACTION]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_ARCHIVE]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_PIN]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_DELETE]: panel(IOS.AGENTS),
@@ -308,8 +310,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_START]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DELETE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_RENAME]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_PIN]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_MARK_READ]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PIN]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_MARK_READ]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,

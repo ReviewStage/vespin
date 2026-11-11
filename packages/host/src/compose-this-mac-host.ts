@@ -3,7 +3,7 @@ import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { HOST_RELEASE } from "@repo/features/host-release";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
-import { EXPERIMENT, type Experiment } from "@repo/settings";
+import { EXPERIMENT, type Experiment, type KeepAwake } from "@repo/settings";
 import { cappedExponential } from "@repo/wire/effect";
 import {
   Duration,
@@ -37,6 +37,7 @@ import {
   writeHostDevice,
 } from "./host-device-record.js";
 import type { HostKernel } from "./host-kernel.js";
+import { handKeepAwake } from "./keep-awake-record.js";
 import { forgetOwnedAgents, ownedAgents, ownedAgentsMoves } from "./local-agent-state.js";
 import type { RunMode } from "./run-mode.js";
 
@@ -87,6 +88,11 @@ import type { RunMode } from "./run-mode.js";
  * is shown of it: launchd and the host's own setup carry the rest. A Mac the
  * host cannot run on (`ThisMacHost`'s `runsHost`) is never enrolled.
  *
+ * How the member keeps this Mac awake (`keep-awake.ts` in `@repo/settings`)
+ * is handed to the host on each of those passes, written into the install's
+ * state where it differs from what stands there (`keep-awake-record.ts`), since the
+ * host is a process of its own that never reads the app's settings.
+ *
  * Which machine this Mac is, and the device its record names, are told to
  * the windows under the account signed in (`LIVE_READ.THIS_MAC_HOST`) as
  * the host starts, after its own enroll, and on every one of those changes
@@ -134,6 +140,8 @@ export interface ThisMacHostDependencies {
   accountId: () => string | undefined;
   /** Whether the account signed in has the experiment given on, as the settings hold it now. */
   experimentOn: (experiment: Experiment) => Effect.Effect<boolean>;
+  /** How the member keeps this Mac awake, as the settings hold it now, which the host is handed in its state. */
+  keepAwake: Effect.Effect<KeepAwake>;
   /** A pulse each time the settings are told again, which a sign-in, a sign-out, and an experiment turned on or off each do, subscribed as it is yielded. */
   settingsTold: Effect.Effect<Stream.Stream<void>, never, Scope.Scope>;
   /** Whether the service lists the device given among the account's hosts; none where it could not answer. */
@@ -386,6 +394,11 @@ export function composeThisMacHost(
             ),
           );
 
+    /** How the member keeps this Mac awake handed to its host, where it is installed; one that cannot be written is handed again at the next change. */
+    const keepAwakeHanded = Effect.flatMap(dependencies.keepAwake, (choice) =>
+      Effect.ignore(handKeepAwake(host.stateRoot, choice)),
+    );
+
     // Note that the in-process changes are subscribed before the first read, so one that lands while it reads is read again after it.
     // A change interrupts the keep under way, but for an enroll begun, which runs whole; This Mac is told on every pass.
     const lifetime = Effect.gen(function* () {
@@ -400,7 +413,9 @@ export function composeThisMacHost(
       });
       yield* Effect.forkScoped(
         Stream.concat(Stream.succeed(undefined), changed).pipe(
-          Stream.mapEffect(() => Effect.andThen(tellThisMac, keptNow)),
+          Stream.mapEffect(() =>
+            Effect.andThen(Effect.andThen(keepAwakeHanded, tellThisMac), keptNow),
+          ),
           Stream.changesWith(sameKept),
           Stream.switchMap((kept) => Stream.fromEffectDrain(keep(kept))),
           Stream.runDrain,

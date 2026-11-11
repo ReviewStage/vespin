@@ -37,12 +37,14 @@ export { EmptyState } from "./empty-state.js";
 export { MenuPickRow, WordsField } from "./form-rows.js";
 export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
+export { BUZZ, type Buzz, buzz } from "./haptics.js";
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 export {
   ListRow,
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowSubmenu,
   TaskRow,
 } from "./list-row.js";
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";

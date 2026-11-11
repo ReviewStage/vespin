@@ -13,6 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { type AdminRoute, useAdminRoute } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
+import { type AgentRoute, useAgentRoute } from "../agent-route.js";
 import { runAppCommand } from "../app-commands.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
 import { stepTitle } from "../history-titles.js";
@@ -113,6 +114,7 @@ function mount(
   let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
   let person: PersonRoute | undefined;
+  let agentPage: AgentRoute | undefined;
   let automations: AutomationsRoute | undefined;
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
@@ -139,6 +141,7 @@ function mount(
     // The Board and a person's page stand where the router does, as the window's root reads them, and are left for the state's place.
     board = useBoardRoute();
     person = usePersonRoute();
+    agentPage = useAgentRoute();
     automations = useAutomationsRoute({
       narrow: false,
     });
@@ -289,6 +292,9 @@ function mount(
       }),
     /** Opens the Board of the workspace at `workspace` by the router, as the Board's own doors do. */
     openBoard: (workspace: string) => act(() => board?.onOpen(workspace)),
+    /** Opens an agent's own page by the router, as a door naming an agent the task list does not carry does. */
+    openAgentPage: (agentId: string, workspace: string) =>
+      act(() => agentPage?.onOpen(agentId, workspace)),
     /** Opens a person's page by the router, as a press on their name does. */
     openPerson: (userId: string, name: string | undefined, workspace: string) =>
       act(() => person?.onOpen(userId, name, workspace)),
@@ -518,6 +524,26 @@ test("a person's page is a step of its own, which Back from a plan opened after 
   act(() => window.history().onBack());
   await settle();
   assert.equal(window.at(), "/acme/person/user-maya");
+  act(() => window.history().onBack());
+  await settle();
+  assert.equal(window.at(), "/acme/person/user-charles");
+});
+
+test("an agent's own page, which opens its agent on its task, is a step Back from that task passes over", async () => {
+  const listed = { workspaces: [ACME], workspace: ACME };
+  const window = mount(listedTab(listed));
+  window.openPerson("user-charles", undefined, ACME.slug);
+  window.openAgentPage("8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21", ACME.slug);
+  await settle();
+  window.leaveFor(
+    listedTab({
+      ...listed,
+      page: TASKS_PAGE.DOCUMENT,
+      activeTaskId: TASK_ID,
+      boundFor: TASK_ID,
+    }),
+  );
+
   act(() => window.history().onBack());
   await settle();
   assert.equal(window.at(), "/acme/person/user-charles");

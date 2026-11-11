@@ -270,6 +270,7 @@ describe("a host's daemon", () => {
 
         const daemon = yield* hostDaemon({
           stateRoot,
+          pid: process.pid,
           device: DEVICE,
           version: VERSION,
           platform,
@@ -348,6 +349,7 @@ describe("a host's daemon", () => {
 
         const daemon = yield* hostDaemon({
           stateRoot,
+          pid: process.pid,
           device: DEVICE,
           version: VERSION,
           platform: platformOn(FRA_01, stateRoot),
@@ -383,6 +385,7 @@ describe("a host's daemon", () => {
 
         yield* hostDaemon({
           stateRoot,
+          pid: process.pid,
           device: { deviceId: DEVICE_ID, deviceSecret: DEVICE_SECRET, serviceOrigin: SERVICE },
           version: VERSION,
           platform,

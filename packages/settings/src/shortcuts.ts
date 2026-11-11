@@ -103,6 +103,7 @@ export const APP_COMMAND = {
   SHOW_TERMINAL: "show-terminal",
   NEW_TERMINAL: "new-terminal",
   MENTION_LINES: "mention-lines",
+  RUN_ACTION: "run-action",
   GROUP_TASKS_BY_REPOSITORY: "group-tasks-by-repository",
   LIST_TASKS_UNGROUPED: "list-tasks-ungrouped",
   SHOW_FINISHED_SUB_TASKS: "show-finished-sub-tasks",
@@ -674,6 +675,13 @@ export const APP_SHORTCUTS = {
     label: "Mention lines in agent",
     chord: { key: SHORTCUT_KEY.K, option: true },
   },
+  // Note that Run is the desktop's alone, because Safari keeps ⌥⌘R for its own Reload from origin.
+  [APP_COMMAND.RUN_ACTION]: {
+    label: "Run",
+    chord: { key: SHORTCUT_KEY.R, option: true },
+    experiment: EXPERIMENT.RUN_ACTIONS,
+    capability: HOST_CAPABILITY.DESKTOP_APP,
+  },
   [APP_COMMAND.INSERT_PICTURE]: {
     label: "Insert image",
     chord: { key: SHORTCUT_KEY.I, option: true },
@@ -954,6 +962,7 @@ export const APP_SHORTCUT_GROUPS = [
       APP_COMMAND.MOVE_ROW_DOWN,
       APP_COMMAND.SHOW_TERMINAL,
       APP_COMMAND.MENTION_LINES,
+      APP_COMMAND.RUN_ACTION,
       APP_COMMAND.INSERT_PICTURE,
     ],
   },

@@ -23,6 +23,7 @@
  * declared logged once for every read that follows it by deltas.
  */
 
+import { accountSound, accountSoundChoice } from "../schemas/account-sound.js";
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
 import { agentApproval } from "../schemas/agent-approval.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
@@ -397,6 +398,23 @@ export const accountPreferenceSync = defineSyncTable(accountPreference, {
     accountPreference.runsOnDeviceId,
     accountPreference.updatedAt,
   ],
+});
+
+/**
+ * A sound the account keeps of its own, on the account's topic, which the
+ * account's preferences read is woken on, so a sound added, renamed, or
+ * removed on one device is listed on every other. Note that its bytes are
+ * ignored, because they are written only with the row, whose arrival
+ * notifies, and never change after.
+ */
+export const accountSoundSync = defineSyncTable(accountSound, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountSound.userId }],
+  ignore: [accountSound.bytes, accountSound.byteCount],
+});
+
+/** Which sound one of the account's two sounds plays, on the account's topic, which the same read is woken on. */
+export const accountSoundChoiceSync = defineSyncTable(accountSoundChoice, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountSoundChoice.userId }],
 });
 
 /**
@@ -810,6 +828,8 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskReadSync,
   macCommandSync,
   accountPreferenceSync,
+  accountSoundSync,
+  accountSoundChoiceSync,
   integrationConnectionSync,
   runnerLineSync,
   agentQueueSync,

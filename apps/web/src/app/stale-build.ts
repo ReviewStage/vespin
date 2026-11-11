@@ -37,9 +37,6 @@ export const PRELOAD_ERROR = "vite:preloadError";
 /** What the toast says of a chunk that failed to load; a deploy or a dropped connection alike. */
 export const PART_DID_NOT_LOAD = `Part of ${PRODUCT_NAME} could not load`;
 
-/** What the toast says of a build the service refused as older than it serves. */
-export const BUILD_TOO_OLD = `This ${PRODUCT_NAME} is older than the one now live`;
-
 /** What the reload needs of the tab, which a test stands in for. */
 export interface StaleBuildTab {
   /** Whether the browser has a connection, without which a reload trades the surface's Reload for the browser's error page. */

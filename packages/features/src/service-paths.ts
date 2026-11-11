@@ -24,6 +24,14 @@ export const HOSTED_SERVICE_PATH = {
    * `provider-key-wire.ts` declares every body.
    */
   ACCOUNT_PROVIDER_KEYS: "/api/account/provider-keys",
+  /**
+   * The sounds the account keeps of its own: read one's clip as its bytes in
+   * base64 (GET ?id=), add one under a name (POST), rename one (PATCH), or
+   * remove one (DELETE ?id=). `sound-clip-wire.ts` declares every body.
+   */
+  ACCOUNT_SOUNDS: "/api/account/sounds",
+  /** Which of the account's sounds one of its two sounds plays (PUT). */
+  ACCOUNT_SOUND_CHOICE: "/api/account/sounds/choice",
   /** One of the account's subscriptions named, or its name cleared (PUT). */
   ACCOUNT_SUBSCRIPTION_LABEL: "/api/account/provider-keys/label",
   /** The account's subscriptions of a kind put in a new order (PUT). */

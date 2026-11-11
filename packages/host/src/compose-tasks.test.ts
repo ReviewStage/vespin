@@ -2789,7 +2789,7 @@ it.effect(
 );
 
 it.effect(
-  "a list whose rows stop decoding keeps what it drew and says it is catching up, and is live again once it is read again",
+  "a list stays live across a row that stops decoding, which is left out until it decodes again",
   () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(LIVE_NOW);
@@ -2803,17 +2803,16 @@ it.effect(
       });
       assert.equal(last()?.live, HOST_LIVE.LIVE);
 
-      // A deploy changed the row's shape, so it no longer decodes, and the poll asked again within a second fails the same way.
+      // A deploy changed the row's shape, so it no longer decodes: the row is left out, so the one drawn stands, and the list stays live.
       yield* listAnswers(service, { plans: [{ id: INVITES, title: "Teammate invitations" }] });
       yield* TestClock.adjust(Duration.seconds(1));
       yield* settled;
-      assert.equal(last()?.live, HOST_LIVE.CATCHING_UP);
-      assert.equal(last()?.listStatus, TASKS_READ.READY, "the list drawn stands");
+      assert.equal(last()?.live, HOST_LIVE.LIVE);
+      assert.equal(last()?.listStatus, TASKS_READ.READY);
       assert.equal(last()?.tasks[0]?.name, "Teammate invitations, live");
 
-      // The rows decode again by the time the follow starts again, a pause later.
-      service.live.list.set({ plans: [planRow(INVITES, "Teammate invitations, again")] });
-      yield* TestClock.adjust(Duration.seconds(5));
+      // The row decodes again, and stands again.
+      yield* listAnswers(service, { plans: [planRow(INVITES, "Teammate invitations, again")] });
       yield* settled;
       assert.equal(last()?.live, HOST_LIVE.LIVE);
       assert.equal(last()?.tasks[0]?.name, "Teammate invitations, again");

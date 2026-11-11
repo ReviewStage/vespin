@@ -5,6 +5,7 @@ import {
   Button,
   COMPOSER_ELEMENT,
   COMPOSER_LOOK,
+  COMPOSER_SEND_TONE,
   ComposerBody,
   ComposerFoot,
   ComposerFootNote,
@@ -119,6 +120,11 @@ function ComposerFoots(): React.JSX.Element {
                 empty: true,
                 refuses: { onRefused: ignore, words: "Fill in Invites a member may send a day." },
               }}
+            />
+            {/* A send that turns something away, in words and in the danger ink: a denial's note. */}
+            <Box
+              words="Not on the production database."
+              send={{ label: "Deny", empty: false, inWords: true, tone: COMPOSER_SEND_TONE.DANGER }}
             />
             <Box
               words="Here are the two screens."

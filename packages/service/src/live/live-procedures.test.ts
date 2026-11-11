@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { addSound } from "@repo/database/models/account-sounds";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
 import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
@@ -44,6 +45,7 @@ import {
 import {
   ACCOUNT_PREFERENCES_READ,
   accountPreferencesOfLiveRows,
+  accountSoundsOfLiveRows,
 } from "@repo/features/account-preferences-live";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { AGENT_ORIGIN_READ, agentOriginOfLive } from "@repo/features/agent-origin-live";
@@ -85,6 +87,7 @@ import {
   pullRequestChaptersOfLive,
 } from "@repo/features/pull-request-chapters-live";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
+import { SOUND_CLIP_SLOT, SOUND_CLIP_TYPE } from "@repo/features/sound-clip-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
@@ -165,6 +168,12 @@ import { agentOriginRead } from "./reads/agent-origin.js";
 
 const ORIGIN = "https://app.test";
 const LIVE_INBOX = "/api/live/inbox";
+
+/** A sound clip whose bytes open as a WAV's, its last byte a mark that tells two apart. */
+const clipOf = (mark: number) => ({
+  contentType: SOUND_CLIP_TYPE.WAV,
+  bytes: new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, mark]),
+});
 
 /** A live read's address, naming the account it is for where one is named (`LIVE_USER_QUERY`). */
 function readOf(path: string, forUser: string | undefined): URL {
@@ -330,21 +339,34 @@ it.layer(getTestDB())("the account's live reads", (it) => {
           chaptersModel: CHAPTERS_MODEL.OPUS,
         });
 
+        const danaSound = yield* addSound(dana, "Glass", clipOf(1), SOUND_CLIP_SLOT.ASK);
+        yield* addSound(eli, "Knock", clipOf(2), SOUND_CLIP_SLOT.FINISH);
+
         const answered = yield* ask({ bearer: dana, path: "/api/live/account-preferences" });
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.answer)(answered.body);
-        const rows = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.rows)({
+        const {
+          preferences: rows,
+          sounds,
+          soundChoices,
+        } = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.rows)({
           preferences: answer.queries.preferences.rows,
-        }).preferences;
+          sounds: answer.queries.sounds.rows,
+          soundChoices: answer.queries.soundChoices.rows,
+        });
         assert.equal(rows.length, 1, "one row, the account's own");
         assert.deepEqual(
-          accountPreferencesOfLiveRows(rows),
+          accountPreferencesOfLiveRows(rows, accountSoundsOfLiveRows(sounds, soundChoices)),
           {
             agent: { model: "openai/gpt-6.1-sol", effort: "medium" },
             chaptersModel: CHAPTERS_MODEL.SONNET,
             slackNotifications: true,
+            sounds: {
+              list: [danaSound],
+              choices: { [SOUND_CLIP_SLOT.FINISH]: undefined, [SOUND_CLIP_SLOT.ASK]: danaSound.id },
+            },
           },
-          "dana's own row alone",
+          "dana's own row and clip alone",
         );
       }),
   );

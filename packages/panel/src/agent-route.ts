@@ -1,13 +1,13 @@
 /**
- * agent-route.ts -- an agent's own page as the router stands it: whether it stands, the agent and workspace its address names, and the navigation that opens it.
+ * agent-route.ts -- an agent's own address as the router stands it: whether it stands, the agent and workspace it names, and the navigation that opens it.
  *
- * An agent's page, the page of an agent on no task or of an archived one
- * opened on its own, is a routed place (`panel-router.tsx`) under the
- * workspace its address names, `/<workspace>/agent/<agentId>`, read from the
- * address alone, as a person's page is (`workspace-routes.ts`). Opening one
- * is a visit; opening the one already standing moves nothing. The side
- * panel beside it is the window's, which the history saves in the step
- * beside its address (`places/window-history.ts`), as it does an Inbox item's.
+ * An agent's address, `/<workspace>/agent/<agentId>`, is a routed place
+ * (`panel-router.tsx`) under the workspace it names, read from the address
+ * alone, as a person's page is (`workspace-routes.ts`). Its page opens the
+ * agent on its task (`desktop-agent-page.tsx`), so a door naming an agent
+ * the task list does not carry yet opens it here and the agent lands on its
+ * task once read. Opening one is a visit; opening the one already standing
+ * moves nothing.
  */
 
 import { useNavigate, useRouter } from "@tanstack/react-router";

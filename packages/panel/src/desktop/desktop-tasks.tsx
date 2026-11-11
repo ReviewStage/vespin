@@ -124,7 +124,6 @@ import {
 import { DesktopHome } from "./desktop-home.js";
 import {
   AgentPane,
-  agentsRetry,
   DETAILS_WORDS,
   MainTabBars,
   mainTabLabel,
@@ -1006,7 +1005,6 @@ function DescriptionDocument({
         onOpenPullRequest={openPullRequestDoor}
         // Note that New agent stands on the group's head at every width, as the strip's "+" offers it.
         newAgent={newAgentStarts(mainTabs, agents)[0]}
-        starts={room === SHELL_ROOM.NARROW ? agentsRetry(agents) : []}
         phone={
           room === SHELL_ROOM.NARROW
             ? {
@@ -1197,9 +1195,6 @@ function DescriptionDocument({
   }
   const { task } = region;
   const listed = listedOpen ?? task;
-  // The column has a tab on its way: the agents are still read, or, read, a draft opens in the task's
-  // empty column.
-  const columnComing = agents.agents !== undefined || !agents.listFailed;
   // The panel holds the keys while the focus went into it last, or while it
   // fills the window over this column; shut, it hands them back.
   const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
@@ -1462,6 +1457,7 @@ function DescriptionDocument({
                             onOpenTerminal={terminalDoors.onOpenTerminal}
                             onOpenLocal={terminalDoors.onOpenLocal}
                             onOpenBrowser={phone ? openBrowser : undefined}
+                            onShowShell={terminalDoors.onShowShell}
                             onShown={phone ? setShownAgentTab : undefined}
                             onOpenAgent={openAgentColumn}
                             waiting={waitingOf}
@@ -1474,7 +1470,7 @@ function DescriptionDocument({
                         {/* The plan's banner is the whole plan's, so it stands over every
             tab of the column, and over the panel's while that fills the window. */}
                         {sidePanel.fullScreen ? null : stranded.banner}
-                        {/* A run's task says what fired the run over every tab of the column too, as its agent's own page does under its bar. */}
+                        {/* A run's task says what fired the run over every tab of the column. */}
                         {runPlace === undefined || runAgent === undefined ? null : (
                           <AutomationRunStrip place={runPlace} status={runAgent.status} />
                         )}
@@ -1488,7 +1484,7 @@ function DescriptionDocument({
                             {tab === undefined || isOverviewTab(tab) ? (
                               // While the agents are read, or a draft opens on a task with none, the
                               // column stands as the tab it will show does before it lands.
-                              tab === undefined && columnComing ? (
+                              tab === undefined ? (
                                 <AgentColumn>
                                   <AgentTabSkeleton />
                                 </AgentColumn>

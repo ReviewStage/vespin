@@ -364,6 +364,13 @@ it.effect(
         assert.equal(spawned[check]?.env?.HOME, HOME);
         assert.equal(spawned[check]?.env?.SSH_AUTH_SOCK, SSH_AGENT);
         assert.ok(check < spawned.findIndex((each) => each.args[1] === "exit 0"));
+        // Note that the next daemon's start ends the group a record names, so one that outlived a daemon killed outright runs no longer.
+        const group = `${STATE_ROOT}/runner-groups/${AGENT_ID}`;
+        yield* until(() => files.has(group));
+        assert.equal(
+          JSON.parse(files.get(group) ?? "{}").group,
+          spawned.findIndex((each) => each.program === RUNNER) + 1,
+        );
         // Note that the identity the launch carries is set in the agent's repository, as a cloud checkout sets it, before its runner starts.
         const identity = spawned.findIndex((each) =>
           each.args.some((arg) => arg.includes(CHECKOUT_IDENTITY_SCRIPT)),
@@ -380,10 +387,15 @@ it.effect(
         assert.equal(runner?.env?.SSH_AUTH_SOCK, SSH_AGENT);
         assert.equal(runner?.env?.GH_CONFIG_DIR, undefined);
         assert.deepEqual(
-          [...files.keys()].filter((path) => !path.startsWith(`${HOME}/.vespin/`)),
-          [`${STATE_ROOT}/owned-agents/${AGENT_ID}`],
-          "nothing is written outside the agents' folders but the device's record",
+          [...files.keys()].filter(
+            (path) => !path.startsWith(`${HOME}/.vespin/`) && !path.startsWith(`${STATE_ROOT}/`),
+          ),
+          [],
+          "nothing is written outside the agents' folders and the host's own state",
         );
+        yield* TestClock.adjust(Duration.seconds(1));
+        yield* until(() => runner?.ended === "exited");
+        assert.ok(!files.has(group), "an ended runner's group is no longer kept");
       }),
     ),
 );
