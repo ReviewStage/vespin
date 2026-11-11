@@ -24,6 +24,7 @@ import {
   pageRepositoryOf,
   pastedLinkMention,
   sectionAnchors,
+  unreadPlaceLinksIn,
   withoutMemberLinks,
 } from "./mention-link.js";
 
@@ -399,6 +400,19 @@ test("every @ link outside code is one a writer keeps, whatever its target names
       { label: "@Escaped", target: "https://linear.app/b" },
     ],
   );
+});
+
+test("a link under a workspace that reads as no place, such as a placeholder's, is unread, and a place or a site page is not", () => {
+  const words = [
+    "Started [@its agent](https://vespin.dev/acme/agent/{AGENT}) on [@it](https://vespin.dev/acme/task/<task-id>),",
+    "beside [@Rollout](https://vespin.dev/acme/task/42#rollout), [@Run](https://vespin.dev/acme/agent/a1),",
+    "the [@docs](https://vespin.dev/docs/agents), and [@Linear](https://linear.app/a).",
+  ].join("\n");
+
+  assert.deepEqual(unreadPlaceLinksIn(words), [
+    "https://vespin.dev/acme/agent/{AGENT}",
+    "https://vespin.dev/acme/task/<task-id>",
+  ]);
 });
 
 test("the mentions in a message are its @ links outside code, in order, their labels unescaped", () => {

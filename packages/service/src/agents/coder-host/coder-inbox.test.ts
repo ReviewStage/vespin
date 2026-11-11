@@ -379,6 +379,12 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         for (const [value, reason] of refusals) {
           assert.equal(refusalOf(yield* post(agent, value)), reason);
         }
+        // A link written before the tool that answers its id has answered holds a placeholder, which leads nowhere.
+        const placeholder = "https://vespin.dev/acme/agent/{AGENT}";
+        const unread = refusalOf(
+          yield* post(agent, { ...QUEUE, body: `Started [@its agent](${placeholder}).` }),
+        );
+        assert.ok(unread.startsWith("Not posted:") && unread.includes(placeholder), unread);
         assert.deepEqual(yield* taskInboxItems(agent.userId, agent.taskId), []);
 
         const channel = {
