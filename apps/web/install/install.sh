@@ -457,12 +457,19 @@ load_mac_agent() {
 
 # Restarts the LaunchAgent on the release just installed, once the box is
 # connected, in this user's login session where they are logged in, and says
-# it runs only while they are.
+# it runs only while they are, and where macOS keeps a Mac nobody sits at
+# from sleeping: the host holds it awake only while its agents work. Note
+# that a laptop, which has a battery, keeps the option under Battery.
 restart_mac_agent() {
   uid="$(id -u)"
   stop_launch_agent "$uid"
   start_launch_agent "$uid" "$PLIST" || true
   printf 'It runs while %s is logged in, so on a Mac nobody sits at, turn on automatic login for %s.\n' "$(id -un)" "$(id -un)"
+  energy="Energy › Prevent automatic sleeping when the display is off"
+  if pmset -g batt 2>/dev/null | grep -q InternalBattery; then
+    energy="Battery › Options › Prevent automatic sleeping on power adapter when the display is off"
+  fi
+  printf 'It keeps the Mac awake while agents work. To keep it reachable between them, turn on System Settings › %s.\n' "$energy"
 }
 
 # The release's tarball for this computer, by its name, address and SHA-256,

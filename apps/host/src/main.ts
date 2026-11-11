@@ -259,6 +259,7 @@ const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
       version: VERSION,
       platform,
       releases,
+      pid: process.pid,
     });
     if (ended === HOST_DAEMON_END.REMOVED) {
       reportToStderr(`${PRODUCT_NAME} host: every agent it ran is stopped.`);

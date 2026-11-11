@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import { HostedDeviceAgentClient } from "@repo/features";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { Clock, Effect, Layer, Option } from "effect";
+import { Clock, Effect, Layer, Option, SubscriptionRef } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { composeLocalAgents } from "../compose-local-agents.js";
 import { LocalAgentPlatform, type LocalAgentPlatformSeam, Reporter } from "../effect/seams.js";
 import { type HostDevice, hostDeviceWhen, markHostDeviceRefused } from "../host-device-record.js";
+import { hostKeepAwake } from "./host-keep-awake.js";
 import { hostRunnersLeftStopped } from "./host-runners-left.js";
 import { hostServiceStanding } from "./host-standing.js";
 import { type HostReleases, hostTargetOf, hostUpdate } from "./host-update.js";
@@ -46,6 +48,8 @@ export interface HostDaemonOptions {
   readonly platform: LocalAgentPlatformSeam;
   /** The account install's releases, where the daemon runs from one of them; none where it takes no notice of a newer release. */
   readonly releases?: HostReleases | undefined;
+  /** The daemon's own process id, which a Mac's hold on staying awake ends with. */
+  readonly pid: number;
 }
 
 /** The daemon run until the service refuses the box's secret, every runner it started stopped and its record marked refused before it returns, or until it switched to a newer release, every runner stopped. */
@@ -70,6 +74,17 @@ export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOption
         releases === undefined || target === undefined
           ? undefined
           : yield* hostUpdate({ releases, version: options.version, target });
+      const working = yield* SubscriptionRef.make(false);
+      // Note that only a Mac is kept awake, by the choice its app hands the host (`host-keep-awake.ts`).
+      if (platform.devicePlatform === DEVICE_PLATFORM.DARWIN) {
+        yield* Effect.forkScoped(
+          hostKeepAwake({
+            stateRoot: options.stateRoot,
+            working: SubscriptionRef.changes(working),
+            pid: options.pid,
+          }),
+        );
+      }
       const composer = yield* composeLocalAgents({
         kernel: { stateRoot: options.stateRoot, createId: randomUUID },
         deviceId,
@@ -79,6 +94,7 @@ export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOption
           credential: { authorization: () => Effect.succeed(secret) },
         }),
         update: update?.follower,
+        working,
       }).pipe(
         Effect.provide(Layer.succeed(LocalAgentPlatform, platform)),
         Effect.updateService(HttpClient.HttpClient, standing.client),

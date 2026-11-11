@@ -322,6 +322,8 @@ export interface LocalAgentsDependencies {
   client: LocalAgentClient;
   /** The host's update of itself, where it runs from an account install's releases; none where it takes no notice of a newer release. */
   update?: LocalAgentsUpdate | undefined;
+  /** Set to whether any runner runs, each time one starts or ends, as the host keeping its Mac awake reads it (`daemon/host-keep-awake.ts`); none where nothing reads it. */
+  working?: SubscriptionRef.SubscriptionRef<boolean> | undefined;
 }
 
 /** A runner this Mac started: the launch line it settles, its stdin, and the process it is. */
@@ -552,6 +554,18 @@ export function composeLocalAgents(
         const workers = yield* FiberMap.make<string>();
         const mailboxes = new Map<string, Queue.Queue<DeviceAgentClaimedLine>>();
         const runners = new Map<string, Runner>();
+        /** Whether any runner runs, told where the host reads it. */
+        const workingTold = Effect.suspend(() =>
+          dependencies.working === undefined
+            ? Effect.void
+            : SubscriptionRef.set(dependencies.working, runners.size > 0),
+        );
+        // Note that a follow that ends leaves no runner running, whatever its runners' own exits got to say.
+        yield* Effect.addFinalizer(() =>
+          dependencies.working === undefined
+            ? Effect.void
+            : SubscriptionRef.set(dependencies.working, false),
+        );
         /** The launch lines no beat settles: those claimed and handed to their agents whose runners are not yet running or settled unstarted, and those whose runner ended until its settle is answered. */
         const starting = new Set<string>();
         /** Held by each claim and by a beat's settle of a launch the device runs nothing for, so neither runs while the other is unanswered. */
@@ -930,6 +944,7 @@ export function composeLocalAgents(
             const exited = yield* Effect.gen(function* () {
               const code = yield* Effect.option(handle.exitCode);
               runners.delete(agentId);
+              yield* workingTold;
               // Note that the launch is starting again until its settle is answered, so no beat settles it as a runner gone before its turn is let go of and its exit code sent.
               starting.add(line.id);
               yield* Scope.close(runnerScope, Exit.void).pipe(
@@ -938,6 +953,7 @@ export function composeLocalAgents(
               );
             }).pipe(Effect.forkIn(agentScope));
             runners.set(agentId, { lineId: line.id, stdin, handle, exited });
+            yield* workingTold;
           });
 
         /**
