@@ -95,6 +95,7 @@ const platformOn = (os: HostOs, stateRoot: string, uid = 990) =>
     installFolder: "/opt/vespin-host",
     arch: DEVICE_ARCH.X64,
     stateRoot,
+    tempFolder: `${stateRoot}/machine-temp`,
     node: NODE,
     user: { uid, gid: uid },
     clis: fakeClis(),
