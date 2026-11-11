@@ -241,10 +241,13 @@ function segmentWords(scope: Scope): string {
  * instead: one button naming the scope chosen, opening the others.
  */
 export function ScopePicker({
+  label,
   scopes,
   look = SCOPE_LOOK.SEGMENTED,
   children,
 }: {
+  /** What the control chooses, heard by VoiceOver before the scope chosen and kept off screen, such as "Filter". */
+  readonly label: string;
   readonly scopes: readonly Scope[];
   readonly look?: ScopeLook | undefined;
   /** The list the control scopes, or what stands in its place while it lists nothing. */
@@ -254,7 +257,7 @@ export function ScopePicker({
   return (
     <VStack spacing={0}>
       <Picker<string>
-        label=""
+        label={label}
         selection={chosen?.label ?? ""}
         onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
         modifiers={[

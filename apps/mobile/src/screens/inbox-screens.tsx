@@ -104,6 +104,9 @@ const INBOX_TITLE = "Inbox";
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
 
+/** What the scopes' control is heard as by VoiceOver, before the scope chosen. */
+const SCOPE_LABEL = "Filter";
+
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
 
@@ -664,7 +667,7 @@ function InboxStackList(words: InboxSearch) {
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
       <Screen>
-        <ScopePicker scopes={scopes}>
+        <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
           {listing.listed.length === 0 ? (
             <InboxEmpty
               show={show}
@@ -719,7 +722,7 @@ function InboxSplitScreen({
         <SplitView
           {...sidebar.columns({
             view: (
-              <ScopePicker scopes={scopes} look={SCOPE_LOOK.MENU}>
+              <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
                 {listing.listed.length === 0 ? (
                   <InboxEmpty
                     show={show}
