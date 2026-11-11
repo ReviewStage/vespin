@@ -77,43 +77,21 @@ function embedHeight(fit: PageFit): PageEmbedHeight {
   return { kind: PAGE_EMBED_HEIGHT.STAND_IN };
 }
 
-/** A page's fit, and the page and version it was heard for. */
-interface HeardFit {
-  readonly pageId: string;
-  readonly version: number;
-  readonly fit: PageFit;
-}
-
-/** How a page's version was last fitted in this window, pending where it never was. */
-function fittedOf(pageId: string, version: number): PageFit {
-  return FITTED.get(pageId)?.get(version) ?? PAGE_FIT_PENDING;
-}
-
-/**
- * How the page in `frame` is fitted, from the heights it reports against the
- * frame's own; as it was last fitted in this window, or pending, until it has.
- * Note that the fit is kept with the page and version it was heard for, so a
- * frame handed another page or version starts from that one's fit, never
- * the last one's.
- */
+/** How the page in `frame` is fitted, from the heights it reports against the frame's own; as it was last fitted in this window, or pending, until it has. */
 function useFrameFit(
   frame: RefObject<HTMLIFrameElement | null>,
   pageId: string,
   version: number,
 ): PageFit {
-  const [heard, setHeard] = useState<HeardFit>(() => ({
-    pageId,
-    version,
-    fit: fittedOf(pageId, version),
-  }));
-  const current = heard.pageId === pageId && heard.version === version;
-  const fit = current ? heard.fit : fittedOf(pageId, version);
+  const [fit, setFit] = useState<PageFit>(
+    () => FITTED.get(pageId)?.get(version) ?? PAGE_FIT_PENDING,
+  );
   useEffect(() => {
-    if (!current || heard.fit.kind === PAGE_FIT.PENDING) return;
+    if (fit.kind === PAGE_FIT.PENDING) return;
     const versions = FITTED.get(pageId) ?? new Map<number, PageFit>();
-    versions.set(version, heard.fit);
+    versions.set(version, fit);
     FITTED.set(pageId, versions);
-  }, [current, heard, pageId, version]);
+  }, [fit, pageId, version]);
   useEffect(() => {
     const hear = (event: MessageEvent) => {
       const framed = frame.current;
@@ -122,15 +100,11 @@ function useFrameFit(
       const size = readSize(event.data);
       if (Option.isNone(size)) return;
       const frameHeight = framed.getBoundingClientRect().height;
-      setHeard((last) => {
-        const was =
-          last.pageId === pageId && last.version === version ? last.fit : fittedOf(pageId, version);
-        return { pageId, version, fit: pageFitAfter(was, size.value.height, frameHeight) };
-      });
+      setFit((last) => pageFitAfter(last, size.value.height, frameHeight));
     };
     window.addEventListener("message", hear);
     return () => window.removeEventListener("message", hear);
-  }, [frame, pageId, version]);
+  }, [frame]);
   return fit;
 }
 
@@ -234,17 +208,17 @@ function FrameReply({
   );
 }
 
-/** One version of a page, drawn live in the words that tell of it. */
-export function ShownPage({
-  place,
+/** One version of a page, drawn live in the words that tell of it, in a frame of its own. */
+function PageVersionFrame({
   pageId,
   version,
   title,
+  src,
 }: {
-  place: PagePlace;
   pageId: string;
   version: number;
   title: string;
+  src: string;
 }): React.JSX.Element {
   const frame = useRef<HTMLIFrameElement>(null);
   useFrameLinks(frame);
@@ -256,16 +230,32 @@ export function ShownPage({
       <PageEmbed
         frameRef={frame}
         height={embedHeight(fit)}
-        frame={{
-          title,
-          src: appPlatform().pageFrameUrl({ ...place, pageId, version }),
-          sandbox: PAGE_SANDBOX,
-          lazy: true,
-        }}
+        frame={{ title, src, sandbox: PAGE_SANDBOX, lazy: true }}
       />
       {replyDoor === undefined ? null : <FrameReply frame={frame} onReply={replyDoor} />}
     </div>
   );
+}
+
+/**
+ * One version of a page, drawn live in the words that tell of it. Note that
+ * each page and version is drawn in a frame of its own, keyed by its
+ * address, because a frame navigated to another one may still hear the last
+ * document's height after it changed, and its fit would be taken for the new.
+ */
+export function ShownPage({
+  place,
+  pageId,
+  version,
+  title,
+}: {
+  place: PagePlace;
+  pageId: string;
+  version: number;
+  title: string;
+}): React.JSX.Element {
+  const src = appPlatform().pageFrameUrl({ ...place, pageId, version });
+  return <PageVersionFrame key={src} pageId={pageId} version={version} title={title} src={src} />;
 }
 
 /** A page named by a line of words, drawn live at its newest version as its plan, or its agent on no task, holds its pages; nothing while they are read or where none is the page. */
