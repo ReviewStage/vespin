@@ -104,6 +104,8 @@
     "./inbox-list-model": "./src/inbox-list-model.js",
     "./composer-markdown": "./src/composer-markdown.js",
     "./plain-words": "./src/plain-words.js",
+    "./search-found-model": "./src/search-found-model.js",
+    "./search-score": "./src/search-score.js",
     "./search-tokens": "./src/search-tokens.js",
     "./device-agent-wire": "./src/device-agent-wire.js",
     "./host-pairing-view": "./src/host-pairing-view.js",

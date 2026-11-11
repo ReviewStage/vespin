@@ -22,8 +22,8 @@
  * row marks exactly what found it, a loose hit's scattered letters included.
  */
 
-import { type MatchRange, searchTokens } from "@repo/features/search-tokens";
-import { namesTaskKey } from "@repo/features/workspace-key";
+import { type MatchRange, searchTokens } from "./search-tokens.js";
+import { namesTaskKey } from "./workspace-key.js";
 
 /** Each way a row can answer a query, in the order they rank. */
 export const SEARCH_TIER = {

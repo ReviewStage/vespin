@@ -31,7 +31,7 @@ export function focusSearchField(
 /**
  * One drawn line with the query's words marked where they landed, so a
  * result says why it matched: the stretches a search hit gave (`ranges`,
- * `@repo/ui/search-score`), or else wherever the words typed (`tokens`)
+ * `@repo/features/search-score`), or else wherever the words typed (`tokens`)
  * stand in it. A line the words did not land on is returned as it was.
  */
 export function Highlighted({

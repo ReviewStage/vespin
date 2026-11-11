@@ -59,7 +59,7 @@ function useTasksWorkspace(): Workspace | undefined {
 }
 
 /** How many of the reader's threads wait on them, by the task holding them and by the agent that posted them, in the chosen workspace. */
-function useWaiting(workspaceId: string | undefined): {
+export function useWaiting(workspaceId: string | undefined): {
   readonly byTask: ReadonlyMap<string, number>;
   readonly byAgent: ReadonlyMap<string, number>;
 } {
@@ -191,12 +191,25 @@ export function useTasksListing(search: string): TasksListing {
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
-interface TaskAgentLine {
+export interface TaskAgentLine {
   readonly agent: ListedAgent;
   readonly waiting: number;
   readonly pullRequest:
     | NonNullable<AppStateSnapshot["tasks"]["agentPullRequests"]>[number]["pullRequest"]
     | undefined;
+}
+
+/** An agent's line: how many of its threads wait on the reader, and the pull request the document holds for it. */
+export function agentLine(
+  agent: ListedAgent,
+  waitingByAgent: ReadonlyMap<string, number>,
+  view: AppStateSnapshot["tasks"] | undefined,
+): TaskAgentLine {
+  return {
+    agent,
+    waiting: waitingByAgent.get(agent.id) ?? 0,
+    pullRequest: view?.agentPullRequests?.find((each) => each.agentId === agent.id)?.pullRequest,
+  };
 }
 
 /** A task's page as the screen draws it: the task, its description where it is read, its agents, its pages, and what waits on the reader. */
@@ -255,14 +268,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       onTask,
       (agent) => agent,
       (agent) => (waiting.byAgent.get(agent.id) ?? 0) > 0,
-    ).map(
-      (agent): TaskAgentLine => ({
-        agent,
-        waiting: waiting.byAgent.get(agent.id) ?? 0,
-        pullRequest: view?.agentPullRequests?.find((each) => each.agentId === agent.id)
-          ?.pullRequest,
-      }),
-    );
+    ).map((agent) => agentLine(agent, waiting.byAgent, view));
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
     return {

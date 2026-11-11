@@ -27,6 +27,12 @@ import {
   sectionAnchors,
 } from "@repo/features/mention-link";
 import type { PageLine } from "@repo/features/page-wire";
+import {
+  hitRangesIn,
+  LOOSE_FROM,
+  type SearchSubject,
+  searchHit,
+} from "@repo/features/search-score";
 import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { skillWord } from "@repo/features/skill-word";
@@ -77,7 +83,6 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
-import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
 import type { SkillOption } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import {
@@ -142,7 +147,7 @@ import { useKnownNames } from "./use-known-names.js";
  * things of the task itself, its agents, open threads, pull requests, and
  * pages in that order, and lists each kind to browse below them, as an
  * editor's `@` menu lists its kinds; typed, it finds each kind's best few by the words typed, scored
- * as ⌘K scores them (`@repo/ui/search-score`), each row marking what found
+ * as ⌘K scores them (`@repo/features/search-score`), each row marking what found
  * it, letters typed in order finding only a path, each group in a fixed place
  * so a later read never moves the rows above it: agents first, then tasks,
  * people, the description, pages, and files and folders, since agents and tasks are
