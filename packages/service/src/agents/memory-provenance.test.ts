@@ -37,7 +37,7 @@ import { runAgentRemember } from "./memory-tools.js";
  * included, whose first line its relay wrote with no sender, nor a
  * turn whose journal already holds a web read, the retired runtime's or Claude Code's; a
  * turn a member's own line opened, which read nothing of the web, keeps the
- * memory; and a turn that settled refuses nothing. Synthetic accounts,
+ * memory, as from the agent and that line; and a turn that settled refuses nothing. Synthetic accounts,
  * workspaces, and words throughout.
  */
 
@@ -79,7 +79,7 @@ type Opener =
 
 /**
  * A turn of the agent's, as the relay writes one: its row, the line that
- * opened it, and its journal holding a call of each tool named.
+ * opened it, and its journal holding a call of each tool named; the line's id.
  */
 const writeTurn = (
   agent: Agent,
@@ -96,22 +96,26 @@ const writeTurn = (
       .values({ ...own, origin: TURN_ORIGIN.TYPED, status, queuedAt: now, startedAt: now })
       .returning({ id: turns.id });
     assert.ok(turn !== undefined);
-    yield* db.insert(messages).values({
-      ...own,
-      seq: 1,
-      turnId: turn.id,
-      clientId: randomUUID(),
-      role: MESSAGE_ROLE.USER,
-      parts: [{ type: "text", text: "Look over what changed today." }],
-      metadata: { channel: MESSAGE_CHANNEL.TYPED },
-      placedAt: now,
-      finishedAt: now,
-      ...(opener.sender === undefined
-        ? undefined
-        : opener.sender === MESSAGE_SENDER.AUTOMATION
-          ? { sender: opener.sender, senderName: opener.name }
-          : { sender: opener.sender, senderUserId: agent.userId }),
-    });
+    const [line] = yield* db
+      .insert(messages)
+      .values({
+        ...own,
+        seq: 1,
+        turnId: turn.id,
+        clientId: randomUUID(),
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: "Look over what changed today." }],
+        metadata: { channel: MESSAGE_CHANNEL.TYPED },
+        placedAt: now,
+        finishedAt: now,
+        ...(opener.sender === undefined
+          ? undefined
+          : opener.sender === MESSAGE_SENDER.AUTOMATION
+            ? { sender: opener.sender, senderName: opener.name }
+            : { sender: opener.sender, senderUserId: agent.userId }),
+      })
+      .returning({ id: messages.id });
+    assert.ok(line !== undefined);
     yield* db.insert(messages).values({
       ...own,
       seq: 2,
@@ -129,6 +133,7 @@ const writeTurn = (
       metadata: { author: MESSAGE_AUTHOR.MODEL },
       placedAt: now,
     });
+    return line.id;
   });
 
 /** A `remember` from the agent, as its tool door calls it. */
@@ -191,19 +196,25 @@ it.layer(getTestDB())("a remember's provenance", (it) => {
       }),
   );
 
-  it.effect("a turn a member's line opened, which read nothing of the web, keeps the memory", () =>
-    Effect.gen(function* () {
-      const { agent, workspaceId } = yield* openAgent();
-      yield* writeTurn(agent, { sender: MESSAGE_SENDER.MEMBER }, [AGENT_TOOL.BASH]);
+  it.effect(
+    "a turn a member's line opened, which read nothing of the web, keeps the memory as from the agent and that line",
+    () =>
+      Effect.gen(function* () {
+        const { agent, workspaceId } = yield* openAgent();
+        const line = yield* writeTurn(agent, { sender: MESSAGE_SENDER.MEMBER }, [AGENT_TOOL.BASH]);
 
-      const answer = yield* remember(agent);
+        const answer = yield* remember(agent);
 
-      assert.equal(answer.outcome, MEMORY_OUTCOME.KEPT);
-      assert.deepEqual(
-        (yield* listMemories(workspaceId)).map((kept) => kept.text),
-        [FACT],
-      );
-    }),
+        assert.equal(answer.outcome, MEMORY_OUTCOME.KEPT);
+        assert.deepEqual(
+          (yield* listMemories(workspaceId)).map((kept) => [
+            kept.text,
+            kept.agentId,
+            kept.messageId,
+          ]),
+          [[FACT, agent.id, line]],
+        );
+      }),
   );
 
   it.effect("a turn that settled refuses nothing, whatever opened it", () =>

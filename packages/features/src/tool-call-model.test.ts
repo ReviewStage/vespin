@@ -202,6 +202,31 @@ test("a skill load says the skill it loaded, and answers with the skill's instru
   assert.equal(loading.output, undefined);
 });
 
+test("a memory search reads how many memories it recalled about its query and lists them as Markdown, its query alone before it answers", () => {
+  const input = { query: "invitations" };
+  const answered = toolCallView({
+    tool: "search_memory",
+    input,
+    output: {
+      status: "accepted",
+      memories: [
+        { id: "m1", text: "Invitations expire after `7` days.", updatedAt: "2026-11-01T00:00:00Z" },
+        { id: "m2", text: "Only admins invite.\nOwners too.", updatedAt: "2026-11-02T00:00:00Z" },
+      ],
+      total: 12,
+    },
+  });
+  assert.equal(callLine(answered.kind, answered.subject, undefined).verb, "Recalled");
+  assert.equal(answered.subject, "2 memories about “invitations”");
+  assert.deepEqual(answered.output, {
+    kind: TOOL_BLOCK.MARKDOWN,
+    text: "- Invitations expire after `7` days.\n- Only admins invite.\n  Owners too.",
+  });
+
+  const running = toolCallView({ tool: "search_memory", input, output: undefined });
+  assert.equal(running.subject, "invitations");
+});
+
 test("a patch names the first file it touches and how many more, a moved file by where it moved to, carries the patch to draw as a diff, and answers with the files it changed", () => {
   const patchText = [
     "*** Begin Patch",

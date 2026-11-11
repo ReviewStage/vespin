@@ -188,6 +188,7 @@
     "./workspace-invitation-wire": "./src/workspace-invitation-wire.js",
     "./sidebar-live": "./src/sidebar-live.js",
     "./workspace-live": "./src/workspace-live.js",
+    "./workspace-tile": "./src/workspace-tile.js",
     "./workspace-wire": "./src/workspace-wire.js",
     "./workspace-key": "./src/workspace-key.js",
     "./words": "./src/words.js",

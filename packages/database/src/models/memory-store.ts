@@ -1,13 +1,16 @@
 import { isWireUuid } from "@repo/features";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
+import { agentTable } from "../schemas/agent.js";
 import { organization } from "../schemas/auth.js";
 import { memory } from "../schemas/memory.js";
+import { task } from "../schemas/task.js";
 import { InstantColumnSchema } from "./columns.js";
+import { agentVisibleTo } from "./workspace-store.js";
 
 /**
  * memory-store.ts -- a workspace's memories, shared by its members, kept and corrected by its coding agents and read and forgotten from Settings.
@@ -26,6 +29,11 @@ import { InstantColumnSchema } from "./columns.js";
  * the row, and only for the member whose words it holds or one who manages
  * the workspace. A memory outlives the account whose words it holds, as a
  * workspace's git history outlives its committers: its member is then null.
+ * Where the words came from moves with them: a keep or a correction by a
+ * coding agent names the agent and the line that opened its turn
+ * (`MemorySource`), and one by a member names none, while the same words
+ * kept again stay where they first came from, as they stay the first
+ * keeper's.
  * The workspace's bound counts every memory, so a recall's read of one
  * workspace's rows stays bounded, and so does the live read Settings holds
  * (`packages/service/src/live/reads/workspace-memories.ts`), which answers every one of them.
@@ -69,10 +77,18 @@ type MemoryWritten =
   | typeof MEMORY_OUTCOME.ALREADY_KEPT
   | typeof MEMORY_OUTCOME.CORRECTED;
 
-/** One memory as the store holds it: its words and the member whose words they are, null once that account is gone. */
+/** Where a memory's words came from: the coding agent that kept them, and the line that opened its turn then, none for a turn no line opened. */
+export interface MemorySource {
+  readonly agentId: string;
+  readonly messageId: string | null;
+}
+
+/** One memory as the store holds it: its words, the member whose words they are, null once that account is gone, and the agent and line they came from, null for a member's own keep. */
 export interface StoredMemory {
   readonly id: string;
   readonly userId: string | null;
+  readonly agentId: string | null;
+  readonly messageId: string | null;
   readonly text: string;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -81,6 +97,12 @@ export interface StoredMemory {
 export type MemoryOutcome =
   | { readonly kind: MemoryWritten; readonly memory: StoredMemory }
   | { readonly kind: typeof MEMORY_OUTCOME.NOT_FOUND | typeof MEMORY_OUTCOME.FULL };
+
+/** Where a memory's words came from as one reader may see it: the agent, the line that opened its turn, and the task the agent works on. */
+export interface MemorySourceRead extends MemorySource {
+  readonly taskId: string;
+  readonly taskName: string;
+}
 
 /** Who asks to forget: the member, and whether they own or administer the workspace. */
 export interface MemoryForgetter {
@@ -91,6 +113,8 @@ export interface MemoryForgetter {
 const MemoryRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.NullOr(Schema.String),
+  agentId: Schema.NullOr(Schema.String),
+  messageId: Schema.NullOr(Schema.String),
   text: Schema.String,
   createdAt: InstantColumnSchema,
   updatedAt: InstantColumnSchema,
@@ -99,12 +123,21 @@ const MemoryRowSchema = Schema.Struct({
 const ROW_COLUMNS = {
   id: memory.id,
   userId: memory.userId,
+  agentId: memory.agentId,
+  messageId: memory.messageId,
   text: memory.text,
   createdAt: memory.createdAt,
   updatedAt: memory.updatedAt,
 };
 
 const MemoryKeySchema = Schema.Struct({ organizationId: Schema.String, id: Schema.String });
+
+/** Who wrote a memory's words: the member, and the agent and line they came from, each null where none did. */
+const MemoryWriterFields = {
+  userId: Schema.NullOr(Schema.String),
+  agentId: Schema.NullOr(Schema.String),
+  messageId: Schema.NullOr(Schema.String),
+};
 
 /** Every memory of the workspace, most recently kept or corrected first: what a keep counts and dedupes against under its lock, and what a read answers. */
 const findMemories = SqlSchema.findAll({
@@ -149,7 +182,7 @@ const lockWorkspace = SqlSchema.findOneOption({
 const insertMemory = SqlSchema.findOneOption({
   Request: Schema.Struct({
     organizationId: Schema.String,
-    userId: Schema.String,
+    ...MemoryWriterFields,
     text: Schema.String,
     now: Schema.Date,
   }),
@@ -161,6 +194,8 @@ const insertMemory = SqlSchema.findOneOption({
         .values({
           organizationId: write.organizationId,
           userId: write.userId,
+          agentId: write.agentId,
+          messageId: write.messageId,
           text: write.text,
           createdAt: write.now,
           updatedAt: write.now,
@@ -169,11 +204,11 @@ const insertMemory = SqlSchema.findOneOption({
     ),
 });
 
-/** A memory's words written again, as the member they now belong to. */
+/** A memory's words written again, as the member they now belong to and from where they now came. */
 const updateMemory = SqlSchema.findOneOption({
   Request: Schema.Struct({
     ...MemoryKeySchema.fields,
-    userId: Schema.NullOr(Schema.String),
+    ...MemoryWriterFields,
     text: Schema.String,
     now: Schema.Date,
   }),
@@ -182,7 +217,13 @@ const updateMemory = SqlSchema.findOneOption({
     Database.use((db) =>
       db
         .update(memory)
-        .set({ text: write.text, userId: write.userId, updatedAt: write.now })
+        .set({
+          text: write.text,
+          userId: write.userId,
+          agentId: write.agentId,
+          messageId: write.messageId,
+          updatedAt: write.now,
+        })
         .where(and(eq(memory.organizationId, write.organizationId), eq(memory.id, write.id)))
         .returning(ROW_COLUMNS),
     ),
@@ -201,11 +242,50 @@ const deleteMemory = SqlSchema.findAll({
     ),
 });
 
+/** Where each of the memories named came from, as the reader may see it: only an agent the reader may open, with its task. */
+const findMemorySources = SqlSchema.findAll({
+  Request: Schema.Struct({
+    readerId: Schema.String,
+    organizationId: Schema.String,
+    ids: Schema.Array(Schema.String),
+  }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    agentId: Schema.String,
+    messageId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
+    taskName: Schema.String,
+  }),
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: memory.id,
+          agentId: agentTable.id,
+          messageId: memory.messageId,
+          taskId: task.id,
+          taskName: task.name,
+        })
+        .from(memory)
+        .innerJoin(agentTable, eq(agentTable.id, memory.agentId))
+        .innerJoin(task, eq(task.id, agentTable.taskId))
+        .where(
+          and(
+            eq(memory.organizationId, key.organizationId),
+            inArray(memory.id, [...key.ids]),
+            agentVisibleTo(key.readerId),
+          ),
+        ),
+    ),
+});
+
 /** A row as the store answers it. */
 function storedOf(row: typeof MemoryRowSchema.Type): StoredMemory {
   return {
     id: row.id,
     userId: row.userId,
+    agentId: row.agentId,
+    messageId: row.messageId,
     text: row.text,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
@@ -242,14 +322,22 @@ export function listMemories(organizationId: string): MemoryStoreEffect<readonly
  * one `replaces` names, and answers what that came to. The words are taken
  * as handed: the caller holds them to the bound and to what may be kept at
  * all. A new memory past the bound, or a correction of a memory the
- * workspace does not hold, writes nothing.
+ * workspace does not hold, writes nothing. `source` is the coding agent
+ * keeping them and the line that opened its turn; a member's own keep hands
+ * none.
  */
 export function rememberMemory(
   organizationId: string,
   userId: string,
   text: string,
   replaces: string | undefined,
+  source?: MemorySource,
 ): MemoryStoreEffect<MemoryOutcome> {
+  const writer = {
+    userId,
+    agentId: source?.agentId ?? null,
+    messageId: source?.messageId ?? null,
+  };
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
@@ -266,15 +354,17 @@ export function rememberMemory(
             yield* deleteMemory({ organizationId, id: target.id });
           }
           const id = same?.id ?? target.id;
-          const kept = yield* updateMemory({ organizationId, id, userId, text, now });
+          const kept = yield* updateMemory({ organizationId, id, ...writer, text, now });
           return outcomeOf(MEMORY_OUTCOME.CORRECTED, kept);
         }
         if (same !== undefined) {
-          // Note that the same words kept again stay the words of whoever kept them first.
+          // Note that the same words kept again stay the words of whoever kept them first, from where they first came.
           const kept = yield* updateMemory({
             organizationId,
             id: same.id,
             userId: same.userId,
+            agentId: same.agentId,
+            messageId: same.messageId,
             text,
             now,
           });
@@ -283,10 +373,29 @@ export function rememberMemory(
         if (every.length >= MEMORY_BOUNDS.MAX_MEMORIES) {
           return { kind: MEMORY_OUTCOME.FULL } as const;
         }
-        const kept = yield* insertMemory({ organizationId, userId, text, now });
+        const kept = yield* insertMemory({ organizationId, ...writer, text, now });
         return outcomeOf(MEMORY_OUTCOME.KEPT, kept);
       }),
     ),
+  );
+}
+
+/**
+ * Where each of the workspace's memories named came from, by its id, as the
+ * reader may see it: the agent that kept or last corrected it, the line
+ * that opened its turn, and the agent's task. A memory a member kept, one
+ * whose agent is gone, and one whose agent or task the reader may not open
+ * (`agentVisibleTo`) has none, so no reader learns of a task it cannot see.
+ */
+export function readMemorySources(
+  readerId: string,
+  organizationId: string,
+  ids: readonly string[],
+): MemoryStoreEffect<ReadonlyMap<string, MemorySourceRead>> {
+  if (ids.length === 0) return Effect.succeed(new Map());
+  return Effect.map(
+    findMemorySources({ readerId, organizationId, ids }),
+    (rows) => new Map(rows.map(({ id, ...source }) => [id, source])),
   );
 }
 

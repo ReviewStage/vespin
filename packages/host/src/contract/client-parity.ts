@@ -14,7 +14,8 @@
  * changed; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
  * Settings' Account page: Share usage data, support access, and the
- * account's deletion; and the phone's own push registration,
+ * account's deletion; a workspace made from the switcher, which New
+ * workspace names; and the phone's own push registration,
  * which no other client has a place for. Nothing else says which share, so
  * this table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has
  * a row, and a kind added without one, or a row whose act is gone, does not
@@ -410,7 +411,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
   [PORT_ACT_KIND.FEEDBACK_SEND]: panel(IOS.FEEDBACK),
 
-  [PORT_ACT_KIND.WORKSPACE_CREATE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_RENAME]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_EXPERIMENT_SET]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_INVITE]: panel(IOS.SETTINGS),

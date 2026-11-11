@@ -1,3 +1,4 @@
+import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { cn, HoverCard, HoverCardHead, OneLine, Tooltip } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -62,18 +63,6 @@ const TILE_OF_SIZE = {
 
 type NamedWorkspace = Pick<Workspace, "id" | "name" | "photoVersion" | "pictureUrl">;
 
-/**
- * Who shares a workspace in words: "Personal workspace" for the account's
- * own first workspace while no one else is in it, its members counted
- * otherwise, a team made a moment ago and joined by no one yet included;
- * nothing from a service that does not count them.
- */
-export function sharedWords(count: number | undefined, personal: boolean): string | undefined {
-  if (count === undefined) return undefined;
-  if (count <= 1) return personal ? "Personal workspace" : "1 member";
-  return `${count} members`;
-}
-
 /** A workspace's card: its tile at a card's size, its name, and who shares it. */
 export function WorkspaceCard({
   workspace,
@@ -88,7 +77,7 @@ export function WorkspaceCard({
       <HoverCardHead
         mark={<WorkspaceTile workspace={workspace} size={TILE_SIZE.HEAD} />}
         name={workspace.name}
-        sub={sharedWords(workspace.memberCount, personal)}
+        sub={workspaceSharedWords(workspace.memberCount, personal)}
       />
     </HoverCard>
   );
