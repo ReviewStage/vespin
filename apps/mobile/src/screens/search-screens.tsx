@@ -17,7 +17,7 @@ import type { SearchBarCommands } from "react-native-screens";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { SettingsBarButton } from "../settings-button.js";
-import { type TasksListing, useStatusAsk } from "../tasks/use-tasks.js";
+import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns } from "../use-window-size-class.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
@@ -126,8 +126,8 @@ function useSearchScreen() {
   const [query, setQuery] = useState("");
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents.
-  const { setStatus, question } = useStatusAsk(found.listing);
-  const listing: TasksListing = { ...found.listing, setStatus };
+  // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
+  const { listing, status, deletion } = useListingAsks(found.listing);
   const remind = useRemindSheet();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
@@ -150,7 +150,7 @@ function useSearchScreen() {
         onArchiveAgent={archiveAsk.archive}
       />
     );
-  return { query, setQuery, results, question, remind, archiveAsk };
+  return { query, setQuery, results, status, deletion, remind, archiveAsk };
 }
 
 /**
@@ -162,7 +162,7 @@ function useSearchScreen() {
  * its results instead.
  */
 function SearchStackScreen() {
-  const { query, setQuery, results, question, remind, archiveAsk } = useSearchScreen();
+  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen();
   const field = useRef<SearchBarCommands>(null);
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
@@ -186,7 +186,8 @@ function SearchStackScreen() {
       </Stack.Screen>
       <SettingsBarButton />
       <Screen>{results}</Screen>
-      <StatusQuestionAsk question={question} />
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}
       {remind.sheet}
     </>
@@ -199,7 +200,7 @@ function SearchStackScreen() {
  * beside its mailboxes. A row found opens in its own tab, beside its list.
  */
 function SearchSplitScreen() {
-  const { query, setQuery, results, question, remind, archiveAsk } = useSearchScreen();
+  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen();
   const sidebar = useAppSidebar(SIDEBAR_PLACE.SEARCH, useSidebarTasks());
   return (
     <>
@@ -214,7 +215,8 @@ function SearchSplitScreen() {
           }}
         />
       </Screen>
-      <StatusQuestionAsk question={question} />
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}
       {sidebar.ask}
       {remind.sheet}

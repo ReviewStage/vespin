@@ -35,7 +35,10 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
+  DELETE_FAILED_NOTE,
+  deleteTaskWords,
   MARK_FAILED_NOTES,
+  RENAME_FAILED_NOTE,
   type StopAgentsWords,
   settleFailedNote,
   settleStopWords,
@@ -197,6 +200,42 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
   return { held, setStatus };
 }
 
+/** A task's rename and its delete, as the panel's menu sends them. */
+export interface TaskWrites {
+  /** Renames a task, as the panel's Rename does (`TASKS_RENAME`): the host draws the name at once and puts it back where the service refused it. */
+  readonly rename: (taskId: string, name: string) => void;
+  /** Deletes a task for good, as the panel's Permanently delete does once asked (`TASKS_DELETE`), the host taking its row at once. */
+  readonly remove: (taskId: string) => void;
+}
+
+/** A task's rename and delete, sent on the host's port. */
+export function useTaskWrites(): TaskWrites {
+  const acts = useHostActs();
+  const write = useWrite();
+  return useMemo(
+    () => ({
+      rename: (taskId, name) => {
+        write(() => acts[ACT_KIND.TASKS_RENAME]({ taskId, name }), {
+          refused: (landed) => (landed ? undefined : RENAME_FAILED_NOTE),
+          unanswered: RENAME_FAILED_NOTE,
+          retry: true,
+          subject: { kind: WRITE_SUBJECT.TASK_NAME, id: taskId },
+          went: BUZZ.SUCCESS,
+        });
+      },
+      remove: (taskId) => {
+        write(() => acts[ACT_KIND.TASKS_DELETE]({ taskId }), {
+          refused: (landed) => (landed ? undefined : DELETE_FAILED_NOTE),
+          unanswered: DELETE_FAILED_NOTE,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+    }),
+    [acts, write],
+  );
+}
+
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
 export interface TasksListing {
   readonly tree: TaskTree;
@@ -210,6 +249,9 @@ export interface TasksListing {
   readonly markRead: (taskId: string, unread: boolean) => void;
   /** Pins a task to the list's Pinned group, or unpins it. */
   readonly pin: (taskId: string, pinned: boolean) => void;
+  readonly rename: TaskWrites["rename"];
+  /** Asks first whether to delete a task for good, as the panel's Permanently delete does. */
+  readonly askDelete: (task: TaskSummary) => void;
   /** A task at a glance, as its row's preview draws it: how many of its threads wait on the reader, and its agents not archived, as its Overview lists them. */
   readonly glanceOf: (taskId: string) => TaskGlance;
 }
@@ -245,12 +287,15 @@ function taskAgentsInOrder(
   );
 }
 
+/** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
+export type ReadListing = Omit<TasksListing, "askDelete">;
+
 /**
  * The chosen workspace's tasks as the panel's phone Tasks lists them, under
  * `search` where one is typed, with each status a press set drawn at once;
  * every workspace's before the account's workspaces are read.
  */
-export function useTasksListing(search: string): TasksListing {
+export function useTasksListing(search: string): ReadListing {
   const acts = useHostActs();
   const write = useWrite();
   const workspace = useTasksWorkspace();
@@ -259,6 +304,7 @@ export function useTasksListing(search: string): TasksListing {
   const waiting = useWaiting(workspace?.id);
   const listed = view?.tasks ?? NO_TASKS;
   const { held, setStatus } = useStatusWrites(listed);
+  const { rename } = useTaskWrites();
   return useMemo(() => {
     const tasks = withHeld(listed, held);
     const tree = taskTree({
@@ -301,8 +347,19 @@ export function useTasksListing(search: string): TasksListing {
       waiting: waiting.byTask.get(taskId) ?? 0,
       agents: taskAgentsInOrder(byTask, taskId, waiting.byAgent),
     });
-    return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin, glanceOf };
-  }, [acts, write, listed, held, view, workspace, readerId, waiting, search]);
+    return {
+      tree,
+      found,
+      workspace,
+      lookOf,
+      setStatus,
+      agentsWorking,
+      markRead,
+      pin,
+      rename,
+      glanceOf,
+    };
+  }, [acts, write, listed, held, view, workspace, readerId, waiting, search, rename]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
@@ -341,6 +398,7 @@ export interface TaskOverview {
   readonly tasks: readonly TaskSummary[];
   readonly setStatus: SetStatus;
   readonly agentsWorking: (taskId: string) => boolean;
+  readonly rename: TaskWrites["rename"];
 }
 
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
@@ -360,6 +418,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const waiting = useWaiting(workspace?.id);
   const { held: statuses, setStatus } = useStatusWrites(view?.tasks ?? NO_TASKS);
+  const { rename } = useTaskWrites();
   const listed = useMemo(() => withHeld(view?.tasks ?? NO_TASKS, statuses), [view, statuses]);
   const task = named === undefined ? undefined : listed.find((each) => namesTask(each, named));
   const taskId = task?.id;
@@ -392,8 +451,9 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       tasks: listed,
       setStatus,
       agentsWorking: agentsWorkingIn(view, listed),
+      rename,
     };
-  }, [task, view, waiting, held, workspace, listed]);
+  }, [task, view, waiting, held, workspace, listed, rename]);
 }
 
 /** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */
@@ -474,4 +534,65 @@ export function useStatusAsk(doors: Pick<TasksListing, "setStatus" | "agentsWork
     dismiss: letGo,
   };
   return { setStatus, question };
+}
+
+/** A delete held for its question, kept past its answer so the alert keeps its words as it goes. */
+interface HeldDelete {
+  readonly taskId: string;
+  readonly words: StopAgentsWords;
+  readonly presented: boolean;
+}
+
+/**
+ * Deletes a task for good as the panel does, asking first in the panel's
+ * words (`deleteTaskWords`), since nothing brings it back. Answers the
+ * asking `askDelete` and its question, which the screen draws; `onDeleted`
+ * runs as the delete goes, such as the task's own page giving way.
+ */
+export function useDeleteAsk(
+  remove: TaskWrites["remove"],
+  onDeleted?: () => void,
+): {
+  readonly askDelete: (task: TaskSummary) => void;
+  readonly question: StatusQuestion;
+} {
+  const [held, setHeld] = useState<HeldDelete>();
+  const letGo = () => setHeld((was) => (was === undefined ? was : { ...was, presented: false }));
+  const question: StatusQuestion = {
+    words: held?.words ?? NO_WORDS,
+    presented: held?.presented === true,
+    confirm: () => {
+      if (held === undefined || !held.presented) return;
+      letGo();
+      remove(held.taskId);
+      onDeleted?.();
+    },
+    dismiss: letGo,
+  };
+  return {
+    askDelete: (task) =>
+      setHeld({ taskId: task.id, words: deleteTaskWords(task.name, task), presented: true }),
+    question,
+  };
+}
+
+/**
+ * A list's acts that ask first, as every list of tasks offers them: its
+ * status set, asking where it stops agents, and its delete, asking always.
+ * Answers the listing its rows act through and the two questions, which the
+ * screen draws.
+ */
+export function useListingAsks(read: ReadListing): {
+  readonly listing: TasksListing;
+  readonly status: StatusQuestion;
+  readonly deletion: StatusQuestion;
+} {
+  const { setStatus, question } = useStatusAsk(read);
+  const { remove } = useTaskWrites();
+  const deletion = useDeleteAsk(remove);
+  return {
+    listing: { ...read, setStatus, askDelete: deletion.askDelete },
+    status: question,
+    deletion: deletion.question,
+  };
 }
