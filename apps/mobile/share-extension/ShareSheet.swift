@@ -46,6 +46,8 @@ final class ShareSheetModel: ObservableObject {
   @Published var repository: String?
   /// True until what was shared is read into the words, while the field and Start wait on it.
   @Published var reading = true
+  /// The one key every Start this sheet sends goes under, so a second press after an answer that never came is the same request.
+  let idempotencyKey = UUID().uuidString
   @Published private(set) var standing = Standing.drafting
 
   init(snapshot: ShareSnapshot?) {
@@ -67,7 +69,9 @@ final class ShareSheetModel: ObservableObject {
       accountId: snapshot.accountId, prompt: words, workspaceId: workspaceId, repository: repository)
     if let service = snapshot.service, let token = ShareToken.read() {
       standing = .starting
-      if await ShareStart.start(draft, service: service, token: token) {
+      if await ShareStart.start(
+        draft, service: service, token: token, idempotencyKey: idempotencyKey)
+      {
         standing = .started
         return
       }

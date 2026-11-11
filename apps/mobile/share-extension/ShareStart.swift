@@ -1,12 +1,16 @@
-// ShareStart.swift -- the share sheet's Start as the app's New task sends it: one POST of the task and its agent's words to the service, under the account's current access token.
+// ShareStart.swift -- the share sheet's Start as the app's New task sends it: one POST of the task and its agent's words to the service, under the account's access token.
 //
 // The extension holds no session of its own. It reads the access token the
-// app keeps in their shared Keychain item (`ShareToken.swift`), and the
-// service's address and the headers the app names itself in from the
-// snapshot (`AppGroupFiles.swift`). It never renews the token, since the
-// refresh token stays the app's alone: a token gone stale, a refusal, or no
-// answer is reported as not started, and the sheet keeps the draft for New
-// task instead.
+// app keeps in their shared Keychain item (`ShareToken.swift`), which reads
+// a token past its expiry as none, and the service's address and the
+// headers the app names itself in from the snapshot (`AppGroupFiles.swift`).
+// It never renews the token, since the refresh token stays the app's alone.
+// The request follows no redirect, so the token never reaches another
+// address, and is given up whole after `limit`, however slowly an answer
+// trickles in. A redirect, a refusal, or no answer in time is reported as not
+// started, and the sheet keeps the draft for New task instead. One sheet
+// sends every try under one idempotency key, so a second press after an
+// answer that never came is the same request, never a second task.
 
 import Foundation
 
@@ -16,26 +20,54 @@ struct ShareService {
   let headers: [String: String]
 }
 
+/// Refuses every redirect, so the response is the redirect itself and the bearer stays with the service.
+private final class NoRedirects: NSObject, URLSessionTaskDelegate {
+  func urlSession(
+    _ session: URLSession, task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
+  ) async -> URLRequest? {
+    nil
+  }
+}
+
 enum ShareStart {
   /// The path New task's start is sent to (`HOSTED_SERVICE_PATH.TASKS`).
   private static let path = "/api/plans"
-  /// How long the sheet waits on the service before it keeps the draft instead.
-  private static let timeout: TimeInterval = 20
+  /// How long the sheet waits on the service, in all, before it keeps the draft instead.
+  private static let limit: Duration = .seconds(20)
+  /// A session that keeps no cookies or cache of its own.
+  private static let session = URLSession(configuration: .ephemeral)
 
-  /// Starts `draft` as a task with its agent on the words, under `token`; whether the service took it.
-  static func start(_ draft: ShareDraft, service: ShareService, token: String) async -> Bool {
-    let agent: [String: Any] = ["idempotencyKey": UUID().uuidString, "prompt": draft.prompt]
+  /// Starts `draft` as a task with its agent on the words, under `token` and `idempotencyKey`; whether the service took it in time.
+  static func start(_ draft: ShareDraft, service: ShareService, token: String, idempotencyKey: String)
+    async -> Bool
+  {
+    let agent: [String: Any] = ["idempotencyKey": idempotencyKey, "prompt": draft.prompt]
     var body: [String: Any] = ["planning": false, "agent": agent]
     if let workspaceId = draft.workspaceId { body["workspaceId"] = workspaceId }
     if let repository = draft.repository { body["repository"] = repository }
     guard let data = try? JSONSerialization.data(withJSONObject: body) else { return false }
-    var request = URLRequest(url: service.origin.appendingPathComponent(path), timeoutInterval: timeout)
+    var request = URLRequest(url: service.origin.appendingPathComponent(path))
     request.httpMethod = "POST"
     request.httpBody = data
     for (name, value) in service.headers { request.setValue(value, forHTTPHeaderField: name) }
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    guard let (_, response) = try? await URLSession.shared.data(for: request),
+    return await withTaskGroup(of: Bool.self) { group in
+      group.addTask { await send(request) }
+      group.addTask {
+        try? await Task.sleep(for: limit)
+        return false
+      }
+      let first = await group.next() ?? false
+      group.cancelAll()
+      return first
+    }
+  }
+
+  /// Whether the service answered `request` with success, following no redirect.
+  private static func send(_ request: URLRequest) async -> Bool {
+    guard let (_, response) = try? await session.data(for: request, delegate: NoRedirects()),
       let status = (response as? HTTPURLResponse)?.statusCode
     else { return false }
     return (200..<300).contains(status)

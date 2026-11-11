@@ -125,7 +125,7 @@ export interface DeviceSeams {
   readonly cipher: SecretCipherSeam;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
-  /** Keeps the account's current access token where the share sheet reads it, or removes it (`share-token-account.ts`). */
+  /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-account.ts`). */
   readonly keepShareToken: KeepShareToken;
 }
 

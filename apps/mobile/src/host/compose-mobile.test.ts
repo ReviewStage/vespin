@@ -41,7 +41,7 @@ const testDevice: DeviceSeams = {
     open: () => Promise.resolve({ end: AUTH_SESSION_END.CLOSED }),
     dismiss: () => undefined,
   },
-  keepShareToken: () => undefined,
+  keepShareToken: () => true,
 };
 
 /** The device a flow signs in on against the stubbed account service: its sheet granting at once. */
@@ -121,7 +121,13 @@ it.effect(
   () => {
     // Each token the share sheet was handed, none standing for its removal.
     const shared: (string | undefined)[] = [];
-    const device: DeviceSeams = { ...stubDevice, keepShareToken: (token) => shared.push(token) };
+    const device: DeviceSeams = {
+      ...stubDevice,
+      keepShareToken: (kept) => {
+        shared.push(kept?.token);
+        return true;
+      },
+    };
     // Each OAuth form the host posted, by the endpoint it went to and the client it named.
     const posted: (readonly [string, string | null])[] = [];
     const recording: typeof globalThis.fetch = async (input, init) => {
