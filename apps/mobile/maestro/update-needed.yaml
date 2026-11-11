@@ -1,0 +1,18 @@
+# update-needed.yaml -- the screen that stands in front of the tabs while the service refuses this build as older than it serves, with Update.
+#
+# No service refuses a simulator's build, so the launch asks the fixture run
+# to stand as that refusal leaves the document (`-updateNeeded true`,
+# `src/host/fixture-host.ts`). Update opens TestFlight, which a simulator
+# lacks, so the flow shoots the screen and presses nothing.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      updateNeeded: "true"
+- assertVisible: "This Vespin is older than the one now live"
+- assertVisible: "Update"
+- assertNotVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+- takeScreenshot: update-needed
