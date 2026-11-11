@@ -162,8 +162,9 @@ here once, so a screen gets them by composing these pieces.
 - **Settings** come from `accessibility.ts`, one store per setting shared by
   every component: `useReduceMotion` (a custom motion is left out, as Jump to
   latest's scroll), `useReduceTransparency` (`GlassBar` and Jump to latest
-  stand solid on `SURFACE` inside `CHIP_EDGE_STRONG`), `useIncreaseContrast`
-  (`useColors` gives the quiet inks the body's, the hairline the strong edge,
+  stand solid on `SURFACE` inside a `TEXT_MUTED` edge, which holds 3:1 where
+  the brand's strong edge does not), `useIncreaseContrast` (`useColors`
+  gives the quiet inks the body's, the hairline the quiet ink,
   and danger the words' ink). Bold Text and Button Shapes need nothing of
   ours: SwiftUI's text styles and React Native's system face take Bold Text,
   and the system's buttons draw their own shapes.
