@@ -774,6 +774,32 @@ test("a shell that ended takes any key for a new one in the same tab", async () 
   assert.equal(kept().length, 1, "the tab is still the one terminal");
 });
 
+test("a run action's tab takes nothing typed, and a key after its shell ended starts no shell in its place", async () => {
+  keep([
+    {
+      shell: TAB.shell,
+      title: TAB.title,
+      terminal: RUNNING_ON,
+      action: { id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01" },
+    },
+  ]);
+  const tab = await mount();
+  const port = main.post(RUNNING_ON);
+  port.say({ type: "state", state: "attached" });
+  await tab.type("a", 65);
+  port.say({ type: "state", state: "exited", code: 0 });
+  await settle();
+  const before = main.sent.length;
+  await tab.type("a", 65);
+
+  assert.deepEqual(
+    port.posted.filter((message) => message.type === "input"),
+    [],
+  );
+  assert.deepEqual(tab.kinds(before), []);
+  assert.equal(tab.bar(), "This run action’s terminal ended. Run the action to start it again.");
+});
+
 test("a service it cannot reach shows a bar that says so, whose action asks again", async () => {
   main.down.add(ACT_KIND.TERMINAL_CREATE);
   mountAnnouncer();

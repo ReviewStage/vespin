@@ -52,7 +52,7 @@ import {
   type SandboxService,
   SandboxUnavailable,
 } from "@repo/sandbox";
-import { Context, Effect, Layer, Option, Result, Schema } from "effect";
+import { Context, Duration, Effect, Layer, Option, Result, Schema } from "effect";
 import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
 import {
@@ -73,16 +73,19 @@ import {
 } from "./preview-relay.js";
 import {
   holdsTerminal,
-  interruptTerminal,
   killTerminal,
   listTerminals,
+  RUN_ACTION_EXIT,
+  RUN_ACTION_SIGNAL,
+  type RunActionSignal,
   type RunActionStart,
   renameTerminal,
+  rerunAction,
+  signalRunAction,
   startRunAction,
   startTerminal,
   TMUX_EXIT,
   terminalsOf,
-  typeIntoTerminal,
 } from "./tmux.js";
 
 /** A sandbox's statuses, read as the tab reads them; one the provider named none of reads as stopped. */
@@ -92,6 +95,20 @@ const STATE_OF_STATUS = new Map<string | undefined, SandboxState>([
   [SANDBOX_STATUS.STOPPING, SANDBOX_STATE.STOPPED],
   [SANDBOX_STATUS.STOPPED, SANDBOX_STATE.STOPPED],
 ]);
+
+/**
+ * How a run action is stopped, as Conductor stops its scripts: TERM to its
+ * process group, then KILL where any of it still runs once the grace is
+ * past, asked after every poll so a stop that took returns at once.
+ */
+const RUN_ACTION_STOP = {
+  GRACE: Duration.seconds(5),
+  POLL: Duration.millis(500),
+} as const;
+
+/** How many polls the grace holds. */
+const STOP_POLLS =
+  Duration.toMillis(RUN_ACTION_STOP.GRACE) / Duration.toMillis(RUN_ACTION_STOP.POLL);
 
 /** Why a shell could not be had: the sandbox is not running, as it stands, or the shell named is not there. */
 export const SHELL_REFUSAL = {
@@ -105,13 +122,14 @@ export type ShellRefusal =
 
 type ShellEffect<A> = Effect.Effect<Result.Result<A, ShellRefusal>, SandboxError>;
 
-/** What an attach finds: a running sandbox's PTY, minted for one connection, with the sandbox's name and its session, where the sandbox stands instead, or no such shell in it. */
+/** What an attach finds: a running sandbox's PTY, minted for one connection, with the sandbox's name, its session, and whether the shell is a run action's, which takes nothing typed; where the sandbox stands instead; or no such shell in it. */
 type SandboxAttach =
   | {
       readonly state: typeof SANDBOX_STATE.RUNNING;
       readonly sandboxName: string;
       readonly sandboxSessionId: string;
       readonly shell: InteractiveShell;
+      readonly readOnly: boolean;
     }
   | { readonly state: typeof SANDBOX_STATE.STOPPED | typeof SANDBOX_STATE.STARTING }
   | { readonly state: typeof SANDBOX_STATE.RUNNING; readonly gone: true };
@@ -161,19 +179,24 @@ export interface AgentSandboxService {
     title: string | undefined,
   ) => ShellEffect<TerminalSummary>;
   /**
-   * A run action run in the agent's running sandbox: its shell where one
-   * already runs it, its command typed again into its shell where that shell
-   * stands idle, or a new shell started for it under the id given; so a
-   * second press never starts the action twice. A stopped sandbox is never
-   * woken here.
+   * A run action run in the agent's running sandbox: its shell where its
+   * process still runs, which starts nothing, its process run anew in the
+   * same pane where it has exited, or a new shell started for it under the
+   * id given; so a second press never starts the action twice. A stopped
+   * sandbox is never woken here.
    */
   readonly run: (
     sessionId: string,
     terminalId: string,
     run: RunActionStart,
   ) => ShellEffect<TerminalSummary>;
-  /** What a run action's shell runs interrupted, the shell and its output left standing; none standing for the action is not found. */
-  readonly interrupt: (sessionId: string, actionId: string) => ShellEffect<void>;
+  /**
+   * A run action's process group stopped (`RUN_ACTION_STOP`): TERM, then
+   * KILL where it outlives the grace, its pane and output left standing;
+   * one already ended is left as it is, and none standing for the action is
+   * not found.
+   */
+  readonly stop: (sessionId: string, actionId: string) => ShellEffect<void>;
   /** A shell named anew. */
   readonly rename: (sessionId: string, terminalId: string, title: string) => ShellEffect<void>;
   /** A shell ended, with whatever it ran. */
@@ -358,13 +381,13 @@ function agentSandboxOver(
           const ask =
             standing === undefined
               ? startRunAction(terminalId, run)
-              : typeIntoTerminal(standing.id, run.command);
+              : rerunAction(standing.id, run);
           const started = yield* api.run(running, ask);
           if (started.exitCode !== 0) {
-            // Note that a shell is started under its action's id, so a press made at once beside this one starts it first and tmux refuses this one's: that press's shell is the answer.
+            // Note that a press made at once beside this one may start the action first, under its id or in its pane, and tmux refuses this one's: that press's shell is the answer.
             const raced = (yield* shells()).find((shell) => shell.runAction === run.actionId);
-            if (standing === undefined && raced !== undefined) return Result.succeed(raced);
-            // A shell tmux could not start or type into is otherwise an outage: its id is the action's or one tmux just listed.
+            if (raced?.running === true) return Result.succeed(raced);
+            // A shell tmux could not start or run again is otherwise an outage: its id is the action's or one tmux just listed.
             return yield* Effect.fail(new SandboxUnavailable({}));
           }
           const shell = (yield* shells()).find((each) => each.id === (standing?.id ?? terminalId));
@@ -373,17 +396,31 @@ function agentSandboxOver(
             : Result.succeed(shell);
         }),
       ),
-    interrupt: (sessionId, actionId) =>
+    stop: (sessionId, actionId) =>
       inRunning(sessionId, (running) =>
         Effect.gen(function* () {
           const listed = terminalsOf(yield* api.run(running, listTerminals()));
           if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
           const shell = listed.find((each) => each.runAction === actionId);
           if (shell === undefined) return Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
-          const interrupted = yield* api.run(running, interruptTerminal(shell.id));
-          return interrupted.exitCode === 0
-            ? Result.succeed(undefined)
-            : Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
+          // An action whose process ended has nothing to stop, and its pane's leader may be another's by now.
+          if (!shell.running) return Result.succeed(undefined);
+          // Whether any of the group runs after the signal: NO_SESSION where the shell went meanwhile.
+          const signal = (sent: RunActionSignal) =>
+            Effect.map(api.run(running, signalRunAction(shell.id, sent)), (run) => run.exitCode);
+          const termed = yield* signal(RUN_ACTION_SIGNAL.TERM);
+          if (termed === RUN_ACTION_EXIT.NO_SESSION) {
+            return Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
+          }
+          if (termed === RUN_ACTION_EXIT.ENDED) return Result.succeed(undefined);
+          if (termed !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
+          // Asked again every poll until none of it runs or the grace is past.
+          const outlived = yield* signal(RUN_ACTION_SIGNAL.PROBE).pipe(
+            Effect.delay(RUN_ACTION_STOP.POLL),
+            Effect.repeat({ while: (exit) => exit === 0, times: STOP_POLLS - 1 }),
+          );
+          if (outlived === 0) yield* signal(RUN_ACTION_SIGNAL.KILL);
+          return Result.succeed(undefined);
         }),
       ),
     rename: (sessionId, terminalId, title) => onShell(sessionId, renameTerminal(terminalId, title)),
@@ -406,7 +443,15 @@ function agentSandboxOver(
         if (held.exitCode !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
         // The run's own PTY, which never resumes the sandbox.
         const shell = yield* api.openInteractive(running);
-        return { state: SANDBOX_STATE.RUNNING, sandboxName: sandbox.name, sandboxSessionId, shell };
+        // A shell the check names a run action for is that action's, which nothing typed reaches.
+        const readOnly = held.stdout.trim() !== "";
+        return {
+          state: SANDBOX_STATE.RUNNING,
+          sandboxName: sandbox.name,
+          sandboxSessionId,
+          shell,
+          readOnly,
+        };
       }),
     open: (sessionId) =>
       Effect.gen(function* () {

@@ -33,6 +33,10 @@
  * token set, and what was typed before waits for it, up to a bound past
  * which the shell attaches at once.
  *
+ * A run action's shell takes nothing typed: its tmux client is attached
+ * read-only (`tmux.ts`'s `attachTerminal`), and the relay never hands it a
+ * typed byte either, so only its size reaches it.
+ *
  * How the connection ended is the close code the panel's host reads as the
  * tab's state (`@repo/features/terminal-wire`'s `TERMINAL_RELAY_CLOSE`).
  */
@@ -284,15 +288,16 @@ function readDevice(
   return Effect.ensuring(read, Queue.end(fromDevice));
 }
 
-/** The desktop's frames to the PTY: typing as it came, which is a use, and a resize as the PTY's own frame, which is not. */
+/** The desktop's frames to the PTY: typing as it came, which is a use, unless the shell is read-only, and a resize as the PTY's own frame, which is not. */
 function deviceToPty(
   fromDevice: Stream.Stream<RelayFrame>,
   pty: RelaySocket,
   used: Effect.Effect<void>,
+  readOnly: boolean,
 ): Effect.Effect<PipeEnd> {
   return Effect.gen(function* () {
     yield* Stream.runForEach(fromDevice, (frame) => {
-      if ("bytes" in frame) return Effect.andThen(used, pty.send(frame));
+      if ("bytes" in frame) return readOnly ? Effect.void : Effect.andThen(used, pty.send(frame));
       const resize = readResize(jsonOf(frame.text));
       if (Result.isFailure(resize)) return Effect.void;
       const { cols, rows } = resize.success;
@@ -401,7 +406,7 @@ export function relayTerminal(
     if (leftFirst) return yield* pty.success.close(NORMAL_CLOSE);
     yield* device.send({ text: JSON.stringify({ type: TERMINAL_RELAY_FRAME.ATTACHED }) });
     const end = yield* Effect.raceAll([
-      deviceToPty(Stream.fromQueue(fromDevice), pty.success, used),
+      deviceToPty(Stream.fromQueue(fromDevice), pty.success, used, sandbox.readOnly),
       ptyToDevice(device, pty.success, used),
     ]);
     yield* pty.success.close(NORMAL_CLOSE);

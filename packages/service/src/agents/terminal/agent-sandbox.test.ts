@@ -15,12 +15,13 @@ import {
   SandboxUnavailable,
 } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { Effect, Layer, Redacted, Result } from "effect";
+import { Duration, Effect, Fiber, Layer, Redacted, Result } from "effect";
+import { TestClock } from "effect/testing";
 import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { AgentImage } from "../coder-host/agent-image.js";
 import { AgentSandbox, agentSandboxLayer, SHELL_REFUSAL } from "./agent-sandbox.js";
-import { TMUX_EXIT } from "./tmux.js";
+import { RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX_EXIT } from "./tmux.js";
 
 /**
  * A coding agent's sandbox as its Terminal tab reaches it, through `Sandbox`
@@ -107,6 +108,79 @@ const field = (value: string) => Buffer.from(`${value}\n`).toString("base64");
 
 const listedShell = (id: string, title: string, command: string) =>
   [`terminal-${id}`, "100", field(title), field(command), field("/workspace/repository")].join(" ");
+
+const ACTION = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
+const ACTION_RUN = { actionId: ACTION, label: "Dev server", command: "pnpm dev", environment: {} };
+
+/**
+ * A running sandbox whose tmux holds at most the one run action's session,
+ * as tmux would: started by `new-session`, run again by `respawn-pane` only
+ * once its process has exited (`exit`), and its process group living through
+ * as many probes after a signal as given, forever where none is.
+ */
+function actionTmux(probesLived?: number) {
+  let started: string | undefined;
+  let pane = "0  ";
+  let probes = 0;
+  const sent: string[] = [];
+  const sandbox = memorySandbox({
+    run: ({ ask }) => {
+      const scriptAt = ask.args.indexOf("-c") + 1;
+      const rest = ask.args.slice(scriptAt + 2);
+      if (ask.args[scriptAt]?.includes("kill -")) {
+        if (started === undefined) return ran(RUN_ACTION_EXIT.NO_SESSION);
+        sent.push(rest[1] ?? "");
+        if (rest[1] === RUN_ACTION_SIGNAL.KILL) return ran(RUN_ACTION_EXIT.ENDED);
+        if (rest[1] === RUN_ACTION_SIGNAL.PROBE) probes += 1;
+        return ran(probesLived !== undefined && probes >= probesLived ? RUN_ACTION_EXIT.ENDED : 0);
+      }
+      if (rest.length === 0) {
+        if (started === undefined) return ran(0);
+        const line = [`terminal-${started}`, "100", field("Dev server"), field("bash")];
+        return ran(
+          0,
+          [...line, field("/workspace/repository"), field(ACTION), field(pane)].join(" "),
+        );
+      }
+      if (rest[0] === "new-session") {
+        started = (rest[rest.indexOf("-s") + 1] ?? "").replace("terminal-", "");
+      }
+      if (rest[0] === "respawn-pane") {
+        if (pane.startsWith("0")) return ran(1);
+        pane = "0  ";
+      }
+      return ran(0);
+    },
+  });
+  sandbox.stand({
+    name: SANDBOX,
+    status: SANDBOX_STATUS.RUNNING,
+    running: RUNNING_SESSION,
+    tags: { sessionId: SESSION },
+  });
+  const layer = Layer.provide(
+    agentSandboxLayer,
+    Layer.mergeAll(
+      LOCAL_AGENT_ENVIRONMENT,
+      Layer.succeed(AgentImage, FIXTURE_IMAGE),
+      sandbox.layer,
+    ),
+  );
+  return {
+    layer,
+    /** The process exits, its pane standing dead with the dead flag, status, and signal given. */
+    exit: (dead: string) => {
+      pane = dead;
+    },
+    /** The args of each tmux command of the kind asked so far. */
+    asked: (kind: string) =>
+      sandbox.state.commands.flatMap((command) =>
+        command.ask.args.includes(kind) ? [command.ask.args] : [],
+      ),
+    /** The signals sent to the action's group, in order. */
+    signals: () => [...sent],
+  };
+}
 
 it.layer(getTestDB())("a coding agent's sandbox", (it) => {
   it.effect(
@@ -254,95 +328,84 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
   );
 
   it.effect(
-    "a run action starts one shell, and a second press while it runs starts nothing, while one in an idle shell is typed there again; a stopped sandbox is refused, never woken",
+    "a run action starts one process, a second press while it runs starts nothing, and one whose process exited runs again in its own pane; a stopped sandbox is refused, never woken",
     () =>
       Effect.gen(function* () {
-        const action = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
-        const run = { actionId: action, label: "Dev server", command: "pnpm dev", environment: {} };
-        // tmux as the run leaves it: the shell it starts lists as running the command, marked with its action.
-        let shells: string[] = [];
-        let foreground = "node";
-        const sandbox = memorySandbox({
-          run: ({ ask }) => {
-            const scriptAt = ask.args.indexOf("-c") + 1;
-            const tmuxArgs = ask.args.slice(scriptAt + 2);
-            if (tmuxArgs.length === 0) return ran(0, shells.join("\n"));
-            if (tmuxArgs[0] === "new-session") {
-              const id = (tmuxArgs[tmuxArgs.indexOf("-s") + 1] ?? "").replace("terminal-", "");
-              shells = [
-                [
-                  `terminal-${id}`,
-                  "100",
-                  field("Dev server"),
-                  field(foreground),
-                  field("/workspace/repository"),
-                  field(action),
-                ].join(" "),
-              ];
-            }
-            return ran(0);
-          },
-        });
-        sandbox.stand({
-          name: SANDBOX,
-          status: SANDBOX_STATUS.RUNNING,
-          running: RUNNING_SESSION,
-          tags: { sessionId: SESSION },
-        });
-        const layer = Layer.provide(
-          agentSandboxLayer,
-          Layer.mergeAll(
-            LOCAL_AGENT_ENVIRONMENT,
-            Layer.succeed(AgentImage, FIXTURE_IMAGE),
-            sandbox.layer,
-          ),
-        );
+        const tmux = actionTmux();
         const stopped = standing(SANDBOX_STATUS.STOPPED);
         const other = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
+        const press = (terminalId: string) =>
+          Effect.flatMap(AgentSandbox, (agentSandbox) =>
+            agentSandbox.run(SESSION, terminalId, ACTION_RUN),
+          ).pipe(Effect.provide(tmux.layer));
 
-        const { first, again } = yield* Effect.gen(function* () {
-          const agentSandbox = yield* AgentSandbox;
-          const first = yield* agentSandbox.run(SESSION, SHELL, run);
-          const again = yield* agentSandbox.run(SESSION, other, run);
-          return { first, again };
-        }).pipe(Effect.provide(layer));
-        const startedBefore = sandbox.state.commands.length;
-        foreground = "bash";
-        shells = shells.map((line) => line.replace(field("node"), field("bash")));
-        const idle = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
-          agentSandbox.run(SESSION, other, run),
-        ).pipe(Effect.provide(layer));
+        const first = yield* press(SHELL);
+        const again = yield* press(other);
+        // The action's process exits 1, its pane kept, as tmux's `remain-on-exit` leaves it.
+        tmux.exit("1 1 ");
+        const exited = yield* press(other);
         const refused = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
-          agentSandbox.run(SESSION, SHELL, run),
+          agentSandbox.run(SESSION, SHELL, ACTION_RUN),
         ).pipe(Effect.provide(stopped.layer));
 
-        assert.deepEqual(
-          first,
-          Result.succeed({
-            id: SHELL,
-            title: "Dev server",
-            command: "node",
-            cwd: "/workspace/repository",
-            running: true,
-            runAction: action,
-          }),
-        );
+        const runningShell = {
+          id: SHELL,
+          title: "Dev server",
+          command: "bash",
+          cwd: "/workspace/repository",
+          running: true,
+          runAction: ACTION,
+        };
+        assert.deepEqual(first, Result.succeed(runningShell));
         assert.deepEqual(again, first);
-        const started = sandbox.state.commands.filter((command) =>
-          command.ask.args.includes("new-session"),
-        );
-        assert.equal(started.length, 1);
-        const typed = sandbox.state.commands
-          .slice(startedBefore)
-          .filter((command) => command.ask.args.includes("send-keys"));
-        assert.equal(typed.length, 1);
-        assert.ok(typed[0]?.ask.args.includes("pnpm dev"));
-        assert.equal(Result.isSuccess(idle) && idle.success.id, SHELL);
+        assert.deepEqual(exited, first);
+        assert.deepEqual(tmux.asked("new-session").length, 1);
+        const respawned = tmux.asked("respawn-pane");
+        assert.equal(respawned.length, 1);
+        assert.ok(respawned[0]?.includes(`=terminal-${SHELL}:`));
+        assert.ok(respawned[0]?.includes("pnpm dev"));
         assert.deepEqual(
           refused,
           Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
         );
         assert.deepEqual(stopped.state.resumed, []);
+      }),
+  );
+
+  it.effect(
+    "a stop sends TERM to the action's process group, and KILL only once it outlives five seconds",
+    () =>
+      Effect.gen(function* () {
+        const stubborn = actionTmux();
+        const stop = (tmux: ReturnType<typeof actionTmux>) =>
+          Effect.flatMap(AgentSandbox, (agentSandbox) => agentSandbox.stop(SESSION, ACTION)).pipe(
+            Effect.provide(tmux.layer),
+          );
+        yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, SHELL, ACTION_RUN),
+        ).pipe(Effect.provide(stubborn.layer));
+
+        const stopping = yield* Effect.forkChild(stop(stubborn));
+        yield* TestClock.adjust(Duration.millis(4_900));
+        const killedEarly = stubborn.signals().includes(RUN_ACTION_SIGNAL.KILL);
+        yield* TestClock.adjust(Duration.millis(100));
+        const stopped = yield* Fiber.join(stopping);
+
+        // A group that ends on TERM, after the first wait, is never killed.
+        const willing = actionTmux(1);
+        yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, SHELL, ACTION_RUN),
+        ).pipe(Effect.provide(willing.layer));
+        const ending = yield* Effect.forkChild(stop(willing));
+        yield* TestClock.adjust(Duration.seconds(5));
+        const ended = yield* Fiber.join(ending);
+
+        assert.equal(killedEarly, false);
+        assert.deepEqual(stopped, Result.succeed(undefined));
+        assert.equal(stubborn.signals()[0], RUN_ACTION_SIGNAL.TERM);
+        assert.equal(stubborn.signals().at(-1), RUN_ACTION_SIGNAL.KILL);
+        assert.deepEqual(ended, Result.succeed(undefined));
+        assert.ok(!willing.signals().includes(RUN_ACTION_SIGNAL.KILL));
       }),
   );
 

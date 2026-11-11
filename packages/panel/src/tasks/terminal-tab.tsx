@@ -1,5 +1,10 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { type TerminalAction, type TerminalBar, terminalLook } from "@repo/features/terminal-model";
+import {
+  readOnlyTerminalLook,
+  type TerminalAction,
+  type TerminalBar,
+  terminalLook,
+} from "@repo/features/terminal-model";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
@@ -15,7 +20,7 @@ import {
   Text,
   TextButton,
 } from "@repo/ui";
-import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
+import { STRIP_TAB_KIND, type TerminalStripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useContext, useMemo, useState } from "react";
 import { TERMINAL_LOAD_FAILED } from "../bundle-loader.js";
@@ -27,6 +32,7 @@ import { TERMINAL_FIND, type TerminalFind } from "../terminal/contract.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectMirrors } from "../use-app-state.js";
 import { AgentRef, agentSubject, NOTHING_HELD } from "./agent-ref.js";
+import { useRunTabLooks } from "./run-action-shells.js";
 import { AgentGlyph } from "./tab-look.js";
 import { useHeldShells } from "./terminal-held.js";
 import {
@@ -85,6 +91,9 @@ function useScrollbackFind(find: TerminalFind | undefined): FindSource | undefin
     [find],
   );
 }
+
+/** No cloud tab, which a Local tab hands the run action looks. */
+const NO_CLOUD_TAB: readonly TerminalStripTab[] = [];
 
 /** What a phone's ⋯ calls the agent's name in the bar, which opens its tab. */
 const OPEN_AGENT = "Open agent";
@@ -161,7 +170,17 @@ export function TerminalTab({
   // Note that a Local tab says which step of the agent's mirror it waits on while it connects, where the host said.
   const mirrors = useQuery({ ...appStateQuery, select: selectMirrors }).data;
   const mirror = tab.kind === STRIP_TAB_KIND.LOCAL ? mirrors?.[agentId] : undefined;
-  const look = terminalLook(session.state, mirror);
+  // A run action's tab is read-only, and its bar says where the action stands before how it is connected.
+  const runLook = useRunTabLooks(
+    tab.kind === STRIP_TAB_KIND.TERMINAL ? [tab] : NO_CLOUD_TAB,
+    shown,
+  )(tab.kind === STRIP_TAB_KIND.TERMINAL ? tab : undefined);
+  const look =
+    runLook === undefined
+      ? terminalLook(session.state, mirror)
+      : readOnlyTerminalLook(session.state);
+  const words =
+    runLook?.standing === undefined ? look.words : `${runLook.standing} · ${look.words}`;
   // A phone draws no bar over the screen: its header's ⋯ opens the agent.
   const phone = usePhoneRoom();
   // Note that a phone has no title bar to carry "connecting…", so a state only that bar says is said in a bar over the screen.
@@ -194,7 +213,7 @@ export function TerminalTab({
                 glyph={<AgentGlyph agent={subject.agent} />}
                 label={subject.name}
               />
-              <span className="terminal-tab-standing flex-none">· {look.words}</span>
+              <span className="terminal-tab-standing flex-none">· {words}</span>
             </span>
           }
         />

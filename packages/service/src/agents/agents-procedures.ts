@@ -700,7 +700,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         }),
       );
     }),
-    /** What one run action's shell runs interrupted, answering the shells as they stand after. */
+    /** One run action stopped, TERM then KILL where it outlives the grace (`agent-sandbox.ts`), answering the shells as they stand after. */
     stopRunAction: signedIn.stopRunAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
       const { sessionId, agent } = yield* reachedAgentSession(context.userId, input.id);
@@ -709,7 +709,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       return yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
-          const stopped = yield* sandboxOrUpstream(sandbox.interrupt(sessionId, actionId));
+          const stopped = yield* sandboxOrUpstream(sandbox.stop(sessionId, actionId));
           if (Result.isFailure(stopped)) return yield* Effect.fail(shellRefusal(stopped.failure));
           return yield* listedShells(sessionId);
         }),

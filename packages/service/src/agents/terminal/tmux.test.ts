@@ -5,12 +5,14 @@ import {
   holdsTerminal,
   killTerminal,
   listTerminals,
+  RUN_ACTION_SIGNAL,
   renameTerminal,
+  rerunAction,
+  signalRunAction,
   startRunAction,
   startTerminal,
   TMUX,
   terminalsOf,
-  typeIntoTerminal,
 } from "./tmux.js";
 
 /**
@@ -19,7 +21,10 @@ import {
  * a prefix tmux would take for another, and splice nothing into shell text;
  * a list reads back only the sessions a tab started, oldest first, each
  * named as the developer named it or as its foreground command is, and
- * running where that command is not the shell at its prompt. Every command
+ * running where that command is not the shell at its prompt, or, for a run
+ * action, while its own process runs, saying how it exited once it has. A
+ * run action's command is its pane's process, handed to the shell that runs
+ * it as an argument of its own. Every command
  * runs on a tmux server of its own, and none installs anything or reaches
  * for sudo itself.
  */
@@ -35,15 +40,19 @@ const SHELL_B = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 /** One field as the list prints it: what tmux printed, newline and all, in base64. */
 const field = (value: string) => Buffer.from(`${value}\n`).toString("base64");
 
-/** One line as the list prints it: the session's name, when it was created, and its free-text fields in base64. */
+/** One line as the list prints it: the session's name, when it was created, and its free-text fields in base64, a run action's and its pane's where given. */
 function listed(
   name: string,
   created: number,
   title: string,
   command: string,
   cwd: string,
+  action?: { readonly id: string; readonly pane: string },
 ): string {
-  return [name, String(created), field(title), field(command), field(cwd)].join(" ");
+  const fields = [name, String(created), field(title), field(command), field(cwd)];
+  return (action === undefined ? fields : [...fields, field(action.id), field(action.pane)]).join(
+    " ",
+  );
 }
 
 test("starting, naming, and ending a shell target its session exactly and carry a name as one argument", () => {
@@ -66,28 +75,39 @@ test("starting, naming, and ending a shell target its session exactly and carry 
 });
 
 test("a run action's command, label, and variables reach tmux as written where they end in a semicolon, which tmux would read as the end of its command", () => {
-  // Note that tmux 3.6 types `find . -exec rm {} \;` as `find . -exec rm {} ;` and `pnpm dev;` as `pnpm dev`: a backslash before the last `;` hands each back whole.
-  const command = "find . -exec rm {} \\;";
-  const started = startRunAction(SHELL_A, {
+  // Note that tmux 3.6 reads `find . -exec rm {} \;` as `find . -exec rm {} ;` and `pnpm dev;` as `pnpm dev`: a backslash before the last `;` hands each back whole.
+  const run = {
     actionId: SHELL_A,
     label: "Clean;",
-    command,
+    command: "find . -exec rm {} \\;",
     environment: { MODE: "a;" },
-  });
-  const typed = typeIntoTerminal(SHELL_A, "pnpm dev;");
+  };
+  const started = startRunAction(SHELL_A, run);
+  const rerun = rerunAction(SHELL_A, { ...run, command: "pnpm dev;" });
 
   assert.ok(started.args.includes("find . -exec rm {} \\\\;"));
   assert.ok(started.args.includes("Clean\\;"));
   assert.ok(started.args.includes("MODE=a\\;"));
-  assert.ok(typed.args.includes("pnpm dev\\;"));
-  assert.ok(
-    startRunAction(SHELL_A, {
-      actionId: SHELL_A,
-      label: "Dev",
-      command: "pnpm dev",
-      environment: {},
-    }).args.includes("pnpm dev"),
-  );
+  assert.ok(rerun.args.includes("pnpm dev\\;"));
+  assert.ok(rerun.args.includes("MODE=a\\;"));
+});
+
+test("a run action's command is its pane's own process, handed to its shell as an argument rather than typed or spliced into a script", () => {
+  const hostile = "pnpm dev $(id) 'q'";
+  const run = { actionId: SHELL_A, label: "Dev", command: hostile, environment: {} };
+
+  for (const ask of [startRunAction(SHELL_A, run), rerunAction(SHELL_A, run)]) {
+    assert.ok(!scriptOf(ask)?.includes(hostile));
+    assert.ok(!ask.args.includes("send-keys"));
+    // The command follows the script that runs it and the name that script's `$0` takes.
+    const at = ask.args.indexOf(hostile);
+    assert.equal(ask.args[at - 1], "run-action");
+    assert.match(ask.args[at - 2] ?? "", /bash -lc "\$1"/);
+  }
+  // The pane outlives its process, so what it printed and how it exited stand.
+  assert.ok(startRunAction(SHELL_A, run).args.includes(TMUX.REMAIN_OPTION));
+  const signaled = signalRunAction(SHELL_A, RUN_ACTION_SIGNAL.TERM);
+  assert.deepEqual(signaled.args.slice(-2), [`=terminal-${SHELL_A}:`, RUN_ACTION_SIGNAL.TERM]);
 });
 
 test("every command runs on a tmux server of its own, and none installs tmux or reaches for sudo", () => {
@@ -96,6 +116,7 @@ test("every command runs on a tmux server of its own, and none installs tmux or 
     startTerminal(SHELL_A, "dev server"),
     attachTerminal(SHELL_A),
     holdsTerminal(SHELL_A),
+    signalRunAction(SHELL_A, RUN_ACTION_SIGNAL.KILL),
     renameTerminal(SHELL_A, "dev server"),
     killTerminal(SHELL_A),
   ];
@@ -136,4 +157,34 @@ test("a title or folder with spaces is read back whole, and a list that failed i
   ]);
   assert.deepEqual(terminalsOf({ exitCode: 0, stdout: "", stderr: "" }), []);
   assert.equal(terminalsOf({ exitCode: 1, stdout: "", stderr: "" }), undefined);
+});
+
+test("a run action reads as running while its process runs, whatever its foreground command, and says how it exited once it has", () => {
+  const dev = { id: "dev-action", pane: "0  " };
+  const stdout = [
+    listed(`terminal-${SHELL_A}`, 100, "Dev", "vim", "/workspace/repository", dev),
+    listed(`terminal-${SHELL_B}`, 200, "Check", "bash", "/workspace/repository", {
+      id: "check-action",
+      pane: "1 1 ",
+    }),
+    listed("terminal-11111111-2f4d-4c6b-9e0a-1d2f3a4b5c6d", 300, "Serve", "bash", "/", {
+      id: "serve-action",
+      pane: "1  15",
+    }),
+  ].join("\n");
+
+  const read = terminalsOf({ exitCode: 0, stdout, stderr: "" }) ?? [];
+
+  assert.deepEqual(
+    read.map(({ running, exited }) => ({ running, exited })),
+    [
+      { running: true, exited: undefined },
+      { running: false, exited: { code: 1 } },
+      { running: false, exited: { signal: 15 } },
+    ],
+  );
+  assert.deepEqual(
+    read.map((shell) => shell.runAction),
+    ["dev-action", "check-action", "serve-action"],
+  );
 });

@@ -145,6 +145,7 @@ import { OpenFileTabProvider } from "../tasks/open-file-tab.js";
 import { PagePane } from "../tasks/page-pane.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { ofPullRequestTab, pullRequestOfTab } from "../tasks/pull-request-number.js";
+import { type RunTabLook, useRunTabLooks } from "../tasks/run-action-shells.js";
 import { stripTabTakesFind, stripTabTitle } from "../tasks/strip-tab-kinds.js";
 import {
   AgentGlyph,
@@ -1095,6 +1096,8 @@ function stripTabs(input: {
   people: ReadonlyMap<string, HeldPeople>;
   /** The account signed in, whose cloud Browser draft a closed draft's tab lets go. */
   account: string | undefined;
+  /** How a run action's Terminal tab looks (`useRunTabLooks`); none for a developer's own shell. */
+  runLookOf: (tab: TerminalStripTab) => RunTabLook | undefined;
 }): DrawnTab[] {
   const { panel, unread, agents, subagents, files, changes, pages, terminals, locals, held } =
     input;
@@ -1199,13 +1202,14 @@ function stripTabs(input: {
     close: () => panel.onClose(tab),
   }));
   // A cloud terminal tab is named by its terminal, wears the terminal glyph and its agent's name, and
-  // hangs its agent's card, saying under a rule whose sandbox its shell runs in.
+  // hangs its agent's card, saying under a rule whose sandbox its shell runs in; a run action's wears
+  // the action's icon and says where it stands after its name.
   const terminalTabs = terminals.map((tab) => {
     const subject = agentSubject(agentsOf(tab.terminal), tab.terminal, held, false);
     return {
       tab,
       look: look(tab, {
-        ...tabLook({ kind: TAB_KIND.TERMINAL, title: tab.title }),
+        ...tabLook({ kind: TAB_KIND.TERMINAL, title: tab.title, action: input.runLookOf(tab) }),
         detail: subject.name,
         card: hungCard({ kind: TAB_KIND.TERMINAL, subject, models }),
       }),
@@ -1406,8 +1410,10 @@ function PanelTabs({
   const copied = useTranscriptCopier();
   const people = useChangesPeopleOf(useMemo(() => changes.map((tab) => tab.changes), [changes]));
   const account = useWindowAccount();
+  const runLookOf = useRunTabLooks(terminals, shown);
   const kinds = stripTabs({
     account,
+    runLookOf,
     panel,
     unread,
     agents,
