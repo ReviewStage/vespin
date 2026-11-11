@@ -71,6 +71,10 @@ test("a thread started with no subject is titled by its message's first line tha
   );
   assert.equal(inboxStartTitle({ text: "", attachments: [PDF] }), "invoice.pdf");
   assert.equal(
+    inboxStartTitle({ text: "[File: invoice.pdf] is wrong", attachments: [PDF] }),
+    "invoice.pdf is wrong",
+  );
+  assert.equal(
     inboxStartTitle({
       text: "",
       attachments: [{ ...PDF, name: `${"q3 board report ".repeat(12)}.pdf` }],

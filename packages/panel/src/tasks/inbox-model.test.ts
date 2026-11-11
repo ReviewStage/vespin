@@ -35,6 +35,8 @@ import {
   inboxList,
   inboxPlaces,
   inboxPreview,
+  inboxPreviewHeard,
+  inboxPreviewPieces,
   inboxSettledStanding,
   inboxSteps,
   isDone,
@@ -964,6 +966,38 @@ test("a thread's latest message by a member is its row's preview, led by who wro
     ],
   });
   assert.equal(inboxPreview(open(filesOnly), previewName), "Charles Pan: Sent a file");
+  const picture = {
+    attachmentId: "e1b2c3d4-0000-4000-8000-000000000003",
+    name: "Picture 2",
+    mediaType: "image/png",
+  };
+  const unnamed = {
+    ...picture,
+    attachmentId: "e1b2c3d4-0000-4000-8000-000000000004",
+    name: "Picture 3",
+  };
+  const naming = open(
+    message({
+      text: "[Picture 2] Do we have `[Picture 2]` or `[Picture 3]`?",
+      createdAt: 2_000,
+      member: YOU,
+      files: [picture, unnamed],
+    }),
+  );
+  assert.deepEqual(
+    inboxPreviewPieces(naming, previewName),
+    ["You: ", picture, " Do we have [Picture 2] or [Picture 3]?"],
+    "a marker in code stays words, though its file is named outside it",
+  );
+  assert.equal(
+    inboxPreview(naming, previewName),
+    "You: [Picture 2] Do we have [Picture 2] or [Picture 3]?",
+  );
+  assert.equal(
+    inboxPreviewHeard(naming, previewName),
+    "You: Picture 2 Do we have [Picture 2] or [Picture 3]?",
+    "a reader hears the file its marker names by its name",
+  );
 });
 
 /** The agent's message ending with `ask`, open unless it says otherwise. */
@@ -1230,7 +1264,7 @@ test("a thread's row previews its latest message, an answer led by its answerer 
     "You: Chose 7 days",
   );
   const note = message({
-    text: "Shipped **#42**.",
+    text: "Shipped **#42**. ![The flow](https://example.com/flow.png) `![`\n\n    ![",
     createdAt: 3_000,
     author: INBOX_MESSAGE_AUTHOR.AGENT,
   });
@@ -1240,7 +1274,7 @@ test("a thread's row previews its latest message, an answer led by its answerer 
     answeredBy: YOU,
     thread: [note],
   });
-  assert.equal(inboxPreview(settledNote, previewName), "Shipped #42.");
+  assert.equal(inboxPreview(settledNote, previewName), "Shipped #42. The flow ![ ![");
   assert.equal(inboxLineKind(settledNote), INBOX_LINE.SAID);
 });
 

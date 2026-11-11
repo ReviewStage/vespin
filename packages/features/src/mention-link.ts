@@ -1406,7 +1406,9 @@ export function withoutMemberLinks(text: string): string {
  * plain words says it, a notification or a list's title: a link naming a
  * mention by the name its chip says (`linkMention`, read with no
  * repository, as a place off a task's page draws it), and any other link
- * by its label, never its address. A bare address is words, and stays as
+ * by its label, never its address, and a picture, `![alt](address)`, by
+ * its alt words as written, without the mark that makes it a picture; an
+ * escaped `\!` stays as written. A bare address is words, and stays as
  * written. The words are read once, front to back: a label is the words
  * since the last `[` on its line, so of nested brackets the inner link is
  * the link, as markdown reads them. Note that code is not told apart,
@@ -1425,7 +1427,12 @@ export function linkLabels(words: string): string {
       const link = words[at + 1] === "(" ? destinationEnd(words, at + 2) : undefined;
       if (link !== undefined && "end" in link) {
         const label = readLabel(words.slice(open + 1, at));
-        said += words.slice(from, open) + (linkMention(label, link.target, null)?.name ?? label);
+        // Note that a picture's mark is taken off with its link, so it is said by its alt words alone.
+        const mark = open - 1;
+        const picture = mark >= from && words[mark] === "!" && !escapedAt(words, mark);
+        // Note that a picture's alt words are said as written, since no mention is drawn as one.
+        const name = picture ? label : (linkMention(label, link.target, null)?.name ?? label);
+        said += words.slice(from, picture ? mark : open) + name;
         from = link.end + 1;
         at = link.end;
       } else if (link !== undefined) {

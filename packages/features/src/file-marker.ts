@@ -144,6 +144,22 @@ export function wordsWithoutMarkers(text: string): string {
   return words + text.slice(at);
 }
 
+/**
+ * The words with every marker outside code written as the name of the file
+ * it names, "this Picture 1 next to spec.pdf": what a place that draws plain
+ * words, and no chip, says of each file where the message named it, as a
+ * search's snippet, a reader's ears, or a title read from the words.
+ */
+export function markersAsNames(text: string): string {
+  let words = "";
+  let at = 0;
+  for (const marker of fileMarkers(text)) {
+    words += text.slice(at, marker.start) + marker.name;
+    at = marker.end;
+  }
+  return words + text.slice(at);
+}
+
 /** The next picture's name: one past the highest picture's number among the names, so a picture taken off frees no number a later one reuses beside its neighbor's marker. */
 export function nextPictureName(names: Iterable<string>): string {
   let highest = 0;

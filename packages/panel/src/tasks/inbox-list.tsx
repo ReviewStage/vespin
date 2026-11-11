@@ -13,7 +13,6 @@ import {
   type InboxShow,
   type InboxWhose,
   inboxLineKind,
-  inboxPreview,
   inboxPreviewHeard,
   isDone,
   isUnread,
@@ -145,6 +144,7 @@ import { PEOPLE_FILTER, PEOPLE_FILTER_WORDS, peopleFilterActions } from "../memb
 import { useShortcutTarget } from "../shortcut-target.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { LineWords } from "./file-chips.js";
 import type { InboxResolver } from "./inbox-close.js";
 import {
   INBOX_COLUMNS,
@@ -161,6 +161,7 @@ import {
   inboxLineGlyph,
   useInboxStanding,
 } from "./inbox-item-parts.js";
+import { useInboxLinePieces } from "./inbox-message.js";
 import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";
@@ -494,7 +495,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   const _reader = directory.readerId ?? readerId;
   const { nameOf } = useInboxStanding(listed, readerId);
   const lineKind = inboxLineKind(item);
-  const preview = inboxPreview(item, nameOf, ticked);
+  const preview = useInboxLinePieces(item, nameOf, ticked);
   const heard = inboxPreviewHeard(item, nameOf, ticked);
   const addressedTo = inboxAddressedTo(item);
   const addressee = usePerson(addressedTo);
@@ -522,7 +523,7 @@ export const InboxItemRow = memo(function InboxItemRow({
             data-line={lineKind}
           >
             {inboxLineGlyph(lineKind)}
-            {preview}
+            <LineWords pieces={preview} />
           </span>
         }
         describedAs={heard}
