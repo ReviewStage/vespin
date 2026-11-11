@@ -1,6 +1,10 @@
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { type AppStateBridgeReads, followAppStateOver } from "@repo/host/app-state-reads";
+import {
+  type AppStateBridgeReads,
+  followAppStateOver,
+  shareAppState,
+} from "@repo/host/app-state-reads";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { Data, Effect } from "effect";
 import { appBridge } from "./app-bridge.js";
@@ -84,7 +88,9 @@ const firstRead: Effect.Effect<AppStateSnapshot, AppStateUnread> = Effect.flatMa
  * never stale (`staleTime: Infinity`, as the docs' guide to data pushed over
  * a socket has it) and never read again; its `queryFn`, a read of its own, stands only for a reader on a
  * client nothing follows into. A read the bridge refused is not tried
- * again, since the window shows that failure at once.
+ * again, since the window shows that failure at once. Its structural
+ * sharing, which every reader's `select` answer shares as well, keeps the
+ * readers on the document's own objects (`shareAppState`).
  *
  * Note that the read answers the document the client holds where that is as
  * new, because the subscription may have written a later reading while the
@@ -98,6 +104,7 @@ export const appStateQuery = queryOptions({
       return held !== undefined && held.version >= read.version ? held : read;
     }),
   staleTime: Infinity,
+  structuralSharing: shareAppState,
   retry: false,
 });
 

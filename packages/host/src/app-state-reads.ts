@@ -356,6 +356,78 @@ export function memoizedSelect<Inputs extends unknown[], A>(
   };
 }
 
+/** How deep `shareAppState` compares before it takes the new value whole, as Query's own `replaceEqualDeep` stops. */
+const SHARE_DEPTH = 500;
+
+/** Whether `value` is an array with no holes and no keys of its own beside its items. */
+function isPlainArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value) && value.length === Object.keys(value).length;
+}
+
+/** Whether `value` is an object of any kind, which a walk may go into. */
+function isObject(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+/** Whether `value` is an object literal's kind: one made by `{}` or with no prototype at all. */
+function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  if (!isObject(value)) return false;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * The document query's structural sharing (`structuralSharing`), for the
+ * document's writes and every reader's `select` answer alike, since Query
+ * hands a reader's options to the one query they share. It is Query's own
+ * `replaceEqualDeep` but for one answer: a node that changed and is made
+ * wholly of `next`'s own parts is `next`'s node itself, not a copy of it.
+ *
+ * Note that this is what keeps a reader on the document's own objects.
+ * `replaceEqualDeep` answers a changed node with a copy, so a reader's answer
+ * over a slice comes to hold copies equal to the document's nodes but never
+ * identical; each write then compares the reader's copies with the
+ * document's nodes deeply, and as more of the slice moves, every push walks
+ * all of it once per reader (a renderer up for an hour spent 13% of a core
+ * there). Answering `next`'s node keeps the next comparison
+ * stopping at the first identical object. A node with any part kept from
+ * `held` is still a copy, so a write's unchanged parts keep their identity.
+ */
+export function shareAppState<T>(held: unknown, next: T, depth = 0): T {
+  if (held === next) return held as T;
+  if (depth > SHARE_DEPTH) return next;
+  const array = isPlainArray(held) && isPlainArray(next);
+  if (!array && !(isPlainObject(held) && isPlainObject(next))) return next;
+  // SAFETY: both are plain arrays or plain objects, each read by its own keys.
+  const before = held as Readonly<Record<PropertyKey, unknown>>;
+  const after = next as Readonly<Record<PropertyKey, unknown>>;
+  const heldSize = array ? (held as readonly unknown[]).length : Object.keys(before).length;
+  const nextKeys = array ? undefined : Object.keys(after);
+  const nextSize = nextKeys?.length ?? (next as readonly unknown[]).length;
+  const parts: unknown[] = [];
+  let keptHeld = 0;
+  let keptNext = 0;
+  for (let at = 0; at < nextSize; at++) {
+    const key = nextKeys?.[at] ?? at;
+    const heldItem = before[key];
+    const nextItem = after[key];
+    // Note that a part that is the same, or no object on either side, needs no walk of its own.
+    const shared =
+      heldItem === nextItem || !isObject(heldItem) || !isObject(nextItem)
+        ? nextItem
+        : shareAppState(heldItem, nextItem, depth + 1);
+    parts.push(shared);
+    if (shared === heldItem && (array ? at < heldSize : Object.hasOwn(before, key))) keptHeld++;
+    if (shared === nextItem) keptNext++;
+  }
+  if (keptHeld === heldSize && nextSize === heldSize) return held as T;
+  if (keptNext === nextSize) return next;
+  // SAFETY: the copy is `next`'s shape, by its keys in its order, each part `next`'s or one equal to it.
+  return (
+    array ? parts : Object.fromEntries(nextKeys?.map((key, at) => [key, parts[at]]) ?? [])
+  ) as T;
+}
+
 /** No task's feed read: the feed before it first answers. */
 const NO_INBOX_READS: InboxReads = new Map();
 
