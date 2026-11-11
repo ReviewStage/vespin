@@ -1,6 +1,17 @@
 {
   "type": "object",
-  "properties": {},
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36
+    }
+  },
   "required": [],
   "additionalProperties": false
 }

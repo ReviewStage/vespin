@@ -19,7 +19,7 @@ import {
   type InboxToolResult,
   inboxRejected,
   postToInbox,
-  readOwnInbox,
+  readThreads,
   withdrawAsk,
 } from "./inbox.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
@@ -36,7 +36,7 @@ export type InboxCall =
       readonly input: UnparsedWireValue;
     };
 
-/** Runs one of the agent's thread tools as the admitted conversation's agent: a post, a withdrawal, or a read of its own items; a store failure is the tool's own refusal. */
+/** Runs one of the agent's thread tools as the admitted conversation's agent: a post, a withdrawal, or a read of its own threads or, read only, of another agent's or a task's of its workspace; a store failure is the tool's own refusal. */
 export function runAgentInbox(
   admitted: AdmittedConversation,
   call: InboxCall,
@@ -55,7 +55,7 @@ export function runAgentInbox(
       case INBOX_TOOL.WITHDRAW:
         return yield* withdrawAsk(agent, call.input);
       case INBOX_TOOL.READ:
-        return yield* readOwnInbox(agent);
+        return yield* readThreads(agent, call.input);
     }
   }).pipe(
     Effect.tapError(logStoreFailure),

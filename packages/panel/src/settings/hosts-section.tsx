@@ -353,6 +353,8 @@ function ThisMacRow({
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
+  // Note that a reader is told at once where this Mac's host could not be started, as the row turns to Failed.
+  useAnnounce(ANNOUNCE.ALERT, on && setupFailed ? `${THIS_MAC} ${WORDS.FAILED}` : "");
   const description = !on ? (
     THIS_MAC_WORDS.OFF
   ) : setupFailed ? (
@@ -540,7 +542,9 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
     confirmFailure(FAILURE_SURFACE.HOST_REMOVE),
   );
   const askRemove = (host: HostLine, label: string) => {
-    const offline = standingOf(host, book, joinedNow(host))?.words === WORDS.OFFLINE;
+    // Note that a host the sweep marked away hears of its removal only once it is back, whatever its setup says.
+    const offline =
+      host.away === true || standingOf(host, book, joinedNow(host))?.words === WORDS.OFFLINE;
     setAsked({ accountId, host, label, offline });
     removing.ask();
   };

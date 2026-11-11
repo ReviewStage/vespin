@@ -133,6 +133,10 @@ const CHECKS_WAIT = {
 } as const;
 
 /** The harnesses whose instructions differ in the tools they name: Claude Code and Codex, which each run their own. */
+/** How Codex reads an attached PDF or HEIC photo, since it has no Read tool: it goes with every Codex agent's checkout or sandbox words. */
+const CODEX_DOCUMENT_WORDS =
+  " To read an attached PDF, run `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; to look at a HEIC photo, convert it with `heif-dec <file> <out>.jpg`, then `view_image`.";
+
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
   CODEX: CONVERSATION_RUNTIME.CODEX,
@@ -260,8 +264,8 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     integrations: NATIVE_INTEGRATION_WORDS,
   },
   [CODER_HARNESS.CODEX]: {
-    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.`,
-    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.`,
+    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.${CODEX_DOCUMENT_WORDS}`,
+    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.${CODEX_DOCUMENT_WORDS}`,
     serve:
       "Start the app from your shell in the background (with `&` and its output sent to a file), which keeps a server running until you stop it",
     started: STOP_BEFORE_TURN_END,

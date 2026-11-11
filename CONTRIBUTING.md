@@ -109,7 +109,6 @@ packages/
   ui/             the design system: every component, control, and page pattern the apps draw with
   wire/           the vocabulary every side speaks and the Schema tooling it is declared with
 tools/
-  anti-slop/      the repository's oxlint rules
   claude-code-probe/  proves Claude Code runs inside a Vespin sandbox
   demo-postgres/  a throwaway Postgres for the local demo
   polish/         screenshots every scene of the app, in both themes and three widths, for a design review

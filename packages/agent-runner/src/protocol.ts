@@ -173,6 +173,18 @@ export const CLAUDE_CODE_UNASKED_TOOLS = [
   "TaskGet",
 ] as const;
 
+/**
+ * The shell commands a launch whose mode asks runs unasked, each by its
+ * first words (`@repo/wire`'s `CommandPrefixSchema`, `["pnpm","test"]`):
+ * the commands the agent's starter always allows, as their list stood as
+ * the service wrote the config. Claude Code takes each as its allow rule
+ * for the launch alone; Codex, which takes no rule but its own files, has
+ * the runner accept an ask whose command is one plain command starting
+ * with one, never written to a rules file. Read as the service wrote them,
+ * which checked each, and ignored by a runner from before them.
+ */
+const AllowedCommandsSchema = Schema.Array(Schema.Array(Schema.String));
+
 /** The harness a launch runs, spelled as `conversations.runtime` spells it. */
 export const RUNNER_HARNESS = {
   CLAUDE_CODE: "claude_code",
@@ -239,7 +251,9 @@ export const INPUT_LINE = {
  * The member's answers to a tool call's ask: allow the call; allow it and,
  * for as long as the launch's CLI runs, every call its rule covers, as the
  * CLI suggested it, kept in the session alone so nothing is written to the
- * checkout (`ALLOW_FOR_AGENT`); or deny it.
+ * checkout (`ALLOW_FOR_AGENT`); or deny it. Where the ask carried a
+ * `commandPrefix`, the service also keeps it on the answering member's
+ * list, which their later launches are handed (`allowedCommands`).
  */
 export const APPROVAL_DECISION = {
   ALLOW: "allow",
@@ -565,6 +579,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   warmForMs: Schema.optionalKey(Schema.Number),
   /** How the launch answers its agent's tool calls (`PERMISSION_MODE`); full access where absent, as in a config written before modes. */
   permissionMode: Schema.optionalKey(PermissionModeSchema),
+  /** The commands the launch runs unasked in a mode that asks (`AllowedCommandsSchema`); none where absent, as with full access. */
+  allowedCommands: Schema.optionalKey(AllowedCommandsSchema),
 });
 export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 
@@ -632,6 +648,8 @@ export const CodexConfigSchema = Schema.Struct({
   warmForMs: Schema.optionalKey(Schema.Number),
   /** How the launch answers its agent's tool calls (`PERMISSION_MODE`), as the Codex app means each; full access where absent, as in a config written before modes. */
   permissionMode: Schema.optionalKey(PermissionModeSchema),
+  /** The commands the launch runs unasked in a mode that asks (`AllowedCommandsSchema`); none where absent, as with full access. */
+  allowedCommands: Schema.optionalKey(AllowedCommandsSchema),
 });
 export type CodexConfig = typeof CodexConfigSchema.Type;
 
@@ -971,7 +989,14 @@ export interface RunnerEndEvent {
  * stands on the call in the transcript; `agentId` the subagent's that made it, absent for
  * the agent's own; `title` the CLI's sentence for the ask, or the tool's
  * name where it gave none; `description` its subtitle, where it gave one;
- * `input` the call's input, cut as `APPROVAL_INPUT` says.
+ * `input` the call's input, cut as `APPROVAL_INPUT` says; `commandPrefix`
+ * the command's first words where the harness proposed a rule for every
+ * command starting with them (Claude Code's Bash suggestion ending in a
+ * wildcard, Codex's exec-policy amendment), which the member's Always
+ * allow keeps past the session, and absent where it proposed none. The
+ * service keeps a prefix only where it is one `@repo/wire`'s
+ * `CommandPrefixSchema` takes, so a runner's is read loosely here, and one
+ * it does not take leaves the ask as it is.
  */
 export const RunnerApprovalRequestedSchema = Schema.Struct({
   type: Schema.Literal(RUNNER_EVENT.APPROVAL_REQUESTED),
@@ -982,6 +1007,7 @@ export const RunnerApprovalRequestedSchema = Schema.Struct({
   title: Schema.String,
   description: Schema.optionalKey(Schema.String),
   input: Schema.Record(Schema.String, Schema.Unknown),
+  commandPrefix: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 export type RunnerApprovalRequested = typeof RunnerApprovalRequestedSchema.Type;
 

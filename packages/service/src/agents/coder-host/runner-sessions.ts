@@ -354,8 +354,6 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
     firstSequence: number,
     rewindBefore: string | undefined,
   ) => Effect.Effect<RunnerConfig, E | LaunchRefused, RunnerServices>;
-  /** The checkout's folders the harness finds a repository's skills in, whose names it keeps over an installed skill's. */
-  readonly skillRoots: readonly string[];
   /** What goes ahead of a message to a runner already running. */
   readonly ahead: (agent: Agent) => Effect.Effect<HarnessAhead, E | LaunchRefused, RunnerServices>;
   /** How a message opening with the command named is handed to the harness (`harness-commands.ts`). */
@@ -573,7 +571,7 @@ function runnerContent(
     return [
       {
         type: "text" as const,
-        text: `[${name} (${mediaType}) was attached: it is at ${path} in your sandbox, read it from there]`,
+        text: `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
       },
     ];
   });
@@ -983,9 +981,7 @@ export const runnerSessions = <
       const upload = layout.skillsUpload;
       return upload === undefined
         ? Effect.succeed<readonly SandboxFile[]>([])
-        : Effect.map(nativeSkills(target, agent, harness.skillRoots), (skills) =>
-            nativeSkillFiles(skills, upload),
-          );
+        : Effect.map(nativeSkills(target, agent), (skills) => nativeSkillFiles(skills, upload));
     };
 
     /**

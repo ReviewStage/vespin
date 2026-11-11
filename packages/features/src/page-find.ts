@@ -3,6 +3,7 @@ import { PAGE_LINK_SCRIPT } from "./page-link.js";
 import { PAGE_PICK_SCRIPT } from "./page-pick.js";
 import { PAGE_SIZE_SCRIPT } from "./page-size.js";
 import { PAGE_THEME_SCRIPT } from "./page-theme.js";
+import { PAGE_ZOOM_SCRIPT } from "./page-zoom.js";
 
 /**
  * page-find.ts -- ⌘F in a plan's page as drawn: the find the page's frame runs over its own words, and the messages the side panel and the frame pass to drive it.
@@ -315,6 +316,6 @@ export function doctypeEnd(html: string): number {
  */
 export function withPageScripts(html: string): string {
   const end = doctypeEnd(html);
-  const scripts = `<script>${PAGE_FIND_SCRIPT}</script><script>${PAGE_LINK_SCRIPT}</script><script>${PAGE_PICK_SCRIPT}</script><script>${PAGE_SIZE_SCRIPT}</script><script>${PAGE_THEME_SCRIPT}</script>`;
+  const scripts = `<script>${PAGE_FIND_SCRIPT}</script><script>${PAGE_LINK_SCRIPT}</script><script>${PAGE_PICK_SCRIPT}</script><script>${PAGE_SIZE_SCRIPT}</script><script>${PAGE_THEME_SCRIPT}</script><script>${PAGE_ZOOM_SCRIPT}</script>`;
   return `${html.slice(0, end)}${scripts}${html.slice(end)}`;
 }

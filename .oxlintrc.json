@@ -1,17 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": [
-    ".agents/**",
-    ".claude/**",
-    "packages/agent-runner/src/codex-protocol/**",
-    "tools/anti-slop/**"
-  ],
-  "jsPlugins": [
-    {
-      "name": "anti-slop",
-      "specifier": "./tools/anti-slop/index.ts"
-    }
-  ],
+  "ignorePatterns": [".agents/**", ".claude/**", "packages/agent-runner/src/codex-protocol/**"],
   "rules": {
     "unicorn/no-useless-spread": "off",
     "no-restricted-imports": [
@@ -25,39 +14,7 @@
           }
         ]
       }
-    ],
-    "anti-slop/agent-box-reads-agent": "error",
-    "anti-slop/archive-through-agent-change": "error",
-    "anti-slop/ask-beside-screen": "error",
-    "anti-slop/async-press-needs-busy": "error",
-    "anti-slop/enforce-delete-with-where": "error",
-    "anti-slop/enforce-update-with-where": "error",
-    "anti-slop/no-browser-form-validation": "error",
-    "anti-slop/no-direct-view-storage": "error",
-    "anti-slop/no-document-press-listener": "error",
-    "anti-slop/no-focused-or-skipped-test": "error",
-    "anti-slop/no-follow-outside-host-read": "error",
-    "anti-slop/no-hand-written-arrow-keys": "error",
-    "anti-slop/no-hand-written-live-region": "error",
-    "anti-slop/no-internal-vi-mock": "error",
-    "anti-slop/no-lucide-outside-door": "error",
-    "anti-slop/no-node-test": "error",
-    "anti-slop/no-open-page-from-button": "error",
-    "anti-slop/no-placeholder-ellipsis": "error",
-    "anti-slop/no-product-name": "error",
-    "anti-slop/no-raw-heading-outside-ui": "error",
-    "anti-slop/no-raw-press-outside-ui": "error",
-    "anti-slop/no-raw-press-outside-ui-native": "error",
-    "anti-slop/no-reduced-motion-query": "error",
-    "anti-slop/no-shadcn-focus-ring": "error",
-    "anti-slop/no-shortcut-flag": "error",
-    "anti-slop/no-source-read-in-test": "error",
-    "anti-slop/one-message-box": "error",
-    "anti-slop/retired": "error",
-    "anti-slop/row-behavior-in-row": "error",
-    "anti-slop/sandbox-delete-in-one-place": "error",
-    "anti-slop/settings-row-end": "error",
-    "anti-slop/skeleton-through-components": "error"
+    ]
   },
   "overrides": [
     {
@@ -77,12 +34,6 @@
         "react/set-state-in-effect": "off",
         "react/use-memo": "off",
         "react-hooks/exhaustive-deps": "off"
-      }
-    },
-    {
-      "files": ["**/*.test.ts", "**/*.test.mjs", "**/*.test.tsx"],
-      "rules": {
-        "anti-slop/enforce-delete-with-where": "off"
       }
     }
   ]

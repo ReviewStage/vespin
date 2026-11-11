@@ -77,7 +77,6 @@ import {
   type MachineLayout,
   type RunnerCredential,
 } from "../machine/agent-machine.js";
-import { SKILL_ROOT } from "../repository-skills.js";
 import { LAUNCH_SWAP, type PlaceholderSwap } from "../sandbox-firewall.js";
 import {
   KEY_REFUSAL,
@@ -88,7 +87,7 @@ import {
 import { launchPayerOf, roomAfterLimit } from "./agent-runtime-choice.js";
 import { codexCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
-import { launchPermissionMode } from "./permission-mode.js";
+import { launchAllowedCommands, launchPermissionMode } from "./permission-mode.js";
 import {
   type HarnessLaunch,
   type RunnerHarness,
@@ -313,6 +312,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
           ? undefined
           : { installedSkills: layout.installedSkills }),
         ...mode,
+        ...(yield* launchAllowedCommands(agent, mode)),
       };
       return written;
     });
@@ -350,8 +350,6 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     sessionPrefix: NATIVE_SESSION_PREFIX[CONVERSATION_RUNTIME.CODEX],
     launch,
     config,
-    // Note that Codex reads a checkout's skills from `.agents/skills` alone.
-    skillRoots: [SKILL_ROOT.AGENTS],
     ahead,
     commandRoute: codexCommandRoute,
   };

@@ -563,8 +563,8 @@ it.effect(
 /** Google's revocation endpoint, which a Google sign-in's token is posted to. */
 const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
-/** The GitHub App's endpoint a user token is revoked at, under the fixture App's client id. */
-const GITHUB_REVOKE_URL = `https://api.github.com/applications/${GITHUB_FIXTURE.CLIENT_ID}/token`;
+/** The GitHub App's endpoint a user's whole authorization is revoked at, refresh token and all, under the fixture App's client id. */
+const GITHUB_REVOKE_URL = `https://api.github.com/applications/${GITHUB_FIXTURE.CLIENT_ID}/grant`;
 
 /** A Google sign-in's access token, synthetic. */
 const GOOGLE_ACCESS_TOKEN = "ya29.fixture-google-access";
