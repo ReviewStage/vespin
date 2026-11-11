@@ -263,6 +263,17 @@ running agents' titles** and when each began, how many of them run, and how
 many threads wait on you. We forget the activity's token once it ends, or Apple
 says it is gone, and both tokens leave with the phone's row or your account.
 
+While you are signed in to the Vespin iOS app, it keeps a small file on your
+phone, in a folder only the app and its own extensions can read, for
+Vespin's share sheet: **your account's id, your workspaces' ids and names,
+and the names of the repositories each reaches**. When you share text or a
+link to Vespin from another app, the share sheet reads that file and sends
+nothing anywhere: Start keeps **the words you shared and edited**, with the
+workspace and repository you picked, as a draft in the same folder, and the
+app opens New task on it the next time you open the app, then deletes it.
+Nothing leaves your phone until you start that task. Signing out deletes both
+files, as does deleting the app.
+
 So your phone stays quiet while you're at your desk, the Service notes when
 a desktop or web client of yours was last active: while you use one, it
 tells the Service so at most every 30 seconds, with nothing of what you typed

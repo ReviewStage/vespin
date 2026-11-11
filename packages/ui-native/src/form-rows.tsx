@@ -26,6 +26,8 @@ type WordsFieldProps = {
   readonly placeholder: string;
   /** Called with the words as they are typed. */
   readonly onWords: (words: string) => void;
+  /** The words it opens on, such as a draft kept elsewhere; none where it opens empty. */
+  readonly initialWords?: string | undefined;
   /** Whether the keyboard rises on it as the sheet opens. */
   readonly autoFocus?: boolean | undefined;
   /** The name a flow finds the field by. */
@@ -38,9 +40,15 @@ type WordsFieldProps = {
  * words. The field keeps its own words, as a composer's does, and hands
  * each change to its holder.
  */
-export function WordsField({ placeholder, onWords, autoFocus = false, testId }: WordsFieldProps) {
+export function WordsField({
+  placeholder,
+  onWords,
+  initialWords = "",
+  autoFocus = false,
+  testId,
+}: WordsFieldProps) {
   const colors = useColors();
-  const text = useNativeState("");
+  const text = useNativeState(initialWords);
   return (
     <TextField
       text={text}

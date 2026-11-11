@@ -189,12 +189,14 @@ function AgentSection({
 function DraftSection({
   placeholder,
   onWords,
+  initialWords,
   pictures,
   note,
   testIds,
 }: {
   readonly placeholder: string;
   readonly onWords: (words: string) => void;
+  readonly initialWords?: string | undefined;
   readonly pictures: AttachedPictures;
   readonly note: string | undefined;
   /** The names a flow finds the field and the + by. */
@@ -202,7 +204,13 @@ function DraftSection({
 }) {
   return (
     <ListSection footer={note}>
-      <WordsField placeholder={placeholder} onWords={onWords} autoFocus testId={testIds.WORDS} />
+      <WordsField
+        placeholder={placeholder}
+        onWords={onWords}
+        initialWords={initialWords}
+        autoFocus
+        testId={testIds.WORDS}
+      />
       <AttachRow
         pictures={pictures.attached}
         onAdd={pictures.attach}
@@ -305,20 +313,29 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   );
 }
 
+/** What New task opens on in place of an empty sheet: a draft the share sheet kept. */
+export interface NewTaskDraft {
+  readonly prompt: string;
+  /** The workspace it was kept for, where one was picked; the phone's own otherwise. */
+  readonly workspaceId?: string | undefined;
+  readonly repository?: string | undefined;
+}
+
 /**
  * New task, Home's composer as a sheet: the task described and the pictures
  * that go with it, the repository it works in, the newest one the account's
  * tasks were about until another is picked, its agent's model and effort,
  * and where its agent runs. Start
  * makes the task and starts its agent in one act, as Home does, in the
- * workspace the app works in.
+ * workspace the app works in, or the one a draft it opens on was kept for.
  */
-export function NewTaskScreen() {
-  const [prompt, setPrompt] = useState("");
+export function NewTaskScreen({ draft }: { readonly draft?: NewTaskDraft | undefined }) {
+  const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const workspace = useChosenWorkspace(workspaces).chosen;
-  const repository = useRepositoryPick(workspace);
+  const chosen = useChosenWorkspace(workspaces).chosen;
+  const workspace = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
+  const repository = useRepositoryPick(workspace, draft?.repository);
   const pick = useModelPick();
   const startTask = useStartTask(workspace?.id);
   const [note, setNote] = useState<string | undefined>(undefined);
@@ -346,6 +363,7 @@ export function NewTaskScreen() {
           <DraftSection
             placeholder={WORDS.TASK_PLACEHOLDER}
             onWords={setPrompt}
+            initialWords={draft?.prompt}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_TASK}
