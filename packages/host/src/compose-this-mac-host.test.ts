@@ -190,6 +190,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
           Layer.succeed(ThisMacHost, {
             stateRoot,
             home: homeOf(stateRoot),
+            launcher: launcherOf(stateRoot),
             runsHost: true,
             registers: options.registers ?? true,
             machine: Effect.succeed({
@@ -263,6 +264,10 @@ const freshState = Effect.gen(function* () {
 /** The home the host runs with, beside its state folder. */
 const homeOf = (stateRoot: string) => join(dirname(stateRoot), "home");
 
+/** The launcher inside the app, which `~/.local/bin/vespin-host` is linked to once the agent is registered. */
+const launcherOf = (stateRoot: string) =>
+  join(dirname(stateRoot), "Vespin.app", "Contents", "MacOS", "vespin-host");
+
 /** An agent's folder the host made, under its home. */
 const agentFolderOf = (stateRoot: string) => join(homeOf(stateRoot), ".vespin", "agents", AGENT_ID);
 
@@ -276,6 +281,9 @@ const recorded = (record: HostDevice) =>
 
 /** The account's standing record, as its host left it. */
 const STANDING = { deviceId: KEPT_ID, deviceSecret: OLD_SECRET, serviceOrigin: SERVICE } as const;
+
+/** What turning This Mac on or off answers over another account's host. */
+const ANOTHER_ACCOUNTS = { failure: "not-found", anotherAccount: true } as const;
 
 /** What This Mac reads as with no record, as the windows draw it. */
 const UNENROLLED = {
@@ -379,6 +387,36 @@ it.effect(
         yield* until(() => mac.asked.length > 1);
 
         assert.deepEqual(mac.asked, ["unregister", "register"]);
+      }).pipe(Effect.provide(FILES)),
+    ),
+);
+
+it.effect(
+  "taking over the account install's host moves vespin-host to the app's launcher, and leaves its state, its agents' folders, the clones, and its releases",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const stateRoot = yield* recorded(STANDING);
+        const home = homeOf(stateRoot);
+        const link = join(home, ".local", "bin", "vespin-host");
+        const releases = join(home, ".local", "share", "vespin-host");
+        const kept = [agentFolderOf(stateRoot), join(home, ".vespin", "clones"), releases];
+        for (const folder of kept) yield* fileSystem.makeDirectory(folder, { recursive: true });
+        yield* fileSystem.makeDirectory(dirname(link), { recursive: true });
+        yield* fileSystem.symlink(join(releases, "current", "bin", "vespin-host"), link);
+        const mac = yield* thisMac(stateRoot, { listed: [KEPT_ID] });
+
+        yield* until(() => mac.asked.includes("register"));
+        let target = yield* fileSystem.readLink(link);
+        for (let round = 0; round < 2_000 && target !== launcherOf(stateRoot); round += 1) {
+          yield* nudged(Duration.millis(100));
+          target = yield* fileSystem.readLink(link);
+        }
+
+        assert.equal(target, launcherOf(stateRoot));
+        assert.deepEqual(Option.getOrUndefined(yield* readHostDevice(stateRoot)), STANDING);
+        for (const folder of kept) assert.ok(yield* fileSystem.exists(folder), folder);
       }).pipe(Effect.provide(FILES)),
     ),
 );
@@ -597,8 +635,8 @@ it.effect(
         const mac = yield* thisMac(stateRoot, { status: THIS_MAC_AGENT_STATUS.ENABLED });
         yield* until(() => mac.held() !== undefined);
 
-        assert.deepEqual(yield* mac.turn(false), { failure: "unanswered" });
-        assert.deepEqual(yield* mac.turn(true), { failure: "unanswered" });
+        assert.deepEqual(yield* mac.turn(false), ANOTHER_ACCOUNTS);
+        assert.deepEqual(yield* mac.turn(true), ANOTHER_ACCOUNTS);
         yield* nudged(Duration.seconds(10));
 
         assert.equal(mac.asked.length, 0, "nothing of the other account's host is touched");
@@ -612,20 +650,23 @@ it.effect.each([
     case: "the record was enrolled with another service",
     record: { ...STANDING, serviceOrigin: "https://preview.app.test" },
     registers: true,
+    answer: { failure: "unanswered" },
   },
   {
     case: "the record is another account's",
     record: STANDING,
     registers: true,
+    answer: ANOTHER_ACCOUNTS,
   },
   {
     case: "this build does not register the agent, as a development run does not",
     record: STANDING,
     registers: false,
+    answer: { failure: "unanswered" },
   },
 ] as const)(
   "nothing is enrolled, registered, unregistered, or removed where $case, even turned off",
-  ({ record, registers }) =>
+  ({ record, registers, answer }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* recorded(record);
@@ -638,7 +679,7 @@ it.effect.each([
           status: THIS_MAC_AGENT_STATUS.ENABLED,
         });
         yield* nudged(Duration.minutes(1));
-        assert.deepEqual(yield* on.turn(false), { failure: "unanswered" });
+        assert.deepEqual(yield* on.turn(false), answer);
 
         // Note that the length is asserted rather than the list, which an assertion would narrow to an empty one.
         assert.equal(on.asked.length + off.asked.length, 0);

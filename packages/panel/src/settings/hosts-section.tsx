@@ -108,8 +108,11 @@ import { MenuRow } from "./menu-row.js";
  * off removes, after asking, since that takes the host and its agents'
  * folders off this Mac. While on it says the host's standing, and offline
  * until the service lists it. A Mac removed from anywhere else reads off,
- * since nothing enrolls it again unasked. A browser tab has no This Mac, so
- * it draws none.
+ * since nothing enrolls it again unasked. A build that only reads This
+ * Mac's host (`AppThisMacHost.releasedOnly`) draws the switch locked, saying
+ * only the released app runs it, and one whose host is another account's
+ * says so where turning it on or off is refused. A browser tab has no This
+ * Mac, so it draws none.
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
  * stands and a while after, so a host joining, leaving, renamed, or moving
@@ -163,6 +166,12 @@ const UNREACHED: ActionResult = {
 const REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
   reason: "Could not remove this machine. Try again.",
+};
+/** Turning This Mac on or off where its host is another account's, which only that account, or an uninstall on this Mac, removes. */
+const ANOTHER_ACCOUNTS_WORDS = `This Mac's host belongs to another ${PRODUCT_NAME} account. Remove it from that account, or run vespin-host uninstall --keep-agents.`;
+const ANOTHER_ACCOUNTS: ActionResult = {
+  status: ACTION_RESULT_STATUS.REJECTED,
+  reason: ANOTHER_ACCOUNTS_WORDS,
 };
 /** Turning This Mac off, refused by the service, said in the dialog that asked. */
 const TURN_OFF_REFUSED: ActionResult = {
@@ -248,6 +257,7 @@ const THIS_MAC_WORDS = {
   SWITCH: "Run agents on this Mac",
   OFF: "Run your agents on this Mac instead of the cloud.",
   TURN_ON_FAILED: "Could not turn on this Mac. Try again.",
+  RELEASED_ONLY: "Only the released app runs This Mac's host",
   NEEDS_APPROVAL: `macOS won't run agents on this Mac until you allow ${PRODUCT_NAME} in System Settings › General › Login Items.`,
   OPEN_LOGIN_ITEMS: "Open Login Items",
   STILL_LISTED: `This Mac is off, but ${PRODUCT_NAME} couldn't remove it from your machines. Remove it from the list below.`,
@@ -331,6 +341,7 @@ function ThisMacRow({
   book,
   on,
   needsApproval,
+  releasedOnly,
   onChange,
 }: {
   /** This Mac as the service lists it; none before it does. */
@@ -339,6 +350,8 @@ function ThisMacRow({
   on: boolean;
   /** Whether macOS holds its host until the member allows the app in Login Items. */
   needsApproval: boolean;
+  /** Whether this build leaves This Mac's host as it stands, since only the released app runs it. */
+  releasedOnly: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
@@ -365,6 +378,7 @@ function ThisMacRow({
             checked={on}
             label={THIS_MAC_WORDS.SWITCH}
             describedBy={control["aria-describedby"]}
+            locked={releasedOnly ? THIS_MAC_WORDS.RELEASED_ONLY : undefined}
             onChange={(next) => onChange(next)}
           />
         )}
@@ -546,8 +560,9 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       .catch(() => undefined)
       .then((answer) => {
         if (answer !== undefined && !("failure" in answer)) return;
+        const anotherAccounts = answer !== undefined && answer.anotherAccount === true;
         showToast({
-          words: THIS_MAC_WORDS.TURN_ON_FAILED,
+          words: anotherAccounts ? ANOTHER_ACCOUNTS_WORDS : THIS_MAC_WORDS.TURN_ON_FAILED,
           replayUnmasked: true,
           tone: STATUS_TONE.DANGER,
           failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
@@ -564,7 +579,9 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         deleteFolders: deleteFolders || agentFolders === 0,
       }),
     answered: (answer) => {
-      if ("failure" in answer) return TURN_OFF_REFUSED;
+      if ("failure" in answer) {
+        return answer.anotherAccount === true ? ANOTHER_ACCOUNTS : TURN_OFF_REFUSED;
+      }
       // Note that the host's state is gone either way, so what of its removal did not land is said beside the turn off rather than refusing it.
       if (answer.stillListed === true) {
         showToast({
@@ -629,6 +646,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
               book={book}
               on={thisMacOn}
               needsApproval={thisMac.needsApproval === true}
+              releasedOnly={thisMac.releasedOnly === true}
               onChange={switchThisMac}
             />
           )}
