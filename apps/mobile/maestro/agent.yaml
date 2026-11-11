@@ -58,10 +58,15 @@ appId: dev.vespin.ios
 # The recording under the card: the flow waits for the player to report it
 # can play the file, so a read that never lands, or a file it cannot play,
 # fails here rather than leaving a well with its spinner in the screenshot.
+# Note that the flow scrolls to the recording by its caption, which its well
+# and its player both carry, since the player is named only once it can play
+# and a scroll to that name would run past a recording still read.
 - scrollUntilVisible:
-    element:
-      id: "video-player"
+    element: "Accepting an invite.*"
     direction: DOWN
+- extendedWaitUntil:
+    visible:
+      id: "video-player"
     timeout: 15000
 - assertNotVisible: ".*can't play here.*"
 - waitForAnimationToEnd:
