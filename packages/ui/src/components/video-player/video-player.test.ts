@@ -15,8 +15,7 @@ import { VIDEO_PLAYER_PLACE, VideoPlayer, type VideoPlayerPlace } from "../../in
  * the button. Until its size is read it says it is loading, with no bar.
  * In the viewer it starts at
  * once, unless motion is held still. A recording drawn again, as Expand
- * draws it in the viewer, starts where it was left, and the player it was
- * left in goes on from the viewer's place when played again. The browser's media element is
+ * draws it in the viewer, starts where it was left. The browser's media element is
  * the boundary, so a stand-in plays, pauses, seeks, and opens Safari's own
  * player as one does, telling its events, and the player is read by what its
  * bar shows. Full screen, where the browser fills the screen with no element,
@@ -248,19 +247,13 @@ test("Full screen opens the video in the browser's own player where the browser 
   expect(Reflect.get(video, "webkitDisplayingFullscreen")).toBe(true);
 });
 
-test("a recording opened in the viewer starts where it was left, and its first player goes on from the viewer's place", () => {
+test("a recording opened in the viewer starts where it was left", () => {
   const inline = mountPlayer(() => undefined, KEPT_URL);
   inline.press("ArrowRight");
   inline.press("ArrowRight");
   inline.pressButton("Expand");
   const viewer = mountPlayer(undefined, KEPT_URL, VIDEO_PLAYER_PLACE.VIEWER);
   expect(viewer.playhead()).toBe(10);
-  viewer.press("ArrowRight");
-  // A change of speed in the first player, before it plays, moves nothing and keeps the viewer's place.
-  inline.press(">");
-  act(() => inline.video.dispatchEvent(new Event("ratechange")));
-  inline.pressButton("Play");
-  expect(inline.playhead()).toBe(15);
 });
 
 /** Draws a player in the viewer, as the file viewer an Expand opens does, and answers its video. */

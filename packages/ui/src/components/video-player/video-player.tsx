@@ -75,9 +75,7 @@ import { Tooltip } from "../tooltip/hint.js";
  * A recording keeps its place wherever it is drawn: each player notes where
  * it stands as it plays (`places`, by the video's bytes), so the same
  * recording drawn again, in the viewer an Expand opens or in a player drawn
- * anew, starts where it was left, and a player played again after another
- * moved the same recording, as the inline one after the viewer closes, goes
- * on from there.
+ * anew, starts where it was left.
  *
  * Until its first frame's size is read, the frame holds the shape it will
  * take, its known size or a screenshot's (`LOADING_SIZE`), on the veil, the
@@ -237,19 +235,13 @@ interface Playback {
   readonly speed: number;
 }
 
-/** Where a recording was left: the second it stood at, and the player that stood it there. */
-interface Place {
-  readonly at: number;
-  readonly by: symbol;
-}
-
-/** Where each recording was last left, by its `data:` URL, the latest last. */
-const places = new Map<string, Place>();
+/** Where each recording was last left, in seconds, by its `data:` URL, the latest last. */
+const places = new Map<string, number>();
 
 /** Notes where `dataUrl` was left, letting the oldest place go past `PLACES_KEPT`. */
-function keepPlace(dataUrl: string, place: Place): void {
+function keepPlace(dataUrl: string, at: number): void {
   places.delete(dataUrl);
-  places.set(dataUrl, place);
+  places.set(dataUrl, at);
   const oldest = places.keys().next().value;
   if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
 }
@@ -730,14 +722,11 @@ export function VideoPlayer({
           width: viewer ? undefined : LOADING_SIZE.width,
           aspectRatio: `${String(LOADING_SIZE.width)} / ${String(LOADING_SIZE.height)}`,
         };
-  // This player, named in the places it keeps, so it can tell another's from its own.
-  const [self] = useState(() => Symbol(VIDEO_LABEL.PLAYER));
   // The recording whose place this player keeps, once it has taken up where that one was left.
   const keeps = useRef<string>(undefined);
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
-  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which must not claim another player's place.
-  const read = (shown: HTMLVideoElement, moved = true) => {
+  const read = (shown: HTMLVideoElement) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
     // Note that the time is held within the length, because the seek that reads a length stands past it a moment.
     setPlayback({
@@ -746,15 +735,14 @@ export function VideoPlayer({
       duration,
       speed: shown.playbackRate,
     });
-    if (moved && keeps.current !== undefined) {
-      keepPlace(keeps.current, { at: Math.min(shown.currentTime, duration), by: self });
-    }
+    if (keeps.current !== undefined)
+      keepPlace(keeps.current, Math.min(shown.currentTime, duration));
   };
   // Once its length is known, the video goes to where it was left, or its start, which also ends the seek that read the length.
   const resume = (shown: HTMLVideoElement) => {
     if (keeps.current !== undefined || !Number.isFinite(shown.duration)) return;
     keeps.current = dataUrl;
-    const left = places.get(dataUrl)?.at ?? 0;
+    const left = places.get(dataUrl) ?? 0;
     shown.currentTime = left < shown.duration ? left : 0;
   };
   const expand =
@@ -821,18 +809,10 @@ export function VideoPlayer({
           read(event.currentTarget);
         }}
         onTimeUpdate={(event) => read(event.currentTarget)}
-        onPlay={(event) => {
-          const shown = event.currentTarget;
-          const left = keeps.current === undefined ? undefined : places.get(keeps.current);
-          // Played again after another player moved the same recording, it goes on from there.
-          if (left !== undefined && left.by !== self) {
-            shown.currentTime = left.at < shown.duration ? left.at : 0;
-          }
-          read(shown);
-        }}
+        onPlay={(event) => read(event.currentTarget)}
         onPause={(event) => read(event.currentTarget)}
         onEnded={(event) => read(event.currentTarget)}
-        onRateChange={(event) => read(event.currentTarget, false)}
+        onRateChange={(event) => read(event.currentTarget)}
         // A new address resets the old one's time before its own loads, which is no place of the old recording's.
         onEmptied={() => {
           keeps.current = undefined;
