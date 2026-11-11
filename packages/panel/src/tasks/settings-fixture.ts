@@ -35,6 +35,7 @@ import {
   adminMetricsScope,
   adminMetricsWindow,
 } from "@repo/features/admin-wire";
+import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
@@ -223,6 +224,10 @@ export function settingsTasksView(profile: string, list: TasksView): TasksView |
   if (!SETTINGS_LINKS.has(profile)) return undefined;
   return {
     ...list,
+    // Note that Memory's page names the agents that kept its memories, so the list carries them, as it carries every task's agents.
+    ...(profile === RUN_PROFILE.SETTINGS_MEMORY
+      ? { taskAgents: [...(list.taskAgents ?? []), ...MEMORY_AGENTS] }
+      : undefined),
     workspaces: list.workspaces.map((workspace) => ({
       ...workspace,
       memberCount: MEMBERS.get(workspace.id)?.length ?? 1,
@@ -439,6 +444,45 @@ const { ADA, MAYA, THEO } = FIXTURE_PERSON;
 /** The Acme task the agents that kept some of the memories work on (`tasks-fixture.ts`). */
 const USAGE_ALERTS = { taskId: "2b8c4e6a-0d3f-4a51-9c79-3e4f5a6b7c82", taskName: "Usage alerts" };
 
+/** The agents that kept some of the memories, by id. */
+const MEMORY_AGENT = {
+  CLAUDE: "5d9f3b7c-2e4a-4f6b-8c0d-3e5f7a9b1c2d",
+  CODEX: "6e0b4c8d-3f5a-4a7c-9d1e-4f6b8a0c2d3e",
+} as const;
+
+/** An agent on the Usage alerts task, as the task list carries it, which names the memories it kept. */
+function memoryAgent(id: string, title: string, model: string, agoDays: number): ListedAgent {
+  return {
+    id,
+    planId: USAGE_ALERTS.taskId,
+    model,
+    effort: "high",
+    title,
+    createdAt: NOW - agoDays * DAY,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+    workspaceId: WORKSPACE.ACME,
+    repository: "acme/relay",
+    settledAt: NOW - agoDays * DAY + HOUR,
+  };
+}
+
+/** The agents Memory's page names: one on Claude, one on Codex, so each wears its harness's mark. */
+const MEMORY_AGENTS: readonly ListedAgent[] = [
+  memoryAgent(
+    MEMORY_AGENT.CLAUDE,
+    "feat(service): usage alerts at 80%",
+    "anthropic/claude-opus-5.5",
+    2,
+  ),
+  memoryAgent(
+    MEMORY_AGENT.CODEX,
+    "fix(billing): retry the nightly export",
+    "openai/gpt-6.1-sol",
+    10,
+  ),
+];
+
 /**
  * The workspace's memories, the most recently kept first, as the service
  * lists them: some used by agents often, two kept in the last week, and two
@@ -449,7 +493,7 @@ const MEMORIES: readonly MemorySummary[] = [
   memory(1, "Migrations are generated with `pnpm db:generate`, never written by hand.", MAYA, 1, {
     source: {
       ...USAGE_ALERTS,
-      agentId: "5d9f3b7c-2e4a-4f6b-8c0d-3e5f7a9b1c2d",
+      agentId: MEMORY_AGENT.CLAUDE,
       messageId: "6e0a4c8d-3f5b-4a7c-9d1e-4f6a8b0c2d3e",
     },
     recalls30d: 31,
@@ -467,7 +511,7 @@ const MEMORIES: readonly MemorySummary[] = [
     },
   ),
   memory(4, "The billing export runs nightly at 02:00 UTC and must finish by 04:00.", THEO, 9, {
-    source: { ...USAGE_ALERTS, agentId: "5d9f3b7c-2e4a-4f6b-8c0d-3e5f7a9b1c2d", messageId: null },
+    source: { ...USAGE_ALERTS, agentId: MEMORY_AGENT.CODEX, messageId: null },
     recalls30d: 12,
     lastRecalledAt: NOW - 3 * DAY,
   }),

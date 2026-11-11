@@ -14,11 +14,18 @@ import {
 } from "@repo/host/app-state";
 import type { PortActKind, PortActResult } from "@repo/host/contract";
 import { ReplayUnmask, showsInReplay } from "@repo/ui/session-replay-marks";
+import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { stateWith } from "../testing/app-state.js";
+import {
+  composerEditor,
+  editorBundleLanded,
+  installEditorLayout,
+  writeInComposer,
+} from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
 import { MemorySection } from "./memory-page.js";
@@ -26,8 +33,8 @@ import { MemorySection } from "./memory-page.js";
 /**
  * Settings › Memory over a bridge answering as the host would: the memories
  * of the workspace Settings shows are held for that workspace and drawn as
- * the host lays them on the document, listed in the service's order with
- * their words whole and whose words they are; Delete is offered from a
+ * the host lays them on the document, a row each with their words whole;
+ * Delete is offered from a
  * memory's ⋯, unavailable on one the reader may not forget, asks first in
  * the confirm dialog, and the memory leaves the list as the host draws it
  * gone; several chosen are forgotten one after another on one question; a
@@ -35,7 +42,8 @@ import { MemorySection } from "./memory-page.js";
  * another workspace is held for its own memories; and a read that fails
  * offers to try again. The memories agents recall most stand first, one no
  * agent was handed in the window says so, and Edit saves a memory's words
- * in place. Synthetic workspaces, members, and memories.
+ * from the field it opens in their place, which goes with a memory deleted
+ * while it saves. Synthetic workspaces, members, and memories.
  */
 
 const READER = "user-reader";
@@ -250,7 +258,12 @@ async function mount(
   };
 }
 
-const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>(".memory-row")];
+beforeAll(() => {
+  installEditorLayout();
+  return Effect.runPromise(editorBundleLanded);
+});
+
+const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>("tbody tr[data-index]")];
 
 const words = (page: HTMLElement) =>
   rows(page).map((row) => row.querySelector(".memory-text")?.textContent);
@@ -267,10 +280,33 @@ const button = (within: Element, label: string) =>
 const dialog = () =>
   document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("no question");
 
-/** A memory row's own press, which ⌘ chooses. */
-const pressOf = (page: HTMLElement, memory: MemorySummary) =>
-  rowOf(page, memory).querySelector<HTMLButtonElement>("[data-card-press]") ??
-  assert.fail("no press on the row");
+/** A memory row's box, which chooses it. */
+const boxOf = (page: HTMLElement, memory: MemorySummary) =>
+  rowOf(page, memory).querySelector<HTMLElement>('[role="checkbox"]') ??
+  assert.fail("no box on the row");
+
+/** The field a memory's words are written in, where one stands. */
+const field = (page: HTMLElement) => page.querySelector<HTMLElement>(".memory-field");
+
+/** Waits for the field's editor to run, then writes `words` over what it holds. */
+async function writeInField(page: HTMLElement, words: string): Promise<void> {
+  const box = () => field(page) ?? assert.fail("no field");
+  // Note that the editor lands from its own bundle, which a render inside `act` lays in.
+  await vi.waitFor(async () => {
+    await settle();
+    assert.ok(composerEditor(box()).editor !== undefined, "the editor runs");
+  });
+  writeInComposer(box(), words);
+}
+
+/** Presses the field's own `label`, its Cancel or its Save. */
+function pressInField(page: HTMLElement, label: string): void {
+  const press =
+    [...page.querySelectorAll<HTMLButtonElement>(".memory-field button")].find(
+      (each) => (each.getAttribute("aria-label") ?? each.textContent) === label,
+    ) ?? assert.fail(`no ${label} in the field`);
+  act(() => press.click());
+}
 
 /** Opens a memory's ⋯. */
 function openMenu(page: HTMLElement, memory: MemorySummary): void {
@@ -307,7 +343,7 @@ async function searchFor(page: HTMLElement, query: string): Promise<void> {
   await settle();
 }
 
-test("what Vespin kept in the workspace is held for it and listed in the service's order, each memory's words whole and named by whose they are", async () => {
+test("what Vespin kept in the workspace is held for it and drawn a row each, its words whole and masked", async () => {
   const { page } = await mount();
 
   assert.deepEqual(
@@ -317,10 +353,6 @@ test("what Vespin kept in the workspace is held for it and listed in the service
     [{ workspaceId: ACME.id }],
   );
   assert.deepEqual(words(page), [DEPLOYS.text, TESTS.text]);
-  const keeper = (memory: MemorySummary) =>
-    rowOf(page, memory).querySelector(".ui-comment-head")?.textContent ?? "";
-  assert.match(keeper(DEPLOYS), /^You/u);
-  assert.match(keeper(TESTS), /^Dean/u);
   assert.equal(
     showsInReplay(rowOf(page, DEPLOYS).querySelector(".memory-text")),
     false,
@@ -364,18 +396,14 @@ test("Delete asks first, then deletes the memory for good and lists what the hos
 
 test("a memory a search hid comes back unchosen, so a later act on what is chosen leaves it be", async () => {
   const { page } = await mount();
-  act(() => {
-    pressOf(page, DEPLOYS).dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true }),
-    );
-  });
+  act(() => boxOf(page, DEPLOYS).click());
 
   await searchFor(page, "store");
   await searchFor(page, "");
 
   // Note that the element is checked as a yes or no, because a failure's diff of an element would print the whole document.
   assert.ok(page.querySelector('[role="toolbar"]') === null, "nothing stands chosen");
-  assert.equal(pressOf(page, DEPLOYS).getAttribute("data-selected"), null);
+  assert.equal(boxOf(page, DEPLOYS).getAttribute("aria-checked"), "false");
 });
 
 test("a forget that fails says so in the dialog and keeps the memory listed", async () => {
@@ -425,13 +453,7 @@ test("several memories chosen are forgotten on one question, one after another, 
   stored = { [ACME.id]: [DEPLOYS, pricing, TESTS] };
   const { page } = await mount();
 
-  for (const memory of [DEPLOYS, pricing, TESTS]) {
-    act(() => {
-      pressOf(page, memory).dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true }),
-      );
-    });
-  }
+  for (const memory of [DEPLOYS, pricing, TESTS]) act(() => boxOf(page, memory).click());
   act(() => button(page.querySelector('[role="toolbar"]') ?? page, "Delete").click());
   assert.match(
     dialog().textContent ?? "",
@@ -500,7 +522,8 @@ test("while the memories are read the page says Reading, which is neither its fa
   const { page } = await mount();
 
   const status = page.querySelector('[role="status"]') ?? assert.fail("no reading region");
-  assert.equal(status.textContent, "Reading Vespin's memory");
+  // Note that the skeleton draws the table's own headings, hidden from a reader, after the words a reader hears.
+  assert.match(status.textContent ?? "", /^Reading Vespin's memory/u);
   assert.doesNotMatch(page.textContent ?? "", /could not be read|hasn't remembered/u);
 });
 
@@ -508,7 +531,7 @@ test("before the workspaces are read the page says Reading, and does not say non
   const { page } = await mount(true, null);
 
   const status = page.querySelector('[role="status"]') ?? assert.fail("no reading region");
-  assert.equal(status.textContent, "Reading your workspaces");
+  assert.match(status.textContent ?? "", /^Reading your workspaces/u);
   assert.doesNotMatch(page.textContent ?? "", /none is open/u);
   assert.equal(sent.length, 0, "no workspace is a memory read of none");
 });
@@ -545,16 +568,16 @@ test("the memories agents recalled most in the last 30 days stand first, then th
   assert.deepEqual(words(page), [flags.text, pricing.text, DEPLOYS.text, TESTS.text]);
 });
 
-test("a memory older than the recall window that no agent was handed in it reads Unused and Never recalled", async () => {
+test("a memory older than the recall window that no agent was handed in it reads Unused, no recalls, and Never", async () => {
   vi.useFakeTimers({ toFake: ["Date"], now: Date.UTC(2026, 10, 20, 12) });
   const { page } = await mount();
 
-  const said = rowOf(page, DEPLOYS).textContent ?? "";
-  assert.match(said, /Unused/u);
-  assert.match(said, /Never recalled/u);
+  const cells = [...rowOf(page, DEPLOYS).querySelectorAll("td")].map((cell) => cell.textContent);
+  assert.match(cells.join(" | "), /Unused/u);
+  assert.deepEqual(cells.slice(2, 4), ["—", "Never"]);
 });
 
-test("Edit saves the memory's new words in place of the memory it edits", async () => {
+test("Edit opens the memory's words in their place and saves the new words in place of the memory it edits", async () => {
   const corrected = "Deployments go out from main through Vercel.";
   saveAnswer = (save) => ({
     outcome: MEMORY_SAVED.CORRECTED,
@@ -564,17 +587,9 @@ test("Edit saves the memory's new words in place of the memory it edits", async 
 
   openMenu(page, DEPLOYS);
   chooseMenuItem("Edit");
-  const editor = document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("no editor");
-  const field = editor.querySelector("textarea") ?? assert.fail("no field");
-  assert.equal(field.value, DEPLOYS.text);
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
-      field,
-      corrected,
-    );
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  act(() => button(editor, "Save").click());
+  await writeInField(page, corrected);
+  assert.ok(document.querySelector('[role="dialog"]') === null, "no dialog opens");
+  pressInField(page, "Save");
   await settle();
 
   assert.deepEqual(
@@ -583,33 +598,28 @@ test("Edit saves the memory's new words in place of the memory it edits", async 
       .map((request) => request.payload),
     [{ workspaceId: ACME.id, text: corrected, replaces: DEPLOYS.id }],
   );
+  await vi.waitFor(() =>
+    assert.ok(field(page) === null, "the field goes once the words are taken"),
+  );
 });
 
-test("an edit whose memory is deleted while it saves stays closed, never reopening as an empty Add memory", async () => {
+test("an edit whose memory is deleted while it saves goes with it, and its answer opens no field again", async () => {
   const answering = Promise.withResolvers<void>();
   saveHeld = answering.promise;
   saveAnswer = () => ({ failure: MEMORY_SAVE_FAILURE.NOT_FOUND });
   const { page } = await mount();
   openMenu(page, DEPLOYS);
   chooseMenuItem("Edit");
-  const editor = document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("no editor");
-  const field = editor.querySelector("textarea") ?? assert.fail("no field");
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
-      field,
-      "Deployments go out from main.",
-    );
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  act(() => button(editor, "Save").click());
+  await writeInField(page, "Deployments go out from main.");
+  pressInField(page, "Save");
   await settle();
 
   // Another member deletes the memory while the save is out.
   act(() => lay(ACME.id, { rows: [TESTS] }));
-  // Note that the card is checked as a yes or no, because a failure's diff of an element would print the whole document.
-  await vi.waitFor(() => assert.ok(document.querySelector('[role="dialog"]') === null, "put away"));
+  // Note that the field is checked as a yes or no, because a failure's diff of an element would print the whole document.
+  await vi.waitFor(() => assert.ok(field(page) === null, "put away"));
   answering.resolve();
   await settle();
 
-  assert.ok(document.querySelector('[role="dialog"]') === null, "no card stands");
+  assert.ok(field(page) === null, "no field stands");
 });
