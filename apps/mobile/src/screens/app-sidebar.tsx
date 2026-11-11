@@ -91,9 +91,13 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
  * Tasks tab beside its list, as a link to it does. The account's photo and
  * Settings both open Settings, the photo where the iPhone stands it and
  * Settings at the foot, where an iPad sidebar stands it; New task opens its
- * sheet. A narrower regular window, a portrait iPad's or the unfolded Duo's,
- * keeps the system's tab bar, and the list stands first under the photo and
- * the switcher, as the split view stood before.
+ * sheet. The switcher heads the sidebar's list rather than its bar, as
+ * Notion's iPad sidebar names its workspace, because the bar's middle
+ * overlapped the photo in a column that narrow, and a second leading item
+ * folds into the bar's overflow. A narrower regular window, a portrait
+ * iPad's or the unfolded Duo's, keeps the system's tab bar, and the list
+ * stands first under the photo and the switcher, as the split view stood
+ * before.
  */
 export function useAppSidebar(
   place: SidebarPlace,
@@ -127,6 +131,7 @@ export function useAppSidebar(
     return {
       sidebar: (
         <RowList look={LIST_LOOK.SIDEBAR} selected={selected} onSelect={pick}>
+          {header === undefined ? null : <ListSection>{header}</ListSection>}
           <ListSection>
             {PLACES.map((each) => (
               <GroupRow
@@ -144,7 +149,6 @@ export function useAppSidebar(
       ),
       sidebarBar: {
         account,
-        header,
         action: { ...NEW_TASK, onPress: () => router.push("/start-task") },
         foot: [{ ...SETTINGS, onPress: () => openSettings() }],
       },
