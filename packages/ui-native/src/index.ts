@@ -84,7 +84,16 @@ export {
   pullRequestLook,
   REVIEW_LOOK,
 } from "./pull-request-look.js";
-export { ConfirmAsk, MarkRow, PullRequestHead, WriteNoteRow } from "./pull-request-page.js";
+export {
+  ConfirmAsk,
+  MarkRow,
+  PullRequestHead,
+  WORDS_ASK_KIND,
+  WordsAsk,
+  type WordsAskAct,
+  type WordsAskKind,
+  WriteNoteRow,
+} from "./pull-request-page.js";
 export { RemindSheet } from "./remind-sheet.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./row-preview.js";
@@ -95,6 +104,8 @@ export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,
   ActionRow,
+  MemberRow,
+  type MemberRowAct,
   type PickOption,
   PickRows,
   PUSH_ROW_GOES,

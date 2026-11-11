@@ -86,7 +86,15 @@ import {
 } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import {
+  INVITATION_ROLE,
+  type WorkspaceInvitation,
+} from "@repo/features/workspace-invitation-wire";
+import {
+  WORKSPACE_ROLE,
+  type Workspace,
+  type WorkspaceMembersAnswer,
+} from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
@@ -871,6 +879,36 @@ const FIXTURE_WORKSPACE: Workspace = {
   ],
 };
 
+/** The fixture workspace's people, as Settings › Workspace lists them: the account, its owner, an admin, and a member. */
+const MEMBERS: WorkspaceMembersAnswer = {
+  members: [
+    { userId: ADA.userId, name: ADA.name, email: "ada@example.com", role: WORKSPACE_ROLE.OWNER },
+    {
+      userId: "user-grace",
+      name: "Grace Hopper",
+      email: "grace@example.com",
+      role: WORKSPACE_ROLE.ADMIN,
+    },
+    {
+      userId: "user-alan",
+      name: "Alan Turing",
+      email: "alan@example.com",
+      role: WORKSPACE_ROLE.MEMBER,
+    },
+  ],
+};
+
+/** The fixture workspace's one pending invitation, a week from running out. */
+const INVITATIONS: readonly WorkspaceInvitation[] = [
+  {
+    id: "invitation-katherine",
+    email: "katherine@example.com",
+    role: INVITATION_ROLE.MEMBER,
+    expiresAt: new Date(LANDED + 7 * DAY).toISOString(),
+    acceptUrl: "https://vespin.dev/accept-invitation/invitation-katherine",
+  },
+];
+
 /**
  * A team the fixture's account is a member of beside its own, where a list
  * names none, so the iOS app's workspace switcher has another to list and
@@ -1351,6 +1389,8 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
+    [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
     ),

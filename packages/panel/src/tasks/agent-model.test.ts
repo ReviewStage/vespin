@@ -25,7 +25,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
-import { effortFor } from "@repo/features/model-effort";
+import { choiceOn, effortFor } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
@@ -46,7 +46,6 @@ import {
   checkoutCommand,
   choiceLabel,
   choiceModelId,
-  choiceOn,
   continueFailureNote,
   dockedPullRequests,
   finishedReplyLead,

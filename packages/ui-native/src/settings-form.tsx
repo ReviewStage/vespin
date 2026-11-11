@@ -5,6 +5,7 @@ import {
   HStack,
   Image,
   LabeledContent,
+  Menu,
   Picker,
   Spacer,
   Button as SwiftUIButton,
@@ -13,7 +14,9 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityIdentifier,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   contentShape,
@@ -58,19 +61,31 @@ function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   return <Image systemName={goes} size={GOES_MARK_SIZE} color={colors.TEXT_MUTED} />;
 }
 
+/** The row's other words, joined as VoiceOver reads a value after its label; none where there are none. */
+function spokenValue(...parts: readonly (string | undefined)[]) {
+  const said = parts.filter((part) => part !== undefined && part.length > 0).join(", ");
+  return said.length === 0 ? [] : [accessibilityValue(said)];
+}
+
 /**
  * A row's content made one press, as a Form's navigation row is: the whole
  * row takes the press, its words keep their own ink rather than the tint a
- * button lends, and VoiceOver hears it by its label.
+ * button lends, and VoiceOver hears it by its name, then its other words as
+ * its value, so a flow still finds it by the name alone.
  */
 function PressedRow({
   label,
+  value,
   onPress,
   children,
+  testId,
 }: {
   readonly label: string;
+  /** The row's other words, read after its name. */
+  readonly value?: readonly (string | undefined)[] | undefined;
   readonly onPress: () => void;
   readonly children: ReactElement;
+  readonly testId?: string | undefined;
 }) {
   const colors = useColors();
   return (
@@ -80,7 +95,9 @@ function PressedRow({
         buttonStyle("plain"),
         contentShape(shapes.rectangle()),
         accessibilityLabel(label),
+        ...spokenValue(...(value ?? [])),
         listRowBackground(colors.SURFACE),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
     >
       {children}
@@ -168,7 +185,7 @@ export function AccountRow({ name, email, picture, detail, onPress }: AccountRow
   return onPress === undefined ? (
     face
   ) : (
-    <PressedRow label={name} onPress={onPress}>
+    <PressedRow label={name} value={[email, detail]} onPress={onPress}>
       {face}
     </PressedRow>
   );
@@ -182,6 +199,8 @@ type PushRowProps = {
   readonly detail?: string | undefined;
   readonly goes: PushRowGoes;
   readonly onPress: () => void;
+  /** The name a flow finds the row by, where its words are not its own, such as a workspace named for its owner. */
+  readonly testId?: string | undefined;
 };
 
 /**
@@ -189,10 +208,10 @@ type PushRowProps = {
  * end, or out of the app, with the arrow out, its words in the ink and what
  * stands at its end in the muted ink.
  */
-export function PushRow({ label, symbol, detail, goes, onPress }: PushRowProps) {
+export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRowProps) {
   const colors = useColors();
   return (
-    <PressedRow label={label} onPress={onPress}>
+    <PressedRow label={label} value={[detail]} onPress={onPress} testId={testId}>
       <HStack spacing={SPACE.ROW}>
         {symbol === undefined ? null : (
           <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
@@ -300,5 +319,76 @@ export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
         </Text>
       ))}
     </Picker>
+  );
+}
+
+/** One thing a member's menu does to them. */
+export interface MemberRowAct {
+  readonly label: string;
+  /** Whether it takes them out of something, such as Remove from workspace, which the system draws red. */
+  readonly destructive?: boolean | undefined;
+  readonly onPress: () => void;
+}
+
+type MemberRowProps = {
+  readonly name: string;
+  readonly email: string;
+  readonly picture?: string | undefined;
+  /** Their role, in the words the panel says it: Owner, Admin, Member; none for an address invited, whose line says it. */
+  readonly role?: string | undefined;
+  /** The badge beside the reader's own name, such as "You"; none on anyone else's row. */
+  readonly badge?: string | undefined;
+  /** What the reader may do to them; a row with none takes no press. */
+  readonly acts: readonly MemberRowAct[];
+};
+
+/**
+ * A member of a workspace: their photo or letters, their name with the
+ * reader's own badge, their address, and their role at the end in the muted
+ * ink. Where the reader may act on them, a press opens the system's menu of
+ * those acts, as a contact's row opens one.
+ */
+export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
+  const colors = useColors();
+  const face = (
+    <HStack spacing={SPACE.ROW}>
+      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <VStack alignment="leading" spacing={1}>
+        <Text modifiers={[foregroundStyle(colors.TEXT)]}>
+          {badge === undefined ? name : `${name} · ${badge}`}
+        </Text>
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {email}
+        </Text>
+      </VStack>
+      <Spacer />
+      {role === undefined ? null : (
+        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
+      )}
+    </HStack>
+  );
+  if (acts.length === 0) {
+    return <VStack modifiers={[listRowBackground(colors.SURFACE)]}>{face}</VStack>;
+  }
+  return (
+    <Menu
+      label={face}
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        accessibilityLabel(badge === undefined ? name : `${name}, ${badge}`),
+        ...spokenValue(email, role),
+      ]}
+    >
+      {acts.map((act) => (
+        <SwiftUIButton
+          key={act.label}
+          label={act.label}
+          role={act.destructive === true ? "destructive" : "default"}
+          onPress={act.onPress}
+        />
+      ))}
+    </Menu>
   );
 }

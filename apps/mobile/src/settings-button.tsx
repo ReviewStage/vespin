@@ -10,16 +10,26 @@ import { appStateQuery } from "./host/app-state-query.js";
 /** What the photo is heard as: where it goes, as the gear it replaced was. */
 const SETTINGS = "Settings";
 
-/** Settings' route: a sheet over the tabs, a form sheet in a regular window. */
-const SETTINGS_ROUTE = "/settings";
+/** Settings' routes: its main list, a sheet over the tabs and a form sheet in a regular window, and the pages a place elsewhere opens it on. */
+export const SETTINGS_ROUTE = {
+  MAIN: "/settings",
+  ACCOUNT: "/settings/account",
+  AGENTS: "/settings/agents",
+  /** The workspace the app works in, as the workspace switcher's Workspace settings opens it. */
+  WORKSPACE: "/settings/workspace",
+} as const;
+
+export type SettingsRoute = (typeof SETTINGS_ROUTE)[keyof typeof SETTINGS_ROUTE];
 
 /**
  * The one way to open Settings, from the account's photo, the iPad's menu
- * bar's ⌘, (`modules/menu-commands/`), or anywhere else that offers it.
+ * bar's ⌘, (`modules/menu-commands/`), the workspace switcher, or anywhere
+ * else that offers it: on its main list, or on one of its pages.
  */
-export function useOpenSettings(): () => void {
+export function useOpenSettings(): (route?: SettingsRoute) => void {
   const router = useRouter();
-  return () => router.push(SETTINGS_ROUTE);
+  // Note that a page is pushed with its stack's anchor, so Settings opened on Workspace stands its main list under it and Back goes there.
+  return (route = SETTINGS_ROUTE.MAIN) => router.push(route, { withAnchor: true });
 }
 
 /** The signed-in account as its photo button, opening Settings as a sheet over the tabs; none while nobody is signed in. */
@@ -31,7 +41,7 @@ export function useSettingsAccount(): BarAccount | undefined {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
     label: SETTINGS,
-    onPress: open,
+    onPress: () => open(),
   };
 }
 
