@@ -755,8 +755,15 @@ export const inboxPostInputSchema = EffectSchema.Struct({
 
 export type InboxPost = typeof inboxPostInputSchema.Type;
 
-/** What a read's tool part carries as its input: nothing, since an agent reads its own items alone. */
-export const inboxReadInputSchema = EffectSchema.Struct({});
+/**
+ * What a read's tool part carries as its input: nothing for the agent's own
+ * threads, or one other agent of its workspace by `agentId`, or one task of
+ * it by `taskId`, whose threads it reads and never writes.
+ */
+export const inboxReadInputSchema = EffectSchema.Struct({
+  agentId: EffectSchema.optionalKey(wireUuidSchema),
+  taskId: EffectSchema.optionalKey(wireUuidSchema),
+});
 
 /** What a form's field holds once filled: words, a number, an option, or yes or no, by the field's type. */
 const inboxFieldValueSchema = EffectSchema.Union([
