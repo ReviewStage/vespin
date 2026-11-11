@@ -6,7 +6,6 @@ import {
   AskNote,
   BAR_TITLE,
   Composer,
-  DOCK_ROOM,
   EmptyState,
   GlassDock,
   PATH_PART,
@@ -97,7 +96,6 @@ export function CommentThreadScreen() {
               repository={task?.repository}
               onOpenLink={openLink}
               standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
-              footRoom={DOCK_ROOM}
             />
           </Screen>
         </GlassDock>

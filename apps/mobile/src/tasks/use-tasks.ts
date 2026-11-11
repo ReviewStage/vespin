@@ -230,6 +230,39 @@ export interface TasksListing {
   readonly rename: TaskWrites["rename"];
   /** Asks first whether to delete a task for good, as the panel's Permanently delete does. */
   readonly askDelete: (task: TaskSummary) => void;
+  /** A task at a glance, as its row's preview draws it: how many of its threads wait on the reader, and its agents not archived, as its Overview lists them. */
+  readonly glanceOf: (taskId: string) => TaskGlance;
+}
+
+/** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
+export interface TaskGlance {
+  readonly waiting: number;
+  readonly agents: readonly ListedAgent[];
+}
+
+/** The agents not archived, by the task they work on, read once for every row. */
+function agentsByTask(view: TasksView | undefined): ReadonlyMap<string, readonly ListedAgent[]> {
+  const byTask = new Map<string, ListedAgent[]>();
+  for (const agent of view?.taskAgents ?? []) {
+    if (agent.archivedAt !== undefined) continue;
+    const onTask = byTask.get(agent.planId);
+    if (onTask === undefined) byTask.set(agent.planId, [agent]);
+    else onTask.push(agent);
+  }
+  return byTask;
+}
+
+/** A task's agents not archived, in the order its Overview lists them: those waiting on the reader first. */
+function taskAgentsInOrder(
+  byTask: ReadonlyMap<string, readonly ListedAgent[]>,
+  taskId: string,
+  waitingByAgent: ReadonlyMap<string, number>,
+): readonly ListedAgent[] {
+  return inAgentListOrder(
+    byTask.get(taskId) ?? [],
+    (agent) => agent,
+    (agent) => (waitingByAgent.get(agent.id) ?? 0) > 0,
+  );
 }
 
 /** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
@@ -282,7 +315,24 @@ export function useTasksListing(search: string): ReadListing {
       );
     };
     const agentsWorking = agentsWorkingIn(view, tasks);
-    return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin, rename };
+    // Note that the agents are grouped by task once, since every row's preview reads its own.
+    const byTask = agentsByTask(view);
+    const glanceOf = (taskId: string): TaskGlance => ({
+      waiting: waiting.byTask.get(taskId) ?? 0,
+      agents: taskAgentsInOrder(byTask, taskId, waiting.byAgent),
+    });
+    return {
+      tree,
+      found,
+      workspace,
+      lookOf,
+      setStatus,
+      agentsWorking,
+      markRead,
+      pin,
+      rename,
+      glanceOf,
+    };
   }, [acts, listed, held, view, workspace, readerId, waiting, search, rename]);
 }
 
@@ -360,14 +410,9 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   });
   return useMemo(() => {
     if (task === undefined) return undefined;
-    const onTask = (view?.taskAgents ?? []).filter(
-      (agent) => agent.planId === task.id && agent.archivedAt === undefined,
+    const agents = taskAgentsInOrder(agentsByTask(view), task.id, waiting.byAgent).map((agent) =>
+      agentLine(agent, waiting.byAgent, view),
     );
-    const agents = inAgentListOrder(
-      onTask,
-      (agent) => agent,
-      (agent) => (waiting.byAgent.get(agent.id) ?? 0) > 0,
-    ).map((agent) => agentLine(agent, waiting.byAgent, view));
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
     return {

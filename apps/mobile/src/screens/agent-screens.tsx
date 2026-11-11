@@ -32,7 +32,6 @@ import {
   Composer,
   type ComposerMenu,
   ConfirmAsk,
-  DOCK_ROOM,
   GlassDock,
   HeldCallBanner,
   HintPickRows,
@@ -499,7 +498,6 @@ export function AgentScreen() {
               ? []
               : [{ label: MERGE_WORD, onPress: () => setMerging(item.number) }]
           }
-          footRoom={DOCK_ROOM}
         />
       </GlassDock>
       {asked === undefined ? null : (

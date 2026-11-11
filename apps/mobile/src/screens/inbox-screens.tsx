@@ -1,6 +1,7 @@
 // inbox-screens.tsx -- the Inbox's list and its thread: the Stack's two screens in a compact window, one split view in a regular one.
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
@@ -46,7 +47,6 @@ import {
 import {
   BAR_TITLE,
   type BarMenu,
-  DOCK_ROOM,
   EmptyState,
   GlassDock,
   LIST_LOOK,
@@ -54,6 +54,7 @@ import {
   ListRow,
   type MarkdownVideo,
   PATH_PART,
+  previewMessages,
   ROW_ACTION_TONE,
   RowList,
   type Scope,
@@ -63,6 +64,7 @@ import {
   THREAD_MEDIA,
   type ThreadMessage,
   ThreadPage,
+  ThreadPreview,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -112,6 +114,9 @@ const NO_TITLES: ReadonlyMap<string, string> = new Map();
 /** What an agent is called where the document holds no title for it yet. */
 const UNTITLED_AGENT = "Agent";
 
+/** How many of a thread's newest messages its row reads for its preview: more than the preview draws, since a file sent alone says nothing there. */
+const PREVIEW_TAIL = 6;
+
 /** What the list's search says where it finds nothing. */
 function noMatchWords(search: string): string {
   return `No items match “${search}”.`;
@@ -126,6 +131,7 @@ type InboxRowsProps = {
   readonly onRefresh: () => Promise<void>;
   readonly onMark: (itemId: string, unread: boolean) => void;
   readonly onRemind: (item: InboxItem) => void;
+  readonly onResolve: (item: InboxItem) => void;
 };
 
 /**
@@ -133,7 +139,8 @@ type InboxRowsProps = {
  * thread's title, and the line of what it asks led by its glyph, with the
  * teammate it waits on before the time, or when its reminder comes back in
  * the time's place; a swipe from the leading edge marks it read or unread, a
- * swipe from the trailing edge opens Remind me, and a long press offers both.
+ * swipe from the trailing edge resolves it or opens Remind me, and a long
+ * press lifts its preview over the same acts.
  */
 function InboxRows({
   look,
@@ -144,6 +151,7 @@ function InboxRows({
   onRefresh,
   onMark,
   onRemind,
+  onResolve,
 }: InboxRowsProps) {
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
@@ -154,6 +162,7 @@ function InboxRows({
           readerId={readerId}
           onMark={onMark}
           onRemind={onRemind}
+          onResolve={onResolve}
         />
       ))}
     </RowList>
@@ -164,28 +173,59 @@ function InboxRows({
  * One Inbox item's row: the task's ring and name, the thread's title, and
  * the line of what it asks led by its glyph, with the teammate it waits on
  * before the time, and when its reminder comes due; a swipe from the leading
- * edge marks it read or unread, and one from the trailing edge opens Remind
- * me. The one row every list of Inbox items draws, the Search tab's among them.
+ * edge marks it read or unread, and one from the trailing edge resolves it
+ * while it stands open, which a full swipe runs, or opens Remind me. A long
+ * press lifts its preview, the thread's newest messages, over the same acts.
+ * The one row every list of Inbox items draws, the Search tab's among them.
  */
 export function InboxRow({
   listed,
   readerId,
   onMark,
   onRemind,
+  onResolve,
 }: {
   readonly listed: InboxListed;
   readonly readerId: string | undefined;
   readonly onMark: (itemId: string, unread: boolean) => void;
   /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
   readonly onRemind: (item: InboxItem) => void;
+  /** Resolves the open thread, which a full swipe from the trailing edge runs. */
+  readonly onResolve: (item: InboxItem) => void;
 }) {
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
+  const titles = useAgentTitles();
+  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const title = cardTitle(item.title);
+  // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
+  const messages = useMemo(
+    () =>
+      previewMessages(
+        inboxThreadMessages(
+          item.thread === undefined ? item : { ...item, thread: item.thread.slice(-PREVIEW_TAIL) },
+          agentName,
+          readerId,
+        ),
+      ),
+    [item, agentName, readerId],
+  );
+  const resolve =
+    item.status === INBOX_STATUS.OPEN
+      ? [
+          {
+            label: RESOLVE,
+            symbol: "checkmark.circle",
+            tone: ROW_ACTION_TONE.ACCENT,
+            onPress: () => onResolve(item),
+          } as const,
+        ]
+      : [];
   return (
     <ListRow
       id={item.id}
-      title={cardTitle(item.title)}
+      title={title}
       task={{
         name: holder.task.name,
         status: holder.task.status,
@@ -198,6 +238,7 @@ export function InboxRow({
       at={item.updatedAt}
       due={item.remindAt}
       trailingActions={[
+        ...resolve,
         { ...REMIND_ME, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => onRemind(item) },
       ]}
       leadingActions={[
@@ -208,6 +249,13 @@ export function InboxRow({
           onPress: () => onMark(item.id, !unread),
         },
       ]}
+      preview={
+        <ThreadPreview
+          title={title}
+          task={{ name: holder.task.name, status: holder.task.status }}
+          messages={messages}
+        />
+      }
     />
   );
 }
@@ -455,9 +503,7 @@ function ThreadDetail({
           }}
         />
       }
-      {...(inStack
-        ? { footRoom: DOCK_ROOM }
-        : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
+      {...(inStack ? {} : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
     />
   );
   if (!inStack) return page;
@@ -593,6 +639,7 @@ function InboxStackList() {
               onRefresh={acts.refresh}
               onMark={acts.mark}
               onRemind={remind.open}
+              onResolve={acts.resolve}
             />
           )}
         </ScopePills>
@@ -643,6 +690,7 @@ function InboxSplitScreen({
                     onRefresh={acts.refresh}
                     onMark={acts.mark}
                     onRemind={remind.open}
+                    onResolve={acts.resolve}
                   />
                 )}
               </ScopePills>
@@ -650,7 +698,7 @@ function InboxSplitScreen({
             bar: {
               title: INBOX_TITLE,
               menu,
-              search: { placeholder: SEARCH_INBOX, onChange: setSearch },
+              search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
             },
           })}
           detail={
@@ -661,8 +709,8 @@ function InboxSplitScreen({
             )
           }
         />
-        {sidebar.ask}
       </Screen>
+      {sidebar.ask}
       {remind.sheet}
     </>
   );

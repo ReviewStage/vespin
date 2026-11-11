@@ -40,17 +40,18 @@ const TONE_ROLE = {
 } as const satisfies Record<StatusTone, keyof BrandColors>;
 
 /**
- * A theme as Increase Contrast reads it, from the brand's own stronger roles
- * rather than colors of its own: the quiet ink as the body's, the hairline
- * as the strong edge, and danger's ink as danger's words, as the system's
- * secondary labels and separators darken where the reader asks.
+ * A theme as Increase Contrast reads it, from the brand's own roles rather
+ * than colors of its own: the quiet ink as the body's, the hairline as the
+ * quiet ink, which holds WCAG's 3:1 for a boundary on every ground where the
+ * brand's strong edge does not, and danger's ink as danger's words, as the
+ * system's secondary labels and separators darken where the reader asks.
  */
 function strongerContrast(colors: BrandColors): BrandColors {
   return {
     ...colors,
     TEXT_MUTED: colors.TEXT_BODY,
     SIDEBAR_INK: colors.TEXT_BODY,
-    CHIP_EDGE: colors.CHIP_EDGE_STRONG,
+    CHIP_EDGE: colors.TEXT_MUTED,
     DANGER: colors.DANGER_TEXT,
   };
 }

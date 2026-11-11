@@ -17,6 +17,7 @@ import {
   ActionRow,
   ConfirmAsk,
   ListSection,
+  rejectionWords,
   Screen,
   SettingsForm,
   ToggleRow,
@@ -48,6 +49,9 @@ export default function AccountScreen() {
   const signOut = useAsyncAction(() => undefined);
   const deletion = useAsyncAction(accountDeleteRefusalWords);
   const supportPress = useAsyncAction(() => undefined);
+  const usage = useAsyncAction(rejectionWords);
+  // Note that the system's switch keeps the turn a person made, so a refused write redraws it from the stored choice.
+  const [usageRound, setUsageRound] = useState(0);
   const [asking, setAsking] = useState(false);
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return null;
   // Note that the phone is unregistered first, while the account's credential still stands, so no push of the account reaches a phone signed out of it; the unregister's own deadline bounds the wait.
@@ -76,15 +80,22 @@ export default function AccountScreen() {
               detail={`Signed in with ${SOCIAL_PROVIDER_LABEL[account.provider]}`}
             />
           </ListSection>
-          <ListSection title="Privacy" footer={support?.words}>
+          <ListSection title="Privacy" footer={usage.refusal ?? support?.words}>
             {settings === undefined ? null : (
               <ToggleRow
+                key={usageRound}
                 label="Share usage data"
                 on={settings.usageData === true}
                 onChange={(on) => {
-                  acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }).catch(
-                    (error: unknown) => console.error("The setting was not saved.", error),
-                  );
+                  void usage
+                    .run(() =>
+                      acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }).then(
+                        () => undefined,
+                      ),
+                    )
+                    .then((landed) => {
+                      if (!landed) setUsageRound((round) => round + 1);
+                    });
                 }}
               />
             )}

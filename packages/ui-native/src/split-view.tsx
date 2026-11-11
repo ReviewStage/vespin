@@ -23,6 +23,9 @@ import { AccountBarItem, type BarAccount } from "./account-button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { PathTitle } from "./thread-page.js";
 
+/** What the first column holds, so it is drawn afresh as that changes. */
+const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
+
 /** An act a bar holds by its symbol alone, such as Settings. */
 export type BarAction = {
   readonly label: string;
@@ -55,9 +58,11 @@ export type BarMenu = {
   readonly submenus?: readonly BarMenu[] | undefined;
 };
 
-/** A list's search, the system's field in the sidebar: what it says before anything is typed, and what is called with each change. */
+/** A list's search, the system's field over its column: what it says before anything is typed, what is typed now, and what is called with each change. */
 export type BarSearch = {
   readonly placeholder: string;
+  /** The query the list is filtered by, which the field starts from wherever the list stands, so a list moved to another column keeps its words. */
+  readonly text: string;
   readonly onChange: (text: string) => void;
 };
 
@@ -168,7 +173,7 @@ function Column({
   /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
 }) {
-  const text = useNativeState("");
+  const text = useNativeState(bar.search?.text ?? "");
   const stacked = (
     <ZStack
       modifiers={
@@ -268,7 +273,13 @@ export function SplitView({
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
-        <Column view={sidebar} bar={sidebarBar} sidebar />
+        {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
+        <Column
+          key={content === undefined ? FIRST_COLUMN.LIST : FIRST_COLUMN.APP_SIDEBAR}
+          view={sidebar}
+          bar={sidebarBar}
+          sidebar
+        />
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>

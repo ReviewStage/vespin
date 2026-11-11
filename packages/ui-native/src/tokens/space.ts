@@ -12,6 +12,14 @@ export const SPACE = {
   PAGE: 20,
 } as const;
 
+/**
+ * The widest a column of words reads well at, in points, near the readable
+ * width iOS's own apps keep: a transcript in an iPad's or an unfolded Duo's
+ * wide window centers its rows in it rather than running a line across the
+ * whole screen.
+ */
+export const READING_WIDTH = 720;
+
 /** The sizes the marks are drawn at, in points. */
 export const MARK_SIZE = {
   /** The unread dot, in the row's margin. */

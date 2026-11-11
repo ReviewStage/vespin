@@ -8,14 +8,17 @@ builds a control of its own.
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow` (a
-  task on one line, its sub-tasks folded under the panel's chevron), a task
-  page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and `WordsRow` for its
-  description), `GroupRow` (a place a regular window's sidebar opens, such
-  as the Inbox with its count), `SplitView` (the app's sidebar, the list,
-  and the detail, or the list and the detail, each column under its own
-  `ColumnBar`: its inline title, the account's photo, a header such as the
-  workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an act, a
-  search, and the acts at its foot, the sidebar shown or hidden as its
+  task on one line, its sub-tasks folded under the panel's chevron), each
+  row's acts behind a swipe from either edge, a full swipe running the
+  first, and in its long press menu, which lifts the row's preview
+  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open, a
+  task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
+  `WordsRow` for its description), `GroupRow` (a place a regular window's
+  sidebar opens, such as the Inbox with its count), `SplitView` (the app's
+  sidebar, the list, and the detail, or the list and the detail, each column
+  under its own `ColumnBar`: its inline title, the account's photo, a header
+  such as the workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
+  act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
@@ -160,7 +163,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   asks first asking in `ConfirmAsk`.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
-  New task; a regular window's sidebar keeps its labels. A window wide enough
+  New task; a regular window's bar keeps its labels. A window wide enough
   for three columns hides it and stands the app sidebar instead, whose
   `GroupRow`s carry the places' names.
 
@@ -172,8 +175,9 @@ here once, so a screen gets them by composing these pieces.
 - **Settings** come from `accessibility.ts`, one store per setting shared by
   every component: `useReduceMotion` (a custom motion is left out, as Jump to
   latest's scroll), `useReduceTransparency` (`GlassBar` and Jump to latest
-  stand solid on `SURFACE` inside `CHIP_EDGE_STRONG`), `useIncreaseContrast`
-  (`useColors` gives the quiet inks the body's, the hairline the strong edge,
+  stand solid on `SURFACE` inside a `TEXT_MUTED` edge, which holds 3:1 where
+  the brand's strong edge does not), `useIncreaseContrast` (`useColors`
+  gives the quiet inks the body's, the hairline the quiet ink,
   and danger the words' ink). Bold Text and Button Shapes need nothing of
   ours: SwiftUI's text styles and React Native's system face take Bold Text,
   and the system's buttons draw their own shapes.
@@ -189,7 +193,9 @@ here once, so a screen gets them by composing these pieces.
   A group header, a page's heading, and a message's writer line are headings;
   a glyph its words already say is hidden. What happens out of the reader's
   sight is told with `useAnnounced`: an agent's change of state,
-  a held call, and a send refused (`AskNote`).
+  a held call, and a send refused (`AskNote`). A line of Markdown offers
+  each chip and link it holds as one of its VoiceOver actions ("Open …"),
+  since iOS never lists a view standing in a paragraph as its own element.
 - **Contrast.** Words stand in an ink that holds WCAG's 4.5:1 on the ground
   they stand on (danger's words in `DANGER_TEXT`, a filled button's in
   `ON_ACCENT`), checked against `@repo/brand`'s table, which

@@ -28,11 +28,12 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { useDockRoom } from "./glass-bar.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
@@ -113,8 +114,6 @@ type ThreadPageProps = {
   readonly menu?: BarMenu | undefined;
   /** What stands at the page's foot under its scroll, such as a split view's composer (`ComposerFoot`). */
   readonly foot?: ReactNode | undefined;
-  /** The room left under the last message, so it scrolls clear of a bar docked over the page's foot (`DOCK_ROOM`). */
-  readonly footRoom?: number | undefined;
 };
 
 /** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
@@ -219,10 +218,7 @@ function MessageView({
   pictureSource,
   videoAt,
   now,
-}: Omit<
-  ThreadPageProps,
-  "path" | "status" | "title" | "messages" | "ask" | "footRoom" | "menu" | "foot"
-> & {
+}: Omit<ThreadPageProps, "path" | "status" | "title" | "messages" | "ask" | "menu" | "foot"> & {
   readonly message: ThreadMessage;
 }) {
   const colors = useColors();
@@ -299,18 +295,9 @@ function MessageView({
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
-  const {
-    path,
-    status,
-    title,
-    messages,
-    ask,
-    footRoom = 0,
-    menu,
-    foot,
-    standing,
-    ...drawing
-  } = props;
+  const { path, status, title, messages, ask, menu, foot, standing, ...drawing } = props;
+  // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
+  const footRoom = useDockRoom();
   return (
     <Toolbar>
       <VStack spacing={0}>
@@ -319,7 +306,9 @@ export function ThreadPage(props: ThreadPageProps) {
             alignment="leading"
             spacing={SPACE.EDGE}
             modifiers={[
-              frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+              // Note that a wide window centers the thread's column at the reading width, as Mail centers a message, rather than running its lines across the screen.
+              frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
+              frame({ maxWidth: Number.POSITIVE_INFINITY }),
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >
