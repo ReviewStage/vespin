@@ -70,6 +70,9 @@ test("a recording asterisks every attribute it does not lay out by, those that c
   ]) {
     assert.equal(masked(name, "acme/launch", row), "***********", name);
   }
+  // A picture's `data:` address is megabytes, which leaves as no more asterisks than a short value.
+  const address = `data:image/png;base64,${"A".repeat(100_000)}`;
+  assert.equal(masked("src", address, document.createElement("img")), "****************");
 });
 
 test("a recording leaves the attributes it lays out by, a link's address only where it is an icon's or a stylesheet's, and an id only where an icon draws through it", async () => {
@@ -85,7 +88,7 @@ test("a recording leaves the attributes it lays out by, a link's address only wh
   assert.equal(masked("_cssText", ".row { margin: 0; }"), ".row { margin: 0; }");
   assert.equal(
     masked("href", "https://x.test/?t=1", document.createElement("a")),
-    "*******************",
+    "****************",
   );
   assert.equal(masked("href", "#glyph", svg("use")), "#glyph");
   assert.equal(masked("id", "glyph", svg("symbol")), "glyph");

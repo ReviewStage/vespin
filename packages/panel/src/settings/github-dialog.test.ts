@@ -11,6 +11,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
 import type { SettingsLink } from "@repo/settings/settings-views";
+import { showsInReplay } from "@repo/ui/session-replay-marks";
 import { holdExits } from "@repo/ui/testing/held-exits";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -248,6 +249,11 @@ test("a saved token's Manage opens it with Disconnect, which asks at the dialog'
   stored = KEPT;
   await mountAndOpen();
   assert.equal(tokenField() === null, true);
+  // The dialog shows its own words in the screen recording, so the token's facts are masked again inside it.
+  const drawnAt = (words: string) =>
+    [...dialog().querySelectorAll("*")].findLast((node) => node.textContent === words);
+  assert.equal(showsInReplay(drawnAt("ghp_…wxyz")), false, "the hint is masked");
+  assert.equal(showsInReplay(drawnAt("octo-member")), false, "the login is masked");
   const asked = () => dialog().querySelector<HTMLElement>('[role="group"]');
 
   // Note that the press is made from Disconnect holding focus, as a pointer's or a key's press is.

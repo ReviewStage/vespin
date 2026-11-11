@@ -33,6 +33,7 @@ import {
   Text,
   useConfirmDialog,
 } from "@repo/ui";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -125,11 +126,11 @@ export function TokenFacts({ token }: { token: GitHubTokenSummary }): React.JSX.
     <SettingsFacts>
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
         <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-          {token.hint}
+          <ReplayMask>{token.hint}</ReplayMask>
         </Text>
         {"\u00a0·\u00a0"}
         <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.LABEL}>
-          {token.login}
+          <ReplayMask>{token.login}</ReplayMask>
         </Text>
         {FACT_BREAK}
       </Text>

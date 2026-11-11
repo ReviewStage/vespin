@@ -127,32 +127,6 @@ test("the recorder is handed a text masking that shows only the words under the 
   assert.equal(mask("Orphan", null), "******");
 });
 
-// No picture, video, or diagram is blocked from the recording, so masking
-// its address is what keeps it out; and a `data:` address is megabytes, so
-// a mask of its own length would send megabytes of asterisks.
-test("the recorder is handed an attribute masking that masks a picture's address short and leaves its classes", async () => {
-  window.__PosthogExtensions__ = { initSessionRecording: () => undefined };
-  sessionReplay(testShell())({
-    permitted: true,
-    appVersion: "0.0.0",
-    packaged: true,
-    accountId: "user-1",
-  });
-  await vi.waitFor(() => assert.ok(client.calls.some(([name]) => name === "init")));
-  const options = client.calls.find(([name]) => name === "init")?.[2] as {
-    session_recording: {
-      maskAttributeFn: (name: string, value: string, element?: Element) => string;
-    };
-  };
-  const mask = options.session_recording.maskAttributeFn;
-  const picture = document.createElement("img");
-  const address = `data:image/png;base64,${"A".repeat(100_000)}`;
-
-  assert.equal(mask("src", address, picture), "****************");
-  assert.equal(mask("src", "", picture), "");
-  assert.equal(mask("class", "picture-block w-fit", picture), "picture-block w-fit");
-});
-
 // A recording is filed under the workspace the window lists, so a team's
 // recordings can be found by it: grouped as one is listed, regrouped on a
 // switch, ungrouped once none is listed, and let go with the person on a stop.
