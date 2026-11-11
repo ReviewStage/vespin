@@ -2,7 +2,6 @@
 
 import {
   Form,
-  Group,
   HStack,
   Image,
   LabeledContent,
@@ -299,8 +298,6 @@ export function ActionRow({ label, symbol, destructive = false, onPress }: Actio
 export type PickOption = { readonly id: string; readonly label: string };
 
 type PickRowsProps = {
-  /** What is picked, for VoiceOver; the section's title heads it on screen. */
-  readonly label: string;
   readonly options: readonly PickOption[];
   readonly picked: string | undefined;
   readonly onPick: (id: string) => void;
@@ -318,13 +315,15 @@ const PICKED_MARK_SIZE = 15;
  * drawn here rather than by SwiftUI's inline picker, because its check takes
  * the form's tint, which stands in the ink, and neither a tint on the picker
  * nor one on a group around it reached the check. VoiceOver hears each row
- * as a button, the picked one selected, and the section's title over them.
+ * as a button by its words, the picked one selected, under the section's
+ * title.
  */
-export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
+export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
   const markSize = useScaledSize(PICKED_MARK_SIZE);
+  // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
-    <Group modifiers={[accessibilityLabel(label)]}>
+    <>
       {options.map((option) => (
         <SwiftUIButton
           key={option.id}
@@ -350,7 +349,7 @@ export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
           </HStack>
         </SwiftUIButton>
       ))}
-    </Group>
+    </>
   );
 }
 

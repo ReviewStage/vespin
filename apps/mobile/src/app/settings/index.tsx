@@ -168,7 +168,6 @@ export default function SettingsScreen() {
           {!allowed || push.standing === undefined ? null : (
             <ListSection title="Notify me" footer={PUSH_NOTIFY_FOOTER}>
               <PickRows
-                label="Notify me"
                 options={PUSH_NOTIFY_CHOICES}
                 picked={push.standing.notify}
                 onPick={(id) => {
