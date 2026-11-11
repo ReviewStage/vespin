@@ -65,9 +65,13 @@ const TYPED =
 /** A numbered line beneath: a block of its own, so its number hangs beside its first row however it wraps. */
 const NUMBERED_LINE = "ui-code-editor-line relative block";
 
-/** A line's number, hung in the gutter before its words, right-aligned to them, in the muted ink a gutter's numbers take. */
+/**
+ * A line's number, hung in the gutter before its words, right-aligned to them, in the muted ink a gutter's numbers take.
+ * Note that it never wraps, because hung outside its line it is only as wide as its narrowest piece, and the
+ * layers' `overflow-wrap: anywhere` would make that one digit, breaking a line's 10 into a 1 over a 0.
+ */
 const LINE_NUMBER =
-  "ui-code-editor-line-number absolute top-0 right-full mr-ui-12 select-none tabular-nums text-muted-foreground";
+  "ui-code-editor-line-number absolute top-0 right-full mr-ui-12 select-none whitespace-nowrap tabular-nums text-muted-foreground";
 
 /** The fewest digits the gutter stands wide for, so the words do not move as a script passes nine lines. */
 const GUTTER_DIGITS = 2;
