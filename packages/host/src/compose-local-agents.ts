@@ -148,7 +148,8 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  * (`LocalAgentPlatformSeam.repositoryReachedScript`), and a launch it does
  * not reach is settled as not started for that reason
  * (`DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN`), which its transcript words as
- * signing in with `gh auth login` or setting up SSH.
+ * signing in with `gh auth login` or setting up SSH; a launch whose
+ * worktree already stands is not checked again.
  *
  * A runner ends with the host, or with the gate, so none runs as the gate
  * opens, and every agent this machine made (`ownedAgents`) has its turn let
@@ -702,13 +703,13 @@ export function composeLocalAgents(
             const withRepository = repository !== null;
             // Note that the agent is kept as this machine's before its folder is made, so an uninstall finds whatever a launch cut off left.
             yield* keepOwnedAgent(kernel.stateRoot, agentId);
-            const cleared =
-              sessionResumed(secrets.stdin) && !(yield* workExists(layout, withRepository));
+            const worked = yield* workExists(layout, withRepository);
+            const cleared = sessionResumed(secrets.stdin) && !worked;
             if (cleared) {
               report("a local agent's folder was cleared since its last turn, so it starts afresh");
             }
-            // Note that the box's own sign-in is checked before the repository is made, so a sign-in that cannot reach it fails the launch in words of its own rather than as a fetch.
-            if (withRepository && !(yield* signInReaches(repository))) {
+            // Note that the box's own sign-in is checked only where the repository is to be made, so a sign-in that cannot reach it fails the launch in words of its own rather than as a fetch, and a later turn's launch on the worktree that stands waits on no network.
+            if (withRepository && !worked && !(yield* signInReaches(repository))) {
               report(
                 "a local agent's repository is not reached on this machine's own GitHub sign-in, so its launch was not started",
               );

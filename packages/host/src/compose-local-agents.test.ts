@@ -146,6 +146,8 @@ const followingDevice = (
     readonly writingTakes?: Duration.Input;
     /** The box's own GitHub sign-in does not reach the repository, as a box signed in to nothing does. */
     readonly signInUnreached?: boolean;
+    /** The agent's worktree stands from an earlier turn. */
+    readonly worktreeStands?: boolean;
     /** Whether the device's switch is on, as it stands and each time it changes; on where not given. */
     readonly switchedOn?: Stream.Stream<boolean>;
     /** How the restore script exits, as a restore line runs it; well where none is named. */
@@ -156,7 +158,8 @@ const followingDevice = (
     /** Each link made, by its path, to what it leads to. */
     const links = new Map<string, string>();
     const disk = memoryFileSystem({
-      exists: () => Effect.succeed(false),
+      exists: (path) =>
+        Effect.succeed(options.worktreeStands === true && path === `${LAYOUT.checkoutPath}/.git`),
       makeDirectory: (path) =>
         options.writingTakes !== undefined && path.startsWith(LAYOUT.folder)
           ? Effect.sleep(options.writingTakes)
@@ -588,6 +591,23 @@ it.effect(
 
         assert.deepEqual(claims, [landed, landed]);
         assert.deepEqual(settled, [{ id: LINE_ID, exitCode: 0 }]);
+      }),
+    ),
+);
+
+it.effect(
+  "a later turn's launch on the worktree that stands starts its runner without checking the box's sign-in again",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { spawned, settled } = yield* followingDevice(() => Effect.void, {
+          signInUnreached: true,
+          worktreeStands: true,
+        });
+        yield* until(() => spawned.some((each) => each.program === RUNNER));
+
+        assert.ok(!spawned.some((each) => each.args[1] === REACH_CHECK));
+        assert.ok(!settled.some((each) => each.unstarted !== undefined));
       }),
     ),
 );
