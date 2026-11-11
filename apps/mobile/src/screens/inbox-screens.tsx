@@ -44,7 +44,7 @@ import {
   INBOX_FEED,
   type InboxFeed,
   selectAgentHarnesses,
-  selectAgentTitles,
+  selectAgentNames,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import {
@@ -119,11 +119,11 @@ const MORE = { label: "More", symbol: "ellipsis" } as const;
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
 
-/** No agent's title held. */
-const NO_TITLES: ReadonlyMap<string, string> = new Map();
+/** No agent's name held. */
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
 
-/** What an agent is called where the document holds no title for it yet. */
-const UNTITLED_AGENT = "Agent";
+/** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
+const UNLISTED_AGENT = "Agent";
 
 /** How many of a thread's newest messages its row reads for its preview: more than the preview draws, since a file sent alone says nothing there. */
 const PREVIEW_TAIL = 6;
@@ -229,8 +229,7 @@ function InboxRow({
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
-  const titles = useAgentTitles();
-  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
   const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
@@ -379,9 +378,9 @@ function moreMenu(
   };
 }
 
-/** Every agent's title the document holds, by the agent's id. */
-function useAgentTitles(): ReadonlyMap<string, string> {
-  const { data = NO_TITLES } = useQuery({ ...appStateQuery, select: selectAgentTitles });
+/** Every agent's name the document holds, by the agent's id, as the panel names it. */
+function useAgentNames(): ReadonlyMap<string, string> {
+  const { data = NO_NAMES } = useQuery({ ...appStateQuery, select: selectAgentNames });
 
   return data;
 }
@@ -427,8 +426,7 @@ function ThreadDetail({
   const colors = useColors();
   const { holder, item } = listed;
   const openLink = useOpenLink();
-  const titles = useAgentTitles();
-  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
   const harness = useAgentHarness(item.agentId);
   const pictureOf = useMemberPictures();
 

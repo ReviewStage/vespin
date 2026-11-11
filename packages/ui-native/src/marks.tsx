@@ -21,15 +21,16 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
+import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, View } from "react-native";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
-import { STATUS_MARK_LOOK } from "./status-mark-model.js";
+import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -103,13 +104,11 @@ export function ToneGlyph({
  */
 export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   const colors = useColors();
-  const look = STATUS_MARK_LOOK[status];
-
   return (
     <Image
-      systemName={look.symbol}
+      systemName={STATUS_MARK_SYMBOL[status]}
       size={MARK_SIZE.GLYPH}
-      color={toneColor(colors, look.tone)}
+      color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
   );
@@ -300,9 +299,6 @@ export function NeedsYouDot() {
   );
 }
 
-/** What a failed mark is heard as. */
-const FAILED_WORDS = "Failed";
-
 /** The mark a failed agent's row, or its task's, ends with: the filled alert in the danger ink, heard as Failed. */
 export function FailedMark() {
   const colors = useColors();
@@ -311,13 +307,13 @@ export function FailedMark() {
     <Image
       systemName="exclamationmark.circle.fill"
       color={colors.DANGER}
-      modifiers={[font({ textStyle: TYPE_ROLE.TIME }), accessibilityLabel(FAILED_WORDS)]}
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME }),
+        accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]),
+      ]}
     />
   );
 }
-
-/** What a working mark is heard as. */
-const WORKING_WORDS = "Working";
 
 /** The system's spinner, small and in the working ink, where an agent is at work. */
 export function WorkingMark() {
@@ -325,7 +321,11 @@ export function WorkingMark() {
 
   return (
     <ProgressView
-      modifiers={[controlSize("mini"), tint(colors.WORKING), accessibilityLabel(WORKING_WORDS)]}
+      modifiers={[
+        controlSize("mini"),
+        tint(colors.WORKING),
+        accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.WORKING]),
+      ]}
     />
   );
 }

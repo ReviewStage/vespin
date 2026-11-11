@@ -1,3 +1,4 @@
+import { TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import {
   TASK_PRIORITY,
   TASK_STATUS,
@@ -5,7 +6,7 @@ import {
   type TaskStatus,
 } from "@repo/features/task-wire";
 import React from "react";
-import { STATUS_TONE, type StatusTone } from "../status-tone.js";
+import type { StatusTone } from "../status-tone.js";
 
 // `tsx` executes imported workspace-package JSX with the classic runtime.
 void React;
@@ -51,15 +52,6 @@ const BARS = [
   { x: 7 - BAR_WIDTH / 2, y: 5, height: 7.5 },
   { x: MARK_EDGE.end - BAR_WIDTH, y: MARK_EDGE.start, height: 11 },
 ] as const;
-
-/** The tone each status is drawn in: at rest, under way, or finished well. */
-const STATUS_MARK_TONE = {
-  [TASK_STATUS.BACKLOG]: STATUS_TONE.NEUTRAL,
-  [TASK_STATUS.TODO]: STATUS_TONE.NEUTRAL,
-  [TASK_STATUS.IN_PROGRESS]: STATUS_TONE.WORKING,
-  [TASK_STATUS.DONE]: STATUS_TONE.COMPLETE,
-  [TASK_STATUS.CANCELED]: STATUS_TONE.NEUTRAL,
-} as const satisfies Record<TaskStatus, StatusTone>;
 
 /** The ring every status but the settled ones draws, dashed for the backlog. */
 function Ring({ dashed }: { dashed: boolean }): React.JSX.Element {
@@ -107,11 +99,12 @@ function statusBody(status: TaskStatus): React.JSX.Element {
 
 /** A task's status as its mark, in the tone of the status it stands for. */
 export function TaskStatusMark({ status }: { status: TaskStatus }): React.JSX.Element {
+  const tone: StatusTone = TASK_STATUS_TONE[status];
   return (
     <svg
       className="ui-task-mark ui-task-status-mark"
       data-status={status}
-      data-tone={STATUS_MARK_TONE[status]}
+      data-tone={tone}
       viewBox="0 0 14 14"
       aria-hidden="true"
     >

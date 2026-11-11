@@ -22,6 +22,7 @@ import {
   type PullRequestMoment,
 } from "./automation-wire.js";
 import { readerZone } from "./date-mention.js";
+import { GLYPH_STATE, GLYPH_STATE_WORDS, STOPPED_WORDS } from "./glyph-state.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { titlesNothing } from "./task-wire.js";
 import { clockText } from "./time-format.js";
@@ -140,13 +141,13 @@ function agentLine(
     : standing;
 }
 
-/** Where a started run's agent stands, as its row's line says it; the admin pages say an agent's status in these words too. */
+/** Where a started run's agent stands, as its row's line says it; the admin pages say an agent's status in these words too. Working, Failed, and Stopped are the agent's glyph's own words (`glyph-state.ts`). */
 export const AGENT_STATUS_WORDS = {
   [AGENT_STATUS.STARTING]: "Starting…",
-  [AGENT_STATUS.RUNNING]: "Working",
+  [AGENT_STATUS.RUNNING]: GLYPH_STATE_WORDS[GLYPH_STATE.WORKING],
   [AGENT_STATUS.COMPLETED]: "Finished",
-  [AGENT_STATUS.FAILED]: "Failed",
-  [AGENT_STATUS.CANCELED]: "Stopped",
+  [AGENT_STATUS.FAILED]: GLYPH_STATE_WORDS[GLYPH_STATE.FAILED],
+  [AGENT_STATUS.CANCELED]: STOPPED_WORDS,
 } as const satisfies Record<AgentStatus, string>;
 
 /** The order the owners' groups stand in: the workspace's first, as the ones every member shares. */

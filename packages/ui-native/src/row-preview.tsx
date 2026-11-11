@@ -14,6 +14,7 @@ import type { AgentStatus, PullRequestState } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { ModelProvider } from "@repo/features/models-wire";
+import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
@@ -340,10 +341,17 @@ export function AgentPreview({
   /** Its latest step as one line; none before the app holds its transcript. */
   readonly step?: string | undefined;
   readonly waiting: number;
-  readonly pullRequest?: { readonly number: number; readonly state: PullRequestState } | undefined;
+  readonly pullRequest?:
+    | {
+        readonly number: number;
+        readonly state: PullRequestState;
+        readonly queued?: true | undefined;
+      }
+    | undefined;
 }) {
   const colors = useColors();
-  const pull = pullRequest === undefined ? undefined : PULL_REQUEST_LOOK[pullRequest.state];
+  const pull =
+    pullRequest === undefined ? undefined : PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
 
   return (
     <PreviewCard>
