@@ -29,10 +29,10 @@ export function linkRuleWords(home: string): string {
   );
 }
 
-/** Why words holding links that read as no place of ours were not published, after the refusal's lead. */
-export function unreadLinksWords(targets: readonly string[]): string {
+/** Why words holding links with a placeholder for an id were not published, after the refusal's lead. */
+export function placeholderLinksWords(targets: readonly string[]): string {
   return (
-    `these links name no place of ${PRODUCT_NAME}'s: ${targets.map((target) => `\`${target}\``).join(", ")}. ` +
-    "Write each from the id the tool answered, once it has answered, as a placeholder leads nowhere."
+    `these links hold a placeholder where an id goes, so they lead nowhere: ${targets.map((target) => `\`${target}\``).join(", ")}. ` +
+    "Write each from the id the tool answered, once it has answered."
   );
 }

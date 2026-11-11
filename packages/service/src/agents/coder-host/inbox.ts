@@ -27,7 +27,7 @@ import {
   decodeMention,
   MENTION_KIND,
   mentionLinksIn,
-  unreadPlaceLinksIn,
+  placeholderLinksIn,
 } from "@repo/features/mention-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readEither } from "@repo/wire/effect";
@@ -46,7 +46,7 @@ import {
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
-import { unreadLinksWords } from "../link-rule.js";
+import { placeholderLinksWords } from "../link-rule.js";
 import { CODER } from "./bounds.js";
 import {
   type InboxSandboxDoor,
@@ -525,9 +525,9 @@ export function postToInbox(
   if (post.body.trim() === "") return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_POST));
   const refused = askRefusal(post.ask);
   if (refused !== undefined) return Effect.succeed(inboxRejected(refused));
-  const unread = unreadPlaceLinksIn(post.body);
+  const unread = placeholderLinksIn(post.body);
   if (unread.length > 0) {
-    return Effect.succeed(inboxRejected(`Not posted: ${unreadLinksWords(unread)}`));
+    return Effect.succeed(inboxRejected(`Not posted: ${placeholderLinksWords(unread)}`));
   }
   // A place refused is said before any picture is read, since mending it reads them again.
   const place = placeOf(post);

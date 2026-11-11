@@ -33,7 +33,7 @@ import {
   taskNumberOf,
   withTaskId,
 } from "./link-grammar.js";
-import { isLinkHome, RESERVED_WORKSPACE_SLUGS } from "./link-home.js";
+import { isLinkHome } from "./link-home.js";
 import { LINK_SITE_LIST, linkSiteName, linkSiteOf } from "./link-site.js";
 import { parsedUrl } from "./parsed-url.js";
 import { PRODUCT_NAME } from "./product-name.js";
@@ -1057,22 +1057,20 @@ export function mentionLinksIn(text: string): readonly MentionLink[] {
   return found;
 }
 
+/** The marks a placeholder for an id is written between, `{AGENT}` or `<agent-id>`, which no address of ours holds. */
+const PLACEHOLDER_MARKS = /[{}<>]/u;
+
 /**
- * The targets of the words' mention links that stand under a workspace of
- * ours yet read as no place in it (`readLink`), such as one written with a
- * placeholder for an id no tool had answered yet, which the app draws as a
- * chip that opens nothing. The site's own pages, which stand under no
- * workspace, are left alone.
+ * The targets of the words' mention links of ours that hold a placeholder
+ * where an id goes, such as one written before the tool that answers the id
+ * had answered, which the app draws as a chip that opens nothing.
  */
-export function unreadPlaceLinksIn(text: string): readonly string[] {
+export function placeholderLinksIn(text: string): readonly string[] {
   return mentionLinksIn(text)
     .map((link) => link.target)
     .filter((target) => {
       const url = parsedUrl(target);
-      if (url === undefined || !isLinkHome(url)) return false;
-      const [, workspace = "", place = ""] = url.pathname.split("/");
-      const underWorkspace = place !== "" && !RESERVED_WORKSPACE_SLUGS.has(workspace);
-      return underWorkspace && readLink(target) === undefined;
+      return url !== undefined && isLinkHome(url) && PLACEHOLDER_MARKS.test(target);
     });
 }
 

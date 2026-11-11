@@ -23,8 +23,8 @@ import {
   mentionsIn,
   pageRepositoryOf,
   pastedLinkMention,
+  placeholderLinksIn,
   sectionAnchors,
-  unreadPlaceLinksIn,
   withoutMemberLinks,
 } from "./mention-link.js";
 
@@ -402,14 +402,14 @@ test("every @ link outside code is one a writer keeps, whatever its target names
   );
 });
 
-test("a link under a workspace that reads as no place, such as a placeholder's, is unread, and a place or a site page is not", () => {
+test("a link of ours with a placeholder where an id goes is caught, and a place, a page the link reader does not know, or another site is not", () => {
   const words = [
     "Started [@its agent](https://vespin.dev/acme/agent/{AGENT}) on [@it](https://vespin.dev/acme/task/<task-id>),",
     "beside [@Rollout](https://vespin.dev/acme/task/42#rollout), [@Run](https://vespin.dev/acme/agent/a1),",
-    "the [@docs](https://vespin.dev/docs/agents), and [@Linear](https://linear.app/a).",
+    "[@New automation](https://vespin.dev/acme/automations/new), and [@Linear](https://linear.app/a/{x}).",
   ].join("\n");
 
-  assert.deepEqual(unreadPlaceLinksIn(words), [
+  assert.deepEqual(placeholderLinksIn(words), [
     "https://vespin.dev/acme/agent/{AGENT}",
     "https://vespin.dev/acme/task/<task-id>",
   ]);
