@@ -447,7 +447,7 @@ fi
 # prose, comments, identifiers, user-facing words, and file names. A British
 # spelling is refused as a word or as one part of an identifier, but where the
 # name belongs to an outside spec or API (ARIA's `labelledby`, the Web Audio
-# `AnalyserNode`) or the value is already stored or on the wire (a `"cancelled"`
+# `AnalyserNode`, Foundation's `NSUserCancelledError`) or the value is already stored or on the wire (a `"cancelled"`
 # status, the `tasks.colourCode` kind), which keeps the spelling it shipped with.
 # Migrations, the generated Codex protocol, and patches against other source
 # are written as they must apply, so they are left out.
@@ -478,7 +478,7 @@ node --input-type=module -e '
       ])
       .join("|"),
   );
-  const kept = /labelledBy|AnalyserNode|createAnalyser|tasks\.colourCode|["\x27`]cancelled["\x27`]|cancelled\??:|"cancelled" in/g;
+  const kept = /labelledBy|AnalyserNode|createAnalyser|NSUserCancelledError|tasks\.colourCode|["\x27`]cancelled["\x27`]|cancelled\??:|"cancelled" in/g;
   const skipped = /^(pnpm-lock\.yaml|patches\/|packages\/database\/migrations\/|packages\/agent-runner\/src\/codex-protocol\/|scripts\/repository-checks\.sh$)|\.patch$/;
   const repository = process.argv[1];
   const files = execFileSync("git", ["-C", repository, "ls-files"], { encoding: "utf8" }).split("\n");

@@ -16,7 +16,10 @@ final class ShareViewController: UIViewController {
       model: ShareSheetModel(snapshot: AppGroupFiles.snapshot()),
       items: items,
       finish: { [weak self] in self?.extensionContext?.completeRequest(returningItems: nil) },
-      cancel: { [weak self] in self?.extensionContext?.cancelRequest(withError: CancellationError()) })
+      cancel: { [weak self] in
+        self?.extensionContext?.cancelRequest(
+          withError: NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError))
+      })
     let hosting = UIHostingController(rootView: sheet)
     addChild(hosting)
     hosting.view.translatesAutoresizingMaskIntoConstraints = false
