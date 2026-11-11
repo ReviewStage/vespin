@@ -1136,6 +1136,9 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     ],
     editorProps: composerProps(state, props),
   });
+  laidIn(editor, state, props.text);
+  // Note that the words opened on are the owner's own, so the editor's reading of them, which may spell them otherwise (a code span's padding), is no change to hand back.
+  state.emitted = textOf(editor.state.doc);
   editor.on("transaction", ({ transaction }) => {
     for (const [mark, pos] of state.marks) state.marks.set(mark, transaction.mapping.map(pos));
     const text = textOf(editor.state.doc);
@@ -1143,7 +1146,6 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     state.emitted = text;
     props.onDraft(text);
   });
-  laidIn(editor, state, props.text);
   if (props.focus) editor.view.focus();
   return {
     ...editorFormatting(editor),
