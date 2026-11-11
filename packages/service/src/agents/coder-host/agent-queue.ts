@@ -45,7 +45,7 @@ import {
 } from "@repo/database/models/agent-queue-store";
 import { type Agent, readAgentOfConversation } from "@repo/database/models/agent-store";
 import { latestTurnsOfReached } from "@repo/database/models/message-reads";
-import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
+import { type SettledAgentTurn, senderNameOf, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueue, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
@@ -72,19 +72,11 @@ export type QueueSessions = (
   HttpClient.HttpClient | DatabaseServices
 >;
 
-/** The name a line diverted while the agent booted goes under where no member typed it; none for a member's own. */
+/** The name a line diverted while the agent booted goes under where no member typed it, as its row keeps it (`senderNameOf`), or the product's for its own; none for a member's own. */
 function from(line: QueuedLine | undefined): { readonly name: string } | undefined {
-  switch (line?.sender.kind) {
-    case MESSAGE_SENDER.AUTOMATION:
-    case MESSAGE_SENDER.AGENT:
-      return { name: line.sender.name };
-    case MESSAGE_SENDER.GITHUB:
-      return { name: line.sender.login };
-    case MESSAGE_SENDER.APP:
-      return { name: PRODUCT_NAME };
-    default:
-      return undefined;
-  }
+  if (line?.sender.kind === MESSAGE_SENDER.APP) return { name: PRODUCT_NAME };
+  const name = senderNameOf(line?.sender);
+  return name === null ? undefined : { name };
 }
 
 /**
