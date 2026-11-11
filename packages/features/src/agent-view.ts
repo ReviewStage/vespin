@@ -1,3 +1,4 @@
+import { CommandPrefixSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
@@ -616,6 +617,39 @@ export type MemorySaveFailure = (typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY
 export const memorySaveAnswerViewSchema = answerView(accountContract.saveMemory);
 
 export type MemorySaveAnswerView = typeof memorySaveAnswerViewSchema.Type;
+
+/** The commands the account always allows its coding agents to run, as the window hears them read: the list, the earliest added first, or why there is no answer. */
+export const allowedCommandsAnswerViewSchema = answerView(accountContract.allowedCommands);
+
+export type AllowedCommandsAnswerView = typeof allowedCommandsAnswerViewSchema.Type;
+
+/**
+ * One write of the account's always-allowed commands, as Settings asks it:
+ * a command's first words added by hand (`add`), or one removed by its
+ * first words (`remove`), which the host finds on the list it holds, so a
+ * removal taken back and asked again names the command rather than an id
+ * the take-back replaced.
+ */
+export const allowedCommandWriteParamsSchema = EffectSchema.Union([
+  EffectSchema.Struct({ add: CommandPrefixSchema }),
+  EffectSchema.Struct({ remove: CommandPrefixSchema }),
+]);
+
+export type AllowedCommandWriteParams = typeof allowedCommandWriteParamsSchema.Type;
+
+/**
+ * Why a write of the always-allowed commands changed nothing: the list
+ * holds all it may (`allowed-commands-full`), or no answer at all
+ * (`unanswered`), among the failures every account call may answer.
+ */
+export const ALLOWED_COMMANDS_WRITE_FAILURE = failureSetOf({
+  addAllowedCommand: accountContract.addAllowedCommand,
+});
+
+/** A write, as the window hears it: the list as it then stands, or why nothing changed. */
+export const allowedCommandsWriteAnswerViewSchema = answerView(accountContract.addAllowedCommand);
+
+export type AllowedCommandsWriteAnswerView = typeof allowedCommandsWriteAnswerViewSchema.Type;
 
 /** Writing the default, as the window asks it: the choice to keep. */
 export const agentDefaultWriteParamsSchema = modelChoiceSchema;

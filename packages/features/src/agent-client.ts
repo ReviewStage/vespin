@@ -1,4 +1,4 @@
-import { HTTP_METHOD, type UnparsedWireValue, unparsedWire } from "@repo/wire";
+import { type CommandPrefix, HTTP_METHOD, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -61,6 +61,8 @@ import {
   type AgentWarmAnswerView,
   type AgentWorkspaceListParams,
   type AgentWorkspaceToolsAnswerView,
+  type AllowedCommandsAnswerView,
+  type AllowedCommandsWriteAnswerView,
   type ChaptersProviderAnswer,
   type ChatGptDeviceLoginParams,
   type ChatGptDevicePollAnswerView,
@@ -128,6 +130,7 @@ import {
   type RefusedDevice,
   TRANSCRIPT_PARTS_QUERY,
 } from "./agent-wire.js";
+import { ALLOWED_COMMAND_QUERY, allowedCommandAddRequestSchema } from "./allowed-command-wire.js";
 import {
   CHAPTERS_MODEL,
   CHAPTERS_PICK_LIST,
@@ -586,6 +589,30 @@ export class HostedAgentClient {
     params: MemorySaveParams,
   ): Effect.Effect<MemorySaveAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.account.saveMemory, params);
+  }
+
+  /** The commands the account always allows its coding agents to run unasked, the earliest added first. */
+  readAllowedCommands(): Effect.Effect<AllowedCommandsAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.allowedCommands, undefined);
+  }
+
+  /** A command's first words added by hand to the account's always-allowed commands, answering the list as it then stands; a prefix the service would refuse by shape is refused here without traveling at all. */
+  addAllowedCommand(
+    prefix: CommandPrefix,
+  ): Effect.Effect<AllowedCommandsWriteAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(allowedCommandAddRequestSchema)({ prefix }));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.addAllowedCommand, admitted);
+  }
+
+  /** One of the account's always-allowed commands removed by its id, answering the list as it then stands. */
+  removeAllowedCommand(
+    id: string,
+  ): Effect.Effect<AllowedCommandsWriteAnswerView, never, HttpClient.HttpClient> {
+    // The command rides in the query, since a DELETE carries no body.
+    return hostedCall(this.#hosted.account.removeAllowedCommand, {
+      query: { [ALLOWED_COMMAND_QUERY.ID]: id },
+    });
   }
 
   /** One of the account's own sounds' clips, its bytes in base64, or null where it keeps no such sound. */

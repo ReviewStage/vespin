@@ -23,6 +23,10 @@
  */
 
 import {
+  AGENT_PERMISSION_MODE,
+  type AgentPendingApproval,
+} from "@repo/features/agent-approval-wire";
+import {
   AGENT_CALL_FAILURE,
   type AgentOverviewChecksAnswerView,
   type AgentOverviewConversationAnswerView,
@@ -35,6 +39,7 @@ import {
 import {
   AGENT_AUTHOR,
   AGENT_BRIEF,
+  AGENT_RUNTIME,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentChangedFile,
@@ -279,8 +284,25 @@ const ADDITIONS = CHANGED_FILES.reduce((sum, file) => sum + file.additions, 0);
 const DELETIONS = CHANGED_FILES.reduce((sum, file) => sum + file.deletions, 0);
 
 /** The agent as the task's list and its tab hold it. */
-function agentSummary(taskId: string, running = false): AgentSummary {
-  return {
+/**
+ * The call the agent holds under `agent-approval`, in an asking mode: its
+ * members tests, whose first words the harness proposed as a rule, so
+ * Always allow names them and keeps them for every agent of the member's.
+ */
+const HELD_CALL: AgentPendingApproval = {
+  id: "5b7d9f1a-3c5e-4a7c-9e1b-3d5f7a9c1e3b",
+  toolUseId: "fixture-approval-members-test",
+  toolName: "Bash",
+  title: "Run pnpm test src/members",
+  description: "Run the members tests",
+  input: { command: "pnpm test src/members", description: "Run the members tests" },
+  askedAt: STARTED_AT + 23 * MINUTE,
+  commandPrefix: ["pnpm", "test"],
+};
+
+/** The agent as the task's list and its tab hold it: at work where it runs or holds a call, and in an asking mode with the call where it holds one. */
+function agentSummary(taskId: string, running = false, held = false): AgentSummary {
+  const summary: AgentSummary = {
     id: FIXTURE_AGENT_ID,
     planId: taskId,
     model: "anthropic/claude-opus-5.5",
@@ -293,6 +315,15 @@ function agentSummary(taskId: string, running = false): AgentSummary {
     brief: AGENT_BRIEF.PROMPT,
     sandboxVcpus: 2,
   };
+  return held
+    ? {
+        ...summary,
+        status: AGENT_STATUS.RUNNING,
+        runtime: AGENT_RUNTIME.CLAUDE_CODE,
+        permissionMode: AGENT_PERMISSION_MODE.ASK,
+        pendingApprovals: [HELD_CALL],
+      }
+    : summary;
 }
 
 /** A tool's call as the transcript stores it, answered. */
@@ -897,7 +928,12 @@ type TranscriptLength = (typeof TRANSCRIPT_LENGTH)[keyof typeof TRANSCRIPT_LENGT
 
 /** What one agent profile opens beside the agent: its Pull request tab on a view, with the transcript as long as it says, a file's tab, the page it showed, its Terminal staged one way, or the task's description, whose comments the tasks fixture answers. */
 type AgentStage =
-  | { readonly view: PullRequestView; readonly transcript?: TranscriptLength }
+  | {
+      readonly view: PullRequestView;
+      readonly transcript?: TranscriptLength;
+      /** Whether the agent holds a call on the member's answer (`HELD_CALL`). */
+      readonly held?: true;
+    }
   | { readonly file: string }
   | { readonly page: string }
   | { readonly terminal: TerminalStage }
@@ -914,6 +950,7 @@ const AGENT_STAGES: ReadonlyMap<string, AgentStage> = new Map<string, AgentStage
     { view: PULL_REQUEST_VIEW.CONVERSATION, transcript: TRANSCRIPT_LENGTH.LONG_RUN },
   ],
   [RUN_PROFILE.AGENT_CHECKS, { view: PULL_REQUEST_VIEW.CHECKS }],
+  [RUN_PROFILE.AGENT_APPROVAL, { view: PULL_REQUEST_VIEW.CONVERSATION, held: true }],
   [RUN_PROFILE.AGENT_FILES, { view: PULL_REQUEST_VIEW.FILES }],
   [RUN_PROFILE.AGENT_CHAPTERS, { view: PULL_REQUEST_VIEW.CHAPTERS }],
   [RUN_PROFILE.AGENT_FILE, { file: OPENED_FILE }],
@@ -1010,6 +1047,11 @@ function longRun(stage: AgentStage): boolean {
   return "view" in stage && stage.transcript === TRANSCRIPT_LENGTH.LONG_RUN;
 }
 
+/** Whether the agent holds a call on the member's answer under the profile's stage. */
+function holdsCall(stage: AgentStage): boolean {
+  return "view" in stage && stage.held === true;
+}
+
 /** The agent's Terminal stage, where the profile stages one. */
 function terminalStage(stage: AgentStage): TerminalStage | undefined {
   return "terminal" in stage ? stage.terminal : undefined;
@@ -1029,7 +1071,7 @@ type StagedAnswer<Kind extends PortActKind> = (
 /** Every read the agent's tabs ask through the act door, answered as the service would answer it for this agent; the parts the host holds are staged apart (`STAGED_PARTS`). */
 const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_LIST]: ({ taskId }, stage) => ({
-    agents: [agentSummary(taskId, longRun(stage))],
+    agents: [agentSummary(taskId, longRun(stage), holdsCall(stage))],
   }),
   [ACT_KIND.AGENTS_TRANSCRIPT]: () => longRunHold(),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({
@@ -1104,7 +1146,8 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
 export function agentTasksView(profile: string, open: TasksView): TasksView | undefined {
   const taskId = open.activeTaskId;
   if (!AGENT_STAGES.has(profile) || taskId === undefined) return undefined;
-  const agent = agentSummary(taskId, longRun(AGENT_STAGES.get(profile) ?? { description: true }));
+  const stage = AGENT_STAGES.get(profile) ?? { description: true };
+  const agent = agentSummary(taskId, longRun(stage), holdsCall(stage));
   const agents: TaskSummary["agents"] = {
     total: 1,
     working: 0,

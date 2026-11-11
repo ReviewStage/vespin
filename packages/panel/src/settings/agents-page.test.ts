@@ -176,6 +176,7 @@ const preferencesHeld = () => ({
 function holdKeys(): void {
   ({ deliverKeys, deliverModels, deliverPreferences } = handHostReads({
     keys: { rows: { keys } },
+    allowedCommands: { rows: { commands: [] } },
     models: modelsHeld(),
     preferences: preferencesHeld(),
   }));
@@ -259,6 +260,7 @@ test("while the default and the keys are read, placeholder rows stand in each gr
   assert.deepEqual(placeholders(page), [
     ["Reading your keys", 2],
     ["Reading your default", 3],
+    ["Reading your always-allowed commands", 2],
   ]);
   await settle();
   await vi.waitFor(() => assert.equal(placeholders(page).length, 0));

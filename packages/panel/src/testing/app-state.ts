@@ -31,6 +31,7 @@ import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
 import { IDLE_TASKS_VIEW, type TASK_CALL_FAILURE, type TasksView } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import {
+  type AppAllowedCommandList,
   type AppAutomationReads,
   type AppBrowserTabs,
   type AppChapters,
@@ -210,6 +211,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.PULL_REQUEST]: NO_KEYS_HELD,
     [LIVE_READ.REPOSITORY_LISTS]: NO_KEYS_HELD,
     [LIVE_READ.GITHUB_TOKEN]: NO_KEYS_HELD,
+    [LIVE_READ.ALLOWED_COMMANDS]: NO_KEYS_HELD,
     [LIVE_READ.PULL_REQUEST_CHAPTERS]: NO_CHAPTERS,
     [LIVE_READ.BROWSER_TABS]: NO_BROWSER_TABS,
     [LIVE_READ.PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
@@ -475,6 +477,7 @@ export function handHostReads(first: {
   readonly chapters?: AppChapters;
   readonly tools?: AppIntegrationTools;
   readonly keys?: AppHostRead<AppProviderKeyList>;
+  readonly allowedCommands?: AppHostRead<AppAllowedCommandList>;
   readonly preferences?: AppHostRead<AccountPreferencesLive>;
   readonly models?: AppHostRead<ModelsAnswer>;
   readonly members?: AppWorkspaceMembers;
@@ -511,6 +514,9 @@ export function handHostReads(first: {
         ...(first.keys === undefined
           ? undefined
           : { [LIVE_READ.PROVIDER_KEYS]: { [account]: first.keys } }),
+        ...(first.allowedCommands === undefined
+          ? undefined
+          : { [LIVE_READ.ALLOWED_COMMANDS]: { [account]: first.allowedCommands } }),
         ...(first.preferences === undefined
           ? undefined
           : { [LIVE_READ.ACCOUNT_PREFERENCES]: { [account]: first.preferences } }),

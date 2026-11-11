@@ -25,6 +25,8 @@ import { AgentTab } from "./agent-tab.js";
 /**
  * agent-approvals.test.ts -- a tool call a Claude Code agent holds says so on
  * its own row, and Allow sends the answer and the row says it was allowed;
+ * Always allow names the command's first words where the harness proposed
+ * them;
  * Deny opens a box for why, whose words go to the agent with the denial;
  * a Claude Code agent's model chip and a Codex agent's both name their mode
  * off Full access.
@@ -167,6 +169,22 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   assert.deepEqual(answered, [{ answer: "allow" }]);
   assert.equal(buttonReading(container, "Allow"), undefined);
   assert.ok(call.textContent?.includes("Allowed"));
+});
+
+test("Always allow on a call whose harness proposed its first words names them in the press, and answers it", async () => {
+  const [held] = CLAUDE_AGENT.pendingApprovals ?? [];
+  assert.ok(held !== undefined);
+  const { container, answered } = await drawnTab({
+    ...CLAUDE_AGENT,
+    pendingApprovals: [{ ...held, commandPrefix: ["pnpm", "test"] }],
+  });
+
+  const always =
+    buttonReading(container, "Always allow pnpm test *") ?? assert.fail("Always allow");
+  await act(async () => always.click());
+  await settle();
+
+  assert.deepEqual(answered, [{ answer: "allow_for_agent" }]);
 });
 
 test("Deny opens a box for why, and its Deny sends the denial with the words written", async () => {

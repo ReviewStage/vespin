@@ -734,6 +734,9 @@ function fakeService() {
         asked.push("remove-token");
         return { token: null };
       }),
+    readAllowedCommands: () => Effect.succeed({ commands: [] }),
+    addAllowedCommand: () => Effect.succeed({ commands: [] }),
+    removeAllowedCommand: () => Effect.succeed({ commands: [] }),
 
     forgetMemory: (forget) =>
       Effect.andThen(
