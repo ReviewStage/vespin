@@ -12,6 +12,7 @@
  */
 
 import assert from "node:assert/strict";
+import { CLIENT_HEADER } from "@repo/features/client-identity";
 import "@orpc/experimental-effect/extensions/effect";
 import { it } from "@effect/vitest";
 import { oc } from "@orpc/contract";
@@ -338,6 +339,35 @@ it.effect(
         handle(new Request(new URL("/api/plans/ABC/edits", ORIGIN)), services),
       );
       assert.equal(elsewhere.status, HOSTED_HTTP_STATUS.NOT_FOUND);
+    }),
+);
+
+it.effect(
+  "a build naming an API version below the floor is refused as needing an update, and one naming none is served",
+  () =>
+    Effect.gen(function* () {
+      // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
+      const services = Context.empty() as Context.Context<WebServices>;
+      const handle = hostedFetch(testRouter);
+      const below = yield* Effect.promise(() =>
+        handle(
+          new Request(new URL("/api/plans/ABC/edits", ORIGIN), {
+            headers: { [CLIENT_HEADER.CLIENT]: "ios/0.1.0", [CLIENT_HEADER.API_VERSION]: "0" },
+          }),
+          services,
+        ),
+      );
+      assert.deepEqual(
+        [below.status, yield* Effect.promise(() => below.json())],
+        [
+          HOSTED_HTTP_STATUS.UPGRADE_REQUIRED,
+          { error: HOSTED_API_ERROR.HOST_UPGRADE_NEEDED, minimumVersion: "1" },
+        ],
+      );
+      const unnamed = yield* Effect.promise(() =>
+        handle(new Request(new URL("/api/plans/ABC/edits", ORIGIN)), services),
+      );
+      assert.equal(unnamed.status, HOSTED_HTTP_STATUS.NOT_FOUND);
     }),
 );
 

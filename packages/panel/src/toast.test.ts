@@ -377,7 +377,7 @@ it.effect(
   "while the app does not reach the service, a failure toast nothing named is not shown, and a refusal still is",
   () =>
     Effect.gen(function* () {
-      handState({}, { network: { online: true, reachable: false } });
+      handState({}, { network: { online: true, reachable: false, updateNeeded: false } });
       // Note that we wait on the read itself, because it lands after a fiber's hops a busy runner can stretch past any one tick.
       yield* Effect.promise(readAppState);
       mount();

@@ -750,6 +750,8 @@ interface AppNetworkSlice {
   reachable: boolean;
   /** How many changes made offline the service refused as they were sent again, until a window clears the count; none where none was. */
   offlineRefused?: number;
+  /** Whether the service refused this build as older than it serves (426), on its last answered call: the one fact every surface that offers the update draws. */
+  updateNeeded: boolean;
 }
 
 /**

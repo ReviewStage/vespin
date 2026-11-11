@@ -25,7 +25,7 @@ import {
 const BASE_URL = "https://app.test";
 
 /** The service's reach as it is first kept, at the test clock's start, before any call was made. */
-const REACHABLE: ServiceReachState = { reachable: true, answeredAt: 0 };
+const REACHABLE: ServiceReachState = { reachable: true, answeredAt: 0, updateNeeded: false };
 const PATH = "/api/account/preferences";
 
 function refusal(): Response {
@@ -177,6 +177,30 @@ it.effect(
       const refused = yield* send;
       assert.ok(callAnswered(refused) && refused.response.status === HTTP_STATUS.UNAUTHORIZED);
       assert.equal((yield* SubscriptionRef.get(reach)).reachable, true);
+    }),
+);
+
+it.effect(
+  "a 426 says this build needs an update on the reach, until the next answer of another status",
+  () =>
+    Effect.gen(function* () {
+      const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
+      let asked = 0;
+      const { call, client } = callOn(NO_CREDENTIAL, () => {
+        asked += 1;
+        return asked === 1
+          ? jsonResponse({ error: "host-upgrade-needed" }, HTTP_STATUS.UPGRADE_REQUIRED)
+          : jsonResponse({ ok: true });
+      });
+      const send = Effect.provideService(
+        Effect.provide(call.send({ method: HTTP_METHOD.GET, path: PATH }), client),
+        ServiceReach,
+        reach,
+      );
+      yield* send;
+      assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, true);
+      yield* send;
+      assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, false);
     }),
 );
 

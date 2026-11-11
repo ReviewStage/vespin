@@ -1503,14 +1503,14 @@ function titleBarOffline(page: HTMLElement): Element | null {
 }
 
 test("with the sidebar folded, the Mac offline says so in the title bar beside New task, and nothing does online", async () => {
-  handState({}, { network: { online: false, reachable: true } });
+  handState({}, { network: { online: false, reachable: true, updateNeeded: false } });
   const offline = mount(false);
   await settle();
   await vi.waitFor(() => assert.equal(titleBarOffline(offline) !== null, true));
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  handState({}, { network: { online: true, reachable: true } });
+  handState({}, { network: { online: true, reachable: true, updateNeeded: false } });
   const online = mount(false);
   await settle();
   await vi.waitFor(() => assert.equal(titleBarOffline(online) === null, true));
@@ -1523,7 +1523,7 @@ function stripUnderPhoneHead(page: HTMLElement): string | undefined {
 }
 
 test("on a phone, the service not answering says so in a strip under the page's header, and nothing does once it answers", async () => {
-  handState({}, { network: { online: true, reachable: false } });
+  handState({}, { network: { online: true, reachable: false, updateNeeded: false } });
   const unreached = await mountNarrow({ at: SHELL_AT.INBOX });
   await vi.waitFor(() =>
     assert.equal(stripUnderPhoneHead(unreached), "Can't connect. Check your internet connection."),
@@ -1531,7 +1531,7 @@ test("on a phone, the service not answering says so in a strip under the page's 
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  handState({}, { network: { online: true, reachable: true } });
+  handState({}, { network: { online: true, reachable: true, updateNeeded: false } });
   const answering = await mountNarrow({ at: SHELL_AT.INBOX });
   assert.ok(
     answering.querySelector('header.ui-toolbar[data-look="phone"]'),
@@ -1541,7 +1541,7 @@ test("on a phone, the service not answering says so in a strip under the page's 
 });
 
 test("the sign-in, which needs the network, says over it when the Mac is offline", async () => {
-  handState({}, { network: { online: false, reachable: true } });
+  handState({}, { network: { online: false, reachable: true, updateNeeded: false } });
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);

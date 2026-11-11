@@ -226,7 +226,11 @@ it.effect(
   "a poll waiting out its backoff is asked again the moment the service answers again",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt: 0 });
+      const reach = yield* SubscriptionRef.make({
+        reachable: false,
+        answeredAt: 0,
+        updateNeeded: false,
+      });
       let asks = 0;
       const following = yield* Effect.forkChild(
         liveRows<Part>(
@@ -243,7 +247,7 @@ it.effect(
       yield* settled;
       assert.equal(asks, 1, "the first poll failed and waits");
 
-      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1 });
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1, updateNeeded: false });
       yield* settled;
       assert.equal(asks, 2, "asked again with no time passing");
       yield* Fiber.interrupt(following);
