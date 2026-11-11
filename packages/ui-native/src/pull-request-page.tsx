@@ -1,7 +1,18 @@
 // pull-request-page.tsx -- a pull request's page: its heading with where it stands and its branches, the rows of its checks and reviews, the line a change GitHub refused leaves, and the question an act asks first.
 
-import { Alert, Host, HStack, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  Alert,
+  Host,
+  HStack,
+  Button as SwiftUIButton,
+  Text,
+  TextField,
+  useNativeState,
+  VStack,
+} from "@expo/ui/swift-ui";
+import {
+  autocorrectionDisabled,
+  disabled,
   font,
   foregroundStyle,
   frame,
@@ -10,9 +21,10 @@ import {
   listRowInsets,
   listRowSeparator,
   monospacedDigit,
+  textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
-import type { ReactElement } from "react";
+import { type ReactElement, useState } from "react";
 import { FieldChip } from "./button.js";
 import type { MarkLook } from "./glyph.js";
 import { RowFrame, RowHead } from "./list-row.js";
@@ -236,6 +248,12 @@ type ConfirmAskProps = {
   readonly act: string;
   /** Whether the act ends or takes away something, which the system draws red. */
   readonly destructive?: boolean | undefined;
+  /**
+   * Words the person types before the act can be pressed, such as the
+   * account's address before Delete account, as the panel's confirm gates
+   * an act that cannot be undone.
+   */
+  readonly gate?: string | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
   /** Called as the alert goes, by its act or Cancel. */
@@ -253,17 +271,23 @@ const CANCEL = { LABEL: "Cancel", ROLE: "cancel" } as const;
  * and the act is pressed in the bar or on a card, which this cannot stand
  * on; an alert stands centered whatever presents it. It stands in a host
  * of its own, the size of nothing, so a screen draws it beside whatever it
- * shows and presents it from a press anywhere.
+ * shows and presents it from a press anywhere. A gated ask holds the
+ * system's field in the alert, its act dimmed until the field holds the
+ * gate's words exactly.
  */
 export function ConfirmAsk({
   title,
   message,
   act,
   destructive = false,
+  gate,
   presented,
   onAct,
   onDismiss,
 }: ConfirmAskProps) {
+  const typed = useNativeState("");
+  const [words, setWords] = useState("");
+  const shut = gate !== undefined && words !== gate;
   return (
     <Host matchContents style={{ position: "absolute" }}>
       <Alert
@@ -277,11 +301,20 @@ export function ConfirmAsk({
           <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>
         </Alert.Trigger>
         <Alert.Actions>
+          {gate === undefined ? null : (
+            <TextField
+              text={typed}
+              placeholder={gate}
+              onTextChange={setWords}
+              modifiers={[autocorrectionDisabled(), textInputAutocapitalization("never")]}
+            />
+          )}
           <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
           <SwiftUIButton
             label={act}
             role={destructive ? "destructive" : "default"}
             onPress={onAct}
+            modifiers={[disabled(shut)]}
           />
         </Alert.Actions>
         {message === undefined ? null : (

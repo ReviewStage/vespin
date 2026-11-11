@@ -14,15 +14,18 @@ import { ChildProcess, type ChildProcessSpawner } from "effect/process";
 import { agentOnBox } from "./local-agent-box.js";
 
 /**
- * local-agent-requests.ts -- what a local agent's tools and the service ask of this Mac, answered only inside the agent's own folder: a file read, and a diff of its worktree.
+ * local-agent-requests.ts -- what a local agent's tools and the service ask of this Mac, answered only inside the agent's own folders: a file read, and a diff of its worktree.
  *
- * The service asks for a path it built under the agent's folder
- * (`deviceAgentLayout`), but a path is only words: a `..`, or a symlink the
+ * The service asks for a path it built under one of the agent's folders
+ * (`deviceAgentLayoutIn`), but a path is only words: a `..`, or a symlink the
  * agent made in its worktree, could name any file the developer can read.
  * So every target is resolved to its real path first, every symlink
  * followed, and answered only where that real path stands inside the real
- * path of the agent's folder, whose temp folder, worktree, attachments, and
- * installed skills all stand beneath it. Anything else is refused as a path
+ * path of one of the agent's own places (`agentPlaces`): its folder, which
+ * holds its worktree and installed skills, its attachments under the host's
+ * state, and its shared files under the machine's own temp folder, never
+ * that temp folder itself, and those only while they are this machine's own
+ * (`sharedFilesPrivate`). Anything else is refused as a path
  * that names no file the agent may read, and a read answers no bytes. A
  * path that does not exist resolves to nothing, and is refused the same
  * way. No credential stands in the agent's folder: its GitHub sign-in is
@@ -47,6 +50,37 @@ export interface LocalAgentRequestBox {
   readonly gh: string;
 }
 
+/** The places that are the agent's own, each absolute: its folder, its attachments, and its shared files, the only places it is written to or read from for it. */
+export function agentPlaces(layout: DeviceAgentLayout): readonly string[] {
+  return [layout.folder, layout.attachments, layout.sharedFiles];
+}
+
+/**
+ * Whether the agent's shared files folder and its root under the machine's
+ * temp folder are each a real folder, never a link, owned by whoever owns
+ * the agent's own folder. Note that it is asked on every read as well as at
+ * launch, since a root the OS cleared from a temp folder every user shares
+ * (Linux's `/tmp`) could be made again by someone else, who could then swap
+ * the agent's folder beneath it for a link to anything the host can read.
+ */
+export const sharedFilesPrivate = (
+  layout: DeviceAgentLayout,
+): Effect.Effect<boolean, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const owner = (yield* fileSystem.stat(layout.folder)).uid;
+    if (Option.isNone(owner)) return false;
+    const root = layout.sharedFiles.slice(0, layout.sharedFiles.lastIndexOf("/"));
+    for (const place of [root, layout.sharedFiles]) {
+      if (Option.isSome(yield* Effect.option(fileSystem.readLink(place)))) return false;
+      const info = yield* fileSystem.stat(place);
+      if (info.type !== "Directory" || Option.getOrUndefined(info.uid) !== owner.value) {
+        return false;
+      }
+    }
+    return true;
+  }).pipe(Effect.orElseSucceed(() => false));
+
 /** Whether `path`, already real, stands at or under `root`, already real. */
 function within(root: string, path: string): boolean {
   const base = root.replace(/\/+$/u, "");
@@ -54,21 +88,27 @@ function within(root: string, path: string): boolean {
 }
 
 /**
- * The real path of `target` where it stands inside the agent's folder, every
- * symlink in either followed; nothing where either cannot be resolved, or
- * the target resolves outside.
+ * The real path of `target` where it stands inside one of the agent's own
+ * places, every symlink in either followed, its shared files counted only
+ * while they are private (`sharedFilesPrivate`); nothing where the target
+ * cannot be resolved, or resolves outside every place that can.
  */
 const confinedPath = (
-  layout: Pick<DeviceAgentLayout, "folder">,
+  layout: DeviceAgentLayout,
   target: string,
 ): Effect.Effect<Option.Option<string>, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     if (!target.startsWith("/")) return Option.none();
     const resolved = yield* Effect.option(fileSystem.realPath(target));
-    const root = yield* Effect.option(fileSystem.realPath(layout.folder));
-    if (Option.isNone(resolved) || Option.isNone(root)) return Option.none();
-    return within(root.value, resolved.value) ? resolved : Option.none();
+    if (Option.isNone(resolved)) return Option.none();
+    const sharedPrivate = yield* sharedFilesPrivate(layout);
+    for (const place of agentPlaces(layout)) {
+      if (place === layout.sharedFiles && !sharedPrivate) continue;
+      const root = yield* Effect.option(fileSystem.realPath(place));
+      if (Option.isSome(root) && within(root.value, resolved.value)) return resolved;
+    }
+    return Option.none();
   });
 
 /** The first `bound` bytes of the regular file at `path`, real and confined; nothing where it is no file or cannot be read. */
@@ -84,7 +124,7 @@ const readBounded = (path: string, bound: number) =>
     return Option.getOrElse(read, () => new Uint8Array());
   }).pipe(Effect.orElseSucceed(() => null));
 
-/** A read asked: the bytes of the file it names, inside the agent's folder; no bytes for anything else. */
+/** A read asked: the bytes of the file it names, inside the agent's own places; no bytes for anything else. */
 const answeredRead = (layout: DeviceAgentLayout, args: unknown) =>
   Effect.gen(function* () {
     const read = decodeReadArgs(args);
@@ -156,7 +196,7 @@ const answeredDiff = (layout: DeviceAgentLayout, box: LocalAgentRequestBox, args
     );
   });
 
-/** What one request of a local agent answers, inside the agent's folder given: a read of its tools', or a diff of the service's. */
+/** What one request of a local agent answers, inside the agent's own places given: a read of its tools', or a diff of the service's. */
 export const answeredLocalAgentRequest = (
   layout: DeviceAgentLayout,
   box: LocalAgentRequestBox,
