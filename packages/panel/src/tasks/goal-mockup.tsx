@@ -15,27 +15,39 @@
  */
 
 import {
+  BANNER_LOOK,
   BUTTON_SIZE,
   BUTTON_VARIANT,
+  Banner,
   Button,
   DISCLOSURE_FILL,
-  IconButton,
-  LIST_DENSITY,
+  HoverCard,
+  HoverCardFigures,
+  HoverCardHead,
+  HoverCardNote,
+  HoverCardRule,
   LIST_ROW_ACTIONS,
   LIST_VARIANT,
   List,
   ListRow,
   MESSAGE_LINE_ALIGN,
   MessageLine,
+  NOTE_LINE_LOOK,
+  NoteLine,
   OneLine,
   PauseIcon,
   PlayIcon,
+  RowHint,
+  RowHintOptions,
+  STATUS_TONE,
 } from "@repo/ui";
 import { CircleCheckIcon, GLYPH } from "@repo/ui/icons";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { type ReactNode, useEffect, useSyncExternalStore } from "react";
 import { Message, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
+import { useCoarsePointer } from "../coarse-pointer.js";
+import { rowMenu } from "../desktop/action-menu.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { WorkingLine } from "./working-time.js";
 
@@ -267,71 +279,158 @@ function thousands(tokens: number): string {
   return tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M` : `${Math.round(tokens / 1000)}k`;
 }
 
-function standingWords(goal: MockGoal): string {
+/** How the Pause control stands: `?goalpause=button` draws it on the row as the queue's Steer is; otherwise it is in the row's menu, and a paused goal says so in a banner over the row. */
+const PAUSE_ON_ROW = new URLSearchParams(window.location.search).get("goalpause") === "button";
+
+function harnessName(goal: MockGoal): string {
+  return goal.harness === MOCK_HARNESS.CODEX ? "Codex" : "Claude Code";
+}
+
+/** Where the goal stands, in the few words the row's end holds, as a pull request's row says its state and lines. */
+function metaWords(goal: MockGoal): string {
   const codex = goal.harness === MOCK_HARNESS.CODEX;
   const spent = codex
-    ? `${thousands(goal.tokens)}${goal.budget === undefined ? "" : ` of ${thousands(goal.budget)}`} tokens`
+    ? `${thousands(goal.tokens)} of ${thousands(goal.budget ?? goal.tokens)} tokens`
     : `Turn ${goal.turns}`;
   switch (goal.status) {
     case MOCK_STATUS.ACTIVE:
-      return codex || goal.lastReason === undefined ? `Working · ${spent}` : `${spent} · ${goal.lastReason}`;
+      return `${spent} · ${elapsed(goal.startedAt)}`;
     case MOCK_STATUS.PAUSED:
       return `Paused · ${spent}`;
     case MOCK_STATUS.MET:
-      return `Met after ${goal.turns} turns · ${elapsed(goal.startedAt)}`;
+      return `Met · ${goal.turns} turns`;
     case MOCK_STATUS.BUDGET:
-      return `Budget reached · ${spent}`;
+      return "Budget reached";
   }
 }
 
-/** The goal over the message box: what it is, where it stands, and what the reader may do with it. */
+function statusWord(goal: MockGoal): string {
+  switch (goal.status) {
+    case MOCK_STATUS.ACTIVE:
+      return "Working";
+    case MOCK_STATUS.PAUSED:
+      return "Paused";
+    case MOCK_STATUS.MET:
+      return "Met";
+    case MOCK_STATUS.BUDGET:
+      return "Budget reached";
+  }
+}
+
+/** The card the row hangs as the pointer rests on it: the goal whole, the checker's last word, and how far it has run. */
+function GoalCard({ goal }: { goal: MockGoal }): ReactNode {
+  const codex = goal.harness === MOCK_HARNESS.CODEX;
+  const figures = [
+    { label: "Status", figure: statusWord(goal) },
+    { label: "Running", figure: elapsed(goal.startedAt) },
+    { label: "Turns", figure: String(goal.turns) },
+    ...(codex
+      ? [{ label: "Tokens", figure: `${thousands(goal.tokens)} of ${thousands(goal.budget ?? goal.tokens)}` }]
+      : []),
+  ];
+  return (
+    <HoverCard>
+      <HoverCardHead
+        glyph={goal.status === MOCK_STATUS.MET ? <CircleCheckIcon /> : <GLYPH.GOAL />}
+        name={goal.objective}
+        sub={codex ? "Goal · Codex judges it met" : "Goal · checked after each turn"}
+      />
+      {goal.lastReason === undefined || codex ? null : (
+        <HoverCardNote>
+          {goal.status === MOCK_STATUS.MET ? "Met: " : "Not met yet: "}
+          {goal.lastReason}
+        </HoverCardNote>
+      )}
+      <HoverCardRule />
+      <HoverCardFigures label={harnessName(goal)} figures={figures} />
+    </HoverCard>
+  );
+}
+
+/** Scrolls the transcript to the goal's newest card, which says what the checker last said. */
+function showNewestCard(): void {
+  const cards = document.querySelectorAll("[data-goal-card]");
+  cards.item(cards.length - 1)?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+/** The goal over the message box, a card of one row as the pull request's is: its condition, where it stands, a press showing the checker's newest word, its card on hover, and its menu. */
 export function GoalDock(): ReactNode {
   const { goal } = useMockGoal();
+  const coarse = useCoarsePointer();
   if (goal === undefined) return null;
   const codex = goal.harness === MOCK_HARNESS.CODEX;
   const settled = goal.status === MOCK_STATUS.MET || goal.status === MOCK_STATUS.BUDGET;
+  const paused = goal.status === MOCK_STATUS.PAUSED;
+  // Note that only Codex can pause a goal; Claude Code's only stop is clearing it.
+  const pausing =
+    !codex || settled
+      ? []
+      : [
+          paused
+            ? { label: "Resume goal", icon: <PlayIcon />, onSelect: resume }
+            : { label: "Pause goal", icon: <PauseIcon />, onSelect: pause },
+        ];
+  const menu = rowMenu(
+    "Goal",
+    [
+      pausing,
+      [{ label: "Copy goal", icon: <GLYPH.COPY />, onSelect: () => void navigator.clipboard.writeText(goal.objective) }],
+      [
+        settled
+          ? { label: "Dismiss", icon: <GLYPH.CLOSE />, onSelect: clear }
+          : { label: "Clear goal", icon: <GLYPH.CLOSE />, onSelect: clear },
+      ],
+    ].filter((group) => group.length > 0),
+    undefined,
+    true,
+  );
   return (
     <div className={`agent-goal-dock ${COMPOSER_DOCK_CLASS}`}>
-      <List label="Goal" variant={LIST_VARIANT.CARD} density={LIST_DENSITY.COMPACT}>
-        <ListRow
-          leading={goal.status === MOCK_STATUS.MET ? <CircleCheckIcon /> : <GLYPH.GOAL />}
-          title={<OneLine words={goal.objective}>{goal.objective}</OneLine>}
-          description={standingWords(goal)}
-          meta={settled ? undefined : elapsed(goal.startedAt)}
-          muted={goal.status === MOCK_STATUS.PAUSED}
-          actionsAt={LIST_ROW_ACTIONS.ALWAYS}
+      {!paused || PAUSE_ON_ROW ? null : (
+        <Banner
+          look={BANNER_LOOK.INSET}
+          tone={STATUS_TONE.NEUTRAL}
+          glyph={<PauseIcon />}
           actions={
-            <>
-              {/* Note that only Codex can pause a goal; Claude Code's only stop is clearing it. */}
-              {!codex || settled ? null : goal.status === MOCK_STATUS.PAUSED ? (
-                <Button
-                  size={BUTTON_SIZE.COMPACT}
-                  variant={BUTTON_VARIANT.QUIET}
-                  icon={<PlayIcon />}
-                  onClick={resume}
-                >
-                  Resume
-                </Button>
-              ) : (
-                <Button
-                  size={BUTTON_SIZE.COMPACT}
-                  variant={BUTTON_VARIANT.QUIET}
-                  icon={<PauseIcon />}
-                  onClick={pause}
-                >
-                  Pause
-                </Button>
-              )}
-              <IconButton
-                size={BUTTON_SIZE.COMPACT}
-                label={settled ? "Dismiss" : "Clear goal"}
-                icon={<GLYPH.CLOSE />}
-                onClick={clear}
-              />
-            </>
+            <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.QUIET} icon={<PlayIcon />} onClick={resume}>
+              Resume
+            </Button>
           }
-        />
-      </List>
+        >
+          Goal paused. The agent stops after this turn until you resume it.
+        </Banner>
+      )}
+      <div className="agent-published">
+        <List label="Goal" variant={LIST_VARIANT.CARD} fingerTall>
+          <RowHintOptions card={<GoalCard goal={goal} />}>
+            <ListRow
+              leading={goal.status === MOCK_STATUS.MET ? <CircleCheckIcon /> : <GLYPH.GOAL />}
+              title={goal.objective}
+              meta={<span className="whitespace-nowrap text-muted-foreground">{metaWords(goal)}</span>}
+              hint={{ Hint: RowHint, label: goal.objective }}
+              onPress={showNewestCard}
+              menu={menu}
+              more={!coarse}
+              muted={paused}
+              {...(PAUSE_ON_ROW && pausing.length > 0
+                ? {
+                    actionsAt: LIST_ROW_ACTIONS.HOVER,
+                    actions: (
+                      <Button
+                        size={BUTTON_SIZE.COMPACT}
+                        variant={BUTTON_VARIANT.QUIET}
+                        icon={paused ? <PlayIcon /> : <PauseIcon />}
+                        onClick={paused ? resume : pause}
+                      >
+                        {paused ? "Resume" : "Pause"}
+                      </Button>
+                    ),
+                  }
+                : undefined)}
+            />
+          </RowHintOptions>
+        </List>
+      </div>
     </div>
   );
 }
@@ -362,7 +461,7 @@ function GoalLineCard({ entry, objective }: { entry: MockEvent; objective: strin
   const turn = entry.turn === undefined ? "" : `Turn ${entry.turn}`;
   const preview = entry.kind === MOCK_EVENT.SET ? undefined : entry.reason;
   return (
-    <Message from={MESSAGE_ROLE.ASSISTANT} className={RECEIVED_MESSAGE_CLASS}>
+    <Message from={MESSAGE_ROLE.ASSISTANT} className={RECEIVED_MESSAGE_CLASS} data-goal-card="">
       <Plan
         open={folds ? undefined : false}
         fill={DISCLOSURE_FILL.ACTIONS}
@@ -396,9 +495,24 @@ export function GoalLines(): ReactNode {
   const objective = goal?.objective ?? OBJECTIVE;
   return (
     <>
-      {events.map((entry) => (
-        <GoalLineCard key={entry.id} entry={entry} objective={objective} />
-      ))}
+      {events.map((entry) =>
+        // Note that a move of the goal's own standing says nothing more than that it moved, so it is a trail across the transcript, as a new session's is, rather than a card.
+        entry.kind === MOCK_EVENT.PAUSED || entry.kind === MOCK_EVENT.RESUMED || entry.kind === MOCK_EVENT.CLEARED ? (
+          <NoteLine
+            key={entry.id}
+            look={NOTE_LINE_LOOK.TRAIL}
+            glyph={entry.kind === MOCK_EVENT.PAUSED ? <PauseIcon /> : entry.kind === MOCK_EVENT.RESUMED ? <PlayIcon /> : <GLYPH.GOAL />}
+          >
+            {entry.kind === MOCK_EVENT.PAUSED
+              ? "Goal paused. The agent stops after this turn."
+              : entry.kind === MOCK_EVENT.RESUMED
+                ? "Goal resumed."
+                : "Goal cleared."}
+          </NoteLine>
+        ) : (
+          <GoalLineCard key={entry.id} entry={entry} objective={objective} />
+        ),
+      )}
       {goal?.status === MOCK_STATUS.ACTIVE ? (
         <WorkingLine
           startedAt={goal.startedAt}
