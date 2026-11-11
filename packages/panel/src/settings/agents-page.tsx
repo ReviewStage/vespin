@@ -80,6 +80,7 @@ import { ReadFailed } from "./marks.js";
 import { PickerRow } from "./picker-row.js";
 import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
 import { SchemaSettingRows } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
 
 /**
@@ -432,7 +433,7 @@ function AgentsSection({
   const onRetryModels = useCallback(() => retryModels(), [retryModels]);
 
   return (
-    <SettingsSection title="New agents">
+    <SettingsSection {...settingsSectionHead(SECTION.NEW_AGENTS)}>
       {!signedIn ? (
         <SettingsLine>{PAGE_LINE.SIGNED_OUT}</SettingsLine>
       ) : drawn.choice !== undefined && (models !== undefined || modelsFailed) ? (

@@ -2,10 +2,8 @@ import type { ExperimentChoices, HostCapability } from "@repo/settings";
 import { searchAnchorProps } from "@repo/settings/settings-anchors";
 import {
   APP_SHORTCUTS,
-  CHAPTERS_GROUP_TITLE,
   CHAPTERS_KEYS,
   CHAPTERS_SHORTCUTS,
-  FILES_CHANGED_GROUP_TITLE,
   FILES_CHANGED_KEYS_LISTED,
   FILES_CHANGED_SHORTCUTS,
   IN_CONTEXT_SHORTCUTS,
@@ -15,7 +13,6 @@ import {
   shortcutLabel,
   shownShortcutGroups,
   WRITING_ACTIONS_LISTED,
-  WRITING_GROUP_TITLE,
   WRITING_KEYS_IN_CONTEXT,
   WRITING_SHORTCUTS,
   type WritingAction,
@@ -32,6 +29,7 @@ import {
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * shortcuts-page.tsx -- Settings' Keyboard shortcuts page: the window's own shortcuts and the keys that answer in place, grouped by what they act on, listed to be found rather than changed.
@@ -75,7 +73,10 @@ export function WindowShortcutSections({
   return (
     <>
       {shownShortcutGroups(experiments, capabilities).map((group) => (
-        <SettingsSection key={group.title} title={group.title}>
+        <SettingsSection
+          key={group.title}
+          {...settingsSectionHead(SECTION.SHORTCUTS_GROUP, group.title)}
+        >
           {group.commands.map((command) => (
             <div key={command} {...searchAnchorProps(command)}>
               <SettingsRow
@@ -91,7 +92,7 @@ export function WindowShortcutSections({
           ))}
         </SettingsSection>
       ))}
-      <SettingsSection title={WRITING_GROUP_TITLE}>
+      <SettingsSection {...settingsSectionHead(SECTION.SHORTCUTS_WRITING)}>
         {WRITING_ACTIONS_LISTED.map((action) => (
           <div key={action} {...searchAnchorProps(action)}>
             <SettingsRow
@@ -106,7 +107,7 @@ export function WindowShortcutSections({
           <InContextRow key={key} inContext={key} />
         ))}
       </SettingsSection>
-      <SettingsSection title={FILES_CHANGED_GROUP_TITLE}>
+      <SettingsSection {...settingsSectionHead(SECTION.SHORTCUTS_FILES_CHANGED)}>
         {FILES_CHANGED_KEYS_LISTED.map((key) => (
           <div key={key} {...searchAnchorProps(key)}>
             <SettingsRow
@@ -118,7 +119,7 @@ export function WindowShortcutSections({
           </div>
         ))}
       </SettingsSection>
-      <SettingsSection title={CHAPTERS_GROUP_TITLE}>
+      <SettingsSection {...settingsSectionHead(SECTION.SHORTCUTS_CHAPTERS)}>
         {CHAPTERS_KEYS.map((key) => (
           <div key={key} {...searchAnchorProps(key)}>
             <SettingsRow density={SETTINGS_ROW_DENSITY.LIST} label={CHAPTERS_SHORTCUTS[key].label}>

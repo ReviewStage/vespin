@@ -16,7 +16,7 @@ import {
   isWorkspaceExperiment,
   type WorkspaceExperiment,
 } from "@repo/settings";
-import { EXPERIMENT_ANCHOR, SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { EXPERIMENT_ANCHOR } from "@repo/settings/settings-anchors";
 import {
   CONFIRM_LOSS,
   ConfirmDialog,
@@ -32,7 +32,6 @@ import {
   useConfirmDialog,
   useMinute,
 } from "@repo/ui";
-import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { FlaskConicalIcon } from "lucide-react";
@@ -44,6 +43,7 @@ import { confirmFailure } from "../failure-report.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenFeedback } from "../open-feedback.js";
 import { actionRefused, refusalToast, rowWrite } from "./row-write.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
 
 /**
@@ -329,13 +329,7 @@ export function ExperimentalPage({
       {workspace === undefined || workspaceEntries.length === 0 ? null : (
         <MemberDirectory workspace={workspace} readerId={readerId}>
           <SettingsSection
-            anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_WORKSPACE}
-            title={
-              <>
-                {WORDS.WORKSPACE_TITLE}
-                <ReplayMask>{workspace.name}</ReplayMask>
-              </>
-            }
+            {...settingsSectionHead(SECTION.EXPERIMENTS_WORKSPACE, workspace)}
             caption={WORDS.WORKSPACE_CAPTION}
           >
             {workspaceEntries.map((entry) => (
@@ -345,10 +339,7 @@ export function ExperimentalPage({
         </MemberDirectory>
       )}
       {accountEntries.length === 0 ? null : (
-        <SettingsSection
-          anchor={SETTINGS_SEARCH_ROW.EXPERIMENTS_ACCOUNT}
-          title={WORDS.ACCOUNT_TITLE}
-        >
+        <SettingsSection {...settingsSectionHead(SECTION.EXPERIMENTS_ACCOUNT)}>
           {accountEntries.map((entry) => (
             <AccountExperimentRow
               key={entry.key}

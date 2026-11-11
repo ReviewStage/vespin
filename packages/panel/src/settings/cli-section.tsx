@@ -50,6 +50,7 @@ import { confirmFailure, refusedShown } from "../failure-report.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
 import { appStateQuery, selectAccount, selectCapability } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
+import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * cli-section.tsx -- Settings › our MCP & CLI's CLI section: the `vespin` command's sign-in, with Sign out everywhere once it holds one, and its install, to copy and, in the desktop app, run here as VS Code installs `code`.
@@ -82,7 +83,6 @@ import { ReadFailed } from "./marks.js";
  */
 
 const SECTION = {
-  TITLE: "CLI",
   CAPTION: `Use ${PRODUCT_NAME} from your terminal.`,
 } as const;
 
@@ -410,11 +410,7 @@ export function CliSection(): React.JSX.Element {
       : listed;
   const email = account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.email : undefined;
   return (
-    <SettingsSection
-      title={SECTION.TITLE}
-      caption={SECTION.CAPTION}
-      anchor={SETTINGS_SEARCH_ROW.CLI_SIGN_IN}
-    >
+    <SettingsSection {...settingsSectionHead(SECTION_HEAD.CLI_SIGN_IN)} caption={SECTION.CAPTION}>
       {rows === undefined ? (
         <>
           <ReadFailed

@@ -42,6 +42,7 @@ import { useIntegrationToolReads } from "../integration-tools.js";
 import { focusSearchField } from "../search-field.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { ReadFailed } from "./marks.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * integrations-page.tsx -- Settings › Integrations: the services the account connects so our agents can use them.
@@ -305,7 +306,10 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
       {rows.length === 0 ? <PageNote>{PAGE_LINE.NONE_OFFERED}</PageNote> : null}
       {rows.length > 0 && found.length === 0 ? <NoMatchNote query={query} /> : null}
       {found.map((group) => (
-        <SettingsSection key={group.heading ?? "unread"} title={group.heading}>
+        <SettingsSection
+          key={group.heading ?? "unread"}
+          {...settingsSectionHead(SECTION.INTEGRATIONS_GROUP, group.heading)}
+        >
           {group.rows.map((row) => (
             <IntegrationRow
               key={row.connection}
