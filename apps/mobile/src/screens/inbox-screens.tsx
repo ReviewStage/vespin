@@ -59,6 +59,7 @@ import {
   previewMessages,
   ROW_ACTION_TONE,
   RowList,
+  SCOPE_LOOK,
   type Scope,
   ScopePicker,
   Screen,
@@ -691,8 +692,8 @@ function InboxStackList(words: InboxSearch) {
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
-// under its scopes' segmented control with its search and ⋯ menu in its bar and the
-// selected thread beside it, and, where the window is wide enough for three
+// under its scopes' menu picker, since the column cuts segments short, with
+// its search and ⋯ menu in its bar and the selected thread beside it, and, where the window is wide enough for three
 // columns, the app sidebar before them, as Mail stands its mailboxes, a
 // mailbox's mail, and a message. The Stack's header steps aside, since the
 // split view draws each column's navigation bar itself.
@@ -718,7 +719,7 @@ function InboxSplitScreen({
         <SplitView
           {...sidebar.columns({
             view: (
-              <ScopePicker scopes={scopes}>
+              <ScopePicker scopes={scopes} look={SCOPE_LOOK.MENU}>
                 {listing.listed.length === 0 ? (
                   <InboxEmpty
                     show={show}

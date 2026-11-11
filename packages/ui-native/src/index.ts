@@ -21,7 +21,9 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
+  SCOPE_LOOK,
   type Scope,
+  type ScopeLook,
   ScopePicker,
   StatusChip,
 } from "./button.js";

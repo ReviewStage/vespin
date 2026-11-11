@@ -13,6 +13,7 @@ import {
   disabled as disabledModifier,
   font,
   foregroundStyle,
+  frame,
   labelsHidden,
   monospacedDigit,
   padding,
@@ -215,6 +216,14 @@ export type Scope = {
   readonly onPress: () => void;
 };
 
+/** How a `ScopePicker` stands: as segments across a screen, or as one menu button where a column is too narrow for segments. */
+export const SCOPE_LOOK = {
+  SEGMENTED: "segmented",
+  MENU: "menu",
+} as const;
+
+export type ScopeLook = (typeof SCOPE_LOOK)[keyof typeof SCOPE_LOOK];
+
 /** A scope as its segment names it: its label, and its count after it where it has one. */
 function segmentWords(scope: Scope): string {
   return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
@@ -226,13 +235,17 @@ function segmentWords(scope: Scope): string {
  * list they scope. It stands over the list rather than in it, so it stays
  * when the scope chosen lists nothing. Note that the system draws it, in
  * its own glass and its own selection, so it reads as iOS's rather than a
- * row of capsules of our own.
+ * row of capsules of our own. In a split view's list column, whose 320 pt
+ * cut the segments' words short, it stands as the system's menu picker
+ * instead: one button naming the scope chosen, opening the others.
  */
 export function ScopePicker({
   scopes,
+  look = SCOPE_LOOK.SEGMENTED,
   children,
 }: {
   readonly scopes: readonly Scope[];
+  readonly look?: ScopeLook | undefined;
   /** The list the control scopes, or what stands in its place while it lists nothing. */
   readonly children: ReactNode;
 }) {
@@ -244,8 +257,11 @@ export function ScopePicker({
         selection={chosen?.label ?? ""}
         onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
         modifiers={[
-          pickerStyle("segmented"),
+          pickerStyle(look),
           labelsHidden(),
+          ...(look === SCOPE_LOOK.MENU
+            ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]
+            : []),
           padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
         ]}
       >

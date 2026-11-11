@@ -22,7 +22,7 @@ builds a control of its own.
   such as the workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
-  `ScopePicker` (a list's scopes as the system's segmented control), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
+  `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
@@ -151,7 +151,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   on the status marks alone: a task's ring, and a pull request's state.
 - **Scopes and capsules.** A list's scopes are `ScopePicker`, the system's
   segmented control under its title, as Mail and the App Store switch a
-  list's views. `Chip` is a capsule an act or a choice stands in, such as a
+  list's views; in a split view's 320 pt list column, which cuts the
+  segments' words short, the system's menu picker naming the scope chosen
+  (`SCOPE_LOOK.MENU`). `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee. Each stands
   on `SURFACE` inside a hairline.
