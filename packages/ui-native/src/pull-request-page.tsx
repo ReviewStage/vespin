@@ -16,6 +16,7 @@ import {
   font,
   foregroundStyle,
   frame,
+  keyboardType,
   lineLimit,
   listRowBackground,
   listRowInsets,
@@ -322,6 +323,107 @@ export function ConfirmAsk({
             onPress={onAct}
             modifiers={[disabled(shut)]}
           />
+        </Alert.Actions>
+        {message === undefined ? null : (
+          <Alert.Message>
+            <Text>{message}</Text>
+          </Alert.Message>
+        )}
+      </Alert>
+    </Host>
+  );
+}
+
+/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
+export const WORDS_ASK_KIND = {
+  /** A name, capitalized and corrected as the system does. */
+  NAME: "name",
+  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
+  EMAIL: "email",
+} as const;
+
+export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
+
+/** One of a `WordsAsk`'s acts beside Cancel, handed the words typed. */
+export interface WordsAskAct {
+  readonly label: string;
+  readonly onAct: (words: string) => void;
+}
+
+type WordsAskProps = {
+  readonly title: string;
+  readonly message?: string | undefined;
+  readonly placeholder: string;
+  /** The words the field holds as the alert opens, such as the name a rename starts from. */
+  readonly initial?: string | undefined;
+  readonly kind: WordsAskKind;
+  /** Its acts, the last the one Return presses; each dimmed while the field is empty. */
+  readonly acts: readonly WordsAskAct[];
+  readonly presented: boolean;
+  /** Called as the alert goes, by an act or Cancel. */
+  readonly onDismiss: () => void;
+};
+
+/**
+ * Words asked for in the system's alert, as iOS asks a rename or an
+ * address: its field, Cancel, and its acts, each dimmed until something is
+ * typed. The field starts from `initial` each time the alert opens. It
+ * stands in a host of its own, the size of nothing, as `ConfirmAsk` does.
+ */
+export function WordsAsk({
+  title,
+  message,
+  placeholder,
+  initial = "",
+  kind,
+  acts,
+  presented,
+  onDismiss,
+}: WordsAskProps) {
+  const typed = useNativeState(initial);
+  const [words, setWords] = useState(initial);
+  useEffect(() => {
+    if (!presented) return;
+    typed.value = initial;
+    setWords(initial);
+  }, [presented, initial, typed]);
+  const empty = words.trim().length === 0;
+  const field =
+    kind === WORDS_ASK_KIND.EMAIL
+      ? [
+          keyboardType("email-address"),
+          autocorrectionDisabled(),
+          textInputAutocapitalization("never"),
+        ]
+      : [textInputAutocapitalization("words")];
+  return (
+    <Host matchContents style={{ position: "absolute" }}>
+      <Alert
+        title={title}
+        isPresented={presented}
+        onIsPresentedChange={(shown) => {
+          if (!shown) onDismiss();
+        }}
+      >
+        <Alert.Trigger>
+          <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>
+        </Alert.Trigger>
+        <Alert.Actions>
+          <TextField
+            text={typed}
+            placeholder={placeholder}
+            onTextChange={setWords}
+            modifiers={field}
+          />
+          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
+          {acts.map((act) => (
+            <SwiftUIButton
+              key={act.label}
+              label={act.label}
+              onPress={() => act.onAct(words.trim())}
+              modifiers={[disabled(empty)]}
+            />
+          ))}
         </Alert.Actions>
         {message === undefined ? null : (
           <Alert.Message>

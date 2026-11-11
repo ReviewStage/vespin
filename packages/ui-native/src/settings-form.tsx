@@ -5,6 +5,7 @@ import {
   HStack,
   Image,
   LabeledContent,
+  Menu,
   Picker,
   Spacer,
   Button as SwiftUIButton,
@@ -13,6 +14,7 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityIdentifier,
   accessibilityLabel,
   background,
   buttonStyle,
@@ -67,10 +69,12 @@ function PressedRow({
   label,
   onPress,
   children,
+  testId,
 }: {
   readonly label: string;
   readonly onPress: () => void;
   readonly children: ReactElement;
+  readonly testId?: string | undefined;
 }) {
   const colors = useColors();
   return (
@@ -81,6 +85,7 @@ function PressedRow({
         contentShape(shapes.rectangle()),
         accessibilityLabel(label),
         listRowBackground(colors.SURFACE),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
     >
       {children}
@@ -182,6 +187,8 @@ type PushRowProps = {
   readonly detail?: string | undefined;
   readonly goes: PushRowGoes;
   readonly onPress: () => void;
+  /** The name a flow finds the row by, where its words are not its own, such as a workspace named for its owner. */
+  readonly testId?: string | undefined;
 };
 
 /**
@@ -189,10 +196,10 @@ type PushRowProps = {
  * end, or out of the app, with the arrow out, its words in the ink and what
  * stands at its end in the muted ink.
  */
-export function PushRow({ label, symbol, detail, goes, onPress }: PushRowProps) {
+export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRowProps) {
   const colors = useColors();
   return (
-    <PressedRow label={label} onPress={onPress}>
+    <PressedRow label={label} onPress={onPress} testId={testId}>
       <HStack spacing={SPACE.ROW}>
         {symbol === undefined ? null : (
           <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
@@ -300,5 +307,69 @@ export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
         </Text>
       ))}
     </Picker>
+  );
+}
+
+/** One thing a member's menu does to them. */
+export interface MemberRowAct {
+  readonly label: string;
+  /** Whether it takes them out of something, such as Remove from workspace, which the system draws red. */
+  readonly destructive?: boolean | undefined;
+  readonly onPress: () => void;
+}
+
+type MemberRowProps = {
+  readonly name: string;
+  readonly email: string;
+  readonly picture?: string | undefined;
+  /** Their role, in the words the panel says it: Owner, Admin, Member; none for an address invited, whose line says it. */
+  readonly role?: string | undefined;
+  /** The badge beside the reader's own name, such as "You"; none on anyone else's row. */
+  readonly badge?: string | undefined;
+  /** What the reader may do to them; a row with none takes no press. */
+  readonly acts: readonly MemberRowAct[];
+};
+
+/**
+ * A member of a workspace: their photo or letters, their name with the
+ * reader's own badge, their address, and their role at the end in the muted
+ * ink. Where the reader may act on them, a press opens the system's menu of
+ * those acts, as a contact's row opens one.
+ */
+export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
+  const colors = useColors();
+  const face = (
+    <HStack spacing={SPACE.ROW}>
+      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <VStack alignment="leading" spacing={1}>
+        <Text modifiers={[foregroundStyle(colors.TEXT)]}>
+          {badge === undefined ? name : `${name} · ${badge}`}
+        </Text>
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {email}
+        </Text>
+      </VStack>
+      <Spacer />
+      {role === undefined ? null : (
+        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
+      )}
+    </HStack>
+  );
+  if (acts.length === 0) {
+    return <VStack modifiers={[listRowBackground(colors.SURFACE)]}>{face}</VStack>;
+  }
+  return (
+    <Menu label={face} modifiers={[listRowBackground(colors.SURFACE), accessibilityLabel(name)]}>
+      {acts.map((act) => (
+        <SwiftUIButton
+          key={act.label}
+          label={act.label}
+          role={act.destructive === true ? "destructive" : "default"}
+          onPress={act.onPress}
+        />
+      ))}
+    </Menu>
   );
 }

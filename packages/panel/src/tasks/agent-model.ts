@@ -66,7 +66,7 @@ import {
   remedyLabel,
 } from "@repo/features/failure-remedy";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
-import { effortLabel } from "@repo/features/model-effort";
+import { effortLabel, SPEED_WORD } from "@repo/features/model-effort";
 import { agentName, CATALOG_ID_SEPARATOR, modelLabel } from "@repo/features/model-label";
 import {
   type CatalogModel,
@@ -1287,19 +1287,6 @@ function orderedModels(models: readonly CatalogModel[]): readonly CatalogModel[]
 
 /** What the model menu and Settings say where the catalog could not be read. */
 export const MODELS_READ_FAILED = readFailedWords("the models");
-
-/** The word a choice label, the Fast row, and the Speed choice say for each speed. */
-export const SPEED_WORD = {
-  [MODEL_SPEED.STANDARD]: "Standard",
-  [MODEL_SPEED.FAST]: "Fast",
-  [MODEL_SPEED.ULTRAFAST]: "Ultrafast",
-} as const satisfies Record<ModelSpeed, string>;
-
-/** The word a choice label and the Fast row say for the fast version. */
-export const FAST_WORD = SPEED_WORD[MODEL_SPEED.FAST];
-
-/** The word the Speed choice is named by, which stands in the Fast row's place for a model with an Ultrafast version. */
-export const SPEED_LABEL = "Speed";
 
 /** What the Fast row says where the service withholds the model's fast version because Anthropic never granted the organization of the key the account's agents run on fast mode. */
 const FAST_NOT_ENABLED_NOTE = "Fast isn't enabled for this key's Anthropic organization";
