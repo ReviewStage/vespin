@@ -1,4 +1,4 @@
-// inbox-ask.tsx -- a thread's open ask as its card, and the box under the thread: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, and the composer that sends them with a note or replies.
+// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note or replies, and Remind me and Resolve.
 
 import { ASK_PRESS, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import { fieldValueOf, shownTicks, withStep, withValue } from "@repo/features/inbox-draft";
@@ -26,6 +26,7 @@ import {
 } from "@repo/ui-native";
 import type { ReactNode } from "react";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
+import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
 const THREAD_MORE = { label: "More", symbol: "ellipsis" } as const;
@@ -182,12 +183,15 @@ export function ThreadComposer({
   return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
 }
 
-/** The thread's ⋯ menu: Resolve, while the thread stands open. */
-export function threadMenu(item: InboxItem, answer: ThreadAnswer): BarMenu | undefined {
-  if (item.status !== INBOX_STATUS.OPEN) return undefined;
+/** The thread's ⋯ menu: Remind me, on any thread, open or settled, as the panel's menu offers it, and Resolve while it stands open. */
+export function threadMenu(item: InboxItem, answer: ThreadAnswer, onRemind: () => void): BarMenu {
+  const resolve =
+    item.status === INBOX_STATUS.OPEN
+      ? [{ label: RESOLVE, symbol: "checkmark.circle", onPress: answer.resolve } as const]
+      : [];
   return {
     ...THREAD_MORE,
     choices: [],
-    actions: [{ label: RESOLVE, symbol: "checkmark.circle", onPress: answer.resolve }],
+    actions: [{ ...REMIND_ME, onPress: onRemind }, ...resolve],
   };
 }

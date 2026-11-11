@@ -134,6 +134,7 @@ export interface TabDoors
     | "onRename"
     | "onOpenTerminal"
     | "onOpenBrowser"
+    | "run"
     | "onOpenInTask"
     | "archive"
     | "deletion"
@@ -260,6 +261,7 @@ function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
     onRename,
     onOpenTerminal,
     onOpenBrowser: doors.onOpenBrowser,
+    run: doors.run,
     onOpenInTask,
     archive,
     deletion,

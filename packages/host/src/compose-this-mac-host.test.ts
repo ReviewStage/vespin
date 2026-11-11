@@ -19,7 +19,7 @@ import { HOST_RELEASE } from "@repo/features/host-release";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { GATEWAY_EVENT } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { EXPERIMENT, type Experiment } from "@repo/settings";
+import { EXPERIMENT, type Experiment, KEEP_AWAKE, type KeepAwake } from "@repo/settings";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Duration, Effect, Layer, Option, PubSub, Result, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
@@ -29,6 +29,7 @@ import type { AppThisMacHost, AppThisMacHosts } from "./app-state.js";
 import { composeThisMacHost } from "./compose-this-mac-host.js";
 import { reporterLayer, ThisMacHost } from "./effect/seams.js";
 import { type HostDevice, readHostDevice, writeHostDevice } from "./host-device-record.js";
+import { readKeepAwake } from "./keep-awake-record.js";
 import { scriptedSpawner } from "./testing/scripted-spawner.js";
 
 const USER_ID = "user-fixture";
@@ -97,6 +98,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
     const listed = new Set(options.listed ?? []);
     let version: string | null = null;
     let told: AppThisMacHosts | undefined;
+    let keepAwake: KeepAwake = KEEP_AWAKE.WORKING;
     const client = {
       enrollOwn: (deviceId: string) =>
         HttpClient.get(ENROLL_URL).pipe(
@@ -123,6 +125,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       accountId: () => USER_ID,
       experimentOn: (experiment) => Effect.succeed(experiments[experiment] === true),
       settingsTold: Effect.map(PubSub.subscribe(settingsTold), Stream.fromSubscription),
+      keepAwake: Effect.sync(() => keepAwake),
       hostListed: (deviceId) => Effect.succeed(Option.some(listed.has(deviceId))),
       client,
     }).pipe(
@@ -184,7 +187,13 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
         experiments[experiment] = on;
         return PubSub.publish(settingsTold, undefined);
       });
-    return { asked, enrolled, held, turn, flip };
+    /** Keep this Mac awake chosen, and the settings told again, as its menu in Settings does. */
+    const keepAwakeChosen = (choice: KeepAwake) =>
+      Effect.suspend(() => {
+        keepAwake = choice;
+        return PubSub.publish(settingsTold, undefined);
+      });
+    return { asked, enrolled, held, turn, flip, keepAwakeChosen };
   });
 
 /** The state folder with the record given written, as the install's host would have left it. */
@@ -226,6 +235,30 @@ it.effect(
           enrolled: true,
           agentFolders: 0,
         });
+      }).pipe(Effect.provide(FILES)),
+    ),
+);
+
+it.effect(
+  "how the member keeps this Mac awake reaches the installed host's state as the settings are told again",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const stateRoot = yield* recorded({
+          deviceId: KEPT_ID,
+          deviceSecret: OLD_SECRET,
+          serviceOrigin: SERVICE,
+        });
+        const mac = yield* thisMac(stateRoot, { experiments: {} });
+        yield* until(() => mac.held() !== undefined);
+
+        yield* mac.keepAwakeChosen(KEEP_AWAKE.PLUGGED_IN);
+        let read = yield* readKeepAwake(stateRoot);
+        for (let round = 0; round < 2_000 && read !== KEEP_AWAKE.PLUGGED_IN; round += 1) {
+          yield* nudged(Duration.millis(100));
+          read = yield* readKeepAwake(stateRoot);
+        }
+        assert.equal(read, KEEP_AWAKE.PLUGGED_IN);
       }).pipe(Effect.provide(FILES)),
     ),
 );

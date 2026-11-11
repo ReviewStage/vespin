@@ -147,3 +147,38 @@ test("with Done and follow-ups on, the bar says Needs you, lists each ask waitin
   act(() => waitingButton.click());
   assert.deepEqual(chosen, ["Expire an invitation after a week?: Never"]);
 });
+
+test("with Done and follow-ups on, a done agent's bar offers Archive and opens another agent of the task that waits on the developer", () => {
+  const pressed: string[] = [];
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      createElement(ThreadsDock, {
+        threads: {
+          waiting: [],
+          posted: [],
+          onOpen: () => undefined,
+          turnEnd: true,
+          others: [{ agentId: "review", name: "Review the invite flow", waiting: 1 }],
+          onOpenAgent: (agentId) => pressed.push(`open ${agentId}`),
+          done: {
+            followUps: [],
+            ticked: [],
+            onTick: () => undefined,
+            archive: { onSelect: () => pressed.push("archive"), busy: false },
+          },
+        },
+      }),
+    ),
+  );
+
+  const buttons = [...container.querySelectorAll("button")];
+  const archive = buttons.find((each) => each.textContent === "Archive agent");
+  const other = buttons.find((each) => each.textContent?.startsWith("Review the invite flow"));
+  assert.ok(archive && other, container.textContent ?? "");
+  act(() => archive.click());
+  act(() => other.click());
+  assert.deepEqual(pressed, ["archive", "open review"]);
+});

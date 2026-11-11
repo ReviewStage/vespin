@@ -3,11 +3,12 @@ import {
   REVIEW_COMMENT_MODE,
   type ReviewCommentMode,
 } from "@repo/features/pull-request-write-wire";
-import { BUTTON_VARIANT, Button, CARD_CORNER, CARD_PADDING, Card } from "@repo/ui";
+import { BUTTON_SIZE, BUTTON_VARIANT, Button, CARD_CORNER, CARD_PADDING, Card } from "@repo/ui";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useState } from "react";
 import { type CommentLines, commentLinesLabel } from "./changes-model.js";
 import { CommentEditor, overCommentBound } from "./comment-editor.js";
-import { ACTS_AT_END_CLASS } from "./pull-request-look.js";
+import { REPLY_VARIANT } from "./comment-variant.js";
 import {
   PullRequestWriteNote,
   type ReadAgain,
@@ -62,8 +63,11 @@ export type PendingReview = { readonly comments: number } | null | undefined;
 
 /**
  * The comment under the lines it is on: its head naming them, the words
- * written as they are drawn, GitHub's answer where it did not take it, and Cancel
- * with what GitHub offers. Enter sends it the way the first offer does, and
+ * written as they are drawn, bare on the card as a thread's first comment is
+ * on a page, GitHub's answer where it did not take it, and in the words'
+ * foot Cancel, Start a review where no review is held, and the round send:
+ * a single comment, or the review's next comment once one is held. Enter
+ * sends it as the round send does, and
  * Escape lets it go unless it is on its way.
  */
 export function LineComment({
@@ -135,6 +139,7 @@ export function LineComment({
         {LINE_WORDS.on(commentLinesLabel(lines))}
       </p>
       <CommentEditor
+        variant={REPLY_VARIANT.FIRST}
         label={LINE_WORDS.FIELD}
         placeholder={LINE_WORDS.PLACEHOLDER}
         value={body}
@@ -146,36 +151,45 @@ export function LineComment({
           if (!sending) onClose();
         }}
         suggestion={suggestion}
+        actions={
+          <>
+            {headSha === undefined || writes.note?.kind === WRITE_NOTE.WORDS ? (
+              <Button size={BUTTON_SIZE.COMPACT} onClick={onRefresh}>
+                <ReplayUnmask>{LINE_WORDS.REFRESH}</ReplayUnmask>
+              </Button>
+            ) : null}
+            <Button
+              variant={BUTTON_VARIANT.QUIET}
+              size={BUTTON_SIZE.COMPACT}
+              disabled={sending}
+              onClick={onClose}
+            >
+              <ReplayUnmask>{LINE_WORDS.CANCEL}</ReplayUnmask>
+            </Button>
+            {holding ? null : (
+              <Button
+                size={BUTTON_SIZE.COMPACT}
+                disabled={blank || sending || headSha === undefined}
+                busy={sending && sentAs === REVIEW_COMMENT_MODE.REVIEW}
+                busyLabel={LINE_WORDS.SENDING}
+                onClick={() => send(REVIEW_COMMENT_MODE.REVIEW)}
+              >
+                <ReplayUnmask>{LINE_WORDS.START}</ReplayUnmask>
+              </Button>
+            )}
+          </>
+        }
+        send={{
+          label: holding ? LINE_WORDS.ADD : LINE_WORDS.SINGLE,
+          empty: blank,
+          held: headSha === undefined || (sending && sentAs !== first),
+          onSend: () => send(first),
+          busy: sending && sentAs === first,
+          busyLabel: LINE_WORDS.SENDING,
+        }}
       />
       {headSha === undefined ? <p className={NOTE_CLASS}>{LINE_WORDS.NO_HEAD}</p> : null}
       <PullRequestWriteNote writes={writes} className={NOTE_CLASS} />
-      <div className={`line-comment-foot flex-wrap ${ACTS_AT_END_CLASS}`}>
-        {headSha === undefined || writes.note?.kind === WRITE_NOTE.WORDS ? (
-          <Button onClick={onRefresh}>{LINE_WORDS.REFRESH}</Button>
-        ) : null}
-        <Button disabled={sending} onClick={onClose}>
-          {LINE_WORDS.CANCEL}
-        </Button>
-        {holding ? null : (
-          <Button
-            disabled={blank || headSha === undefined}
-            busy={sending && sentAs === REVIEW_COMMENT_MODE.SINGLE}
-            busyLabel={LINE_WORDS.SENDING}
-            onClick={() => send(REVIEW_COMMENT_MODE.SINGLE)}
-          >
-            {LINE_WORDS.SINGLE}
-          </Button>
-        )}
-        <Button
-          variant={BUTTON_VARIANT.PRIMARY}
-          disabled={blank || headSha === undefined}
-          busy={sending && sentAs === REVIEW_COMMENT_MODE.REVIEW}
-          busyLabel={LINE_WORDS.SENDING}
-          onClick={() => send(REVIEW_COMMENT_MODE.REVIEW)}
-        >
-          {holding ? LINE_WORDS.ADD : LINE_WORDS.START}
-        </Button>
-      </div>
     </Card>
   );
 }

@@ -50,6 +50,7 @@ import {
   continueFailureNote,
   dockedPullRequests,
   finishedReplyLead,
+  lastTurnEnding,
   messageFailureNote,
   modelLabel,
   noteWhileOffline,
@@ -176,6 +177,29 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
   assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
   assert.equal(messageWords(turn), summary);
   assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
+  // A follow-up offered twice is one to tick.
+  const twice: AgentTranscriptMessage = {
+    ...turn,
+    parts: [
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: { summary, followUps: ["Add a Members page", " Add a Members page", "Resend"] },
+        output: { status: "accepted" },
+      },
+    ],
+  };
+  assert.deepEqual(lastTurnEnding([twice])?.followUps, ["Add a Members page", "Resend"]);
+  // A line the turn took in under way stands after its journal yet waits on no turn; one no turn took does.
+  const line = (taken: boolean): AgentTranscriptMessage => ({
+    id: taken ? "steer" : "next",
+    role: MESSAGE_ROLE.USER,
+    parts: [{ type: "text", text: "Keep the link valid for a week." }],
+    ...(taken ? { arrivedIn: { journalId: twice.id, afterStep: 1 } } : {}),
+  });
+  assert.equal(lastTurnEnding([twice, line(true)])?.messageId, twice.id);
+  assert.equal(lastTurnEnding([twice, line(false)]), undefined);
   // A later call refused stands for the turn, which then replies in its own words.
   const refused: AgentTranscriptMessage = {
     ...turn,
@@ -841,22 +865,24 @@ test("a Start refused for a missing credential says in one sentence which harnes
   );
 });
 
-test("a message to an agent whose device is away says it is offline, in the words a Start on it gets, under the composer and in the Inbox alike", () => {
-  const away =
-    "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.";
+test("a message to an agent whose device is away offers to continue it in the cloud under the composer, and says it in a Start's words in the Inbox, which offers no move", () => {
+  const refused = {
+    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+    refusedDevice: { name: "Studio" },
+  };
+  const note = messageFailureNote(refused, null);
 
   assert.deepEqual(
+    [note, remedyLabel(note), messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED)],
     [
-      messageFailureNote(
-        {
-          failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
-          localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        },
-        null,
-      ).text,
-      messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED),
+      {
+        reason: FAILURE_REASON.CONTINUE_IN_CLOUD,
+        text: "Studio is offline. Unpushed changes stay on it.",
+      },
+      "Continue in the cloud",
+      "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.",
     ],
-    [away, away],
   );
 });
 

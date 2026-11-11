@@ -2459,7 +2459,7 @@ test("the pill, the title, and the files' count stand from what Vespin holds bef
   ]);
 });
 
-test("until the pull request's own read lands, the line under the title draws what its link's card draws of it, as the host holds it for the agent's workspace", async () => {
+test("until the pull request's own read lands, the line under the title draws what its link's card draws of it, as the host holds it for the agent's task's workspace", async () => {
   const workspace = {
     id: "workspace-acme",
     name: "Acme",
@@ -2485,13 +2485,26 @@ test("until the pull request's own read lands, the line under the title draws wh
       const state = await earlier();
       return {
         ...state,
-        tasks: { ...IDLE_TASKS_VIEW, workspaces: [workspace] },
+        tasks: {
+          ...IDLE_TASKS_VIEW,
+          workspaces: [workspace],
+          tasks: [
+            {
+              id: AGENT.planId,
+              workspaceId: workspace.id,
+              name: "Expire invitations",
+              createdAt: 1,
+              updatedAt: 1,
+              repository: "acme/relay",
+            },
+          ],
+        },
         [LIVE_READ.LINK_STANDINGS]: { [workspace.id]: { [PAGE]: { rows: { pullRequest } } } },
       };
     },
   });
   const control = controlAnswering({ pullRequest: held<never>().read });
-  const tab = await draw({ ...control, workspaceId: workspace.id });
+  const tab = await draw(control);
 
   await vi.waitFor(() => assert.deepEqual(waiting(tab), ["Reading description"]));
   assert.equal(tab.querySelector(".pull-request-branches")?.textContent, "main ← luke/expiry-job");
@@ -3350,6 +3363,20 @@ test("Review opens a panel whose choice and words are submitted for the agent as
     true,
     "a fresh review says Comment",
   );
+});
+
+test("Escape in the review's words closes the panel and hands the focus back to Review, its words kept", async () => {
+  const tab = await draw(controlAnswering());
+  const panel = openReview(tab);
+  writeReview(panel, "Almost.");
+
+  pressInBox(panel, { key: "Escape" }, "Review comment");
+  await settle();
+
+  assert.equal(tab.querySelector('[role="dialog"]'), null, "the panel closes");
+  assert.equal(document.activeElement, reviewPress(tab), "the focus is back on Review");
+  assert.equal(boxWords(openReview(tab), "Review comment"), "Almost.");
+  assert.deepEqual(changes, []);
 });
 
 test("Enter submits the review from its words, while Shift+Enter only adds a line and an input method's Enter sends nothing", async () => {
@@ -5037,8 +5064,9 @@ function writeComment(tab: HTMLElement, words: string): HTMLElement {
 /** The comment box's Comment press. */
 function commentPress(tab: HTMLElement): HTMLButtonElement {
   return (
-    tab.querySelector<HTMLButtonElement>(".pull-request-comment-foot button") ??
-    assert.fail("the box offers Comment")
+    tab.querySelector<HTMLButtonElement>(
+      ".pull-request-comment-box .ui-composer-foot button[aria-label='Comment']",
+    ) ?? assert.fail("the box offers Comment")
   );
 }
 
@@ -5195,9 +5223,20 @@ function writeLineComment(comment: HTMLElement, words: string): void {
 function commentOffer(comment: HTMLElement, label: string): HTMLButtonElement {
   return (
     [...comment.querySelectorAll<HTMLButtonElement>("button")].find(
-      (each) => each.textContent === label,
+      (each) => pressName(each) === label,
     ) ?? assert.fail(`the comment offers ${label}`)
   );
+}
+
+/** What a press is called to a reader: its words, or the name a round press wears in their place. */
+function pressName(press: Element): string | null {
+  const words = press.textContent ?? "";
+  return words === "" ? press.getAttribute("aria-label") : words;
+}
+
+/** What a comment's box offers in its foot, by name, in order. */
+function footOffers(comment: HTMLElement): readonly (string | null)[] {
+  return [...comment.querySelectorAll(".ui-composer-foot button")].map(pressName);
 }
 
 /** Chooses `label` in the ⋯ of the first pending comment in `comment`, as the member would. */
@@ -5232,10 +5271,12 @@ test("the gutter's + opens a comment under the last line picked, however the pic
     [{ path: INVITE_FILE.path, side: DIFF_SELECTION_SIDE.ADDITIONS, line: 13 }],
   );
   assert.equal(lists.at(-1)?.selected?.path, INVITE_FILE.path);
-  assert.deepEqual(
-    [...comment.querySelectorAll(".line-comment-foot button")].map((each) => each.textContent),
-    ["Cancel", "Add single comment", "Start a review"],
-  );
+  assert.deepEqual(footOffers(comment), [
+    "Add a suggestion",
+    "Cancel",
+    "Start a review",
+    "Add single comment",
+  ]);
 
   writeLineComment(comment, "Why **twice**?");
   act(() => commentOffer(comment, "Add single comment").click());
@@ -5554,10 +5595,7 @@ test("a member holding a pending review adds a comment to it and nothing else, a
     end: 12,
     endSide: DIFF_SELECTION_SIDE.DELETIONS,
   });
-  assert.deepEqual(
-    [...comment.querySelectorAll(".line-comment-foot button")].map((each) => each.textContent),
-    ["Cancel", "Add review comment"],
-  );
+  assert.deepEqual(footOffers(comment), ["Cancel", "Add review comment"]);
   writeLineComment(comment, "Gone?");
   act(() => commentOffer(comment, "Add review comment").click());
   await settle();

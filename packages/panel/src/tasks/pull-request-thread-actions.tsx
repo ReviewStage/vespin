@@ -1,21 +1,18 @@
 import type { ReviewThread } from "@repo/features/agent-wire";
-import {
-  PULL_REQUEST_ACTION,
-  PULL_REQUEST_WRITE_BOUNDS,
-} from "@repo/features/pull-request-write-wire";
-import { BUTTON_SIZE, COMPOSER_LOOK, IconButton, Tooltip } from "@repo/ui";
+import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
+import { BUTTON_SIZE, IconButton, Tooltip } from "@repo/ui";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
 import { createContext, type ReactNode, useContext, useRef } from "react";
 import { DRAFT_PLACE, useDraft } from "../composer-drafts.js";
 import { type HeldBodies, heldBodies } from "./comment-drafts.js";
-import { MessageBox, useMessageBox } from "./message-box.js";
+import { CommentEditor, overCommentBound } from "./comment-editor.js";
+import { REPLY_VARIANT } from "./comment-variant.js";
 import {
   PullRequestWriteNote,
   type PullRequestWrites,
   type ReadAgain,
   usePullRequestWrites,
 } from "./pull-request-writes.js";
-import { TaskMentions } from "./task-mentions.js";
 
 /**
  * pull-request-thread-actions.tsx -- what a member does on a review thread of an agent's pull request, wherever the thread is drawn: reply to it, and resolve it or open it again, as a description's thread offers.
@@ -150,42 +147,36 @@ export function ThreadResolve({
   );
 }
 
-/** The reply's box, as a description's thread draws its own: one line until it is used, Enter sending and Esc leaving it with its words kept. */
+/** The reply's box, as a description's thread draws its own, in GitHub's Markdown: Enter sending, and Esc leaving it with its words kept. */
 function ReplyBox({ controls }: { controls: ThreadControls }): React.JSX.Element {
   const { agentId, threadId, writes } = controls;
   const { draft, update } = useDraft({ kind: DRAFT_PLACE.REVIEW_REPLY, agentId, threadId });
   const words = draft.text;
   const out = writes.pending;
   const sending = out === PULL_REQUEST_ACTION.REPLY_TO_THREAD;
+  const blank = words.trim() === "" || overCommentBound(words);
   const send = () => {
     const body = words.trim();
-    if (body === "" || out !== undefined) return;
+    if (blank || out !== undefined) return;
     // Note that the words stay until GitHub took them, so a refusal leaves them to send again, and only the words sent go, so any written since stay.
     void writes.write({ action: PULL_REQUEST_ACTION.REPLY_TO_THREAD, threadId, body }, () =>
       update((was) => (was.text === words ? { ...was, text: "" } : was)),
     );
   };
-  const box = useMessageBox({
-    draft: words,
-    setDraft: (text) => update((was) => ({ ...was, text })),
-    placeholder: THREAD_WORDS.REPLY,
-    label: THREAD_WORDS.REPLY,
-    maxLength: PULL_REQUEST_WRITE_BOUNDS.MAX_BODY_CHARS,
-    onSubmit: send,
-    held: out !== undefined,
-    takesFiles: false,
-    // Note that every thread of the tab stands open with its box, so none takes the caret as it is drawn.
-    takesFocus: false,
-  });
   return (
-    <MessageBox
-      box={box}
-      look={COMPOSER_LOOK.CARD}
-      className="comment-field"
+    <CommentEditor
+      variant={REPLY_VARIANT.REPLY}
+      label={THREAD_WORDS.REPLY}
+      placeholder={THREAD_WORDS.REPLY}
+      value={words}
+      onChange={(text) => update((was) => ({ ...was, text }))}
+      busy={out !== undefined}
+      onSubmit={send}
       send={{
         label: THREAD_WORDS.REPLY,
-        empty: words.trim() === "",
+        empty: blank,
         held: out !== undefined && !sending,
+        onSend: send,
         busy: sending,
         busyLabel: THREAD_WORDS.REPLYING,
       }}
@@ -202,10 +193,7 @@ export function ThreadReply({
   if (controls === undefined) return null;
   return (
     <div className="pull-request-thread-actions flex flex-col gap-control-gap px-list-inset pb-list-inset">
-      {/* Note that the task's `@` list names what GitHub cannot read, so the box stands under none. */}
-      <TaskMentions value={undefined}>
-        <ReplyBox controls={controls} />
-      </TaskMentions>
+      <ReplyBox controls={controls} />
       <PullRequestWriteNote writes={controls.writes} className="pull-request-thread-note" />
     </div>
   );

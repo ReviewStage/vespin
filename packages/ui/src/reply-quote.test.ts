@@ -12,7 +12,7 @@ import {
  * reply-quote.test.ts -- words picked out of an agent's message are kept
  * tidy; a message holds them as blockquotes set apart from the
  * developer's lines by a blank line, and reads back as the same quotes and
- * lines. Synthetic words.
+ * lines, a fenced block's lines read as its code. Synthetic words.
  */
 
 const quote = (words: string): MessageBlock => ({ kind: MESSAGE_BLOCK.QUOTE, words });
@@ -62,4 +62,9 @@ test("a > line that runs into the lines beside it is words, as Markdown would no
     lines("Above", "> not apart", "Below"),
   ]);
   assert.deepEqual(messageBlocks(">no space"), [lines(">no space")]);
+});
+
+test("a > line set apart inside a fenced block is the block's code, not a quote", () => {
+  const code = "```md\n\n> keep ``hi``\n\n```";
+  assert.deepEqual(messageBlocks(`Run:\n${code}`), [lines("Run:", ...code.split("\n"))]);
 });

@@ -210,9 +210,9 @@ const STOP_BEFORE_TURN_END =
 /**
  * How an agent waits on its checks, on either harness: with our
  * `schedule_wakeup` (`wakeup-tool.ts`), whose turn ends once it has booked
- * one, so its sandbox stops while it waits, and the scheduled sweep hands
- * the prompt back as the line that opens its next turn
- * (`../../maintenance/wakeup-sweep.ts`).
+ * one, so its sandbox stops while it waits, and a delayed queue message
+ * hands the prompt back as the line that opens its next turn
+ * (`agent-wakeups.ts`).
  */
 const WAKEUP_WORDS = `wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` for about as long as the checks usually take: its \`delaySeconds\` is how long, and its \`prompt\` is what to do once it fires, such as \`Read the checks on pull request #<number>\`; end your turn once you have booked it, and the prompt opens your next turn when it fires`;
 

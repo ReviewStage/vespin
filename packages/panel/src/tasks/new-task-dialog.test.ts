@@ -118,6 +118,7 @@ beforeEach(() => {
         agent: DEFAULT_CHOICE,
         chaptersModel: CHAPTERS_MODEL_DEFAULT,
         slackNotifications: true,
+        sounds: { list: [], choices: { finish: undefined, ask: undefined } },
       },
     },
   });

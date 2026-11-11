@@ -18,6 +18,30 @@ export const NATIVE_HELPERS = [
 ];
 
 /**
+ * Vespin's host daemon, shipped inside the bundle as the LaunchAgent macOS
+ * runs through `SMAppService`, each piece where Apple's "Placing content in a
+ * bundle" puts it. Under `Contents`: the launcher, which is the agent's
+ * `BundleProgram`, in `MacOS`; the pinned Node it runs, a helper tool, in
+ * `Helpers`; and the agent's plist in `Library/LaunchAgents`, where
+ * `SMAppService.agent(plistName:)` looks for it. Under `Contents/Resources`,
+ * which holds no code: the daemon's and the runner's bundles, in `host/lib`.
+ * The launcher is built from its Swift source as the helpers are, but ships
+ * apart from them; its source names these same paths.
+ */
+export const BUNDLED_HOST = {
+  label: "dev.vespin.host",
+  launcher: {
+    source: "HostLauncher.swift",
+    binary: "vespin-host",
+    frameworks: ["Foundation"],
+  },
+  launcherPath: "MacOS/vespin-host",
+  nodePath: "Helpers/node",
+  libPath: "host/lib",
+  plistPath: "Library/LaunchAgents/dev.vespin.host.plist",
+};
+
+/**
  * macOS 26's Liquid Glass, laid behind the panel window
  * (`src/main/native/liquid-glass.ts`): `electron-liquid-glass`'s prebuilt
  * N-API addon for the packaged architecture, copied beside the helpers by

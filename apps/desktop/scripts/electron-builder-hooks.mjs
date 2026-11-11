@@ -2,6 +2,9 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { signAsync } from "@electron/osx-sign";
+import { BUNDLED_HOST_ENTITLEMENTS } from "./package-config.mjs";
+import { BUNDLED_HOST } from "./package-layout.mjs";
 import {
   awaitNotarizationDecision,
   notaryInfoArguments,
@@ -18,6 +21,10 @@ import {
 } from "./release-config.mjs";
 
 const ELECTRON_BUILDER_NOTARIZE_ENV = "APP_ELECTRON_BUILDER_NOTARIZE";
+// As many tries, and as far apart, as electron-builder's own signing makes
+// (app-builder-lib's `macCodeSign.sign`), which this hook stands in for.
+const SIGN_ATTEMPTS = 4;
+const SIGN_RETRY_INTERVAL_MS = 5_000;
 
 function sleep(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
@@ -79,6 +86,41 @@ function staple(artifactPath) {
     attempts: STAPLE_ATTEMPTS,
     intervalMs: STAPLE_RETRY_INTERVAL_MS,
   });
+}
+
+/**
+ * electron-builder's signing, as `mac.sign` hands it over, with the host's
+ * two executables (`BUNDLED_HOST`) signed with entitlements of their own,
+ * since electron-builder signs every other file with the app's inherited
+ * entitlements and has no option for one file's. Everything else, the
+ * identity, hardened runtime, timestamp, and the inside-out order
+ * `@electron/osx-sign` signs in, is electron-builder's.
+ */
+export async function signElectronBuilderApp(configuration) {
+  const contents = path.join(configuration.app, "Contents");
+  const ownEntitlements = new Map([
+    [path.resolve(contents, BUNDLED_HOST.launcherPath), BUNDLED_HOST_ENTITLEMENTS.launcher],
+    [path.resolve(contents, BUNDLED_HOST.nodePath), BUNDLED_HOST_ENTITLEMENTS.node],
+  ]);
+  const options = {
+    ...configuration,
+    optionsForFile: (filePath) => {
+      const fileOptions = configuration.optionsForFile(filePath);
+      const entitlements = ownEntitlements.get(path.resolve(filePath));
+      // Note that a fresh list each time, since osx-sign replaces a list it is handed with the plist it writes for it.
+      return entitlements === undefined
+        ? fileOptions
+        : { ...fileOptions, entitlements: [...entitlements] };
+    },
+  };
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await signAsync(options);
+    } catch (error) {
+      if (attempt >= SIGN_ATTEMPTS) throw error;
+      sleep(SIGN_RETRY_INTERVAL_MS * attempt);
+    }
+  }
 }
 
 function shouldNotarize() {

@@ -412,6 +412,7 @@ export function PageReviewPress({
           setBody,
           over:
             nothing || review.editing || body.length > DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
+          maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
         }}
         sending={review.sending}
         pending={review.held.map((comment) => ({

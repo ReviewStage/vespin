@@ -192,10 +192,9 @@ export type WriteNote =
       readonly remedy?: WriteRemedy | undefined;
     };
 
-/** Where the agent whose pull request a tab shows stands: its task, or, for an agent on none, the workspace its page belongs to. */
+/** Where the agent whose pull request a tab shows stands: its task, or none where the surface names no task. */
 export interface WritePlace {
   readonly taskId: string | null;
-  readonly workspaceId?: string | undefined;
 }
 
 const WritePlaceContext = createContext<WritePlace | undefined>(undefined);
@@ -589,13 +588,12 @@ export function PullRequestWriteNote({
   const openSettings = useOpenSettings();
   const openWorkspaceGitHub = useOpenWorkspaceGitHub();
   const place = useContext(WritePlaceContext);
-  // Note that a task's workspace is the task's to name, and a place on none names its own.
+  // Note that a task's workspace is the task's to name, and a place on none is the listed workspace's.
   const openAccess = () =>
     place?.taskId === null || place?.taskId === undefined
       ? openSettings({
           page: SETTINGS_VIEW.WORKSPACE,
           section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
-          ...(place?.workspaceId === undefined ? undefined : { workspaceId: place.workspaceId }),
         })
       : openWorkspaceGitHub(place.taskId);
   const { note, dismiss } = writes;

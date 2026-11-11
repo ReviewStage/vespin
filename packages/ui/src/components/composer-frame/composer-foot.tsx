@@ -7,6 +7,7 @@ import {
   BUTTON_VARIANT,
   type BusyProps,
   Button,
+  type ButtonVariant,
   IconButton,
   SUBMIT_STATE,
 } from "../button/button.js";
@@ -75,6 +76,20 @@ import { Tooltip } from "../tooltip/hint.js";
  */
 
 /** The send's press: its name, whether the box has anything to send, and whether a send it made is still out. */
+/** The send's ink: the box's own, or the danger ink where what it sends turns something away, as a denial's note does. */
+export const COMPOSER_SEND_TONE = {
+  INK: "ink",
+  DANGER: "danger",
+} as const;
+
+export type ComposerSendTone = (typeof COMPOSER_SEND_TONE)[keyof typeof COMPOSER_SEND_TONE];
+
+/** The button variant each tone draws in. */
+const SEND_VARIANT = {
+  [COMPOSER_SEND_TONE.INK]: BUTTON_VARIANT.INK,
+  [COMPOSER_SEND_TONE.DANGER]: BUTTON_VARIANT.DANGER,
+} as const satisfies Record<ComposerSendTone, ButtonVariant>;
+
 export type ComposerSend = {
   /** What it does, which is its name and its hint: "Send", "Reply", "Comment". */
   label: string;
@@ -86,6 +101,8 @@ export type ComposerSend = {
   onSend?: (() => void) | undefined;
   /** Whether it reads as its label in words, where its press settles something and sends no message ("Got it"), or sends one another way than its round send would ("Queue"). */
   inWords?: boolean | undefined;
+  /** Its ink; the box's own where none is named. */
+  tone?: ComposerSendTone | undefined;
   /** The glyph it wears in the send's round place, or before its words where it reads in words, where it sends another way than the round send would ("Queue", "Steer"). */
   icon?: ReactNode;
   /** What a touch held on it does, where it may send another way than its press does: an agent's Queue where its press steers. */
@@ -191,7 +208,18 @@ function SendPress({
   send: ComposerSend;
   refusalId: string;
 }): React.JSX.Element {
-  const { label, empty, held = false, inWords = false, icon, onSend, chord, refuses } = send;
+  const {
+    label,
+    empty,
+    held = false,
+    inWords = false,
+    tone = COMPOSER_SEND_TONE.INK,
+    icon,
+    onSend,
+    chord,
+    refuses,
+  } = send;
+  const variant = SEND_VARIANT[tone];
   const busy = send.busy === true ? { busy: true, busyLabel: send.busyLabel } : {};
   const type = onSend === undefined ? BUTTON_TYPE.SUBMIT : BUTTON_TYPE.BUTTON;
   // Note that an empty send that can say why stays pressable, and a held one never is.
@@ -206,7 +234,7 @@ function SendPress({
   if (inWords) {
     return (
       <Button
-        variant={BUTTON_VARIANT.INK}
+        variant={variant}
         type={type}
         icon={icon}
         disabled={empty || held}
@@ -223,7 +251,7 @@ function SendPress({
       {icon === undefined ? (
         <IconButton
           submit={SUBMIT_STATE.READY}
-          variant={BUTTON_VARIANT.INK}
+          variant={variant}
           label={label}
           type={type}
           disabled={empty || held}
@@ -235,7 +263,7 @@ function SendPress({
         <IconButton
           icon={icon}
           shape={BUTTON_SHAPE.ROUND}
-          variant={BUTTON_VARIANT.INK}
+          variant={variant}
           label={label}
           type={type}
           disabled={empty || held}
@@ -262,6 +290,18 @@ function StopButton({ stop }: { stop: ComposerStop }): React.JSX.Element {
         {...busy}
       />
     </Tooltip>
+  );
+}
+
+/** A box's one note, as its foot draws it under the bar, and as a field-only box draws it under its field, which has no foot: its line, said as it lands, and what mends it under the line. */
+export function ComposerFootNote({ note }: { note: ComposerNote }): React.JSX.Element {
+  return (
+    <div className="ui-composer-foot-note flex flex-col items-start gap-tight-gap">
+      <ErrorState onRetry={note.onRetry} remedy={note.remedy} failure={note.failure}>
+        {note.words}
+      </ErrorState>
+      {note.mends}
+    </div>
   );
 }
 
@@ -316,14 +356,7 @@ export function ComposerFoot({
       {send.refuses === undefined ? null : (
         <ErrorLine id={refusalId} error={inputProblem(send.refuses.words)} />
       )}
-      {note === undefined ? null : (
-        <div className="ui-composer-foot-note flex flex-col items-start gap-tight-gap">
-          <ErrorState onRetry={note.onRetry} remedy={note.remedy} failure={note.failure}>
-            {note.words}
-          </ErrorState>
-          {note.mends}
-        </div>
-      )}
+      {note === undefined ? null : <ComposerFootNote note={note} />}
     </FootBox>
   );
 }

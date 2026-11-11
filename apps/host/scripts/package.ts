@@ -9,6 +9,10 @@
  *   tsx scripts/package.ts --arch x64
  *   tsx scripts/package.ts --os darwin --arch arm64
  *
+ * With `--folder <path>`, the release is laid out at that path and left
+ * unpacked, with no tarball: how the desktop app's package carries the Mac's
+ * inside `Vespin.app` (`apps/desktop/scripts/package-host.mjs`).
+ *
  * Node is fetched as its pin names it (`@repo/agent-runner/pins`'
  * `NODE_LINUX_PINS`, `NODE_MAC_PIN`), refused unless it arrived at its
  * pinned size and digest, and only its pinned members are kept. Claude Code and Codex are
@@ -30,7 +34,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { type AgentToolPin, NODE_LINUX_PINS, NODE_MAC_PIN } from "@repo/agent-runner/pins";
 import { DEVICE_ARCH, DEVICE_PLATFORM, type DeviceArch } from "@repo/features/device-agent-wire";
@@ -54,7 +58,7 @@ const LINUX_TARGETS: Readonly<Record<DeviceArch, HostTarget>> = {
   [DEVICE_ARCH.ARM64]: HOST_TARGET.LINUX_ARM64,
 };
 
-const USAGE = "usage: package.ts --arch x64|arm64 | --os darwin --arch arm64";
+const USAGE = "usage: package.ts (--arch x64|arm64 | --os darwin --arch arm64) [--folder <path>]";
 
 /** Where each file a release carries comes from: both bundles, its `vespin-host` command, and the license. */
 const SOURCES: ReleaseSources = {
@@ -137,24 +141,36 @@ async function packageTarball(target: HostTarget, node: AgentToolPin): Promise<v
   process.stdout.write(`${name} ${digest}\n`);
 }
 
-async function main(): Promise<void> {
-  // Note that `pnpm <script> -- --arch x64`, as the release workflow runs it, hands the `--` on, which parseArgs would read as the end of the options.
-  const given = process.argv.slice(2);
-  const { values } = parseArgs({
-    args: given[0] === "--" ? given.slice(1) : given,
-    options: { arch: { type: "string" }, os: { type: "string" } },
-  });
+/** The release target and the Node it runs on, as the options name them. */
+function releaseTarget(values: { os?: string; arch?: string }): {
+  target: HostTarget;
+  node: AgentToolPin;
+} {
   // Note that a Mac release is Apple silicon's alone, since NODE_MAC_PIN is its Node.
   if (values.os === DEVICE_PLATFORM.DARWIN) {
     if (values.arch !== DEVICE_ARCH.ARM64) throw new Error(USAGE);
-    await packageTarball(HOST_TARGET.DARWIN_ARM64, NODE_MAC_PIN);
-    return;
+    return { target: HOST_TARGET.DARWIN_ARM64, node: NODE_MAC_PIN };
   }
   const arch = Object.values(DEVICE_ARCH).find((each): each is DeviceArch => each === values.arch);
   if (arch === undefined || (values.os !== undefined && values.os !== DEVICE_PLATFORM.LINUX)) {
     throw new Error(USAGE);
   }
-  await packageTarball(LINUX_TARGETS[arch], NODE_LINUX_PINS[arch]);
+  return { target: LINUX_TARGETS[arch], node: NODE_LINUX_PINS[arch] };
+}
+
+async function main(): Promise<void> {
+  // Note that `pnpm <script> -- --arch x64`, as the release workflow runs it, hands the `--` on, which parseArgs would read as the end of the options.
+  const given = process.argv.slice(2);
+  const { values } = parseArgs({
+    args: given[0] === "--" ? given.slice(1) : given,
+    options: { arch: { type: "string" }, os: { type: "string" }, folder: { type: "string" } },
+  });
+  const { target, node } = releaseTarget(values);
+  if (values.folder === undefined) {
+    await packageTarball(target, node);
+    return;
+  }
+  await stage(resolve(values.folder), node);
 }
 
 await main();

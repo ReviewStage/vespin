@@ -262,6 +262,9 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.0.0)
+      '@electron/osx-sign':
+        specifier: 1.3.3
+        version: 1.3.3
       '@repo/brand':
         specifier: workspace:*
         version: link:../../packages/brand
@@ -1521,6 +1524,9 @@ importers:
       expo-glass-effect:
         specifier: 58.0.5
         version: 58.0.5(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
+      expo-haptics:
+        specifier: 58.0.7
+        version: 58.0.7(expo@58.0.23)
       expo-symbols:
         specifier: 58.0.4
         version: 58.0.4(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
