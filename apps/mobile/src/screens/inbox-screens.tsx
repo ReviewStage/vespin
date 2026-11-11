@@ -27,7 +27,12 @@ import {
   RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import { INBOX_FILE_TYPE, INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
+import {
+  INBOX_FILE_TYPE,
+  INBOX_STATUS,
+  type InboxItem,
+  inboxWaitsOn,
+} from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -426,9 +431,7 @@ function ThreadDetail({
                 linkOf(
                   {
                     kind: LINK_DESTINATION.PAGE,
-                    ...("taskId" in page.place
-                      ? { planId: page.place.taskId }
-                      : { agentId: page.place.agentId }),
+                    planId: page.place.taskId,
                     pageId: page.pageId,
                   },
                   workspace?.slug ?? workspace?.id ?? workspaceId ?? "",
