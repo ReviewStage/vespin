@@ -4397,38 +4397,32 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
 
-  it.effect(
-    "a launch mints its write token and reads its installed skills while its repository is cloned",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const clone = gate();
-        const write = sighting((sent) => mintsRepositoryToken(sent, TOKEN_ACCESS.WRITE));
-        const skills = sighting((sent) => new URL(sent.url).pathname.includes("/git/trees/"));
-        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation(), {
-          onGitHub: (sent) => {
-            write.observe(sent);
-            skills.observe(sent);
-          },
-        });
-        api.hooks.onRun = async (env) => {
-          if (isClone({ env })) await clone.pass();
-        };
+  it.effect("a launch mints its write token while its repository is cloned", () =>
+    Effect.gen(function* () {
+      vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+      const api = runnerSandboxApi();
+      const clone = gate();
+      const write = sighting((sent) => mintsRepositoryToken(sent, TOKEN_ACCESS.WRITE));
+      const { agent, sessions } = yield* repositoryAgent(api, ownInstallation(), {
+        onGitHub: (sent) => write.observe(sent),
+      });
+      api.hooks.onRun = async (env) => {
+        if (isClone({ env })) await clone.pass();
+      };
 
-        const line = yield* writtenLine(agent, "Fix the relay.");
-        const opening = yield* Effect.forkChild(deliveredOpen(sessions, line));
-        yield* Effect.promise(() => Promise.all([clone.arrived, write.seen, skills.seen]));
-        const startedDuringClone = api.commands.length;
-        clone.open();
-        const opened = yield* Fiber.join(opening);
+      const line = yield* writtenLine(agent, "Fix the relay.");
+      const opening = yield* Effect.forkChild(deliveredOpen(sessions, line));
+      yield* Effect.promise(() => Promise.all([clone.arrived, write.seen]));
+      const startedDuringClone = api.commands.length;
+      clone.open();
+      const opened = yield* Fiber.join(opening);
 
-        assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(startedDuringClone, 0);
-        assert.equal(api.commands.length, 1);
-        const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
-        assert.ok(JSON.stringify(api.policies.at(-1)?.policy).includes(writeHeader));
-      }),
+      assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+      assert.equal(startedDuringClone, 0);
+      assert.equal(api.commands.length, 1);
+      const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
+      assert.ok(JSON.stringify(api.policies.at(-1)?.policy).includes(writeHeader));
+    }),
   );
   it.effect(
     "a message to a running runner is written ahead of its credential's renewal, and a renewal Vercel refused leaves the message standing",

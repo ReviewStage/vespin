@@ -1,26 +1,17 @@
 /**
- * skills.ts -- the agent skills a session is offered: the ones the repository it works on keeps, then the ones its member installed into the app.
+ * skills.ts -- the installed skills a session is offered: the ones its member installed into the app.
  *
- * The skills are merged here in a fixed precedence: the repository's, then
- * the workspace's installed skills, then the member's personal ones. A name
- * an earlier source already offers is left out of a later one, since two
- * skills of one name would write the same folder.
- *
- * A repository's skills are read from GitHub as a session starts
- * (`../repository-skills.ts`), on a read token for that one repository
- * minted on the installation of the task's workspace, each one's body told
- * where the skill stands in the agent's own view of the repository, so the
- * files it names can be found; its body is handed as markdown alone, since
- * the checkout holds its files. An installed skill is read from the store
+ * An installed skill is read from the store
  * (`installed-skill-store.ts`'s `sessionInstalledSkills`), while the member
- * has the Skills experiment on (`EXPERIMENT.SKILLS`): the ones
- * of the workspace the agent works in, where its member is one of it, and
- * the member's own personal ones, which follow them into every workspace.
- * Its supporting files are handed beside its body, for the launch to write
- * (`../coder-host/native-skills.ts`). Read as the session starts, so a read
- * that fails is logged and offers none of that source's skills rather than
- * failing the start.
- */
+ * has the Skills experiment on (`EXPERIMENT.SKILLS`): the ones of the
+ * workspace the agent works in, where its member is one of it, and the
+ * member's own personal ones, which follow them into every workspace, a name
+ * an earlier one offers left out of a later one, since two skills of one
+ * name would write the same folder. Its supporting files are handed beside
+ * its body, for the launch to write (`../coder-host/native-skills.ts`). A
+ * repository's own skills are never read here: the harness finds them in the
+ * checkout. Read as the session starts, so a read that fails is logged and
+ * offers no skills rather than failing the start. */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { accountExperimentOn } from "@repo/database/models/account-store";
@@ -33,69 +24,20 @@ import { INSTALLED_SKILL_MAIN_FILE } from "@repo/features/installed-skill-wire";
 import { readSkillFile } from "@repo/features/skill-file";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option } from "effect";
-import type { HttpClient } from "effect/http";
-import { GitHubApp, markRefusedToken } from "../../github/github-app.js";
-import { type RepositorySkill, readRepositorySkills } from "../repository-skills.js";
 
 /** One skill as a session is offered it: its name, the description it routes on, its body, and the files beside it. */
 export interface AgentSkill {
   readonly name: string;
   readonly description: string;
   readonly markdown: string;
-  /** Its supporting files, by path from its folder, `SKILL.md` aside; none for a repository skill, whose files the checkout holds. */
+  /** Its supporting files, by path from its folder, `SKILL.md` aside. */
   readonly files?: Readonly<Record<string, Uint8Array>>;
-  /** Its own `SKILL.md` as installed, frontmatter and all, for a native harness that reads the folder whole; none for a repository skill. */
+  /** Its own `SKILL.md` as installed, frontmatter and all, for a native harness that reads the folder whole. */
   readonly skillFile?: Uint8Array;
 }
 
 /** How a session's workspace is read, as the caller reaches it: none where the agent's member is no longer in it. */
 type WorkspaceOf = Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices>;
-
-/**
- * The skills the repository keeps on its default branch, as a session is
- * offered them, each body led by where it stands for the agent reading it; none
- * where the installation of the task's workspace does not reach the
- * repository or GitHub could not be read, which is logged.
- */
-export const repositorySkills = /* @__PURE__ */ Effect.fn("web/repositorySkills")(function* (
-  target: ConversationTarget,
-  /** The workspace whose installation reads the repository, as the caller reaches it. */
-  workspaceOf: WorkspaceOf,
-  repository: string,
-  /** The member whose own token reads the repository where no installation reaches it; none for an automation. */
-  member: string | undefined,
-  loaded: (skill: RepositorySkill) => string,
-): Effect.fn.Return<
-  readonly AgentSkill[],
-  never,
-  GitHubApp | HttpClient.HttpClient | DatabaseServices
-> {
-  const app = yield* GitHubApp;
-  const read = Effect.gen(function* () {
-    const workspace = yield* workspaceOf;
-    if (Option.isNone(workspace)) return [];
-    const reached = yield* app.repositoryReadToken(workspace.value, repository, member);
-    if (Option.isNone(reached)) return [];
-    return yield* readRepositorySkills(reached.value.token, reached.value.repository).pipe(
-      markRefusedToken(reached.value.access),
-    );
-  });
-  const skills = yield* read.pipe(
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `The skills of conversation ${target.conversationId} were not read: ${failure._tag}`,
-        ),
-        [],
-      ),
-    ),
-  );
-  return skills.map((skill) => ({
-    name: skill.name,
-    description: skill.description,
-    markdown: loaded(skill),
-  }));
-});
 
 /** One installed skill as a session is offered it; nothing where it holds no `SKILL.md`. */
 function installedAgentSkill(skill: InstalledSkillWithFiles): AgentSkill | undefined {
@@ -103,7 +45,7 @@ function installedAgentSkill(skill: InstalledSkillWithFiles): AgentSkill | undef
   if (main === undefined) return undefined;
   const siblings = skill.files.filter((file) => file.path !== INSTALLED_SKILL_MAIN_FILE);
   const text = new TextDecoder("utf-8", { fatal: false }).decode(main.bytes);
-  // The body is handed without its frontmatter, as a repository skill's is.
+  // The body is handed without its frontmatter.
   const body = readSkillFile(text)?.body ?? text.replace(/^\uFEFF/u, "").trim();
   const offered = {
     name: skill.name,

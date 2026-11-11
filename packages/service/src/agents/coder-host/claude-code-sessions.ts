@@ -56,7 +56,6 @@ import { HostedEnvironment } from "../../environment.js";
 import { SERVER_AGENT_HARNESS } from "../../events/server-events.js";
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { LaunchRefused, type MachineLayout } from "../machine/agent-machine.js";
-import { SKILL_ROOT } from "../repository-skills.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-sessions.js";
 import { WORKER_DENIED_TOOLS } from "../tool-catalog/catalog.js";
@@ -342,8 +341,6 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
           : planCredential(turn.subscriptionId);
       }),
     config,
-    // Note that Claude Code reads a checkout's skills from `.claude/skills` alone.
-    skillRoots: [SKILL_ROOT.CLAUDE],
     commandRoute: claudeCodeCommandRoute,
     ahead,
   };
