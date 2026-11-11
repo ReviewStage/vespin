@@ -25,6 +25,7 @@ import { vi } from "vitest";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import { codexToken } from "./codex-token.js";
 import type { RunnerSelf } from "./launch.js";
+import { CODEX_PIN } from "./pins.js";
 import {
   APPROVAL_BY,
   APPROVAL_DECISION,
@@ -57,6 +58,7 @@ import {
   type Script,
   type Spawned,
 } from "./testing/fake-app-server.js";
+import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { makeFakeService } from "./testing/fake-service.js";
@@ -154,6 +156,7 @@ const SANDBOX_ENV = {
 const CONFIG: CodexConfig = {
   harness: RUNNER_HARNESS.CODEX,
   cwd: "/srv/agent-probe-repo",
+  agentId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   executable: "/opt/agent-codex/bin/codex",
   model: "gpt-5.5",
   effort: CODEX_EFFORT.HIGH,
@@ -247,6 +250,7 @@ function launch(
           extra.http ?? service.layer,
           claude.layer,
           probe.layer,
+          fakeCheckoutSnapshots().layer,
           Logger.layer([recorder]),
         ),
       ),
@@ -381,8 +385,21 @@ it.effect(
         kinds(service.applied).filter((kind) => kind !== RUNNER_EVENT.ACCEPTED),
         [...notified(WORKFLOW.exchanges), RUNNER_EVENT.END],
       );
-      // Each line is said taken once, under the service's own id, which Codex is handed to echo.
-      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+      // Each line is said taken once, under the service's own id, which Codex is handed to echo; the
+      // first opened the turn, so its ACCEPTED carries the checkout as it stood before it, and the steer's none.
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+        ),
+        [
+          {
+            type: RUNNER_EVENT.ACCEPTED,
+            uuid: LINE.FIRST,
+            snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+          },
+          { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.STEERED },
+        ],
+      );
       assert.deepEqual(
         service.applied.map(({ sequence }) => sequence),
         service.applied.map((_, index) => FIRST_SEQUENCE + index),
@@ -759,7 +776,21 @@ it.effect("sends a steer refused by a turn that cannot be steered as the next tu
     assert.deepEqual(received(process, "turn/start")[1]?.input, [
       { type: "text", text: "And the second line?", text_elements: [] },
     ]);
-    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+    // The next turn goes on with the agent's turn the service holds, so only the line that opened it
+    // carries the checkout: a record under the steer's would write over the turn's own.
+    assert.deepEqual(
+      service.applied.flatMap(({ message: posted }) =>
+        "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+      ),
+      [
+        {
+          type: RUNNER_EVENT.ACCEPTED,
+          uuid: LINE.FIRST,
+          snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+        },
+        { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.STEERED },
+      ],
+    );
   }),
 );
 
@@ -842,6 +873,38 @@ it.effect("ends an idle launch at once on a stop, and on stdin closing, with no 
     yield* closed.closeStdin;
     assert.equal(yield* Fiber.join(closed.run), RUNNER_END.INPUT_CLOSED);
     assert.ok(closed.spawned[0]?.ended);
+  }),
+);
+
+it.effect("compacts the thread in a compaction line's place, its words dropped", () =>
+  Effect.gen(function* () {
+    const service = fakeService("turn/completed");
+    const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+    if (started === undefined) throw new Error("the resumed turn has no turn/started");
+    const script: Script = {
+      exchanges: [
+        ...RESUME,
+        {
+          method: "thread/compact/start",
+          reply: [{ id: 3, result: {} }, started, ...RESUMED_TURN_END],
+        },
+      ],
+    };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write({ ...CONFIG, threadId: THREAD });
+    yield* write({
+      type: INPUT_LINE.MESSAGE,
+      uuid: LINE.FIRST,
+      content: [{ type: "text", text: "/compact keep the plan" }],
+      compact: true,
+    });
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "thread/compact/start"), [{ threadId: THREAD }]);
+    assert.deepEqual(received(process, "turn/start"), []);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
   }),
 );
 
@@ -1136,7 +1199,8 @@ it.effect(
         `model_providers.chatgpt_backend_plan.auth.args=["${SELF.script}", "codex-token", "${TOKEN_URL}"]`,
         "model_providers.chatgpt_backend_plan.auth.timeout_ms=30000",
         "model_providers.chatgpt_backend_plan.auth.refresh_interval_ms=300000",
-        'model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "0.163.0" }',
+        // The version is the pinned Codex's, which a bump moves (`scripts/bump-agent-pins.mjs`).
+        `model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "${CODEX_PIN.VERSION}" }`,
         'model_providers.chatgpt_backend_plan.wire_api="responses"',
         "model_providers.chatgpt_backend_plan.requires_openai_auth=false",
         "model_providers.chatgpt_backend_plan.supports_websockets=false",

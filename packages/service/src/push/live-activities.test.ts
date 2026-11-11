@@ -144,7 +144,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
             "content-state": {
               running: 1,
               waiting: 0,
-              agents: [{ id: first.agentId, title: "Fix the refresh", step: null, startedAt: 0 }],
+              agents: [{ id: first.agentId, title: "Fix the refresh", startedAt: 0 }],
             },
             "stale-date": 900,
             alert: { title: "Fix the refresh", body: "Started working." },
@@ -175,10 +175,9 @@ it.layer(getTestDB())("a member's live activity", (it) => {
                 {
                   id: second.agentId,
                   title: "Ship the invitations",
-                  step: null,
                   startedAt: 60_000,
                 },
-                { id: first.agentId, title: "Fix the refresh", step: null, startedAt: 0 },
+                { id: first.agentId, title: "Fix the refresh", startedAt: 0 },
               ],
             },
             "stale-date": 960,

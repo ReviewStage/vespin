@@ -87,6 +87,8 @@ export const transcriptWindowRowSchema = Schema.Struct({
   turnUsage: Schema.NullOr(Schema.Unknown),
   turnFailure: NullableString,
   turnFastRefused: Schema.NullOr(Schema.Boolean),
+  /** The commit the turn's runner recorded the checkout at before the turn, where it did (`turns.snapshot_commit`); absent from a service older than it. */
+  turnSnapshotCommit: Schema.optionalKey(NullableString),
 });
 
 export type TranscriptWindowRow = typeof transcriptWindowRowSchema.Type;
@@ -199,6 +201,10 @@ function windowMessageOf(
       ...(row.journalId === null || row.afterStep === null
         ? undefined
         : { arrivedIn: { journalId: row.journalId, afterStep: row.afterStep } }),
+      // A line that opened its turn, whose checkout its runner recorded before it, is one a rewind can put the files back at.
+      ...(row.journalId === null && typeof row.turnSnapshotCommit === "string"
+        ? { filesRestorable: true as const }
+        : undefined),
     };
   }
   if (spokenOnCall(row)) return { ...message, sentAt: row.placedAt };

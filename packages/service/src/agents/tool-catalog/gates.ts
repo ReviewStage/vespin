@@ -49,6 +49,8 @@ export const TOOL_GATE = {
   DESCRIPTIONS: "descriptions",
   /** The agent's harness has no wakeup of its own, so ours wakes it (Codex; Claude Code's CLI schedules its own). */
   WAKEUP: "wakeup",
+  /** The agent's workspace has Done and follow-ups on. */
+  TURN_END: "turn-end",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
@@ -97,6 +99,10 @@ export const GATES: { readonly [G in ToolGate]: Gate } = {
   [TOOL_GATE.WAKEUP]: {
     opens: (_agent, _experiments, runtime) => runtime === CONVERSATION_RUNTIME.CODEX,
     refusal: `Not booked: your harness schedules its own wakeups with ${CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP}; use that.`,
+  },
+  [TOOL_GATE.TURN_END]: {
+    opens: (_agent, experiments) => experiments.turnEndOn,
+    refusal: EXPERIMENT_OFF_REFUSAL,
   },
 };
 

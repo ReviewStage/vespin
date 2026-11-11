@@ -48,6 +48,8 @@ export const TurnHandedSchema = Schema.Struct({
     Schema.Struct({
       descriptionsOn: Schema.Boolean,
       memoryOn: Schema.Boolean,
+      /** Absent on a session opened before Done and follow-ups was kept, which read it as off. */
+      turnEndOn: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });

@@ -51,6 +51,7 @@ import {
 } from "./protocol.js";
 import { runAgent } from "./runner.js";
 import { fakeAppServer } from "./testing/fake-app-server.js";
+import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { ANSWER, type Answer, makeFakeService } from "./testing/fake-service.js";
@@ -98,6 +99,7 @@ const ENV = {
 
 const CONFIG: RunnerConfig = {
   cwd: "/workspace/repository",
+  agentId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   executable: "/opt/claude/bin/claude",
   model: "claude-sonnet",
   effort: EFFORT.HIGH,
@@ -166,7 +168,13 @@ function launch(
     const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env }).pipe(
       Effect.scoped,
       Effect.provide(
-        Layer.mergeAll(cli.layer, service.layer, fakeAppServer([]).layer, probe.layer),
+        Layer.mergeAll(
+          cli.layer,
+          service.layer,
+          fakeAppServer([]).layer,
+          probe.layer,
+          fakeCheckoutSnapshots().layer,
+        ),
       ),
       Effect.forkScoped,
     );
@@ -1400,9 +1408,14 @@ it.effect(
       const accepted = service.applied.filter(
         ({ message }) => "type" in message && message.type === RUNNER_EVENT.ACCEPTED,
       );
+      // The first message opens a turn, so its ACCEPTED carries the checkout as it stood before it; the second landed in that turn, so its carries none.
       assert.deepEqual(
         accepted.map(({ message }) => message),
-        cli.prompts.map((prompt) => ({ type: RUNNER_EVENT.ACCEPTED, uuid: prompt.uuid })),
+        cli.prompts.map((prompt, index) => ({
+          type: RUNNER_EVENT.ACCEPTED,
+          uuid: prompt.uuid,
+          ...(index === 0 ? { snapshot: fakeSnapshotOf(CONFIG.cwd, first) } : undefined),
+        })),
       );
       assert.equal(cli.prompts[0]?.uuid, first);
       assert.notEqual(cli.prompts[1]?.uuid, undefined);
@@ -1735,7 +1748,13 @@ it.effect(
       const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env: ENV }).pipe(
         Effect.scoped,
         Effect.provide(
-          Layer.mergeAll(claudeCodeLive, service.layer, fakeAppServer([]).layer, fakeProbe().layer),
+          Layer.mergeAll(
+            claudeCodeLive,
+            service.layer,
+            fakeAppServer([]).layer,
+            fakeProbe().layer,
+            fakeCheckoutSnapshots().layer,
+          ),
         ),
         Effect.forkScoped,
       );

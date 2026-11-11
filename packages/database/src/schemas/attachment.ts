@@ -178,6 +178,11 @@ export const attachment = pgTable(
       "attachment_description_comment_file",
       sql`${table.descriptionCommentId} is null or (${table.taskId} is not null and ${table.organizationId} is not null and ${table.name} is not null and ${table.position} is not null and octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)})`,
     ),
+    // An Inbox file names its item's task, so it moves with the task (`task-store.ts`).
+    check(
+      "attachment_inbox_file_task",
+      sql`${table.inboxItemId} is null or ${table.taskId} is not null`,
+    ),
     // Only a WebM recording carries an MP4 copy, held to the bound a function may answer whole, as the WebM is.
     check(
       "attachment_mp4_copy",

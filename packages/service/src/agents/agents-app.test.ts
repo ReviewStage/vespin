@@ -24,6 +24,7 @@ import { registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
+import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
@@ -55,6 +56,7 @@ import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { keptPictureIdOf } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
+import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
@@ -118,6 +120,8 @@ import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
  * and the store PGlite. Synthetic accounts, bearers, tasks, and words
  * throughout.
  */
+
+const AGENT_REWIND = "/api/agents/rewind";
 
 it.layer(getTestDB())("starting an agent from another", (it) => {
   /** A source agent on the owner's plan, on a choice and servers of its own, with a transcript of two turns, a branch, and a pull request, its GitHub answering as given. */
@@ -183,6 +187,47 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
+
+  it.effect(
+    "a rewind asked to put the files back is refused as malformed while the workspace has the experiment off, and where no snapshot of them stands for the line once it is on, the conversation left whole either way",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, source, stored, laterLine } = yield* sourceAgent;
+        const db = yield* Database;
+        const rowsOf = () =>
+          db
+            .select({ id: messages.id })
+            .from(messages)
+            .where(eq(messages.conversationId, stored.conversationId));
+        const before = yield* rowsOf();
+        const asked = () =>
+          ask(
+            request(AGENT_REWIND, owner, {
+              method: "POST",
+              id: source.id,
+              body: { messageId: laterLine, restoreFiles: true },
+            }),
+          );
+
+        const off = yield* asked();
+        assert.deepEqual(
+          [off.status, off.body],
+          [HOSTED_HTTP_STATUS.BAD_REQUEST, { error: HOSTED_API_ERROR.INVALID_REQUEST }],
+        );
+
+        yield* setWorkspaceExperiment({
+          organizationId: task.workspaceId,
+          experiment: EXPERIMENT.REWIND_FILES,
+          on: true,
+          by: owner,
+        });
+        const answered = yield* asked();
+
+        assert.deepEqual(answered.body, { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING });
+        assert.equal(answered.status, HOSTED_HTTP_STATUS.CONFLICT);
+        assert.deepEqual(yield* rowsOf(), before, "nothing was cut");
+      }),
+  );
 
   it.effect(
     "a continue is handed the description as it stands now and every step after the source's brief, its reasoning left out, on the source's choice and servers, and names where it came from",

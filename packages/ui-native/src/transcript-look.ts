@@ -60,6 +60,7 @@ export const CALL_SYMBOL = {
   [CALL_KIND.SLEEP]: "timer",
   [CALL_KIND.SCHEDULE_WAKEUP]: "alarm",
   [CALL_KIND.CANCEL_WAKEUP]: "bell.slash",
+  [CALL_KIND.END_TURN]: "checkmark.circle",
   [CALL_KIND.LIST_TASKS]: "checklist",
   [CALL_KIND.REMEMBER]: "brain",
   [CALL_KIND.RECALL]: "brain",

@@ -288,6 +288,8 @@ export const LOCAL_AGENT_REFUSAL = {
   NOT_OWNER: "not-owner",
   /** The repository is reached on the starter's own GitHub token, and the device's host is a build from before it runs such an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   GITHUB_SIGN_IN: "github-sign-in",
+  /** The agent's mode asks before it acts, and the device's host is a build from before it runs an agent in a mode (`DEVICE_CAPABILITY.PERMISSION_MODES`), which would run it with full access. */
+  PERMISSION_MODES: "permission-modes",
 } as const;
 
 export type LocalAgentRefusal = (typeof LOCAL_AGENT_REFUSAL)[keyof typeof LOCAL_AGENT_REFUSAL];
@@ -1005,6 +1007,8 @@ export const agentQueueAnswerSchema = EffectSchema.Struct({ queue: agentQueueSch
  */
 export const agentRewindRequestSchema = EffectSchema.Struct({
   messageId: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
+  /** Whether the agent's files go back too, to the snapshot its runner took before the turn the line opened; the conversation alone where absent. */
+  restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /**
@@ -2575,6 +2579,14 @@ const agentTranscriptMessageSchema = EffectSchema.Struct({
   arrivedIn: EffectSchema.optionalKey(
     EffectSchema.Struct({ journalId: EffectSchema.String, afterStep: countedNumber }),
   ),
+  /**
+   * Whether a rewind to just before one of the developer's lines can put
+   * the agent's files back too: its runner recorded the checkout before the
+   * turn the line opened. Absent where it recorded none, on a line that
+   * awaits its turn or arrived inside one, on every other row, and from a
+   * service older than it.
+   */
+  filesRestorable: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /** Epoch milliseconds the turn began, as a working line counts it: its start, or its queueing where its harness has not started it; absent on the developer's rows, and from a service older than it. */
   startedAt: EffectSchema.optionalKey(countedNumber),
   /** Epoch milliseconds the turn answered or ended; absent while it is still written, on the developer's rows, and from a service older than it. */

@@ -877,6 +877,21 @@ Your workspace keeps one memory shared by every member and every one of its agen
 }
 
 /**
+ * What the agent is told of ending a turn (`end-turn-tool.ts`) where it is
+ * offered `end_turn`, as where its workspace has Done and follow-ups on
+ * (`../tool-catalog/gates.ts`'s `TURN_END`), and nothing where not.
+ */
+function turnEndWords(standing: AgentStanding): string {
+  return offers(standing, AGENT_TOOL.END_TURN)
+    ? `## Ending a turn
+
+End every turn by calling \`${AGENT_TOOL.END_TURN}\` last, and write nothing after it. Its summary is what the developer reads as your reply, in place of your last message, and what an agent that started you, or a Slack thread that did, receives as your final message: 2 to 5 short bullets of what you did and what stands, with mentions where they help. Its follow-ups, at most 3, are next steps that really came up this turn, each worded as the message the developer would send you to start it; the developer ticks the ones they want and sends them with words of their own. Leave them out when nothing came up, or when you wait on an answer in a thread, and never invent work to fill them.
+
+`
+    : "";
+}
+
+/**
  * The instructions for one agent, on the repository its row names, null
  * for an agent with none, which works in a sandbox with no checkout, worded
  * for what it was handed, for whether its token reads the repository's CI,
@@ -965,7 +980,7 @@ ${tools.worker(place.worker)}${editing.updating}${place.status}
 
 The developer may keep their tasks in sections of the workspace's sidebar, their own and no teammate's. \`${AGENT_TOOL.LIST_TASKS}\` names each task's section and the sections the developer keeps; \`${AGENT_TOOL.CREATE_SECTION}\` makes a section, \`${AGENT_TOOL.UPDATE_TASK}\`'s sectionId moves a task into one or back under Tasks, and \`${AGENT_TOOL.DELETE_SECTION}\` deletes one, its tasks going back under Tasks and none of them deleted. ${sections.sorting} Say in your message what you changed.
 
-${memoryWords(standing)}## What your messages are
+${memoryWords(standing)}${turnEndWords(standing)}## What your messages are
 
 ${sections.messages}
 

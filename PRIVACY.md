@@ -257,8 +257,8 @@ agents: one that lets the Service start the activity, and one for the
 activity while it stands on the phone. We keep them with your phone's row,
 beside when the Service last pushed the activity and what that push showed,
 and the Service sends Apple a token with each push to the activity: **your
-agents' titles and their current steps**, how many of them run, and how many
-threads wait on you. We forget the activity's token once it ends, or Apple
+running agents' titles** and when each began, how many of them run, and how
+many threads wait on you. We forget the activity's token once it ends, or Apple
 says it is gone, and both tokens leave with the phone's row or your account.
 
 So your phone stays quiet while you're at your desk, the Service notes when

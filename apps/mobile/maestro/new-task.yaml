@@ -22,8 +22,10 @@ appId: dev.vespin.ios
 # lowers the keyboard because the sheet's form lowers it on a drag
 # (`SettingsForm`); the words field's return key types a new line.
 - hideKeyboard
-# The repository's menu offers what the workspace's GitHub reaches.
-- tapOn: "Repository.*"
+# The repository's menu offers what the workspace's GitHub reaches. Note
+# that the row is pressed by its words with its value, "Repository,
+# ada/relay", because its section's heading is named "Repository" too.
+- tapOn: "Repository, .*"
 - assertVisible: "ada/ledger"
 - waitForAnimationToEnd
 - takeScreenshot: new-task-repositories

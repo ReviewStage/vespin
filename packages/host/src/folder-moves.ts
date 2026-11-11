@@ -1,4 +1,4 @@
-import { Effect, Path, Stream } from "effect";
+import { Effect, Path, Predicate, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
 
 /**
@@ -59,6 +59,12 @@ export const folderMoves = (
         Stream.catchIf(
           (error) => error.reason._tag === "NotFound",
           () => Stream.succeed(false),
+        ),
+        // Note that a folder removed between its check and its watch is a folder gone too, because the system's watch throws as it is laid, which reaches here as a defect rather than a failure.
+        Stream.catchDefect((defect) =>
+          Predicate.hasProperty(defect, "code") && defect.code === "ENOENT"
+            ? Stream.succeed(false)
+            : Stream.die(defect),
         ),
         Stream.ignore,
         Stream.takeUntil((stays) => !stays),

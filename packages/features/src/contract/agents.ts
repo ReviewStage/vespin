@@ -338,15 +338,38 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/stop` }))
     .input(idParams)
     .output(EffectSchema.flip(agentAnswerSchema)),
+  /**
+   * One agent's harness started on a fresh session in the same agent
+   * (`coder-host/clear.ts`), its transcript kept; refused while the agent
+   * works, and for one on no harness.
+   */
+  clear: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.AGENT_NOT_READY,
+        HOSTED_API_ERROR.INVALID_REQUEST,
+      ),
+    )
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/clear` }))
+    .input(idParams)
+    .output(EffectSchema.flip(agentAnswerSchema)),
   /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`). */
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/warm` }))
     .input(idParams)
     .output(EffectSchema.flip(agentWarmAnswerSchema)),
-  /** One agent taken back to just before one of the developer's lines, stopped first where it still works. */
+  /** One agent taken back to just before one of the developer's lines, stopped first where it still works, its files put back too where asked and a snapshot of them stands. */
   rewind: declaredProcedure
-    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING,
+      ),
+    )
     .meta(bodyCap(CHOICE_BODY_BYTES))
     .meta(
       openapi({

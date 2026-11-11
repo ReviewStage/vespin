@@ -62,7 +62,7 @@ const threadPushSchema = EffectSchema.Struct({
   /** The agent's message the push is about: the ask an answer names, or the post a reply follows. */
   messageId: idSchema,
   agentId: idSchema,
-  /** The task the thread stands on; absent for an agent with no task. */
+  /** The task the thread stands on; optional for a released app, and always sent. */
   taskId: EffectSchema.optionalKey(idSchema),
   /** The thread's revision, which a nod or a close names. */
   revision: EffectSchema.Int,
@@ -160,7 +160,7 @@ function pressOf(
  * Where a tap or an action on a notification takes the app, and what it
  * sends there: a thread's push opens the thread, with its option or its
  * words where an action pressed one; a failed run opens its task, or the
- * Inbox for an agent with no task. None for a payload that is not the
+ * Inbox where a push names none. None for a payload that is not the
  * service's or a settled thread's background push, which nobody taps.
  */
 export function inboxPushResponseOf(

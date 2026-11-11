@@ -540,6 +540,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   /** Absent in a config written before Codex mode, which is Claude Code's. */
   harness: Schema.optionalKey(Schema.Literal(RUNNER_HARNESS.CLAUDE_CODE)),
   cwd: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`); none in a config written before it, whose turns take no snapshot. */
+  agentId: Schema.optionalKey(Schema.String),
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(EffortSchema),
@@ -606,6 +608,8 @@ export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 export const CodexConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CODEX),
   cwd: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`); none in a config written before it, whose turns take no snapshot. */
+  agentId: Schema.optionalKey(Schema.String),
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(CodexEffortSchema),
@@ -691,12 +695,18 @@ const UuidSchema = Schema.String.check(
  * is on the next payer: Claude Code drops a resumed session's prompt under
  * a uuid the session holds, answering nothing, so the runner hands the SDK
  * the prompt under a uuid of its own, and ACCEPTED still names the service's.
+ * `compact` asks for the session's compaction in the message's place: Codex
+ * compacts its thread (`thread/compact/start`), which takes no words, once no
+ * turn of its own runs, and Claude Code, whose CLI runs the message's bare
+ * `/compact` as its own command, needs no mark. A runner from before the mark
+ * hands the message on as words.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
   uuid: Schema.optionalKey(UuidSchema),
   content: Schema.Array(ContentBlockSchema),
   resent: Schema.optionalKey(Schema.Boolean),
+  compact: Schema.optionalKey(Schema.Boolean),
 });
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its
@@ -865,10 +875,32 @@ export interface RunnerIdle {
   readonly type: typeof RUNNER_EVENT.IDLE;
 }
 
-/** The ACCEPTED event: the message line, by its `uuid`, handed to the SDK, or taken by Codex's app-server. */
+/** Where a checkout keeps the snapshots taken before each turn (`checkout-snapshot.ts`): under the agent's id, each under a stamp of when it was taken and the line's id, in the clone's own refs beside an archived agent's (`refs/vespin/archive/`). */
+export const CHECKOUT_SNAPSHOT = {
+  REF_PREFIX: "refs/vespin/turns/",
+  /** How many snapshots a checkout keeps: the oldest beyond go as a new one is taken. */
+  KEEP: 20,
+} as const;
+
+/** The checkout as it stood before a turn: the snapshot commit, `HEAD` where the checkout had commits, and the branch checked out where one was. */
+export interface CheckoutSnapshot {
+  readonly commit: string;
+  /** `HEAD` at the snapshot, the snapshot's parent; none in a repository with no commits yet. */
+  readonly head?: string | undefined;
+  /** The branch checked out at the snapshot; none on a detached `HEAD`. */
+  readonly branch?: string | undefined;
+}
+
+/**
+ * The ACCEPTED event: the message line, by its `uuid`, handed to the SDK, or
+ * taken by Codex's app-server, with the checkout as it stood before the turn
+ * the line opens (`checkout-snapshot.ts`); no snapshot where the line joined
+ * a turn under way, or where the checkout could not be snapshotted.
+ */
 export interface RunnerAccepted {
   readonly type: typeof RUNNER_EVENT.ACCEPTED;
   readonly uuid: string;
+  readonly snapshot?: CheckoutSnapshot | undefined;
 }
 
 /** The WAITING event: what the Stop hook before the `result` reported still in flight, as the SDK spells it. */

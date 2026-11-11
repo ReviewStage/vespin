@@ -71,6 +71,7 @@ import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
+  DEVICE_CAPABILITY,
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
@@ -149,6 +150,7 @@ import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import {
   KEY_REFUSAL,
   PLAN_REFUSAL,
+  RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -863,6 +865,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CLAUDE_CODE,
           cwd: "/workspace/repository",
+          agentId: agent.id,
           executable:
             "/opt/agent/claude-agent-sdk/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude",
           model: "claude-opus-5-5",
@@ -900,6 +903,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "list_ports",
             "share_port",
             "schedule_wakeup",
+            "end_turn",
           ],
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
@@ -1259,6 +1263,48 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // Its fingerprint reads the key in its variable, as warm runners launched before were recorded: the first
         // 32 hex characters of the SHA-256 of {"env":[["ANTHROPIC_API_KEY",API_KEY]],"names":["linear"]}.
         assert.equal(launch.payload.fingerprint, "586cbee90aa20b9bb788adc7a378466c");
+
+        // A mode that asks is refused by name on a Mac whose runner reads no mode, rather than run with full access,
+        // and queues no launch; once the Mac says its runner reads one, the launch is handed it.
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+        const asked = () =>
+          Effect.flatMap(
+            sessionsFor(userId, { next: 0 }).pipe(
+              Effect.provide(machines),
+              Effect.provide(services(onKey)),
+            ),
+            (sessions) =>
+              Effect.flatMap(writtenLine(agent, "Go on."), (line) => deliveredOpen(sessions, line)),
+          );
+        assert.deepEqual(yield* asked(), {
+          outcome: SESSION_SEND_OUTCOME.FAILED,
+          status: 422,
+          runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED,
+        });
+        const launchesWaiting = (yield* deviceAgentLinesWaiting(userId, deviceId)).filter(
+          (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
+        );
+        assert.deepEqual(launchesWaiting, []);
+        yield* registerDevice(userId, {
+          id: deviceId,
+          name: "Studio",
+          ...DEVICE_LAYOUT,
+          capabilities: [DEVICE_CAPABILITY.PERMISSION_MODES],
+        });
+        assert.equal((yield* asked()).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).at(-1);
+        assert.ok(relaunch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH && relaunch.id !== launch.id);
+        const reclaimed = Option.getOrThrow(
+          yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id).pipe(
+            Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
+          ),
+        );
+        assert.ok("secrets" in reclaimed);
+        const [config] = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(reclaimed.secrets)
+          .stdin.trimEnd()
+          .split("\n")
+          .map((line: string): ClaudeCodeConfig => JSON.parse(line));
+        assert.equal(config?.permissionMode, PERMISSION_MODE.ASK);
       }),
   );
 
@@ -1736,6 +1782,38 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       // The stop names the launch running the turn, by its first event number.
       assert.deepEqual(stop, { type: INPUT_LINE.STOP, launch: 0 });
     }),
+  );
+
+  it.effect(
+    "a message opening with a command the CLI runs goes bare, and one that would change the agent's row goes behind words",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+        yield* sessions.send(opened.sessionId, message(agent, "/compact keep the plan"));
+        yield* sessions.send(opened.sessionId, message(agent, "/effort low"));
+
+        const [compact, effort] = (yield* launchLines(api.commands[0]))
+          .filter(
+            (line): line is Extract<InputLine, { type: "message" }> =>
+              (line as InputLine).type === INPUT_LINE.MESSAGE,
+          )
+          .slice(1);
+        assert.deepEqual(compact?.content, [{ type: "text", text: "/compact keep the plan" }]);
+        // The CLI runs a command from the last text block alone, so the turn's words after it leave it words.
+        assert.deepEqual(effort?.content[0], { type: "text", text: "/effort low" });
+        assert.equal(effort?.content.length, 2);
+      }),
   );
 
   it.effect(
@@ -3402,6 +3480,51 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message sent while another call holds the lease waits on it where the warm runner was launched in another mode, and goes to a launch in the agent's mode",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 1 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        sequence.next = 2;
+        // The member asks for approvals while another instance's call holds the lease.
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const elsewhere = randomUUID();
+        const heldUntil = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
+        assert.equal(yield* claimAgentRunnerLease(agent.id, elsewhere, now, heldUntil), true);
+
+        const sending = yield* Effect.forkChild(
+          sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails."),
+        );
+        yield* turnsPass;
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+        yield* turnsPass;
+        // Nothing is queued for the runner launched with full access while the lease stands.
+        const [first] = api.commands;
+        assert.ok(first !== undefined);
+        assert.ok(!JSON.stringify(yield* handedLines(userId, first)).includes("Now the emails."));
+        yield* releaseAgentRunnerLease(agent.id, elsewhere);
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+
+        assert.equal((yield* Fiber.join(sending)).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const second = api.commands[1];
+        assert.ok(second !== undefined);
+        const [config] = (yield* launchLines(second)) as [ClaudeCodeConfig];
+        assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
+        assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Now the emails."));
+      }),
+  );
+
+  it.effect(
     "reset deletes the sandbox and retires the runner's bearer; a session gone answers retired",
     () =>
       Effect.gen(function* () {
@@ -4180,7 +4303,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it",
+    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it, and once cleared opens a fresh one of its own",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4219,6 +4342,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [config.resume, config.fork, config.rewindBefore],
           [CLI_SESSION, true, "source-line"],
         );
+
+        // A clear marks the transcript and lets the session go; the next place made anew starts afresh.
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* writer.markSessionCleared({ userId, conversationId: continued.conversationId });
+        yield* recordAgentNativeSession(userId, continued.id, null);
+        const fresh = runnerSandboxApi();
+        const reopened = yield* deliveredOpen(
+          yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(fresh))),
+          yield* writtenLine(continued, "Start over."),
+        );
+        assert.ok(reopened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const [freshConfig] = (yield* launchLines(fresh.commands[0])) as [
+          ClaudeCodeConfig,
+          InputLine,
+        ];
+        assert.deepEqual([freshConfig.resume, freshConfig.fork], [undefined, undefined]);
       }),
   );
 

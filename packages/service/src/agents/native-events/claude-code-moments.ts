@@ -94,6 +94,15 @@ const readEnvelope = Schema.decodeUnknownOption(
 
 const readInit = Schema.decodeUnknownOption(Schema.Struct({ session_id: Schema.String }));
 
+/** What a compaction folded, as `SDKCompactBoundaryMessage` counts it. */
+const readCompactBoundary = Schema.decodeUnknownOption(
+  Schema.Struct({
+    compact_metadata: Schema.optionalKey(
+      Schema.Struct({ pre_tokens: Schema.optionalKey(Schema.Number) }),
+    ),
+  }),
+);
+
 /** The transcript a dropped mirror batch was of, as `SDKMirrorErrorMessage` keys it. */
 const readMirrorError = Schema.decodeUnknownOption(
   Schema.Struct({ key: Schema.Struct({ sessionId: Schema.String }) }),
@@ -143,6 +152,11 @@ const readInformational = Schema.decodeUnknownOption(
 /** The files `SDKFilesPersistedEvent` says it could not persist. */
 const readFilesPersisted = Schema.decodeUnknownOption(
   Schema.Struct({ failed: Schema.Array(Schema.Unknown) }),
+);
+
+/** Why the CLI could not write its session to disk, and what of it was lost, as `SDKSessionWritesLostMessage` says both. */
+const readSessionWritesLost = Schema.decodeUnknownOption(
+  Schema.Struct({ error_code: Schema.String, lost: Schema.Array(Schema.String) }),
 );
 
 const COUNT = Schema.optionalKey(Schema.NullOr(Schema.Number));
@@ -265,6 +279,7 @@ const SYSTEM_SUBTYPE = {
   HOOK_RESPONSE: "hook_response",
   INFORMATIONAL: "informational",
   FILES_PERSISTED: "files_persisted",
+  SESSION_WRITES_LOST: "session_writes_lost",
 } as const satisfies Record<string, SdkSystemSubtype>;
 
 /**
@@ -738,7 +753,8 @@ function noted(said: string): readonly NativeMoment[] {
 /**
  * A `system` message that carries a failure no turn holds: a model retried
  * on another (whose usage is still priced as the agent's model), a plugin or
- * hook that failed, a warning, or files not persisted. Each is said in the
+ * hook that failed, a warning, files not persisted, or a session the CLI
+ * could not write to disk. Each is said in the
  * log by its subtype and outcome, never its words; any other is nothing.
  */
 function failureNoticeMoments(
@@ -773,6 +789,11 @@ function failureNoticeMoments(
       const failed = Option.getOrUndefined(readFilesPersisted(message))?.failed.length ?? 0;
       return failed > 0 ? noted(`${subtype}: ${failed} failed`) : [];
     }
+    case SYSTEM_SUBTYPE.SESSION_WRITES_LOST:
+      return Option.match(readSessionWritesLost(message), {
+        onSome: ({ error_code, lost }) => noted(`${subtype}: ${error_code}, ${lost.join(", ")}`),
+        onNone: () => noted(subtype),
+      });
     default:
       return [];
   }
@@ -794,8 +815,11 @@ function systemMoments(
         }),
         { kind: NATIVE_MOMENT.ACTIVE },
       ];
-    case SYSTEM_SUBTYPE.COMPACT_BOUNDARY:
-      return [{ kind: NATIVE_MOMENT.COMPACTED }];
+    case SYSTEM_SUBTYPE.COMPACT_BOUNDARY: {
+      const tokensBefore = Option.getOrUndefined(readCompactBoundary(message))?.compact_metadata
+        ?.pre_tokens;
+      return [{ kind: NATIVE_MOMENT.COMPACTED, notice: { tokensBefore: tokensBefore ?? null } }];
+    }
     case SYSTEM_SUBTYPE.TASK_NOTIFICATION:
       return taskNotificationMoments(message, held);
     case SYSTEM_SUBTYPE.MIRROR_ERROR:
@@ -815,6 +839,7 @@ function systemMoments(
     case SYSTEM_SUBTYPE.HOOK_RESPONSE:
     case SYSTEM_SUBTYPE.INFORMATIONAL:
     case SYSTEM_SUBTYPE.FILES_PERSISTED:
+    case SYSTEM_SUBTYPE.SESSION_WRITES_LOST:
       return failureNoticeMoments(subtype, message);
     default:
       // Note that a subtype this build does not know is said by its name alone, so a failure it carries is never silent.

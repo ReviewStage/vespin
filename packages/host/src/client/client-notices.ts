@@ -151,6 +151,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
       return {
         when: stored?.soundWhen ?? APP_SETTING_DEFAULTS.soundWhen,
         sound: stored?.completionSound ?? APP_SETTING_DEFAULTS.completionSound,
+        askSound: stored?.askSound ?? APP_SETTING_DEFAULTS.askSound,
       };
     },
     notify: () =>

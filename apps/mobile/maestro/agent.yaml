@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a run of calls opened, the pictures and the recording it showed, the pull request it opened as its card, and the page it showed opened whole.
+# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a run of calls opened, the pictures and the recording it showed, the pull request it opened as its card, and the page it showed opened whole; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -81,3 +81,16 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-jump
+# An agent whose transcript is not read yet, or could not be: the fixture
+# holds none for this id, so the list stands empty and its empty state, which
+# is SwiftUI's, stands in the rows' place in a host of its own, rather than
+# crashing the app as it did mounted bare in the list.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 00000000-0000-4000-8000-000000000000
+- assertVisible: "Reading the transcript|The transcript could not be read\\."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-empty
