@@ -14,6 +14,7 @@ import {
   type Task,
 } from "@repo/features/task-wire";
 import { agoText, dateOfText, momentText, sinceText } from "@repo/features/time-format";
+import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import {
   Button,
@@ -21,6 +22,8 @@ import {
   EDITABLE_BLOCK_CLASS,
   IconButton,
   SavedTick,
+  Skeleton,
+  SkeletonRegion,
   STATUS_TONE,
   TEXT_BUTTON_LINES,
   TEXT_TONE,
@@ -534,6 +537,12 @@ const BODY_CLASS = "description-body";
  */
 const HEAD_KEY = "head";
 
+/** What the description's placeholder says to a reader. */
+const DESCRIPTION_LOADING_LABEL = readingWords("the description");
+
+/** How wide each line of the description's text stands while it is read: a paragraph's, the last line short. */
+const TEXT_LINE_WIDTHS = ["96%", "90%", "94%", "62%"] as const;
+
 /**
  * Each section of a newer document drawn under the id it had in the older
  * while its heading stands, so a save redraws a section in place rather than
@@ -1043,6 +1052,39 @@ function DescriptionBodyColumn({
     <div ref={ref} className={BODY_CLASS}>
       {children}
     </div>
+  );
+}
+
+/**
+ * A task's description while it is read: its title as the list names it, and
+ * what the page draws at its head, its agents and its pages, which stand at
+ * once since none of them waits on the description, over its text's lines
+ * held, so the description lands in place under them.
+ */
+export function DescriptionBodySkeleton({
+  name,
+  head,
+}: {
+  name: string;
+  /** What the task's own page draws at the head of its text, as `DescriptionBody`'s `head`. */
+  head?: ((room: DescriptionRoom) => React.ReactNode) | undefined;
+}): React.JSX.Element {
+  const scroller = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const room = useMemo((): DescriptionRoom => ({ scroller, column: body }), []);
+  return (
+    <DocumentScroll ref={scroller}>
+      <DescriptionBodyColumn ref={body}>
+        <TaskTitle name={name} />
+        <Fragment key={HEAD_KEY}>{head?.(room)}</Fragment>
+        <DocumentRule />
+        <SkeletonRegion label={DESCRIPTION_LOADING_LABEL}>
+          {TEXT_LINE_WIDTHS.map((width) => (
+            <Skeleton key={width} width={width} />
+          ))}
+        </SkeletonRegion>
+      </DescriptionBodyColumn>
+    </DocumentScroll>
   );
 }
 
