@@ -133,7 +133,7 @@ const SENTRY_DSN = process.env.APP_HOST_SENTRY_DSN ?? "";
  */
 const LOG_FILE =
   process.platform === "darwin" && process.argv.includes("--bundled")
-    ? path.join(os.homedir(), "Library", "Logs", "Vespin Host", "vespin-host.log")
+    ? path.join(os.homedir(), "Library", "Logs", `${PRODUCT_NAME} Host`, "vespin-host.log")
     : undefined;
 
 /** Whether a reported line says something failed, which Sentry is told as an error rather than a log line. */
