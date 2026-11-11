@@ -314,6 +314,16 @@ pnpm check:affected                      # what changed since origin/main, from 
   `vitest.config.ts` is on the root `vitest.config.ts` projects list, and each
   workspace's tests run in exactly one CI job.
 
+## Learning more about Effect
+
+This repository uses the Effect Typescript library.
+
+Before writing any Effect code, first read `node_modules/effect/AGENTS.md`
+**completely**, and follow the links in the file when required.
+
+If you need to learn more about particular Effect apis and concepts that the
+guide doesn't cover, search through the source code in `node_modules/effect/src`.
+
 ## Code style
 
 The model is Redis. Full rules with sources and examples in `docs/STYLE.md`.
