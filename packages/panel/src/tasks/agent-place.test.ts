@@ -184,7 +184,7 @@ async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTM
   return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
 }
 
-test("where a move is offered, the popover lists the places under its facts and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
+test("where a move is offered, the popover lists the places under its facts, Cloud wearing its sandbox's dot, and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
   const moved: AgentRunsOnRequest[] = [];
   const opened: SettingsLink[] = [];
   const studio: MacOffer = { deviceId: DEVICE, name: "Studio", providers: [] };
@@ -197,6 +197,7 @@ test("where a move is offered, the popover lists the places under its facts and 
 
   const rows = await placeMenuOf(withMac, opened);
   assert.deepEqual(factsShown(), [["Status", "Off"]]);
+  assert.equal(rows[0]?.querySelector('[role="img"]')?.getAttribute("aria-label"), "Off");
   assert.deepEqual(
     rows.map((row) => row.textContent?.includes("Studio") ?? false),
     [false, true],
