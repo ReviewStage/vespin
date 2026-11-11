@@ -81,6 +81,7 @@ async function drawn(on: boolean): Promise<HTMLElement> {
         name: "Acme",
         slug: "acme",
         role: WORKSPACE_ROLE.ADMIN,
+        github: null,
         experiments: [{ experiment: EXPERIMENT.REPLY_BUTTONS, on, changedBy: null, changedAt: 1 }],
       },
     ],
