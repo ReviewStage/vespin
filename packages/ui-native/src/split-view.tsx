@@ -19,7 +19,6 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
-import { AccountBarItem, type BarAccount } from "./account-button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { PathTitle } from "./thread-page.js";
 
@@ -74,16 +73,15 @@ export type BarPath = {
 
 /**
  * What a column's bar holds: its title, small and inline as every screen's
- * stands, which the back button and the reader name it by; the account's photo at its leading edge, what
- * heads it in its middle (a SwiftUI view such as the workspace switcher, or
- * a page's path), its menu and its act at its trailing edge, a search field
+ * stands, which the back button and the reader name it by; what leads it
+ * (a SwiftUI view such as the workspace switcher), a page's path in its
+ * middle, its menu and its act at its trailing edge, a search field
  * over its list, and the acts at its foot, as an iPad's sidebar stands
  * Settings in its bottom bar.
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
-  readonly account?: BarAccount | undefined;
-  readonly header?: ReactNode | undefined;
+  readonly leading?: ReactNode | undefined;
   readonly path?: BarPath | undefined;
   readonly menu?: BarMenu | undefined;
   readonly action?: BarAction | undefined;
@@ -147,8 +145,7 @@ function BarActionButton({ action }: { readonly action: BarAction }) {
 /** Whether a bar holds anything for the toolbar to draw. */
 function barHolds(bar: ColumnBar): boolean {
   return (
-    bar.account !== undefined ||
-    bar.header !== undefined ||
+    bar.leading !== undefined ||
     bar.path !== undefined ||
     bar.menu !== undefined ||
     bar.action !== undefined ||
@@ -191,13 +188,8 @@ function Column({
     <Toolbar>
       {stacked}
       <Toolbar.Content>
-        {bar.account === undefined ? null : (
-          <ToolbarItem placement="topBarLeading">
-            <AccountBarItem {...bar.account} />
-          </ToolbarItem>
-        )}
-        {bar.header === undefined ? null : (
-          <ToolbarItem placement="principal">{bar.header}</ToolbarItem>
+        {bar.leading === undefined ? null : (
+          <ToolbarItem placement="topBarLeading">{bar.leading}</ToolbarItem>
         )}
         {bar.path === undefined ? null : (
           <ToolbarItem placement="principal">

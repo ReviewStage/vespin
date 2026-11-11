@@ -12,7 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useInboxBadge } from "../inbox/use-inbox.js";
-import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
+import { useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -88,16 +88,15 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
  * system's tab bar would, which that window hides, with the tab's list
  * beside it: the place the tab is, or the task it has open where the sidebar
  * lists it, drawn selected. A place opens its tab, and a task opens on the
- * Tasks tab beside its list, as a link to it does. The account's photo and
- * Settings both open Settings, the photo where the iPhone stands it and
- * Settings at the foot, where an iPad sidebar stands it; New task opens its
- * sheet. The switcher heads the sidebar's list rather than its bar, as
- * Notion's iPad sidebar names its workspace, because the bar's middle
- * overlapped the photo in a column that narrow, and a second leading item
- * folds into the bar's overflow. A narrower regular window, a portrait
- * iPad's or the unfolded Duo's, keeps the system's tab bar, and the list
- * stands first under the photo and the switcher, as the split view stood
- * before.
+ * Tasks tab beside its list, as a link to it does. The switcher's account
+ * and Settings at the foot, where an iPad sidebar stands it, both open
+ * Settings; New task opens its sheet. The switcher heads the sidebar's list
+ * rather than its bar, as Notion's iPad sidebar names its workspace,
+ * because a second leading item folds into the bar's overflow beside the
+ * sidebar's own button. A narrower regular window, a portrait iPad's or the
+ * unfolded Duo's, keeps the system's tab bar, and the list stands first
+ * under the switcher at its bar's leading edge, as the compact bar stands
+ * it.
  */
 export function useAppSidebar(
   place: SidebarPlace,
@@ -111,7 +110,6 @@ export function useAppSidebar(
 } {
   const router = useRouter();
   const waiting = useInboxBadge();
-  const account = useSettingsAccount();
   const openSettings = useOpenSettings();
   const switcher = useWorkspaceSwitcher();
   const threeColumns = useThreeColumns();
@@ -126,7 +124,7 @@ export function useAppSidebar(
   const columns = (list?: ListColumn | undefined): SidebarColumns => {
     const visibility = { sidebarShown: shown, onSidebarShownChange: setShown };
     if (!threeColumns && list !== undefined) {
-      return { sidebar: list.view, sidebarBar: { ...list.bar, account, header }, ...visibility };
+      return { sidebar: list.view, sidebarBar: { ...list.bar, leading: header }, ...visibility };
     }
     return {
       sidebar: (
@@ -148,7 +146,6 @@ export function useAppSidebar(
         </RowList>
       ),
       sidebarBar: {
-        account,
         action: { ...NEW_TASK, onPress: () => router.push("/start-task") },
         foot: [{ ...SETTINGS, onPress: () => openSettings() }],
       },

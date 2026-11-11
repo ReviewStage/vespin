@@ -187,9 +187,9 @@ export { Video } from "./video.js";
 export {
   NoBarTitle,
   newWorkspaceAction,
+  type SwitcherAccount,
   type SwitcherAction,
   type SwitcherWorkspace,
-  settingsAction,
   WorkspaceSwitcher,
   WorkspaceSwitcherMenu,
   WorkspaceTile,
