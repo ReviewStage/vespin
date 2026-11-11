@@ -2,6 +2,7 @@
 
 import {
   Form,
+  Group,
   HStack,
   Image,
   LabeledContent,
@@ -310,26 +311,24 @@ type PickRowsProps = {
 /** A choice among a few, each a row of its own with the picked one checked, as SwiftUI's inline picker draws it. */
 export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
+  // Note that the copper reaches the inline picker's checkmark from a group around it, since a tint on the picker itself left the check in the screen's ink.
   return (
-    <Picker<string | null>
-      label={label}
-      selection={picked ?? null}
-      onSelectionChange={(id) => {
-        if (id !== null) onPick(id);
-      }}
-      modifiers={[
-        pickerStyle("inline"),
-        labelsHidden(),
-        tint(colors.ACCENT),
-        listRowBackground(colors.SURFACE),
-      ]}
-    >
-      {options.map((option) => (
-        <Text key={option.id} modifiers={[tag(option.id), foregroundStyle(colors.TEXT)]}>
-          {option.label}
-        </Text>
-      ))}
-    </Picker>
+    <Group modifiers={[tint(colors.ACCENT)]}>
+      <Picker<string | null>
+        label={label}
+        selection={picked ?? null}
+        onSelectionChange={(id) => {
+          if (id !== null) onPick(id);
+        }}
+        modifiers={[pickerStyle("inline"), labelsHidden(), listRowBackground(colors.SURFACE)]}
+      >
+        {options.map((option) => (
+          <Text key={option.id} modifiers={[tag(option.id), foregroundStyle(colors.TEXT)]}>
+            {option.label}
+          </Text>
+        ))}
+      </Picker>
+    </Group>
   );
 }
 
