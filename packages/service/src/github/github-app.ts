@@ -68,8 +68,9 @@
  * the developer who started it (`agents/coder-host/checkout.ts`,
  * `agents/coder-host/pull-request.ts`), and for a member's change to a pull
  * request (`agents/pull-request-write.ts`). No read of what a workspace
- * reaches takes it. An account's deletion reads it once more and revokes it
- * at GitHub once the row is gone (`auth/sign-in-revocation.ts`).
+ * reaches takes it. An account's deletion reads it once more and revokes the
+ * whole authorization it names at GitHub once the row is gone
+ * (`auth/sign-in-revocation.ts`).
  *
  * Nothing here holds a client: the GitHub reads run on the ambient
  * `HttpClient` and the rows are read on the ambient `SqlClient`, so a test
@@ -266,6 +267,15 @@ export const GITHUB_HTTP_STATUS = {
   /** GitHub's primary or secondary rate limit, which it may answer as 403 instead. */
   TOO_MANY_REQUESTS: 429,
 } as const;
+
+/**
+ * What GitHub revokes of a user's authorization of the App, as the path of
+ * its endpoint names it
+ * (https://docs.github.com/en/rest/apps/oauth-applications): one access
+ * token, or the whole grant with every token the App holds for the user.
+ */
+const USER_AUTHORIZATION_PART = { TOKEN: "token", GRANT: "grant" } as const;
+type UserAuthorizationPart = (typeof USER_AUTHORIZATION_PART)[keyof typeof USER_AUTHORIZATION_PART];
 
 /** The domain of the address GitHub links to an account while keeping the account's own private. */
 const GITHUB_NOREPLY_DOMAIN = "users.noreply.github.com";
@@ -776,12 +786,15 @@ export interface GitHubAppService {
     HttpClient.HttpClient | DatabaseServices
   >;
   /**
-   * A user access token of the App revoked at GitHub under the App's client
-   * credentials (`DELETE /applications/{client_id}/token`), as a connect
-   * revokes an installer's token it does not keep: what an account's
-   * deletion asks of its GitHub sign-in (`auth/sign-in-revocation.ts`).
+   * The user's whole authorization of the App revoked at GitHub under the
+   * App's client credentials, named by a live access token of theirs
+   * (`DELETE /applications/{client_id}/grant`), which GitHub answers by
+   * deleting every token the App holds for the user, the refresh token
+   * among them: what an account's deletion asks of its GitHub sign-in
+   * (`auth/sign-in-revocation.ts`). A connect's installer token it does not
+   * keep is revoked alone, since the user's other tokens are still theirs.
    */
-  readonly revokeUserToken: (
+  readonly revokeUserGrant: (
     token: Redacted.Redacted,
   ) => Effect.Effect<void, GitHubReadFailure, HttpClient.HttpClient>;
   /**
@@ -1904,12 +1917,16 @@ function githubAppService(
       return "error" in answer ? Option.none() : Option.some(answer);
     });
 
-  /** The user access token revoked, under the App's client credentials. */
-  const revokeToken = (app: ReadySettings, token: Redacted.Redacted) =>
+  /** The user access token alone, or the whole authorization it names, revoked under the App's client credentials. */
+  const revokeAuthorization = (
+    app: ReadySettings,
+    token: Redacted.Redacted,
+    revoked: UserAuthorizationPart,
+  ) =>
     Effect.scoped(
       Effect.flatMap(
         send(
-          HttpClientRequest.delete(`${GITHUB_API}/applications/${app.clientId}/token`).pipe(
+          HttpClientRequest.delete(`${GITHUB_API}/applications/${app.clientId}/${revoked}`).pipe(
             HttpClientRequest.basicAuth(app.clientId, Redacted.value(app.clientSecret)),
             HttpClientRequest.setHeaders(GITHUB_HEADERS),
             HttpClientRequest.bodyJsonUnsafe({ access_token: Redacted.value(token) }),
@@ -2109,7 +2126,7 @@ function githubAppService(
             Option.isSome(installer) && "refresh_token" in tokens
               ? yield* keepInstallerTokens(app, installer.value, tokens)
               : false;
-          if (!kept) yield* revokeToken(app, token);
+          if (!kept) yield* revokeAuthorization(app, token, USER_AUTHORIZATION_PART.TOKEN);
           return Option.some(installations);
         }),
       workspaceRepositories: (organizationId) =>
@@ -2241,7 +2258,10 @@ function githubAppService(
           return userOf(yield* readBody(response, UserSchema));
         }).pipe(Effect.scoped),
       userToken,
-      revokeUserToken: (token) => Effect.flatMap(ready, (app) => revokeToken(app, token)),
+      revokeUserGrant: (token) =>
+        Effect.flatMap(ready, (app) =>
+          revokeAuthorization(app, token, USER_AUTHORIZATION_PART.GRANT),
+        ),
     };
     return service;
   });
