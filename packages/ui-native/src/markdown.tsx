@@ -116,8 +116,8 @@ const MARKER_WIDTH = 1.4;
 
 const styles = StyleSheet.create({
   flow: { gap: SPACE.ROW },
-  item: { flexDirection: "row", gap: SPACE.TIGHT },
-  itemBody: { flex: 1, gap: SPACE.TIGHT },
+  itemBody: { gap: SPACE.TIGHT },
+  marker: { position: "absolute", left: 0, top: 0 },
   quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW, gap: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
@@ -436,6 +436,14 @@ function Marker({
   );
 }
 
+/**
+ * A list's items, each its marker in the margin beside its blocks. Note that
+ * an item is a column indented by the marker's width, the marker standing in
+ * that margin, rather than a row of the marker and a growing body, because
+ * a hosted page (`RNHostView`) measures a row's growing child at its
+ * unwrapped width, so a long item ran past the edge rather than wrapping,
+ * as a quote, a column with padding, never did.
+ */
 function ListView({
   block,
   drawing,
@@ -446,15 +454,21 @@ function ListView({
   return (
     <View style={styles.flow}>
       {block.items.map((item, at) => (
-        <View key={at} style={styles.item}>
-          <Marker
-            checked={item.checked}
-            number={block.start === undefined ? undefined : block.start + at}
-            drawing={drawing}
-          />
-          <View style={styles.itemBody}>
-            <Blocks blocks={item.blocks} drawing={drawing} />
+        <View
+          key={at}
+          style={[
+            styles.itemBody,
+            { paddingLeft: PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT },
+          ]}
+        >
+          <View style={styles.marker}>
+            <Marker
+              checked={item.checked}
+              number={block.start === undefined ? undefined : block.start + at}
+              drawing={drawing}
+            />
           </View>
+          <Blocks blocks={item.blocks} drawing={drawing} />
         </View>
       ))}
     </View>
