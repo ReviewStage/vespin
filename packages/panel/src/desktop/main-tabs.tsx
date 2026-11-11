@@ -49,7 +49,7 @@ import { AgentTabCard } from "../tasks/agent-tab-card.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
 import { useFailedAgents } from "../tasks/failed-lines.js";
-import { agentForkDoors, ForkProvider } from "../tasks/fork-action.js";
+import { agentForkDoors, ForkProvider, type SideDoor } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
@@ -779,6 +779,7 @@ export function MainTabContent({
   cards,
   onFork,
   onContinue,
+  onSide,
   threads,
 }: {
   tab: Exclude<MainTab, typeof MAIN_TAB.OVERVIEW>;
@@ -799,6 +800,8 @@ export function MainTabContent({
   onContinue?:
     | ((agentId: string, words: string, attachments: readonly AgentAttachment[]) => void)
     | undefined;
+  /** Starts a side chat of an agent (`/btw`) and opens it in the side panel; none where no side panel stands to open it. */
+  onSide?: SideDoor | undefined;
   /** The threads the agent posted that wait on the developer, docked over its box; none where nothing waits. */
   threads?: AgentThreads | undefined;
 }): React.JSX.Element {
@@ -835,6 +838,7 @@ export function MainTabContent({
                   control: agents,
                   onFork,
                   onContinue,
+                  onSide,
                   cards: cards.agent(agentId),
                   onOpenTarget,
                 })

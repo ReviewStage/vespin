@@ -197,6 +197,9 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * rather than an answer's.
  */
 
+/** The side chat's commands, which a box that opens no side chat leaves out of its list. */
+const SIDE_COMMANDS: ReadonlySet<SlashCommand> = new Set([SLASH_COMMAND.BTW, SLASH_COMMAND.SIDE]);
+
 /** What the box says it takes: the first message of an empty conversation, then a follow-up. */
 export const PLACEHOLDER = {
   FIRST: "Ask to make changes",
@@ -346,6 +349,7 @@ export function AgentComposer({
   mode,
   approvalsWaiting = 0,
   onClear,
+  onSide,
   onContinueInCloud,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
@@ -425,6 +429,8 @@ export function AgentComposer({
   approvalsWaiting?: number;
   /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no commands, as New task's and a draft agent's, which have no session yet. */
   onClear?: (() => Promise<boolean>) | undefined;
+  /** Asks a side question in a fork opened beside the agent (`/btw`, `side-chat.ts`), answering whether it started; none where the box offers none. */
+  onSide?: ((question: string) => Promise<boolean>) | undefined;
   /** The agent continued in the cloud with the message given, which a note of its machine gone offline offers (`FAILURE_REASON.CONTINUE_IN_CLOUD`); none where no such move is offered. */
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
@@ -481,7 +487,10 @@ export function AgentComposer({
     commands:
       onClear === undefined || editingQueued
         ? undefined
-        : { onRun: (name) => runCommand(name, true) },
+        : {
+            onRun: (name) => runCommand(name, true),
+            withheld: onSide === undefined ? SIDE_COMMANDS : undefined,
+          },
     keywords,
     // A server's chip in the box says what a send now does with it: opens a turn, or steers the one running.
     servers: {
@@ -643,13 +652,31 @@ export function AgentComposer({
    * agent's harness on a fresh session, and `/compact` chosen from the list
    * is written into the words, where the developer may add what to keep
    * before sending it, the service handing it to the harness as its
-   * compaction (`harness-commands.ts`). Whatever runs empties the box.
+   * compaction (`harness-commands.ts`). `/btw` and `/side` chosen from the
+   * list are written in the same way, for the question to follow; typed
+   * with one, they start a side chat on it, the box emptying at once so
+   * the agent's own conversation goes on, and taking the question back
+   * where it did not start. Whatever else runs empties the box.
    */
   const runCommand = (name: SlashCommand, chosen: boolean) => {
     switch (name) {
-      case SLASH_COMMAND.COMPACT: {
+      case SLASH_COMMAND.COMPACT:
+      case SLASH_COMMAND.BTW:
+      case SLASH_COMMAND.SIDE: {
         const words = leadingCommand(composer.draft)?.words ?? "";
-        if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
+        if (chosen) {
+          editor.current?.replace(`/${name} ${words}`);
+          return;
+        }
+        if (name === SLASH_COMMAND.COMPACT || onSide === undefined || words === "") return;
+        editor.current?.clear();
+        // Note that a question that did not start comes back only into a box still empty, so nothing written meanwhile is lost.
+        const takeBack = () => {
+          if (latest.current.draft.trim() === "") editor.current?.replace(`/${name} ${words}`);
+        };
+        onSide(words).then((took) => {
+          if (!took) takeBack();
+        }, takeBack);
         return;
       }
       case SLASH_COMMAND.MODEL:
@@ -677,7 +704,8 @@ export function AgentComposer({
    * The command the box's words run rather than send, typed as their first
    * word: `/model`, whatever follows it, which is dropped as the menu opens,
    * since the agent would only read it as a stray line; or `/clear` and
-   * `/new` typed alone.
+   * `/new` typed alone; or `/btw` and `/side`, which with no question run
+   * nothing and leave the box as it is.
    */
   const typedCommand = (): SlashCommand | undefined => {
     if (onClear === undefined || editingQueued) return undefined;
@@ -691,6 +719,9 @@ export function AgentComposer({
       case SLASH_COMMAND.CLEAR:
       case SLASH_COMMAND.NEW:
         return typed.words === "" ? typed.name : undefined;
+      case SLASH_COMMAND.BTW:
+      case SLASH_COMMAND.SIDE:
+        return onSide === undefined ? undefined : typed.name;
       default:
         return absurd(typed.name);
     }
@@ -703,9 +734,12 @@ export function AgentComposer({
     if (queuesNow) return sentBy(queueing.onQueue);
     steer();
   };
-  /** The other way than a send that queues where `pressQueues` says, which ⌘↩ and a touch held on Send take: an edit steered, or the message steered or queued. */
+  /** The other way than a send that queues where `pressQueues` says, which ⌘↩ and a touch held on Send take: an edit steered, one of the box's commands typed run, or the message steered or queued. */
   const sendOtherWay = (pressQueues: boolean) => {
     if (editingQueued) return sentBy(queueing.onSteer);
+    // A command typed runs whichever way it is sent, so `/btw` never queues behind the turn nor steers it.
+    const command = typedCommand();
+    if (command !== undefined) return runCommand(command, false);
     if (pressQueues) return steer();
     if (queueing !== undefined) sentBy(queueing.onQueue);
   };

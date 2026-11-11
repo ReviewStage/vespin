@@ -5,6 +5,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type {
   TaskBlockRequest,
   TaskCreateRelationKind,
@@ -46,6 +47,7 @@ import {
   sameTab,
   subagentTab,
   TAB_WORDS,
+  transcriptTab,
   turnChangesTab,
 } from "@repo/ui/tab-strip-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
@@ -77,9 +79,11 @@ import {
 } from "../tasks/description-body.js";
 import { CommentFocusScope } from "../tasks/description-comments.js";
 import { useDescriptionEdit, useDescriptionRetry } from "../tasks/description-doors.js";
+import type { AgentFork } from "../tasks/fork-model.js";
 import { keyedItem } from "../tasks/inbox-model.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
+import { isSideChat } from "../tasks/side-chat.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
@@ -112,6 +116,7 @@ import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
+import { useArchivePress } from "./agent-archive.js";
 import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
 import {
@@ -142,6 +147,7 @@ import {
   type SidePanelDrawing,
   SidePanelSkeleton,
   showPullRequest,
+  type TranscriptDoors,
   taskCards,
   useColumnFocus,
   useSidePanelDrawing,
@@ -746,6 +752,38 @@ function DescriptionDocument({
     false,
     (draft) => openColumnTab(draftTab(draft)),
   );
+  // A side chat (`/btw`, `side-chat.ts`) opens beside the agent it was asked of, as a tab of the
+  // side panel in that agent's strip; its mark keeps it out of this column (`use-tasks-tab.ts`),
+  // so the agents there stay the task's own work. Closing it archives it once it has answered.
+  // Note that the tab opens only where the reader still stands on the task asked from, since one
+  // who moved on while the start was out must not have the panel open over where they went.
+  const openTaskNow = useRef(taskId);
+  openTaskNow.current = taskId;
+  const sideDoor = useSteadyDoor(async (fork: AgentFork, question: string): Promise<boolean> => {
+    const askedOn = taskId;
+    const started = await agents.startSide(fork, question);
+    if (started === undefined) return false;
+    if (openTaskNow.current === askedOn) openPanelTab(transcriptTab(started.id));
+    return true;
+  });
+  const archivePress = useArchivePress(agents);
+  const closeSideChat = useSteadyDoor((agentId: string) => {
+    const standing = agents.agents?.find((each) => each.id === agentId);
+    // Note that one still answering is left at work, since archiving it would stop it unasked.
+    if (standing === undefined || !isSideChat(standing) || agentStillWriting(standing.status)) {
+      return;
+    }
+    void archivePress(agentId, true);
+  });
+  const openSideChatInTask = useSteadyDoor(openAgentColumn);
+  const sideChatDoors = useMemo<TranscriptDoors>(
+    () => ({
+      onOpenInTask: openSideChatInTask,
+      onOpenTerminal: terminalDoors.onOpenTerminal,
+      onClosed: closeSideChat,
+    }),
+    [openSideChatInTask, terminalDoors.onOpenTerminal, closeSideChat],
+  );
   const showHistory = useSteadyDoor((save: number | undefined) => {
     if (opened !== undefined) tasks.onOpenHistory(opened.id, save);
   });
@@ -1105,6 +1143,22 @@ function DescriptionDocument({
           }),
     [agents, views.held, tab, sideTab, listedCard, tasks, now],
   );
+  // A side chat's transcript and box, drawn in its tab beside the column as an agent's tab draws them there.
+  const sideTranscript = (agentId: string) =>
+    cards === undefined ? null : (
+      <AgentPane
+        label={mainTabLabel(agentTab(agentId), agents)}
+        tabbed={false}
+        tab={agentTab(agentId)}
+        agents={agents}
+        shown={tasks.shown}
+        views={views}
+        onOpenDelegation={openDelegationDoor}
+        onOpenPullRequest={openPullRequestDoor}
+        onOpenTarget={openTargetDoor}
+        cards={cards}
+      />
+    );
   // A link anywhere on the task to a pull request one of its agents opened, a chip in the description,
   // a transcript, or an Inbox item, opens that same tab rather than GitHub; a link to any other
   // pull request of the task's repository opens in a Pull request tab by its number, and one to
@@ -1516,6 +1570,7 @@ function DescriptionDocument({
                                 cards={cards}
                                 onFork={forkDoor}
                                 onContinue={continueDoor}
+                                onSide={sideDoor}
                                 threads={threads}
                                 hidden={agentThreadsView !== undefined}
                               />
@@ -1551,6 +1606,8 @@ function DescriptionDocument({
                           shown={tasks.shown}
                           focused={sideFocused}
                           onOpenTarget={openTarget}
+                          transcript={sideTranscript}
+                          transcriptDoors={sideChatDoors}
                           banner={stranded.banner}
                           taskOfTab={tasks}
                           activity={phone ? { onShown: setShownTab } : undefined}

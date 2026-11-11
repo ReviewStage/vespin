@@ -734,10 +734,10 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
   };
 
   return (rows, now) => {
-    // The agents started from each agent, built again only where their rows moved.
+    // The agents started from each agent, built again only where their rows moved; a side chat stands under its source rather than among them.
     const startedFrom = new Map<string, AgentLiveRow[]>();
     for (const row of rows.agents
-      .filter((each) => each.startedFrom !== null)
+      .filter((each) => each.startedFrom !== null && each.startedFrom.side !== true)
       .toSorted(firstStarted)) {
       const source = row.startedFrom?.agentId;
       if (source === undefined) continue;

@@ -103,6 +103,7 @@ import {
 import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
 import { type ByPullRequestTab, pullRequestAsked } from "./pull-request-number.js";
 import { keptSkills } from "./repository-skills.js";
+import { sideChatStart } from "./side-chat.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { MessageSender } from "./use-agent-composer.js";
 import type { ChoiceWriter } from "./use-agent-model.js";
@@ -448,6 +449,13 @@ export interface AgentsControl {
     disabledServers?: readonly string[],
     runsOn?: AgentRunsOnRequest,
   ) => Promise<StartFailure | undefined>;
+  /**
+   * Starts a side chat (`/btw`): the fork given, under a key of its own, on
+   * the question as its note (`side-chat.ts`), opening no tab, which its
+   * caller opens in the side panel. Answers the agent it started, or nothing
+   * where it did not start, which a toast says.
+   */
+  startSide: (fork: AgentFork, question: string) => Promise<AgentSummary | undefined>;
   /** Brings back the archived agent a surface draws alone, as its own page does; none from here, where every agent is a task's. */
   onUnarchive: (() => void | Promise<void>) | undefined;
   /** Continues one agent in a new one on its whole transcript, the developer's words and files as its note, its tab opening as a Start's does; present exactly while a Start could run. */
@@ -1387,6 +1395,42 @@ export function useAgents(input: {
     return undefined;
   };
 
+  // Note that a side chat goes at once rather than through a draft, so a refusal is said in a toast.
+  // The key each side question the service never answered went under, by its source agent, then its words.
+  const sideUnanswered = useRef(new Map<string, Map<string, string>>());
+  const startSide = async (
+    fork: AgentFork,
+    question: string,
+  ): Promise<AgentSummary | undefined> => {
+    if (taskId === undefined) return undefined;
+    const source = standing?.find((agent) => agent.id === fork.agentId);
+    // Note that the same question asked again of the same agent after the service never answered
+    // goes under the key it went under, so the service answers the side chat it may have started.
+    const ofAgent = sideUnanswered.current.get(fork.agentId) ?? new Map<string, string>();
+    const key = ofAgent.get(question) ?? mintKey();
+    const asked = sideChatStart({
+      key,
+      fork,
+      question,
+      disabledServers: source?.disabledServers ?? [],
+    });
+    const answer = await askStart(taskId, asked);
+    // Note that an answer lets go of its own question's key alone, so another still unanswered keeps its own.
+    if ("failure" in answer && answer.failure === AGENT_CALL_FAILURE.UNANSWERED) {
+      sideUnanswered.current.set(fork.agentId, ofAgent.set(question, key));
+    } else {
+      ofAgent.delete(question);
+      if (ofAgent.size === 0) sideUnanswered.current.delete(fork.agentId);
+    }
+    if (!("failure" in answer)) return answer.agent;
+    failed(startFailureNote(answer, taskId).text, {
+      surface: FAILURE_SURFACE.AGENT_START,
+      cause: answer,
+      about: { agentId: fork.agentId },
+    });
+    return undefined;
+  };
+
   // A refused Stop, or one that found nothing to stop yet, leaves the button as it was, so it says so in a toast.
   const onStop = async (agentId: string): Promise<boolean> => {
     const answer = await sendStop({ agentId }).catch(agentUnreached);
@@ -1716,6 +1760,7 @@ export function useAgents(input: {
     onDiscardDraft,
     startPrompt: steadyStartPrompt,
     startFork: steadyStartFork,
+    startSide,
     onRetryList,
     models: offered.data?.models,
     modelsFailed: offered.isError || modelsRead.state === MODELS_READ.FAILED,

@@ -424,6 +424,12 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
  * its checkout would be none of the new agent's; and that a sandbox that
  * could not be read is a miss, logged, as a copy that failed is.
  */
+/** The work a side chat takes up: none copied, so it checks out what its source pushed. */
+const SIDE_CHAT_WORK: SourceWork = {
+  on: TAKEN_ON.COPY,
+  copy: { copied: false, miss: SNAPSHOT_MISS.SIDE_CHAT },
+};
+
 const sourceWorkOf = (
   userId: string,
   source: Agent,
@@ -498,10 +504,16 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
   const transcript = yield* sourceTranscriptOf(source, from, noteFiles);
   const forked = from.messageId !== undefined;
-  const work = yield* sourceWorkOf(userId, source, repository, forked, idempotencyKey);
+  // A side chat copies none of the work, so it pushes no branch and boots from no snapshot: it reads what the source pushed.
+  const side = from.side === true;
+  // Note that a side chat stands under its source and is archived with it, so none is asked of a source already archived.
+  if (side && source.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  const work = side
+    ? SIDE_CHAT_WORK
+    : yield* sourceWorkOf(userId, source, repository, forked, idempotencyKey);
   const inPullRequest = !forked && (yield* goesOnInPullRequest(userId, source, published));
   const [, ...extras] = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, source.id));
-  const edited = yield* transcript.edited;
+  const edited = side ? undefined : yield* transcript.edited;
   return {
     source,
     lineage,
@@ -517,7 +529,7 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
       published,
       work,
       carried,
-      forked: { at: forked, edited },
+      forked: { at: forked, edited, side },
       unkept: transcript.unkept,
       inPullRequest,
       extras,

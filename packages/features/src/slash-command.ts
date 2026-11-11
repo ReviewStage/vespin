@@ -4,8 +4,10 @@
  * A message that opens with `/name` names a command: one of these, which
  * the box runs itself rather than sending as words (`/model` changes the
  * model, `/clear` and its alias `/new` start the agent's harness on a fresh
- * session), or `/compact`, which goes as a message the service hands its
- * harness as a compaction; or one of the harness's own, which the service
+ * session, `/btw` and its alias `/side` ask a side question in a fork
+ * opened beside the agent while it keeps working), or `/compact`, which
+ * goes as a message the service hands its harness as a compaction; or one
+ * of the harness's own, which the service
  * hands it bare (`coder-host/harness-commands.ts`). A `/name` anywhere but
  * at the message's start is words, and so is a path (`/tmp/build.log`),
  * whose name is followed by another `/` rather than a space or the end.
@@ -17,6 +19,8 @@ export const SLASH_COMMAND = {
   COMPACT: "compact",
   CLEAR: "clear",
   NEW: "new",
+  BTW: "btw",
+  SIDE: "side",
 } as const;
 export type SlashCommand = (typeof SLASH_COMMAND)[keyof typeof SLASH_COMMAND];
 

@@ -494,6 +494,7 @@ const StartedFromColumnSchema = Schema.NullOr(
     sandbox: Schema.optionalKey(Schema.String),
     session: Schema.optionalKey(Schema.String),
     cutBefore: Schema.optionalKey(Schema.String),
+    side: Schema.optionalKey(Schema.Literal(true)),
   }),
 );
 /** An author as the agent's row holds it. */
@@ -1907,6 +1908,8 @@ const findStartedFrom = SqlSchema.findAll({
           and(
             // Note that the source is matched on the expression its index is built on.
             inArray(sql`(${agentTable.startedFrom}->>'agentId')`, [...agentIds]),
+            // A side chat stands under its source rather than among the agents started from it.
+            isNull(sql`(${agentTable.startedFrom}->>'side')`),
             agentVisibleTo(userId),
           ),
         )
@@ -2576,6 +2579,36 @@ export function continuationsOf(
     }
     return bySource;
   });
+}
+
+/** The side chats asked beside an agent (`StoredStartedFrom`'s `side`) that still stand unarchived, oldest first; one of a workspace the account is not in is left out. */
+const findStandingSideChats = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
+  Result: AgentRowSchema,
+  execute: ({ userId, agentId }) =>
+    Database.use((db) =>
+      db
+        .select(AGENT_COLUMNS)
+        .from(agentTable)
+        .where(
+          and(
+            // Note that the source is matched on the expression its index is built on.
+            eq(sql`(${agentTable.startedFrom}->>'agentId')`, agentId),
+            eq(sql`(${agentTable.startedFrom}->>'side')`, "true"),
+            isNull(agentTable.archivedAt),
+            agentVisibleTo(userId),
+          ),
+        )
+        .orderBy(asc(agentTable.createdAt), asc(agentTable.id)),
+    ),
+});
+
+/** The side chats asked beside the agent that stand unarchived, which an archive of the agent takes with it. */
+export function standingSideChatsOf(
+  userId: string,
+  agentId: string,
+): AgentStoreEffect<readonly Agent[]> {
+  return findStandingSideChats({ userId, agentId });
 }
 
 /** Whether a pull request is a merge the row did not already keep as that pull request merged. */

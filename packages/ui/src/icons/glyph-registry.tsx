@@ -44,6 +44,7 @@ import {
   ListTree,
   Lock,
   MemoryStick,
+  MessageCircleQuestion,
   MessageSquareHeart,
   MessagesSquare,
   PhoneOff,
@@ -240,6 +241,8 @@ export const GLYPH = {
   COMPACT: lucideGlyph(FoldVertical),
   // A harness's session let go, the next message opening a fresh one in the same agent (`/clear`).
   NEW_SESSION: lucideGlyph(Eraser),
+  // A side question asked of an agent in a fork beside it while it keeps working (`/btw`).
+  SIDE_CHAT: lucideGlyph(MessageCircleQuestion),
   // What a row is dragged by to put it in another place.
   DRAG_HANDLE: lucideGlyph(GripVertical),
   OPEN_EXTERNALLY: ExternalIcon,

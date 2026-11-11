@@ -47,10 +47,14 @@ interface ForkDoors {
     | undefined;
   readonly forkedTo: (messageId: string) => readonly ReactNode[];
   readonly onContinue?: ContinueDoor | undefined;
+  readonly onSide?: SideDoor | undefined;
 }
 
 /** Opens the task's draft as a continue of the agent, prefilled with the words and files given. */
 export type ContinueDoor = (words: string, attachments: readonly AgentAttachment[]) => void;
+
+/** Starts a side chat of an agent (`/btw`) at the fork given on the question given, answering whether it started. */
+export type SideDoor = (fork: AgentFork, question: string) => Promise<boolean>;
 
 const ForkContext = createContext<ForkDoors | undefined>(undefined);
 
@@ -81,6 +85,11 @@ export function ForkProvider({
 /** The press that opens the agent's continue as the task's draft, where its tab hands one. */
 export function useContinueDoor(): ContinueDoor | undefined {
   return useContext(ForkContext)?.onContinue;
+}
+
+/** What starts a side chat of the agent (`/btw`), where its tab hands one. */
+export function useSideDoor(): SideDoor | undefined {
+  return useContext(ForkContext)?.onSide;
 }
 
 /** An agent as its chip wears it where the place hands no cards: by its tab's name where the task lists it, else by the title its source's summary names, and else as a coding agent. */
@@ -132,10 +141,12 @@ export function agentForkDoors(input: {
   onContinue?:
     | ((agentId: string, words: string, attachments: readonly AgentAttachment[]) => void)
     | undefined;
+  /** Starts a side chat of an agent and opens it beside the column; none where none opens, as off a task's page. */
+  onSide?: SideDoor | undefined;
   cards: TranscriptCards | undefined;
   onOpenTarget: ((target: ToolTarget) => void) | undefined;
 }): ForkDoors {
-  const { agent, control, onFork, onContinue, cards, onOpenTarget } = input;
+  const { agent, control, onFork, onContinue, onSide, cards, onOpenTarget } = input;
   const listed = [...(control.agents ?? []), ...(control.archived ?? [])];
   const listedIds = new Set(listed.map((each) => each.id));
   const forks = new Map(forksOf(listed, agent.id));
@@ -163,6 +174,7 @@ export function agentForkDoors(input: {
       onContinue !== undefined && drafts
         ? (words, attachments) => onContinue(agent.id, words, attachments)
         : undefined,
+    onSide: drafts ? onSide : undefined,
     forkedTo: (messageId) =>
       (forks.get(messageId) ?? []).map((agentId) => (
         <Fragment key={agentId}>

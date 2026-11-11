@@ -5,6 +5,7 @@ import {
   changesTab,
   fileTab,
   pageTab,
+  sameTab,
   type TerminalStripTab,
   terminalTab,
   transcriptTab,
@@ -660,37 +661,43 @@ test("a page of another task opens beside the Inbox item, drawn there, and Open 
   assert.deepEqual(pagesDrawn(), [PAGE]);
 });
 
-test("an agent's transcript stands in a panel beside the Inbox alone, once the task's agents hold it", () => {
+test("an agent's transcript stands once the task's agents hold it: beside the Inbox, and on a task's page in the strip of the agent it was opened under, as a side chat stands beside the agent it was asked of", () => {
+  const side = "side-chat";
   let control: SidePanelControl | undefined;
-  function Probe({ bare }: { bare: boolean }) {
+  function Probe({ bare, agent }: { bare: boolean; agent: string }) {
     control = useSidePanel(
       undefined,
-      bare ? { id: TASK, holds: {}, bare: true } : usedTask(TASK),
+      bare ? { id: TASK, holds: {}, bare: true } : { ...usedTask(TASK), agent },
       [],
       [],
       [],
-      [AGENT, OTHER_AGENT],
+      [AGENT, OTHER_AGENT, side],
     );
     return null;
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  const render = (bare: boolean) => act(() => root.render(createElement(Probe, { bare })));
+  const render = (bare: boolean, agent = AGENT) =>
+    act(() => root.render(createElement(Probe, { bare, agent })));
   const panel = () => {
     assert.ok(control);
     return control;
   };
+  const stands = (agentId: string) =>
+    panel().strip.some((tab) => typeof tab === "object" && sameTab(tab, transcriptTab(agentId)));
 
   render(true);
   act(() => panel().onOpen(transcriptTab(AGENT)));
   assert.deepEqual(panel().strip, [transcriptTab(AGENT)]);
 
-  render(false);
-  assert.ok(
-    !panel().strip.some((tab) => typeof tab === "object" && "transcript" in tab),
-    "a task's own page draws its agents in its column, never beside",
-  );
+  render(false, AGENT);
+  act(() => panel().onOpen(transcriptTab(side)));
+  assert.ok(stands(side));
+  render(false, OTHER_AGENT);
+  assert.ok(!stands(side), "another agent's strip leaves out the side chat asked of the first");
+  render(false, AGENT);
+  assert.ok(stands(side));
 });
 
 test("an archived agent's Pull request tab is drawn as a live agent's, while its Terminal tab is not", () => {

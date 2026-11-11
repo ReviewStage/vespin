@@ -700,7 +700,8 @@ export const disabledServersSchema = EffectSchema.Array(
  * many of that message's steps had begun, and how many words and calls the
  * last of them held, so the cut keeps those and nothing the agent wrote
  * after; a fork naming none keeps the message whole, as a desktop before
- * the count asked.
+ * the count asked. A side chat is a fork at a message, so `side` goes only
+ * beside one.
  */
 const agentStartFromSchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
@@ -711,11 +712,14 @@ const agentStartFromSchema = EffectSchema.Struct({
   messageStepParts: EffectSchema.optionalKey(
     EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0)),
   ),
+  /** Whether the fork is a side chat (`/btw`): a question asked beside the agent, which copies no work and stays under its source. */
+  side: EffectSchema.optionalKey(EffectSchema.Literal(true)),
 }).check(
   EffectSchema.makeFilter(
-    ({ messageId, messageSteps, messageStepParts }) =>
+    ({ messageId, messageSteps, messageStepParts, side }) =>
       (messageSteps === undefined || messageId !== undefined) &&
-      (messageStepParts === undefined || messageSteps !== undefined),
+      (messageStepParts === undefined || messageSteps !== undefined) &&
+      (side === undefined || messageId !== undefined),
   ),
 );
 
@@ -1337,7 +1341,9 @@ export const agentSummarySchema = EffectSchema.Struct({
    * written, with
    * how many of that agent's steps its replay kept of how many there were,
    * and the branch that agent's work was copied to for this one where it
-   * could be; absent for an agent started afresh, and from a service before it.
+   * could be, and whether it is a side chat asked beside that agent, which
+   * every client keeps under it; absent for an agent started afresh, and
+   * from a service before it.
    */
   from: EffectSchema.optionalKey(
     EffectSchema.Struct({
@@ -1348,6 +1354,7 @@ export const agentSummarySchema = EffectSchema.Struct({
       steps: countedNumber,
       totalSteps: countedNumber,
       branch: EffectSchema.optionalKey(EffectSchema.String),
+      side: EffectSchema.optionalKey(EffectSchema.Literal(true)),
     }),
   ),
   /**

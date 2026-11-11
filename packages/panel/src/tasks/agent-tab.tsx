@@ -281,7 +281,7 @@ import {
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
-import { ForkedToLine, useForkOffered } from "./fork-action.js";
+import { ForkedToLine, useForkOffered, useSideDoor } from "./fork-action.js";
 import { type ForkCut, forkCutOf, openReply } from "./fork-model.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
 import {
@@ -305,6 +305,7 @@ import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-sel
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
+import { isSideChat, sideChatFork } from "./side-chat.js";
 import { SentWords, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
@@ -2749,32 +2750,37 @@ function AgentTranscriptView({
                     const tails = piece === undefined || piece.last;
                     return (
                       <>
-                        <SteadyAgentMessage
-                          message={
-                            message === first && opening !== undefined ? opening.brief : message
-                          }
-                          description={message === description}
-                          taskId={message === description ? taskId : undefined}
-                          lead={lead}
-                          moving={working && index === placed.length - 1}
-                          forkCut={forkCutOf(message, open)}
-                          delegation={delegation}
-                          todos={todos}
-                          briefTitle={briefTitle}
-                          origin={message === description ? origin : undefined}
-                          sender={
-                            message === task
-                              ? briefSender
-                              : messageSender(message, readerId, members, former)
-                          }
-                          wakeupDelay={
-                            isWakeupLine(message)
-                              ? wakeupDelayOf(placed[index - 1]?.message)
-                              : undefined
-                          }
-                          arrived={arrivals.get(message.id) ?? NO_ARRIVED}
-                          piece={piece}
-                        />
+                        {/* A side chat opens on the question it was asked, so its source's brief stands only behind its card. */}
+                        {replay?.side === true &&
+                        message === first &&
+                        opening !== undefined ? null : (
+                          <SteadyAgentMessage
+                            message={
+                              message === first && opening !== undefined ? opening.brief : message
+                            }
+                            description={message === description}
+                            taskId={message === description ? taskId : undefined}
+                            lead={lead}
+                            moving={working && index === placed.length - 1}
+                            forkCut={forkCutOf(message, open)}
+                            delegation={delegation}
+                            todos={todos}
+                            briefTitle={briefTitle}
+                            origin={message === description ? origin : undefined}
+                            sender={
+                              message === task
+                                ? briefSender
+                                : messageSender(message, readerId, members, former)
+                            }
+                            wakeupDelay={
+                              isWakeupLine(message)
+                                ? wakeupDelayOf(placed[index - 1]?.message)
+                                : undefined
+                            }
+                            arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                            piece={piece}
+                          />
+                        )}
                         {!tails ? null : message === first &&
                           opening !== undefined &&
                           replay !== undefined ? (
@@ -3038,6 +3044,16 @@ function AgentTabView({
   // Note that a first launch still booting says so in the empty transcript's centered line (`AgentBootLine`), so no working line or end line stands under it.
   const booting = bootHolds(transcript.boot?.phase);
   const bootLine = bootLineOf(transcript.boot);
+  // A side chat is offered only once the agent has begun a reply to ask about, and never in a side chat itself.
+  const sideDoor = useSideDoor();
+  const sideFork =
+    sideDoor === undefined || agent.runtime === undefined || !controlsQueue || isSideChat(agent)
+      ? undefined
+      : sideChatFork(agent.id, kept, standing.working);
+  const onSide =
+    sideDoor === undefined || sideFork === undefined
+      ? undefined
+      : (question: string) => sideDoor(sideFork, question);
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
@@ -3310,6 +3326,7 @@ function AgentTabView({
             context={transcript.context}
             brief={agent.brief}
             onStop={onStop}
+            onSide={onSide}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
             followsUp

@@ -51,6 +51,8 @@ import { foldTaskCall, NO_TASKS, type TaskFold, todosOf } from "./agent-todos.js
 export const REPLAY_VERB = {
   CONTINUED: "Continued from",
   FORKED: "Forked from",
+  /** A side chat's (`side-chat.ts`), which names the agent it was asked of. */
+  ASKED: "Asked of",
 } as const;
 
 type ReplayVerb = (typeof REPLAY_VERB)[keyof typeof REPLAY_VERB];

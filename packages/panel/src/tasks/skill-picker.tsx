@@ -88,6 +88,8 @@ export type SkillSource = () => Promise<SkillsRead>;
 /** The box's own commands, where it runs them: what choosing one from the list does. */
 export interface ComposerCommands {
   readonly onRun: (name: SlashCommand) => void;
+  /** The commands the box does not run here, which the list leaves out: `/btw` where no side chat opens. */
+  readonly withheld?: ReadonlySet<SlashCommand> | undefined;
 }
 
 /** The groups' headings, where commands stand beside skills. */
@@ -289,7 +291,9 @@ export function useSkillPicker({
   // Note that the box's commands are offered for the message's first word alone, which is where they run.
   const leads =
     commands !== undefined && trigger !== undefined && draft.slice(0, trigger.start).trim() === "";
-  const leading = leads ? matchingCommands(trigger.query) : [];
+  const leading = leads
+    ? matchingCommands(trigger.query).filter((name) => commands?.withheld?.has(name) !== true)
+    : [];
   // Note that a box with no skills to offer opens the list only on a command the word finds.
   const mention = source === undefined && leading.length === 0 ? undefined : trigger;
   const open = mention !== undefined && closedAt !== mention.start;

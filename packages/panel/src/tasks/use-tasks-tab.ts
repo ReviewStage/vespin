@@ -127,6 +127,7 @@ import type { SectionReveal } from "./description-body.js";
 import type { RevisionSource } from "./description-history-model.js";
 import { holdsAsk } from "./inbox-model.js";
 import type { MessageReveal } from "./message-links.js";
+import { isSideChat } from "./side-chat.js";
 import {
   stripTabClosesIdle,
   stripTabDrawsAgain,
@@ -575,8 +576,9 @@ function pinOnTask(pin: SidebarPin, taskId: string): boolean {
  * arrive in the conversation: one with a thread waiting on them, a question
  * before a notice, as the Inbox lists what waits; else the task's agent
  * that was last active, one at work counting as active now, archived ones
- * left out (`agentsOfTask`); none where it has none, so it opens on its
- * description.
+ * left out (`agentsOfTask`), as are side chats, which stand under their
+ * agents' side panels (`side-chat.ts`); none where it has none, so it opens
+ * on its description.
  */
 function resumingAgentOf(
   taskId: string,
@@ -586,7 +588,7 @@ function resumingAgentOf(
   const items = waiting.find((each) => each.taskId === taskId)?.items ?? [];
   const waitingOn = items.find(holdsAsk) ?? items[0];
   if (waitingOn !== undefined) return waitingOn.agentId;
-  const lines = agentsOfTask(agents, taskId);
+  const lines = agentsOfTask(agents, taskId).filter((line) => !isSideChat(line));
   const working = lines.find((line) => agentStillWriting(line.status));
   if (working !== undefined) return working.id;
   let latest = lines[0];
@@ -1054,12 +1056,28 @@ export function useTasksTab(input: {
     onDraftRestored: (on, draftId) => mainRef.current?.onShow(on, draftTab(draftId)),
     keywords: dictationWords,
   });
-  // The task's archived agents, whose tabs stand once opened (`use-main-tabs.ts`).
-  const archivedIds = useMemo(() => agents.archived?.map((agent) => agent.id), [agents.archived]);
+  // The task's archived agents, whose tabs stand once opened (`use-main-tabs.ts`). Note that a
+  // side chat stands under its agent's side panel (`side-chat.ts`), so it is left out of the
+  // column's own agents and stands there only once opened, as an archived agent does.
+  const sideChatIds = useMemo(
+    () => new Set(agents.agents?.filter(isSideChat).map((agent) => agent.id)),
+    [agents.agents],
+  );
+  const columnAgentIds = useMemo(
+    () =>
+      sideChatIds.size === 0
+        ? agents.agentIds
+        : agents.agentIds?.filter((agentId) => !sideChatIds.has(agentId)),
+    [agents.agentIds, sideChatIds],
+  );
+  const archivedIds = useMemo(() => {
+    const archived = agents.archived?.map((agent) => agent.id);
+    return sideChatIds.size === 0 ? archived : [...(archived ?? []), ...sideChatIds];
+  }, [agents.archived, sideChatIds]);
   const mainTabs = useMainTabs(
     fixture === undefined ? undefined : { tab: tasksFixture?.fixtureColumnTab(input.run) },
     viewed.activeTaskId,
-    agents.agentIds,
+    columnAgentIds,
     archivedIds,
     agents.draft?.id,
     input.room === SHELL_ROOM.NARROW,
