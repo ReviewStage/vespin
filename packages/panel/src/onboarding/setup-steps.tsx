@@ -47,13 +47,14 @@ import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
  * Each card is the sign-in's own, so setup reads as the sign-in going on,
  * and each offers a quiet Sign out, since setup stands with no sidebar.
  * An account invited into a team's workspace walks the survey and Connect
- * an agent alone. An agent is required: its step goes on only once Claude or Codex
- * is connected. A team's workspace is required too, once With my team is
+ * an agent alone. An agent may be skipped, since an agent on the account's
+ * own Mac or a host runs on the Claude Code or Codex sign-in already there.
+ * A team's workspace is required, once With my team is
  * chosen, since Back leads to Just me for anyone who changed their mind;
  * once made, its step coming back holds it to change rather than make again,
  * and setup finished as Just me deletes it, asking first, in red, where
  * anyone else joined it, and offering to keep it.
- * The survey and GitHub may be skipped, and the tools need nothing done. Where setup
+ * The survey and GitHub may be skipped too, and the tools need nothing done. Where setup
  * stands is kept on the account (`APP_SETTING_SCHEMA.setupPlace`), so setup
  * left partway resumes at the same step on another machine or on the web,
  * and a team's workspace made is not offered to be made again. Finish lets
@@ -85,6 +86,10 @@ const TEAM_DELETE_WORDS = {
   /** The workspace's name where the window's list no longer holds it. */
   UNNAMED: "your team workspace",
 } as const;
+
+/** What Connect an agent says it is for, and that a Mac or host signed in to Claude Code or Codex needs none of it. */
+const AGENT_PURPOSE =
+  "Set up a plan or an API key for agents in the cloud. Agents on your Mac or a host use the Claude Code or Codex already signed in there.";
 
 /** People named in a sentence, "Ana, Bo, and Cy". */
 const NAMES_LISTED = new Intl.ListFormat("en", { type: "conjunction" });
@@ -392,8 +397,8 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title="Connect an agent"
-        description="Set up a plan or an API key. Pick which one new agents use."
-        foot={foot(agent, last ? "Finish" : "Continue")}
+        description={AGENT_PURPOSE}
+        foot={foot(agent, last ? "Finish" : "Continue", true)}
       >
         <AgentConnectSection onConnected={onConnected} />
       </AuthPage>

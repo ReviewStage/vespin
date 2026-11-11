@@ -4,7 +4,7 @@
  * Setup stands once, in the window after sign-in, for a new account (see
  * `setupGate`), until it is finished. An account invited into a team's
  * workspace with no agent connected walks the survey and Connect an agent
- * alone.
+ * alone, each of which it may skip.
  */
 
 import { SETUP_AUDIENCE, type SetupAudience } from "@repo/settings";
@@ -61,7 +61,7 @@ export type SetupGate = (typeof SETUP_GATE)[keyof typeof SETUP_GATE];
 
 /**
  * Whether the window owes setup. It is owed to an account signed in with no
- * agent connected, since nothing runs without one: one that holds no task and
+ * agent connected, since that is where it is offered one: one that holds no task and
  * belongs to no team's workspace, so an account that has worked before is
  * never set up again on another machine, or one invited into a team's
  * workspace, whose teammates' tasks it holds, which is asked for an agent
