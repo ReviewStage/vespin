@@ -682,7 +682,7 @@ function TasksSplitScreen({
             ),
             bar: {
               title: TASKS_TITLE,
-              search: { placeholder: SEARCH_TASKS, onChange: setSearch },
+              search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
             },
           })}
           detail={
