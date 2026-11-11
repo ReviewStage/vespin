@@ -36,7 +36,6 @@ import { HarnessMark } from "../harness-marks.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import {
   type AgentModeControl,
-  MODE_APPLIES,
   MODE_GLYPH,
   MODE_GROUP,
   MODE_QUESTION,
@@ -84,13 +83,14 @@ import { useRepositoryRemedy } from "./repository-remedy.js";
  * leaves the menu open, or, for a model with an Ultrafast version, Speed in
  * its place, naming the speed chosen now and opening a submenu of the
  * speeds the model offers, Standard, Fast, and Ultrafast, which closes the
- * menu on a pick as Effort does. Last, on a running Claude Code agent's
- * chip alone, Permissions names the agent's permission mode after its glyph
- * and opens a submenu of the three under the question they answer, each
- * with its hint under its name and a line under them saying a change
- * reaches the agent from its next turn (`agent-approvals.tsx`); it closes
- * the menu on a pick. A model whose provider no subscription or API key
- * of the account's pays for says "Connect Claude" or "Connect Codex" at its
+ * menu on a pick as Effort does. Last, on the chip of an agent whose
+ * harness takes a mode, running or about to start, Permissions names the
+ * agent's permission mode after its glyph and opens a submenu of the three
+ * under the question they answer, each with its hint under its name, and
+ * for a running agent a line under them saying a change reaches it from its
+ * next turn (`agent-approvals.tsx`); it closes the menu on a pick. A
+ * model whose provider no subscription or API key of the account's pays for
+ * says "Connect Claude" or "Connect Codex" at its
  * row's end, and its pick, or Fast's press where it is the choice, closes
  * the menu and lands on that harness's row in Settings › Agents rather
  * than choosing it. On an automation's
@@ -196,7 +196,7 @@ export function ModelMenu(props: {
   lastLine?: MenuLastLine | undefined;
   /** Whether the choice is what a new agent would start on, on the reader's own credentials, so one nothing of theirs pays for says it cannot run: an automation's. */
   startsNew?: boolean | undefined;
-  /** The agent's permission mode and its change, pinned as the last row; none for an agent whose harness takes no mode, and on an automation's menu. */
+  /** The agent's permission mode and its change, pinned as the last row, a running agent's or a new one's; none for an agent whose harness takes no mode, and on an automation's menu. */
   permissions?: AgentModeControl | undefined;
   /** The menu is on its way out (`SearchableMenu`'s). */
   leaving?: boolean | undefined;
@@ -324,7 +324,7 @@ export function ModelMenu(props: {
           heading: MODE_QUESTION,
           rows: modeMenuRows(),
           value: control.mode,
-          note: MODE_APPLIES,
+          note: control.applies,
           onPick: (picked) => {
             const mode = MODES.find((each) => each === picked);
             if (mode === undefined) return;

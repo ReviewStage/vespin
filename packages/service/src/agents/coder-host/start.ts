@@ -258,6 +258,8 @@ export type StartAsk = StartPlace & {
   readonly landed?: StoredTask | undefined;
   /** Where the agent runs, the cloud or one of the starter's devices; none for where `machineOfStart` defaults it. */
   readonly runsOn?: AgentRunsOnRequest | undefined;
+  /** The mode the agent starts in, as a new-agent menu picked it; none for the starter's Default permissions. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
   /** The repositories the agent works in beside its own, each with the branch its checkout is cloned at where one is named; none for an agent in one repository or none. */
   readonly alsoRepositories?: readonly AgentAlsoRepository[] | undefined;
 };
@@ -946,7 +948,11 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       payer: runtime.payer,
       machine: placed.machine,
       deviceId: placed.deviceId,
-      permissionMode: startingPermissionMode(runtime.runtime, permissionMode, member === undefined),
+      permissionMode: startingPermissionMode(
+        runtime.runtime,
+        ask.permissionMode ?? permissionMode,
+        member === undefined,
+      ),
       githubAccess: reached?.access,
       startBranch: branch,
       extraRepositories: extras,
@@ -1174,6 +1180,7 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     alsoRepositories: request.alsoRepositories,
     branch: request.branch,
     title: request.title,
+    permissionMode: request.permissionMode,
     summaryModel,
     reached,
     landed,

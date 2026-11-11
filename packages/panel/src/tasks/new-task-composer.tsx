@@ -1,3 +1,4 @@
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { AGENT_BOUNDS, AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure, rejectedFailure } from "@repo/features/failure-remedy";
 import { wordsWithoutMarkers } from "@repo/features/file-marker";
@@ -38,6 +39,7 @@ import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
 import { unrunnableChoice } from "./agent-model.js";
 import { repositorySkillsQueryOptions } from "./agent-reads.js";
@@ -281,7 +283,7 @@ export interface NewTaskPress {
   readonly key: string;
 }
 
-/** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and repositories beside the task's in the same order. */
+/** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, permission mode, and repositories beside the task's in the same order. */
 function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
   return (
     a.repository === b.repository &&
@@ -301,6 +303,7 @@ function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
     a.agent.choice?.contextWindow === b.agent.choice?.contextWindow &&
     a.agent.disabledServers.length === b.agent.disabledServers.length &&
     a.agent.disabledServers.every((server) => b.agent.disabledServers.includes(server)) &&
+    a.agent.permissionMode === b.agent.permissionMode &&
     sameInOrder(a.agent.alsoRepositories ?? [], b.agent.alsoRepositories ?? [])
   );
 }
@@ -404,6 +407,15 @@ export function NewTaskComposer({
   const [disabledServers, setDisabledServers] = useState<readonly string[]>(
     refused?.card.press.ask.agent.disabledServers ?? NONE_OFF,
   );
+  // The mode the chip's Permissions row picked, a refused card's as it was pressed; none for the member's Default permissions.
+  const [pickedMode, pickMode] = useState<AgentPermissionMode | undefined>(
+    refused?.card.press.ask.agent.permissionMode,
+  );
+  const mode = useNewAgentPermissionMode({
+    model: choice?.model,
+    picked: pickedMode,
+    choose: pickMode,
+  });
   const openSettings = useOpenSettings();
   // Note that no agent has started, so the popover offers no Built in section (`luke`).
   const servers: AgentServersControl = {
@@ -681,6 +693,7 @@ export function NewTaskComposer({
         attachments,
         choice: pickedModel,
         disabledServers,
+        ...(pickedMode === undefined ? undefined : { permissionMode: pickedMode }),
         ...(also.length === 0 ? undefined : { alsoRepositories: also }),
       },
     };
@@ -832,6 +845,7 @@ export function NewTaskComposer({
         modelsFailed={newTask.modelsFailed}
         readModels={newTask.readModels}
         usage={undefined}
+        mode={mode}
         servers={servers}
         plus={relationPlus}
         skills={skills}
