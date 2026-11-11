@@ -1,6 +1,7 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
 import { Host, HStack, VStack } from "@expo/ui/swift-ui";
+import { padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { Keyboard, type LayoutChangeEvent, StyleSheet, View } from "react-native";
@@ -21,6 +22,24 @@ const DockMeasure = createContext<((room: number) => void) | undefined>(undefine
 /** How round the bar stands: a rounded field, as a composer's is. */
 export const BAR_RADIUS = 24;
 
+/**
+ * How far the bar's row stands in from its edge: little, since the row's
+ * presses carry frames of a press's size (`PRESS_SIZE`), which stand them as
+ * far in as the bar's edge did before, so the bar draws as it did while each
+ * press takes Apple's least target.
+ */
+export const BAR_EDGE = 2;
+
+/** How far apart the row's pieces stand: not at all, since a press's frame holds the room around its mark that the row's spacing held before. */
+export const BAR_ROW_SPACING = 0;
+
+/** How far what heads the bar, such as queued messages, stands in from its edge, where the row's marks stand in theirs. */
+export const BAR_HEAD_INSET = {
+  leading: SPACE.ROW + 2,
+  trailing: SPACE.TIGHT + 2,
+  top: SPACE.TIGHT + 2,
+} as const;
+
 const styles = StyleSheet.create({
   // The bar's own gap above the tab bar, or the keyboard.
   gap: { paddingBottom: SPACE.ROW },
@@ -31,9 +50,7 @@ const styles = StyleSheet.create({
   docked: { position: "absolute", left: 0, right: 0, bottom: 0 },
   bar: {
     marginHorizontal: SPACE.ROW + 2,
-    paddingLeft: SPACE.ROW + 4,
-    paddingRight: SPACE.TIGHT * 2,
-    paddingVertical: SPACE.TIGHT * 2,
+    padding: BAR_EDGE,
     borderRadius: BAR_RADIUS,
   },
 });
@@ -99,14 +116,16 @@ export function GlassBar({
   const keyboard = useKeyboardHeight() > 0;
   const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-  const row = <HStack spacing={SPACE.ROW}>{children}</HStack>;
+  const row = <HStack spacing={BAR_ROW_SPACING}>{children}</HStack>;
   const content = (
     <Host matchContents={{ vertical: true }} style={styles.content}>
       {head === undefined ? (
         row
       ) : (
         <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
-          {head}
+          <VStack alignment="leading" modifiers={[padding(BAR_HEAD_INSET)]}>
+            {head}
+          </VStack>
           {row}
         </VStack>
       )}

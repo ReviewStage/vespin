@@ -2,6 +2,7 @@
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
   accessibilityLabel,
   buttonStyle,
   contentShape,
@@ -14,7 +15,7 @@ import {
 import { Chip } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The panel's words for a queued message's acts and its sending. */
@@ -23,9 +24,6 @@ const WORDS = {
   DELETE: "Delete",
   SENDING: "Sending",
 } as const;
-
-/** The least a press stands as, in points, as Apple's guidelines ask of a target, so a queued line's small act is pressed as easily as a row. */
-const PRESS_FRAME = 44;
 
 /** One message waiting behind the turn: queued, which its starter may steer or delete, or on its way. */
 export type QueuedLine = {
@@ -61,7 +59,7 @@ function LineAct({
       onPress={onPress}
       modifiers={[
         buttonStyle("plain"),
-        frame({ minWidth: PRESS_FRAME, minHeight: PRESS_FRAME }),
+        frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
         contentShape(shapes.rectangle()),
         accessibilityLabel(label),
       ]}
@@ -101,11 +99,12 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
         </Text>
       )}
       {lines.map((line) => (
-        <HStack key={line.id} spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_FRAME })]}>
+        <HStack key={line.id} spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
           <Image
             systemName={line.sending ? "arrow.up.circle" : "clock"}
             size={MARK_SIZE.GLYPH}
             color={colors.TEXT_MUTED}
+            modifiers={[accessibilityHidden()]}
           />
           <Text
             modifiers={[
@@ -139,6 +138,9 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
   );
 }
 
+/** What a press on an attached picture is heard to do, since its × alone says so on screen. */
+const DETACH_HINT = "Removes it from the message";
+
 /** One picture attached to the message, by the name the message carries it under ("Picture 1"). */
 export type AttachedPicture = { readonly id: string; readonly name: string };
 
@@ -159,6 +161,7 @@ export function AttachedPictures({
             key={picture.id}
             label={picture.name}
             symbol="xmark"
+            hint={DETACH_HINT}
             onPress={() => onDetach(picture.id)}
           />
         ))}
@@ -178,7 +181,7 @@ export type SkillSuggestion = {
 const SUGGESTIONS_SHOWN = 4;
 
 /** How tall one suggestion stands, in points: a press's least, as Apple's guidelines ask. */
-const SUGGESTION_HEIGHT = PRESS_FRAME + 6;
+const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
 
 /**
  * The skills a `/` being typed offers, as a list over the field inside the
