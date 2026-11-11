@@ -17,7 +17,6 @@ private enum Words {
   static let placeholder = "Describe the task"
   static let workspace = "Workspace"
   static let repository = "Repository"
-  static let noRepository = "None"
   static let start = "Start"
   static let cancel = "Cancel"
   static let done = "Done"
@@ -124,7 +123,6 @@ struct ShareSheet: View {
             ForEach(repositories, id: \.self) { repository in
               Text(repository).tag(Optional(repository))
             }
-            Text(Words.noRepository).tag(String?.none)
           }
         }
       }
