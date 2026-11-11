@@ -195,15 +195,36 @@ function setupQuery(workspaceId: string) {
   });
 }
 
-/** A save's answer drawn over the page, a read still under way canceled first so its older setup cannot land over it. */
+/** Which part of the setup a save writes: the scripts, or the run actions. */
+const SETUP_PART = {
+  SCRIPTS: "scripts",
+  RUN_ACTIONS: "run-actions",
+} as const;
+
+type SetupPart = (typeof SETUP_PART)[keyof typeof SETUP_PART];
+
+/**
+ * A save's answer drawn over the page, a read still under way canceled first
+ * so its older setup cannot land over it. Note that only the part the save
+ * wrote is taken from its answer, the rest kept as the page holds it, because
+ * a script's save answering after a run action's would otherwise put back the
+ * run actions it read before that save, and the next run action's save, which
+ * writes the whole list as the page holds it, would write them back.
+ */
 async function drawAnswer(
   queries: QueryClient,
   workspaceId: string,
   answer: WorkspaceSandboxSetupAnswer,
+  part: SetupPart,
 ): Promise<void> {
   const { queryKey } = setupQuery(workspaceId);
   await queries.cancelQueries({ queryKey, exact: true });
-  queries.setQueryData(queryKey, answer);
+  queries.setQueryData(queryKey, (held) => {
+    if (held === undefined) return answer;
+    return part === SETUP_PART.RUN_ACTIONS
+      ? { ...held, runActions: answer.runActions ?? [] }
+      : { ...answer, runActions: held.runActions ?? answer.runActions ?? [] };
+  });
 }
 
 /** A save of the script named, an empty one removing it, its answer drawn over the page at once. */
@@ -219,7 +240,7 @@ function useSaveScript(workspaceId: string) {
             script,
             kind: target.kind,
           }),
-    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer),
+    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer, SETUP_PART.SCRIPTS),
   });
 }
 
@@ -705,7 +726,7 @@ function useSaveRunActions(workspaceId: string) {
           ...(isDefault ? { isDefault: true } : undefined),
         })),
       }),
-    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer),
+    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer, SETUP_PART.RUN_ACTIONS),
   });
 }
 
