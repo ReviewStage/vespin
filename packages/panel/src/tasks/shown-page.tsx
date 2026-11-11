@@ -15,11 +15,9 @@ import {
 import type { PagePlace } from "@repo/features/page-wire";
 import { PAGE_EMBED_HEIGHT, PageEmbed, type PageEmbedHeight, usePressAway } from "@repo/ui";
 import { replyOf } from "@repo/ui/reply-quote";
-import { useQuery } from "@tanstack/react-query";
 import { Option, Schema } from "effect";
 import { type ReactNode, type RefObject, useEffect, useReducer, useRef, useState } from "react";
 import { appPlatform } from "../app-platform.js";
-import { pagesQuery } from "../live-reads.js";
 
 import { PAGE_SANDBOX, useFrameLinks } from "./page-pane.js";
 import { PAGE_ROOM, usePageTheme } from "./page-theme.js";
@@ -34,10 +32,8 @@ import { pressPlace, ReplyPress, roomAround, useReplyDoor } from "./reply-to-sel
  * tall as the page reports it is, or at a screenful where the page only ever
  * fills its frame (`@repo/features/page-size`), heard from that frame alone
  * and only in that message's shape, and loads only as it nears the screen.
- * The row drawn above it opens it in its own tab. A line naming a page draws its newest version, from the
- * pages its task holds (`LIVE_READ.PAGES`), as a
- * page's chip hangs its card (`chip-cards.tsx`), and nothing while that read
- * is out or where the reader cannot reach the page.
+ * The row drawn above it opens it in its own tab. A line naming a page draws its newest version, read with its
+ * row (`lone-link-card.tsx`).
  *
  * Words selected in the page offer Reply over them, as words selected in
  * the transcript around it do (`reply-to-selection.tsx`), and a press lays
@@ -216,17 +212,4 @@ export function ShownPage({
       {replyDoor === undefined ? null : <FrameReply frame={frame} onReply={replyDoor} />}
     </div>
   );
-}
-
-/** A page named by a line of words, drawn live at its newest version as its task holds its pages; nothing while they are read or where none is the page. */
-export function ShownNewestPage({
-  place,
-  pageId,
-}: {
-  place: PagePlace;
-  pageId: string;
-}): ReactNode {
-  const page = useQuery(pagesQuery(place)).data?.find((each) => each.id === pageId);
-  if (page === undefined) return null;
-  return <ShownPage place={place} pageId={page.id} version={page.version} title={page.title} />;
 }
