@@ -48,28 +48,28 @@ const { FROM, TO } = CHECKOUT_DIFF_VARIABLE;
  * The diff, run with the checkout as its working directory. Note that the
  * working tree is read as a snapshot reads it, the index copied and the
  * tree added to the copy, so untracked files are among the changes and
- * ignored ones are not, and that the diff is written to a file before it
- * is bounded, so a git that fails ends the script rather than printing a
- * diff cut short.
+ * ignored ones are not; that the copy and the diff stand in a folder of
+ * this run's own, removed as it ends however it ends, so two diffs of one
+ * checkout at once never read each other's; and that the diff is written
+ * to a file before it is bounded, so a git that fails ends the script
+ * rather than printing a diff cut short.
  */
 export const CHECKOUT_DIFF_SCRIPT = [
   "set -eu",
   "umask 0002",
   `if ! git cat-file -e "$${FROM}^{commit}" 2>/dev/null; then exit ${CHECKOUT_DIFF_EXIT.MISSING}; fi`,
   "git_dir=$(git rev-parse --git-dir)",
+  'run=$(mktemp -d "$git_dir/vespin-diff.XXXXXX")',
+  "trap 'rm -rf \"$run\"' EXIT",
   `to="$${TO}"`,
   'if [ -n "$to" ]; then',
   `  if ! git cat-file -e "$to^{commit}" 2>/dev/null; then exit ${CHECKOUT_DIFF_EXIT.MISSING}; fi`,
   "else",
-  '  index="$git_dir/vespin-diff-index"',
-  '  if [ -f "$git_dir/index" ]; then cp "$git_dir/index" "$index"; else rm -f "$index"; fi',
-  "  to=$(GIT_INDEX_FILE=\"$index\" sh -c 'git add -A -- . >/dev/null && git write-tree')",
-  '  rm -f "$index"',
+  '  if [ -f "$git_dir/index" ]; then cp "$git_dir/index" "$run/index"; fi',
+  "  to=$(GIT_INDEX_FILE=\"$run/index\" sh -c 'git add -A -- . >/dev/null && git write-tree')",
   "fi",
-  'out="$git_dir/vespin-diff-out"',
-  `git -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --find-renames "$${FROM}" "$to" > "$out"`,
-  `head -c ${CHECKOUT_DIFF_BOUNDS.MAX_BYTES} "$out"`,
-  'rm -f "$out"',
+  `git -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --find-renames "$${FROM}" "$to" > "$run/out"`,
+  `head -c ${CHECKOUT_DIFF_BOUNDS.MAX_BYTES} "$run/out"`,
 ].join("\n");
 
 /** The two sides a diff stands between, as the turn's rows keep them: the snapshot before the turn, and the one after it, or null for the working tree. */
@@ -99,9 +99,9 @@ function samePathOf(header: string): string {
   return rest.slice(2, 2 + (rest.length - 5) / 2);
 }
 
-/** A side's path off its `--- ` or `+++ ` line, none for no side. */
+/** A side's path off its `--- ` or `+++ ` line, none for no side. Note that git ends a path holding a space with a tab, so patch tells it from a date after it, which is taken off. */
 function sideOf(line: string): string | undefined {
-  const named = line.slice(4);
+  const named = line.slice(4).replace(/\t$/u, "");
   return named === NO_SIDE ? undefined : named.slice(2);
 }
 
@@ -168,7 +168,8 @@ export function checkoutDiffFiles(output: string): CheckoutDiffFiles {
   // A last line of nothing is the newline the diff ends on, not a line of the last file.
   const last = sections.at(-1);
   if (last !== undefined && last.at(-1) === "") last.pop();
-  const cut = output.length >= CHECKOUT_DIFF_BOUNDS.MAX_BYTES;
+  // The bound is the script's, in bytes, so the output is measured as the bytes it came as.
+  const cut = new TextEncoder().encode(output).length >= CHECKOUT_DIFF_BOUNDS.MAX_BYTES;
   const whole = cut ? sections.slice(0, -1) : sections;
   const kept = whole.slice(0, CHANGES_BOUNDS.MAX_FILES);
   return {
