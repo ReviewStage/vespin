@@ -14,9 +14,7 @@
  * have caught, so Better Auth answers it as the failure it is. An after step
  * runs once the row is already gone, so whatever escapes it, a defect
  * included, is logged rather than rejected: a rejection there would answer a
- * delete that happened as one that failed. What would end
- * this file's row among the permanent adaptors is a Better Auth that takes
- * an Effect hook.
+ * delete that happened as one that failed.
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";

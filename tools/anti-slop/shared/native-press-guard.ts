@@ -1,4 +1,4 @@
-import { repositoryPathOf } from "./effect-edges.ts";
+import { repositoryPathOf } from "./repository-path.ts";
 
 /**
  * native-press-guard.ts -- what the `no-raw-press-outside-ui-native` rule

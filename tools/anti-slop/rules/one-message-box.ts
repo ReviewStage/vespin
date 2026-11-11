@@ -1,12 +1,11 @@
 import { defineRule } from "@oxlint/plugins";
-
-import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/effect-edges.ts";
 import {
   BOX_BUILDERS,
   BOX_PARTS,
   isExemptFile,
   isPartModule,
 } from "../shared/message-box-guard.ts";
+import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/repository-path.ts";
 
 /**
  * Every box words are written in is drawn on the one message box

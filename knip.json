@@ -1,14 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreDependencies": ["oxlint", "turbo"],
+  "ignoreDependencies": ["effect", "oxlint", "turbo"],
   "ignoreBinaries": ["afconvert", "iconutil", "ditto", "shasum", "tiffutil"],
   "workspaces": {
     ".": {
-      "entry": [
-        "scripts/fixtures/discarded-effect/*.ts",
-        "scripts/vercel-deployed-paths.mjs",
-        "scripts/test-durations.mjs"
-      ],
+      "entry": ["scripts/vercel-deployed-paths.mjs", "scripts/test-durations.mjs"],
       "project": ["scripts/**"]
     },
     "apps/desktop": {

@@ -1,7 +1,7 @@
 import type { ESTree } from "@oxlint/plugins";
 import { defineRule } from "@oxlint/plugins";
 
-import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/effect-edges.ts";
+import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/repository-path.ts";
 import { DELETE_HELPERS, isExemptFile } from "../shared/sandbox-delete-guard.ts";
 
 /**

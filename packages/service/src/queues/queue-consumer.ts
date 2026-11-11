@@ -5,9 +5,7 @@
  * consumer's effect is run here, on the services the function's runtime
  * handed over, never on a runtime of this file's own: this is the promise
  * door of the automation-runs consumer (`automation-run-consumer.ts`) and the
- * agent-turns consumer (`turn-delivery.ts`) alike, listed as a
- * permanent adaptor in `tools/anti-slop/effect-edges.json` and root
- * AGENTS.md; what would end it is an Effect consumer in the queue's SDK.
+ * agent-turns consumer (`turn-delivery.ts`) alike; what would end it is an Effect consumer in the queue's SDK.
  *
  * A delivery whose effect succeeds answers what it asks of the queue:
  * acknowledged, or delivered again after a while, which the SDK's retry

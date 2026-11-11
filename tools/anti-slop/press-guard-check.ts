@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { ARCHIVE_WRITE_GUARD_RULE, namesArchiveWrite } from "./shared/archive-write-guard.ts";
 import { ARROW_KEY_GUARD_RULE, NAMES_ARROW_KEY } from "./shared/arrow-key-guard.ts";
 import { BUSY_GUARD_RULE } from "./shared/busy-guard.ts";
-import { TYPESCRIPT_SOURCE } from "./shared/effect-edges.ts";
 import { HEADING_GUARD_RULE } from "./shared/heading-guard.ts";
 import { HOST_READ_GUARD_RULE, isWatchedSource } from "./shared/host-read-guard.ts";
 import { KEPT_GUARD_RULE } from "./shared/kept-guard.ts";
@@ -24,6 +23,7 @@ import {
   PRESS_GUARD_RULE,
 } from "./shared/press-guard.ts";
 import { PRESS_LISTENER_GUARD_RULE } from "./shared/press-listener-guard.ts";
+import { TYPESCRIPT_SOURCE } from "./shared/repository-path.ts";
 import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
 import { ROW_BEHAVIOR_GUARD_RULE } from "./shared/row-behavior-guard.ts";
 import { namesSandboxDelete, SANDBOX_DELETE_GUARD_RULE } from "./shared/sandbox-delete-guard.ts";

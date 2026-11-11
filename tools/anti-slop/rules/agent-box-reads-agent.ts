@@ -1,6 +1,6 @@
 import { defineRule } from "@oxlint/plugins";
 
-import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/effect-edges.ts";
+import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/repository-path.ts";
 
 /**
  * A box writing to a started agent reads that agent in one place,

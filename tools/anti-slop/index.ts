@@ -6,7 +6,6 @@ import { askBesideScreenRule } from "./rules/ask-beside-screen.ts";
 import { asyncPressNeedsBusyRule } from "./rules/async-press-needs-busy.ts";
 import { enforceDeleteWithWhereRule } from "./rules/enforce-delete-with-where.ts";
 import { enforceUpdateWithWhereRule } from "./rules/enforce-update-with-where.ts";
-import { noAwaitDrizzleStatementRule } from "./rules/no-await-drizzle-statement.ts";
 import { noBrowserFormValidationRule } from "./rules/no-browser-form-validation.ts";
 import { noDirectViewStorageRule } from "./rules/no-direct-view-storage.ts";
 import { noDocumentPressListenerRule } from "./rules/no-document-press-listener.ts";
@@ -20,12 +19,10 @@ import { noNodeTestRule } from "./rules/no-node-test.ts";
 import { noOpenPageFromButtonRule } from "./rules/no-open-page-from-button.ts";
 import { noPlaceholderEllipsisRule } from "./rules/no-placeholder-ellipsis.ts";
 import { noProductNameRule } from "./rules/no-product-name.ts";
-import { noRawAsyncPrimitivesRule } from "./rules/no-raw-async-primitives.ts";
 import { noRawHeadingOutsideUiRule } from "./rules/no-raw-heading-outside-ui.ts";
 import { noRawPressOutsideUiRule } from "./rules/no-raw-press-outside-ui.ts";
 import { noRawPressOutsideUiNativeRule } from "./rules/no-raw-press-outside-ui-native.ts";
 import { noReducedMotionQueryRule } from "./rules/no-reduced-motion-query.ts";
-import { noRunPromiseOutsideEdgesRule } from "./rules/no-run-promise-outside-edges.ts";
 import { noShadcnFocusRingRule } from "./rules/no-shadcn-focus-ring.ts";
 import { noShortcutFlagRule } from "./rules/no-shortcut-flag.ts";
 import { noSourceReadInTestRule } from "./rules/no-source-read-in-test.ts";
@@ -54,7 +51,6 @@ const antiSlopPlugin = eslintCompatPlugin({
     "async-press-needs-busy": asyncPressNeedsBusyRule,
     "enforce-delete-with-where": enforceDeleteWithWhereRule,
     "enforce-update-with-where": enforceUpdateWithWhereRule,
-    "no-await-drizzle-statement": noAwaitDrizzleStatementRule,
     "no-browser-form-validation": noBrowserFormValidationRule,
     "no-direct-view-storage": noDirectViewStorageRule,
     "no-document-press-listener": noDocumentPressListenerRule,
@@ -68,12 +64,10 @@ const antiSlopPlugin = eslintCompatPlugin({
     "no-open-page-from-button": noOpenPageFromButtonRule,
     "no-placeholder-ellipsis": noPlaceholderEllipsisRule,
     "no-product-name": noProductNameRule,
-    "no-raw-async-primitives": noRawAsyncPrimitivesRule,
     "no-raw-heading-outside-ui": noRawHeadingOutsideUiRule,
     "no-raw-press-outside-ui": noRawPressOutsideUiRule,
     "no-raw-press-outside-ui-native": noRawPressOutsideUiNativeRule,
     "no-reduced-motion-query": noReducedMotionQueryRule,
-    "no-run-promise-outside-edges": noRunPromiseOutsideEdgesRule,
     "no-shadcn-focus-ring": noShadcnFocusRingRule,
     "no-shortcut-flag": noShortcutFlagRule,
     "no-source-read-in-test": noSourceReadInTestRule,

@@ -2,9 +2,9 @@ import type { ESTree } from "@oxlint/plugins";
 import { defineRule } from "@oxlint/plugins";
 
 import { isTestFile } from "../shared/busy-guard.ts";
-import { repositoryPathOf } from "../shared/effect-edges.ts";
 import { attributeName, isNode } from "../shared/jsx.ts";
 import { JSX_SOURCE } from "../shared/press-guard.ts";
+import { repositoryPathOf } from "../shared/repository-path.ts";
 import {
   END_PRESSES,
   MENU_ROW,
