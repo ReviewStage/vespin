@@ -81,6 +81,7 @@ import {
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -574,10 +575,12 @@ function ThreadColumn({
   return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
 }
 
+/** The list's search words and how to change them, held by the tab's root screen above its two layouts. */
+type InboxSearch = { readonly search: string; readonly setSearch: (search: string) => void };
+
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
-function useInboxScreen(chosen?: string | undefined) {
+function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
-  const [search, setSearch] = useState("");
   const listing = useInboxListing({ show, search, chosen });
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
@@ -591,14 +594,16 @@ function useInboxScreen(chosen?: string | undefined) {
 // Settings at the bar's leading edge, and its search and its ⋯ menu as round
 // glass buttons at its trailing one, each row pushing its thread as the Stack's
 // next screen.
-function InboxStackList() {
+function InboxStackList(words: InboxSearch) {
   const router = useRouter();
   const switcher = useWorkspaceSwitcher();
-  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen();
+  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(words);
+  const field = useRefilledSearchField(search);
   return (
     <>
       <Stack.Screen options={{ title: INBOX_TITLE, ...switcherTitle(switcher) }}>
         <Stack.SearchBar
+          ref={field}
           placeholder={SEARCH_INBOX}
           placement="integratedButton"
           allowToolbarIntegration={false}
@@ -658,11 +663,16 @@ function InboxStackList() {
 function InboxSplitScreen({
   selected,
   select,
+  words,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
+  readonly words: InboxSearch;
 }) {
-  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(selected);
+  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(
+    words,
+    selected,
+  );
   const sidebar = useAppSidebar(SIDEBAR_PLACE.INBOX, useSidebarTasks());
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
   return (
@@ -716,15 +726,16 @@ function InboxSplitScreen({
   );
 }
 
-/** The Inbox tab's root screen: its list, laid out by the window's size class. */
+/** The Inbox tab's root screen: its list, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
 export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
+  const [search, setSearch] = useState("");
   useSurfaceOpen(PRODUCT_SURFACE.INBOX);
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <InboxSplitScreen selected={selected} select={select} />
+    <InboxSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
-    <InboxStackList />
+    <InboxStackList search={search} setSearch={setSearch} />
   );
 }
 

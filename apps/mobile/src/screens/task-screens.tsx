@@ -72,6 +72,7 @@ import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -863,13 +864,15 @@ function OverviewPage({
   );
 }
 
+/** The tree's search words and how to change them, held by the tab's root screen above its two layouts. */
+type TasksSearch = { readonly search: string; readonly setSearch: (search: string) => void };
+
 /**
  * The list screens' search, the listing under it, its status set asking
  * first where it stops agents and its delete asking always, with the
  * questions that ask, and the pull that reads the list again.
  */
-function useTasksScreen() {
-  const [search, setSearch] = useState("");
+function useTasksScreen({ search, setSearch }: TasksSearch) {
   const read = useTasksListing(search);
   const { listing, status, deletion } = useListingAsks(read);
   const { refreshTasks } = useInboxActs();
@@ -880,14 +883,16 @@ function useTasksScreen() {
 // Stack's inline title, the account's photo opening Settings at the bar's
 // leading edge and its search a round glass button at its trailing one, each
 // row pushing its task as the Stack's next screen.
-function TasksStackList() {
+function TasksStackList(words: TasksSearch) {
   const router = useRouter();
   const switcher = useWorkspaceSwitcher();
-  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen();
+  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
+  const field = useRefilledSearchField(search);
   return (
     <>
       <Stack.Screen options={{ title: TASKS_TITLE, ...switcherTitle(switcher) }}>
         <Stack.SearchBar
+          ref={field}
           placeholder={SEARCH_TASKS}
           placement="integratedButton"
           allowToolbarIntegration={false}
@@ -919,11 +924,13 @@ function TasksStackList() {
 function TasksSplitScreen({
   selected,
   select,
+  words,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
+  readonly words: TasksSearch;
 }) {
-  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen();
+  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const newSubTask = useNewSubTask();
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
@@ -988,14 +995,15 @@ function TasksSplitScreen({
   );
 }
 
-/** The Tasks tab's root screen: its tree, laid out by the window's size class. */
+/** The Tasks tab's root screen: its tree, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
+  const [search, setSearch] = useState("");
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <TasksSplitScreen selected={selected} select={select} />
+    <TasksSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
-    <TasksStackList />
+    <TasksStackList search={search} setSearch={setSearch} />
   );
 }
 
