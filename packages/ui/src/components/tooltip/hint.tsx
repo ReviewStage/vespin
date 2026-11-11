@@ -121,7 +121,7 @@ import { useTouchHold } from "../menu/touch-hold.js";
 import type { OneLineHint } from "../one-line/clipped-line.js";
 import { Shortcut } from "../shortcut/shortcut.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
-import { TOOLTIP_CHORD, TooltipCard, TooltipPill } from "./tooltip.js";
+import { type CardBox, TOOLTIP_CHORD, TooltipCard, TooltipPill } from "./tooltip.js";
 
 /**
  * How long after one pill goes the next shows at once. Note that it is the
@@ -506,6 +506,7 @@ function Hint({
   chord,
   card,
   cardBeside,
+  cardAt,
   leaving,
   hold,
   onCard,
@@ -517,6 +518,7 @@ function Hint({
   chord: ShortcutChord | undefined;
   card: ReactNode;
   cardBeside: boolean;
+  cardAt: (() => CardBox | undefined) | undefined;
   leaving: boolean;
   hold: (element: HTMLElement | null) => void;
   onCard: (over: boolean) => void;
@@ -535,6 +537,7 @@ function Hint({
         {...placed}
         anchor={region ?? anchor}
         beside={cardBeside}
+        at={cardAt}
         onHover={onCard}
         onPress={onCardPress}
         onChoice={onCardChoice}
@@ -574,6 +577,8 @@ function Hint({
  * description the keyboard never enters. `cardRegion` is the row the
  * control stands in, the whole of which counts as the control while its
  * card stands, and which the card hangs from in the control's place.
+ * `cardAt` hangs the card from a box of the caller's instead, read as the
+ * card is placed, for a control that stands apart from what it is about.
  */
 export function Tooltip({
   label,
@@ -582,6 +587,7 @@ export function Tooltip({
   card,
   cardBeside = false,
   cardRegion,
+  cardAt,
   children,
 }: {
   label: string | undefined;
@@ -590,6 +596,8 @@ export function Tooltip({
   card?: ReactNode;
   cardBeside?: boolean | undefined;
   cardRegion?: RefObject<HTMLElement | null> | undefined;
+  /** Where its card hangs from in the window, in the control's place, as a pin's card hangs under what the pin is on; the control where this answers none. */
+  cardAt?: (() => CardBox | undefined) | undefined;
   children: ReactElement<AnchorProps>;
 }): React.JSX.Element {
   const id = useId();
@@ -964,6 +972,7 @@ export function Tooltip({
           chord={chord}
           card={card}
           cardBeside={cardBeside}
+          cardAt={cardAt}
           leaving={pill.leaving}
           hold={drawPill}
           onCard={onCard}

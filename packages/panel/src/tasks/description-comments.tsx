@@ -3572,6 +3572,7 @@ function PagePin({
   open,
   onOpen,
   onHint,
+  cardAt,
   stands,
 }: {
   threads: readonly DescriptionCommentThread[];
@@ -3579,6 +3580,8 @@ function PagePin({
   open: boolean;
   onOpen: () => void;
   onHint: (over: boolean) => void;
+  /** Where its preview hangs from, where its comments open when pressed. */
+  cardAt: () => FrameBox | undefined;
   stands: CommentPinStands;
 }): React.JSX.Element | null {
   const now = useMinute();
@@ -3589,6 +3592,7 @@ function PagePin({
   const comments = threads.length;
   return (
     <CommentPin
+      cardAt={cardAt}
       author={author}
       count={comments}
       label={`${comments} ${comments === 1 ? "comment" : "comments"}`}
@@ -3757,17 +3761,21 @@ function HeldPin({
   stands,
   onOpen,
   onHint,
+  cardAt,
 }: {
   held: readonly HeldComment[];
   open: boolean;
   stands: CommentPinStands;
   onOpen: () => void;
   onHint: (over: boolean) => void;
+  /** Where its preview hangs from, where its comments open when pressed. */
+  cardAt: () => FrameBox | undefined;
 }): React.JSX.Element {
   const { author, nameRef } = useReaderWriter();
   const first = held[0];
   return (
     <CommentPin
+      cardAt={cardAt}
       author={author}
       count={held.length}
       label={PAGE_REVIEW_WORDS.pin(held.length)}
@@ -3816,16 +3824,20 @@ function DraftPin({
   stands,
   onOpen,
   onHint,
+  cardAt,
 }: {
   words: string;
   files: readonly AgentAttachment[];
   stands: CommentPinStands;
   onOpen: () => void;
   onHint: (over: boolean) => void;
+  /** Where its preview hangs from, where its comments open when pressed. */
+  cardAt: () => FrameBox | undefined;
 }): React.JSX.Element {
   const { author, nameRef } = useReaderWriter();
   return (
     <CommentPin
+      cardAt={cardAt}
       look={COMMENT_PIN_LOOK.DRAFT}
       label={PAGE_COMMENT_WORDS.DRAFT}
       open={false}
@@ -4022,6 +4034,7 @@ export function PageCommentLayer({
                 held={held}
                 open={heldOpen === path}
                 stands={pinStands(box)}
+                cardAt={() => underElement(room.current, marks.get(path) ?? undefined)}
                 onOpen={() => {
                   // Note that an edit standing open holds its card, so no pin takes its place until it is saved or canceled.
                   if (review.editing) return;
@@ -4056,6 +4069,7 @@ export function PageCommentLayer({
             }}
             onHint={(over) => onHint(over ? path : undefined)}
             stands={pinStands(box)}
+            cardAt={() => underElement(room.current, marks.get(path) ?? undefined)}
           />
         </span>
       ))}
@@ -4072,6 +4086,7 @@ export function PageCommentLayer({
             words={drafted.words}
             files={drafted.attachments}
             stands={pinStands(draftMark.box)}
+            cardAt={() => underElement(room.current, draftMark.at ?? PAGE_TOP)}
             onOpen={() => {
               if (review?.editing === true) return;
               setHeldOpen(undefined);
