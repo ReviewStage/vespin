@@ -38,7 +38,8 @@
  * runner it started with it. Once the service settles the box's secret as
  * refused, the host removed in Settings › Hosts, it stops them and marks its
  * record refused; the account install then removes itself, as `vespin-host
- * uninstall` does, run apart from its own service (`removeItself`), and any
+ * uninstall --keep-agents` does, run apart from its own service
+ * (`removeItself`), keeping its agents' folders and its log, and any
  * other run rests (`hostRefusedRest`) until the box is connected again. A
  * start on a refused record rests the same way, never removing anything,
  * since the install script starts the service before it connects the box
@@ -149,6 +150,9 @@ const LEAVE_EXIT = { LEFT: 0, UNANSWERED: 1 } as const;
 
 /** The release's command, beside its `lib/`, whose `uninstall` removes the account install (`vespin-host.sh`). */
 const RELEASE_COMMAND = "bin/vespin-host";
+
+/** What a removed box runs of that command: the account install removed, its agents' folders and its log kept, since nobody is there to be asked about work that was not pushed. */
+const UNINSTALL_KEEPING_AGENTS = ["uninstall", "--keep-agents"] as const;
 
 /** The transient systemd unit a removed box's uninstall runs in, apart from the daemon's own unit, which it stops. */
 const UNINSTALL_UNIT = "vespin-host-uninstall";
@@ -328,8 +332,8 @@ const restartAsked = (service: HostService | undefined) =>
  * stopping the daemon's service, its first step, does not stop it too: in a
  * transient systemd unit of its own beside a unit, which a stop of the
  * unit's control group does not reach, and otherwise in a session of its
- * own, its words in the daemon's own log. Its input is no terminal, so it
- * asks nothing and removes every agent's folder. Whether it started.
+ * own, its words in the daemon's own log. It keeps every agent's folder and
+ * the log, asking nothing. Whether it started.
  */
 const uninstallApart = (service: HostService | undefined) => {
   const command = path.join(installFolder, RELEASE_COMMAND);
@@ -338,7 +342,15 @@ const uninstallApart = (service: HostService | undefined) => {
       Effect.flatMap(
         ChildProcess.make(
           "systemd-run",
-          ["--user", "--collect", "--quiet", "--unit", UNINSTALL_UNIT, command, "uninstall"],
+          [
+            "--user",
+            "--collect",
+            "--quiet",
+            "--unit",
+            UNINSTALL_UNIT,
+            command,
+            ...UNINSTALL_KEEPING_AGENTS,
+          ],
           { stdin: "ignore", stdout: "ignore", stderr: "ignore" },
         ),
         (handle) => handle.exitCode,
@@ -351,7 +363,7 @@ const uninstallApart = (service: HostService | undefined) => {
   // Note that a command that cannot start fails as an `error` event after the spawn returns, so the answer waits on `spawn` or `error`, whichever comes first.
   return Effect.callback<boolean>((resume) => {
     try {
-      const child = spawn(command, ["uninstall"], {
+      const child = spawn(command, UNINSTALL_KEEPING_AGENTS, {
         detached: true,
         stdio: ["ignore", "inherit", "inherit"],
       });
@@ -368,19 +380,20 @@ const uninstallApart = (service: HostService | undefined) => {
 
 /**
  * A box removed in Settings › Hosts removing itself, as `vespin-host
- * uninstall` would: its service, its agents' folders, its state and its
- * releases. The daemon exits once the uninstall has started, since the
- * uninstall stops its service within moments; one that did not start is
- * said, and a start of the service meanwhile rests on its refused record.
+ * uninstall --keep-agents` would: its service, its state and its releases,
+ * never its agents' folders or its log. The daemon exits once the uninstall
+ * has started, since the uninstall stops its service within moments; one
+ * that did not start is said, and a start of the service meanwhile rests on
+ * its refused record.
  */
 const removeItself = (service: HostService | undefined) =>
   Effect.gen(function* () {
     reportToStderr(
-      `${PRODUCT_NAME} host: removed in Settings › Machines, so it removes itself from this account: its service, its agents' folders, its state and its releases.`,
+      `${PRODUCT_NAME} host: removed in Settings › Machines, so it removes itself from this account: its service, its state and its releases. Its agents' folders and this log stay.`,
     );
     if (!(yield* uninstallApart(service))) {
       reportToStderr(
-        `${PRODUCT_NAME} host: could not start its uninstall. Run ${HOST_COMMAND} uninstall to remove it.`,
+        `${PRODUCT_NAME} host: could not start its uninstall. Run ${HOST_COMMAND} uninstall --keep-agents to remove it.`,
       );
     }
   });
@@ -535,7 +548,7 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
   }
   return Effect.sync(() =>
     process.stderr.write(
-      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | version | uninstall\n",
+      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | version | uninstall [--keep-agents]\n",
     ),
   ).pipe(Effect.as(CONNECT_EXIT.USAGE));
 }

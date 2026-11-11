@@ -52,8 +52,10 @@ import type { RunMode } from "./run-mode.js";
  * again (a sign-in, a sign-out, an experiment turned on or off), This Mac
  * turned on or off, and a move in the install's state folder, which its own
  * host writes apart from this app; and it is acted on only when it changed.
- * While no account is signed in, nothing on this Mac is installed, started,
- * or stopped.
+ * While no account is signed in, the host its record names stands stopped
+ * and kept from starting at the next login, so a Mac never runs agents for an
+ * account no longer signed in; nothing is installed or started, and nothing
+ * is removed, so signing in again starts the same host on the same record.
  *
  * This Mac runs agents only where the member turned it on: Settings ›
  * Hosts' Run agents on this Mac (`HOSTS_THIS_MAC_SET`), whose switch reads
@@ -112,10 +114,14 @@ const RETRY_AFTER = {
 
 const RETRY = cappedExponential(RETRY_AFTER.FIRST, RETRY_AFTER.LONGEST);
 
-/** What the app keeps This Mac's host at for the account signed in, and how many times it was turned on; none where it keeps it at nothing, and leaves it as it stands. */
+/** What the app keeps This Mac's host at for the account signed in, and how many times it was turned on; stopped, with no account, where nobody is signed in; none where it keeps it at nothing, and leaves it as it stands. */
 type Kept =
   | { readonly userId: string; readonly running: boolean; readonly turns: number }
+  | typeof SIGNED_OUT
   | undefined;
+
+/** What the app keeps This Mac's host at while nobody is signed in. */
+const SIGNED_OUT = { userId: undefined, running: false, turns: 0 } as const;
 
 const sameKept = (one: Kept, other: Kept) =>
   one?.userId === other?.userId && one?.running === other?.running && one?.turns === other?.turns;
@@ -367,12 +373,28 @@ export function composeThisMacHost(
       report("this Mac's host was stopped");
     });
 
+    /**
+     * The host stopped and kept from starting at the next login while nobody
+     * is signed in, its files kept. Note that no account can be asked
+     * whether it owns the record, so any of this app's service's that stands
+     * unrefused is stopped, since whoever enrolled it is signed in here no
+     * longer; a refused one already rests.
+     */
+    const stoppedSignedOut = Effect.gen(function* () {
+      if (!host.runsHost) return;
+      const record = yield* ownServiceRecord;
+      if (Option.isNone(record) || record.value.refused === true) return;
+      const stopped = yield* host.stop;
+      if (Result.isFailure(stopped)) return yield* Effect.fail(`stop it: ${stopped.failure}`);
+      report("this Mac's host was stopped, since nobody is signed in");
+    });
+
     /** What the app keeps the host at now, as the account and its experiments stand. */
     const keptNow: Effect.Effect<Kept> = Effect.gen(function* () {
+      if (!kernel.runMode.sendsNetwork) return undefined;
       const userId = dependencies.accountId();
-      if (userId === undefined || !account.capabilitiesActive() || !kernel.runMode.sendsNetwork) {
-        return undefined;
-      }
+      if (userId === undefined) return SIGNED_OUT;
+      if (!account.capabilitiesActive()) return undefined;
       return {
         userId,
         running: yield* dependencies.experimentOn(EXPERIMENT.BRING_YOUR_OWN_HOST),
@@ -384,7 +406,12 @@ export function composeThisMacHost(
     const keep = (kept: Kept) =>
       kept === undefined
         ? Effect.void
-        : (kept.running ? keepRunning : keepStopped).pipe(
+        : (kept.userId === undefined
+            ? stoppedSignedOut
+            : kept.running
+              ? keepRunning
+              : keepStopped
+          ).pipe(
             Effect.tapError((step) =>
               Effect.sync(() => report(`this Mac's host: could not ${step}, so it is tried again`)),
             ),
