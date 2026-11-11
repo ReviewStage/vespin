@@ -36,7 +36,7 @@ import {
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
-import type { AgentBoot } from "@repo/features/agent-boot";
+import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
 import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import {
   AGENT_BOUNDS,
@@ -249,7 +249,10 @@ const statusNow = (target: ConversationTarget, { createdAt, blank }: AgentStart,
     const standing = { createdAt, now, blank, boot: bootRow?.phase };
     const status = agentStatusOf(turn, standing);
     const runStartedAt = agentRunStartedAt(turn, { createdAt });
-    const failed = status === AGENT_STATUS.FAILED && turn !== undefined;
+    // Note that a failed first launch is said by its boot, so it names no turn that never started; an agent that never started otherwise still does.
+    const failed =
+      status === AGENT_STATUS.FAILED &&
+      (turn !== undefined || bootRow?.phase !== BOOT_PHASE.FAILED);
     const failureReason = failed ? agentFailureOf(turn) : undefined;
     const hostLost = failed ? hostLostOf(turn) : undefined;
     const graceEdge = statusClockEdge(turn, standing);

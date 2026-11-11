@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { addSound } from "@repo/database/models/account-sounds";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
+import { beginAgentBoot } from "@repo/database/models/agent-boot-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
 import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
 import { createAgent } from "@repo/database/models/agent-store";
@@ -151,6 +152,7 @@ import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-confi
 import { liveProcedures } from "./live-procedures.js";
 import { pollSealer } from "./poll-sealer.js";
 import { agentOriginRead } from "./reads/agent-origin.js";
+import { agentTranscriptRead } from "./reads/agent-transcript.js";
 
 /**
  * The reads the desktop follows, answered by the procedure the way the
@@ -1077,6 +1079,49 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
           }),
           { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
         );
+      }),
+  );
+
+  it.effect(
+    "an agent's first launch is delivered on its transcript to a member of its workspace, and to no account outside it",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const stranger = yield* openUser;
+        const task = yield* startTask(owner, { name: "Teammate invitations" });
+        yield* joinWorkspace(task.workspaceId, teammate);
+        const started = yield* createAgent(owner, {
+          taskId: task.id,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: "acme/relay",
+          descriptionSnapshot: "# Teammate invitations\n",
+          prompt: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        });
+        const { agent } = Option.getOrThrow(started);
+        yield* beginAgentBoot(agent.id, new Date(0), undefined);
+        const sql = yield* SqlClient.SqlClient;
+        // The boot's statement as Realtime runs it for `reader`, the agent's own transcript followed.
+        const bootRowsFor = (reader: string) => {
+          const statement = Option.getOrThrow(
+            agentTranscriptRead.statements({
+              userId: reader,
+              id: agent.id,
+              call: "",
+              ownerId: owner,
+              conversationId: agent.conversationId,
+              parentConversationId: agent.conversationId,
+              agentId: agent.id,
+            }),
+          ).boot;
+          return sql.unsafe(statement.sql, [...statement.params]);
+        };
+
+        assert.equal((yield* bootRowsFor(teammate)).length, 1);
+        assert.deepEqual(yield* bootRowsFor(stranger), []);
       }),
   );
 
