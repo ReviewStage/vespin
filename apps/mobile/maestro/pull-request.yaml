@@ -36,9 +36,19 @@ appId: dev.vespin.ios
 - assertVisible: "grace"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
-# Merging acts on the press, as the panel's merge control does. Note that an
-# iPad's bar folds its buttons into its overflow, "More", so where the merge
-# stands in none the overflow is opened first.
+# Merging acts on the press, as the panel's merge control does. Note that a
+# regular window draws the press in the page, under the checks, where it may
+# stand below the fold, so it is scrolled to first; an iPad's bar that folds
+# its buttons into its overflow, "More", has it opened where it is in neither.
+- runFlow:
+    when:
+      notVisible: "Squash and merge"
+    commands:
+      - scrollUntilVisible:
+          element: "Squash and merge"
+          direction: DOWN
+          timeout: 5000
+          optional: true
 - runFlow:
     when:
       notVisible: "Squash and merge"
@@ -117,6 +127,15 @@ appId: dev.vespin.ios
     when:
       notVisible: "Remove from queue"
     commands:
+      - scrollUntilVisible:
+          element: "Remove from queue"
+          direction: DOWN
+          timeout: 5000
+          optional: true
+- runFlow:
+    when:
+      notVisible: "Remove from queue"
+    commands:
       - tapOn: "More"
 - tapOn: "Remove from queue"
 - assertVisible: "Remove from the merge queue?"
@@ -128,6 +147,15 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     notVisible: "Queued #2"
     timeout: 30000
+- runFlow:
+    when:
+      notVisible: "Merge when ready"
+    commands:
+      - scrollUntilVisible:
+          element: "Merge when ready"
+          direction: DOWN
+          timeout: 5000
+          optional: true
 - runFlow:
     when:
       notVisible: "Merge when ready"
