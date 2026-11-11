@@ -114,21 +114,31 @@ export interface CommentReply {
   readonly note: string | undefined;
 }
 
+/** A reply sent and not yet answered as posted: its words, and the key it went under. */
+interface SentReply {
+  readonly words: string;
+  readonly key: string;
+}
+
 /**
  * A reply on one thread, as the panel's thread sends it: the words go at
- * once under a key kept for as long as they stand, the field emptied as
- * they go and given them back where the service refused them, with why.
+ * once under a key kept for as long as they stand, so the same words sent
+ * again after a lost answer are taken once, and other words go under a key
+ * of their own; the field is emptied as they go and given them back where
+ * the service refused them, with why.
  */
 export function useCommentReply(taskId: string, threadId: string): CommentReply {
   const acts = useHostActs();
   const [words, setWords] = useState("");
-  const [key, setKey] = useState(randomUUID);
+  const [sent, setSent] = useState<SentReply | undefined>(undefined);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
       if (kept === "" || sending) return;
+      const key = sent?.words === kept ? sent.key : randomUUID();
+      setSent({ words: kept, key });
       setSending(true);
       setNote(undefined);
       setWords("");
@@ -141,7 +151,7 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
         .then((answer) => {
           if ("thread" in answer) {
             buzz(BUZZ.SUCCESS);
-            setKey(randomUUID());
+            setSent(undefined);
             return;
           }
           buzz(BUZZ.ERROR);
@@ -157,5 +167,5 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       send,
       note,
     };
-  }, [acts, taskId, threadId, words, key, sending, note]);
+  }, [acts, taskId, threadId, words, sent, sending, note]);
 }
