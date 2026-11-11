@@ -2,9 +2,15 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
+import { rememberMemory } from "@repo/database/models/memory-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { experimentInTestWorkspace, getTestDB, startTask } from "@repo/database/testing";
+import {
+  experimentInTestWorkspace,
+  getTestDB,
+  openWorkspace,
+  startTask,
+} from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { RUN_STATUS, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
@@ -33,7 +39,9 @@ import { coderTurnMessage } from "./turn-message.js";
  * says nothing of them; and a typed turn hands the task once after the
  * agent's first turn, then only where someone other than the agent saved
  * the description after its previous turn started, never on its first turn or for
- * its own notes. Synthetic accounts, tasks, and words throughout.
+ * its own notes; and an agent's first turn alone, with Memory on, is handed
+ * the memories of its own workspace its task's words find. Synthetic
+ * accounts, tasks, and words throughout.
  */
 
 const DESCRIPTION_TEXT = "# Teammate invitations\n\n## Goal\n\nInvite a teammate by email.\n";
@@ -212,6 +220,45 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         assert.ok(back.includes("Only admins withdraw invites."), back);
         // Its last edit came while Task descriptions was off, so it is said to predate the work since.
         assert.ok(back.includes(STALE_WORDS), back);
+      }),
+  );
+
+  it.effect(
+    "an agent's first turn, with Memory on, is handed the memories of its own workspace its task and words find, never another workspace's, one that matches nothing, or any on a later turn, and nothing at all with Memory off",
+    () =>
+      Effect.gen(function* () {
+        const { userId, agent, admitted } = yield* openAgent;
+        const elsewhere = yield* openWorkspace(userId);
+        const kept = (workspaceId: string, text: string) =>
+          rememberMemory(workspaceId, userId, text, undefined);
+        yield* kept(agent.organizationId, "Invitation emails go out through the mail queue.");
+        yield* kept(agent.organizationId, "Release notes are dated in Eastern time.");
+        yield* kept(elsewhere, "Invitations in the other workspace expire after a day.");
+        const firstTurn = randomUUID();
+        const typedAt = (turnId: string) =>
+          Effect.map(
+            coderTurnMessage(
+              admitted,
+              agent,
+              { kind: SESSION_TURN.TYPED, turnId, words: "Send the invitation email." },
+              {},
+              TURN_STARTS_AT,
+            ),
+            (message) => message.text ?? "",
+          );
+
+        const off = yield* typedAt(firstTurn);
+        assert.ok(!off.includes("What the workspace remembers"), off);
+
+        yield* experimentInTestWorkspace(userId, EXPERIMENT.MEMORY);
+        const first = yield* typedAt(firstTurn);
+        assert.ok(first.includes("Invitation emails go out through the mail queue."), first);
+        assert.ok(!first.includes("Eastern time"), first);
+        assert.ok(!first.includes("other workspace"), first);
+
+        yield* ranTurn(admitted, firstTurn, TURN_STARTS_AT);
+        const later = yield* typedAt(randomUUID());
+        assert.ok(!later.includes("What the workspace remembers"), later);
       }),
   );
 });
