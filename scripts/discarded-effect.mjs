@@ -12,11 +12,10 @@ import {
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
- * Everything the repository compiles, and the canary pair beside it. The
- * workspaces have tsconfigs of their own, but one program over all of them
- * costs a single bind rather than twenty-six, and this check reads no
- * diagnostic, so the differences between those tsconfigs — which `@types`
- * package each pulls in — change nothing about which values are Effects.
+ * Everything the repository compiles. A program is built per group of
+ * workspaces below rather than per tsconfig: this check reads no diagnostic,
+ * so the differences between those tsconfigs (which `@types` package each
+ * pulls in) change nothing about which values are Effects.
  */
 const SOURCE_GLOBS = [
   "apps/*/src/**/*.ts",
@@ -27,30 +26,86 @@ const SOURCE_GLOBS = [
   "packages/*/src/**/*.ts",
   "packages/*/src/**/*.tsx",
   "tools/*/src/**/*.ts",
-  `${CANARY.DIRECTORY}/*.ts`,
 ];
 
-const sourceFiles = [];
+/**
+ * The workspaces read together in one program; a workspace named in no group
+ * is a program of its own. Note that we split the repository, because one
+ * program over all of it kept every type it resolved and outgrew the 4 GB
+ * heap `package.json` gives this check, and that we group the workspaces
+ * rather than read each alone, because each program resolves again the types
+ * it shares with the others: a program per workspace took twice as long. Each
+ * group here peaks below the heap `apps/web` alone takes, about 2 GB, so a
+ * workspace joins a group only where a measured heap says the group still
+ * does; `@repo/service` and `apps/web` stand alone for that reason.
+ */
+const PROGRAM_GROUPS = [
+  [
+    "packages/runtime",
+    "packages/wire",
+    "packages/settings",
+    "packages/sync",
+    "packages/gateway",
+    "packages/sandbox",
+    "packages/credentials",
+    "packages/agent-runner",
+    "packages/database",
+    "tools/claude-code-probe",
+    "apps/cli",
+  ],
+  ["packages/brand", "packages/features", "packages/ui", "packages/panel", "apps/catalog"],
+  ["packages/host", "apps/desktop", "apps/host", "packages/ui-native", "apps/mobile"],
+];
+
+/** The workspace a repository path sits in, such as `packages/panel`. */
+function workspaceOf(relativePath) {
+  return relativePath.split("/", 2).join("/");
+}
+
+const byWorkspace = new Map();
 for await (const found of glob(SOURCE_GLOBS, { cwd: REPOSITORY_ROOT })) {
-  sourceFiles.push(path.join(REPOSITORY_ROOT, found));
+  const workspace = workspaceOf(found);
+  const files = byWorkspace.get(workspace) ?? [];
+  files.push(path.join(REPOSITORY_ROOT, found));
+  byWorkspace.set(workspace, files);
+}
+const grouped = new Set(PROGRAM_GROUPS.flat());
+const programs = [
+  ...PROGRAM_GROUPS.map((group) => group.filter((workspace) => byWorkspace.has(workspace))),
+  ...[...byWorkspace.keys()]
+    .filter((workspace) => !grouped.has(workspace))
+    .sort()
+    .map((one) => [one]),
+]
+  .filter((group) => group.length > 0)
+  .map((group) => ({
+    name: group.join(", "),
+    rootNames: group.flatMap((workspace) => byWorkspace.get(workspace)),
+  }));
+const sourceCount = programs.reduce((count, program) => count + program.rootNames.length, 0);
+
+const canaryNames = [];
+for await (const found of glob(`${CANARY.DIRECTORY}/*.ts`, { cwd: REPOSITORY_ROOT })) {
+  canaryNames.push(path.join(REPOSITORY_ROOT, found));
 }
 
 const base = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, "tsconfig.base.json"), "utf8"));
-const found = findDiscardedEffects({
+const reported = [];
+for (const { name, discarded } of findDiscardedEffects({
   root: REPOSITORY_ROOT,
-  rootNames: sourceFiles,
+  programs,
+  canaryNames,
   compilerOptions: compilerOptionsFrom(REPOSITORY_ROOT, base.compilerOptions),
-});
-
-const canary = found.filter((one) => one.file.startsWith(`${CANARY.DIRECTORY}/`));
-const reported = found.filter((one) => !one.file.startsWith(`${CANARY.DIRECTORY}/`));
-
-const sighted = canary.map(discardedAt);
-if (sighted.join("\n") !== CANARY.DISCARDED.join("\n")) {
-  process.stderr.write(
-    `error: the canary under ${CANARY.DIRECTORY} reported ${sighted.join(", ") || "nothing"} where it must report ${CANARY.DISCARDED.join(", ")}. This program does not resolve Effect's own types, so its silence about the repository means nothing.\n`,
-  );
-  process.exit(1);
+})) {
+  const canary = discarded.filter((one) => one.file.startsWith(`${CANARY.DIRECTORY}/`));
+  const sighted = canary.map(discardedAt);
+  if (sighted.join("\n") !== CANARY.DISCARDED.join("\n")) {
+    process.stderr.write(
+      `error: the canary under ${CANARY.DIRECTORY} reported ${sighted.join(", ") || "nothing"} in the program for ${name} where it must report ${CANARY.DISCARDED.join(", ")}. That program does not resolve Effect's own types, so its silence about the repository means nothing.\n`,
+    );
+    process.exit(1);
+  }
+  reported.push(...discarded.filter((one) => !one.file.startsWith(`${CANARY.DIRECTORY}/`)));
 }
 
 if (reported.length > 0) {
@@ -63,4 +118,4 @@ if (reported.length > 0) {
   process.exit(1);
 }
 
-process.stdout.write(`No discarded Effect, Stream, or Layer in ${sourceFiles.length} files.\n`);
+process.stdout.write(`No discarded Effect, Stream, or Layer in ${sourceCount} files.\n`);
