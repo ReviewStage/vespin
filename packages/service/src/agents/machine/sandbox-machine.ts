@@ -146,7 +146,9 @@ import {
   type BaseRefill,
   baseDriveName,
   checkoutCommit,
+  DRIVE_PNPM_STORE,
   fillBaseDrive,
+  HAND_INSTALL_TO_AGENT,
   lockfileMoved,
   readBaseDrive,
 } from "../base-drive.js";
@@ -272,9 +274,6 @@ const LINK_TOOLS_DIRECTORY = `if [ -d ${SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME} ]
  */
 const JOIN_DOCKER_GROUP = `if getent group docker > /dev/null && ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
 
-/** Where pnpm keeps its store for a checkout on the workspace's drive, as the base drive's fill installs: the drive's root, the first folder up from the checkout it may write on that drive. */
-const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
-
 /**
  * The workspace's drive's root opened to the store's group on each launch,
  * root's, where pnpm's store stands at it, so `agent`, in the default user's
@@ -286,21 +285,6 @@ const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-st
  * purge it.
  */
 const OPEN_DRIVE_STORE = `if [ -d ${DRIVE_PNPM_STORE} ]; then chgrp --reference=${DRIVE_PNPM_STORE} ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; chmod g+w ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; fi`;
-
-/**
- * The dependencies another user installed in the agent's checkout handed to
- * `agent` on each launch, root's: the base drive's fill's
- * (`../base-drive.ts`), or a setup script's, both the default user's. Note
- * that this is because an install chmods what it installed on every run
- * (pnpm a package's bins, a `prepare` script the hooks it copies), which
- * only a file's owner may, so `agent`'s own install failed on them. The
- * checkout's files but its `.git` and pnpm's store on the drive, whose files
- * `node_modules` links, are made `agent`'s, their group and its writes left
- * as they stand, so the default user still writes them. It is asked only
- * where the checkout's `node_modules` is not `agent`'s, so a launch after
- * the one that handed it walks nothing.
- */
-const HAND_INSTALL_TO_AGENT = `if [ -d ${CODER.CHECKOUT_PATH}/node_modules ] && [ "$(stat -c %U ${CODER.CHECKOUT_PATH}/node_modules)" != ${AGENT_USER} ]; then find ${CODER.CHECKOUT_PATH} -mindepth 1 -maxdepth 1 ! -name .git -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
 
 /**
  * A checkout marked safe for git in the sandbox and its repository shared
@@ -360,8 +344,8 @@ const CREDENTIAL_UNREAD = "the agent's repository credential could not be read";
  * agent's own and those of the repositories it works in beside it at the
  * paths given (`extraCheckoutPaths`), none for an agent in one repository,
  * the drive's pnpm store opened to `agent` (`OPEN_DRIVE_STORE`) and what
- * another user installed in its checkout handed to it
- * (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
+ * another user installed in its checkout handed to it where the drive's
+ * fill did not already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
  * and the folder an agent saves what the service reads back in made
  * `agent`'s and readable by the default user the service reads as
  * (`SHARED_FILES_DIRECTORY`). Note that the checkout's git config is written

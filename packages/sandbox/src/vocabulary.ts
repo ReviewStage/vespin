@@ -309,12 +309,12 @@ export interface SandboxCreate {
   /** How long its kept snapshot lasts after its last use; where unsaid, the package's default. */
   readonly snapshotLapse?: import("effect").Duration.Duration;
   readonly env: Readonly<Record<string, string>>;
+  /** The user made in it as it is created, where it names one. */
+  readonly user?: SandboxUser;
 }
 
 /** A sandbox got or created: as a create opens it, with the user it names, where it names one, made in it where the call creates it. */
-export interface SandboxGetOrCreate extends SandboxCreate {
-  readonly user?: SandboxUser;
-}
+export type SandboxGetOrCreate = SandboxCreate;
 
 /** A file written into a sandbox: its absolute path, its bytes, and its mode. */
 export interface SandboxFile {
