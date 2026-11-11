@@ -146,3 +146,12 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 export { Video } from "./video.js";
+export {
+  newWorkspaceAction,
+  type SwitcherAction,
+  type SwitcherWorkspace,
+  WorkspaceSwitcher,
+  WorkspaceSwitcherMenu,
+  WorkspaceTile,
+  workspaceSettingsAction,
+} from "./workspace-switcher.js";

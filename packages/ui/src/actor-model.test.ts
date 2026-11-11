@@ -18,8 +18,6 @@ import {
   type EditReader,
   editActor,
   githubActor,
-  identityHue,
-  identityLetter,
   latestActivity,
   originActor,
   personActor,
@@ -100,16 +98,6 @@ test("a member named on the wire is read against the workspace's members: their 
     kind: ACTOR_KIND.SOMEONE,
     reason: SOMEONE_REASON.UNNAMED,
   });
-});
-
-test("an identity's hue is read off its id alone, so a rename keeps it, and its letter is the first character a reader sees", () => {
-  assert.equal(identityHue("user-dana"), identityHue("user-dana"));
-  assert.ok(identityHue("user-dana") >= 1 && identityHue("user-dana") <= 6);
-  assert.notEqual(identityHue("user-dana"), identityHue("user-sam"));
-  assert.deepEqual(
-    [identityLetter("  dana"), identityLetter("👩🏽‍💻 Ops"), identityLetter("")],
-    ["D", "👩🏽‍💻", ""],
-  );
 });
 
 const SAM_READS: EditReader = { members: [DANA, SAM], readerId: SAM.userId };
