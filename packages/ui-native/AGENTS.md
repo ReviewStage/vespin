@@ -159,7 +159,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   and `StatusChip` read a task's status, priority and assignee. Each stands
   on `SURFACE` inside a hairline.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
-  rows, a "Recommended" tag and a detail line; `StepList`, a toggle per step,
+  rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
   field: a text or number field under its label, a select's menu picker, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because

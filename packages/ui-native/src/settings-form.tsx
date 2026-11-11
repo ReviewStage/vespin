@@ -7,7 +7,6 @@ import {
   Image,
   LabeledContent,
   Menu,
-  Picker,
   Spacer,
   Button as SwiftUIButton,
   Text,
@@ -15,6 +14,7 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
@@ -24,13 +24,10 @@ import {
   disabled,
   font,
   foregroundStyle,
-  labelsHidden,
   listRowBackground,
-  pickerStyle,
   scrollContentBackground,
   scrollDismissesKeyboard,
   shapes,
-  tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
@@ -308,26 +305,49 @@ type PickRowsProps = {
   readonly onPick: (id: string) => void;
 };
 
-/** A choice among a few, each a row of its own with the picked one checked, as SwiftUI's inline picker draws it. */
+/** The picked row's check, as iOS's own Settings draws it at a row's end. */
+const PICKED_MARK = "checkmark";
+
+/** The check's size, as small and heavy as the system's own. */
+const PICKED_MARK_SIZE = 15;
+
+/**
+ * A choice among a few, each a row of its own with the picked one checked
+ * in copper, as iOS's own Settings checks a choice. Note that the rows are
+ * drawn here rather than by SwiftUI's inline picker, because its check takes
+ * the form's tint, which stands in the ink, and neither a tint on the picker
+ * nor one on a group around it reached the check. VoiceOver hears each row
+ * as a button, the picked one selected, and the section's title over them.
+ */
 export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
-  // Note that the copper reaches the inline picker's checkmark from a group around it, since a tint on the picker itself left the check in the screen's ink.
   return (
-    <Group modifiers={[tint(colors.ACCENT)]}>
-      <Picker<string | null>
-        label={label}
-        selection={picked ?? null}
-        onSelectionChange={(id) => {
-          if (id !== null) onPick(id);
-        }}
-        modifiers={[pickerStyle("inline"), labelsHidden(), listRowBackground(colors.SURFACE)]}
-      >
-        {options.map((option) => (
-          <Text key={option.id} modifiers={[tag(option.id), foregroundStyle(colors.TEXT)]}>
-            {option.label}
-          </Text>
-        ))}
-      </Picker>
+    <Group modifiers={[accessibilityLabel(label)]}>
+      {options.map((option) => (
+        <SwiftUIButton
+          key={option.id}
+          onPress={() => onPick(option.id)}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(option.label),
+            ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
+            listRowBackground(colors.SURFACE),
+          ]}
+        >
+          <HStack modifiers={[contentShape(shapes.rectangle())]}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
+            <Spacer />
+            {option.id === picked ? (
+              <Image
+                systemName={PICKED_MARK}
+                size={PICKED_MARK_SIZE}
+                color={colors.ACCENT}
+                modifiers={[font({ size: PICKED_MARK_SIZE, weight: "semibold" })]}
+              />
+            ) : null}
+          </HStack>
+        </SwiftUIButton>
+      ))}
     </Group>
   );
 }
