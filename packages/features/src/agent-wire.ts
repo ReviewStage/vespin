@@ -1400,6 +1400,13 @@ export const agentAnswerSchema = EffectSchema.Struct({
 export const agentMessageAnswerSchema = EffectSchema.Struct({
   agent: agentSummarySchema,
   txid: EffectSchema.optionalKey(EffectSchema.String),
+  /**
+   * The agent's queue with the message in it, where the agent's machine was
+   * still booting its first launch and the message waits there to go once it
+   * is up (`agent-boot.ts`), in place of a line written; absent where the
+   * message was sent, and from a service older than it.
+   */
+  queued: EffectSchema.optionalKey(agentQueueSchema),
 });
 
 /**

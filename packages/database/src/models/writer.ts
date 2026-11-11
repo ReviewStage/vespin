@@ -394,7 +394,7 @@ export type LineSender =
     };
 
 /** The name a line's row keeps beside its sender's kind: an automation's or an agent's, or the GitHub login; none for any other. */
-function senderNameOf(sender: LineSender | undefined): string | null {
+export function senderNameOf(sender: LineSender | undefined): string | null {
   switch (sender?.kind) {
     case MESSAGE_SENDER.AUTOMATION:
     case MESSAGE_SENDER.AGENT:
