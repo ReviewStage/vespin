@@ -1,3 +1,4 @@
+import { namedServers, serverRows } from "@repo/features/agent-servers-model";
 import { connectionHealth } from "@repo/features/integration-health";
 import {
   INTEGRATION_PROVIDER,
@@ -16,7 +17,6 @@ import {
   type SettingsSectionSkeletonShape,
   SettingsSectionsSkeleton,
 } from "@repo/ui";
-import { namedServers, serverRows } from "@repo/ui/agent-servers-model";
 import { unreadShown } from "../failure-report.js";
 import { IntegrationRow } from "../integration-row.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";

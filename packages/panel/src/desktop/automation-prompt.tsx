@@ -1,9 +1,9 @@
+import { SERVER_HANDED } from "@repo/features/agent-servers-model";
 import { AUTOMATION_BOUNDS } from "@repo/features/automation-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { cssCustomProperties } from "@repo/ui";
-import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appPlatform } from "../app-platform.js";

@@ -1,4 +1,5 @@
 import { ENTITY_KIND, ENTITY_WORD } from "@repo/features/entity-kind";
+import type { SkillOption } from "@repo/features/skill-mention";
 import { skillWord } from "@repo/features/skill-word";
 import { TASK_SKILL_SOURCE, type TaskSkillSource } from "@repo/features/task-wire";
 import {
@@ -13,7 +14,6 @@ import {
   INLINE_REF_NAME,
   InlineRef,
 } from "@repo/ui";
-import type { SkillOption } from "@repo/ui/skill-mention";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { SkillSourceBadge } from "./skill-source-badge.js";

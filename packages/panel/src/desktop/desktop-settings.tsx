@@ -1,5 +1,6 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
+import { integrationNamed } from "@repo/features/integration-search";
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -32,7 +33,6 @@ import {
   useMenu,
   useRovingKeys,
 } from "@repo/ui";
-import { integrationNamed } from "@repo/ui/integration-search";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
