@@ -34,7 +34,7 @@ export {
   QueuedLines,
 } from "./composer-head.js";
 export { EmptyState } from "./empty-state.js";
-export { MenuPickRow, WordsField } from "./form-rows.js";
+export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
 export { BUZZ, type Buzz, buzz } from "./haptics.js";

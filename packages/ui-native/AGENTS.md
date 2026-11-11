@@ -20,7 +20,7 @@ builds a control of its own.
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, with `WordsField` and `MenuPickRow` for a sheet that starts work,
+  rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a sheet that starts work,
   `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's

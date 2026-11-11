@@ -1,4 +1,4 @@
-# new-task.yaml -- New task from the tab bar's round +: Home's composer as a sheet, the task described, its repository and model picked, and the task started with its agent, the agent's page opened; then a draft that Cancel asks before discarding.
+# new-task.yaml -- New task from the tab bar's round +: Home's composer as a sheet, the task described, its repository and model picked, and the task started with its agent, the agent's page opened; then a draft that Cancel asks before discarding; then a picture attached through the sheet's +, which keeps the sheet as a draft too.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -52,6 +52,46 @@ appId: dev.vespin.ios
 - assertVisible: "Discard draft?"
 - waitForAnimationToEnd
 - takeScreenshot: new-task-discard
+- tapOn: "Discard draft"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
+    timeout: 5000
+# A picture attaches through the sheet's +, which opens the system's photo
+# picker on the library `media/invite-bug.png` was added to. Note that the
+# picker's grid names its photos differently by iOS version, so it is tried
+# by each name, as Maestro's own gallery recipe does; and that a sheet with
+# a picture and no words keeps it as a draft too.
+- launchApp:
+    arguments:
+      fixture: inbox
+- addMedia:
+    - "media/invite-bug.png"
+- assertVisible: "Inbox"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- hideKeyboard
+- waitForAnimationToEnd
+- takeScreenshot: new-task-add
+- tapOn:
+    id: "new-task-attach"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-picker
+- tapOn:
+    id: "PXGGridLayout-Info"
+    index: 0
+    optional: true
+- tapOn:
+    text: "Photo, .*"
+    index: 0
+    optional: true
+- tapOn: "Add"
+- extendedWaitUntil:
+    visible: "Picture 1"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: new-task-picture
+- tapOn: "Cancel"
+- assertVisible: "Discard draft?"
 - tapOn: "Discard draft"
 - extendedWaitUntil:
     notVisible: "Describe the task"

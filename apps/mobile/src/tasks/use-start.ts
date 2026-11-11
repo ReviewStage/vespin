@@ -6,7 +6,8 @@
  * and read from the document the host writes it into. Each start is the act
  * the panel sends: New agent's `AGENTS_START` on the task, and New task's
  * one `TASKS_START`, which makes the task and starts its agent together, as
- * Home's composer does. A start names a model only where one was picked, so
+ * Home's composer does, the pictures attached going with its words as the
+ * panel's attachments do. A start names a model only where one was picked, so
  * an untouched sheet starts on the account's default at the moment it goes,
  * as the panel's does.
  */
@@ -19,7 +20,7 @@ import {
   startFailureWords,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
 import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import { modelLabel } from "@repo/features/model-label";
 import {
@@ -199,9 +200,11 @@ export function useRepositoryPick(workspace: Workspace | undefined): RepositoryP
 
 /* ----- The starts ----- */
 
-/** The words and choices a start carries. */
+/** The words, pictures, and choices a start carries. */
 interface StartAsk {
   readonly prompt: string;
+  /** The pictures attached, in the order attached; none where nothing is. */
+  readonly attachments: readonly AgentAttachment[] | undefined;
   readonly picked: ModelChoice | undefined;
   readonly runsOn: string;
 }
@@ -214,11 +217,12 @@ interface StartAsk {
 export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
-  return async ({ prompt, picked, runsOn }) => {
+  return async ({ prompt, attachments, picked, runsOn }) => {
     const answer = await acts[ACT_KIND.AGENTS_START]({
       taskId,
       idempotencyKey: key,
       prompt,
+      ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
       ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
       ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
     }).catch((error: unknown) => {
@@ -241,7 +245,7 @@ export function useStartTask(
 ): (ask: StartAsk & { readonly repository: string | undefined }) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
-  return async ({ prompt, picked, runsOn, repository }) => {
+  return async ({ prompt, attachments, picked, runsOn, repository }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
       ...(workspaceId === undefined ? undefined : { workspaceId }),
       ...(repository === undefined ? undefined : { repository }),
@@ -249,6 +253,7 @@ export function useStartTask(
       agent: {
         idempotencyKey: key,
         prompt,
+        ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
         ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
         ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
       },
