@@ -36,27 +36,6 @@ function loadedMarkdown(skill: RepositorySkill): string {
   return `This skill is \`${folder}/SKILL.md\` in the checkout; resolve the files it names relative to \`${folder}/\`.\n\n${skill.markdown}`;
 }
 
-/** Each source's skills for the agent, in precedence order: its repository's on its default branch, where it has one, then its member's installed ones. */
-function sourcedSkills(
-  target: ConversationTarget,
-  agent: Agent,
-  loaded: (skill: RepositorySkill) => string = loadedMarkdown,
-): Effect.Effect<readonly [readonly AgentSkill[], readonly AgentSkill[]], never, CheckoutServices> {
-  return Effect.gen(function* () {
-    // The workspace is read once for both sources, as the agent reads itself.
-    const workspaceOf = yield* Effect.cached(ownAgentWorkspace(target.userId, agent));
-    return yield* Effect.all(
-      [
-        hasRepository(agent)
-          ? repositorySkills(target, workspaceOf, agent.repository, agentMember(agent), loaded)
-          : Effect.succeed([]),
-        installedSkills(target, workspaceOf),
-      ],
-      { concurrency: "unbounded" },
-    );
-  });
-}
-
 /**
  * The installed skills a native harness is handed (`runner-sessions.ts`):
  * the merge of the repository's skills the harness finds itself and the
@@ -64,7 +43,8 @@ function sourcedSkills(
  * an installed skill a repository skill of its name shadows stays out too;
  * a repository skill in a root the harness never reads (`roots`, such as
  * `.claude/skills` for Codex) shadows nothing, since the harness would
- * offer neither. Read from the default branch.
+ * offer neither. Read from the default branch, and only where the member
+ * has a skill installed, since none installed leaves nothing to shadow.
  */
 export function nativeSkills(
   target: ConversationTarget,
@@ -72,11 +52,25 @@ export function nativeSkills(
   roots: readonly string[],
 ): Effect.Effect<readonly AgentSkill[], never, CheckoutServices> {
   return Effect.gen(function* () {
+    // The workspace is read once for both sources, as the agent reads itself.
+    const workspaceOf = yield* Effect.cached(ownAgentWorkspace(target.userId, agent));
+    const installed = yield* installedSkills(target, workspaceOf);
+    // Note that the repository's skills only shadow installed ones, so with none installed they go unread, because
+    // each costs a GitHub request in the App's one lane, which the agent's own repository token waits behind.
+    if (installed.length === 0) return [];
     const seen = new Set<string>();
-    const [repository, installed] = yield* sourcedSkills(target, agent, (skill) => {
-      if (roots.some((root) => skill.folder.startsWith(`${root}/`))) seen.add(skill.name);
-      return loadedMarkdown(skill);
-    });
+    const repository = hasRepository(agent)
+      ? yield* repositorySkills(
+          target,
+          workspaceOf,
+          agent.repository,
+          agentMember(agent),
+          (skill) => {
+            if (roots.some((root) => skill.folder.startsWith(`${root}/`))) seen.add(skill.name);
+            return loadedMarkdown(skill);
+          },
+        )
+      : [];
     const theirs = repository.filter((skill) => seen.has(skill.name));
     const merged = mergedSkills([theirs, installed]);
     return merged.filter((skill) => !seen.has(skill.name));
