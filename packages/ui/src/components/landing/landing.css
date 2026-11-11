@@ -712,8 +712,19 @@
     padding: 51px 12px 12px;
   }
 
+  /* The workspace's switcher, New task at its end, as the panel's row
+     stands (`sidebar-workspace`). */
   .ui-landing-workspace {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-control-gap);
     padding-bottom: var(--ui-block-gap);
+  }
+
+  .ui-landing-workspace > :first-child {
+    flex: 1;
+    min-width: 0;
   }
 
   .ui-landing-workspace-ref {
@@ -808,6 +819,13 @@
     overflow: hidden;
   }
 
+  /* The thread's pane is a column, so the empty state fills it and stands
+     a little above its middle, as the window's Inbox draws it. */
+  .ui-landing-inbox-thread > .ui-landing-sheet-end {
+    display: flex;
+    flex-direction: column;
+  }
+
   .ui-landing-inbox-list > .ui-landing-sheet-start {
     border-right: 1px solid var(--ui-color-border);
   }
@@ -815,6 +833,21 @@
   .ui-landing-search {
     display: block;
     padding: 8px var(--ui-space-12) var(--ui-row-inset);
+  }
+
+  /* The Inbox's head over its list: the search, then Mark all as read and
+     View options at its end, as the window's Inbox stands
+     (`inbox-head-row`). */
+  .ui-landing-inbox-head {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-control-gap);
+    padding: 8px var(--ui-space-12) var(--ui-row-inset);
+  }
+
+  .ui-landing-inbox-search {
+    flex: 1;
+    min-width: 0;
   }
 
   .ui-landing-rows {
@@ -839,16 +872,6 @@
   .ui-landing-line-glyph > svg {
     width: 12px;
     height: 12px;
-  }
-
-  .ui-landing-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--ui-control-gap);
-    height: 100%;
-    color: var(--ui-color-text-muted);
   }
 
   /* The thread: its subject over the comments, a line joining their faces,

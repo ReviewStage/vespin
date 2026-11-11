@@ -5,6 +5,7 @@ import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  CommentsIcon,
   ComposeIcon,
   GearIcon,
   SearchIcon,
@@ -36,9 +37,9 @@ import { MINUTE, STORY_NOW, still } from "./landing-story.js";
  * landing-desktop.tsx -- the Mac app's frame as the landing's windows draw it: the title bar's controls, the sidebar, and an agent's face.
  *
  * The sidebar is the desktop's own: the title bar's sidebar toggle and way
- * back and forward over the workspace, the places, and My tasks under each
- * task's repository, with the hidden statuses' line and the account's foot
- * with its settings. Its tasks and the workspace are one made-up team's,
+ * back and forward over the workspace and its New task, the places, and My
+ * tasks under each task's repository, with the account's foot, its
+ * feedback, and its settings. Its tasks and the workspace are one made-up team's,
  * acme, building teammate invitations. Every part is a `@repo/ui` component
  * placed as the panel places it (`packages/panel/src/desktop/desktop-sidebar.tsx`).
  */
@@ -160,10 +161,11 @@ export function DesktopSidebar({
             </Text>
           </span>
         </NavItem>
+        <IconButton icon={<ComposeIcon />} label="New task" onClick={still} />
       </div>
       <SidebarPlaces label="Places">
-        <NavItem icon={<ComposeIcon />}>New task</NavItem>
         <NavItem icon={<SearchIcon />}>Search</NavItem>
+        <NavItem icon={<GLYPH.HOME />}>Home</NavItem>
         <NavItem
           icon={<InboxIcon />}
           current={place === DESKTOP_PLACE.INBOX ? NAV_CURRENT.PAGE : undefined}
@@ -219,6 +221,7 @@ export function DesktopSidebar({
         >
           {MEMBER}
         </NavItem>
+        <IconButton icon={<CommentsIcon />} label="Send feedback" onClick={still} />
         <IconButton icon={<GearIcon />} label="Settings" onClick={still} />
       </div>
     </aside>

@@ -1,8 +1,10 @@
 import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import { type ReactNode, type RefObject, useRef } from "react";
 import {
+  CheckCheckIcon,
   CheckIcon,
   GLYPH,
   ICON_SIZE,
@@ -20,6 +22,7 @@ import {
   PlusIcon,
   SearchIcon,
   SidebarIcon,
+  SidePanelIcon,
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
@@ -46,6 +49,7 @@ import { ComposerBody } from "../composer-frame/composer-body.js";
 import { ComposerFoot } from "../composer-frame/composer-foot.js";
 import { ComposerFrame } from "../composer-frame/composer-frame.js";
 import { Disclosure, DisclosureBody, DisclosureSummary } from "../disclosure/disclosure.js";
+import { EmptyState } from "../empty-state/empty-state.js";
 import { FoldingButton } from "../folding-button/folding-button.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
@@ -67,7 +71,12 @@ import { MessageFrame } from "../message/message.js";
 import { MessageHead } from "../message/message-head.js";
 import { MoreButton } from "../more-button/more-button.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
-import { PROGRESS_COUNT_LOOK, ProgressCount } from "../progress-ring/progress-ring.js";
+import {
+  PROGRESS_COUNT_LOOK,
+  PROGRESS_RING_TONE,
+  ProgressCount,
+  ProgressRing,
+} from "../progress-ring/progress-ring.js";
 import { SearchField } from "../search-field/search-field.js";
 import { SettingsOrderedRows } from "../settings-ordered-rows/settings-ordered-rows.js";
 import {
@@ -80,6 +89,7 @@ import {
 } from "../settings-row/settings-row.js";
 import { SETTINGS_SECTION_FRAME, SettingsSection } from "../settings-section/settings-section.js";
 import { Shimmer } from "../shimmer/shimmer.js";
+import { Shortcut } from "../shortcut/shortcut.js";
 import { Switch } from "../switch/switch.js";
 import { TABS_GROUND, Tab, Tabs } from "../tabs/tabs.js";
 import { TEXT_ELEMENT, TEXT_TONE, Text } from "../text/text.js";
@@ -501,22 +511,20 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
       <DesktopSidebar place={DESKTOP_PLACE.INBOX} />
       <div className="ui-landing-main ui-landing-inbox">
         <nav className="ui-landing-inbox-list" aria-label="Inbox">
-          <Toolbar
-            title="Inbox"
-            end={TOOLBAR_INSET.COLUMN}
-            actions={
-              <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
-            }
-          />
+          <Toolbar end={TOOLBAR_INSET.COLUMN} />
           <div className="ui-landing-sheet-start">
-            <search className="ui-landing-search">
-              <SearchField
-                label="Search inbox"
-                placeholder="Search inbox"
-                value=""
-                onChange={still}
-              />
-            </search>
+            <div className="ui-landing-inbox-head">
+              <search className="ui-landing-inbox-search">
+                <SearchField
+                  label="Search inbox"
+                  placeholder="Search inbox"
+                  value=""
+                  onChange={still}
+                />
+              </search>
+              <IconButton icon={<CheckCheckIcon />} label="Mark all as read" onClick={still} />
+              <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
+            </div>
             <div className="ui-landing-rows">
               <List label="Inbox items">
                 {inboxItems(step).map((item) => (
@@ -536,17 +544,16 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
             {open ? (
               <QuestionThread step={step} />
             ) : (
-              <div className="ui-landing-empty">
-                <GlyphSlot size={ICON_SIZE.LARGE}>
-                  <InboxIcon />
-                </GlyphSlot>
-                <Text tone={TEXT_TONE.MUTED}>Choose an item</Text>
-              </div>
+              <EmptyState icon={<InboxIcon />}>
+                Choose an item, or step with{" "}
+                <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].chord} spoken />{" "}
+                <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].chord} spoken />
+              </EmptyState>
             )}
           </div>
         </section>
       </div>
-      <SidePanelToggle />
+      {open ? <SidePanelToggle /> : null}
     </div>
   );
 }
@@ -749,6 +756,11 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
                     Opus 5.5 <span className="ui-landing-effort">High</span>
                   </ChipName>
                 </Chip>
+                <IconButton
+                  icon={<ProgressRing share={0.38} tone={PROGRESS_RING_TONE.MUTED} />}
+                  label="Context usage"
+                  onClick={still}
+                />
                 <IconButton icon={<MicrophoneIcon />} label="Dictate" onClick={still} />
               </>
             }
@@ -926,6 +938,7 @@ function AutomationBar(): React.JSX.Element {
             </Button>
             <Switch checked label="Turn off Nightly flaky-test sweep" onChange={still} />
             <MoreButton thing="Automation" onClick={still} />
+            <IconButton icon={<SidePanelIcon />} label="Hide runs" onClick={still} />
           </>
         }
       />
@@ -1035,7 +1048,6 @@ function AutomationPage({ step }: { step: number }): React.JSX.Element {
         <IconButton icon={<SidebarIcon />} label="Show sidebar" onClick={still} />
         <IconButton icon={<ComposeIcon />} label="New task" onClick={still} />
       </span>
-      <SidePanelToggle />
     </div>
   );
 }
@@ -1060,7 +1072,13 @@ function PhoneInbox(): React.JSX.Element {
         look={TOOLBAR_LOOK.PHONE}
         start={TOOLBAR_INSET.COLUMN}
         end={TOOLBAR_INSET.COLUMN}
-        lead={<IconButton icon={<ComposeIcon />} label="New task" onClick={still} />}
+        lead={
+          <IconButton
+            icon={<Avatar name={MEMBER} size={AVATAR_SIZE.ACCOUNT} decorative />}
+            label="Account"
+            onClick={still}
+          />
+        }
         title={
           <Text as={TEXT_ELEMENT.H1} variant={TEXT_VARIANT.TOOLBAR_TITLE}>
             Inbox
