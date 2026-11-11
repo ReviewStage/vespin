@@ -1,7 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import { Fragment, type NodeType, type Node as PmNode, Slice } from "@tiptap/pm/model";
-import type { Transaction } from "@tiptap/pm/state";
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import type { DescriptionEditorPictures, PictureNode, PictureTaken } from "./contract.js";
@@ -140,24 +139,22 @@ function removedAt(view: EditorView, pos: number): void {
 }
 
 /**
- * Where pictures laid in at `pos` stand, `tr` changed to make room: a
- * paragraph split where `pos` falls inside its words, else the nearest
- * place beside `pos` that takes a paragraph (a list item's among them),
- * else after the top-level block `pos` stands in, as it is from a table's
- * cell, whose Markdown holds no block.
+ * Where pictures laid in at `pos` stand, as the stretch they take the place
+ * of: the empty line `pos` stands on, else just below the line it stands on,
+ * which they never split, inside a list item where the line is one's, else
+ * after the top-level block `pos` stands in, as from a table's cell, whose
+ * Markdown holds no block.
  */
-function pictureRoom(tr: Transaction, pos: number, paragraph: NodeType): number {
-  const $at = tr.doc.resolve(pos);
-  if (inTableCell($at)) return $at.after(1);
-  const { parent, parentOffset } = $at;
-  const within = parentOffset > 0 && parentOffset < parent.content.size;
-  if (parent.type === paragraph && within) {
-    tr.split(pos);
-    return pos + 1;
+function pictureRoom(doc: PmNode, pos: number, paragraph: NodeType): { from: number; to: number } {
+  const $at = doc.resolve(pos);
+  const top = $at.depth === 0 ? pos : $at.after(1);
+  if (inTableCell($at)) return { from: top, to: top };
+  const { parent } = $at;
+  if (parent.type === paragraph && parent.content.size === 0) {
+    return { from: $at.before(), to: $at.after() };
   }
-  const beside = insertPoint(tr.doc, pos, paragraph);
-  if (beside !== null) return beside;
-  return $at.depth === 0 ? pos : $at.after(1);
+  const below = insertPoint(doc, parent.isTextblock ? $at.after() : pos, paragraph) ?? top;
+  return { from: below, to: below };
 }
 
 /**
@@ -182,9 +179,8 @@ export function laidInPictures(
     const picture = state.schema.node(PICTURE_NODE, { src: "", alt: altOf(file), upload });
     return paragraph.create(null, [picture]);
   });
-  const tr = state.tr;
-  const at = pictureRoom(tr, pos ?? state.selection.from, paragraph);
-  view.dispatch(tr.insert(at, paragraphs).scrollIntoView());
+  const { from, to } = pictureRoom(state.doc, pos ?? state.selection.from, paragraph);
+  view.dispatch(state.tr.replaceWith(from, to, paragraphs).scrollIntoView());
   pictures.take(taken);
 }
 
@@ -213,7 +209,7 @@ export function removedPicture(view: EditorView, upload: string): void {
   if (pos !== undefined) removedAt(view, pos);
 }
 
-/** A paste of image files laid in as pictures at the caret; answers whether it was one. */
+/** A paste of image files laid in as pictures at the caret's line; answers whether it was one. */
 export function pastedPictures(
   view: EditorView,
   event: ClipboardEvent,
@@ -225,7 +221,7 @@ export function pastedPictures(
   return true;
 }
 
-/** A drop of image files from outside the editor laid in as pictures where they landed; answers whether it was one. */
+/** A drop of image files from outside the editor laid in as pictures at the line they landed on; answers whether it was one. */
 export function droppedPictures(
   view: EditorView,
   event: DragEvent,
