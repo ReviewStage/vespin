@@ -260,6 +260,11 @@ export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
     active: INTERNAL,
+    sound: SCREEN_ONLY,
+    addSound: SCREEN_ONLY,
+    renameSound: SCREEN_ONLY,
+    removeSound: SCREEN_ONLY,
+    chooseSound: SCREEN_ONLY,
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,

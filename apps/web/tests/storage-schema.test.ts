@@ -38,6 +38,8 @@ const DECLARED_TABLES = [
   "account_chatgpt_host",
   "account_preference",
   "account_provider_key",
+  "account_sound",
+  "account_sound_choice",
   "admin_favorite",
   "agent",
   "agent_approval",

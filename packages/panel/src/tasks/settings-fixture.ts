@@ -891,6 +891,7 @@ const STAGED_PREFERENCES: AppAccountPreferences = {
       agent: { model: "anthropic/claude-opus-5.5", effort: "high" },
       chaptersModel: CHAPTERS_MODEL.SONNET,
       slackNotifications: true,
+      sounds: { list: [], choices: { finish: undefined, ask: undefined } },
     },
   },
 };
