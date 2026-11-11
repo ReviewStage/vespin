@@ -9,8 +9,9 @@
  * deleted, as a deleted task's are (`conversation-delete.ts`); each agent's
  * sandboxes are deleted with the drives they own, as an archive deletes
  * them (`session-sandboxes.ts`'s `deletedWithWorkspace`), past the answer,
- * and so is the workspace's drive (`workspace-drive.ts`), which no agent
- * owns; each local agent's device is told
+ * and so are the workspace's drive and the per-repository drive, from before
+ * it, of each repository its agents started in (`workspace-drive.ts`), which
+ * no agent owns; each local agent's device is told
  * to stop its runner and remove its folder, as an archive tells it
  * (`device-discard.ts`'s `discardedWithWorkspace`), by a line that outlives
  * the agent's row; and each scheduled automation's schedule is deleted at
@@ -27,7 +28,7 @@ import { workspaceAgentConversations } from "@repo/database/models/workspace-sto
 import { Effect } from "effect";
 import { discardedWithWorkspace } from "../agents/device-discard.js";
 import { deletedWithWorkspace, deploymentSandboxDeletes } from "../agents/session-sandboxes.js";
-import { workspaceDriveName } from "../agents/workspace-drive.js";
+import { baseDriveName, workspaceDriveName } from "../agents/workspace-drive.js";
 import { schedulesForgotten } from "../automations/automation-cadence.js";
 
 /** What the deletion read before Better Auth deleted the workspace, which it settles after. */
@@ -35,8 +36,8 @@ export interface WorkspaceDeletionPending {
   readonly conversationIds: readonly string[];
   /** The sessions the workspace's agents ran in, whose sandboxes are deleted. */
   readonly sessionIds: readonly string[];
-  /** The workspace's drive, by name, deleted where it stands. */
-  readonly workspaceDrive: string;
+  /** The workspace's drive and the per-repository drives of the repositories its agents started in, by name, each deleted where it stands. */
+  readonly drives: readonly string[];
   /** The local agents, each by the device it was pinned to, which is told to discard it. */
   readonly devices: readonly {
     readonly userId: string;
@@ -55,7 +56,15 @@ export const beforeWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/beforeWork
     return {
       conversationIds: agents.map((agent) => agent.conversationId),
       sessionIds: agents.flatMap((agent) => (agent.sessionId === null ? [] : [agent.sessionId])),
-      workspaceDrive: workspaceDriveName(organizationId),
+      // Note that the names are kept once each, as many agents share a repository and a name reads its case aside.
+      drives: [
+        ...new Set(
+          agents.flatMap((agent) =>
+            agent.repository === null ? [] : [baseDriveName(organizationId, agent.repository)],
+          ),
+        ),
+        workspaceDriveName(organizationId),
+      ],
       devices: agents.flatMap(({ userId, agentId, deviceId }) =>
         deviceId === null ? [] : [{ userId, agentId, deviceId }],
       ),
@@ -75,11 +84,7 @@ export const afterWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/afterWorksp
         ),
       ),
     );
-    yield* deletedWithWorkspace(
-      deploymentSandboxDeletes,
-      pending.sessionIds,
-      pending.workspaceDrive,
-    );
+    yield* deletedWithWorkspace(deploymentSandboxDeletes, pending.sessionIds, pending.drives);
     yield* discardedWithWorkspace(pending.devices);
     yield* schedulesForgotten(pending.schedules);
   },

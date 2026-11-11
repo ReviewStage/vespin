@@ -33,7 +33,7 @@
  * runs it (`archive-script.ts`), and a local agent's archive queues its
  * device a discard line (`device-discard.ts`). A deleted workspace's agents'
  * sandboxes are deleted at once (`deletedWithWorkspace`), from the
- * sessions its delete read while they stood, and so is its drive
+ * sessions its delete read while they stood, and so are its drives
  * (`workspace-drive.ts`), which no agent owns; a
  * local agent's device is told nothing there, since its discard line is
  * queued under the agent's rows, which the delete has taken. Nothing here
@@ -110,7 +110,7 @@ const ARCHIVE_DELETE = {
     Duration.sum(ARCHIVE_SCRIPT.RESUME_TIMEOUT, ARCHIVE_SCRIPT.RUN_TIMEOUT),
     Duration.seconds(15),
   ),
-  /** How many local agents of an archived task are let go of, or sandboxes of a deleted workspace deleted, at once. */
+  /** How many local agents of an archived task are let go of, or sandboxes and drives of a deleted workspace deleted, at once. */
   CONCURRENCY: 5,
 } as const;
 
@@ -273,8 +273,8 @@ export const archivedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* 
 /**
  * The sandboxes of a deleted workspace's agents deleted, with the drives
  * they own, at once, by the sessions the workspace's delete read
- * while its agents stood, and the workspace's drive by the name it read,
- * with the fill's sandbox under its name (`deletedFilledDrive`). Unlike a
+ * while its agents stood, and its drives by the names it read, each with
+ * the fill's sandbox under its name (`deletedFilledDrive`). Unlike a
  * release, nothing is read again first, since the agents are
  * gone and none can resume its sandbox. The deletes are
  * handed to the reach to keep the function awake for, so this returns
@@ -284,7 +284,7 @@ export const archivedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* 
 export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* (
   reach: SandboxDeleteReach,
   sessionIds: readonly string[],
-  workspaceDrive: string,
+  drives: readonly string[],
 ) {
   const deleteSession = (sessionId: string) =>
     SessionSandboxes.use((sandboxes) => sandboxes.deleteFor(sessionId)).pipe(
@@ -296,14 +296,15 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
         ),
       ),
     );
-  const deleteDrive = deletedFilledDrive({ name: workspaceDrive, drive: workspaceDrive }).pipe(
-    Effect.timeout(ARCHIVE_DELETE.TIMEOUT),
-    Effect.catch((failure) =>
-      Effect.logWarning(
-        `a deleted workspace's drive was not deleted: ${describeDeleteFailure(failure)}`,
+  const deleteDrive = (name: string) =>
+    deletedFilledDrive({ name, drive: name }).pipe(
+      Effect.timeout(ARCHIVE_DELETE.TIMEOUT),
+      Effect.catch((failure) =>
+        Effect.logWarning(
+          `a deleted workspace's drive was not deleted: ${describeDeleteFailure(failure)}`,
+        ),
       ),
-    ),
-  );
+    );
   yield* reach.keepAwake(
     Effect.all(
       [
@@ -311,7 +312,10 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
           concurrency: ARCHIVE_DELETE.CONCURRENCY,
           discard: true,
         }),
-        deleteDrive,
+        Effect.forEach(drives, deleteDrive, {
+          concurrency: ARCHIVE_DELETE.CONCURRENCY,
+          discard: true,
+        }),
       ],
       { concurrency: 2, discard: true },
     ),

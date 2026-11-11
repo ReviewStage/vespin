@@ -62,7 +62,7 @@ import { accountDeletionSteps, workspaceDeletionSteps } from "../accounts/deleti
 import { onboardingEventsFromEnvironment } from "../accounts/onboarding-events.js";
 import { WELCOME_MAIL_ENVIRONMENT } from "../accounts/welcome-mail.js";
 import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
-import { WORKSPACE_DRIVE, workspaceDriveName } from "../agents/workspace-drive.js";
+import { baseDriveName, WORKSPACE_DRIVE, workspaceDriveName } from "../agents/workspace-drive.js";
 import { AutomationCadence } from "../automations/automation-cadence.js";
 import { GitHubApp } from "../github/github-app.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -208,7 +208,7 @@ const openAuthRoute = (
     return { auth, post, signUp, sandboxes, forgotten, resend };
   });
 
-/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox on a repository, the workspace's drive a fill is still filling, another of that member's on her Mac in the same repository with a stop line waiting, and that member's scheduled automation, and one she shares with Grace, holding her own scheduled automation and a task she created that Grace has an agent on. */
+/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox on a repository whose drive from before workspace drives stands, the workspace's drive a fill is still filling, another of that member's on her Mac in the same repository with a stop line waiting, and that member's scheduled automation, and one she shares with Grace, holding her own scheduled automation and a task she created that Grace has an agent on. */
 const openWorkspaces = (
   route: Effect.Success<ReturnType<typeof openAuthRoute>>,
   ada: string,
@@ -249,15 +249,19 @@ const openWorkspaces = (
       .update(conversations)
       .set({ runtimeSessionId: "session-of-grace" })
       .where(eq(conversations.id, agent.conversationId));
+    yield* db
+      .update(agentTable)
+      .set({ repository: "acme/relay" })
+      .where(eq(agentTable.id, agentId));
     route.sandboxes.stand({
       name: "sandbox-of-grace",
       tags: { [SESSION_TAG]: "session-of-grace" },
     });
     const workspaceDrive = workspaceDriveName(solo.id);
-    route.sandboxes.state.drives.set(workspaceDrive, {
-      name: workspaceDrive,
-      forkedFrom: undefined,
-    });
+    const repositoryDrive = baseDriveName(solo.id, "acme/relay");
+    for (const name of [workspaceDrive, repositoryDrive]) {
+      route.sandboxes.state.drives.set(name, { name, forkedFrom: undefined });
+    }
     route.sandboxes.stand({
       name: workspaceDrive,
       drive: { name: workspaceDrive, at: WORKSPACE_DRIVE.MOUNT },
@@ -320,6 +324,7 @@ const openWorkspaces = (
       sharedAgent,
       leftBehind: agent.conversationId,
       workspaceDrive,
+      repositoryDrive,
       mac,
       local,
       schedule: scheduled.id,
@@ -328,7 +333,7 @@ const openWorkspaces = (
   });
 
 it.effect(
-  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left, its drive, and its automations' schedules, tells a local agent's Mac to discard it in place of its waiting lines, and leaves a workspace others share, forgetting the account's own schedule there and keeping the tasks it created there for no one, with a teammate's agent on them",
+  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left, its drives, and its automations' schedules, tells a local agent's Mac to discard it in place of its waiting lines, and leaves a workspace others share, forgetting the account's own schedule there and keeping the tasks it created there for no one, with a teammate's agent on them",
   () =>
     Effect.gen(function* () {
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
@@ -343,6 +348,7 @@ it.effect(
           shared,
           leftBehind,
           workspaceDrive,
+          repositoryDrive,
           mac,
           local,
           schedule,
@@ -375,7 +381,10 @@ it.effect(
           route.sandboxes.state.deleted.toSorted(),
           ["sandbox-of-grace", workspaceDrive].toSorted(),
         );
-        assert.deepEqual(route.sandboxes.state.deletedDrives, [workspaceDrive]);
+        assert.deepEqual(
+          route.sandboxes.state.deletedDrives.toSorted(),
+          [repositoryDrive, workspaceDrive].toSorted(),
+        );
         // The agent's row is gone with the workspace, so its Mac reads the discard alone, not the stop queued before.
         assert.deepEqual(
           (yield* deviceAgentLinesWaiting(grace.id, mac)).map(({ agentId, kind }) => ({

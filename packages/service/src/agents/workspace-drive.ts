@@ -71,6 +71,13 @@ import {
   syncWorkspaceRepository,
 } from "./repository-shell.js";
 
+/**
+ * What every per-repository drive, from before workspace drives, is named
+ * with, its digest after it. Nothing reads or fills one any more; a deleted
+ * workspace's are still deleted with it (`workspace-deletion.ts`).
+ */
+const REPOSITORY_DRIVE_PREFIX = "agent-base-drive-";
+
 export const WORKSPACE_DRIVE = {
   /** Every workspace drive, and the sandbox that fills it, is named with this, its digest after it. */
   NAME_PREFIX: "agent-workspace-drive-",
@@ -137,6 +144,17 @@ export function readOf(found: ListedSandbox | undefined, now: number): DriveRead
   if (found === undefined) return { state: DRIVE_STATE.READY };
   if (stillFilling(found, now)) return { state: DRIVE_STATE.FILLING };
   return { state: DRIVE_STATE.WANTED, stale: found };
+}
+
+/** A per-repository drive's name, and its fill's sandbox's: the prefix and a digest of the workspace and the repository, lower-cased. */
+export function baseDriveName(workspaceId: string, fullName: string): string {
+  const digest = createHash("sha256")
+    .update(workspaceId)
+    .update("\0")
+    .update(fullName.toLowerCase())
+    .update("\0")
+    .digest("hex");
+  return `${REPOSITORY_DRIVE_PREFIX}${digest.slice(0, 32)}`;
 }
 
 /** The folder under the mount a repository stands in: `owner/name` as GitHub spells it, lower-cased, so one repository is one folder however a row cases it. */
