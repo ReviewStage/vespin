@@ -24,7 +24,7 @@ import {
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
-import { type ReactElement, useState } from "react";
+import { type ReactElement, useEffect, useState } from "react";
 import { FieldChip } from "./button.js";
 import type { MarkLook } from "./glyph.js";
 import { RowFrame, RowHead } from "./list-row.js";
@@ -287,6 +287,12 @@ export function ConfirmAsk({
 }: ConfirmAskProps) {
   const typed = useNativeState("");
   const [words, setWords] = useState("");
+  // Note that the field is emptied each time the alert opens, so every ask is typed afresh and none is let through by an earlier one's words.
+  useEffect(() => {
+    if (!presented) return;
+    typed.value = "";
+    setWords("");
+  }, [presented, typed]);
   const shut = gate !== undefined && words !== gate;
   return (
     <Host matchContents style={{ position: "absolute" }}>
