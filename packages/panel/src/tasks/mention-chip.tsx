@@ -546,6 +546,7 @@ function MentionChip({
   name: written,
   doors,
   bare = false,
+  state: told,
 }: {
   mention: Mention;
   /** Its link's target as written, which names it. */
@@ -555,6 +556,8 @@ function MentionChip({
   doors: MentionDoors;
   /** Whether it was written as its bare address, so a provider's page is called by the key and title its provider answered. */
   bare?: boolean;
+  /** What stands after its name in its standing's place, where the caller knows more of it than its link does: a file's lines changed. */
+  state?: ReactNode;
 }): React.JSX.Element {
   const openLink = useOpenLink();
   const known = useKnownNames();
@@ -619,7 +622,7 @@ function MentionChip({
       kind={entityWordHeard(entityOfMention(mention).kind, label)}
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
-      state={standing?.state}
+      state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={
         press === undefined
@@ -942,6 +945,32 @@ export function linkChip(
   // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
   return chip === undefined ? undefined : (
     <WrittenAs markdown={markdownLink(label, href)}>{chip}</WrittenAs>
+  );
+}
+
+/**
+ * A file of the task's repository as its mention chip, as a call's row
+ * names one it read or wrote and a turn's files-changed row names each
+ * (`turn-files.tsx`), with `state` after its name where given; none where
+ * the place knows no repository, or the path is no file of it, as an
+ * absolute one or one that climbs out is not.
+ */
+export function fileChip(path: string, doors: MentionDoors, state?: ReactNode): ReactNode {
+  const repository = doors.place.repository;
+  if (repository === null) return undefined;
+  const target = encodeMention({ kind: MENTION_KIND.FILE, path }, doors.place);
+  const found = linkMention(target, target, repository);
+  // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
+  if (found?.mention.kind !== MENTION_KIND.FILE) return undefined;
+  return (
+    <MentionChip
+      mention={found.mention}
+      target={target}
+      name={found.name}
+      doors={pageDoors(doors, target)}
+      bare
+      state={state}
+    />
   );
 }
 
