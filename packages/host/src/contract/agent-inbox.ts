@@ -1,7 +1,7 @@
 /**
- * agent-inbox.ts -- the Inbox's asks of the host, declared, and the live follow of a task's or an agent's inbox beside them.
+ * agent-inbox.ts -- the Inbox's asks of the host, declared, and the live follow of a task's inbox beside them.
  *
- * What a task's coding agents need of the developer: a task's or an agent's
+ * What a task's coding agents need of the developer: a task's
  * inbox held followed, and read again, and every item the account reaches read again; one item answered,
  * closed, messaged, or marked, a thread started, every item marked read, and
  * an item's image and an agent's picture.
@@ -18,7 +18,7 @@
  *
  * Only a panel draws the Inbox, so every act is the panel's alone, and a
  * refusal or a defect of the host's is drawn as the coding-agent calls'
- * unanswered failure. A task's or an agent's inbox
+ * unanswered failure. A task's inbox
  * is a live follow, declared once (`live-follow.ts`), not a plain act.
  */
 
@@ -153,7 +153,7 @@ export const AGENT_INBOX_ACTS = declaredActs({
   }),
 });
 
-/** The Inbox's live read the host follows for the windows: one task's or one agent's inbox. */
+/** The Inbox's live read the host follows for the windows: one task's inbox. */
 export const AGENT_INBOX_FOLLOWS = liveFollows({
   AGENTS_INBOX_FOLLOW: liveFollow({
     slice: LIVE_READ.HOLDER_INBOX,

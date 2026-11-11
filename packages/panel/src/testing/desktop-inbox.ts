@@ -431,7 +431,7 @@ function heldInboxes() {
     isHeld,
     /** Every holder the host holds, as scopes. */
     heldScopes: (): AgentInboxScope[] =>
-      [INBOX_SCOPE_KIND.PLAN, INBOX_SCOPE_KIND.AGENT].flatMap((kind) =>
+      Object.values(INBOX_SCOPE_KIND).flatMap((kind) =>
         Object.keys(held[kind]).map((id) => ({ kind, id })),
       ),
     /** The holders as the host holds them now, for a mount to hand the window first. */

@@ -22,7 +22,7 @@ import {
 } from "./live-follow.js";
 
 /**
- * scope-inbox-follow.ts -- a plan's inbox, or one agent's, followed for main over the service's held poll while a window holds it, and told whole on the app state as it changes.
+ * scope-inbox-follow.ts -- a plan's inbox followed for main over the service's held poll while a window holds it, and told whole on the app state as it changes.
  *
  * The host follows the scope's live read (`live-follow.ts`) the first time
  * the scope is held, stands its items in the sync engine's pool
@@ -36,7 +36,7 @@ import {
  * the one slice the windows draw (`LIVE_READ.HOLDER_INBOX`).
  */
 
-/** Which inbox: one plan's, or one agent's, by its id. */
+/** Which inbox: one plan's, by its id. */
 export class InboxScopeKey extends Data.Class<{
   readonly kind: InboxScopeKind;
   readonly id: string;

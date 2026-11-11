@@ -493,7 +493,6 @@ async function _narrowTaskInbox(
   // again what `later` says once it settles; one that fails after it answered keeps its rows, as the host keeps them.
   const heldOf = (read: AppHolderInbox): AppHolderInboxes => ({
     [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: read },
-    [INBOX_SCOPE_KIND.AGENT]: {},
   });
   let standing: AppHolderInbox = first === undefined ? { rows: items } : UNREAD;
   // Note that the window is a fresh one, so nothing a test before handed it stands.

@@ -155,7 +155,7 @@ describe("a delivery that crosses the wire", () => {
   });
   const held = (plans: AppHolderInboxes["plan"]): AppStateSnapshot => ({
     ...document,
-    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} },
+    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.PLAN]: plans },
   });
   const pages = (tasks: AppPages["task"]): AppStateSnapshot => ({
     ...document,

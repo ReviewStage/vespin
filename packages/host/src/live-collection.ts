@@ -326,7 +326,7 @@ interface LetGo<Key> {
 }
 
 /**
- * The reads the windows hold, as a plan's or an agent's inbox is: each
+ * The reads the windows hold, as a plan's inbox is: each
  * opened by the first window's hold and kept while any holds it; once the
  * last lets go it stays among those let go lately that `LetGo` keeps, open
  * or paused, until later ones push it out, or the session ends.
