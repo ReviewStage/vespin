@@ -3415,6 +3415,18 @@ function pinBox(pins: ReadonlyMap<string, HTMLElement>, path: string): FrameBox 
   return pins.get(path)?.getBoundingClientRect();
 }
 
+/**
+ * Where a card about an element in the frame opens from, in the window:
+ * under the element where the room shows its foot, and otherwise under its
+ * top edge, where its pin stands, since a card under a foot past the room
+ * has nowhere to stand; none where the element is not measured.
+ */
+function underElement(room: HTMLElement | null, box: FrameBox | undefined): FrameBox | undefined {
+  if (room === null || box === undefined) return undefined;
+  const foot = room.getBoundingClientRect().height;
+  return inWindow(room, box.bottom <= foot ? box : { ...box, bottom: Math.max(box.top, 0) });
+}
+
 /** Keeps the pin drawn for `path` in `pins` while it stands, by its element's path. */
 function keptPin(pins: Map<string, HTMLElement>, path: string) {
   return (node: HTMLElement | null) => {
@@ -4076,7 +4088,8 @@ export function PageCommentLayer({
         anchor={() =>
           at === undefined
             ? inWindow(room.current, PAGE_TOP)
-            : (inWindow(room.current, marks.get(at) ?? undefined) ?? pinBox(postedPins.current, at))
+            : (underElement(room.current, marks.get(at) ?? undefined) ??
+              pinBox(postedPins.current, at))
         }
         side={POPOVER_SIDE.BELOW}
         // Note that a held reply's edit standing open in a thread holds the card, so a stray press never drops its words.
@@ -4109,7 +4122,7 @@ export function PageCommentLayer({
         anchor={() =>
           heldOpen === undefined
             ? undefined
-            : (inWindow(room.current, marks.get(heldOpen) ?? undefined) ??
+            : (underElement(room.current, marks.get(heldOpen) ?? undefined) ??
               pinBox(heldPins.current, heldOpen))
         }
         side={POPOVER_SIDE.BELOW}
@@ -4140,7 +4153,7 @@ export function PageCommentLayer({
       </RectFloat>
       <RectFloat
         open={pending !== undefined}
-        anchor={() => inWindow(room.current, pending?.box ?? PAGE_TOP)}
+        anchor={() => underElement(room.current, pending?.box ?? PAGE_TOP)}
         side={POPOVER_SIDE.BELOW}
         // Note that a comment being sent, or holding files or a dictation, which no draft keeps, stands through a press away, as a description's does.
         onPressAway={() => {
