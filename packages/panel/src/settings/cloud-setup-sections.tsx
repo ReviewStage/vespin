@@ -21,6 +21,8 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   AVATAR_SIZE,
   Badge,
   BUTTON_VARIANT,
@@ -111,8 +113,8 @@ import { MenuRow } from "./menu-row.js";
  * Terminal shows the log, and how it exited, a failure in the danger ink;
  * a script saved since that run says it has not run since. A repository's
  * run actions are edited in place the same way, each with its label and
- * icon leading its row, dragged by its grip to another place, and one made
- * the Run button's default from its ⋯.
+ * icon leading its row, dragged by its grip or moved from its ⋯ to another
+ * place, and one made the Run button's default from its ⋯.
  */
 
 /** A script's row while the setup is read. */
@@ -781,8 +783,9 @@ function useRunActionOrder(
  * and its label leading the row, its command under it, colored as Bash with
  * its lines numbered, and Discard and Save at the row's end once any of the
  * three differs from what is saved, ⌘S or ⌘↩ in the command and Enter in the
- * label pressing Save, Escape pressing Discard. A saved action's ⋯ makes it
- * the repository's default, or lets the default go, and removes it, a
+ * label pressing Save, Escape pressing Discard. A saved action's ⋯ moves it
+ * up or down, which a keyboard reaches where the grip's drag does not, makes
+ * it the repository's default or lets the default go, and removes it, a
  * removal asking first. An action just added stands the same way, its caret
  * in its label and Cancel at its end, until it is saved, when the saved list
  * draws it in its place. A member reads each with its icon, read-only.
@@ -794,6 +797,7 @@ function RunActionRow({
   action,
   manages,
   added,
+  onMove,
 }: {
   /** The section's one save, which every row shares (`useSaveRunActions`). */
   saving: RunActionSave;
@@ -805,6 +809,8 @@ function RunActionRow({
   manages: boolean;
   /** An action just added and not yet saved: what Cancel does to let it go. */
   added?: { readonly onCancel: () => void } | undefined;
+  /** Moves a saved action one place up (-1) or down (1), as the grip's drag would; none for one just added. */
+  onMove?: ((by: -1 | 1) => void) | undefined;
 }): React.JSX.Element {
   const saved = action === undefined ? EMPTY_DRAFT : draftOf(action);
   const [edited, setEdited] = useState<RunActionDraft | undefined>(undefined);
@@ -858,9 +864,24 @@ function RunActionRow({
         isDefault: on && each.id === action?.id,
       })),
     });
+  const place = action === undefined ? -1 : actions.findIndex((each) => each.id === action.id);
   const menu =
     manages && action !== undefined
       ? [
+          [
+            {
+              label: "Move up",
+              icon: <ArrowUpIcon />,
+              disabled: busy || place <= 0,
+              onSelect: () => onMove?.(-1),
+            },
+            {
+              label: "Move down",
+              icon: <ArrowDownIcon />,
+              disabled: busy || place === actions.length - 1,
+              onSelect: () => onMove?.(1),
+            },
+          ],
           [
             isDefault
               ? {
@@ -982,8 +1003,8 @@ interface AddedRunAction {
  * for the repository with its Add action, and its actions under it in their
  * order, each edited in place. An owner or admin adds one from Add action,
  * to a repository already listed or one picked in the repository menu,
- * drags one by its grip to another place, and makes one the default or
- * removes it from its ⋯; every change saves the repository's whole list.
+ * drags one by its grip to another place or moves it from its ⋯, and makes
+ * one the default or removes it there; every change saves the repository's whole list.
  */
 function RunActionsSection({
   workspaceId,
@@ -1137,7 +1158,7 @@ function RunActionsOfRepository({
           // Note that a drag waits while a save is out, since it saves the whole list as it reads it now.
           onPointerDown={manages && !saving.isPending ? drag : undefined}
           gutter={manages}
-          rows={order.ordered.map((action) => ({
+          rows={order.ordered.map((action, index) => ({
             key: action.id,
             row: (
               <RunActionRow
@@ -1146,6 +1167,7 @@ function RunActionsOfRepository({
                 actions={order.ordered}
                 action={action}
                 manages={manages}
+                onMove={(by) => order.move(index, index + by)}
               />
             ),
           }))}
