@@ -24,7 +24,7 @@ import { visibleViewport } from "@repo/ui/visible-viewport";
 import { type AnyExtension, type ChainedCommands, type Editor, Extension } from "@tiptap/core";
 import { keydownHandler } from "@tiptap/pm/keymap";
 import type { ResolvedPos } from "@tiptap/pm/model";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorBox, EditorFormat, EditorFormatDoors, EditorFormatting } from "./contract.js";
 import { keymapName, selectionTouchesCell } from "./writing-keys.js";
 
@@ -100,12 +100,15 @@ function touchedBlocks(editor: Editor): ReadonlySet<WritingBlock | undefined> {
 }
 
 /**
- * The selection as a format toolbar reads it now. Note that a selection
- * touching no text block holds no words, as a divider selected whole holds
- * none, so no toolbar stands over it and ⌘K goes on to the window.
+ * The selection as a format toolbar reads it now. Note that a node selected
+ * whole holds no words, a picture in its paragraph as a divider, and nor
+ * does a selection touching no text block, so no toolbar stands over either
+ * and ⌘K goes on to the window; a node with tools of its own, a picture's,
+ * shows those alone.
  */
 function formatOf(editor: Editor): EditorFormat {
-  const { from, to, empty, $from } = editor.state.selection;
+  const { selection } = editor.state;
+  const { from, to, empty, $from } = selection;
   const touched = touchedBlocks(editor);
   const blocks = touched.size === 0 ? new Set([blockAt($from)]) : touched;
   const linked = editor.isActive(MARK_NAMES[WRITING_MARK.LINK]);
@@ -113,7 +116,7 @@ function formatOf(editor: Editor): EditorFormat {
   return {
     from,
     to,
-    empty: empty || touched.size === 0,
+    empty: empty || touched.size === 0 || selection instanceof NodeSelection,
     code: blocks.has(WRITING_BLOCK.CODE_BLOCK),
     cell: selectionTouchesCell(editor.state),
     marks: WRITING_MARKS.filter((mark) => editor.isActive(MARK_NAMES[mark])),
