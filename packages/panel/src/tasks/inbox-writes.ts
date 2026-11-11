@@ -88,7 +88,7 @@ const INBOX_WRITE = {
     surface: FAILURE_SURFACE.INBOX_MARK,
     // Note that several items refused say it once, each refusal's words being the same.
     refused: (itemId, { remindAt }) => ({
-      words: remindAt === null ? REMIND_REFUSED.CANCEL : REMIND_REFUSED.SET,
+      words: remindAt === null ? REMIND_REFUSED.CLEAR : REMIND_REFUSED.SET,
       about: { inboxItemId: itemId },
     }),
   } satisfies RowWrite<InboxRows, RemindFields, typeof ACT_KIND.AGENTS_INBOX_REMIND>,

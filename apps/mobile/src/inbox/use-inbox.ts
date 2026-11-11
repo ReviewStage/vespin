@@ -236,7 +236,7 @@ export function useInboxActs(): {
           refused: (answer) =>
             "failure" in answer
               ? until === null
-                ? REMIND_REFUSED.CANCEL
+                ? REMIND_REFUSED.CLEAR
                 : REMIND_REFUSED.SET
               : undefined,
           retry: true,

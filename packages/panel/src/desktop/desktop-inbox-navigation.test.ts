@@ -255,19 +255,19 @@ test("one column wide, the item's bar says where it stands in the list, and its 
   layOut(page, 800);
   assert.deepEqual([readTitle(page), pagerOf(page)], ["Alert at 80%?", "3 of 3"]);
   assert.equal(
-    arrowNamed(page, "Next item").getAttribute("aria-disabled"),
+    arrowNamed(page, "Next inbox item").getAttribute("aria-disabled"),
     "true",
     "nothing below the last, the arrow keeping the keyboard",
   );
   pressKey("j");
   assert.equal(readTitle(page), "Alert at 80%?");
 
-  act(() => arrowNamed(page, "Previous item").click());
+  act(() => arrowNamed(page, "Previous inbox item").click());
   assert.deepEqual([readTitle(page), pagerOf(page)], ["Expire after 7 days?", "2 of 3"]);
   pressKey("k");
   assert.deepEqual([readTitle(page), pagerOf(page)], ["How is a failed email retried?", "1 of 3"]);
   assert.equal(
-    arrowNamed(page, "Previous item").getAttribute("aria-disabled"),
+    arrowNamed(page, "Previous inbox item").getAttribute("aria-disabled"),
     "true",
     "nothing above the first, the arrow keeping the keyboard",
   );
