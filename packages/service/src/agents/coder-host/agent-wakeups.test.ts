@@ -13,12 +13,11 @@ import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { ACTION_RESULT_STATUS, MESSAGE_CHANNEL, type UnparsedWireValue } from "@repo/wire";
 import { and, eq, isNotNull } from "drizzle-orm";
-import { Clock, Duration, Effect, Layer, Option } from "effect";
+import { Duration, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
-import { AGENT_CALLER, type AgentCall } from "../agents/agent-tools.js";
-import { canceledTurn } from "../agents/coder-host/stop.js";
-import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { runScheduleWakeup, WAKEUP_DELAY } from "../agents/coder-host/wakeup-tool.js";
+import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
+import { githubReaching } from "../../testing/github-app-fake.js";
+import { AGENT_CALLER, type AgentCall } from "../agent-tools.js";
 import {
   type AgentSessions,
   SESSION_CANCEL_OUTCOME,
@@ -26,26 +25,32 @@ import {
   SESSION_SEND_OUTCOME,
   type SessionMessage,
   SessionUnreachable,
-} from "../agents/sessions/agent-sessions.js";
-import { connectAgentApiKeys } from "../testing/agent-credentials.js";
-import { githubReaching } from "../testing/github-app-fake.js";
-import { sweepAgentWakeups, WAKEUP_SWEEP } from "./wakeup-sweep.js";
+} from "../sessions/agent-sessions.js";
+import {
+  AgentWakeupNotPublished,
+  AgentWakeups,
+  consumeAgentWakeup,
+  type PublishedAgentWakeup,
+} from "./agent-wakeups.js";
+import { canceledTurn } from "./stop.js";
+import { CODER_TOOL_SET } from "./tool-set.js";
+import { runScheduleWakeup, WAKEUP_DELAY } from "./wakeup-tool.js";
 
 /**
- * A wakeup booked with `schedule_wakeup` and delivered by the sweep: the
- * booking is handed to its agent as a line of its own once the delay the
- * tool booked has run on the clock, and never again; booking again replaces
- * it and `stop` cancels it; a Stop of the agent drops it; and one whose
- * delivery fails is tried again past the retry, then given up. The clock is
- * the test's (`TestClock`), so the due time is read off it as the sweep
- * reads it off the cron's. Over a real dialect, the harness a fake at the
- * client's boundary. The claim is the deployment's, so each test reads back
- * only the lines its own agent was sent. Synthetic accounts and prompts.
+ * A wakeup booked with `schedule_wakeup`, published to come due after the
+ * delay the tool booked, and delivered by the queue's consumer: the booking
+ * is handed to its agent as a line of its own and never again; booking
+ * again replaces it and `stop` cancels it, so the message published before
+ * sends nothing; a Stop of the agent drops it; one whose send fails stands
+ * for the queue's next delivery; and one the queue did not take is refused.
+ * The queue is a test's, which writes down each message published, and the
+ * test hands each to the consumer as the queue would. Over a real dialect,
+ * the harness a fake at the client's boundary. Synthetic accounts and
+ * prompts.
  */
 
-/** The instant the tests open on, so every row and claim stands at a real date. */
+/** The instant the tests open on, so every row stands at a real date. */
 const OPENED = new Date("2026-10-21T12:00:00Z");
-const RETRY_MS = Duration.toMillis(WAKEUP_SWEEP.RETRY);
 
 /** The agent's harness, writing down every message sent, by session, or refusing every send. */
 function fakeAgentSessions(refusing = false) {
@@ -128,15 +133,36 @@ function callOf(agent: Agent): AgentCall {
   };
 }
 
-/** One call of `schedule_wakeup` by the agent, at the clock's instant. */
-const schedule = (agent: Agent, input: UnparsedWireValue) =>
-  runScheduleWakeup(callOf(agent), input);
+/** A queue that writes down each message published, or refuses every publish. */
+function recordingQueue(refusing = false) {
+  const published: PublishedAgentWakeup[] = [];
+  const publish = (wakeup: PublishedAgentWakeup) =>
+    refusing
+      ? Effect.fail(new AgentWakeupNotPublished({ reason: "refused" }))
+      : Effect.sync(() => {
+          published.push(wakeup);
+        });
+  return { published, publish };
+}
 
-/** One sweep at the clock's instant, as the cron's sweep is handed it, over the harness given. */
-const sweepNow = (agentSessions: ReturnType<typeof fakeAgentSessions>) =>
-  Effect.flatMap(Clock.currentTimeMillis, (now) =>
-    sweepAgentWakeups(agentSessions.sessionsFor, new Date(now)),
+/** One call of `schedule_wakeup` by the agent, at the clock's instant, publishing to the queue given. */
+const schedule = (
+  agent: Agent,
+  input: UnparsedWireValue,
+  queue: ReturnType<typeof recordingQueue>,
+) =>
+  runScheduleWakeup(callOf(agent), input).pipe(
+    Effect.provideService(AgentWakeups, { publish: queue.publish }),
   );
+
+/** One delivery of a published message, as the queue hands it, over the harness given. */
+const deliver = (
+  agentSessions: ReturnType<typeof fakeAgentSessions>,
+  wakeup: PublishedAgentWakeup | undefined,
+) => {
+  assert.ok(wakeup !== undefined, "a message was published");
+  return consumeAgentWakeup(agentSessions.sessionsFor, wakeup.wakeupId);
+};
 
 /** The words the session was sent, in order. */
 const sentTo = (agentSessions: ReturnType<typeof fakeAgentSessions>, sessionId: string) =>
@@ -148,30 +174,30 @@ const SUITE = Layer.mergeAll(getTestDB(), githubReaching([]).layer, memorySandbo
 
 it.layer(SUITE)("the wakeups coding agents book", (it) => {
   it.effect(
-    "a booked wakeup is told to its agent once its delay has run, and never again, as the agent's own line the transcript draws as a wakeup",
+    "a booked wakeup is published to come once its delay has run, and its delivery tells its agent once, as the agent's own line the transcript draws as a wakeup",
     () =>
       Effect.gen(function* () {
         yield* TestClock.setTime(OPENED.getTime());
+        const queue = recordingQueue();
         const agentSessions = fakeAgentSessions();
         const { agent, sessionId } = yield* openAgent;
 
-        const booked = yield* schedule(agent, {
-          delaySeconds: 600,
-          prompt: "Read the checks on pull request #42.",
-        });
+        const booked = yield* schedule(
+          agent,
+          { delaySeconds: 600, prompt: "Read the checks on pull request #42." },
+          queue,
+        );
         assert.deepEqual(booked, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           wakeup: { at: "2026-10-21T12:10:00.000Z", delaySeconds: 600 },
         });
+        assert.deepEqual(
+          queue.published.map(({ delay }) => Duration.toSeconds(delay)),
+          [600],
+        );
 
-        yield* sweepNow(agentSessions);
-        yield* TestClock.adjust("9 minutes");
-        yield* sweepNow(agentSessions);
-        assert.deepEqual(sentTo(agentSessions, sessionId), [], "not yet due");
-        yield* TestClock.adjust("1 minute");
-        yield* sweepNow(agentSessions);
-        yield* TestClock.adjust(WAKEUP_SWEEP.RETRY);
-        yield* sweepNow(agentSessions);
+        yield* deliver(agentSessions, queue.published[0]);
+        yield* deliver(agentSessions, queue.published[0]);
         assert.deepEqual(sentTo(agentSessions, sessionId), [
           "Read the checks on pull request #42.",
         ]);
@@ -199,31 +225,29 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
   );
 
   it.effect(
-    "booking again replaces the wakeup, stop cancels it, and a delay outside the bounds is held to them",
+    "booking again replaces the wakeup and stop cancels it, so the message published before sends nothing, and a delay outside the bounds is held to them",
     () =>
       Effect.gen(function* () {
         yield* TestClock.setTime(OPENED.getTime());
+        const queue = recordingQueue();
         const agentSessions = fakeAgentSessions();
         const { agent, sessionId } = yield* openAgent;
 
-        yield* schedule(agent, { delaySeconds: 60, prompt: "The first booking." });
-        yield* schedule(agent, { delaySeconds: 120, prompt: "The second booking." });
-        yield* TestClock.adjust("1 minute");
-        yield* sweepNow(agentSessions);
+        yield* schedule(agent, { delaySeconds: 60, prompt: "The first booking." }, queue);
+        yield* schedule(agent, { delaySeconds: 120, prompt: "The second booking." }, queue);
+        yield* deliver(agentSessions, queue.published[0]);
         assert.deepEqual(sentTo(agentSessions, sessionId), [], "the first booking is replaced");
-        yield* TestClock.adjust("1 minute");
-        yield* sweepNow(agentSessions);
+        yield* deliver(agentSessions, queue.published[1]);
         assert.deepEqual(sentTo(agentSessions, sessionId), ["The second booking."]);
 
-        yield* schedule(agent, { delaySeconds: 60, prompt: "Canceled before it came." });
-        const stopped = yield* schedule(agent, { stop: true });
+        yield* schedule(agent, { delaySeconds: 60, prompt: "Canceled before it came." }, queue);
+        const stopped = yield* schedule(agent, { stop: true }, queue);
         assert.deepEqual(stopped, { status: ACTION_RESULT_STATUS.ACCEPTED, wakeup: null });
-        yield* TestClock.adjust("1 minute");
-        yield* sweepNow(agentSessions);
+        yield* deliver(agentSessions, queue.published[2]);
         assert.deepEqual(sentTo(agentSessions, sessionId), ["The second booking."]);
 
-        const short = yield* schedule(agent, { delaySeconds: 5, prompt: "Too soon." });
-        const long = yield* schedule(agent, { delaySeconds: 100_000, prompt: "Too late." });
+        const short = yield* schedule(agent, { delaySeconds: 5, prompt: "Too soon." }, queue);
+        const long = yield* schedule(agent, { delaySeconds: 100_000, prompt: "Too late." }, queue);
         assert.equal(
           (short as { wakeup: { delaySeconds: number } }).wakeup.delaySeconds,
           WAKEUP_DELAY.MIN_SECONDS,
@@ -232,37 +256,49 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
           (long as { wakeup: { delaySeconds: number } }).wakeup.delaySeconds,
           WAKEUP_DELAY.MAX_SECONDS,
         );
-        const noPrompt = yield* schedule(agent, { delaySeconds: 60 });
+        assert.deepEqual(
+          queue.published.slice(3).map(({ delay }) => Duration.toSeconds(delay)),
+          [WAKEUP_DELAY.MIN_SECONDS, WAKEUP_DELAY.MAX_SECONDS],
+        );
+        const noPrompt = yield* schedule(agent, { delaySeconds: 60 }, queue);
         assert.equal(noPrompt.status, ACTION_RESULT_STATUS.REJECTED);
       }),
   );
 
-  it.effect("a wakeup whose delivery fails is tried again past the retry, then given up", () =>
+  it.effect(
+    "a delivery whose send fails fails, so the queue delivers it again, and the wakeup stands for that delivery",
+    () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(OPENED.getTime());
+        const queue = recordingQueue();
+        const refusing = fakeAgentSessions(true);
+        const agentSessions = fakeAgentSessions();
+        const { agent, sessionId } = yield* openAgent;
+        yield* schedule(agent, { delaySeconds: 60, prompt: "Check the deploy." }, queue);
+
+        const failed = yield* Effect.exit(deliver(refusing, queue.published[0]));
+        assert.equal(failed._tag, "Failure");
+        yield* deliver(agentSessions, queue.published[0]);
+        assert.deepEqual(sentTo(agentSessions, sessionId), ["Check the deploy."]);
+      }),
+  );
+
+  it.effect("a booking the queue did not take is refused and stands no more", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(OPENED.getTime());
-      const refusing = fakeAgentSessions(true);
+      const queue = recordingQueue();
       const agentSessions = fakeAgentSessions();
       const { agent, sessionId } = yield* openAgent;
-      yield* schedule(agent, { delaySeconds: 60, prompt: "Check the deploy." });
+      yield* schedule(agent, { delaySeconds: 60, prompt: "Booked and taken." }, queue);
 
-      yield* TestClock.adjust("1 minute");
-      yield* sweepNow(refusing);
-      yield* TestClock.adjust("1 second");
-      yield* sweepNow(agentSessions);
-      assert.deepEqual(sentTo(agentSessions, sessionId), [], "not before the retry");
-      yield* TestClock.adjust(RETRY_MS);
-      yield* sweepNow(agentSessions);
-      assert.deepEqual(sentTo(agentSessions, sessionId), ["Check the deploy."]);
-
-      const given = yield* openAgent;
-      yield* schedule(given.agent, { delaySeconds: 60, prompt: "Never lands." });
-      yield* TestClock.adjust("1 minute");
-      for (let attempt = 0; attempt < WAKEUP_SWEEP.MAX_ATTEMPTS; attempt += 1) {
-        yield* sweepNow(refusing);
-        yield* TestClock.adjust(RETRY_MS);
-      }
-      yield* sweepNow(agentSessions);
-      assert.deepEqual(sentTo(agentSessions, given.sessionId), [], "given up past the bound");
+      const refused = yield* schedule(
+        agent,
+        { delaySeconds: 60, prompt: "Never taken." },
+        recordingQueue(true),
+      );
+      assert.equal(refused.status, ACTION_RESULT_STATUS.REJECTED);
+      yield* deliver(agentSessions, queue.published[0]);
+      assert.deepEqual(sentTo(agentSessions, sessionId), [], "the refused booking replaced it");
     }),
   );
 
@@ -271,12 +307,14 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
     () =>
       Effect.gen(function* () {
         yield* TestClock.setTime(OPENED.getTime());
+        const queue = recordingQueue();
         const agentSessions = fakeAgentSessions();
         const { owner, agent, sessionId } = yield* openAgent;
-        yield* schedule(agent, {
-          delaySeconds: 60,
-          prompt: "Read the checks on pull request #42.",
-        });
+        yield* schedule(
+          agent,
+          { delaySeconds: 60, prompt: "Read the checks on pull request #42." },
+          queue,
+        );
         const standing = Option.getOrThrow(yield* readAgent(owner, agent.id));
 
         const canceled = yield* canceledTurn(
@@ -284,8 +322,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
           storeWriter({ tools: CODER_TOOL_SET }),
           standing,
         );
-        yield* TestClock.adjust("1 minute");
-        yield* sweepNow(agentSessions);
+        yield* deliver(agentSessions, queue.published[0]);
         assert.equal(canceled, false);
         assert.deepEqual(sentTo(agentSessions, sessionId), []);
       }),

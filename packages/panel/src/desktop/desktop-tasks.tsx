@@ -2,6 +2,7 @@ import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -123,7 +124,6 @@ import {
 import { DesktopHome } from "./desktop-home.js";
 import {
   AgentPane,
-  agentsRetry,
   DETAILS_WORDS,
   MainTabBars,
   mainTabLabel,
@@ -807,7 +807,12 @@ function DescriptionDocument({
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
-    return posted.length === 0
+    // Note that with Done and follow-ups on the bar stands with nothing posted, since an agent done with nothing to ask still offers its Archive.
+    const others = (agents.agents ?? []).flatMap((each) => {
+      const count = each.id === tabAgent ? 0 : (waitingOf.get(each.id)?.length ?? 0);
+      return count === 0 ? [] : [{ agentId: each.id, name: agentName(each), waiting: count }];
+    });
+    return posted.length === 0 && !turnEndOn
       ? undefined
       : {
           waiting,
@@ -816,6 +821,8 @@ function DescriptionDocument({
           turnEnd: turnEndOn,
           onChoose: chooseAnswer,
           sending: inboxSending,
+          others,
+          onOpenAgent: openAgent,
         };
   }, [
     tabAgent,
@@ -826,6 +833,8 @@ function DescriptionDocument({
     turnEndOn,
     chooseAnswer,
     inboxSending,
+    agents.agents,
+    openAgent,
   ]);
   const reader = useMemo(() => ({ readerId: tasks.me }), [tasks.me]);
   const editAgents = useMemo(() => ({ control: agents, onOpen: openAgent }), [agents, openAgent]);
@@ -996,7 +1005,6 @@ function DescriptionDocument({
         onOpenPullRequest={openPullRequestDoor}
         // Note that New agent stands on the group's head at every width, as the strip's "+" offers it.
         newAgent={newAgentStarts(mainTabs, agents)[0]}
-        starts={room === SHELL_ROOM.NARROW ? agentsRetry(agents) : []}
         phone={
           room === SHELL_ROOM.NARROW
             ? {
@@ -1187,9 +1195,6 @@ function DescriptionDocument({
   }
   const { task } = region;
   const listed = listedOpen ?? task;
-  // The column has a tab on its way: the agents are still read, or, read, a draft opens in the task's
-  // empty column.
-  const columnComing = agents.agents !== undefined || !agents.listFailed;
   // The panel holds the keys while the focus went into it last, or while it
   // fills the window over this column; shut, it hands them back.
   const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
@@ -1452,6 +1457,7 @@ function DescriptionDocument({
                             onOpenTerminal={terminalDoors.onOpenTerminal}
                             onOpenLocal={terminalDoors.onOpenLocal}
                             onOpenBrowser={phone ? openBrowser : undefined}
+                            onShowShell={terminalDoors.onShowShell}
                             onShown={phone ? setShownAgentTab : undefined}
                             onOpenAgent={openAgentColumn}
                             waiting={waitingOf}
@@ -1464,7 +1470,7 @@ function DescriptionDocument({
                         {/* The plan's banner is the whole plan's, so it stands over every
             tab of the column, and over the panel's while that fills the window. */}
                         {sidePanel.fullScreen ? null : stranded.banner}
-                        {/* A run's task says what fired the run over every tab of the column too, as its agent's own page does under its bar. */}
+                        {/* A run's task says what fired the run over every tab of the column. */}
                         {runPlace === undefined || runAgent === undefined ? null : (
                           <AutomationRunStrip place={runPlace} status={runAgent.status} />
                         )}
@@ -1478,7 +1484,7 @@ function DescriptionDocument({
                             {tab === undefined || isOverviewTab(tab) ? (
                               // While the agents are read, or a draft opens on a task with none, the
                               // column stands as the tab it will show does before it lands.
-                              tab === undefined && columnComing ? (
+                              tab === undefined ? (
                                 <AgentColumn>
                                   <AgentTabSkeleton />
                                 </AgentColumn>

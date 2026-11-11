@@ -32,6 +32,17 @@ export const SHELL_ACCESS_USAGE_DESCRIPTIONS = Object.freeze({
   NSDownloadsFolderUsageDescription:
     "A command run in Vespin, by you or an agent, asked to use your Downloads folder. Allowing lets every later command in Vespin read and change files there; allow it if you keep code there.",
 });
+// The entitlements the bundled host's executables are signed with, in place
+// of the app's (`electron-builder-hooks.mjs`'s `signElectronBuilderApp`).
+// The launcher only replaces itself with Node, so it is granted nothing.
+// Node is granted V8's JIT and nothing else: it runs only Vespin's own
+// bundles, the daemon and the runner, never an agent's `node`, which its
+// `PATH` finds elsewhere, so it loads no library another team signed, and
+// library validation stays on.
+export const BUNDLED_HOST_ENTITLEMENTS = Object.freeze({
+  launcher: Object.freeze([]),
+  node: Object.freeze(["com.apple.security.cs.allow-jit"]),
+});
 // The bundle carries one icon for every mode, so the icns is cut from the dark
 // tile — space black reads on either desktop. The running app swaps the Dock
 // image between the light and dark tiles itself; see src/main/window/dock-icon.ts.

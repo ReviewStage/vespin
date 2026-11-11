@@ -73,7 +73,13 @@ import {
 } from "./local-agent-box.js";
 import { LAUNCH_NOTE, notedFirstLines, sessionResumed } from "./local-agent-first-lines.js";
 import { answeredLocalAgentRequest } from "./local-agent-requests.js";
-import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-state.js";
+import {
+  forgetOwnedAgent,
+  forgetRunnerGroup,
+  keepOwnedAgent,
+  keepRunnerGroup,
+  ownedAgents,
+} from "./local-agent-state.js";
 
 /**
  * compose-local-agents.ts -- runs on this device the coding agents the account starts on it, each straight on the box in a folder of its own: their runners started, fed, and stopped as the service's lines say, and their tools' reads and commands answered, for as long as its gate stands (`LocalAgentsDependencies.switchedOn`: open but while the service refuses the device, `daemon/host-standing.ts`).
@@ -141,7 +147,10 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  * host's own Node and the CLIs it keeps, as its user, in the agent's folder, with the
  * agent's home and caches there (`local-agent-box.ts`). Stopping it signals
  * its group alone, and kills the group once `KILL_GRACE` has passed, so
- * nothing of the host's or of any other agent's is stopped with it. Its
+ * nothing of the host's or of any other agent's is stopped with it. The
+ * group is kept in the machine's state while it runs (`keepRunnerGroup`),
+ * so one that outlived a daemon killed outright is ended as the next
+ * daemon starts (`daemon/host-runners-left.ts`). Its
  * folder lives as long as the agent: a turn's end lets go of its GitHub
  * token and empties its `tmp`, and the next turn's runner goes on from the
  * rest, its repository and its harness's session, until the agent's
@@ -313,6 +322,8 @@ export interface LocalAgentsDependencies {
   client: LocalAgentClient;
   /** The host's update of itself, where it runs from an account install's releases; none where it takes no notice of a newer release. */
   update?: LocalAgentsUpdate | undefined;
+  /** Set to whether any runner runs, each time one starts or ends, as the host keeping its Mac awake reads it (`daemon/host-keep-awake.ts`); none where nothing reads it. */
+  working?: SubscriptionRef.SubscriptionRef<boolean> | undefined;
 }
 
 /** A runner this Mac started: the launch line it settles, its stdin, and the process it is. */
@@ -543,6 +554,18 @@ export function composeLocalAgents(
         const workers = yield* FiberMap.make<string>();
         const mailboxes = new Map<string, Queue.Queue<DeviceAgentClaimedLine>>();
         const runners = new Map<string, Runner>();
+        /** Whether any runner runs, told where the host reads it. */
+        const workingTold = Effect.suspend(() =>
+          dependencies.working === undefined
+            ? Effect.void
+            : SubscriptionRef.set(dependencies.working, runners.size > 0),
+        );
+        // Note that a follow that ends leaves no runner running, whatever its runners' own exits got to say.
+        yield* Effect.addFinalizer(() =>
+          dependencies.working === undefined
+            ? Effect.void
+            : SubscriptionRef.set(dependencies.working, false),
+        );
         /** The launch lines no beat settles: those claimed and handed to their agents whose runners are not yet running or settled unstarted, and those whose runner ended until its settle is answered. */
         const starting = new Set<string>();
         /** Held by each claim and by a beat's settle of a launch the device runs nothing for, so neither runs while the other is unanswered. */
@@ -874,6 +897,11 @@ export function composeLocalAgents(
             }
             const stdin = yield* Queue.unbounded<string>();
             const encoder = new TextEncoder();
+            // Note that the runner's record is forgotten only once its group has been ended as its scope closes, so a daemon killed meanwhile leaves it for the next start (`daemon/host-runners-left.ts`).
+            yield* Scope.addFinalizer(
+              runnerScope,
+              Effect.provideContext(forgetRunnerGroup(kernel.stateRoot, agentId), services),
+            );
             const command = platform.launch({
               agentId,
               folder: layout.folder,
@@ -907,6 +935,7 @@ export function composeLocalAgents(
               return yield* notStarted(line.id);
             }
             const handle = started.value;
+            yield* keepRunnerGroup(kernel.stateRoot, agentId, handle.pid);
             if (withToken) yield* Effect.forkIn(renewingGithub(agentId, hadToken), runnerScope);
             yield* Queue.offer(
               stdin,
@@ -917,12 +946,19 @@ export function composeLocalAgents(
               runners.delete(agentId);
               // Note that the launch is starting again until its settle is answered, so no beat settles it as a runner gone before its turn is let go of and its exit code sent.
               starting.add(line.id);
+              // Note that whether any runner works is told once the turn is let go of and settled, so a Mac kept awake for it does not sleep while it is.
               yield* Scope.close(runnerScope, Exit.void).pipe(
                 Effect.andThen(settle(line.id, Option.getOrUndefined(Option.map(code, Number)))),
-                Effect.ensuring(Effect.sync(() => starting.delete(line.id))),
+                Effect.ensuring(
+                  Effect.andThen(
+                    Effect.sync(() => starting.delete(line.id)),
+                    workingTold,
+                  ),
+                ),
               );
             }).pipe(Effect.forkIn(agentScope));
             runners.set(agentId, { lineId: line.id, stdin, handle, exited });
+            yield* workingTold;
           });
 
         /**

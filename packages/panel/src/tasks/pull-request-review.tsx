@@ -1,5 +1,6 @@
 import {
   PULL_REQUEST_ACTION,
+  PULL_REQUEST_WRITE_BOUNDS,
   REVIEW_EVENT,
   type ReviewEvent,
 } from "@repo/features/pull-request-write-wire";
@@ -26,6 +27,7 @@ import {
   ReviewPress,
   type ReviewWords,
 } from "./review-panel.js";
+import { TaskMentions } from "./task-mentions.js";
 
 /**
  * pull-request-review.tsx -- the review a member submits on an agent's pull request from its Pull request tab: the Review press at the end of its tabs' row and the panel it opens (`review-panel.tsx`), as stage-cli's review panel.
@@ -116,15 +118,21 @@ export function PullRequestReview({
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_REVIEW_DISCARD),
   );
   const sending = writes.pending !== undefined || discarding.stage !== CONFIRM_STAGE.RESTING;
+  // Note that the task's `@` list names what GitHub cannot read, so the summary stands under none, as a thread's reply does.
   return (
-    <>
+    <TaskMentions value={undefined}>
       <ReviewPress
         className="pull-request-review"
         words={{ ...REVIEW_WORDS, placeholder: placeholderOf(event) }}
         count={pending?.comments ?? 0}
         open={open}
         onOpen={setOpen}
-        draft={{ body, setBody, over: overCommentBound(body) }}
+        draft={{
+          body,
+          setBody,
+          over: overCommentBound(body),
+          maxLength: PULL_REQUEST_WRITE_BOUNDS.MAX_BODY_CHARS,
+        }}
         sending={sending}
         pending={pendingItems}
         choices={
@@ -143,13 +151,17 @@ export function PullRequestReview({
         note={<PullRequestWriteNote writes={writes} className="pull-request-review-note" />}
         onDiscard={pending == null ? undefined : discarding.ask}
         onSent={(done) =>
-          writes.write({ action: PULL_REQUEST_ACTION.SUBMIT_REVIEW, event, body }, () => {
-            setEvent(REVIEW_EVENT.COMMENT);
-            done();
-          })
+          // Note that the words go trimmed, as every box's do, so a line left open after them writes nothing.
+          writes.write(
+            { action: PULL_REQUEST_ACTION.SUBMIT_REVIEW, event, body: body.trim() },
+            () => {
+              setEvent(REVIEW_EVENT.COMMENT);
+              done();
+            },
+          )
         }
       />
       <ConfirmDialog open confirm={discarding} question={DISCARD_QUESTION} />
-    </>
+    </TaskMentions>
   );
 }

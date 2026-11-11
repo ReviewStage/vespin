@@ -22,14 +22,30 @@ import { CatalogSection } from "../section";
  * alone, its language a press opening its menu, as a block open in a
  * text's editor wears it; and a code
  * editor over the same colored lines, its edited lines drawn plain until
- * colored again, one numbering its lines in a gutter as a script's editor
- * does, and an empty one with its placeholder. The catalog's
+ * colored again, one numbering a script's dozen lines in a gutter as a script's
+ * editor does, and an empty one with its placeholder. The catalog's
  * copy act is the browser's own clipboard; an app hands in its shell's.
  */
 
 const copyToClipboard = (text: string): Promise<void> => navigator.clipboard.writeText(text);
 
 const SHORT = ["pnpm install", "pnpm exec vitest run packages/ui"].join("\n");
+
+/** A setup script past nine lines, so the gutter stands two digits wide and draws each two-digit number whole. */
+const SCRIPT = [
+  "# Start the database the tests run against.",
+  "docker run --detach --name catalog-postgres --publish 5432:5432 postgres:18",
+  "for _ in $(seq 1 60); do",
+  "  docker exec catalog-postgres pg_isready --quiet && break",
+  "  sleep 1",
+  "done",
+  "",
+  "export DATABASE_URL=postgresql://catalog:catalog@localhost:5432/catalog",
+  "pnpm install",
+  "pnpm --filter @repo/web db:migrate",
+  'echo "The database is up and migrated at $DATABASE_URL"',
+  "pnpm exec vitest run packages/ui",
+].join("\n");
 
 const COLORED = [
   'import { CODE_CARD_TITLE, CODE_ROW, CodeCard, TextButton } from "@repo/ui";',
@@ -73,7 +89,7 @@ function EditedCode(): React.JSX.Element {
 
 /** A code editor numbering its lines, as a script's stands, a few lines tall while it holds fewer. */
 function NumberedCode(): React.JSX.Element {
-  const [code, setCode] = useState(SHORT);
+  const [code, setCode] = useState(SCRIPT);
   return <CodeEditor label="Numbered code" value={code} onChange={setCode} rows={3} lineNumbers />;
 }
 

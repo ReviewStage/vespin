@@ -217,6 +217,7 @@ import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, inboxItemGlyph } from "../tasks/inbox-item-parts.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
+import { type RunOffer, runPaletteRows, useRunActions } from "../tasks/run-actions-button.js";
 import { openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { TaskKey } from "../tasks/task-standing.js";
@@ -236,7 +237,7 @@ import {
   useTaskRelationWrites,
 } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
+import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -1034,6 +1035,28 @@ function agentRows(
 }
 
 /**
+ * The shown agent's run actions, each worded as the act it is, Run or Stop
+ * and its name, beside the task's name, and the first printing ⌥⌘R where the
+ * key acts on it (`run-actions-button.tsx`'s `runPaletteRows`).
+ */
+function runRows(
+  offer: RunOffer | undefined,
+  tasks: TasksControl,
+  show: (pick: () => void) => void,
+): readonly PaletteRow[] {
+  const taskName = tasks.tasks.find((task) => task.id === tasks.activeTaskId)?.name;
+  return runPaletteRows(offer).map((row) => ({
+    replayMasked: true,
+    icon: row.icon,
+    label: row.label,
+    detail: [row.detail, taskName].filter((word) => word !== undefined).join(" · "),
+    command: row.keyed ? APP_COMMAND.RUN_ACTION : undefined,
+    terms: [row.label, row.detail],
+    onChoose: () => show(row.onPress),
+  }));
+}
+
+/**
  * The open plan's archived agents, in the order started, each in its tab's
  * look and found by its name as a standing one is, its detail saying it is
  * archived before the plan's name, and hanging its card. One opens its tab
@@ -1223,13 +1246,14 @@ const OPEN_THING_COMMANDS: readonly AppCommand[] = [
 
 /**
  * The commands a row of the open thing's own offers with its chord
- * (`readMarkRows`, `taskPinRows`, `taskCommandRows`), so no run of commands
- * lists them again: U, but the Inbox's, which only the run lists, P, and
- * Version history.
+ * (`readMarkRows`, `taskPinRows`, `taskCommandRows`, `runRows`), so no run
+ * of commands lists them again: U, but the Inbox's, which only the run
+ * lists, P, Version history, and ⌥⌘R, whose row names the action it runs.
  */
 const OWN_ROW_COMMANDS: ReadonlySet<AppCommand> = new Set([
   APP_COMMAND.PIN,
   APP_COMMAND.VERSION_HISTORY,
+  APP_COMMAND.RUN_ACTION,
 ]);
 
 /** The open thing's commands as its run lists them: U only while the Inbox stands, whose chosen item no row of its own marks. */
@@ -2034,6 +2058,22 @@ export function CommandPalette({
   const changesPeople = useChangesPeopleOf(
     useMemo(() => offeredChanges.map((tab) => tab.changes), [offeredChanges]),
   );
+  // The run actions of the agent the open task's column shows, each a row of its own, Run or Stop as it stands (`run-actions-button.tsx`).
+  const showShell = useShowShellTab(tasks.sidePanel, noFocusMove);
+  const terminalsRun =
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
+    true;
+  const runAgentId = tasks.sidePanel.agent;
+  const runAgent = tasks.agents.agents?.find(
+    (agent) => agent.id === runAgentId && agent.archivedAt === undefined,
+  );
+  const runOffer = useRunActions(
+    runAgent,
+    open,
+    runAgent === undefined || !terminalsRun
+      ? undefined
+      : (terminal) => showShell(runAgent.id, terminal),
+  );
   const offerDoors: PanelOfferDoors = {
     account: useWindowAccount(),
     onNewTerminal:
@@ -2120,7 +2160,18 @@ export function CommandPalette({
   // while open: every row a tier matches ranks above the next tier's.
   const tiersOf = {
     [PALETTE_FILTER.THIS_TASK]: () => [
-      agentRows(tasks, inboxWaiting, inboxStanding, offerDoors, onTasks, changesPeople, directory),
+      [
+        ...agentRows(
+          tasks,
+          inboxWaiting,
+          inboxStanding,
+          offerDoors,
+          onTasks,
+          changesPeople,
+          directory,
+        ),
+        ...runRows(runOffer, tasks, onTasks),
+      ],
     ],
     [PALETTE_FILTER.PEOPLE]: () => [
       peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.onOpenPerson(userId))),

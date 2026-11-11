@@ -2,6 +2,7 @@ import { BROWSER_LIVE } from "@repo/features/browser-live-wire";
 import { LIVE_SOCKET } from "@repo/features/live-wire";
 import { SANDBOX_TUNNEL } from "@repo/features/sandbox-tunnel-wire";
 import { TERMINAL_RELAY } from "@repo/features/terminal-wire";
+import { AGENT_WAKEUP } from "@repo/service/agents/coder-host/agent-wakeup-bounds";
 import { TURN_DELIVERY } from "@repo/service/agents/coder-host/turn-delivery-bounds";
 import { SANDBOX_RELEASE } from "@repo/service/agents/sandbox-release-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
@@ -139,8 +140,9 @@ const STANDALONE_ROUTES: readonly string[] = [
 /**
  * The queue consumers, each a function of its own, since a function the
  * queue invokes is reached by nothing else: the automation-runs consumer and
- * the agent-turns consumer, each under the Fluid default a Start's function
- * runs under, and the sandbox-releases consumer, under its own short bound.
+ * the agent-turns consumer, and the agent-wakeups consumer, each under the
+ * Fluid default a Start's function runs under, and the sandbox-releases
+ * consumer, under its own short bound.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -156,6 +158,13 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(TURN_DELIVERY.PATH)],
     dispatches: false,
     queueTopic: TURN_DELIVERY.TOPIC,
+  },
+  {
+    file: routeKeyOf(AGENT_WAKEUP.PATH),
+    maxDuration: AGENT_WAKEUP.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(AGENT_WAKEUP.PATH)],
+    dispatches: false,
+    queueTopic: AGENT_WAKEUP.TOPIC,
   },
   {
     file: routeKeyOf(SANDBOX_RELEASE.PATH),

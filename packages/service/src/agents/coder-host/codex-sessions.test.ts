@@ -6,6 +6,7 @@ import {
   type CodexConfig,
   INPUT_LINE,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_ENV,
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
@@ -17,6 +18,7 @@ import {
   readAgentRouting,
   recordAgentNativeSession,
   updateAgentChoice,
+  updateAgentPermissionModeCommitted,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { registerDevice } from "@repo/database/models/device-store";
@@ -40,8 +42,13 @@ import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
-import { deviceAgentLaunchSecretsSchema } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_AGENT_LINE_KIND,
+  DEVICE_CAPABILITY,
+  deviceAgentLaunchSecretsSchema,
+} from "@repo/features/device-agent-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -77,6 +84,7 @@ import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import {
   PLAN_REFUSAL,
+  RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -444,12 +452,46 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.equal(JSON.stringify(plan.secrets).includes("access-0"), false);
         // A Mac whose host bundles a runner from before the transcript store keeps its threads on its disk alone.
         assert.equal(plan.config.transcriptsUrl, undefined);
+        // Nor does a Mac that never said its runner reads a mode run one that asks: it is refused by name rather than run with full access.
+        const asking = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
+        yield* updateAgentPermissionModeCommitted(userId, asking.id, AGENT_PERMISSION_MODE.ASK);
+        const unasked = yield* Effect.gen(function* () {
+          const sessions = yield* sessionsFor(userId).pipe(
+            Effect.provide(machines),
+            Effect.provide(services(runnerSandboxApi())),
+          );
+          return yield* deliveredOpen(sessions, yield* writtenLine(asking, "Fix the invitations."));
+        });
+        assert.deepEqual(unasked, {
+          outcome: SESSION_SEND_OUTCOME.FAILED,
+          status: 422,
+          runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED,
+        });
+        const askingLines = yield* Effect.flatMap(Database, (db) =>
+          db.select().from(deviceAgentLine).where(eq(deviceAgentLine.agentId, asking.id)),
+        );
+        assert.equal(
+          askingLines.some((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH),
+          false,
+          "a launch queued for a runner that would run the mode unasked",
+        );
 
         // From the host release whose runner mirrors them, they are kept at the service, its Codex home
         // named at its default under the agent's own home, which the runner mirrors from.
+        // That release's host also says its runner reads a mode.
+        yield* registerDevice(userId, {
+          id: deviceId,
+          name: "Studio",
+          ...DEVICE_LAYOUT,
+          codexExecutable,
+          capabilities: [DEVICE_CAPABILITY.PERMISSION_MODES],
+        });
         yield* recordHostVersion(deviceId, "0.11.0");
         const onKept = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
+        yield* updateAgentPermissionModeCommitted(userId, onKept.id, AGENT_PERMISSION_MODE.ASK);
         const kept = yield* launched(onKept);
+        // Its runner reads the mode, so it is handed one that asks.
+        assert.equal(kept.config.permissionMode, PERMISSION_MODE.ASK);
         assert.deepEqual(
           [kept.config.transcriptsUrl, kept.secrets.env.CODEX_HOME],
           [
@@ -597,6 +639,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         const openai = openAi();
         const { userId, agent } = yield* openAgent;
         yield* signIn(userId, 60);
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.AUTO);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
         const line = yield* writtenLine(agent, "Fix the invitations.");
         const { lineId } = line;
@@ -646,6 +689,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           integrations: [LINEAR_SERVER],
           tokenUrl: `${TOKEN_URL}${FIRST_LAUNCH}`,
           installedSkills: "/opt/agent/installed-skills",
+          permissionMode: PERMISSION_MODE.AUTO,
           warm: true,
         });
         assert.ok(first.type === INPUT_LINE.MESSAGE);

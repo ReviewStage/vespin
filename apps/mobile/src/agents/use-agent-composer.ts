@@ -44,10 +44,9 @@ import {
   selectInboxReader,
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
-import type { AttachedPicture, QueuedLine } from "@repo/ui-native";
+import { type AttachedPicture, BUZZ, buzz, type QueuedLine } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useEffect, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -78,11 +77,6 @@ interface Sending {
   readonly id: string;
   readonly words: string;
   readonly pictures: readonly Attached[];
-}
-
-/** Buzzes the phone as the system does for an outcome: a send taken, or one refused. */
-function buzz(type: NotificationFeedbackType): void {
-  notificationAsync(type).catch((error: unknown) => console.error("The buzz did not go.", error));
 }
 
 /** The pictures' attachments, in the order they were attached. */
@@ -177,11 +171,11 @@ export function useAgentComposer(
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
     setPictures((held) => [...sent.pictures, ...held]);
     setNote(refusal);
-    buzz(NotificationFeedbackType.Error);
+    buzz(BUZZ.ERROR);
   };
   const settled = (sent: Sending) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
-    buzz(NotificationFeedbackType.Success);
+    buzz(BUZZ.SUCCESS);
   };
   const send = () => {
     const text = words.trim();
@@ -189,7 +183,7 @@ export function useAgentComposer(
     const refusal = pictureRefusal(pictures);
     if (refusal !== undefined) {
       setNote(refusal);
-      buzz(NotificationFeedbackType.Warning);
+      buzz(BUZZ.WARNING);
       return;
     }
     const sent: Sending = { id: randomUUID(), words: text, pictures };
@@ -271,7 +265,7 @@ export function useAgentComposer(
         console.error("The stop did not go.", error);
         setStopping(false);
         setNote(STOP_FAILED);
-        buzz(NotificationFeedbackType.Error);
+        buzz(BUZZ.ERROR);
       });
   };
   const change = (next: AgentQueueChange) => {

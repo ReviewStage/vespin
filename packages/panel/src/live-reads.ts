@@ -498,10 +498,6 @@ export const hostsQuery = (accountId: string | undefined) =>
 export const thisMacHostQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.THIS_MAC_HOST, accountIds(accountId));
 
-/** The run that started one agent, by the agent, which its page holds. */
-export const agentOriginQuery = (agentId: string | undefined) =>
-  liveReadQuery(LIVE_READ.AGENT_ORIGINS, agentId === undefined ? undefined : [agentId]);
-
 /** The feed of every item the account reaches, which the host holds for the session. */
 export const inboxItemsQuery = () => liveReadQuery(LIVE_READ.INBOX_ITEMS, []);
 

@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
+# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, a thread with a picture opened full screen and a video in the system's player, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -102,6 +102,26 @@ appId: dev.vespin.ios
 # the threads whose words hold every word typed. It comes last, since its
 # keyboard stands over the rows.
 - tapOn: "Inbox"
+- waitForAnimationToEnd
+# Remind me, which a row's trailing swipe and its long press both open, offers
+# the panel's times in a sheet, each saying when it comes due; In 1 hour puts
+# the thread away, out of Open and under Reminders, its time in the row's
+# time's place. The long press is used, since a regular window's sidebar
+# stands its rows elsewhere. Open is chosen again for the search below.
+- longPressOn: "Recorded the invite flow"
+- tapOn: "Remind me"
+- assertVisible: "Pick a date and time…"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-remind
+- tapOn: "In 1 hour.*"
+- waitForAnimationToEnd
+- assertNotVisible: "Recorded the invite flow"
+- tapOn: "Reminders"
+- assertVisible: "Recorded the invite flow"
+- assertVisible: "Reminder .*"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-reminders
+- tapOn: "Open.*"
 - waitForAnimationToEnd
 # A compact window's search is the bar's round button, named as the Search
 # tab is, so the one above the tab bar is pressed; a split view's sidebar
