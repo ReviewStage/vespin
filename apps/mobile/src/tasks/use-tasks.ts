@@ -65,7 +65,7 @@ function refused(what: string): (error: unknown) => void {
 }
 
 /** The workspace the phone works in, among the account's, as Settings chose it. */
-function useTasksWorkspace(): Workspace | undefined {
+export function useTasksWorkspace(): Workspace | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   return useChosenWorkspace(workspaces).chosen;
 }

@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press menu, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with its status changed from its ⋯, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press menu, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it and its status changed from its ⋯, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -116,6 +116,31 @@ onFlowComplete:
     element: "Goal"
     direction: DOWN
 - takeScreenshot: task-description
+# A page in its Pages opens whole on the app's own page screen, its ⋯
+# offering Open in browser, and back leads to the Overview. A tap off the
+# menu closes it.
+# Note that the wait is long, because the first web view a freshly booted
+# simulator opens launches WebKit's processes, as `agent.yaml` says.
+- scrollUntilVisible:
+    element: "Invite funnel"
+    direction: UP
+- tapOn: "Invite funnel"
+- extendedWaitUntil:
+    visible: "Invites sent in the staging workspace.*"
+    timeout: 90000
+- takeScreenshot: task-page
+- tapOn: "More"
+- assertVisible: "Open in browser"
+- takeScreenshot: task-page-menu
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Goal"
+    direction: DOWN
 # Its ⋯ sets its status, which its chip says at once.
 - tapOn: "More"
 - tapOn: "Status"

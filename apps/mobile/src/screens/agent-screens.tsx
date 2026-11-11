@@ -14,6 +14,7 @@ import {
 } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
+import { VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   AgentHead,
@@ -24,7 +25,6 @@ import {
   Composer,
   ConfirmAsk,
   DOCK_ROOM,
-  EmptyState,
   GlassDock,
   HeldCallBanner,
   ListSection,
@@ -32,7 +32,6 @@ import {
   NO_TOGGLES,
   QueuedLines,
   Screen,
-  SealedPage,
   SettingsForm,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
@@ -51,7 +50,6 @@ import {
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
-  usePageHtml,
   useTranscriptRetry,
 } from "../agents/use-agent.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
@@ -61,12 +59,10 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where the list holds no title for it yet. */
 const UNTITLED_AGENT = "Agent";
-
-/** What the page's menu opens the agent on. */
-const OPEN_ON_WEB = "Open on vespin.dev";
 
 /** What stands in the transcript's place while it is read, and where it could not be, with what reads it again. */
 const TRANSCRIPT_WORDS = {
@@ -90,12 +86,6 @@ const MODEL_WORDS = {
 /** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
 const MERGE_WORD = "Merge";
 const MERGE_QUESTION = "Merge this pull request?";
-
-/** What stands in a page's place while it is read, and where it could not be. */
-const PAGE_WORDS = {
-  READING: "Reading the page",
-  FAILED: "The page could not be read.",
-} as const;
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read. */
 function useAgentAddress(
@@ -206,7 +196,7 @@ function AgentComposerBar({
  * One agent's page: the system's header naming the agent in the ink, as
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
- * a menu that opens it on vespin.dev, over its transcript as one lazy list,
+ * a menu that opens it in the browser, over its transcript as one lazy list,
  * its head where the agent stands and the model it runs on, which opens
  * the model sheet, as the menu's Change model does. The transcript
  * is held live while the page is in focus, so a turn under way draws as it
@@ -288,7 +278,7 @@ export function AgentScreen() {
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel="More">
           <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
-            {OPEN_ON_WEB}
+            {VERB.OPEN_IN_BROWSER}
           </Stack.Toolbar.MenuAction>
           {changeModel === undefined ? null : (
             <Stack.Toolbar.MenuAction icon="cpu" onPress={changeModel}>
@@ -344,7 +334,7 @@ export function AgentScreen() {
   );
 }
 
-/** A page the agent showed, opened whole in the app's one web view, under the system's header naming it. */
+/** A page the agent showed, opened whole, by the agent's task, read once the agent is. */
 export function AgentPageScreen() {
   const {
     id = "",
@@ -358,26 +348,14 @@ export function AgentPageScreen() {
     title: string;
   }>();
   const agent = useFollowedAgent(id);
-  useSurfaceOpen(PRODUCT_SURFACE.PAGE, page);
-  // Note that a page stands on the agent's task, read once the agent is.
-  const read = usePageHtml(agent?.planId, page, Number(version));
-  const named = "title" in read && read.title !== "" ? read.title : title;
   return (
-    <>
-      <Stack.Screen options={{ title: named }} />
-      {/* Note that the page stands as the screen's root, outside its SwiftUI host, since the web view sizes itself to the screen. */}
-      {"html" in read ? (
-        <SealedPage html={read.html} title={named} />
-      ) : (
-        <Screen>
-          <EmptyState
-            title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
-            symbol={"failed" in read ? "exclamationmark.triangle" : "macwindow"}
-            loading={!("failed" in read)}
-          />
-        </Screen>
-      )}
-    </>
+    <PageScreen
+      workspaceId={agent?.workspaceId}
+      taskId={agent?.planId}
+      pageId={page}
+      version={Number(version)}
+      title={title}
+    />
   );
 }
 

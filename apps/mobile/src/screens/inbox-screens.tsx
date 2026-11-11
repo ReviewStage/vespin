@@ -30,6 +30,7 @@ import {
 import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
+import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
   INBOX_FEED,
   type InboxFeed,
@@ -82,9 +83,6 @@ import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
-
-/** What the thread's column says before a thread is picked, in a regular window. */
-const SELECT_A_THREAD = "Select a thread";
 
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
@@ -600,7 +598,7 @@ function InboxSplitScreen({
           }
           detail={
             selected === undefined ? (
-              <EmptyState title={SELECT_A_THREAD} symbol="tray" />
+              <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol="tray" />
             ) : (
               <ThreadColumn key={selected} id={selected} />
             )

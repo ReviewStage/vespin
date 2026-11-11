@@ -27,7 +27,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { readingWords } from "@repo/features/words";
+import { readingWords, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
@@ -102,7 +102,6 @@ const WORDS = {
   MARK_DONE: "Mark done",
   PIN: "Pin",
   UNPIN: "Unpin",
-  OPEN_IN_BROWSER: "Open in browser",
   AGENTS: "Agents",
   NEW_AGENT: "New agent",
   PAGES: "Pages",
@@ -112,7 +111,6 @@ const WORDS = {
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
   MORE: { label: "More", symbol: "ellipsis" },
-  OPEN_ON_WEB: "Open on vespin.dev",
   NO_TASKS: "No tasks to do",
   UNLISTED_TASK: "Task",
 } as const;
@@ -200,7 +198,7 @@ function rowActs(
         onPress: () => listing.pin(task.id, !pinned),
       },
       {
-        label: WORDS.OPEN_IN_BROWSER,
+        label: VERB.OPEN_IN_BROWSER,
         symbol: "safari",
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () =>
@@ -443,7 +441,7 @@ function GroupsColumn({
   );
 }
 
-/** What a task's ⋯ holds: its Status, each status checked where it stands, and Open on vespin.dev. */
+/** What a task's ⋯ holds: its Status, each status checked where it stands, and Open in browser. */
 function taskMenu(overview: TaskOverview): BarMenu {
   const { task } = overview;
   return {
@@ -451,7 +449,7 @@ function taskMenu(overview: TaskOverview): BarMenu {
     choices: [],
     actions: [
       {
-        label: WORDS.OPEN_ON_WEB,
+        label: VERB.OPEN_IN_BROWSER,
         symbol: "safari",
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, overview.workspace),
@@ -596,9 +594,10 @@ function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** The pages the task's agents showed, each opened on vespin.dev, where the app draws no page yet. */
+/** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
-  const { task, workspace, pages } = overview;
+  const router = useRouter();
+  const { task, pages } = overview;
   if (pages.length === 0) return null;
   return (
     <ListSection title={WORDS.PAGES} count={pages.length}>
@@ -609,7 +608,16 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           label={page.title}
           detail={provenanceText(page.at, Date.now())}
           onPress={() =>
-            openOnWeb({ kind: LINK_DESTINATION.PAGE, planId: task.id, pageId: page.id }, workspace)
+            router.push({
+              pathname: "/tasks/page/[id]",
+              params: {
+                id: page.id,
+                task: task.id,
+                workspace: task.workspaceId,
+                version: String(page.version),
+                title: page.title,
+              },
+            })
           }
         />
       ))}
