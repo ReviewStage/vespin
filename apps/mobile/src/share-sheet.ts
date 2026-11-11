@@ -1,9 +1,11 @@
 /**
  * share-sheet.ts -- the app's half of the share extension (`share-extension/`): the snapshot of workspaces and repositories its sheet offers, kept current in the App Group, and the draft it kept, opened as New task once the app comes forward.
  *
- * The extension runs with no host, so it reads what New task would offer
- * from the snapshot the app writes (`@repo/features/ios-share-wire`)
- * whenever what it holds changes, and keeps what the member wrote as a draft
+ * The extension runs with no host, so it reads what New task would offer,
+ * and where its Start is sent, from the snapshot the app writes
+ * (`@repo/features/ios-share-wire`) whenever what it holds changes. Where it
+ * can't start the task itself (`@repo/host`'s `issued-token-account-source.ts`), it keeps
+ * what the member wrote as a draft
  * the app opens New task on, prefilled, each time it comes forward with an
  * account signed in and no update holding the app; until then it stays. A draft kept under another account is dropped. A
  * sign-out removes both files, so nothing of the account stays where the
@@ -11,6 +13,7 @@
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { CLIENT_PLATFORM } from "@repo/features/client-identity";
 import { shareDraftOf, shareSnapshotOf } from "@repo/features/ios-share-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectRepositoryList, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -26,6 +29,14 @@ import {
 } from "./app-group.js";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
+import { SERVICE_ORIGIN } from "./host/compose-mobile.js";
+import { APP_VERSION } from "./host/host-provider.js";
+
+/** Where the share sheet's Start goes, named as this build. */
+const SHARE_SERVICE = {
+  origin: SERVICE_ORIGIN,
+  client: { platform: CLIENT_PLATFORM.IOS, version: APP_VERSION },
+};
 
 /** The snapshot's JSON for the account signed in, read off the document as it changes; none while none is. */
 function useSnapshotJson(accountId: string | undefined): string | undefined {
@@ -45,6 +56,7 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
                 selectRepositoryList(workspaceId)(state)?.rows?.repositories.map(
                   ({ fullName }) => fullName,
                 ),
+              SHARE_SERVICE,
             ),
           ),
     [accountId, chosenId],

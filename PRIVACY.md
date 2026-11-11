@@ -278,13 +278,26 @@ say to.
 While you are signed in to the Vespin iOS app, it keeps a small file on your
 phone, in a folder only the app and its own extensions can read, for
 Vespin's share sheet: **your account's id, your workspaces' ids and names,
-and the names of the repositories each reaches**. When you share text or a
-link to Vespin from another app, the share sheet reads that file and sends
-nothing anywhere: Start keeps **the words you shared and edited**, with the
-workspace and repository you picked, as a draft in the same folder, and the
-app opens New task on it the next time you open the app, then deletes it.
-Nothing leaves your phone until you start that task. Signing out deletes both
-files, as does deleting the app.
+and the names of the repositories each reaches**, with the Service's address
+and the app's version. The app also keeps **your account's current sign-in
+token** (the short-lived access token, never the refresh token that renews
+it) in one Keychain item that only the app and its share sheet can read. That
+item stays on this iPhone, never syncs to iCloud or moves to another device,
+holds the time the token stops being sent, a little under an hour after it
+was issued, is rewritten each time the token is renewed, and is deleted when
+you sign out. When you share text or a link to Vespin from another app and press
+Start, the share sheet sends **the words you shared and edited**, with the
+workspace and repository you picked, to the Service under that token, exactly
+as the app's New task does, and the task starts there. Where the task
+doesn't start, because the token has expired, the Service refuses it, or the
+Service doesn't answer, the share sheet keeps those words and picks as a
+draft in the same folder instead, which the app opens New task on the next
+time you open the app, then deletes. Signing out deletes the files and the
+Keychain item. Deleting the app deletes the files at once, but iOS keeps an
+app's Keychain items after the app is deleted, so the item stays on the
+iPhone until the app is installed and opened again, which deletes it; by
+then the token in it has expired, within an hour of being issued, and the
+share sheet never sends a token past its expiry.
 
 So your phone stays quiet while you're at your desk, the Service notes when
 a desktop or web client of yours was last active: while you use one, it

@@ -5,15 +5,18 @@
  * account's reads, so the app writes it a snapshot of what New task would
  * offer: the workspace the phone works in, each of the account's
  * workspaces, and the repositories each reaches, the one a task starts in
- * first. The extension draws its sheet from it and keeps what the member
- * wrote as a draft, which the app opens New task on the next time it comes
- * forward. The keys are the Swift's, exactly (`apps/mobile/share-extension/`),
+ * first, and where its Start is sent with the headers the app names itself
+ * in. The extension draws its sheet from it and starts the task there under
+ * the access token the app keeps for it, or, where it can't, keeps what the
+ * member wrote as a draft, which the app opens New task on the next time it
+ * comes forward. The keys are the Swift's, exactly (`apps/mobile/share-extension/`),
  * which reads the snapshot loosely and writes the draft, so a key renamed
  * here is a sheet that offers nothing or a draft the app drops. An instant
  * travels as epoch milliseconds in a JSON number.
  */
 
 import { Schema as EffectSchema } from "effect";
+import { type ClientIdentity, clientHeaders } from "./client-identity.js";
 import { recentRepositories, workspaceReaches } from "./tasks-model.js";
 import type { TasksView } from "./tasks-view.js";
 import type { Workspace } from "./workspace-wire.js";
@@ -25,6 +28,12 @@ interface ShareWorkspace {
   readonly repositories: readonly string[];
 }
 
+/** Where the share sheet sends its Start, and the headers the app names itself in there, which the extension sends beside the account's token. */
+interface ShareService {
+  readonly origin: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
 /** The snapshot the app writes for the share sheet. */
 interface ShareSnapshot {
   /** The account it was read for, which a draft names back. */
@@ -32,6 +41,7 @@ interface ShareSnapshot {
   /** The workspace the phone works in, which the sheet offers first. */
   readonly chosenWorkspaceId: string | undefined;
   readonly workspaces: readonly ShareWorkspace[];
+  readonly service: ShareService;
 }
 
 /** What the share sheet kept for New task: the words, and the workspace and repository picked, for the account it was kept under. */
@@ -77,7 +87,8 @@ function workspaceRepositories(
  * The snapshot the share sheet is drawn from: each of the account's
  * workspaces with the repositories it reaches, read from the account's
  * tasks and from each workspace's list the app has read (`listedOf`), and
- * the workspace the phone works in.
+ * the workspace the phone works in, and where the sheet's Start is sent,
+ * named as `client`.
  */
 export function shareSnapshotOf(
   accountId: string,
@@ -85,6 +96,7 @@ export function shareSnapshotOf(
   workspaces: readonly Workspace[],
   tasks: TasksView["tasks"],
   listedOf: (workspaceId: string) => readonly string[] | undefined,
+  service: { readonly origin: string; readonly client: ClientIdentity },
 ): ShareSnapshot {
   const recent = recentRepositories(tasks);
   return {
@@ -95,5 +107,6 @@ export function shareSnapshotOf(
       name: workspace.name,
       repositories: workspaceRepositories(workspace, recent, listedOf(workspace.id)),
     })),
+    service: { origin: service.origin, headers: clientHeaders(service.client) },
   };
 }

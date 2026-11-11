@@ -30,6 +30,19 @@ const APP_GROUP_PLIST_KEY = "VespinAppGroup";
 const APP_GROUPS_ENTITLEMENT = "com.apple.security.application-groups";
 const APP_GROUP_ENTITLEMENTS = { [APP_GROUPS_ENTITLEMENT]: [APP_GROUP] } as const;
 
+/**
+ * The Keychain group the app and its share extension alone share, which
+ * holds one item: the account's current access token, which the share sheet
+ * starts a task with (`modules/share-token/`). Each target names it in its
+ * Info.plist under its own key, so Swift reads it rather than spelling it
+ * again, the team's prefix filled in as it is signed. The app lists its own
+ * group first, so every other item it keeps stays where it was, out of the
+ * extension's reach.
+ */
+const SHARE_KEYCHAIN_GROUP = `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}.share`;
+const SHARE_KEYCHAIN_GROUP_PLIST_KEY = "VespinShareKeychainGroup";
+const KEYCHAIN_GROUPS_ENTITLEMENT = "keychain-access-groups";
+
 const ACCENT_COLOR_NAME = "AccentColor";
 
 // The app's icon: the Icon Composer bundle iOS 26 and later draw, and the
@@ -218,6 +231,8 @@ const SHARE_EXTENSION: AppExtension = {
     { FROM: "share-extension", NAME: "ShareSheet.swift" },
     { FROM: "share-extension", NAME: "SharedItems.swift" },
     { FROM: "share-extension", NAME: "AppGroupFiles.swift" },
+    { FROM: "share-extension", NAME: "ShareStart.swift" },
+    { FROM: "modules/share-token/ios", NAME: "ShareToken.swift" },
   ],
   EXTENSION_POINT: "com.apple.share-services",
   PRINCIPAL_CLASS: "ShareViewController",
@@ -228,8 +243,11 @@ const SHARE_EXTENSION: AppExtension = {
     },
   },
   COLORS: { AccentColor: "ACCENT" },
-  ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
-  INFO: { CFBundleDisplayName: "Vespin" },
+  ENTITLEMENTS: {
+    ...APP_GROUP_ENTITLEMENTS,
+    [KEYCHAIN_GROUPS_ENTITLEMENT]: [SHARE_KEYCHAIN_GROUP],
+  },
+  INFO: { CFBundleDisplayName: "Vespin", [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP },
 };
 
 // The build number TestFlight orders uploads by: release-ios.yml names its
@@ -655,8 +673,16 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // The TestFlight build takes its pushes from production APNs, which
       // the distribution profile release-ios.yml exports it with allows; a
       // simulator build is unsigned and carries no entitlement at all.
-      // The App Group it shares files with its extensions through.
-      entitlements: { "aps-environment": "production", ...APP_GROUP_ENTITLEMENTS },
+      // The App Group it shares files with its extensions through, and the
+      // Keychain group it shares the share sheet's token through, after its own.
+      entitlements: {
+        "aps-environment": "production",
+        ...APP_GROUP_ENTITLEMENTS,
+        [KEYCHAIN_GROUPS_ENTITLEMENT]: [
+          `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}`,
+          SHARE_KEYCHAIN_GROUP,
+        ],
+      },
       // Declared exempt from US export rules, so App Store Connect stops
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
@@ -676,6 +702,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         // reaches no module that loads Effect.
         NSUserActivityTypes: ["dev.vespin.viewing"],
         [APP_GROUP_PLIST_KEY]: APP_GROUP,
+        [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP,
       },
     },
     plugins: [
