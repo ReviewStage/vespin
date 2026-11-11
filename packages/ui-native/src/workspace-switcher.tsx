@@ -100,6 +100,8 @@ type WorkspaceSwitcherProps = {
   readonly actions: readonly SwitcherAction[];
   /** How its button stands; the tile and the name where none is given. */
   readonly look?: SwitcherLook | undefined;
+  /** How large the tile stands where the look is the tile alone; the bar's face where none is given. */
+  readonly tileSize?: number | undefined;
 };
 
 /** The picture a tile draws over its letter: the photo as held, else the owner's picture asked for at the tile's size; none while the letter stands alone. */
@@ -186,6 +188,7 @@ export function WorkspaceSwitcherMenu({
   account,
   actions,
   look = SWITCHER_LOOK.NAMED,
+  tileSize = MARK_SIZE.BAR_FACE,
 }: WorkspaceSwitcherProps) {
   const colors = useColors();
   return (
@@ -193,7 +196,7 @@ export function WorkspaceSwitcherMenu({
       modifiers={[accessibilityLabel(heardAs(chosen)), accessibilityIdentifier(SWITCHER_ID)]}
       label={
         look === SWITCHER_LOOK.TILE ? (
-          <WorkspaceTile workspace={chosen} size={MARK_SIZE.BAR_FACE} />
+          <WorkspaceTile workspace={chosen} size={tileSize} />
         ) : (
           <HStack spacing={SPACE.TIGHT + 2}>
             <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />

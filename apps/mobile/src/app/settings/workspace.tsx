@@ -26,7 +26,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
-  AccountRow,
   ActionRow,
   ConfirmAsk,
   ListSection,
@@ -37,6 +36,7 @@ import {
   useAsyncAction,
   WORDS_ASK_KIND,
   WordsAsk,
+  WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -46,6 +46,7 @@ import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
 import { refusalOf, useWrite } from "../../use-write.js";
+import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -113,6 +114,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   const personal = workspace.personal === true;
   const owner = workspace.role === WORKSPACE_ROLE.OWNER;
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const readerId = account === undefined ? undefined : signedInAccountId(account);
   useLiveFollow(workspaceId, (id) => acts[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }));
   useLiveFollow(manages ? workspaceId : undefined, (id) =>
@@ -177,10 +179,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
       <Screen>
         <SettingsForm>
           <ListSection footer={rename.refusal}>
-            <AccountRow
-              name={workspace.name}
-              email={WORKSPACE_ROLE_WORDS[workspace.role]}
-              picture={workspace.photoVersion === undefined ? workspace.pictureUrl : undefined}
+            <WorkspaceRow
+              workspace={switcherWorkspace(workspace, false, photos)}
+              role={WORKSPACE_ROLE_WORDS[workspace.role]}
             />
             {manages && !personal ? (
               <ActionRow

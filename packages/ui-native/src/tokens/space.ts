@@ -36,6 +36,13 @@ export const MARK_SIZE = {
   FACE: 16,
   /** The account's photo in a bar, inside the round glass the bar's other buttons stand in. */
   BAR_FACE: 32,
+  /**
+   * The same in a split view's column bar, such as a portrait iPad's list
+   * column. Note that it is smaller, because iPadOS pads a column bar's items
+   * more than the iPhone's bar does, so the bar's face there stood a fifth
+   * wider than the ⋯ beside it.
+   */
+  COLUMN_BAR_FACE: 26,
 } as const;
 
 /** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
