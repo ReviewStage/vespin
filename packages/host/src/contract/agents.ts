@@ -310,6 +310,15 @@ export const AGENT_ACTS = declaredActs({
     unanswered: AGENT_UNANSWERED,
     byHand: true,
   }),
+  AGENTS_CLEAR: hostAct({
+    input: agentStopParamsSchema,
+    output: agentAgentAnswerSchema,
+    refusal: "Could not start a new session for the agent on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+    byHand: true,
+  }),
   AGENTS_WARM: hostAct({
     input: agentStopParamsSchema,
     output: agentWarmAnswerViewSchema,

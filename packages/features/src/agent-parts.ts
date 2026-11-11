@@ -21,9 +21,13 @@ import {
   type WireValue,
 } from "@repo/wire";
 import {
+  COMPACTED_PART,
   CONNECTION_LOST_PART,
+  type CompactedNotice,
+  CompactedNoticeSchema,
   type ConnectionLostNotice,
   ConnectionLostNoticeSchema,
+  SESSION_CLEARED_PART,
   USAGE_LIMIT_PART,
   UsageLimitAnswerSchema,
   type UsageLimitNotice,
@@ -53,6 +57,10 @@ import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./t
 export const AGENT_PART = {
   USAGE_LIMIT: USAGE_LIMIT_PART,
   CONNECTION_LOST: CONNECTION_LOST_PART,
+  /** Where the harness compacted its session. */
+  COMPACTED: COMPACTED_PART,
+  /** Where the agent's harness was started on a fresh session (`/clear`). */
+  SESSION_CLEARED: SESSION_CLEARED_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -75,6 +83,8 @@ export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string
 export type AgentPart =
   | { readonly kind: typeof AGENT_PART.USAGE_LIMIT; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof AGENT_PART.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
+  | { readonly kind: typeof AGENT_PART.COMPACTED; readonly notice: CompactedNotice }
+  | { readonly kind: typeof AGENT_PART.SESSION_CLEARED }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -130,6 +140,13 @@ export function agentPart(part: WireValue): AgentPart {
       ? { kind: AGENT_PART.CONNECTION_LOST, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
+  if (part.type === AGENT_PART.COMPACTED) {
+    const notice = Schema.decodeUnknownOption(CompactedNoticeSchema)(part.data);
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.COMPACTED, notice: notice.value }
+      : { kind: AGENT_PART.OTHER };
+  }
+  if (part.type === AGENT_PART.SESSION_CLEARED) return { kind: AGENT_PART.SESSION_CLEARED };
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
   if (part.type.startsWith(TOOL_PART_TYPE_PREFIX)) {
     // A native harness's call is read as the call of the same kind, which draws it (`native-tool-calls.ts`).
@@ -282,7 +299,12 @@ const AGENT_READING: RowReading<AgentPart> = {
     return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
   },
   part: (part) => {
-    if (part.kind === AGENT_PART.USAGE_LIMIT || part.kind === AGENT_PART.CONNECTION_LOST) {
+    if (
+      part.kind === AGENT_PART.USAGE_LIMIT ||
+      part.kind === AGENT_PART.CONNECTION_LOST ||
+      part.kind === AGENT_PART.COMPACTED ||
+      part.kind === AGENT_PART.SESSION_CLEARED
+    ) {
       return ROW_PART.NOTICE;
     }
     if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;

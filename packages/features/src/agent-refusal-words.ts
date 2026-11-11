@@ -64,6 +64,9 @@ export const MESSAGE_NOT_SENT = "The message could not be sent.";
 /** What the toast says when the service did not stop an agent. */
 export const STOP_FAILED = "The agent could not be stopped. Try again.";
 
+/** What the toast says when the service did not start an agent's harness on a fresh session (`/clear`). */
+export const CLEAR_FAILED = "A new session could not be started. Try again once the agent is idle.";
+
 /** What the toast says when the agent a Stop answered still reads at work: it found no turn open to cancel, and no runner gone quiet to settle. */
 export const STOP_NOTHING_YET = "There's nothing to stop yet. Try again once the agent is working.";
 

@@ -159,6 +159,7 @@ export * from "./components/selection/selection-menu.js";
 export * from "./components/selection/selection-picker.js";
 export * from "./components/selection/selection-region.js";
 export * from "./components/selection/selection-toolbar.js";
+export * from "./components/session-line/session-line.js";
 export * from "./components/settings-ordered-rows/settings-ordered-rows.js";
 export * from "./components/settings-page/settings-page.js";
 export * from "./components/settings-row/settings-row.js";

@@ -75,6 +75,8 @@ export const FAILURE_SURFACE = {
   AGENT_QUEUE_DELETE: "agent_queue.delete",
   AGENT_RENAME: "agent.rename",
   AGENT_REWIND: "agent.rewind",
+  /** A `/clear` the service did not take: the agent's harness was not started on a fresh session. */
+  AGENT_CLEAR: "agent.clear",
   AGENT_SEND: "agent.send",
   AGENT_SERVERS: "agent.servers",
   AGENT_START: "agent.start",

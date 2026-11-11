@@ -4,6 +4,7 @@ import {
   BookBookmark,
   BookOpen,
   Bot,
+  BrainCircuit,
   Building2,
   Calendar,
   CircleArrowOutUpLeft,
@@ -16,6 +17,7 @@ import {
   Cloud,
   CornerDownRight,
   Cpu,
+  Eraser,
   Eye,
   EyeOff,
   File,
@@ -25,6 +27,7 @@ import {
   FolderGit,
   FolderInput,
   FolderKanban,
+  FoldVertical,
   GitBranch,
   GitPullRequest,
   Globe,
@@ -231,6 +234,12 @@ export const GLYPH = {
   DISCONNECT: lucideGlyph(Unplug),
   // A queued message sent into the turn under way now, rather than waiting for it to end.
   STEER: lucideGlyph(CornerDownRight),
+  // The model an agent runs on, which `/model` changes.
+  MODEL: lucideGlyph(BrainCircuit),
+  // A harness's session folded into a summary of itself to free up its context (`/compact`).
+  COMPACT: lucideGlyph(FoldVertical),
+  // A harness's session let go, the next message opening a fresh one in the same agent (`/clear`).
+  NEW_SESSION: lucideGlyph(Eraser),
   // What a row is dragged by to put it in another place.
   DRAG_HANDLE: lucideGlyph(GripVertical),
   OPEN_EXTERNALLY: ExternalIcon,

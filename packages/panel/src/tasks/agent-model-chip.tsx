@@ -13,7 +13,7 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { HarnessMark } from "../harness-marks.js";
 import { type AgentModeControl, MODE_GLYPH, modeShown } from "./agent-approvals.js";
 import { choiceLabel, paidByOf, providerOf } from "./agent-model.js";
@@ -76,6 +76,7 @@ export function AgentModelChip({
   narrow = false,
   startsNew = false,
   permissions,
+  asked,
 }: {
   model: AgentModelControl;
   /** The catalog as the host holds it for the account; nothing before it is first read. */
@@ -102,6 +103,8 @@ export function AgentModelChip({
   startsNew?: boolean;
   /** The agent's permission mode and its change, offered in the menu; none for an agent whose harness takes no mode. */
   permissions?: AgentModeControl | undefined;
+  /** How many times the box ran `/model`, each run opening the menu, its search focused; none where the box runs none. */
+  asked?: number | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const drawn = useDisclosure(open);
@@ -126,6 +129,11 @@ export function AgentModelChip({
   const paying = paidByOf(payer, usage, model.runtime);
   const offered = models === undefined ? undefined : runtimeModels(models, model.runtime, paidBy);
   const plan = usePayerPlan(paying, payerSubscriptionId, paidBy === undefined, owner);
+
+  // Each `/model` the box runs opens the menu, as a press on the chip does.
+  useEffect(() => {
+    if (asked !== undefined && asked > 0) setOpen(true);
+  }, [asked]);
 
   return (
     <div className="agent-model-chip relative flex min-w-0" ref={root}>
