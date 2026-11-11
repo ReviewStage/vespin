@@ -174,6 +174,14 @@ test("a finished turn that ended with end_turn replies in its summary, keeping t
     );
 
   assert.deepEqual(words(false), ["Reading the check's log.", summary]);
+  const folded = agentRows(turn, false).find((row) => row.kind === TURN_ROW.GROUP);
+  assert.ok(folded?.kind === TURN_ROW.GROUP, "the words after the call fold with it");
+  assert.equal(folded.open, false);
+  assert.ok(
+    folded.blocks.some(
+      (block) => block.kind === AGENT_PART.TEXT && block.text === "It's all in the summary above.",
+    ),
+  );
   assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
   assert.equal(messageWords(turn), summary);
   assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
