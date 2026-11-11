@@ -29,7 +29,7 @@ import type { PullRequestState } from "@repo/features/agent-wire";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { ModelProvider } from "@repo/features/models-wire";
-import { PULL_REQUEST_STATE_LABEL, pullRequestMarkState } from "@repo/features/pull-request-model";
+import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
@@ -201,7 +201,7 @@ function PullRequestLink({
       modifiers={[
         buttonStyle("borderless"),
         hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-        accessibilityValue(PULL_REQUEST_STATE_LABEL[pullRequest.state]),
+        accessibilityValue(pullRequestMarkLabel(pullRequest)),
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
     >

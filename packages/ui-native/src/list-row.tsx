@@ -34,7 +34,7 @@ import {
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
-import { PULL_REQUEST_STATE_LABEL, pullRequestMarkState } from "@repo/features/pull-request-model";
+import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -598,7 +598,7 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
     case TASK_AGENTS_STATUS.WORKING:
       return GLYPH_STATE_WORDS[GLYPH_STATE.WORKING];
     case TASK_AGENTS_STATUS.PULL_REQUEST:
-      return `${PULL_REQUEST_HEARD} ${PULL_REQUEST_STATE_LABEL[agents.pullRequest.state]}`;
+      return `${PULL_REQUEST_HEARD} ${pullRequestMarkLabel(agents.pullRequest)}`;
     case TASK_AGENTS_STATUS.NONE:
     case undefined:
       return undefined;

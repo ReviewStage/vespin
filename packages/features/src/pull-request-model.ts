@@ -78,6 +78,15 @@ export function pullRequestMarkState(pullRequest: {
 /** What the row says of an open pull request GitHub's merge queue holds, as its tab's pill says it. */
 export const QUEUED_LABEL = "Queued";
 
+/** Where a pull request's mark says it stands, in the word a row is heard by: Queued for an open one the merge queue holds, else its state's word. */
+export function pullRequestMarkLabel(pullRequest: {
+  readonly state: PullRequestState;
+  readonly queued?: boolean | undefined;
+}): string {
+  const mark = pullRequestMarkState(pullRequest);
+  return mark === PULL_REQUEST_MARK_QUEUED ? QUEUED_LABEL : PULL_REQUEST_STATE_LABEL[mark];
+}
+
 /** How a pull request the merge queue holds is said where its place is known: "Queued #3", else "Queued". */
 export function queuedLabel(position: number | undefined): string {
   return position === undefined ? QUEUED_LABEL : `${QUEUED_LABEL} #${position}`;
