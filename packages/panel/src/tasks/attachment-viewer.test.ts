@@ -347,6 +347,8 @@ test("on a phone a finger swiped sideways walks the files, one let go slowly sho
   assert.equal(viewer.state.at, 0, "a zoomed picture stays");
   assert.equal(drawn(viewer.picture()).x, before.x - 200, "and moves under the finger");
   viewer.show([VIDEO, FIRST], 0);
+  // The bar stands once the video's size is read, as a browser reads it.
+  act(() => document.querySelector("video")?.dispatchEvent(new Event("loadedmetadata")));
   const scrubber =
     document.querySelector('[data-slot="slider-thumb"]') ?? assert.fail("the video's scrubber");
   laidOut(scrubber.parentElement ?? assert.fail("the scrubber's control"), {

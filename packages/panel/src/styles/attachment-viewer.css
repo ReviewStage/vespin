@@ -23,7 +23,7 @@
    screenshot's shape until its pixels are read. Where the card fills its
    room, as a picture's always does and a phone's video's does, the room is
    the body under the header, one track its own size; a picture opened at its
-   own pixels says none. */
+   own pixels says none; a video waits at a screenshot's shape there too. */
 .attachment-viewer-room {
   container-type: size;
 }
@@ -76,9 +76,9 @@
   width: min(
     100cqw,
     100cqh *
-    var(--ui-video-natural-width) /
-    var(--ui-video-natural-height),
-    var(--ui-video-natural-width) *
+    var(--ui-video-natural-width, 16) /
+    var(--ui-video-natural-height, 10),
+    var(--ui-video-natural-width, 1600) *
     2px
   );
 }
