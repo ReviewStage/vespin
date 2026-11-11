@@ -56,7 +56,7 @@ import {
   WriteNoteRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent } from "../agents/use-agent.js";
 import { openInSafari } from "../open-link.js";
 import {
@@ -301,6 +301,15 @@ export function PullRequestScreen() {
   const state = pullRequest?.state ?? listed?.state;
   const url = pullRequest?.url ?? listed?.url;
   const press = shownPressOf(pullRequest, method, writes, () => setAsking(true));
+  // Whether the pull request offers Remove from queue as it stands, which its question asks about.
+  const dequeues =
+    pullRequest !== undefined &&
+    isLivePullRequest(pullRequest) &&
+    mergeActionFor(pullRequest) === MERGE_ACTION.DEQUEUE;
+  // Note that the question is dropped as soon as the queue no longer offers it, rather than only when its alert says it went, so it never stands again by itself the next time the pull request is queued.
+  useEffect(() => {
+    if (!dequeues) setAsking(false);
+  }, [dequeues]);
   // Whether the press stands in the page, under the checks, rather than in the bar.
   const inPage = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   useScreenActivity((workspaces) =>
@@ -482,7 +491,7 @@ export function PullRequestScreen() {
         title={MERGE_WORDS.DEQUEUE_QUESTION}
         message={QUEUE_WARNING}
         act={MERGE_WORDS.DEQUEUE}
-        presented={asking && queued !== null}
+        presented={asking && dequeues}
         onAct={() => {
           setAsking(false);
           void writes.write({ action: PULL_REQUEST_ACTION.DEQUEUE });
