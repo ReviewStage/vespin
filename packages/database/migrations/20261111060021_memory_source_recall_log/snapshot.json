@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "e052f998-b9e1-434f-b490-e634ab9b930d",
-  "prevIds": ["47072cf9-6e70-4101-a184-d185fe77cfd7", "aa988ae4-9b01-4348-ad15-1d4af3e0290a"],
+  "id": "4a227ba4-2441-4a85-9e49-36d6809ccc58",
+  "prevIds": ["3f6bd1e8-cc74-486f-ad6f-6053fb731f4d"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -6671,6 +6671,32 @@
       "generated": null,
       "identity": null,
       "name": "agents_folder",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "temp_folder",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "attachments_folder",
       "entityType": "columns",
       "schema": "public",
       "table": "device"
