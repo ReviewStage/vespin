@@ -8,7 +8,7 @@
 
 import type { SandboxError, SandboxUnavailable } from "@repo/sandbox";
 import { Effect, Layer, Queue } from "effect";
-import type { ArchiveScript } from "../agents/archive-script.js";
+import type { ArchiveScript, ArchiveScriptRan } from "../agents/archive-script.js";
 import type { SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import { SessionSandboxes } from "../agents/session-sandboxes.js";
 
@@ -28,8 +28,10 @@ export interface SessionSandboxesAsked {
 export function scriptedSessionSandboxes(
   answer: (sessionId: string) => Effect.Effect<number, SandboxUnavailable> = () =>
     Effect.succeed(1),
-  archived: (sessionId: string, archive: ArchiveScript) => Effect.Effect<void, SandboxError> = () =>
-    Effect.void,
+  archived: (
+    sessionId: string,
+    archive: ArchiveScript,
+  ) => Effect.Effect<ArchiveScriptRan | undefined, SandboxError> = () => Effect.succeed(undefined),
 ) {
   return Effect.gen(function* () {
     const deletes = yield* Queue.unbounded<string>();

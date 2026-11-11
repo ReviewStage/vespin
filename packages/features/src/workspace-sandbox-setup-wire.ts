@@ -19,7 +19,8 @@ import { workspaceIdSchema } from "./task-wire.js";
  * when pressed, from the Run menu in the agent's message box, behind the
  * Run actions experiment; `PUT /api/workspaces/sandbox-setup/run-actions`
  * saves one repository's whole list in its order, to an owner or admin, an
- * empty list removing it. Every answer is the setup as it then stands.
+ * empty list removing it. Every answer is the setup as it then stands, each
+ * script with how it last ran in a sandbox where it has.
  */
 
 /** The query the read names its workspace by. */
@@ -45,14 +46,44 @@ export const REPOSITORY_SCRIPT_KIND = {
 export type RepositoryScriptKind =
   (typeof REPOSITORY_SCRIPT_KIND)[keyof typeof REPOSITORY_SCRIPT_KIND];
 
+/** Which of the workspace's scripts a run was of: its install script, or a repository's setup or archive script. */
+export const CLOUD_SETUP_SCRIPT = {
+  INSTALL: "install",
+  ...REPOSITORY_SCRIPT_KIND,
+} as const;
+
+export type CloudSetupScript = (typeof CLOUD_SETUP_SCRIPT)[keyof typeof CLOUD_SETUP_SCRIPT];
+
 const scriptSchema = EffectSchema.String.check(
   EffectSchema.isMaxLength(WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_SCRIPT_CHARS),
 );
+
+/**
+ * How a script last ran in a cloud sandbox: when it started, how it exited,
+ * and the agent whose sandbox it ran in, whose Terminal reads what it
+ * printed for as long as the sandbox stands. Facts alone, never what the
+ * script printed, which may carry a workspace variable's value.
+ */
+const scriptRunSchema = EffectSchema.Struct({
+  /** When the run started, in epoch milliseconds: a script saved since has not run as it stands. */
+  ranAt: countedNumber,
+  exitCode: EffectSchema.Int,
+  /** The agent whose sandbox it ran in, by its id, its task's, and the name every place gives it. */
+  agent: EffectSchema.Struct({
+    id: EffectSchema.String,
+    taskId: EffectSchema.String,
+    name: EffectSchema.String,
+  }),
+});
+
+export type CloudSetupScriptRun = typeof scriptRunSchema.Type;
 
 const savedScriptSchema = EffectSchema.Struct({
   script: EffectSchema.String,
   /** When the script was last saved, in epoch milliseconds. */
   updatedAt: countedNumber,
+  /** How the script, as saved now or before, last ran; absent where it never has, and from a service from before runs were kept. */
+  lastRun: EffectSchema.optionalKey(scriptRunSchema),
 });
 
 const repositorySetupSchema = EffectSchema.Struct({
