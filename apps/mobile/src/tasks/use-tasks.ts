@@ -45,6 +45,7 @@ import {
   selectTasks,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -165,10 +166,12 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
     acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
       (landed) => {
+        buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR);
         if (!landed) letGo();
       },
       (error: unknown) => {
         refused("The status")(error);
+        buzz(BUZZ.ERROR);
         letGo();
       },
     );
@@ -226,8 +229,15 @@ export function useTasksListing(search: string): TasksListing {
       const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
       acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }).catch(refused("The mark"));
     };
+    // Note that a pin taps as a toggle does, lighter than a status's buzz, and a refused one buzzes as any refusal does.
     const pin = (taskId: string, pinned: boolean) => {
-      acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }).catch(refused("The pin"));
+      acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }).then(
+        (landed) => buzz(landed ? BUZZ.SELECTION : BUZZ.ERROR),
+        (error: unknown) => {
+          refused("The pin")(error);
+          buzz(BUZZ.ERROR);
+        },
+      );
     };
     const agentsWorking = agentsWorkingIn(view, tasks);
     return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin };
