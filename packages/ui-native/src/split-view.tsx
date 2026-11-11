@@ -1,4 +1,4 @@
-// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding the account's photo, its acts, its menu, and its search, and the detail's its path and menu.
+// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding the account's photo, its header, its acts, its menu, and its search, and the detail's its path and menu.
 
 import {
   Divider,
@@ -10,6 +10,7 @@ import {
   Toolbar,
   ToolbarItem,
   useNativeState,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import { navigationSplitViewStyle, searchable } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -59,6 +60,8 @@ type SplitViewProps = {
   readonly sidebar: ReactNode;
   /** The account's photo at the leading edge of the sidebar's bar, opening Settings, as a compact window's header stands it. */
   readonly sidebarAccount?: BarAccount | undefined;
+  /** What heads the sidebar, in its bar's middle where a title would stand, such as the workspace switcher: a SwiftUI view, never a host of its own. */
+  readonly sidebarHeader?: ReactNode | undefined;
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   /** An act in the sidebar's bar, by its symbol alone, such as Settings: what a compact window's header holds. */
@@ -114,13 +117,17 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
 function SidebarColumn({
   sidebar,
   sidebarAccount,
+  sidebarHeader,
   sidebarAction,
   sidebarMenu,
   sidebarSearch,
 }: Omit<SplitViewProps, "detail" | "content" | "detailMenu" | "detailPath">) {
   const text = useNativeState("");
   const bar =
-    sidebarAccount === undefined && sidebarAction === undefined && sidebarMenu === undefined ? (
+    sidebarAccount === undefined &&
+    sidebarHeader === undefined &&
+    sidebarAction === undefined &&
+    sidebarMenu === undefined ? (
       sidebar
     ) : (
       <Toolbar>
@@ -130,6 +137,9 @@ function SidebarColumn({
             <ToolbarItem placement="topBarLeading">
               <AccountBarItem {...sidebarAccount} />
             </ToolbarItem>
+          )}
+          {sidebarHeader === undefined ? null : (
+            <ToolbarItem placement="principal">{sidebarHeader}</ToolbarItem>
           )}
           {sidebarMenu === undefined ? null : (
             <ToolbarItem placement="topBarTrailing">
@@ -173,6 +183,9 @@ function SidebarColumn({
  * automatic style hides the sidebar of a portrait iPad until it is asked
  * for, and the list is what the window is wide enough to keep beside the
  * detail; a person may still hide it, which the split view reports back.
+ * Note that each column's children stand in a `ZStack`, because a column
+ * lays several children out one above another, so a sheet or an alert a
+ * screen draws beside a column's page would otherwise take half its height.
  */
 export function SplitView({ detail, content, detailMenu, detailPath, ...sidebar }: SplitViewProps) {
   const [columns, setColumns] = useState<NavigationSplitViewVisibility>("all");
@@ -183,17 +196,21 @@ export function SplitView({ detail, content, detailMenu, detailPath, ...sidebar 
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
-        <SidebarColumn {...sidebar} />
+        <ZStack>
+          <SidebarColumn {...sidebar} />
+        </ZStack>
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
-        <NavigationSplitView.Content>{content}</NavigationSplitView.Content>
+        <NavigationSplitView.Content>
+          <ZStack>{content}</ZStack>
+        </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>
         {detailMenu === undefined && detailPath === undefined ? (
-          detail
+          <ZStack>{detail}</ZStack>
         ) : (
           <Toolbar>
-            {detail}
+            <ZStack>{detail}</ZStack>
             <Toolbar.Content>
               {detailPath === undefined ? null : (
                 <ToolbarItem placement="principal">
