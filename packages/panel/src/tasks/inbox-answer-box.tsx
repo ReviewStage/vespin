@@ -31,16 +31,16 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * through (`agent-box.tsx`'s `useAgentBox`): its + menu attaches files and
  * switches that agent's MCP servers, its model chip changes what the agent
  * runs on and its permission mode for its next step, the chips after the +
- * say where it runs and what it forwards, the `/` list runs `/model`,
- * `/clear`, and `/compact` as the tab's does, since a reply reaches the
- * agent's session through the same steer a message does, the line over the
- * field says a send denies a tool call waiting, and its microphone, `@` and
- * `/` lists, and the ⋯ a narrow card folds them into are the agent box's, so
- * the two boxes read and fold alike. What the tab reads off the agent's
- * transcript, its context ring, cost, and payer, does not stand here, since
- * a thread reads no transcript; nor Queue and Steer, since an item's replies
- * go one at a time in their own order (`use-task-inbox.ts`) rather than on
- * the agent's queue. What stands docked over an
+ * say where it runs and what it forwards, the line over the field says a
+ * send denies a tool call waiting, and its microphone, `@` and `/` lists,
+ * and the ⋯ a narrow card folds them into are the agent box's, so the two
+ * boxes read and fold alike. What the tab reads off the agent's transcript,
+ * its context ring, cost, and payer, does not stand here, since a thread
+ * reads no transcript; nor Queue and Steer, since an item's replies go one
+ * at a time in their own order (`use-task-inbox.ts`) rather than on the
+ * agent's queue; nor the `/` list's commands (`/model`, `/clear`,
+ * `/compact`), since a reply reaches the agent wrapped as a thread's
+ * message, which the harness reads as words rather than a command. What stands docked over an
  * agent's box, its to-do list, its pull request, its threads, and its queue,
  * does not stand here, because a thread is no transcript and need be about no
  * pull request, and the thread's crumbs already name the agent and its task.
@@ -358,6 +358,8 @@ function AnswerCard({
         {...agentBox}
         // Note that an empty box's Send stays Send, or reads Got it, and never Stop, because an empty Send here settles a notice or says what an answer lacks.
         stoppable={false}
+        // Note that the box runs none of the `/` list's commands, because a reply reaches the agent wrapped as a thread's message (`inboxThreadMessage`), so `/compact` would go as words, and a `/clear` would take Send from a new thread.
+        onClear={undefined}
         composer={composer}
         usage={undefined}
         onStop={neverStops}
