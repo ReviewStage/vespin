@@ -128,10 +128,10 @@ enum MenuBar {
   /// Words and enables a command as it is shown or pressed, so it reads as what stands in front now rather than when the menu was built.
   static func validate(_ command: UICommand, id: String) {
     guard let known = commands.first(where: { $0.id == id }) else { return }
-    let look = look(of: known)
-    command.title = look.title
-    command.image = look.image
-    command.attributes = look.enabled ? [] : .disabled
+    let shown = look(of: known)
+    command.title = shown.title
+    command.image = shown.image
+    command.attributes = shown.enabled ? [] : .disabled
   }
 
   /// Whether a command may act now: one JavaScript said may, or the sidebar's where the window stands one.
@@ -189,17 +189,18 @@ enum MenuBar {
   }
 
   private static func element(_ command: Command) -> UIMenuElement {
-    let look = look(of: command)
+    let shown = look(of: command)
     let action = #selector(UIApplication.vespinMenuCommand(_:))
     let made: UICommand
     if let input = command.input {
       made = UIKeyCommand(
-        title: look.title, image: look.image, action: action, input: input,
+        title: shown.title, image: shown.image, action: action, input: input,
         modifierFlags: command.modifiers, propertyList: command.id)
     } else {
-      made = UICommand(title: look.title, image: look.image, action: action, propertyList: command.id)
+      made = UICommand(
+        title: shown.title, image: shown.image, action: action, propertyList: command.id)
     }
-    if !look.enabled { made.attributes = .disabled }
+    if !shown.enabled { made.attributes = .disabled }
     if command.nonRepeatable, #available(iOS 26.0, *) { made.repeatBehavior = .nonRepeatable }
     return made
   }
