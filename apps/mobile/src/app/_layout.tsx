@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
+import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
@@ -36,7 +37,8 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * once a launch (`push-device.ts`), a tapped
  * notification opens its thread (`notifications.ts`), a Stop pressed on
  * the Live Activity of its running agents goes through the host
- * (`live-activity/`), its crash reports name it (`crash-reports.ts`), its
+ * (`live-activity/`), the Inbox widget's snapshot follows its Inbox
+ * (`inbox-widget/`), its crash reports name it (`crash-reports.ts`), its
  * tasks and threads stand in Spotlight, and a Spotlight item tapped or a
  * screen handed over from another device opens (`system-activity/`). The
  * iPad's menu bar acts on whatever stands in front, its account's commands
@@ -57,6 +59,7 @@ function GuardedScreens() {
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
+  useInboxWidget(signedIn);
   useSystemActivity(signedIn);
   useCrashReportAccount();
   useOfflineNotice();

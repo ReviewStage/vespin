@@ -1,5 +1,5 @@
 /**
- * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, and a fixture's activity.
+ * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, a fixture's activity, and the Inbox widget drawn again.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
  * every build of the app. It is optional here all the same, so a build
@@ -28,6 +28,8 @@ declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
   startFixture(contentState: string): Promise<void>;
   /** Ends every activity of the app's at once. */
   endAll(): Promise<void>;
+  /** Has WidgetKit draw the Inbox widget again, from the snapshot the app just kept in the App Group. */
+  reloadInboxWidget(): void;
 }
 
 /** The module, or none in a build that lacks it. */

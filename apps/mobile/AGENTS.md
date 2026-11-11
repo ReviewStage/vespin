@@ -165,6 +165,23 @@ hands the app's JavaScript the tokens, an activity's end, and each Stop
 `-liveActivity true` beside `-fixture inbox` starts an activity of the
 fixture's own, which `maestro/live-activity.yaml` shoots.
 
+## The Inbox widget
+
+The same widget extension draws the Inbox widget (`live-activity/InboxWidget.swift`)
+on the Home Screen (small, medium) and the Lock Screen (circular,
+rectangular, inline): how many threads wait on the member in the chosen
+workspace, and the newest three. It has no account and no network, so it
+draws a snapshot the app keeps in the App Group (`APP_GROUP` in
+`app.config.ts`, read through `src/app-group.ts`): what goes into it is
+`@repo/features/inbox-widget-model`'s, the app writes it as its Inbox moves
+and removes it on a sign-out (`src/inbox-widget/`), and asks WidgetKit to draw
+again through the Live Activity module's `reloadInboxWidget`. While the app
+is closed, the Notification Service Extension moves it by each alert, and
+the background task by each settled thread's push; a push's badge counts the
+whole account, so it is taken as the count only where the account has one
+workspace. Xcode's canvas draws each size's preview; on a simulator, add the
+widget by hand from the Home Screen's edit mode.
+
 ## Handoff and Spotlight
 
 Each thread, task, agent, and pull request screen advertises an
