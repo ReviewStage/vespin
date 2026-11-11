@@ -50,6 +50,7 @@ import {
   continueFailureNote,
   dockedPullRequests,
   finishedReplyLead,
+  lastTurnEnding,
   messageFailureNote,
   modelLabel,
   noteWhileOffline,
@@ -176,6 +177,20 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
   assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
   assert.equal(messageWords(turn), summary);
   assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
+  // A follow-up offered twice is one to tick.
+  const twice: AgentTranscriptMessage = {
+    ...turn,
+    parts: [
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: { summary, followUps: ["Add a Members page", " Add a Members page", "Resend"] },
+        output: { status: "accepted" },
+      },
+    ],
+  };
+  assert.deepEqual(lastTurnEnding([twice])?.followUps, ["Add a Members page", "Resend"]);
   // A later call refused stands for the turn, which then replies in its own words.
   const refused: AgentTranscriptMessage = {
     ...turn,

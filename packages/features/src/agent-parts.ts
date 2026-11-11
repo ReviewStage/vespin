@@ -478,7 +478,8 @@ export function endTurnOf(parts: readonly AgentPart[]): TurnEnding | undefined {
   const offered = Array.isArray(followUps)
     ? followUps.flatMap((each) => (isWireString(each) && each.trim() !== "" ? [each.trim()] : []))
     : [];
-  return { summary: summary.trim(), followUps: offered };
+  // Note that the tool takes a follow-up twice, and one offered twice is one to tick.
+  return { summary: summary.trim(), followUps: [...new Set(offered)] };
 }
 
 /** The summary of a turn's last `end_turn` that was taken (`endTurnOf`), its reply. */
