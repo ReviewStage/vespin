@@ -303,7 +303,7 @@ const MENTION_LINK_CLASS = "description-mention-link";
  * the link's look are added, never the target in an attribute of its own, and that the
  * attribute is drawn alone and never read or written as markdown.
  */
-function linkLook(namesMention: ((target: string) => boolean) | undefined) {
+function linkLook(namesChip: ((target: string) => boolean) | undefined) {
   return Extension.create({
     name: "linkLook",
     addGlobalAttributes() {
@@ -316,7 +316,7 @@ function linkLook(namesMention: ((target: string) => boolean) | undefined) {
               parseHTML: () => null,
               renderHTML: (attributes) => {
                 const href = String(attributes.href ?? "");
-                return namesMention?.(href) === true
+                return namesChip?.(href) === true
                   ? { class: MENTION_LINK_CLASS }
                   : linkMarkAttributes(href);
               },
@@ -337,7 +337,7 @@ function linkLook(namesMention: ((target: string) => boolean) | undefined) {
  */
 export function markdownExtensions(
   drawMention?: MentionDrawer | undefined,
-  namesMention?: ((target: string) => boolean) | undefined,
+  namesChip?: ((target: string) => boolean) | undefined,
   pictures?: DescriptionEditorPictures | undefined,
   drawTaskBox?: TaskBoxDrawer | undefined,
   drawCodeHeader?: CodeHeaderDrawer | undefined,
@@ -364,7 +364,7 @@ export function markdownExtensions(
     pictureNode(pictures),
     RawBlock,
     mentionNode(drawMention),
-    linkLook(namesMention),
+    linkLook(namesChip),
     writingKeys,
     dividerLines,
   ];
@@ -576,7 +576,7 @@ export function mountDescriptionEditor(
   } = props;
   const extensions = markdownExtensions(
     mentions?.drawMention,
-    mentions?.namesMention,
+    mentions?.namesChip,
     pictures,
     drawTaskBox,
     drawCodeHeader,

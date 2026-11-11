@@ -7,8 +7,7 @@ import { descriptionAttachmentOf } from "@repo/features/description-attachment-l
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
-import { readLink } from "@repo/features/link-grammar";
-import { mayNameMention } from "@repo/features/mention-link";
+import { mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
@@ -353,12 +352,12 @@ function wordsOf(node: WordsNode): string {
 }
 
 /**
- * Marks every link in the words whose target may name a mention, or is an
- * app link to any place (`readLink`), to be drawn as its own element,
+ * Marks every link in the words whose target may be drawn as a chip
+ * (`mayNameChip`), to be drawn as its own element,
  * which reads what it names against the plan its page is of (`linkChip`):
  * the same rule for a developer's `@`
  * mention, an agent's link, a reference link, and a bare address. A target
- * is read here before the page's repository is known (`mayNameMention`),
+ * is read here before the page's repository is known,
  * so every page of GitHub's is marked, and every other link is drawn as
  * the library draws it. Note that the mark is made on the markdown, before
  * it is drawn, because the drawing's sanitizer keeps no address on a link
@@ -372,7 +371,7 @@ function markMentions(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
       : node.type === "linkReference" && node.identifier !== undefined
         ? definitions.get(node.identifier)?.url
         : undefined;
-  if (target !== undefined && (mayNameMention(target) || readLink(target) !== undefined)) {
+  if (target !== undefined && mayNameChip(target)) {
     node.data = {
       hName: MENTION_ELEMENT.TAG,
       hProperties: { [MENTION_ELEMENT.TARGET]: target },

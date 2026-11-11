@@ -23,6 +23,7 @@ import {
   linkTarget,
   MENTION_SIGIL,
   mentionMarkdownLink,
+  type ReadLink,
   readGitHubPage,
   readLabel,
   readLink,
@@ -880,7 +881,7 @@ export function mentionName(label: string): string {
   return isMentionLabel(label) ? label.slice(MENTION_SIGIL.length) : label;
 }
 
-/** The kinds an address of our own names, which a bare address of one is read as the mention of, pasted or handed: a plan, one of its sections, a page on it, a coding agent, and a person. */
+/** The kinds an address of our own names, which a bare address of one is handed to an agent as the mention of: a plan, one of its sections, a page on it, a coding agent, and a person. */
 const OWN_KINDS: ReadonlySet<Mention["kind"]> = new Set([
   MENTION_KIND.TASK,
   MENTION_KIND.SECTION,
@@ -941,26 +942,6 @@ function bareName(mention: Mention): string {
   }
 }
 
-/**
- * Words pasted whole that are one address of our own, a plan's, a
- * section's, a page's, an agent's, or a person's, or one page of an integration's or a well-known site's, as
- * the mention they become and the name its bare address says of it
- * (`bareName`), which a place holding the thing's own name may better;
- * nothing for any other words, a file of the plan's repository among them,
- * which `repository` names.
- */
-export function pastedLinkMention(
-  words: string,
-  repository: string | null,
-): { readonly mention: Mention; readonly name: string } | undefined {
-  const address = words.trim();
-  if (address === "" || /\s/u.test(address)) return undefined;
-  const mention = decodeMention(address, repository);
-  if (mention === undefined) return undefined;
-  if (mention.kind !== MENTION_KIND.LINK && !OWN_KINDS.has(mention.kind)) return undefined;
-  return { mention, name: bareName(mention) };
-}
-
 /** Whether a link's label is its target spelled out, as a bare address's is: the same address, however its characters are encoded. */
 function isBareLabel(label: string, target: string): boolean {
   if (label === "" || label === target) return true;
@@ -974,13 +955,14 @@ export function isBareLink(label: string, target: string): boolean {
 }
 
 /**
- * Whether a link's target may name a mention for some task, so a reader
+ * Whether a link's target may be drawn as a chip for some task, so a reader
  * who does not yet know the task's repository knows to read it again when
- * it does: one that names a mention with no repository, or any page of
- * GitHub's, which may be a file or a folder of the task's.
+ * it does (`linkChipOf`): one that names a mention with no repository, any
+ * page of GitHub's, which may be a file or a folder of the task's, or any
+ * place of ours.
  */
-export function mayNameMention(target: string): boolean {
-  if (decodeMention(target, null) !== undefined) return true;
+export function mayNameChip(target: string): boolean {
+  if (decodeMention(target, null) !== undefined || readLink(target) !== undefined) return true;
   return parsedUrl(target)?.origin === GITHUB_ORIGIN;
 }
 
@@ -1004,6 +986,54 @@ export function linkMention(
   const words = label.trim();
   if (isBareLabel(words, target)) return { mention, name: bareName(mention) };
   return { mention, name: mentionName(words) };
+}
+
+/** What a link in words is drawn as: the mention its target names, or the place of ours it opens where it names no mention. */
+export const LINK_CHIP = {
+  MENTION: "mention",
+  PLACE: "place",
+} as const;
+
+/** A link as its chip: its mention and name, or its place and the words it was labeled with, none where it was written bare. */
+export type LinkChip =
+  | {
+      readonly kind: typeof LINK_CHIP.MENTION;
+      readonly mention: Mention;
+      readonly name: string;
+    }
+  | {
+      readonly kind: typeof LINK_CHIP.PLACE;
+      readonly link: ReadLink;
+      readonly name: string | undefined;
+    };
+
+/**
+ * The one rule for which links are chips, which every surface that draws
+ * words (the panel's, the iOS app's) and every editor that lays a paste in
+ * reads, so a link drawn as a chip once sent is a chip while it is written:
+ * its mention where its target names one (`linkMention`), a GitHub page of
+ * a file or a folder read as of the page's own repository where the words
+ * name none, else the place of ours it opens (`readLink`), an Inbox thread
+ * or an automation among them; nothing for a link that stays a link.
+ */
+export function linkChipOf(
+  label: string,
+  target: string,
+  repository: string | null,
+): LinkChip | undefined {
+  const found = linkMention(label, target, repository ?? pageRepositoryOf(target) ?? null);
+  if (found !== undefined) return { kind: LINK_CHIP.MENTION, ...found };
+  const link = readLink(target);
+  if (link === undefined) return undefined;
+  const name = isBareLabel(label.trim(), target) ? undefined : mentionName(label.trim());
+  return { kind: LINK_CHIP.PLACE, link, name };
+}
+
+/** Words pasted whole that are one link drawn as a chip (`linkChipOf`), as that chip; nothing for any other words. */
+export function pastedLinkChip(words: string, repository: string | null): LinkChip | undefined {
+  const address = words.trim();
+  if (address === "" || /\s/u.test(address)) return undefined;
+  return linkChipOf(address, address, repository);
 }
 
 /** The mention written into markdown as a link: `[@label](target)`, its label's brackets and backslashes escaped. */

@@ -340,7 +340,7 @@ export type MentionDrawer = (
 interface ComposerMentions {
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
   readonly drawMention: MentionDrawer;
-  /** The mention words pasted whole stand for, an address of our own or a page of an integration's; nothing for any other words, which paste as words. */
+  /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
 }
 
@@ -377,10 +377,10 @@ export interface DescriptionEditorMentions {
   readonly onKey: (event: KeyboardEvent) => boolean;
   readonly drawMention: MentionDrawer;
   readonly retarget: (target: string, change: HeadingsChange) => MentionNode | undefined;
-  /** The mention words pasted whole stand for, an address of our own or a page of an integration's; nothing for any other words, which paste as words. */
+  /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
-  /** Whether a link's target names a mention, which the read view draws as its chip, so the editor draws the link in a chip's light look. */
-  readonly namesMention: (target: string) => boolean;
+  /** Whether a link's target is one the read view draws as a chip, so the editor draws the link in a chip's light look. */
+  readonly namesChip: (target: string) => boolean;
 }
 
 /** Words of the editor a thread is started on: where they stand in `text`, the Markdown the editor would hand over now, and the words themselves. */

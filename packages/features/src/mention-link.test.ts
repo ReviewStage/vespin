@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { INTEGRATION_PROVIDER } from "./integration-wire.js";
+import { LINK_DESTINATION } from "./link-grammar.js";
 import { LINK_SITE } from "./link-site.js";
 import {
   askedInWords,
@@ -9,20 +10,21 @@ import {
   handedMentionsIn,
   isMentionableTool,
   isMentionLabel,
+  LINK_CHIP,
   linkLabels,
   linkMention,
   linksIn,
   MENTION_KIND,
   type Mention,
   type MentionPlace,
-  mayNameMention,
+  mayNameChip,
   memberMentionOf,
   mentionLinksIn,
   mentionMarkdown,
   mentionName,
   mentionsIn,
   pageRepositoryOf,
-  pastedLinkMention,
+  pastedLinkChip,
   placeholderLinksIn,
   sectionAnchors,
   withoutMemberLinks,
@@ -349,15 +351,16 @@ test("a label that spells another address than its target is the author's words,
   assert.equal(linkMention(issue, issue, REPOSITORY)?.name, "ACME-142/fix-the-thing");
 });
 
-test("a target may name a mention when it names one with no repository, or is any page of GitHub's, however long", () => {
+test("a target may name a chip when it names a mention with no repository, is any page of GitHub's, however long, or is any place of ours", () => {
   const long = `https://github.com/${REPOSITORY}/blob/HEAD/${"%C3%A9".repeat(400)}.ts`;
 
   assert.ok(long.length > 2_000);
-  assert.equal(mayNameMention(long), true);
+  assert.equal(mayNameChip(long), true);
   assert.equal(decodeMention(long, REPOSITORY)?.kind, MENTION_KIND.FILE);
-  assert.equal(mayNameMention(encodeMention(ROLLOUT, PLACE)), true);
-  assert.equal(mayNameMention("https://linear.app/acme/issue/ACME-142"), true);
-  assert.equal(mayNameMention("https://example.com/docs"), false);
+  assert.equal(mayNameChip(encodeMention(ROLLOUT, PLACE)), true);
+  assert.equal(mayNameChip("https://linear.app/acme/issue/ACME-142"), true);
+  assert.equal(mayNameChip("https://vespin.dev/acme/automation/auto-1"), true);
+  assert.equal(mayNameChip("https://example.com/docs"), false);
 });
 
 test("a step back at a path's root is taken by the address itself, and stays inside the repository", () => {
@@ -660,10 +663,7 @@ test("a Google Maps page reads as the site's link and is named by the place its 
     url,
   });
   assert.equal(linkMention(url, url, REPOSITORY)?.name, "Ferry Building");
-  assert.equal(
-    pastedLinkMention("https://maps.app.goo.gl/Ab12Cd34", REPOSITORY)?.name,
-    "Google Maps",
-  );
+  assert.equal(pastedLinkChip("https://maps.app.goo.gl/Ab12Cd34", REPOSITORY)?.name, "Google Maps");
   assert.equal(linkMention("the pier", url, REPOSITORY)?.name, "the pier");
 });
 
@@ -679,7 +679,7 @@ test("a page's address stays one markdown link's however many parentheses it kee
 });
 
 test("words pasted whole that are one integration's page become its mention, named by the last steps of its address", () => {
-  const named = (words: string) => pastedLinkMention(words, REPOSITORY)?.name;
+  const named = (words: string) => pastedLinkChip(words, REPOSITORY)?.name;
 
   assert.equal(
     named(" https://linear.app/acme/issue/ACME-142/fix-the-thing\n"),
@@ -705,8 +705,8 @@ test("a page's address keeps no user, password, or query parameter that may carr
 });
 
 test("a page's name stays one line whatever its address encodes, so its link is still read as a mention", () => {
-  const pasted = pastedLinkMention("https://linear.app/acme/issue/Fix%0ANow", REPOSITORY);
-  assert.ok(pasted !== undefined);
+  const pasted = pastedLinkChip("https://linear.app/acme/issue/Fix%0ANow", REPOSITORY);
+  assert.ok(pasted?.kind === LINK_CHIP.MENTION);
 
   assert.equal(pasted.name, "acme/issue/Fix Now");
   assert.deepEqual(
@@ -886,7 +886,11 @@ test("a person is mentioned by their page's Vespin link under the workspace, rea
   assert.deepEqual(decodeMention("vespin://vespin.dev/acme/person/user_Ab-9", null), person);
   assert.deepEqual(decodeMention(`${page}/`, null), person);
   assert.deepEqual(linkMention("@Dana Reyes", page, null), { mention: person, name: "Dana Reyes" });
-  assert.deepEqual(pastedLinkMention(page, REPOSITORY), { mention: person, name: "Person" });
+  assert.deepEqual(pastedLinkChip(page, REPOSITORY), {
+    kind: LINK_CHIP.MENTION,
+    mention: person,
+    name: "Person",
+  });
   assert.deepEqual(
     handedMentionsIn(`Ask ${page} or [@Dana](${page}).`, REPOSITORY).map(({ mention }) => mention),
     [person, person],
@@ -908,28 +912,43 @@ test("an old Vespin issue page's link names nothing now that Vespin keeps no iss
   assert.equal(decodeMention(page, null), undefined);
   assert.equal(decodeMention(page.replace("https:", "vespin:"), null), undefined);
   assert.equal(linkMention("@ACME-7 Token refresh fails", page, null), undefined);
-  assert.equal(pastedLinkMention(page, REPOSITORY), undefined);
+  assert.equal(pastedLinkChip(page, REPOSITORY), undefined);
   assert.deepEqual(handedMentionsIn(`See ${page} or [@ACME-7](${page}).`, REPOSITORY), []);
 });
 
-test("words pasted whole that are an address of Vespin's own become its mention, named by what the address says, while a file of the plan pastes as words", () => {
-  const pasted = (words: string) => pastedLinkMention(words, REPOSITORY);
+test("words pasted whole become the chip their link is drawn as once sent: an address of Vespin's own, a file of the plan, and a place no mention names, an Inbox thread", () => {
+  const pasted = (words: string) => pastedLinkChip(words, REPOSITORY);
+  const mentioned = (mention: Mention, name: string) => ({
+    kind: LINK_CHIP.MENTION,
+    mention,
+    name,
+  });
   const page: Mention = { kind: MENTION_KIND.PAGE, taskId: TASK_ID, pageId: "page-1" };
   const agent: Mention = { kind: MENTION_KIND.AGENT, agentId: "agent-2" };
+  const file: Mention = { kind: MENTION_KIND.FILE, path: "src/app.ts" };
+  const thread = "https://vespin.dev/acme/inbox/e4519584-9b91-4c47-8ba4-e7b0e636f625";
 
-  assert.deepEqual(pasted(` ${encodeMention(ROLLOUT, PLACE)}\n`), {
-    mention: ROLLOUT,
-    name: "rollout",
+  assert.deepEqual(pasted(` ${encodeMention(ROLLOUT, PLACE)}\n`), mentioned(ROLLOUT, "rollout"));
+  assert.deepEqual(
+    pasted(encodeMention(TASK, PLACE).replace("https:", "vespin:")),
+    mentioned(TASK, "Description"),
+  );
+  assert.deepEqual(pasted(encodeMention(page, PLACE)), mentioned(page, "Page"));
+  assert.deepEqual(pasted(encodeMention(agent, PLACE)), mentioned(agent, "Agent"));
+  assert.deepEqual(
+    pasted(`https://github.com/${REPOSITORY}/blob/HEAD/src/app.ts`),
+    mentioned(file, "app.ts"),
+  );
+  assert.deepEqual(pasted(thread), {
+    kind: LINK_CHIP.PLACE,
+    link: {
+      workspace: "acme",
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: "e4519584-9b91-4c47-8ba4-e7b0e636f625" },
+    },
+    name: undefined,
   });
-  assert.deepEqual(pasted(encodeMention(TASK, PLACE).replace("https:", "vespin:")), {
-    mention: TASK,
-    name: "Description",
-  });
-  assert.deepEqual(pasted(encodeMention(page, PLACE)), { mention: page, name: "Page" });
-  assert.deepEqual(pasted(encodeMention(agent, PLACE)), { mention: agent, name: "Agent" });
-  assert.equal(pasted(`https://github.com/${REPOSITORY}/blob/HEAD/src/app.ts`), undefined);
-  assert.equal(pasted("luke://mcp/linear"), undefined);
   assert.equal(pasted(`see ${encodeMention(ROLLOUT, PLACE)}`), undefined);
+  assert.equal(pasted("https://example.com/docs"), undefined);
 });
 
 test("an agent is handed each @ mention and each bare address of Vespin's own, in order, a bare address ending where GFM ends it", () => {
@@ -1079,12 +1098,12 @@ test("a date that is no day, a range out of order or of two kinds, or a step pas
   }
 });
 
-test("a date written bare is named by its date in full, and is no address a paste makes a chip of", () => {
+test("a date written bare or pasted is named by its date in full", () => {
   assert.deepEqual(linkMention("luke://date/2026-10-20", "luke://date/2026-10-20", REPOSITORY), {
     mention: { kind: MENTION_KIND.DATE, start: "2026-10-20" },
     name: "Oct 20, 2026",
   });
-  assert.equal(pastedLinkMention("luke://date/2026-10-20", REPOSITORY), undefined);
+  assert.equal(pastedLinkChip("luke://date/2026-10-20", REPOSITORY)?.name, "Oct 20, 2026");
 });
 
 test("words that are one member's mention link, written whole or as its address, name that member, and a task, a Vespin, a handle, or more words name none", () => {

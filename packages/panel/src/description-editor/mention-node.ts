@@ -171,8 +171,8 @@ export function mentionTokens(text: string): readonly MentionToken[] {
 }
 
 /**
- * A paste whose words the panel reads as one mention, a page of an
- * integration's address, laid in as that mention's node where the caret
+ * A paste whose words the panel reads as one link it draws as a chip
+ * (`@repo/features/mention-link`'s `linkChipOf`), laid in as that chip's node where the caret
  * stands, outside code, spaced as every chip is (`chipOverSelection`);
  * answers whether it was, so any other paste goes on as words.
  */

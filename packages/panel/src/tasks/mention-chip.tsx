@@ -36,6 +36,8 @@ import {
   decodeMention,
   encodeMention,
   isBareLink,
+  LINK_CHIP,
+  linkChipOf,
   linkMention,
   MENTION_KIND,
   type Mention,
@@ -44,7 +46,7 @@ import {
   mentionName,
   type NumberedTaskIdOf,
   pageRepositoryOf,
-  pastedLinkMention,
+  pastedLinkChip,
   sectionAnchors,
 } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
@@ -941,10 +943,10 @@ function pageDoors(doors: MentionDoors, href: string): MentionDoors {
 }
 
 /**
- * A link in words as its chip, through the doors given: a mention's where
- * its target names one (`linkMention`), a place's in the app where it is an
- * app link no mention names (`readLink`); nothing where it is neither, and
- * it stays a link. `at` is where the link is written in the words drawn,
+ * A link in words as its chip, through the doors given, by the one rule
+ * every surface reads (`linkChipOf`): a mention's where its target names
+ * one, a place's in the app where it is an app link no mention names;
+ * nothing where it is neither, and it stays a link. `at` is where the link is written in the words drawn,
  * which a date's chip names to its picker in words that take a change.
  */
 export function linkChip(
@@ -998,34 +1000,33 @@ function chipOfLink(
 ): React.JSX.Element | undefined {
   const bare = isBareLink(label, href);
   const placed = pageDoors(doors, href);
-  const found = linkMention(label, href, placed.place.repository);
-  if (found?.mention.kind === MENTION_KIND.DATE) {
-    return <WrittenDateChip date={found.mention} at={at} place={doors.place} />;
-  }
-  if (found !== undefined) {
+  const chip = linkChipOf(label, href, placed.place.repository);
+  if (chip === undefined) return undefined;
+  if (chip.kind === LINK_CHIP.MENTION) {
+    if (chip.mention.kind === MENTION_KIND.DATE) {
+      return <WrittenDateChip date={chip.mention} at={at} place={doors.place} />;
+    }
     return (
       <MentionChip
-        mention={found.mention}
+        mention={chip.mention}
         target={href}
-        name={found.name}
+        name={chip.name}
         doors={placed}
         bare={bare}
       />
     );
   }
-  const read = readLink(href);
-  if (read === undefined) return undefined;
+  const read = chip.link;
   if (taskNumberOf(read.place) !== undefined) {
     return <NumberedLinkChip href={href} read={read} label={label} doors={placed} />;
   }
-  const written = bare ? undefined : mentionName(label.trim());
   if (read.place.kind === LINK_DESTINATION.INBOX_ITEM) {
     return (
       <InboxItemChip
         href={href}
         place={read.place}
         workspace={read.workspace}
-        label={written}
+        label={chip.name}
         doors={placed}
       />
     );
@@ -1041,7 +1042,7 @@ function chipOfLink(
           href={href}
           place={read.place}
           workspace={read.workspace}
-          label={written}
+          label={chip.name}
           doors={placed}
         />
       </LinkAutomations>
@@ -1052,7 +1053,7 @@ function chipOfLink(
       href={href}
       place={read.place}
       workspace={read.workspace}
-      label={written}
+      label={chip.name}
       doors={placed}
     />
   );
@@ -1175,31 +1176,46 @@ function byTaskId(words: string, taskIdOf: NumberedTaskIdOf): string {
 }
 
 /**
- * The mention node words pasted whole stand for: an address of our own,
- * a plan's, a section's, a page's, or an agent's, by the scheme of the web
- * or the app's own, a task's by its id or by its number where the window
- * lists the task (`byTaskId`), named as its bare link's chip is
- * (`pastedName`); or a page of an integration's, named by its address's
- * readable form; nothing for any other words, a file of the plan's
- * repository among them, or a person's page in another workspace than the
- * place's.
+ * The target a pasted address's mention is laid in with: the mention's own,
+ * written under the place (`encodeMention`), so either scheme and an old
+ * form read the same; but the address as pasted where that would name
+ * another thing, a person's page of another workspace than the place's, or
+ * a file or a folder where the place knows no repository to write it of.
+ */
+function pastedTarget(mention: Mention, address: string, place: MentionPlace): string {
+  if (mention.kind === MENTION_KIND.PERSON) {
+    return readLink(address)?.workspace === place.workspace
+      ? encodeMention(mention, place)
+      : address;
+  }
+  const paged = mention.kind === MENTION_KIND.FILE || mention.kind === MENTION_KIND.FOLDER;
+  return paged && place.repository === null ? address : encodeMention(mention, place);
+}
+
+/**
+ * The mention node words pasted whole stand for: whatever link the words
+ * would be drawn as a chip once sent (`pastedLinkChip`, the rule every
+ * surface reads), a task's by its id or by its number where the window
+ * lists the task (`byTaskId`). A mention is named as its bare link's chip
+ * is (`pastedName`), and a place of ours no mention names, an Inbox thread
+ * or an automation, by the name the window holds for it, else its kind
+ * (`placeChipLook`); nothing for words that are no such link.
  */
 export function pastedMentionNode(
   words: string,
   place: MentionPlace,
   names: PastedNames,
 ): MentionNode | undefined {
-  const link = pastedLinkMention(byTaskId(words, names.taskIdOf), place.repository);
-  // A person's page is of the workspace its link names, so one of another workspace stays the link it is.
-  const elsewhere =
-    link?.mention.kind === MENTION_KIND.PERSON &&
-    readLink(words.trim())?.workspace !== place.workspace;
-  return link === undefined || elsewhere
-    ? undefined
-    : {
-        name: pastedName(link.mention, link.name, names, place.repository),
-        target: encodeMention(link.mention, place),
-      };
+  const address = byTaskId(words, names.taskIdOf).trim();
+  const chip = pastedLinkChip(address, place.repository);
+  if (chip === undefined) return undefined;
+  if (chip.kind === LINK_CHIP.PLACE) {
+    return { name: placeChipLook(chip.link.place, undefined, names.known).name, target: address };
+  }
+  return {
+    name: pastedName(chip.mention, chip.name, names, place.repository),
+    target: pastedTarget(chip.mention, address, place),
+  };
 }
 
 /** What an editor hands a chip it holds: the doors to its node, and what opens the date picker over its words. */
