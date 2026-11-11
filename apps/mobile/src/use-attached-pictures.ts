@@ -19,7 +19,7 @@ import { pictureName } from "@repo/features/file-marker";
 import type { AttachedPicture } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
 import { launchImageLibraryAsync } from "expo-image-picker";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 /** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
 const PICTURE_QUALITY = 0.7;
@@ -79,7 +79,10 @@ export interface AttachedPictures {
  */
 export function useAttachedPictures(onNote: (note: string | undefined) => void): AttachedPictures {
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
-  // Note that the system's photo picker reads only what the member picks, so no permission is asked for first, and that it covers the screen, so the pictures held as it opened are those it adds to.
+  // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
+  const held = useRef(pictures);
+  held.current = pictures;
+  // Note that the system's photo picker reads only what the member picks, so no permission is asked for first.
   const attach = () => {
     launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -90,8 +93,9 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
     })
       .then((picked) => {
         if (picked.canceled) return;
+        const now = held.current;
         const read = picked.assets.map((asset, index): HeldPicture | string => {
-          const name = nextName(pictures, index);
+          const name = nextName(now, index);
           if (asset.base64 === null || asset.base64 === undefined) {
             return PICTURE_REFUSAL.UNREADABLE(name);
           }
@@ -102,7 +106,7 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
         });
         const unread = read.find((each): each is string => typeof each === "string");
         const next = [
-          ...pictures,
+          ...now,
           ...read.filter((each): each is HeldPicture => typeof each !== "string"),
         ];
         setPictures(next);

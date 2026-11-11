@@ -80,7 +80,7 @@ export function AttachRow({ pictures, onAdd, onDetach, testId }: AttachRowProps)
         onPress={onAdd}
         modifiers={[
           buttonStyle("plain"),
-          accessibilityLabel("Add"),
+          accessibilityLabel("Add picture"),
           ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ]}
       >
