@@ -131,8 +131,8 @@ onFlowComplete:
 # A long press on an agent lifts its preview: its tile and name, where it
 # stands with its model and where it runs, its latest step where the app
 # holds its transcript, and its pull request, over Open and Stop, which a
-# swipe from its trailing edge reveals too while it works. A tap off the
-# preview closes it.
+# swipe from its trailing edge reveals too while it works; once it rests the
+# swipe offers Archive, which asks first. A tap off the preview closes it.
 - longPressOn: "Build teammate invitations"
 - assertVisible: "Open"
 - waitForAnimationToEnd
