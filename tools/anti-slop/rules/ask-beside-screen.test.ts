@@ -33,6 +33,8 @@ tester.run("ask-beside-screen", askBesideScreenRule, {
     mobile(
       "function A() { return <Screen>{page.body}<Rows task={task} onAsk={() => openAsk(sheet)} /></Screen>; }",
     ),
+    // A scalar of an ask, such as whether one stands open, draws no ask.
+    mobile("function A() { return <Screen><Rows disabled={Boolean(remind.sheet)} /></Screen>; }"),
   ],
   invalid: [
     {

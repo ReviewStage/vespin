@@ -55,8 +55,11 @@ appId: dev.vespin.ios
     commands:
       - tapOn: "More"
 - tapOn: "Squash and merge"
-- extendedWaitUntil:
-    visible: "Merged"
+# Note that the state stands in the page's head, which a scroll to the press
+# may have taken out of sight, so the wait for it scrolls back up.
+- scrollUntilVisible:
+    element: "Merged"
+    direction: UP
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-merged
@@ -144,6 +147,9 @@ appId: dev.vespin.ios
 - tapOn:
     text: "Remove from queue"
     below: "Remove from the merge queue?"
+- scrollUntilVisible:
+    element: "Send the invite email from the workspace.*"
+    direction: UP
 - extendedWaitUntil:
     notVisible: "Queued #2"
     timeout: 30000
@@ -164,6 +170,9 @@ appId: dev.vespin.ios
 - assertVisible: "Merge when ready"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-dequeued
+- scrollUntilVisible:
+    element: "Send the invite email from the workspace.*"
+    direction: UP
 # Its diff and comments open on GitHub, from the bar's menu, the last "More"
 # on screen where an iPad's overflow stands open with the menu inside it.
 - tapOn:
