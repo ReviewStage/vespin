@@ -6,7 +6,7 @@ import { agentTable } from "./agent.js";
 import { user } from "./auth.js";
 
 /**
- * account-allowed-command.ts -- the shell commands a member always allows their coding agents to run unasked, each by its first words, in every repository and on either harness.
+ * account-allowed-command.ts -- the shell commands a member always allows their coding agents to run unasked, each by its first words, in every repository.
  *
  * A row is one command prefix (`COMMAND_PREFIX`), its tokens in order
  * (`["pnpm","test"]`, shown as `pnpm test *`), kept once per member. It is

@@ -9,8 +9,10 @@ import { countedNumber, wireUuidSchema } from "./service-wire.js";
  * where the harness proposed the command's prefix (`CommandPrefixSchema`,
  * `["pnpm","test"]`, shown as `pnpm test *`): the prefix is kept on the
  * member's list, which names the agent it came from, and every later launch
- * of the member's agents, in any repository and on either harness, is
- * handed the list, so a command it covers asks no more. Everything else an
+ * of the member's agents, in any repository, is handed the list, so a
+ * command it covers asks no more. Only Claude Code proposes a prefix and
+ * applies the list for now; a Codex agent's Always allow lasts for its
+ * session alone. Everything else an
  * Always allow covers, a file edit, a web fetch, an MCP tool, or a command
  * with no proposed prefix, stays the agent's session's alone. The list
  * matters only in a mode that asks; full access asks nothing.

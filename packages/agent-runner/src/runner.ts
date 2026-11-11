@@ -55,6 +55,7 @@ import type {
   SDKUserMessage,
   SessionStore,
 } from "@anthropic-ai/claude-agent-sdk";
+import { CommandPrefixSchema } from "@repo/wire";
 import {
   Cause,
   Deferred,
@@ -73,6 +74,7 @@ import {
 } from "effect";
 import {
   type Approvals,
+  BASH_TOOL,
   canUseToolOf,
   denyForMessage,
   denyWaiting,
@@ -262,18 +264,32 @@ type Permissions = Pick<
   "permissionMode" | "allowDangerouslySkipPermissions" | "allowedTools" | "canUseTool"
 >;
 
+const readPrefix = Schema.decodeUnknownOption(CommandPrefixSchema);
+
+/** Each always-allowed command as the CLI's Bash rule for it; one that is no plain prefix, which could widen the rule, is passed over. */
+function allowedCommandRules(allowedCommands: readonly (readonly string[])[]): string[] {
+  return allowedCommands.flatMap((prefix) =>
+    Option.isSome(readPrefix(prefix)) ? [`${BASH_TOOL}(${prefix.join(" ")} *)`] : [],
+  );
+}
+
 /**
  * How the CLI answers its tool calls in the launch's mode. Under full access
  * every call runs, as every launch ran before modes, and no callback is
  * handed, since `bypassPermissions` would never call it. A mode that asks
  * runs the reads and every MCP server the launch hands the CLI unasked
- * (`CLAUDE_CODE_UNASKED_TOOLS`), and asks the member the rest through
- * `canUseTool`, which `auto` calls only where its classifier cannot decide.
+ * (`CLAUDE_CODE_UNASKED_TOOLS`), and every command its starter always
+ * allows, as a Bash rule for this launch alone (`Bash(pnpm test *)`, which
+ * matches the bare command too), so the CLI's own reading of a compound
+ * command decides each part and nothing is written to a settings file; it
+ * asks the member the rest through `canUseTool`, which `auto` calls only
+ * where its classifier cannot decide.
  */
 function permissionsOf(
   mode: PermissionMode,
   servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
   approvals: Approvals,
+  allowedCommands: readonly (readonly string[])[],
 ): Permissions {
   if (mode === PERMISSION_MODE.FULL_ACCESS) {
     return {
@@ -288,6 +304,7 @@ function permissionsOf(
       ...CLAUDE_CODE_TOOLS.ADDED,
       ...CLAUDE_CODE_UNASKED_TOOLS,
       ...Object.keys(servers).map((server) => `mcp__${server}`),
+      ...allowedCommandRules(allowedCommands),
     ],
     canUseTool: canUseToolOf(approvals),
   };
@@ -320,7 +337,7 @@ function queryOptions(
     model: config.model,
     systemPrompt: { type: "preset", preset: "claude_code", append: config.append },
     settingSources: ["project"],
-    ...permissionsOf(mode, servers, approvals),
+    ...permissionsOf(mode, servers, approvals, config.allowedCommands ?? []),
     includePartialMessages: true,
     disallowedTools: [...CLAUDE_CODE_TOOLS.DENIED],
     agents: { [CLAUDE_CODE_WORKER]: workerOf(config) },

@@ -11,6 +11,12 @@
  * the launch's end. Whichever comes first takes the ask out of the waiting,
  * posts APPROVAL_RESOLVED, and answers the call in its harness's terms; the
  * rest find it gone, so each ask is answered and resolved exactly once.
+ *
+ * A Bash ask carries the command's first words where the CLI suggested one
+ * rule for every command starting with them (`suggestedPrefix`), which the
+ * member's Always allow keeps on their list past the launch; its answer
+ * still keeps the CLI's own rules in the session, so the agent stops asking
+ * at once.
  */
 
 import type {
@@ -18,7 +24,8 @@ import type {
   PermissionResult,
   PermissionUpdate,
 } from "@anthropic-ai/claude-agent-sdk";
-import { Deferred, Effect, Predicate, Ref, Stream } from "effect";
+import { type CommandPrefix, CommandPrefixSchema } from "@repo/wire";
+import { Deferred, Effect, Option, Predicate, Ref, Schema, Stream } from "effect";
 import type { EventSink } from "./events.js";
 import {
   APPROVAL_BY,
@@ -30,6 +37,11 @@ import {
   RUNNER_EVENT,
   type RunnerApprovalRequested,
 } from "./protocol.js";
+
+/** The CLI's shell tool, the one whose rules name a command's first words. */
+export const BASH_TOOL = "Bash";
+
+const readPrefix = Schema.decodeUnknownOption(CommandPrefixSchema);
 
 /** What the agent is told of a call denied with no words of the member's. */
 const DENIED = "The member denied this.";
@@ -67,12 +79,40 @@ function cut(value: unknown): unknown {
   return Predicate.isObject(value) ? cutInput(value) : value;
 }
 
+/** The trailing wildcards a Bash rule names a command prefix with, the space-separated form first: `Bash(pnpm test *)` and `Bash(pnpm test:*)` alike. */
+const PREFIX_WILDCARDS = [" *", ":*"] as const;
+
+/**
+ * The command's first words the CLI suggested a rule for, where its
+ * suggestions add exactly one allow rule, a Bash rule ending in a wildcard
+ * whose words are a plain prefix; none for an exact command, a compound
+ * command's several rules, or any other tool, so a kept prefix never
+ * widens what the CLI proposed.
+ */
+function suggestedPrefix(
+  toolName: string,
+  suggestions: readonly PermissionUpdate[],
+): CommandPrefix | undefined {
+  if (toolName !== BASH_TOOL) return undefined;
+  const rules = suggestions.flatMap((update) =>
+    update.type === "addRules" && update.behavior === "allow" ? update.rules : [],
+  );
+  const [rule, ...others] = rules;
+  if (rule === undefined || others.length > 0 || rule.toolName !== BASH_TOOL) return undefined;
+  const content = rule.ruleContent ?? "";
+  const wildcard = PREFIX_WILDCARDS.find((each) => content.endsWith(each));
+  if (wildcard === undefined) return undefined;
+  const words = content.slice(0, -wildcard.length).trim().split(/ +/u);
+  return Option.getOrUndefined(readPrefix(words));
+}
+
 /** The ask as the service is told of it. */
 function requested(
   toolName: string,
   input: Record<string, unknown>,
   options: AskOptions,
 ): RunnerApprovalRequested {
+  const prefix = suggestedPrefix(toolName, options.suggestions ?? []);
   return {
     type: RUNNER_EVENT.APPROVAL_REQUESTED,
     requestId: options.requestId,
@@ -82,6 +122,7 @@ function requested(
     title: options.title ?? toolName,
     ...(options.description === undefined ? undefined : { description: options.description }),
     input: cutInput(input),
+    ...(prefix === undefined ? undefined : { commandPrefix: prefix }),
   };
 }
 

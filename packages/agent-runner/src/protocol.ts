@@ -178,9 +178,9 @@ export const CLAUDE_CODE_UNASKED_TOOLS = [
  * first words (`@repo/wire`'s `CommandPrefixSchema`, `["pnpm","test"]`):
  * the commands the agent's starter always allows, as their list stood as
  * the service wrote the config. Claude Code takes each as its allow rule
- * for the launch alone; Codex, which takes no rule but its own files, has
- * the runner accept an ask whose command is one plain command starting
- * with one, never written to a rules file. Read as the service wrote them,
+ * for the launch alone. A Codex launch is handed none for now: Codex takes
+ * rules only from its own files, which the runner never writes, so its
+ * Always allow lasts for the session alone. Read as the service wrote them,
  * which checked each, and ignored by a runner from before them.
  */
 const AllowedCommandsSchema = Schema.Array(Schema.Array(Schema.String));
@@ -253,7 +253,7 @@ export const INPUT_LINE = {
  * CLI suggested it, kept in the session alone so nothing is written to the
  * checkout (`ALLOW_FOR_AGENT`); or deny it. Where the ask carried a
  * `commandPrefix`, the service also keeps it on the answering member's
- * list, which their later launches are handed (`allowedCommands`).
+ * list, which their later Claude Code launches are handed (`allowedCommands`).
  */
 export const APPROVAL_DECISION = {
   ALLOW: "allow",
@@ -648,8 +648,6 @@ export const CodexConfigSchema = Schema.Struct({
   warmForMs: Schema.optionalKey(Schema.Number),
   /** How the launch answers its agent's tool calls (`PERMISSION_MODE`), as the Codex app means each; full access where absent, as in a config written before modes. */
   permissionMode: Schema.optionalKey(PermissionModeSchema),
-  /** The commands the launch runs unasked in a mode that asks (`AllowedCommandsSchema`); none where absent, as with full access. */
-  allowedCommands: Schema.optionalKey(AllowedCommandsSchema),
 });
 export type CodexConfig = typeof CodexConfigSchema.Type;
 
@@ -992,8 +990,8 @@ export interface RunnerEndEvent {
  * `input` the call's input, cut as `APPROVAL_INPUT` says; `commandPrefix`
  * the command's first words where the harness proposed a rule for every
  * command starting with them (Claude Code's Bash suggestion ending in a
- * wildcard, Codex's exec-policy amendment), which the member's Always
- * allow keeps past the session, and absent where it proposed none. The
+ * wildcard), which the member's Always allow keeps past the session, and
+ * absent where it proposed none, as on every Codex ask for now. The
  * service keeps a prefix only where it is one `@repo/wire`'s
  * `CommandPrefixSchema` takes, so a runner's is read loosely here, and one
  * it does not take leaves the ask as it is.

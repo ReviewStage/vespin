@@ -12,7 +12,7 @@
  * starter's Default permissions, where its harness takes that mode
  * (`startingPermissionMode`).
  *
- * A launch in a mode that asks is also handed the commands its starter
+ * A Claude Code launch in a mode that asks is also handed the commands its starter
  * always allows (`launchAllowedCommands`), read as it launches, so a
  * command added or removed since reaches the agent from its next launch.
  */
