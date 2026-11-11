@@ -30,15 +30,14 @@ import {
   ConfirmDialog,
   GAP,
   GlyphSlot,
-  INLINE_EDIT_LOOK,
   INLINE_REF_LOOK,
   Inline,
-  InlineEdit,
   InlineRef,
   OneLine,
   PlayIcon,
   PlusIcon,
   POPOVER_ALIGN,
+  RenamableName,
   RepositoryPicture,
   SETTINGS_ORDER_HANDLE,
   SETTINGS_ROW_CONTROLS,
@@ -799,7 +798,7 @@ function useRunActionOrder(
 
 /**
  * One run action's row, as compact as a subscription's: its icon in the
- * row's mark column, its label, renamed in place, a Default badge on the
+ * row's mark column, its name, renamed by pressing it (`RenamableName`), a Default badge on the
  * repository's default, and its command's first lines under the label in
  * its colors (`CodePreview`). Its
  * chevron folds the whole command open under the row, on the label's edge,
@@ -807,7 +806,7 @@ function useRunActionOrder(
  * edited, Discard and Save standing at the row's end once it differs from
  * what is saved, ⌘S or ⌘↩ in it pressing Save and Escape Discard. An icon
  * picked from the well is saved as soon as it is picked, as a section's is,
- * and a rename from the ⋯ as it ends, as a subscription's name is. The ⋯
+ * and a rename as it ends, pressing the name or Rename in the ⋯ opening it. The ⋯
  * also moves it up or down, which a keyboard reaches where the grip's drag
  * does not, makes it the default or lets the default go, and removes it, a
  * removal asking first. An action just added stands open, its label being
@@ -1002,14 +1001,14 @@ function RunActionRow({
           ),
           label: (
             <ReplayMask>
-              <InlineEdit
+              <RenamableName
                 value={label}
-                label="Label"
+                label="Run action name"
                 editing={renaming}
-                look={INLINE_EDIT_LOOK.INPUT}
+                onBegin={manages && !busy ? () => setRenaming(true) : undefined}
+                onEnd={({ value }) => endRename(value)}
                 placeholder="Dev server"
                 maxLength={WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS}
-                onEnd={({ value }) => endRename(value)}
               >
                 {label === "" ? (
                   <Text
@@ -1022,7 +1021,7 @@ function RunActionRow({
                 ) : (
                   <OneLine>{label}</OneLine>
                 )}
-              </InlineEdit>
+              </RenamableName>
             </ReplayMask>
           ),
           adornment: isDefault ? <Badge>Default</Badge> : undefined,

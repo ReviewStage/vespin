@@ -4,6 +4,7 @@ import {
   INLINE_EDIT_LOOK,
   InlineEdit,
   type InlineEditLook,
+  RenamableName,
 } from "@repo/ui";
 import { useState } from "react";
 import type { Example } from "../example";
@@ -49,6 +50,24 @@ function Renamed({ start, look }: { start: string; look: InlineEditLook }): Reac
   );
 }
 
+/** A name renamed by pressing it, as a run action's or a workspace's is: a press opens the field in its place, Return keeps what was typed. */
+function PressedName({ start }: { start: string }): React.JSX.Element {
+  const [name, setName] = useState(start);
+  const [editing, setEditing] = useState(false);
+  return (
+    <RenamableName
+      value={name}
+      label="Name"
+      editing={editing}
+      onBegin={() => setEditing(true)}
+      onEnd={({ value }) => {
+        setEditing(false);
+        if (value !== undefined) setName(value);
+      }}
+    />
+  );
+}
+
 function InlineEdits(): React.JSX.Element {
   return (
     <>
@@ -64,6 +83,9 @@ function InlineEdits(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="inline-edit-well" title="In a well">
         <Renamed start="Review the launch plan" look={INLINE_EDIT_LOOK.WELL} />
+      </CatalogSection>
+      <CatalogSection id="renamable-name" title="Renamed by pressing the name">
+        <PressedName start="Dev server" />
       </CatalogSection>
       <CatalogSection id="inline-edit-narrow" title="Narrow column, long name">
         <div className="catalog-narrow">

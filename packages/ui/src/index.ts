@@ -82,6 +82,7 @@ export * from "./components/group-header/group-header.js";
 export * from "./components/hold-press/hold-press.js";
 export * from "./components/hover-card/hover-card.js";
 export * from "./components/inline-edit/inline-edit.js";
+export * from "./components/inline-edit/renamable-name.js";
 export * from "./components/inline-ref/inline-ref.js";
 export * from "./components/inline-ref/inline-ref-fit.js";
 export * from "./components/keep-focus/keep-focus.js";
