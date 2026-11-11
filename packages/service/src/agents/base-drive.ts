@@ -92,41 +92,44 @@ export const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.
 const INSTALLED = `find ${REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT} -mindepth 1 -maxdepth 1 ! -name .git`;
 
 /**
- * The dependencies installed in the checkout handed to `agent`, root's,
- * where the checkout's `node_modules` is not `agent`'s already, so a walk
- * that was done once walks nothing. Note that this is because an install
+ * What an earlier fill installed as the default user handed to `agent`,
+ * root's, where the checkout's `node_modules` is not `agent`'s already, so
+ * a walk done once walks nothing. Note that this is because an install
  * chmods what it installed on every run (pnpm a package's bins, a `prepare`
- * script the hooks it copies), which only a file's owner may, so `agent`'s
- * own install failed on what the default user installed. Their group and
- * its writes are left as they stand, so the default user still writes them.
- * The fill hands them over once (`fillBaseDrive`), so every fork starts with
- * them `agent`'s; a launch asks it too (`machine/sandbox-machine.ts`'s
- * readying), which walks only a drive filled before the fill did.
+ * script the hooks it copies), which only a file's owner may. A fill
+ * installs as `agent` (`INSTALL_SCRIPT`), so this walks only a drive an
+ * older fill installed, once, at its next fill; a launch asks it too
+ * (`machine/sandbox-machine.ts`'s readying), for a drive not filled since.
  */
 export const HAND_INSTALL_TO_AGENT = `if [ -d ${REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT}/node_modules ] && [ "$(stat -c %U ${REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT}/node_modules)" != ${AGENT_USER} ]; then ${INSTALLED} -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
 
 /**
- * What an earlier fill handed to `agent` taken back by the default user
- * before it installs again, as the default user's own `sudo`, since its
- * install chmods what it installed, which only a file's owner may.
+ * The drive's root opened to the default user's group, which `agent` is in,
+ * so `agent`'s pnpm keeps its store there as the fill's always has, rather
+ * than under the checkout.
  */
-const TAKE_INSTALL_BACK = `if [ -d node_modules ] && [ "$(stat -c %U node_modules)" != "$(id -un)" ]; then sudo -n ${INSTALLED} -exec chown -R "$(id -un)" {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then sudo -n chown -R "$(id -un)" ${DRIVE_PNPM_STORE}; fi; fi`;
+const OPEN_DRIVE_ROOT = `chgrp "$SUDO_GID" ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE} && chmod g+w ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}`;
 
 /**
- * The dependencies installed in the checkout: with pnpm where its lockfile
- * is pnpm's, with npm where it has a `package.json` and no such lockfile,
- * and nothing in a repository that has neither, which has none to install;
- * written group-writable, as the clone is (`GROUP_WRITES`), by the default
- * user, who first takes back what an earlier fill handed to `agent`
- * (`TAKE_INSTALL_BACK`); the fill hands it all to `agent` once it is done
- * (`HAND_INSTALL_TO_AGENT`).
+ * The dependencies installed in the checkout as `agent`, the user every
+ * agent runs as, so the files are its own on every fork and no launch
+ * hands them over: with pnpm where its lockfile is pnpm's, with npm where
+ * it has a `package.json` and no such lockfile, and nothing in a repository
+ * that has neither; written group-writable, as the clone is
+ * (`GROUP_WRITES`), so the default user still writes them, once the
+ * drive is readied for it (`READY_FOR_AGENT`).
  */
-const INSTALL_SCRIPT = [
-  "set -e",
-  GROUP_WRITES,
-  TAKE_INSTALL_BACK,
-  "if [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi",
-].join("\n");
+const INSTALL_SCRIPT = `sudo -n -u ${AGENT_USER} -H bash -c '${GROUP_WRITES}; cd ${REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT}; if [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi'`;
+
+/**
+ * The drive readied for `agent`'s install, as the default user's own
+ * `sudo`: its root opened (`OPEN_DRIVE_ROOT`) and what an older fill
+ * installed handed over (`HAND_INSTALL_TO_AGENT`). Every fill runs it,
+ * whether or not it installs, so a drive an older fill installed is
+ * handed over at its next fill, and fails on the first command that fails,
+ * so a handover cut short fails the fill.
+ */
+const READY_FOR_AGENT = `sudo -n bash -c 'set -e; ${OPEN_DRIVE_ROOT}; ${HAND_INSTALL_TO_AGENT}'`;
 
 /** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits `DIFFERS_EXIT` where they do. */
 const LOCKFILE_DIFF_SCRIPT = `git diff --quiet "$${BASE_COMMIT_VARIABLE}" HEAD -- ${LOCKFILES.join(" ")}`;
@@ -246,17 +249,17 @@ const installDependencies = Effect.fn("web/installCheckoutDependencies")(functio
   }
 });
 
-/** The checkout's dependencies handed to `agent` (`HAND_INSTALL_TO_AGENT`), or the refusal in the shell's own words. */
-const handedToAgent = Effect.fn("web/handInstallToAgent")(function* (sandbox: RepositorySandbox) {
-  const handed = yield* runInSandbox(
+/** The drive readied for `agent`'s install (`READY_FOR_AGENT`), or the refusal in the shell's own words. */
+const readiedForAgent = Effect.fn("web/readyDriveForAgent")(function* (sandbox: RepositorySandbox) {
+  const readied = yield* runInSandbox(
     sandbox,
-    { command: `sudo -n bash -c '${HAND_INSTALL_TO_AGENT}'` },
+    { command: READY_FOR_AGENT },
     REPOSITORY_REFUSAL.CHECKOUT_FAILED,
   );
-  if (handed.exitCode !== 0) {
+  if (readied.exitCode !== 0) {
     return yield* new RepositoryRefusal({
       reason: REPOSITORY_REFUSAL.CHECKOUT_FAILED,
-      detail: handed.stderr.trim().slice(-INSTALL_ERROR_TAIL_CHARS),
+      detail: readied.stderr.trim().slice(-INSTALL_ERROR_TAIL_CHARS),
     });
   }
 });
@@ -354,7 +357,7 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
       at: BASE_DRIVE.MOUNT,
       image,
       vcpus: SANDBOX_SIZE.VCPUS,
-      // Note that the fill makes `agent` as every agent's sandbox does, so what it hands `agent` is its on every fork.
+      // Note that the fill makes `agent` as every agent's sandbox does, so what it installs as `agent` is its on every fork.
       user: { name: AGENT_USER, homeFolders: [] },
     },
     (running) =>
@@ -383,8 +386,8 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
           !cloned &&
           before !== undefined &&
           (yield* Effect.orElseSucceed(lockfilesUnmoved(sandbox, before), () => false));
+        yield* readiedForAgent(sandbox);
         if (!stillMatches) yield* installDependencies(sandbox);
-        yield* handedToAgent(sandbox);
       }),
   );
   if (filled) yield* Effect.logInfo(`the base drive ${name} is filled`);
