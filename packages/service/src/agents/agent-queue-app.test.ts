@@ -28,6 +28,7 @@ import type { WireBoundaryInput } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { noNetwork } from "@repo/wire/testing";
 import { Effect, Layer, Option } from "effect";
+import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import {
   MESSAGE_ROLE,
@@ -579,6 +580,33 @@ it.layer(SUITE)("an agent's queue", (it) => {
             message.role === MESSAGE_ROLE.USER && userTexts({ messages: [message] })[0] === text,
         );
         assert.deepEqual(sent?.sentBy, { name: "Nightly triage", kind: AGENT_SENDER.AUTOMATION });
+      }),
+  );
+
+  it.effect(
+    "a message sent while its first launch's hand-off could not be recorded stays claimed in the queue rather than dropped",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, handedOn, stored } = yield* queuedBehindEndedTurn(agentSessions, ["First"]);
+        const head = Option.getOrThrow(yield* claimQueueHead(stored.id));
+        const sql = yield* SqlClient.SqlClient;
+        // The boot's table out of reach for this one hand-off, so recording it fails as a store failure would.
+        const unreachable = Effect.acquireUseRelease(
+          sql.unsafe("ALTER TABLE agent_boot RENAME TO agent_boot_away"),
+          () => handedOn(head),
+          () => Effect.orDie(sql.unsafe("ALTER TABLE agent_boot_away RENAME TO agent_boot")),
+        );
+
+        yield* unreachable;
+
+        assert.equal(handedCount(agentSessions, "First"), 1);
+        const queue = Option.getOrThrow(yield* readAgentQueue(owner, stored.id));
+        assert.deepEqual(
+          queue.messages.map((message) => message.text),
+          ["First"],
+          "the message waits to be sent again under its key",
+        );
       }),
   );
 

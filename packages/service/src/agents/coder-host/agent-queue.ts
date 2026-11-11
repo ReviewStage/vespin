@@ -192,9 +192,13 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
     },
     STEER_DELIVERY.NOW,
   );
-  yield* agentBootHandedOff(agent.id, yield* DateTime.nowAsDate).pipe(
+  const handedOff = yield* agentBootHandedOff(agent.id, yield* DateTime.nowAsDate).pipe(
+    Effect.as(true),
     Effect.catchCause((cause) =>
-      Effect.logWarning("agent-queue: a first launch's hand-off did not end", cause),
+      Effect.as(
+        Effect.logWarning("agent-queue: a first launch's hand-off did not end", cause),
+        false,
+      ),
     ),
   );
   // Note that only a member's own message counts as one sent, never a Start's first, which its Start counted.
@@ -215,6 +219,10 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
       },
     );
   }
+  // Note that a first launch's hand-off that was not recorded keeps the message's claim to lapse, as a failed drop
+  // does, so the next hand-off sends it again under its key, answered as a repeat, and records the hand-off then;
+  // dropped now, the boot would stand handing off over an empty queue that nothing hands on again.
+  if (!handedOff) return;
   // Note that the message went, so a failure to take it out of the queue is no refusal of it: it is logged, and
   // its claim left to lapse, after which the next hand-off sends it again under its id, answered as a repeat.
   yield* dropQueuedMessage(agent.id, message).pipe(
