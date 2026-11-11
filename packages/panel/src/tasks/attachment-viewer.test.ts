@@ -13,6 +13,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import type { SideBundles } from "../bundle-loader.js";
 import { FindScope } from "../find-in-tab.js";
+import type { PdfModule } from "../pdf/contract.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
@@ -36,7 +37,10 @@ import { AttachmentViewer } from "./attachment-viewer.js";
  * the clipboard as the PNG it is, and a picture held by its address alone
  * is shown and zoomed with no size, Copy, or Download. A Mermaid file is drawn as the picture the
  * diagram bundle answers, which stands in for Mermaid since it cannot lay out
- * under jsdom, and a file of any other kind imports no bundle. jsdom lays nothing out, so each picture is
+ * under jsdom, and a file of any other kind imports no bundle. A PDF is drawn
+ * by the PDF bundle, which stands in for pdf.js since jsdom starts no worker,
+ * and one it cannot open, or whose bundle failed to load, stands by its icon
+ * saying so. jsdom lays nothing out, so each picture is
  * given the 800 by 400 its frame of 800 by 500 would fit a 2400 by 1200
  * screenshot to.
  */
@@ -703,4 +707,44 @@ test("a file that is no diagram opened over the window imports no diagram bundle
 
   assert.equal(imports, 0);
   assert.equal(document.querySelector(".ui-zoom-image"), null);
+});
+
+/** A PDF of its own, its bytes no PDF reader would open, since the stand-in bundle never reads them. */
+const PDF: FileChip = {
+  name: "plan.pdf",
+  mediaType: "application/pdf",
+  url: `data:application/pdf;base64,${btoa("%PDF-1.7")}`,
+};
+
+/** The PDF bundle standing in for pdf.js, which needs a worker jsdom cannot start: its pages drawn as the bytes and the worker handed it, or as what stands where it cannot open the file. */
+function pdfBundle(opens: boolean): PdfModule {
+  const worker = {} as Worker;
+  return {
+    worker: () => worker,
+    PdfPages: ({ base64, label, worker: handed, refused }) =>
+      opens
+        ? createElement("output", { "aria-label": label }, handed === worker ? atob(base64) : "")
+        : createElement("div", null, refused),
+  };
+}
+
+test("a PDF opened over the window shows its pages, with Download beside them", async () => {
+  await openedOver(PDF, standInBundles({ pdf: () => Promise.resolve(pdfBundle(true)) }));
+
+  assert.equal(document.querySelector('output[aria-label="plan.pdf"]')?.textContent, "%PDF-1.7");
+  assert.ok(document.querySelector('button[aria-label="Download file"]'));
+});
+
+test.each([
+  ["pdf.js cannot open", () => Promise.resolve(pdfBundle(false))],
+  ["its bundle fails to load", () => Promise.reject(new Error("offline"))],
+])("a PDF %s stands by its icon, saying it could not be shown", async (_, pdf) => {
+  await openedOver(PDF, standInBundles({ pdf }));
+
+  assert.match(document.body.textContent, /This PDF could not be shown\./u);
+  assert.equal(
+    [...document.querySelectorAll("button")].filter((each) => each.textContent === "Download file")
+      .length,
+    1,
+  );
 });

@@ -633,6 +633,14 @@ body {
   height: 96px;
 }
 
+/* The room a file viewer's card gives a PDF, a page's width and less than a page's height, so its column scrolls. */
+.catalog-pdf-room {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  height: 320px;
+}
+
 .catalog-skeleton-line {
   width: 160px;
 }

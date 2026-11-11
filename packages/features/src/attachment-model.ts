@@ -1,4 +1,4 @@
-import { base64Bytes } from "./agent-wire.js";
+import { AGENT_ATTACHMENT_TYPE, base64Bytes } from "./agent-wire.js";
 import { formatBytes } from "./number-format.js";
 import { countWords } from "./words.js";
 
@@ -20,10 +20,11 @@ export interface FileChip {
   readonly url: string;
 }
 
-/** How the viewer shows a file: as a picture, played as a video, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
+/** How the viewer shows a file: as a picture, played as a video, as a PDF's pages, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
 export const ATTACHMENT_VIEW = {
   IMAGE: "image",
   VIDEO: "video",
+  PDF: "pdf",
   DIAGRAM: "diagram",
   TEXT: "text",
   OTHER: "other",
@@ -52,6 +53,7 @@ export function sizeLabel(base64: string): string {
 export function attachmentView(file: FileChip): AttachmentView {
   if (file.mediaType.startsWith("image/")) return ATTACHMENT_VIEW.IMAGE;
   if (PLAYED_VIDEO_TYPES.has(file.mediaType)) return ATTACHMENT_VIEW.VIDEO;
+  if (file.mediaType === AGENT_ATTACHMENT_TYPE.PDF) return ATTACHMENT_VIEW.PDF;
   if (!file.mediaType.startsWith("text/")) return ATTACHMENT_VIEW.OTHER;
   return DIAGRAM_EXTENSION.test(file.name) ? ATTACHMENT_VIEW.DIAGRAM : ATTACHMENT_VIEW.TEXT;
 }

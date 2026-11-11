@@ -23,6 +23,7 @@ import {
   type ImageOpening,
   type ImageZoom,
   OneLine,
+  PdfPagesSkeleton,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
@@ -36,6 +37,7 @@ import {
   ZoomImage,
 } from "@repo/ui";
 import { DIAGRAM_DRAWING } from "@repo/ui/diagram-contract";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -47,7 +49,7 @@ import {
   ZoomOutIcon,
 } from "lucide-react";
 import { useId, useRef, useState } from "react";
-import { DIAGRAM_REFUSED_LINE } from "../bundle-loader.js";
+import { DIAGRAM_REFUSED_LINE, PDF_REFUSED_LINE, useSideBundles } from "../bundle-loader.js";
 import {
   copyImageThroughShell,
   copyThroughShell,
@@ -64,7 +66,7 @@ import { linkPressOf } from "./use-open-link.js";
 import { WholeFile, type WholeFileNote } from "./whole-file.js";
 
 /**
- * attachment-viewer.tsx -- a file on a message opened over the window, as Quick Look opens one: an image fitted to the window, a video played there, a Mermaid file drawn as its diagram, a text file drawn as every code is, or any other file by its icon with a way to save it.
+ * attachment-viewer.tsx -- a file on a message opened over the window, as Quick Look opens one: an image fitted to the window, a video played there, a PDF's pages, a Mermaid file drawn as its diagram, a text file drawn as every code is, or any other file by its icon with a way to save it.
  *
  * A picture opens fitted to the window, or at its own pixels where the place
  * opening it asks, and zooms as Preview's does: a pinch, a trackpad's or two
@@ -80,7 +82,13 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * bundle a description's fences draw through (`../diagram-drawing.ts`), and then
  * shown, zoomed, and copied as a picture is; while it is drawn, or where
  * Mermaid refused it, its code stands as a text file's does, with Copy text,
- * a refusal saying so over it.
+ * a refusal saying so over it. A PDF's pages are drawn by pdf.js, in a bundle
+ * of their own loaded the first time a PDF is opened (`../pdf/`), down a
+ * column fitted to the card's width at a file's reading width, its words
+ * selectable (`@repo/ui`'s PdfPages); while it loads and opens it stands as
+ * a blank page, and one it cannot open, or that its bundle failed to load
+ * for, stands by its icon as any other file does, saying it could not be
+ * shown.
  *
  * The files of one message are walked in place with the arrows standing on
  * the dimmed window either side of the card, a press on a file's preview in
@@ -103,7 +111,8 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * Download, since the window holds none of its bytes to count, copy, or
  * save. A message's files are its
  * developer's own, so everything the card holds is left out of the screen
- * recording (`ph-no-capture`) as a second line behind the masking.
+ * recording (`ph-no-capture`) as a second line behind the masking, a PDF's
+ * page canvases among it, which the recording copies no pixels of in any case.
  *
  * On a phone the header is a phone's (`phone-head.tsx`): Close alone at its
  * start, the file's name centered over its size and note, and one ⋯ at its
@@ -112,9 +121,6 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * viewer walks the files too, the file shown following it until it is let
  * go (`@repo/ui`'s `usePageSwipe`), unless the picture is zoomed, where the
  * finger moves the picture instead.
- *
- * Note that a PDF is shown by its icon rather than drawn, because the
- * window's policy refuses the frames and objects Chromium draws one in.
  */
 
 /** The file's name in the viewer's head, cut to its line. */
@@ -386,7 +392,7 @@ interface DiagramShown {
   readonly retry: (() => void) | undefined;
 }
 
-/** The file shown: the picture or the diagram, the video playing, its text drawn as every code is, or the icon, name, and size over Download. */
+/** The file shown: the picture or the diagram, the video playing, a PDF's pages, its text drawn as every code is, or the icon, name, and size over Download. */
 function AttachmentBody({
   file,
   base64,
@@ -455,6 +461,27 @@ function AttachmentBody({
       </div>
     );
   }
+  if (attachmentView(file) === ATTACHMENT_VIEW.PDF) {
+    return (
+      <div className="attachment-viewer-body min-h-0 flex-auto flex flex-col">
+        <PdfBody file={file} base64={base64} />
+      </div>
+    );
+  }
+  return <FileCard file={file} base64={base64} refusal={undefined} />;
+}
+
+/** A file shown by its icon, name, and size over Download, saying why it is not drawn where it could not be. */
+function FileCard({
+  file,
+  base64,
+  refusal,
+}: {
+  file: FileChip;
+  base64: string;
+  /** Why the file is not drawn, where it is one the viewer draws; none for a file it never draws. */
+  refusal: string | undefined;
+}): React.JSX.Element {
   return (
     <div
       className="attachment-viewer-body min-h-0 flex-auto flex flex-col items-center justify-center gap-item-gap p-card text-center"
@@ -467,11 +494,28 @@ function AttachmentBody({
       <p className="mx-0 mt-0 mb-block-gap text-caption text-muted-foreground">
         {sizeLabel(base64)}
       </p>
+      {refusal === undefined ? null : <p className="mx-0 mt-0 mb-block-gap text-body">{refusal}</p>}
       <Button icon={<DownloadIcon aria-hidden="true" />} onClick={() => download(file)}>
         {VIEWER_LABEL.DOWNLOAD}
       </Button>
     </div>
   );
+}
+
+/**
+ * A PDF's pages, drawn by the PDF bundle once it has loaded: a blank page
+ * while it loads, and the file's card saying it could not be shown where the
+ * bundle failed to load, no worker could start, or pdf.js could not open it.
+ */
+function PdfBody({ file, base64 }: { file: FileChip; base64: string }): React.JSX.Element {
+  const bundle = useQuery(useSideBundles().pdf);
+  const refused = <FileCard file={file} base64={base64} refusal={PDF_REFUSED_LINE} />;
+  if (bundle.isError) return refused;
+  if (bundle.data === undefined) return <PdfPagesSkeleton label={file.name} />;
+  const { PdfPages, worker } = bundle.data;
+  const started = worker();
+  if (started === undefined) return refused;
+  return <PdfPages base64={base64} label={file.name} worker={started} refused={refused} />;
 }
 
 /**

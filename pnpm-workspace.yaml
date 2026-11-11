@@ -98,9 +98,12 @@ onlyBuiltDependencies:
 # The Agent SDK's native `claude` binaries, one optional package per platform
 # at about 290 MB each. Nothing here runs the CLI: `@repo/agent-runner` bundles
 # the SDK alone and runs the binary the agent's sandbox image installs, which
-# it names in `pathToClaudeCodeExecutable`.
+# it names in `pathToClaudeCodeExecutable`. And pdf.js's `@napi-rs/canvas`,
+# a native canvas it draws with only under Node: the file viewer draws a PDF
+# in the window's own canvases (`@repo/ui/pdf-pages`).
 ignoredOptionalDependencies:
   - "@anthropic-ai/claude-agent-sdk-*"
+  - "@napi-rs/canvas"
 
 # `@better-auth/oauth-provider` 1.7.7 declares its `/oauth2/authorize` OpenAPI
 # parameters with `items?: undefined`, which `exactOptionalPropertyTypes` (on in

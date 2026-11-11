@@ -206,8 +206,8 @@ const WINDOW_ENTRIES = {
 // dynamic `import()` of its own entry (`@repo/panel`'s `bundle-loader.ts`), so no
 // window parses one before it is needed: the editors (TipTap), a File tab's
 // tree (Pierre's tree), a Terminal tab's screen (xterm.js), a description's diagrams
-// (Mermaid), a Files changed diff (Pierre's diffs and Shiki), and session
-// replay's recorder (rrweb). Each is an entry rather than a chunk, so
+// (Mermaid), a Files changed diff (Pierre's diffs and Shiki), a PDF's pages
+// in the file viewer (pdf.js), and session replay's recorder (rrweb). Each is an entry rather than a chunk, so
 // it keeps a name of its own; what each reaches
 // through dynamic imports of its own, a diagram type's layout or a language's
 // grammar, is a chunk of its own, loaded when it is drawn.
@@ -217,6 +217,7 @@ const SIDE_BUNDLE_ENTRIES = {
   terminal: "../../packages/panel/src/terminal/index.ts",
   diagram: "../../packages/panel/src/diagram/index.ts",
   "diff-view": "../../packages/panel/src/diff-view/index.ts",
+  pdf: "../../packages/panel/src/pdf/index.ts",
   "session-recorder": "src/renderer/session-recorder/index.ts",
 };
 
