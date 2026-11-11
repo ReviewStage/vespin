@@ -225,7 +225,7 @@ test("⌘Z takes a resolve back at the service whenever it is pressed, its toast
   );
 });
 
-test("an Undo the service does not hear says so, and its Try again takes the resolve back", async () => {
+test("an Undo the service does not hear says so, and its Retry takes the resolve back", async () => {
   const { page } = mount({ toasts: true });
   await settle();
   const sent = takenCloses();
@@ -249,12 +249,12 @@ test("an Undo the service does not hear says so, and its Try again takes the res
   await act(async () => (newestToastAction() ?? assert.fail("the toast offers Undo")).click());
   await settle();
   assert.match(newestToastSays() ?? "", /Could not undo resolving/u);
-  const retry = newestToastAction() ?? assert.fail("the failure offers Try again");
-  assert.equal(retry.textContent, "Try again");
+  const retry = newestToastAction() ?? assert.fail("the failure offers Retry");
+  assert.equal(retry.textContent, "Retry");
   await act(async () => retry.click());
   await settle();
 
-  assert.deepEqual(sent.takenBack, [THRESHOLD.id], "the Try again takes it back");
+  assert.deepEqual(sent.takenBack, [THRESHOLD.id], "the Retry takes it back");
   assert.ok(rowMenu(page, "Alert at 80%?").includes("Resolve"), "it stands open again");
 });
 
