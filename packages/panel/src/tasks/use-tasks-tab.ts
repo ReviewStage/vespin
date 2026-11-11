@@ -28,6 +28,7 @@ import {
   documentRegion,
   renamedRegion,
   renamedView,
+  SETTLED_STATUS,
   sidebarTasks,
   TASK_MARK,
   TASKS_PAGE,
@@ -1645,6 +1646,20 @@ export function useTasksTab(input: {
     if (was === undefined || was.taskId !== shownTaskId) return;
     if (archivedIds?.includes(was.agentId) === true) leaveTask();
   }, [shownTaskId, columnAgent, liveIds, archivedIds, leaveTask]);
+  // The open task leaves the window for Home once it is marked done or canceled, or leaves the list read, as a delete
+  // takes it, since the sidebar draws it no longer. Note that only the move does, because a settled task opened from
+  // the Tasks page or a link is read where it stands.
+  const openRow = tasks.tasks.find((task) => task.id === shownTaskId);
+  const openGone =
+    openRow === undefined
+      ? tasks.listStatus === TASKS_READ.READY
+      : openRow.status === SETTLED_STATUS.DONE || openRow.status === SETTLED_STATUS.CANCELED;
+  const openStood = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const was = openStood.current;
+    openStood.current = shownTaskId !== undefined && !openGone ? shownTaskId : undefined;
+    if (was !== undefined && was === shownTaskId && openGone) leaveTask();
+  }, [shownTaskId, openGone, leaveTask]);
   // A workspace chosen on purpose, from the switcher, a workspace made, or
   // one left, is listed at once, and the task on screen follows: the task
   // last open there opens again, where it is still that workspace's, or

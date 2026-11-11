@@ -21,7 +21,12 @@ import { APP_HOME_LINK, LINK_ORIGIN } from "@repo/features/link-home";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_OWNER } from "@repo/features/page-wire";
-import { DESCRIPTION_ACTOR, TASK_CREATE_RELATION_KIND, type Task } from "@repo/features/task-wire";
+import {
+  DESCRIPTION_ACTOR,
+  TASK_CREATE_RELATION_KIND,
+  TASK_STATUS,
+  type Task,
+} from "@repo/features/task-wire";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
@@ -1089,6 +1094,25 @@ test("the agent a column shows, archived, leaves its task for Home, and the colu
     "a draft, as a task with no agent opens on",
   );
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, shown]);
+  await vi.waitFor(() => assert.ok(tab.told.includes(ACT_KIND.TASKS_CLOSE), "the task is left"));
+});
+
+test("the open task marked done leaves for Home, on any of its tabs, and one opened already done is read where it stands", async () => {
+  const done = { ...listed(), status: TASK_STATUS.DONE };
+  const settled = mount(
+    { shown: true, tasks: { ...OPEN, tasks: [done] } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+  await settle();
+  assert.ok(!settled.told.includes(ACT_KIND.TASKS_CLOSE), "a task opened done stays open");
+
+  const tab = mount(
+    { shown: true, tasks: { ...OPEN, tasks: [listed()] } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+  await settle();
+  act(() => tab.control().mainTabs.onChoose(MAIN_TAB.OVERVIEW));
+  tab.stand({ tasks: { ...OPEN, tasks: [done] } });
   await vi.waitFor(() => assert.ok(tab.told.includes(ACT_KIND.TASKS_CLOSE), "the task is left"));
 });
 
