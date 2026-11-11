@@ -164,6 +164,23 @@ hands the app's JavaScript the tokens, an activity's end, and each Stop
 `-liveActivity true` beside `-fixture inbox` starts an activity of the
 fixture's own, which `maestro/live-activity.yaml` shoots.
 
+## Handoff and Spotlight
+
+Each thread, task, agent, and pull request screen advertises an
+`NSUserActivity` of the app's own type (`dev.vespin.viewing`, declared in
+`app.config.ts`'s `NSUserActivityTypes`) while it is the one in front, with
+its title and its vespin.dev page, so Handoff offers it on the member's other
+devices (`useScreenActivity`, `src/system-activity/`). While an account is
+signed in, the chosen workspace's tasks and Inbox threads stand in the app's
+own Core Spotlight index, each named by its vespin.dev link, emptied on
+sign-out. What is built from the document, the activities, the items, and the
+route a continued activity or a tapped item opens, is
+`@repo/features/ios-system-activity`; the app's native module, autolinked
+from `modules/system-activity/`, sets the activity, writes the index, and
+hands a continued activity or a tapped item to JavaScript, which opens it
+through the routing a link takes. `maestro/spotlight.yaml` finds a task from
+the Home Screen's search; Handoff shows only between real devices.
+
 ## Tests
 
 Logic is tested with vitest, under `src/**/*.test.ts`, as root `AGENTS.md`'s
@@ -199,9 +216,15 @@ pull request with UI shows its screenshots to the developer in a thread.
   `metro.config.js` reads it as the `.ts` beside it, as it reads a workspace
   package's `exports`.
 - **Layout follows the window, never the device.** `useWindowSizeClass` reads
-  the window's width into a compact or regular size class; a regular window
-  stands list and detail side by side in `NavigationSplitView`, whether it is
-  an iPad's, the unfolded iPhone Duo's, or a Split View pane.
+  the window's width into a compact or regular size class. A compact window
+  keeps the system's tab bar with stack navigation. A regular one, whether
+  it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
+  list and detail side by side in `NavigationSplitView`; where it is wide
+  enough for three columns, an iPad's in landscape, it hides the tab bar and
+  stands the app sidebar first (`src/screens/app-sidebar.tsx`: the places,
+  Pinned and the member's sections, the workspace switcher, and Settings),
+  as Mail does. Whether the first column stands is one answer every tab
+  shares (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
 - **React 19.3** comes through the `mobile` pnpm catalog, since React Native
