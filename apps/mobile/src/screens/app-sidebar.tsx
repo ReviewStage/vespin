@@ -146,7 +146,7 @@ export function useAppSidebar(
         account,
         header,
         action: { ...NEW_TASK, onPress: () => router.push("/start-task") },
-        foot: [{ ...SETTINGS, onPress: openSettings }],
+        foot: [{ ...SETTINGS, onPress: () => openSettings() }],
       },
       content: list?.view,
       contentBar: list?.bar,
