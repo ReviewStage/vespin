@@ -1,5 +1,5 @@
 /**
- * workspace-tools.ts -- whose Mac an agent's `run_on_mac` runs on, and whether it would run there now, as its composer reads it.
+ * workspace-tools.ts -- whose Mac an agent's `run_on_mac` runs on, and whether it would run there now, as its transcript names it.
  *
  * The Mac is `macOwnerOf`'s: its task's assignee's, or else its starter's.
  * `run_on_mac` is answered off where a call would be refused now

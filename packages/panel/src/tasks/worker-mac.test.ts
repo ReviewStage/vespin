@@ -12,11 +12,12 @@ import { AgentSubagentTab } from "./agent-tab.js";
 /**
  * worker-mac.test.ts -- a worker runs as its agent does, so a command a
  * teammate's agent's worker ran on a Mac says it ran on the teammate's,
- * and the reader's own agent's worker's on the reader's. Synthetic
- * throughout.
+ * and the reader's own agent's worker's on the reader's; and one whose
+ * answer names the member whose Mac it went to, as a task handed to
+ * another member sends it, says theirs. Synthetic throughout.
  */
 
-const DEAN = "user-dean";
+const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 
 const AGENT: AgentSummary = {
@@ -39,8 +40,11 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** Where the worker's tab says its Mac command ran once its page is read, as `reader` sees it. */
-async function workerTabFor(reader: string): Promise<string> {
+/** Where the worker's tab says its Mac command ran once its page is read, as `reader` sees it, its answer naming `macOwner` where given. */
+async function workerTabFor(
+  reader: string,
+  macOwner?: { readonly userId: string; readonly name: string },
+): Promise<string> {
   pushedTranscripts(() => [
     {
       messages: [
@@ -53,7 +57,13 @@ async function workerTabFor(reader: string): Promise<string> {
               toolCallId: "mac-call",
               state: "output-available",
               input: { command: "pnpm test" },
-              output: { status: "ran", exitCode: 0, stdout: "ok", stderr: "" },
+              output: {
+                status: "ran",
+                exitCode: 0,
+                stdout: "ok",
+                stderr: "",
+                ...(macOwner === undefined ? undefined : { macOwner }),
+              },
             },
           ],
         },
@@ -96,10 +106,19 @@ async function workerTabFor(reader: string): Promise<string> {
 }
 
 test("a command a teammate's agent's worker ran on a Mac says it ran on theirs, and the reader's own agent's worker's on the reader's", async () => {
-  const deanReads = await workerTabFor(DEAN);
+  const deanReads = await workerTabFor(DEAN.userId);
   act(() => root?.unmount());
   const charlesReads = await workerTabFor(CHARLES.userId);
 
   assert.equal(deanReads, "On Charles Pan’s Mac");
   assert.equal(charlesReads, "On your Mac");
+});
+
+test("a command whose answer names the member whose Mac it went to says it ran on theirs, not its agent's starter's", async () => {
+  const deanReads = await workerTabFor(DEAN.userId, DEAN);
+  act(() => root?.unmount());
+  const charlesReads = await workerTabFor(CHARLES.userId, DEAN);
+
+  assert.equal(deanReads, "On your Mac");
+  assert.equal(charlesReads, "On Dean Stratakos’s Mac");
 });

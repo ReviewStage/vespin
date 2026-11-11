@@ -277,6 +277,7 @@ function CallStep({
       description={call.description}
       files={call.files}
       page={call.page}
+      macOwner={call.macOwner}
       agent={agent}
       agentCard={agentId === undefined ? undefined : place.card(agentId)}
       input={call.input}

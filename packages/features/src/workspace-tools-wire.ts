@@ -1,5 +1,5 @@
 /**
- * workspace-tools-wire.ts -- whose Mac an agent's `run_on_mac` runs on, and whether it would run there now, as the agent's composer reads it.
+ * workspace-tools-wire.ts -- whose Mac an agent's `run_on_mac` runs on, and whether it would run there now, as the agent's transcript names it on a Mac command whose answer names no one.
  *
  * The Mac is its task's assignee's, or else its starter's. `run_on_mac` is
  * answered off where the service would refuse a call now: no Mac of that
