@@ -2933,3 +2933,10 @@ svg.lucide {
 .agent-log-row-continued {
   padding-block-start: var(--ui-control-gap);
 }
+
+/* A comment's quote line wears every quote's face (`@repo/ui/quote-face`),
+   whose own rules stand outside the layers and set no margin, so its gap
+   from the words under it is set here, as a quote's in the box is. */
+blockquote.comment-quote {
+  margin-bottom: var(--ui-control-gap);
+}

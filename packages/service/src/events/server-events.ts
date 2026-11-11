@@ -7,6 +7,7 @@ import type { ConversationRuntime } from "@repo/database/storage-vocabulary";
 import type { AgentKind, AgentMachineKind } from "@repo/features/agent-wire";
 import type { AutomationFiringKind, AutomationTriggerKind } from "@repo/features/automation-wire";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
+import type { MEMORY_SAVED } from "@repo/features/memory-wire";
 import type { ProviderKeyProvider } from "@repo/features/provider-key-wire";
 import type { TaskSettledStatus } from "@repo/features/task-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
@@ -117,6 +118,8 @@ export const SERVER_EVENT = {
   SKILL_CHANGE: "skill:change",
   DICTATION_USE: "dictation:use",
   MEMORY_FORGET: "memory:forget",
+  MEMORY_SAVE: "memory:save",
+  MEMORY_RECALL: "memory:recall",
   HOST_PAIRING_CHANGE: "host:pairing_change",
   WORKSPACE_MEMBER_CHANGE: "workspace:member_change",
   AUTOMATION_CHANGE: "automation:change",
@@ -140,6 +143,12 @@ export const SERVER_AGENT_STARTER = {
 
 /** Who made an automation: a member, or an agent through its `create_automation`. */
 export const SERVER_AUTOMATION_SOURCE = {
+  MEMBER: SERVER_AGENT_STARTER.MEMBER,
+  AGENT: SERVER_AGENT_STARTER.AGENT,
+} as const;
+
+/** Who kept a memory: a coding agent through its `save_memory`, or a member through their own client or the member MCP server. */
+export const SERVER_MEMORY_KEEPER = {
   MEMBER: SERVER_AGENT_STARTER.MEMBER,
   AGENT: SERVER_AGENT_STARTER.AGENT,
 } as const;
@@ -447,6 +456,13 @@ export interface ServerEventProperties {
   [SERVER_EVENT.DICTATION_USE]: { duration: Values<typeof SERVER_DICTATION_DURATION> };
   /** A member's forget of one of the workspace's memories; what it held is never counted. */
   [SERVER_EVENT.MEMORY_FORGET]: Record<string, never>;
+  /** A memory kept, by what the keep came to and who kept it; its words are never counted. */
+  [SERVER_EVENT.MEMORY_SAVE]: {
+    outcome: Values<typeof MEMORY_SAVED>;
+    by: Values<typeof SERVER_MEMORY_KEEPER>;
+  };
+  /** Memories handed to a coding agent once, by how many; which ones and their words are never counted. */
+  [SERVER_EVENT.MEMORY_RECALL]: { memories: number };
   [SERVER_EVENT.HOST_PAIRING_CHANGE]: { action: Values<typeof SERVER_HOST_PAIRING_ACTION> };
   [SERVER_EVENT.WORKSPACE_MEMBER_CHANGE]: { action: Values<typeof SERVER_WORKSPACE_MEMBER_ACTION> };
   /** Who changed it is the member or one of their agents, as `automation:create` says. */

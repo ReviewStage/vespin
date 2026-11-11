@@ -3,8 +3,14 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import {
+  getTestDB,
+  joinWorkspace,
+  openAgentOnOwnTask,
+  openWorkspace,
+} from "@repo/database/testing";
 import {
   MEMORY_SAVED,
   type MemoriesAnswer,
@@ -19,9 +25,13 @@ import { eq } from "drizzle-orm";
 import { Clock, Duration, Effect, Layer, Option, Result, type Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
-import { runRecall, runRemember } from "../agents/memory-tools.js";
-import { ACTION_RESULT_STATUS } from "../core.js";
-import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events.js";
+import { recordMemoryRecalls, runRecall, runRemember } from "../agents/memory-tools.js";
+import { ACTION_RESULT_STATUS, isRecord } from "../core.js";
+import {
+  recordingProductAnalytics,
+  SERVER_EVENT,
+  SERVER_MEMORY_KEEPER,
+} from "../events/server-events.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedAnswer } from "../testing/hosted-route.js";
 import { memoriesProcedures } from "./memories-procedures.js";
@@ -200,6 +210,71 @@ it.layer(getTestDB())("the memories procedures", (it) => {
         assert.deepEqual(
           asOwner.map((memory) => memory.forgettable),
           [true, true],
+        );
+      }),
+  );
+
+  it.effect(
+    "the read names the agent, line, and task an agent's memory came from and counts its recalls, a member's own keep names none, and each keep and recall is counted without its words",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { owner, teammate, workspaceId, ask, keep } = yield* openTeam;
+        const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
+        const [agent] = yield* db
+          .select({ taskId: agentTable.taskId })
+          .from(agentTable)
+          .where(eq(agentTable.id, agentId));
+        assert.ok(agent !== undefined);
+        const source = { agentId, messageId: randomUUID() };
+        const agents = { workspaceId, userId: owner, source };
+
+        yield* keep(teammate, TESTS_RUN).pipe(Effect.provide(ANALYTICS.layer));
+        yield* TestClock.adjust(Duration.minutes(1));
+        const kept = yield* runRemember(agents, { text: DEPLOYS }).pipe(
+          Effect.provide(ANALYTICS.layer),
+        );
+        assert.ok(isRecord(kept.memory) && typeof kept.memory.id === "string");
+        yield* recordMemoryRecalls(agents, [kept.memory.id], source).pipe(
+          Effect.provide(ANALYTICS.layer),
+        );
+        const recalledAt = yield* Clock.currentTimeMillis;
+        const read = memoriesOf(yield* ask(readMemories(teammate, workspaceId))).memories;
+
+        assert.deepEqual(
+          read.map((memory) => [
+            memory.text,
+            memory.source,
+            memory.recalls30d,
+            memory.lastRecalledAt,
+          ]),
+          [
+            [DEPLOYS, { ...source, taskId: agent.taskId, taskName: "Flaky tests" }, 1, recalledAt],
+            [TESTS_RUN, null, 0, null],
+          ],
+        );
+        assert.deepEqual(
+          ANALYTICS.recorded
+            .filter(
+              (event) =>
+                event.workspaceId === workspaceId &&
+                (event.name === SERVER_EVENT.MEMORY_SAVE ||
+                  event.name === SERVER_EVENT.MEMORY_RECALL),
+            )
+            .map((event) => [event.name, event.userId, event.properties]),
+          [
+            [
+              SERVER_EVENT.MEMORY_SAVE,
+              teammate,
+              { outcome: MEMORY_SAVED.KEPT, by: SERVER_MEMORY_KEEPER.MEMBER },
+            ],
+            [
+              SERVER_EVENT.MEMORY_SAVE,
+              owner,
+              { outcome: MEMORY_SAVED.KEPT, by: SERVER_MEMORY_KEEPER.AGENT },
+            ],
+            [SERVER_EVENT.MEMORY_RECALL, owner, { memories: 1 }],
+          ],
         );
       }),
   );

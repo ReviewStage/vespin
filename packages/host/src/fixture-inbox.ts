@@ -860,6 +860,7 @@ const FIXTURE_WORKSPACE: Workspace = {
   role: WORKSPACE_ROLE.OWNER,
   github: { login: "ada", active: true },
   personal: true,
+  memberCount: 1,
   experiments: [
     {
       experiment: EXPERIMENT.DESCRIPTIONS,
@@ -868,6 +869,20 @@ const FIXTURE_WORKSPACE: Workspace = {
       changedAt: LANDED - 30 * DAY,
     },
   ],
+};
+
+/**
+ * A team the fixture's account is a member of beside its own, where a list
+ * names none, so the iOS app's workspace switcher has another to list and
+ * a flow has one to switch to; it holds no tasks and no threads.
+ */
+const TEAM_WORKSPACE: Workspace = {
+  id: "workspace-relay",
+  name: "Relay",
+  slug: "relay",
+  role: WORKSPACE_ROLE.MEMBER,
+  github: { login: "relay-dev", active: true },
+  memberCount: 6,
 };
 
 /**
@@ -939,7 +954,7 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
       ? list.workspaces
-      : [FIXTURE_WORKSPACE, ...list.workspaces],
+      : [FIXTURE_WORKSPACE, TEAM_WORKSPACE, ...list.workspaces],
     taskPullRequests: [
       ...(list.taskPullRequests ?? []).filter((each) => each.taskId !== TASK.INVITES),
       { taskId: TASK.INVITES, pullRequests: [{ ...INVITES_PULL_REQUEST, agentId: AGENT.INVITES }] },

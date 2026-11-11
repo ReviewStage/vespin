@@ -1057,6 +1057,23 @@ export function mentionLinksIn(text: string): readonly MentionLink[] {
   return found;
 }
 
+/** The marks a placeholder for an id is written between, `{AGENT}` or `<agent-id>`, as a parsed address's path holds them, encoded, whether written so or not; no address of ours holds them. */
+const PLACEHOLDER_MARKS = /%(?:7B|7D|3C|3E)/iu;
+
+/**
+ * The targets of the words' links of ours that hold a placeholder where an
+ * id goes, such as one written before the tool that answers the id had
+ * answered, which the app draws as a link that opens nothing.
+ */
+export function placeholderLinksIn(text: string): readonly string[] {
+  return linksIn(text)
+    .map((link) => link.target)
+    .filter((target) => {
+      const url = parsedUrl(target);
+      return url !== undefined && isLinkHome(url) && PLACEHOLDER_MARKS.test(url.pathname);
+    });
+}
+
 /**
  * Every mention written into the words, in order: a link whose label
  * starts with `@`, whose target names a mention, a GitHub page only as a

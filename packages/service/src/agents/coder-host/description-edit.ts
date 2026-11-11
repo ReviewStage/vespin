@@ -21,6 +21,7 @@ import {
   type NoteMiss,
   readNotes,
 } from "@repo/features/description-notes";
+import { placeholderLinksIn } from "@repo/features/mention-link";
 import { PICTURE_BOUNDS, type Picture } from "@repo/features/picture-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
@@ -43,6 +44,7 @@ import {
   type DescriptionNoteAuthor,
   saveNotes,
 } from "../../tasks/description-notes.js";
+import { placeholderLinksWords } from "../link-rule.js";
 import { CODER } from "./bounds.js";
 import { type InboxSandboxDoor, readSandboxMedia } from "./inbox-image.js";
 
@@ -449,6 +451,10 @@ export function recordDescriptionEdit(
   }
   if (takenInTurn + notes.length + pictures.length > DESCRIPTION_EDIT.MAX_NOTES_PER_TURN) {
     return Effect.succeed(descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.TOO_MANY));
+  }
+  const unread = notes.flatMap((note) => placeholderLinksIn(note.text));
+  if (unread.length > 0) {
+    return Effect.succeed(descriptionEditRejected(`Not saved: ${placeholderLinksWords(unread)}`));
   }
   const writer = { actor: DESCRIPTION_ACTOR.AGENT, agentId: author.agentId } as const;
   return Effect.gen(function* () {

@@ -95,44 +95,100 @@ function discardedExpression(statement) {
   return ts.isCallExpression(called) ? expression : null;
 }
 
-/** Every statement in `rootNames` that describes work and drops it. */
-export function findDiscardedEffects({ root, rootNames, compilerOptions }) {
-  const program = ts.createProgram({ rootNames, options: compilerOptions });
-  const checker = program.getTypeChecker();
+/**
+ * A compiler host that hands each program the files the program before it
+ * already parsed and bound. One program's files are always the next one's
+ * starting point, and every file outside it is let go, so the host holds no
+ * more than the program it is building would hold anyway.
+ *
+ * Note that a parsed file is safe to share because the binder writes only
+ * what the file alone decides, and skips a file it has bound before, while
+ * every checker keeps its answers in tables of its own: this is how the
+ * language service shares files between the programs it builds.
+ */
+function sharingCompilerHost(compilerOptions) {
+  const host = ts.createCompilerHost(compilerOptions);
+  const parse = host.getSourceFile.bind(host);
+  let previous = new Map();
+  let current = new Map();
+  host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+    const shared = shouldCreateNewSourceFile ? undefined : previous.get(fileName);
+    const file = shared ?? parse(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+    if (file !== undefined) current.set(fileName, file);
+    return file;
+  };
+  const settle = () => {
+    previous = current;
+    current = new Map();
+  };
+  return { host, options: compilerOptions, settle };
+}
+
+/** Every statement in `file` that describes work and drops it. */
+function discardedIn(root, checker, file) {
+  const relativePath = path.relative(root, file.fileName).split(path.sep).join("/");
   const discarded = [];
-
-  for (const file of program.getSourceFiles()) {
-    if (file.isDeclarationFile) continue;
-    const relativePath = path.relative(root, file.fileName).split(path.sep).join("/");
-    if (relativePath.startsWith("..") || relativePath.includes("node_modules")) continue;
-    const visit = (node) => {
-      if (ts.isExpressionStatement(node)) {
-        const dropped = discardedExpression(node);
-        const description =
-          dropped === null ? null : describedBy(checker, checker.getTypeAtLocation(dropped));
-        if (description !== null) {
-          discarded.push({
-            file: relativePath,
-            line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
-            description,
-            text: node.getText(file).split("\n", 1)[0].trim(),
-          });
-        }
+  const visit = (node) => {
+    if (ts.isExpressionStatement(node)) {
+      const dropped = discardedExpression(node);
+      const description =
+        dropped === null ? null : describedBy(checker, checker.getTypeAtLocation(dropped));
+      if (description !== null) {
+        discarded.push({
+          file: relativePath,
+          line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1,
+          description,
+          text: node.getText(file).split("\n", 1)[0].trim(),
+        });
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(file);
-  }
-
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
   return discarded;
 }
 
 /**
+ * Every statement in each program's `rootNames` that describes work and drops
+ * it, one program at a time, with the canary files read in every program.
+ *
+ * Note that we build one program per group rather than one over the whole
+ * repository, because the checker keeps every type it resolves for as long as
+ * its program lives: one program over everything outgrew a 4 GB heap. Each
+ * program is let go before the next is built, so the heap holds one group's
+ * types at a time, and the files groups share are parsed once
+ * (`sharingCompilerHost`).
+ */
+export function* findDiscardedEffects({ root, programs, canaryNames, compilerOptions }) {
+  const sharing = sharingCompilerHost(compilerOptions);
+  for (const { name, rootNames } of programs) {
+    yield { name, discarded: discardedInProgram(root, sharing, [...rootNames, ...canaryNames]) };
+  }
+}
+
+/**
+ * One program's discards. Note that the program and its checker live in this
+ * function's frame alone, because a generator keeps its locals until they are
+ * next assigned: held there, the last program's types would still be on the
+ * heap while the next program is built.
+ */
+function discardedInProgram(root, { host, options, settle }, rootNames) {
+  const read = new Set(rootNames);
+  const program = ts.createProgram({ rootNames, options, host });
+  settle();
+  const checker = program.getTypeChecker();
+  return program
+    .getSourceFiles()
+    .filter((file) => read.has(file.fileName))
+    .flatMap((file) => discardedIn(root, checker, file));
+}
+
+/**
  * The fixture pair under `scripts/fixtures/discarded-effect`, compiled inside
- * the same program the repository is read through and asserted against before
- * its answer is believed. A program that resolved no `effect` types would
- * report nothing and read as a clean repository; this is what tells the two
- * apart.
+ * every program the repository is read through and asserted against before
+ * that program's answer is believed. A program that resolved no `effect` types
+ * would report nothing and read as a clean repository; this is what tells the
+ * two apart.
  */
 export const CANARY = {
   DIRECTORY: "scripts/fixtures/discarded-effect",

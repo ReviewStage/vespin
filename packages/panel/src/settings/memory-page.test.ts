@@ -54,6 +54,9 @@ const DEPLOYS: MemorySummary = {
   forgettable: true,
   createdAt: Date.UTC(2026, 9, 10, 12),
   updatedAt: Date.UTC(2026, 9, 12, 12),
+  source: null,
+  recalls30d: 0,
+  lastRecalledAt: null,
 };
 
 const TESTS: MemorySummary = {
@@ -63,6 +66,9 @@ const TESTS: MemorySummary = {
   forgettable: false,
   createdAt: Date.UTC(2026, 9, 9, 12),
   updatedAt: Date.UTC(2026, 9, 9, 12),
+  source: null,
+  recalls30d: 0,
+  lastRecalledAt: null,
 };
 
 /** The memories the test's service holds, by the workspace, held and forgotten by the page. */

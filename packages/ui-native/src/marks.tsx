@@ -118,21 +118,25 @@ type AvatarProps = {
 };
 
 /**
- * A photo clipped to the avatar's circle, in a React Native view SwiftUI
- * hosts at the avatar's size, as a thread's pictures are drawn, since
+ * A photo clipped to its mark's shape, a person's circle unless a corner
+ * is given, such as a workspace's tile, in a React Native view SwiftUI
+ * hosts at the mark's size, as a thread's pictures are drawn, since
  * SwiftUI's own image reads a local file alone. It is never heard, since the
- * avatar it stands in is heard as the person's name.
+ * mark it stands in is heard as the name.
  */
-function AvatarPhoto({
+export function AvatarPhoto({
   address,
   size,
+  corner = size / 2,
   onFail,
 }: {
   readonly address: string;
   readonly size: number;
+  /** How round its corners stand, in points; a circle's where none is given. */
+  readonly corner?: number | undefined;
   readonly onFail: () => void;
 }) {
-  const round = { width: size, height: size, borderRadius: size / 2, overflow: "hidden" } as const;
+  const round = { width: size, height: size, borderRadius: corner, overflow: "hidden" } as const;
   return (
     <RNHostView>
       <View
@@ -187,8 +191,8 @@ export function Avatar({
   );
 }
 
-/** The share of an agent's tile its corners round by, a square softened as the panel's agent tiles are. */
-const TILE_ROUNDING = 0.28;
+/** The share of an agent's or a workspace's tile its corners round by, a square softened as the panel's tiles are. */
+export const TILE_ROUNDING = 0.28;
 
 /** The share of an agent's tile its glyph stands at. */
 const TILE_GLYPH_SCALE = 0.5;

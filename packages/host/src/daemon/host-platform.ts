@@ -54,6 +54,8 @@ interface HostPlatformOptions {
   readonly arch: DeviceArch;
   /** The daemon's state, under which it keeps the agent CLIs. */
   readonly stateRoot: string;
+  /** The machine's own temp folder as the daemon's user sees it (`os.tmpdir()`). */
+  readonly tempFolder: string;
   /** The user the host runs as, whose every agent runs as it too: root's tells Claude Code it may skip its permissions. */
   readonly user: { readonly uid: number; readonly gid: number };
   /** The agent CLIs where something other than the OS's pins names them: a suite's own, which fetches nothing. */
@@ -81,6 +83,7 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
       [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST,
       ...(options.user.uid === ROOT ? { [CLAUDE_CODE_SANDBOXED]: "1" } : {}),
     },
+    tempFolder: options.tempFolder,
     deviceName: options.os.deviceName(),
     deviceMachine: options.os.machine(),
     devicePlatform: options.os.platform,
