@@ -111,29 +111,39 @@ test("with Done and follow-ups on, the bar says Needs you, lists each ask waitin
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() =>
-    root.render(
-      createElement(ThreadsDock, {
-        threads: {
-          waiting: [decide, other],
-          posted: [other, decide],
-          onOpen: (item) => opened.push(item.title),
-          turnEnd: true,
-          onChoose: (item, label) => chosen.push(`${item.title}: ${label}`),
-        },
-      }),
-    ),
-  );
+  const draw = (sending: ReadonlySet<string>) =>
+    act(() =>
+      root.render(
+        createElement(ThreadsDock, {
+          threads: {
+            waiting: [decide, other],
+            posted: [other, decide],
+            onOpen: (item) => opened.push(item.title),
+            turnEnd: true,
+            onChoose: (item, label) => chosen.push(`${item.title}: ${label}`),
+            sending,
+          },
+        }),
+      ),
+    );
+  const never = () =>
+    [...container.querySelectorAll("button")].find((each) => each.textContent === "Never");
+  draw(new Set());
 
   const text = container.textContent ?? "";
   assert.ok(text.startsWith("Needs you2 need you"), text);
   assert.ok(text.includes("Expire an invitation after a week?"), text);
   assert.ok(text.includes("Add RESEND_API_KEY to the workspace"), text);
-  const never = [...container.querySelectorAll("button")].find(
-    (each) => each.textContent === "Never",
-  );
-  assert.ok(never, "the decide's options are its buttons");
-  act(() => never.click());
+  const button = never();
+  assert.ok(button, "the decide's options are its buttons");
+  act(() => button.click());
   assert.deepEqual(chosen, ["Expire an invitation after a week?: Never"]);
   assert.deepEqual(opened, []);
+
+  // While that answer is on its way, a second press sends nothing.
+  draw(new Set([decide.id]));
+  const waitingButton = never();
+  assert.ok(waitingButton, "the buttons stay while the answer is on its way");
+  act(() => waitingButton.click());
+  assert.deepEqual(chosen, ["Expire an invitation after a week?: Never"]);
 });

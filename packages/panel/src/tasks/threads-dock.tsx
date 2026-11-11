@@ -59,33 +59,35 @@ function NeedsYouRow({ item, threads }: { item: InboxItem; threads: AgentThreads
   const open = openAskOf(item.thread ?? []);
   const ask = open === undefined ? undefined : knownAsk(open.ask);
   const options = ask?.type === INBOX_ASK.DECIDE && decideButtons(ask) ? ask.options : undefined;
-  const chooses = threads.onChoose !== undefined && options !== undefined;
-  const sending = threads.sending?.has(item.id) === true;
   const { onChoose } = threads;
+  // Note that the buttons and the row's own press are one choice, so both read this alone.
+  const choice =
+    options === undefined || onChoose === undefined ? undefined : { options, onChoose };
+  const sending = threads.sending?.has(item.id) === true;
   return (
     <ListRow
       leading={inboxLineGlyph(inboxLineKind(item))}
       title={item.title}
-      description={chooses ? undefined : inboxPreview(item, nameOf)}
+      description={choice === undefined ? inboxPreview(item, nameOf) : undefined}
       actions={
-        options !== undefined && onChoose !== undefined ? (
+        choice === undefined ? undefined : (
           <Inline wrap={false}>
-            {options.map((option) => (
+            {choice.options.map((option) => (
               <Button
                 key={option.label}
                 size={BUTTON_SIZE.COMPACT}
                 variant={BUTTON_VARIANT.OUTLINE}
                 disabled={sending}
-                onClick={() => onChoose(item, option.label)}
+                onClick={() => choice.onChoose(item, option.label)}
               >
                 {option.label}
               </Button>
             ))}
           </Inline>
-        ) : undefined
+        )
       }
-      chevron={!chooses}
-      onPress={chooses ? undefined : () => threads.onOpen(item)}
+      chevron={choice === undefined}
+      onPress={choice === undefined ? () => threads.onOpen(item) : undefined}
     />
   );
 }
