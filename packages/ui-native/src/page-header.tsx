@@ -10,6 +10,7 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useAccessibilitySize } from "./accessibility.js";
 import { FieldChip, StatusChip } from "./button.js";
+import type { Face } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -23,7 +24,7 @@ type PageHeaderProps = {
   /** A task's priority, drawn as a chip after its status. */
   readonly priority?: string | undefined;
   /** Who a task is assigned to, drawn as a chip with their face, or the words for no one beside an empty face. */
-  readonly assignee?: { readonly name: string; readonly nobody: boolean } | undefined;
+  readonly assignee?: (Face & { readonly nobody: boolean }) | undefined;
 };
 
 /**
@@ -44,7 +45,7 @@ export function PageHeader({ title, summary, status, priority, assignee }: PageH
       {assignee === undefined ? null : assignee.nobody ? (
         <FieldChip label={assignee.name} symbol="person.crop.circle.dashed" />
       ) : (
-        <FieldChip label={assignee.name} face={assignee.name} />
+        <FieldChip label={assignee.name} face={assignee} />
       )}
     </>
   );

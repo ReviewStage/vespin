@@ -143,7 +143,7 @@ function PreviewMessageRow({
         {message.agent ? (
           <AgentTile name={message.writer} size={MARK_SIZE.WRITER} />
         ) : (
-          <Avatar name={message.writer} size={MARK_SIZE.WRITER} />
+          <Avatar name={message.writer} picture={message.picture} size={MARK_SIZE.WRITER} />
         )}
         <Text
           modifiers={[

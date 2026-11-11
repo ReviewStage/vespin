@@ -77,6 +77,7 @@ import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/u
 import { archiveQuestion } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -603,6 +604,7 @@ function agentState(status: AgentStatus): AgentRowState {
 /** The task's head: its name, its chips, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
+  const pictureOf = useMemberPictures();
   return (
     <TaskHead
       name={task.name}
@@ -611,7 +613,11 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
       assignee={
         task.assignee === undefined || task.assignee === null
           ? { name: NO_ASSIGNEE_WORDS, nobody: true }
-          : { name: task.assignee.name, nobody: false }
+          : {
+              name: task.assignee.name,
+              picture: pictureOf(task.assignee.userId),
+              nobody: false,
+            }
       }
       createdBy={
         task.createdBy === undefined

@@ -110,6 +110,12 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   );
 }
 
+/** A person as a mark draws them: their name, whose letters stand in for a picture, and their sign-in picture where one is known. */
+export type Face = {
+  readonly name: string;
+  readonly picture?: string | undefined;
+};
+
 type AvatarProps = {
   /** The person's or agent's name, which the avatar draws the letters of and is heard as. */
   readonly name: string;

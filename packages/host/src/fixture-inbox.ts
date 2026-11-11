@@ -159,11 +159,23 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
 
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
 const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
+
+/**
+ * The sign-in pictures the fixture's people stand in with: organizations'
+ * logos on GitHub's avatar host, which the apps may load pictures from,
+ * rather than anyone's face; Alan Turing is left with none, so his letters
+ * stand in, as anyone's do without one.
+ */
+const PICTURE = {
+  ADA: "https://avatars.githubusercontent.com/u/9919?v=4",
+  GRACE: "https://avatars.githubusercontent.com/u/1342004?v=4",
+} as const;
 const ACCOUNT: AccountSnapshot = {
   status: ACCOUNT_STATUS.SIGNED_IN,
   id: ADA.userId,
   email: "ada@example.com",
   name: ADA.name,
+  pictureUrl: PICTURE.ADA,
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
@@ -881,6 +893,7 @@ const FIXTURE_WORKSPACE: Workspace = {
   github: { login: "ada", active: true },
   personal: true,
   memberCount: 1,
+  pictureUrl: PICTURE.ADA,
   experiments: [
     {
       experiment: EXPERIMENT.DESCRIPTIONS,
@@ -894,12 +907,19 @@ const FIXTURE_WORKSPACE: Workspace = {
 /** The fixture workspace's people, as Settings › Workspace lists them: the account, its owner, an admin, and a member. */
 const MEMBERS: WorkspaceMembersAnswer = {
   members: [
-    { userId: ADA.userId, name: ADA.name, email: "ada@example.com", role: WORKSPACE_ROLE.OWNER },
+    {
+      userId: ADA.userId,
+      name: ADA.name,
+      email: "ada@example.com",
+      role: WORKSPACE_ROLE.OWNER,
+      pictureUrl: PICTURE.ADA,
+    },
     {
       userId: "user-grace",
       name: "Grace Hopper",
       email: "grace@example.com",
       role: WORKSPACE_ROLE.ADMIN,
+      pictureUrl: PICTURE.GRACE,
     },
     {
       userId: "user-alan",
@@ -921,6 +941,12 @@ const INVITATIONS: readonly WorkspaceInvitation[] = [
   },
 ];
 
+/** Relay's photo, as the host holds a workspace's photo once fetched: a small teal tile with a band across it, so a drawn photo reads apart from a letter on its hue. */
+const TEAM_PHOTO = {
+  version: "relay-photo-1",
+  url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAA+UlEQVR42s3YawrCMBBG0bsT9+cfl+Dm3IA7UhBE1CaTeXwTSGkeEziUNp2E6/32t5wu55bCEajLNAK1mCYgvWkOEptMIKXJCpKZFkAaE89rKxOv2z4m3rVNTHw2djDx1W438dvVa+Jvb6OJo4EuE4OxFhPjYb2JaYTYhCVIacIYJzNhD9WYWIoWmFidUG3CMafUhO/B1plwv31FJiKfaIWJ4DqWbiK+2OeaSPkjJprIShuyTCTmVikmchPQuIn0LD1oomIrEzFRtN9zm6jbFPtMlJ4cOExUH6+smspBqyYFaMkkAtlNOpDRJAVZTGrQ1NQAGpt6QAPTA4OnmUbTnrGMAAAAAElFTkSuQmCC",
+} as const;
+
 /**
  * A team the fixture's account is a member of beside its own, where a list
  * names none, so the iOS app's workspace switcher has another to list and
@@ -933,6 +959,7 @@ const TEAM_WORKSPACE: Workspace = {
   role: WORKSPACE_ROLE.MEMBER,
   github: { login: "relay-dev", active: true },
   memberCount: 6,
+  photoVersion: TEAM_PHOTO.version,
 };
 
 /**
@@ -1477,6 +1504,10 @@ export function inboxAppState(
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.WORKSPACE_PHOTOS]: {
+      ...state[LIVE_READ.WORKSPACE_PHOTOS],
+      [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
+    },
     [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),

@@ -32,6 +32,7 @@ import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import type { PictureOf } from "../member-pictures.js";
 import { useWrite } from "../use-write.js";
 
 /** No threads read yet. */
@@ -73,10 +74,11 @@ export function threadOpen(thread: DescriptionCommentThread): boolean {
   return thread.status === DESCRIPTION_COMMENT_STATUS.OPEN;
 }
 
-/** Who wrote an entry, as the panel's thread names them: a member by their name, the app by its own, and a coding agent by the name its task lists it under. */
+/** Who wrote an entry, as the panel's thread names them: a member by their name and picture, the app by its own, and a coding agent by the name its task lists it under. */
 function writerOf(
   entry: DescriptionCommentEntry,
   agentNames: ReadonlyMap<string, string>,
+  pictureOf: PictureOf,
 ): ThreadMessage["writer"] {
   const { writer } = entry;
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) return { name: PRODUCT_NAME, agent: true };
@@ -84,17 +86,18 @@ function writerOf(
     const named = writer.agentId === undefined ? undefined : agentNames.get(writer.agentId);
     return { name: named ?? PRODUCT_NAME, agent: true };
   }
-  return { name: writer.by?.name ?? SOMEONE, agent: false };
+  return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
 }
 
 /** A thread's comments as its page draws them, each by its writer, its words typed line by line; the files a comment carries are left to the desktop and the web. */
 export function threadMessages(
   thread: DescriptionCommentThread,
   agentNames: ReadonlyMap<string, string>,
+  pictureOf: PictureOf,
 ): readonly ThreadMessage[] {
   return threadComments(thread).map((entry) => ({
     id: entry.id,
-    writer: writerOf(entry, agentNames),
+    writer: writerOf(entry, agentNames, pictureOf),
     at: entry.at,
     words: entry.words ?? "",
     typed: entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER,

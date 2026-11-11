@@ -14,6 +14,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
+import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import {
   threadMessages,
@@ -53,6 +54,7 @@ export function CommentThreadScreen() {
   const threads = useTaskComments(overview?.task.id);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
+  const pictureOf = useMemberPictures();
   const agentNames = new Map(
     (overview?.agents ?? []).map(({ agent }) => [agent.id, agentName(agent)] as const),
   );
@@ -92,7 +94,7 @@ export function CommentThreadScreen() {
               path={path}
               status={task?.status}
               title={quoteOf(thread.quote, thread.anchor !== undefined)}
-              messages={threadMessages(thread, agentNames)}
+              messages={threadMessages(thread, agentNames, pictureOf)}
               repository={task?.repository}
               onOpenLink={openLink}
               standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}

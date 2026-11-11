@@ -16,6 +16,8 @@ export interface PreviewMessage {
   readonly writer: string;
   /** Whether the agent wrote it, whose tile stands beside it rather than a member's face. */
   readonly agent: boolean;
+  /** A member writer's sign-in picture, where one is known. */
+  readonly picture?: string | undefined;
   readonly at: number;
   readonly words: string;
 }
@@ -28,12 +30,14 @@ export interface PreviewMessage {
  */
 export function previewMessages(
   messages: readonly InboxThreadMessage[],
+  pictureOf: (userId: string | undefined) => string | undefined = () => undefined,
 ): readonly PreviewMessage[] {
   return messages
     .map((message) => ({
       id: message.id,
       writer: message.writer.name,
       agent: message.writer.agent,
+      picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       at: message.at,
       words: [message.stamp?.words, plainWords(message.words)]
         .filter((part) => part !== undefined && part !== "")

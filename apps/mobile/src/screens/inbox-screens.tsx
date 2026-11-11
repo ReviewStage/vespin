@@ -80,6 +80,7 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -154,6 +155,8 @@ function InboxRows({
   onRemind,
   onResolve,
 }: InboxRowsProps) {
+  // The members' pictures, read once for every row rather than once a row.
+  const pictureOf = useMemberPictures();
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {listed.map((each) => (
@@ -161,6 +164,7 @@ function InboxRows({
           key={each.item.id}
           listed={each}
           readerId={readerId}
+          pictureOf={pictureOf}
           onMark={onMark}
           onRemind={onRemind}
           onResolve={onResolve}
@@ -183,12 +187,15 @@ function InboxRows({
 export function InboxRow({
   listed,
   readerId,
+  pictureOf,
   onMark,
   onRemind,
   onResolve,
 }: {
   readonly listed: InboxListed;
   readonly readerId: string | undefined;
+  /** Each member's picture by their id, read once by the list the row stands in. */
+  readonly pictureOf: PictureOf;
   readonly onMark: (itemId: string, unread: boolean) => void;
   /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
   readonly onRemind: (item: InboxItem) => void;
@@ -212,8 +219,9 @@ export function InboxRow({
           agentName,
           readerId,
         ),
+        pictureOf,
       ),
-    [item, agentName, readerId],
+    [item, agentName, readerId, pictureOf],
   );
   const resolve =
     item.status === INBOX_STATUS.OPEN
@@ -238,7 +246,11 @@ export function InboxRow({
       summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
       unread={unread}
       done={isDone(item)}
-      face={waitsOn === undefined || waitsOn.userId === readerId ? undefined : waitsOn.name}
+      face={
+        waitsOn === undefined || waitsOn.userId === readerId
+          ? undefined
+          : { name: waitsOn.name, picture: pictureOf(waitsOn.userId) }
+      }
       at={item.updatedAt}
       due={item.remindAt}
       trailingActions={[
@@ -377,6 +389,7 @@ function ThreadDetail({
   const openLink = useOpenLink();
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const pictureOf = useMemberPictures();
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
@@ -437,6 +450,10 @@ function ThreadDetail({
   const menu = threadMenu(item, answer, () => openRemind(item));
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
+    writer: {
+      ...message.writer,
+      picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+    },
     stamp:
       message.stamp === undefined
         ? undefined

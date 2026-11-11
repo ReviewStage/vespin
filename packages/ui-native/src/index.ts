@@ -68,6 +68,7 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  type Face,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,

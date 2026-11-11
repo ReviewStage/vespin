@@ -45,6 +45,7 @@ import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import {
   Avatar,
+  type Face,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -171,7 +172,7 @@ type ListRowProps = RowActs & {
   /** Whether the thread is done, which mutes its words. */
   readonly done?: boolean | undefined;
   /** The teammate a thread of someone else's waits on, whose face stands before the time. */
-  readonly face?: string | undefined;
+  readonly face?: Face | undefined;
   /** When it last changed, in epoch milliseconds, said as the panel's rows say it: "now", "5m", "3h". */
   readonly at?: number | undefined;
   /** What `at` counts from; now where none is given. */
@@ -530,7 +531,9 @@ export function ListRow(props: ListRowProps) {
         ink={titleInk(colors, unread, done)}
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
-            {face === undefined ? null : <Avatar name={face} size={MARK_SIZE.FACE} />}
+            {face === undefined ? null : (
+              <Avatar name={face.name} picture={face.picture} size={MARK_SIZE.FACE} />
+            )}
             {due !== undefined ? (
               <RowDue due={due} now={now} />
             ) : at === undefined ? null : (
@@ -558,7 +561,7 @@ function threadHeard(props: ListRowProps): RowHeard {
       summary?.trim(),
       task?.name,
       task?.status === undefined ? undefined : TASK_STATUS_WORDS[task.status],
-      face,
+      face?.name,
       due !== undefined
         ? `${REMIND_WORDS.DUE} ${dueText(due, moment)}`
         : at === undefined
