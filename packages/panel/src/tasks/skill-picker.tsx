@@ -45,6 +45,7 @@ import {
   CommandRef,
   commandOption,
   matchingCommands,
+  runsCommand,
 } from "./command-ref.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, wordBox } from "./mention-picker.js";
 import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-ref.js";
@@ -305,8 +306,11 @@ export function useSkillPicker({
   const rows: readonly Entry[] = [
     ...offeredCommands.map((name) => ({ kind: ENTRY_KIND.COMMAND, name })),
     ...(open ? offered(skills, mention) : [])
-      // A skill named as a command is left out where the command is what its name runs.
-      .filter((skill) => !(leads && isSlashCommand(skill.name)))
+      // A skill named as a command is left out where the box runs that command, which is what its name runs.
+      .filter(
+        (skill) =>
+          !(leads && isSlashCommand(skill.name) && runsCommand(skill.name, commands.reach)),
+      )
       .map((skill) => ({ kind: ENTRY_KIND.SKILL, skill })),
   ];
   const held =

@@ -71,8 +71,8 @@ export interface CommandReach {
   readonly session: boolean;
 }
 
-/** Whether a box reaches what a listed command acts on. */
-function reaches(name: (typeof LISTED_COMMANDS)[number], reach: CommandReach): boolean {
+/** Whether a box runs a command, by name or by alias: `/model` beside its chip, the rest on a session. */
+export function runsCommand(name: SlashCommand, reach: CommandReach): boolean {
   return name === SLASH_COMMAND.MODEL ? reach.model : reach.session;
 }
 
@@ -82,7 +82,7 @@ export function matchingCommands(query: string, reach: CommandReach): readonly S
   return LISTED_COMMANDS.filter((name) => {
     const entry: CommandEntry = COMMANDS[name];
     const found = name.startsWith(typed) || (entry.alias?.startsWith(typed) ?? false);
-    return found && reaches(name, reach);
+    return found && runsCommand(name, reach);
   });
 }
 

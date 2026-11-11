@@ -559,6 +559,29 @@ test("a box with a model chip and no session, as New task's, lists /model alone 
   );
 });
 
+test("a skill named as a command the box does not run, as /compact in New task's, is still offered under its name", async () => {
+  const box = await mounted(undefined, {
+    model: MODEL,
+    skills: () =>
+      Promise.resolve({
+        skills: [
+          {
+            name: "compact",
+            description: "Use to squash commits.",
+            source: TASK_SKILL_SOURCE.REPOSITORY,
+            path: ".agents/skills/compact/SKILL.md",
+          },
+        ],
+      }),
+  });
+  typeInComposer(box.container, "/compact");
+  await settle();
+  const rows = [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+    (row) => row.querySelector(".ui-combobox-option-detail")?.textContent,
+  );
+  assert.deepEqual(rows, ["Use to squash commits."]);
+});
+
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {
   const box = await mounted();
   typeInComposer(box.container, "Ship it with /");
