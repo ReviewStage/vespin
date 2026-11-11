@@ -22,6 +22,7 @@ import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testi
 import { stateWith } from "../testing/app-state.js";
 import {
   composerEditor,
+  composerWords,
   editorBundleLanded,
   installEditorLayout,
   writeInComposer,
@@ -42,9 +43,10 @@ import { MemorySection } from "./memory-page.js";
  * another workspace is held for its own memories; and a read that fails
  * offers to try again. The memories agents recall most stand first, one no
  * agent was handed in the window says so, and Edit saves a memory's words
- * from the field it opens in their place, which goes with a memory deleted
- * while it saves; Add memory saves a new one from a draft row, which stands
- * under a refusal. Synthetic workspaces, members, and memories.
+ * from the card it opens, which goes with a memory deleted while it saves
+ * and is never replaced while it saves; Add memory saves a new one from the
+ * same card, which stands under a refusal. Synthetic workspaces, members,
+ * and memories.
  */
 
 const READER = "user-reader";
@@ -286,8 +288,8 @@ const boxOf = (page: HTMLElement, memory: MemorySummary) =>
   rowOf(page, memory).querySelector<HTMLElement>('[role="checkbox"]') ??
   assert.fail("no box on the row");
 
-/** The field a memory's words are written in, where one stands. */
-const field = (page: HTMLElement) => page.querySelector<HTMLElement>(".memory-field");
+/** The card's field a memory's words are written in, where one stands; the card hangs over the window, outside the page. */
+const field = (_page: HTMLElement) => document.querySelector<HTMLElement>(".memory-field");
 
 /** Waits for the field's editor to run, then writes `words` over what it holds. */
 async function writeInField(page: HTMLElement, words: string): Promise<void> {
@@ -300,10 +302,10 @@ async function writeInField(page: HTMLElement, words: string): Promise<void> {
   writeInComposer(box(), words);
 }
 
-/** Presses the field's own `label`, its Cancel or its Save. */
-function pressInField(page: HTMLElement, label: string): void {
+/** Presses the field's own `label`, its Save. */
+function pressInField(_page: HTMLElement, label: string): void {
   const press =
-    [...page.querySelectorAll<HTMLButtonElement>(".memory-field button")].find(
+    [...document.querySelectorAll<HTMLButtonElement>(".memory-field button")].find(
       (each) => (each.getAttribute("aria-label") ?? each.textContent) === label,
     ) ?? assert.fail(`no ${label} in the field`);
   act(() => press.click());
@@ -578,7 +580,7 @@ test("a memory older than the recall window that no agent was handed in it reads
   assert.deepEqual(cells.slice(2, 4), ["—", "Never"]);
 });
 
-test("Edit opens the memory's words in their place and saves the new words in place of the memory it edits", async () => {
+test("Edit opens the memory's words in a card and saves the new words in place of the memory it edits", async () => {
   const corrected = "Deployments go out from main through Vercel.";
   saveAnswer = (save) => ({
     outcome: MEMORY_SAVED.CORRECTED,
@@ -588,8 +590,8 @@ test("Edit opens the memory's words in their place and saves the new words in pl
 
   openMenu(page, DEPLOYS);
   chooseMenuItem("Edit");
+  assert.equal(composerWords(field(page) ?? assert.fail("no card")), DEPLOYS.text);
   await writeInField(page, corrected);
-  assert.ok(document.querySelector('[role="dialog"]') === null, "no dialog opens");
   pressInField(page, "Save");
   await settle();
 
@@ -599,9 +601,7 @@ test("Edit opens the memory's words in their place and saves the new words in pl
       .map((request) => request.payload),
     [{ workspaceId: ACME.id, text: corrected, replaces: DEPLOYS.id }],
   );
-  await vi.waitFor(() =>
-    assert.ok(field(page) === null, "the field goes once the words are taken"),
-  );
+  await vi.waitFor(() => assert.ok(field(page) === null, "the card goes once the words are taken"));
 });
 
 test("an edit whose memory is deleted while it saves goes with it, and its answer opens no field again", async () => {
@@ -625,13 +625,12 @@ test("an edit whose memory is deleted while it saves goes with it, and its answe
   assert.ok(field(page) === null, "no field stands");
 });
 
-test("Add memory writes a new one in a draft row atop the table, saves it replacing nothing, and keeps the draft under a refusal", async () => {
+test("Add memory writes a new one in the card, saves it replacing nothing, and keeps the card under a refusal", async () => {
   saveAnswer = () => ({ failure: MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL });
   const { page } = await mount();
 
   act(() => button(page, "Add memory").click());
   await writeInField(page, "Release notes are written before the tag is pushed.");
-  assert.ok(rows(page)[0]?.querySelector(".memory-field") !== null, "the draft stands first");
   pressInField(page, "Save");
   await settle();
 
@@ -646,7 +645,7 @@ test("Add memory writes a new one in a draft row atop the table, saves it replac
   );
 });
 
-test("while an edit's save is out, Add memory opens no draft over it", async () => {
+test("while an edit's save is out, Add memory opens nothing over its card", async () => {
   const answering = Promise.withResolvers<void>();
   saveHeld = answering.promise;
   const { page } = await mount();
@@ -659,8 +658,10 @@ test("while an edit's save is out, Add memory opens no draft over it", async () 
   act(() => button(page, "Add memory").click());
   await settle();
 
-  assert.equal(page.querySelectorAll(".memory-field").length, 1);
-  assert.ok(rows(page)[0]?.querySelector('[role="checkbox"]') !== null, "no draft row stands");
+  assert.equal(
+    composerWords(field(page) ?? assert.fail("no card")),
+    "Deployments go out from main.",
+  );
   answering.resolve();
   await settle();
 });
