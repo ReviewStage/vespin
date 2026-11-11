@@ -15,10 +15,9 @@
  */
 
 import {
-  BANNER_LOOK,
+  Badge,
   BUTTON_SIZE,
   BUTTON_VARIANT,
-  Banner,
   Button,
   DISCLOSURE_FILL,
   HoverCard,
@@ -386,33 +385,36 @@ export function GoalDock(): ReactNode {
   );
   return (
     <div className={`agent-goal-dock ${COMPOSER_DOCK_CLASS}`}>
-      {!paused || PAUSE_ON_ROW ? null : (
-        <Banner
-          look={BANNER_LOOK.INSET}
-          tone={STATUS_TONE.NEUTRAL}
-          glyph={<PauseIcon />}
-          actions={
-            <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.QUIET} icon={<PlayIcon />} onClick={resume}>
-              Resume
-            </Button>
-          }
-        >
-          Goal paused. The agent stops after this turn until you resume it.
-        </Banner>
-      )}
       <div className="agent-published">
         <List label="Goal" variant={LIST_VARIANT.CARD} fingerTall>
           <RowHintOptions card={<GoalCard goal={goal} />}>
             <ListRow
-              leading={goal.status === MOCK_STATUS.MET ? <CircleCheckIcon /> : <GLYPH.GOAL />}
+              leading={
+                goal.status === MOCK_STATUS.MET ? <CircleCheckIcon /> : paused ? <PauseIcon /> : <GLYPH.GOAL />
+              }
               title={goal.objective}
-              meta={<span className="whitespace-nowrap text-muted-foreground">{metaWords(goal)}</span>}
+              meta={
+                paused ? (
+                  <Badge tone={STATUS_TONE.ATTENTION}>Paused</Badge>
+                ) : (
+                  <span className="whitespace-nowrap text-muted-foreground">{metaWords(goal)}</span>
+                )
+              }
               hint={{ Hint: RowHint, label: goal.objective }}
               onPress={showNewestCard}
               menu={menu}
               more={!coarse}
-              muted={paused}
-              {...(PAUSE_ON_ROW && pausing.length > 0
+              // Note that a paused goal holds Resume on its row, standing, so the pause is said where the goal is rather than over it.
+              {...(paused
+                ? {
+                    actionsAt: LIST_ROW_ACTIONS.ALWAYS,
+                    actions: (
+                      <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.QUIET} icon={<PlayIcon />} onClick={resume}>
+                        Resume
+                      </Button>
+                    ),
+                  }
+                : PAUSE_ON_ROW && pausing.length > 0
                 ? {
                     actionsAt: LIST_ROW_ACTIONS.HOVER,
                     actions: (
