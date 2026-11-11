@@ -12,7 +12,7 @@ import { handBeats } from "./testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "./testing/copy-feedback.js";
 
 /**
- * device-presence.test.ts -- the shared presence judges each device by how long ago its beat was on this machine's clock, says it cannot check, not offline, where its read failed, and says a host setting up or failed whatever its beat.
+ * device-presence.test.ts -- the shared presence says a host setting up or failed by its setup, and otherwise offline only where the sweep marked it away, and says it cannot check, not offline, where its read failed.
  * Synthetic ids.
  */
 
@@ -56,22 +56,12 @@ async function draw(ids: readonly string[]): Promise<HTMLElement> {
   return container;
 }
 
-test("a beat delayed by 25 seconds still reads online, and a device quiet for four beats reads offline", async () => {
+test("a host the sweep marked away reads offline, and one it did not reads online", async () => {
   fakeActPort({});
-  handBeats({ [deviceOf(1)]: 25_000 + 15_000, [deviceOf(2)]: 61_000 });
+  handBeats({ [deviceOf(1)]: 1_000, [deviceOf(2)]: 61_000 });
   const container = await draw([deviceOf(1), deviceOf(2)]);
 
   assert.equal(container.textContent, `${DEVICE_STANDING.ONLINE},${DEVICE_STANDING.OFFLINE}`);
-});
-
-test("a device a read found online is not called offline because the next read is late, only once a read that landed lately finds it quiet", async () => {
-  fakeActPort({});
-  // The read 31 seconds ago found the beat 50 seconds old, so the window alone reckons it 81 seconds old now.
-  handBeats({ [deviceOf(1)]: 81_000 }, { askedAgoMs: 31_000 });
-  assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.UNKNOWN);
-
-  handBeats({ [deviceOf(1)]: 81_000 });
-  assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.OFFLINE);
 });
 
 test("a device the read does not name as the account's own has no standing", async () => {
@@ -82,16 +72,13 @@ test("a device the read does not name as the account's own has no standing", asy
   assert.equal(container.textContent, `${DEVICE_STANDING.ONLINE},none`);
 });
 
-test("a read that failed says unknown, never offline, whether or not one answered before it", async () => {
+test("a read that failed says unknown, never offline", async () => {
   fakeActPort({});
   handBeats(undefined);
   assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.UNKNOWN);
-
-  handBeats({ [deviceOf(1)]: 61_000 }, { stale: true });
-  assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.UNKNOWN);
 });
 
-test("a host still fetching its tools, one whose setup failed, and one that never called in ten minutes after joining read setting up, failed, and failed, though each beat just now", async () => {
+test("a host still fetching its tools, one whose setup failed, and one that never called in ten minutes after joining read setting up, failed, and failed, though none is away", async () => {
   fakeActPort({});
   const host = (n: number) => ({ id: deviceOf(n), name: `host-${n}` });
   handBeats(

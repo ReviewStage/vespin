@@ -468,7 +468,7 @@ export interface AppDevicePresence {
 export type AppDevicePresences = Readonly<Record<string, AppHostRead<AppDevicePresence>>>;
 
 /** The account's hosts as Settings › Hosts draws them, by name, with each removal still out drawn gone, and the install script's address its commands name. */
-interface AppHostsHeld {
+export interface AppHostsHeld {
   hosts: readonly HostLine[];
   installScriptUrl: string;
 }
