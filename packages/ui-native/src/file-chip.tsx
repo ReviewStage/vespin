@@ -66,6 +66,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   words: { flexShrink: 1, gap: 1 },
+  facts: { flexDirection: "row", flexWrap: "wrap", columnGap: SPACE.ROW - 2 },
   viewer: { flex: 1 },
   bar: {
     flexDirection: "row",
@@ -241,25 +242,26 @@ type FileChipProps = {
 /**
  * A file's chip after a message's words, as the panel stands a file's chip:
  * its glyph, its name on one line, cut in its middle so its extension
- * stays, and its kind and size under it, muted, on `SURFACE` inside a
- * hairline. A press opens it full screen (`FileViewer`); while its bytes
- * are on their way the system's spinner stands in its glyph's place and a
- * press does nothing. At an accessibility size its name wraps rather than
- * cuts.
+ * stays, and its kind and its size under it as muted words apart, on
+ * `SURFACE` inside a hairline. A press opens it full screen (`FileViewer`);
+ * while its bytes are on their way the system's spinner stands in its
+ * glyph's place and a press does nothing. At an accessibility size its name
+ * wraps rather than cuts.
  */
 export function FileChip({ name, mediaType, source, size }: FileChipProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const [open, setOpen] = useState(false);
   const kind = kindOf(name, mediaType);
-  const line = size === undefined ? kind : `${kind} · ${size}`;
+  const heard = [name, kind, size].filter((part) => part !== undefined).join(", ");
+  const fact = { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED };
   return (
     <>
       <Pressable
         onPress={() => setOpen(true)}
         disabled={source === undefined}
         accessibilityRole="button"
-        accessibilityLabel={`${name}, ${line}`}
+        accessibilityLabel={heard}
         accessibilityHint={FILE_WORDS.OPENS}
         accessibilityState={{ busy: source === undefined }}
         style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
@@ -281,7 +283,11 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
           >
             {name}
           </Text>
-          <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>{line}</Text>
+          {/* Note that its kind and its size stand as two muted words apart, never joined by a separator. */}
+          <View style={styles.facts}>
+            <Text style={fact}>{kind}</Text>
+            {size === undefined ? null : <Text style={fact}>{size}</Text>}
+          </View>
         </View>
       </Pressable>
       {source === undefined ? null : (
