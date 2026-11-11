@@ -117,9 +117,9 @@ const POST_THREAD_WORDS =
   "ask is what the message asks of them, which ends it: " +
   `decide (two to ${INBOX_BOUNDS.MAX_OPTIONS} options, each a short label and an optional detail; name the label you recommend; multiple lets them pick several, and recommended then takes a list of the labels you recommend; ` +
   `where they pick between designs or variants, give each option its own media, at most ${INBOX_BOUNDS.MAX_OPTION_MEDIA}, which they look at on its card: ` +
-  "a file in your sandbox as {path, caption}, a picture or a recording as a body's picture is, a page you showed with show_page as {page} by the id it answered, " +
+  "a file in your sandbox as {path, caption}, a picture or a recording as a body's picture is, a page you showed with show_page as {page, version} by the id and version it answered, " +
   `or an https address to open, such as a preview, as {url, label}; at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} across the options, the message's own pictures counted; ` +
-  "an option's extra screens go in its own media, never an option of their own, and media an option carries stands on its card, so never draw it in body as well; " +
+  "an option's extra screens go in its own media, never an option of their own, and a picture or recording an option carries stands on its card, so never draw it in body as well; " +
   `options with media also offer "${NONE_OF_THESE}", which you never offer yourself, and an answer of none reaches you as "Chose ${NONE_OF_THESE.toLowerCase()}."; ` +
   "for a go-ahead on one step you propose, two short options such as Approve and Request changes), " +
   "do (a to-do: something only they can do by hand, such as changing a GitHub setting, adding a secret, or testing by hand what you could not test yourself; " +
@@ -232,9 +232,9 @@ export const INBOX_REFUSAL = {
   TOO_MANY_PICTURES: `Not posted: a message draws at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} pictures from your sandbox.`,
   NO_OPTIONS: "Not posted: a decide's options each stand under a label of their own.",
   NONE_OFFERED: `Not posted: an option carrying media may not be labeled "${NONE_OF_THESE}", which the reader is offered beside your options already.`,
-  TOO_MUCH_MEDIA: `Not posted: a decide's options carry at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} pieces of media between them, and a message keeps at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} files, its own pictures and its options' together.`,
+  TOO_MUCH_MEDIA: `Not posted: a decide's option media and the message's own pictures total at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} pieces.`,
   NO_PAGE:
-    "Not posted: an option names a page you did not show on this task; name a page by the id show_page answered.",
+    "Not posted: an option names a page or a version you did not show on this task; name a page by the id and version show_page answered.",
   UNKNOWN_RECOMMENDATION: "Not posted: recommended names a label no option has.",
   SEVERAL_RECOMMENDED:
     "Not posted: recommended names each label once, and several only where multiple lets them pick several.",
@@ -439,7 +439,6 @@ function askRefusal(ask: InboxAskInput | undefined): string | undefined {
       if (!distinct(labels)) return INBOX_REFUSAL.NO_OPTIONS;
       const media = ask.options.flatMap((option) => option.media ?? []);
       if (media.length > 0 && labels.includes(NONE_OF_THESE)) return INBOX_REFUSAL.NONE_OFFERED;
-      if (media.length > INBOX_BOUNDS.MAX_ASK_MEDIA) return INBOX_REFUSAL.TOO_MUCH_MEDIA;
       const recommended = recommendedLabels(ask);
       if (!recommended.every((label) => labels.includes(label))) {
         return INBOX_REFUSAL.UNKNOWN_RECOMMENDATION;
@@ -506,7 +505,7 @@ interface KeptOptionMedia {
  * One piece of an option's media as the store keeps it, or the refusal of
  * it: a file read from the sandbox as a body's picture is, under an id
  * minted for it; a page the agent showed on its task, at the version it
- * stands at now; or the address as posted.
+ * names, or its newest; or the address as posted.
  */
 function keptOptionMedia(
   agent: InboxAgent,
@@ -523,7 +522,7 @@ function keptOptionMedia(
       Result.succeed({ media: { type: INBOX_OPTION_MEDIA.LINK, url: posted.url, ...label } }),
     );
   }
-  if ("page" in posted) return keptOptionPage(agent, posted.page);
+  if ("page" in posted) return keptOptionPage(agent, posted.page, posted.version);
   const { path } = posted;
   return Effect.map(
     readSandboxMedia(sandbox, CODER.CHECKOUT_PATH, path, OPTION_FILE_REFUSALS),
@@ -549,16 +548,17 @@ function ownPagePlace(agent: InboxAgent, owner: PageOwner): PagePlace | undefine
   return owner.agentId === agent.agentId ? { agentId: owner.agentId } : undefined;
 }
 
-/** A page an option names as the store keeps it: one shown on the agent's task, at its newest version; refused where the agent's account reaches none there. */
+/** A page an option names as the store keeps it: one shown on the agent's task, at the version named, the one the agent was shown, or its newest; refused where the agent's account reaches no such page or version there. */
 function keptOptionPage(
   agent: InboxAgent,
   pageId: string,
+  version: number | undefined,
 ): Effect.Effect<
   Result.Result<{ readonly media: InboxOptionMedia }, string>,
   never,
   DatabaseServices
 > {
-  return readPageById(agent.userId, pageId, undefined).pipe(
+  return readPageById(agent.userId, pageId, version).pipe(
     Effect.map((found) => {
       if (Option.isNone(found)) return Result.fail(INBOX_REFUSAL.NO_PAGE);
       const { owner, page } = found.value;
@@ -594,8 +594,7 @@ function optionMedia(
   if (ask?.type !== INBOX_ASK.DECIDE)
     return Effect.succeed(Result.succeed({ media: [], files: [] }));
   const posted = ask.options.map((option) => option.media ?? []);
-  const files = posted.flat().filter((media) => "path" in media).length;
-  if (bodyPictures + files > INBOX_BOUNDS.MAX_ASK_MEDIA) {
+  if (bodyPictures + posted.flat().length > INBOX_BOUNDS.MAX_ASK_MEDIA) {
     return Effect.succeed(Result.fail(INBOX_REFUSAL.TOO_MUCH_MEDIA));
   }
   return Effect.gen(function* () {

@@ -540,14 +540,18 @@ export type InboxOption = typeof inboxOptionSchema.Type;
  * One piece of an option's media as the agent posts it: a file by its path
  * in the agent's sandbox, which the service reads and keeps as a file of the
  * message, with the words that say what it shows; a page it showed, by the
- * id `show_page` answered; or an https address, with the words it is named by.
+ * id and the version `show_page` answered, its newest where it names none;
+ * or an https address, with the words it is named by.
  */
 const inboxPostOptionMediaSchema = EffectSchema.Union([
   EffectSchema.Struct({
     path: filledText(INBOX_BOUNDS.MAX_PATH_CHARS),
     caption: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_ALT_CHARS)),
   }),
-  EffectSchema.Struct({ page: wireUuidSchema }),
+  EffectSchema.Struct({
+    page: wireUuidSchema,
+    version: EffectSchema.optionalKey(pageVersionNumberSchema),
+  }),
   EffectSchema.Struct({
     url: EffectSchema.String.check(
       EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_URL_CHARS),
