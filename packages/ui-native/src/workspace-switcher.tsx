@@ -113,9 +113,10 @@ function tilePicture(workspace: SwitcherWorkspace, size: number): string | undef
  * A workspace's tile, as the panel's is: its photo, its owner's picture on a
  * personal one, or the first character of its name on one of six hues read
  * off its id, on a softened square, since a square says a team as a circle
- * says a person. Note that the letter stands under the picture, so it shows
- * while the picture loads and stays once it fails, which takes the picture
- * away. It is never heard, since the name beside it says the workspace.
+ * says a person. Note that the hue and the letter stand only until the
+ * picture has drawn, so they show while it loads and once it fails, which
+ * takes the picture away, but never through a picture's transparent pixels.
+ * It is never heard, since the name beside it says the workspace.
  */
 export function WorkspaceTile({
   workspace,
@@ -128,26 +129,33 @@ export function WorkspaceTile({
   const dark = useColorScheme() === "dark";
   const picture = tilePicture(workspace, size);
   const [failed, setFailed] = useState<string | undefined>(undefined);
+  const [drawn, setDrawn] = useState<string | undefined>(undefined);
+  const pictureDrawn = picture !== undefined && picture === drawn && picture !== failed;
   const corner = size * TILE_ROUNDING;
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
-      <RoundedRectangle
-        cornerRadius={corner}
-        modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
-      />
-      <Text
-        modifiers={[
-          font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
-          foregroundStyle(ON_IDENTITY),
-        ]}
-      >
-        {identityLetter(workspace.name)}
-      </Text>
+      {pictureDrawn ? null : (
+        <>
+          <RoundedRectangle
+            cornerRadius={corner}
+            modifiers={[foregroundStyle(tileHue(workspace.id, dark))]}
+          />
+          <Text
+            modifiers={[
+              font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
+              foregroundStyle(ON_IDENTITY),
+            ]}
+          >
+            {identityLetter(workspace.name)}
+          </Text>
+        </>
+      )}
       {picture === undefined || picture === failed ? null : (
         <AvatarPhoto
           address={picture}
           size={size}
           corner={corner}
+          onLoad={() => setDrawn(picture)}
           onFail={() => setFailed(picture)}
         />
       )}
