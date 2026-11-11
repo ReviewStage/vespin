@@ -56,8 +56,8 @@ import { type AgentsControl, agentAddRepositoryMutation } from "./use-agents.js"
 /** The agent Add repository… is offered on, as the item reads it. */
 type AddedTo = Pick<AgentSummary, "id" | "archivedAt" | "machine" | "startedBy">;
 
-/** What the item reads of the control: the reader, where the agents' workspace is known, and the door the add goes through. */
-type AddDoors = Pick<AgentsControl, "me" | "workspaceId" | "onUnarchive" | "addRepository">;
+/** What the item reads of the control: the reader and the door the add goes through. */
+type AddDoors = Pick<AgentsControl, "me" | "onUnarchive" | "addRepository">;
 
 /** The add of a surface that offers none, which no dialog ever sends. */
 const NO_ADD = agentAddRepositoryMutation(() =>
@@ -208,7 +208,6 @@ export function useAddRepository(
     recent: [],
     openGitHub: (url) => appPlatform().openWeb(url),
     pictures: true,
-    scope: agents.workspaceId,
     manages: false,
   };
   return {
