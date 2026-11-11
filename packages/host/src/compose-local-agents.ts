@@ -18,6 +18,7 @@ import {
   DEVICE_GITHUB_ACCESS,
   DEVICE_LAUNCH_STEP,
   DEVICE_LAUNCH_UNSTARTED,
+  DEVICE_PLATFORM,
   DEVICE_SETUP,
   type DeviceAgentLaunchSecrets,
   type DeviceAgentLayout,
@@ -936,6 +937,14 @@ export function composeLocalAgents(
             }
             const handle = started.value;
             yield* keepRunnerGroup(kernel.stateRoot, agentId, handle.pid);
+            // Note that a Mac does not idle-sleep while the runner lives, because its turn's lease lapses after five minutes asleep. `-w` ends the assertion with the runner even where the daemon dies first, and `-i` holds idle sleep alone, so a closed lid still sleeps it. Failing to start it never fails the launch.
+            if (platform.devicePlatform === DEVICE_PLATFORM.DARWIN) {
+              yield* ChildProcess.make("caffeinate", ["-i", "-w", String(handle.pid)], {
+                stdin: "ignore",
+                stdout: "ignore",
+                stderr: "ignore",
+              }).pipe(Scope.provide(runnerScope), Effect.ignore);
+            }
             if (withToken) yield* Effect.forkIn(renewingGithub(agentId, hadToken), runnerScope);
             yield* Queue.offer(
               stdin,

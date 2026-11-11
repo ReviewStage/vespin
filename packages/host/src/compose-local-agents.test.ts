@@ -216,6 +216,7 @@ const followingDevice = (
         };
       if (program === "/bin/bash") return { exitCode: 0 };
       if (program === RUNNER) return runner;
+      if (program === "caffeinate") return {};
       return undefined;
     });
     const registered: DeviceAgentDevice[] = [];
@@ -386,6 +387,13 @@ it.effect(
           JSON.parse(files.get(group) ?? "{}").group,
           spawned.findIndex((each) => each.program === RUNNER) + 1,
         );
+        // Note that a Mac is kept from idle sleep for as long as the runner lives.
+        yield* until(() => spawned.some((each) => each.program === "caffeinate"));
+        assert.deepEqual(spawned.find((each) => each.program === "caffeinate")?.args, [
+          "-i",
+          "-w",
+          String(spawned.findIndex((each) => each.program === RUNNER) + 1),
+        ]);
         assert.equal(runner?.env?.APP_RUNNER_TOKEN, SECRET_ENV.APP_RUNNER_TOKEN);
         // Note that gh prefers a token in its environment to its config, so one there would never be renewed.
         assert.equal(runner?.env?.GH_TOKEN, undefined, "the runner's gh reads its config alone");
