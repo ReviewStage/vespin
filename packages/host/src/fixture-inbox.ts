@@ -355,7 +355,7 @@ const INVITES_ITEMS: readonly InboxItem[] = [
   item(6, AGENT.INVITES, "turn-end", "How should a finished turn end?", [
     {
       ...agentSaid(
-        109,
+        116,
         90 * MINUTE,
         "Three directions for what a turn shows once the agent is done. Each card holds its shots; press one to look closer.",
         {

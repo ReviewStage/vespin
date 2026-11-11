@@ -51,7 +51,12 @@ function fileWords(label: string, file: InboxOptionFile, at: number): string {
 
 /** What an address is called where its agent gave it no words: its host, as a reader knows a site by. Note that the wire admits an https address alone, so it always reads. */
 function addressWords(url: string): string {
-  return new URL(url).host;
+  // Note that the wire holds an address to https and no spaces alone, so one the URL parser refuses is named as written rather than throwing in render.
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 /** What opens the item's viewer at each of an option's files, by its attachment, as its thumb last drew it. */
@@ -108,6 +113,7 @@ function PageFrameThumb({ page }: { page: InboxOptionPage }) {
           version: page.version,
         }),
         sandbox: PAGE_SANDBOX,
+        lazy: true,
       }}
     />
   );
@@ -131,7 +137,6 @@ function pieceOf(
     case INBOX_OPTION_MEDIA.FILE: {
       const words = fileWords(option.label, piece, at);
       return {
-        id: piece.attachmentId,
         kind: isRecording(piece) ? OPTION_MEDIA_KIND.RECORDING : OPTION_MEDIA_KIND.PICTURE,
         caption: piece.caption,
         thumb: <FileThumb file={piece} words={words} openers={doors.openers} />,
@@ -140,7 +145,6 @@ function pieceOf(
     }
     case INBOX_OPTION_MEDIA.PAGE:
       return {
-        id: piece.pageId,
         kind: OPTION_MEDIA_KIND.PAGE,
         caption: piece.title,
         thumb: <PageFrameThumb page={piece} />,
@@ -149,7 +153,6 @@ function pieceOf(
       };
     case INBOX_OPTION_MEDIA.LINK:
       return {
-        id: piece.url,
         kind: OPTION_MEDIA_KIND.LINK,
         caption: piece.label ?? addressWords(piece.url),
         thumb: <PageThumb glyph={<GLYPH.OPEN_EXTERNALLY />} />,

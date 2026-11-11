@@ -62,8 +62,6 @@ const KIND_MARK: Record<OptionMediaKind, ReactNode> = {
 
 /** One piece of an option's media: what it is, its caption, its thumb, and what a press does. */
 export interface OptionMediaPiece {
-  /** What the tile is keyed by among its option's. */
-  id: string;
   kind: OptionMediaKind;
   /** Its caption: what it shows, a page's title, or an address's words; none where the agent gave none. */
   caption: string | undefined;
@@ -132,8 +130,9 @@ export function OptionMedia({
       className="ui-option-media ph-no-capture m-0 grid list-none grid-cols-option-media gap-item-gap p-0"
       aria-label={`${label} media`}
     >
-      {pieces.map((piece) => (
-        <OptionMediaTile key={piece.id} piece={piece} />
+      {/* Note that a tile is keyed by its place, because an option may carry the same page or address twice and its list never reorders. */}
+      {pieces.map((piece, index) => (
+        <OptionMediaTile key={index} piece={piece} />
       ))}
     </ul>
   );

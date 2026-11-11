@@ -171,7 +171,6 @@ const OPEN = () => undefined;
 
 /** A picture or a recording `width` by `height` as an option's tile, whole on its ground. */
 function filed(
-  id: string,
   caption: string | undefined,
   width: number,
   height: number,
@@ -179,7 +178,7 @@ function filed(
 ): OptionMediaPiece {
   const image = shot(width, height, `hsl(${(width * 7 + height) % 360} 60% 60%)`);
   const thumb = <PageThumb fit={PAGE_THUMB_FIT.CONTAIN} image={image} />;
-  return { id, kind, caption, thumb, onOpen: OPEN };
+  return { kind, caption, thumb, onOpen: OPEN };
 }
 
 /**
@@ -198,10 +197,9 @@ const DESIGNS: readonly ChoiceOption<string>[] = [
       <OptionMedia
         label="Every kind"
         pieces={[
-          filed("desktop", "On a desktop", 1440, 900),
-          filed("recording", "Ticking two follow-ups", 1280, 720, OPTION_MEDIA_KIND.RECORDING),
+          filed("On a desktop", 1440, 900),
+          filed("Ticking two follow-ups", 1280, 720, OPTION_MEDIA_KIND.RECORDING),
           {
-            id: "page",
             kind: OPTION_MEDIA_KIND.PAGE,
             caption: "Done card directions",
             thumb: (
@@ -211,7 +209,6 @@ const DESIGNS: readonly ChoiceOption<string>[] = [
             onOpen: OPEN,
           },
           {
-            id: "link",
             kind: OPTION_MEDIA_KIND.LINK,
             caption: "preview.example.com",
             thumb: <PageThumb glyph={<ExternalIcon />} />,
@@ -229,20 +226,18 @@ const DESIGNS: readonly ChoiceOption<string>[] = [
       <OptionMedia
         label="Shapes, captions, and states"
         pieces={[
-          filed("phone", "On a phone", 390, 844),
-          filed("banner", "Banner, 4 to 1", 1600, 400),
-          filed("icon", "App icon", 64, 64),
-          filed("bare", undefined, 1200, 800),
-          filed("long", "The whole flow from opening a thread to sending the answer", 1920, 1080),
+          filed("On a phone", 390, 844),
+          filed("Banner, 4 to 1", 1600, 400),
+          filed("App icon", 64, 64),
+          filed(undefined, 1200, 800),
+          filed("The whole flow from opening a thread to sending the answer", 1920, 1080),
           {
-            id: "reading",
             kind: OPTION_MEDIA_KIND.PICTURE,
             caption: "On its way",
             thumb: <PageThumb />,
             onOpen: OPEN,
           },
           {
-            id: "gone",
             kind: OPTION_MEDIA_KIND.PICTURE,
             caption: "Could not be read",
             thumb: <PageThumb glyph={<ImageOffIcon />} />,
@@ -357,7 +352,7 @@ function ChoiceLists(): React.JSX.Element {
         <Held
           legend="Designs"
           options={DESIGNS}
-          start={["card"]}
+          start={["kinds"]}
           select={CHOICE_SELECT.MANY}
           look={CHOICE_LOOK.CARD}
         />
