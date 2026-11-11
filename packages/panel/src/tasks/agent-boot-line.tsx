@@ -5,14 +5,14 @@
  * first message waiting in its queue (`@repo/features/agent-boot`), so its
  * transcript stands empty meanwhile, and its centered line says how the
  * boot stands in place of the starting line (`bootLineOf`). Starting…
- * shimmers and counts as the working line does; a boot that failed says
- * why, with Retry where the reader may message the agent.
+ * stands still beside how long, counted as the working line counts; a boot
+ * that failed says why, with Retry where the reader may message the agent.
  */
 
 import { type AgentBoot, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
 import { BOOT_WORDS, bootFailedWords } from "@repo/features/agent-boot-words";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUTTON_SIZE, BUTTON_VARIANT, Button, RetryIcon, Shimmer, TEXT_TONE, Text } from "@repo/ui";
+import { BUTTON_SIZE, BUTTON_VARIANT, Button, RetryIcon, TEXT_TONE, Text } from "@repo/ui";
 import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { pressMutation } from "../act-mutations.js";
@@ -65,7 +65,7 @@ export function AgentBootLine({
     case BOOT_LINE.STARTING:
       return (
         <Text tone={TEXT_TONE.MUTED}>
-          <Shimmer>{BOOT_WORDS.STARTING}</Shimmer>
+          {BOOT_WORDS.STARTING}
           <WorkingTime startedAt={line.since} />
         </Text>
       );
