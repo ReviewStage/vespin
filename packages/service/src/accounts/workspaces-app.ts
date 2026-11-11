@@ -1,3 +1,16 @@
+/**
+ * workspaces-app.ts -- a workspace's photo, served as its bytes.
+ *
+ * `GET /api/workspaces/<id>/photo` serves a workspace's photo as its bytes
+ * to a member of it; the list names only which version of it stands. The
+ * bearer is resolved before any row is touched. Everything else a
+ * workspace answers is the hosted oRPC router's: the list, a workspace
+ * created, renamed, given a photo, or handed over, and its members read,
+ * removed, given a role, or left (`workspaces-procedures.ts`); its GitHub
+ * (`workspace-github-procedures.ts`); and its invitations
+ * (`workspace-invitations-procedures.ts`).
+ */
+
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readWorkspacePhoto } from "@repo/database/models/workspace-store";
 import { workspaceIdSchema } from "@repo/features/task-wire";
@@ -17,19 +30,6 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
-
-/**
- * workspaces-app.ts -- a workspace's photo, served as its bytes.
- *
- * `GET /api/workspaces/<id>/photo` serves a workspace's photo as its bytes
- * to a member of it; the list names only which version of it stands. The
- * bearer is resolved before any row is touched. Everything else a
- * workspace answers is the hosted oRPC router's: the list, a workspace
- * created, renamed, given a photo, or handed over, and its members read,
- * removed, given a role, or left (`workspaces-procedures.ts`); its GitHub
- * (`workspace-github-procedures.ts`); and its invitations
- * (`workspace-invitations-procedures.ts`).
- */
 
 /** GET serves a workspace's photo; the rewrite moves the path's workspace id into the `id` query. */
 const PHOTO_PATH = "/api/workspaces/photo";

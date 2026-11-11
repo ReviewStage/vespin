@@ -167,21 +167,10 @@ export const readOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * Writes each part the write carries — `preferences`, a validated
- * settings snapshot that replaces the stored one whole, `linkOpen`,
- * where the account's links open, `pullRequestOpen`, where its pull
- * requests open, `agentEnter`, what Enter does in an
- * agent's box while it works, `commitAuthor`, who authors an agent's
- * commits, `agentPermissionMode`, the mode a new agent starts on,
- * `setupFinished`, whether the account
- * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
- * `completionSound`, when and which sound plays as an agent finishes,
- * `askSound`, which sound plays as something new needs the account,
- * `turnNotifications`, whether a notification is posted then,
- * `onboardingSurvey`, what it answered in setup's survey, `agent`, a choice the catalog
- * accepts, moved only to a model the account pays for, `chaptersModel`, one of the chapters' fixed set, and `experiments`, each experiment's on or off merged over
- * what stood — and answers the snapshot as it then stands. A write
- * carrying none of them asks for nothing and is refused.
+ * Writes each part the write carries and answers the snapshot as it then
+ * stands. `preferences` replaces the stored settings whole, while
+ * `experiments` are merged over what stood. A write carrying no part asks
+ * for nothing and is refused.
  */
 export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
   seams: AccountPreferenceSeams,

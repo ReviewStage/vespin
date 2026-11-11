@@ -1,12 +1,3 @@
-import type { DatabaseServices } from "@repo/database/core/query";
-import { Effect, Layer } from "effect";
-import { HttpRouter } from "effect/http";
-import { HostedEnvironment } from "../environment.js";
-import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
-import { MAINTENANCE_PROVIDER_KEYS_REWRAP_PATH } from "../maintenance/maintenance-bounds.js";
-import { ANY_METHOD, type WebRoutes } from "../route.js";
-import { handleProviderKeyRewrap } from "./provider-key-rewrap.js";
-
 /**
  * provider-keys-app.ts -- the provider keys' rotation rewrap, asked by hand under the deployment's secret.
  *
@@ -16,6 +7,15 @@ import { handleProviderKeyRewrap } from "./provider-key-rewrap.js";
  * none of what the sweep reaches. The account's own keys are
  * `provider-keys-procedures.ts`'s.
  */
+
+import type { DatabaseServices } from "@repo/database/core/query";
+import { Effect, Layer } from "effect";
+import { HttpRouter } from "effect/http";
+import { HostedEnvironment } from "../environment.js";
+import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
+import { MAINTENANCE_PROVIDER_KEYS_REWRAP_PATH } from "../maintenance/maintenance-bounds.js";
+import { ANY_METHOD, type WebRoutes } from "../route.js";
+import { handleProviderKeyRewrap } from "./provider-key-rewrap.js";
 
 /** The rotation's rewrap, asked by hand under the deployment's secret, over the ring the deployment holds. */
 const providerKeyRewrapEffect = /* @__PURE__ */ Effect.fn("web/providerKeyRewrapEffect")(function* (

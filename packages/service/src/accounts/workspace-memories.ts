@@ -1,20 +1,3 @@
-import {
-  forgetMemory,
-  listMemories,
-  MEMORY_FORGET,
-  MEMORY_OUTCOME,
-  rememberMemory,
-  type StoredMemory,
-} from "@repo/database/models/memory-store";
-import {
-  readAccountNames,
-  type WorkspaceStoreEffect,
-  workspaceOf,
-} from "@repo/database/models/workspace-store";
-import type { MemorySaveAnswer, MemorySummary } from "@repo/features/memory-wire";
-import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import { Effect, Option } from "effect";
-
 /**
  * workspace-memories.ts -- a workspace's shared memories as one member reads and forgets them from Settings.
  *
@@ -36,6 +19,23 @@ import { Effect, Option } from "effect";
  * each holds (`rankMemories`). Whether the member has Memory on is the
  * caller's to check, as each tool and procedure does before it calls here.
  */
+
+import {
+  forgetMemory,
+  listMemories,
+  MEMORY_FORGET,
+  MEMORY_OUTCOME,
+  rememberMemory,
+  type StoredMemory,
+} from "@repo/database/models/memory-store";
+import {
+  readAccountNames,
+  type WorkspaceStoreEffect,
+  workspaceOf,
+} from "@repo/database/models/workspace-store";
+import type { MemorySaveAnswer, MemorySummary } from "@repo/features/memory-wire";
+import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
+import { Effect, Option } from "effect";
 
 /** What a member's read or forget came to. */
 export const WORKSPACE_MEMORY = {

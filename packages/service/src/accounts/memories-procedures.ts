@@ -1,24 +1,3 @@
-import { EXPERIMENT } from "@repo/settings";
-import { Effect } from "effect";
-import { experimentOnIn } from "../agents/workspace-experiment-on.js";
-import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
-import {
-  HOSTED_REFUSAL,
-  hostedStoreOrUnavailable,
-  type UserIdResolver,
-} from "../http/http-effect.js";
-import { accountMiddleware, hosted } from "../orpc/base.js";
-import {
-  forgetWorkspaceMemory,
-  readWorkspaceMemories,
-  saveWorkspaceMemory,
-  searchWorkspaceMemories,
-  WORKSPACE_MEMORY,
-  WORKSPACE_MEMORY_SAVE,
-  type WorkspaceMemoryAnswer,
-  type WorkspaceMemorySaveAnswer,
-} from "./workspace-memories.js";
-
 /**
  * memories-procedures.ts -- a workspace's shared memories as Settings › Memory reads them and forgets one, for a signed-in member of it.
  *
@@ -41,6 +20,27 @@ import {
  * that looks like it holds a credential is refused, as is one past the
  * workspace's bound, and a correction of a memory gone is answered not found.
  */
+
+import { EXPERIMENT } from "@repo/settings";
+import { Effect } from "effect";
+import { experimentOnIn } from "../agents/workspace-experiment-on.js";
+import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
+import {
+  HOSTED_REFUSAL,
+  hostedStoreOrUnavailable,
+  type UserIdResolver,
+} from "../http/http-effect.js";
+import { accountMiddleware, hosted } from "../orpc/base.js";
+import {
+  forgetWorkspaceMemory,
+  readWorkspaceMemories,
+  saveWorkspaceMemory,
+  searchWorkspaceMemories,
+  WORKSPACE_MEMORY,
+  WORKSPACE_MEMORY_SAVE,
+  type WorkspaceMemoryAnswer,
+  type WorkspaceMemorySaveAnswer,
+} from "./workspace-memories.js";
 
 /** What the memories' procedures reach beyond the store: who the bearer is. */
 export interface MemoriesProcedureSeams {

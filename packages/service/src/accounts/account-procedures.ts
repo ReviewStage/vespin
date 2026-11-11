@@ -9,23 +9,20 @@
  * input is read, so an unsigned caller is refused as unsigned whatever it
  * sent.
  *
- * The preferences snapshot is six parts: the settings preferences the
- * desktop syncs, where the account's app links open and what Enter does in
- * an agent's box while it works, synced settings each of its own part so a
- * build that predates it neither refuses the snapshot nor clears the choice
- * by writing the shared part back whole, the coding
- * agents' default model, effort, and context window, which Settings alone
- * writes and which reads, until it does, as the fallback a Start naming no
- * model runs on (`accountModelChoices`), the Claude model the account's Generate chapters
- * runs on, one of a fixed set (`@repo/features/chapters-model-choice`), and the experiments the account turned on in
- * Settings › Experimental. A write carries any of them, a coding-agent
- * choice is accepted only as the catalog accepts it
+ * The preferences snapshot (`account-preferences.ts`) holds the settings
+ * preferences the desktop syncs; the account's own settings, such as where
+ * its links open, each a part of its own so a build that predates one
+ * neither refuses the snapshot nor clears the choice by writing the shared
+ * part back whole; the coding agents' default model, effort, and context
+ * window, which read, until Settings writes one, as the fallback a Start
+ * naming no model runs on (`accountModelChoices`); the Claude model
+ * Generate chapters runs on (`@repo/features/chapters-model-choice`); and
+ * the experiments turned on in Settings › Experimental. A write carries any
+ * of them. A coding-agent choice is accepted only as the catalog accepts it
  * (`packages/service/src/providers/model-catalog.ts`), and moved only to a
- * model a credential of the account's pays for, so what is stored is a
- * choice a Start could run unless its credential has since gone, and the
- * experiments are a patch read
- * as tolerantly as they are answered: a key this deployment does not list
- * is passed over rather than refused, because it is an older or newer
+ * model a credential of the account's pays for. The experiments are a patch
+ * read as tolerantly as they are answered: a key this deployment does not
+ * list is passed over rather than refused, because it is an older or newer
  * build's experiment and refusing it would refuse the build's every other
  * choice too.
  *
