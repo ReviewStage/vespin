@@ -183,6 +183,8 @@ export const FAILURE_SURFACE = {
   SKILL_PREVIEW: "skill.preview",
   SKILL_READ: "skill.read",
   SKILL_REMOVE: "skill.remove",
+  /** The account's own sound clip kept or removed, from Settings (`sound-clip-row.tsx`). */
+  SOUND_CLIP_WRITE: "sound_clip.write",
   TASKS_READ: "tasks.read",
   TASKS_REFRESH: "tasks.refresh",
   TASK_BLOCK: "task.block",

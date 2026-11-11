@@ -32,12 +32,7 @@ import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
-import {
-  ACCOUNT_INBOX_READ,
-  AGENT_INBOX_READ,
-  INBOX_ITEMS_READ,
-  TASK_INBOX_READ,
-} from "@repo/features/inbox-live";
+import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import {
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
@@ -340,7 +335,7 @@ function fakeService() {
   let presence: Effect.Effect<DevicePresenceAnswerView> = Effect.succeed({
     failure: AGENT_CALL_FAILURE.UNANSWERED,
   });
-  /** A plan's or an agent's inbox as its live read answers it: polled from the one script, or the refusal standing. */
+  /** A plan's inbox as its live read answers it: polled from the one script, or the refusal standing. */
   const scopeLive = (poll: boolean | undefined, after: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
       if (scope === undefined) return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
@@ -447,9 +442,6 @@ function fakeService() {
             return transcriptLive(params.id, params.call, poll !== undefined, poll?.after);
           case TASK_INBOX_READ.name:
             if (poll === undefined) asked.push(`description-inbox-live:${params.id}`);
-            return scopeLive(poll !== undefined, poll?.after);
-          case AGENT_INBOX_READ.name:
-            if (poll === undefined) asked.push(`agent-inbox-live:${params.id}`);
             return scopeLive(poll !== undefined, poll?.after);
           case ACCOUNT_INBOX_READ.name:
             return accountInboxLive(params.userId, poll !== undefined, poll?.after);
@@ -740,6 +732,11 @@ function fakeService() {
           Effect.sync(() => forgetAnswer),
         ),
       ),
+    readSound: () => Effect.succeed({ clip: null }),
+    addSound: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    renameSound: () => Effect.succeed({ sound: null }),
+    removeSound: () => Effect.succeed({ sound: null }),
+    chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
     markActive: () => Effect.sync(() => void asked.push("active")),
     registerPushDevice: () => Effect.succeed({ done: true as const }),
     unregisterPushDevice: () => Effect.succeed({ done: true as const }),
@@ -920,7 +917,7 @@ function fakeService() {
       queueAnswer = answer;
       queueGate = gate;
     },
-    /** Whether the service answers a plan's or an agent's inbox's live read, or that the account reaches none; none answers unanswered. */
+    /** Whether the service answers a plan's inbox's live read, or that the account reaches none; none answers unanswered. */
     sealScope: (next: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined) => {
       scope = next;
     },
@@ -998,7 +995,7 @@ export const GATE_CLOSED_SIGNED_OUT = {
   cause: { _tag: FAILURE_FACT.GATE_CLOSED, code: GATE_CLOSED_BY.NO_ACCOUNT },
 };
 
-/** The parts of a transcript's live read, of a plan's or an agent's inbox's, and of the account inbox's. */
+/** The parts of a transcript's live read, of a plan's inbox's, and of the account inbox's. */
 const TRANSCRIPT_PARTS = [
   "messages",
   "turns",

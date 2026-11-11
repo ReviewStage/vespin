@@ -83,6 +83,20 @@ export const ACCOUNT_ASK_ACT_KIND = {
   MEMORIES_RETRY: "memories.retry",
   MEMORIES_FORGET: "memories.forget",
   /**
+   * Settings › Preferences › Notifications: the sounds the account keeps of
+   * its own, one's clip read so the window's player can play it, one added
+   * under a name from a file picked there, renamed, or removed, and which
+   * of them one of its two sounds plays. An add's payload is the clip as a
+   * `data:` URL and the name given, never its file's name; nothing on the
+   * way keeps it, and a read's bytes reach the window that asked alone,
+   * never app state.
+   */
+  SOUND_READ: "sound.read",
+  SOUND_ADD: "sound.add",
+  SOUND_RENAME: "sound.rename",
+  SOUND_REMOVE: "sound.remove",
+  SOUND_CHOOSE: "sound.choose",
+  /**
    * A clip dictated into a message box, carried once from the panel that
    * recorded it to the service and answered with its words. Nothing on the
    * way keeps it.
@@ -298,13 +312,13 @@ export const AGENT_ACT_KIND = {
  */
 export const AGENT_INBOX_ACT_KIND = {
   /**
-   * A task's inbox, or one agent's, held followed while the window holds
+   * A task's inbox, held followed while the window holds
    * the stream open, and a while after among those let go lately: what it
    * holds reaches the panel on app state (`LIVE_READ.HOLDER_INBOX`), so the
    * stream carries nothing.
    */
   AGENTS_INBOX_FOLLOW: "agents.inboxFollow",
-  /** A held task's or agent's inbox, which the panel reads on app state, read again at once, as Try again asks. */
+  /** A held task's inbox, which the panel reads on app state, read again at once, as Try again asks. */
   AGENTS_INBOX_RETRY: "agents.inboxRetry",
   /** Every inbox item the account reaches, which the panel reads on app state, read again at once, as Try again asks. */
   AGENTS_INBOX_ITEMS_RETRY: "agents.inboxItemsRetry",
@@ -908,6 +922,11 @@ export const PORT_ACT_USE = {
   MEMORIES_FOLLOW: ACT_USE.READ,
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,
+  SOUND_READ: ACT_USE.FETCH,
+  SOUND_ADD: ACT_USE.WRITE,
+  SOUND_RENAME: ACT_USE.WRITE,
+  SOUND_REMOVE: ACT_USE.WRITE,
+  SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
   PUSH_DEVICE_REGISTER: ACT_USE.WRITE,

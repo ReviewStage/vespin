@@ -29,7 +29,7 @@ import {
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
-import { holderTaskId, type MentionHolder } from "@repo/features/mention-holder";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   type DescriptionMention,
   decodeMention,
@@ -201,9 +201,9 @@ type MentionState = (typeof MENTION_STATE)[keyof typeof MENTION_STATE];
 /** The lines a file's tab opens on: a mention's, at the commit it pins them to, or lines a path in words names with no commit, read where the tab reads the file. */
 export type OpenFileLines = Omit<MentionLines, "commit"> & { readonly commit?: string | undefined };
 
-/** What a place drawing mentions knows and does: the task or the agent on no task whose words it draws, where its mentions are written, its description's sections' anchors, and what opening a mention does. */
+/** What a place drawing mentions knows and does: the task whose words it draws, where its mentions are written, its description's sections' anchors, and what opening a mention does. */
 export interface MentionDoors {
-  /** The task, or the agent on no task, whose words the place draws; none where neither holds them, so a section of any description is drawn as found. */
+  /** The task whose words the place draws; none where no task holds them, so a section of any description is drawn as found. */
   readonly holder: MentionHolder | undefined;
   readonly place: MentionPlace;
   readonly anchors: ReadonlySet<string>;
@@ -266,7 +266,7 @@ const GONE_WORDS = "No longer in the description";
 
 /** Whether what the mention names is there to open: a section of this description is there while a heading of the description spells its anchor. */
 function mentionState(mention: Mention, doors: MentionDoors): MentionState {
-  if (mention.kind !== MENTION_KIND.SECTION || mention.taskId !== holderTaskId(doors.holder)) {
+  if (mention.kind !== MENTION_KIND.SECTION || mention.taskId !== doors.holder?.taskId) {
     return MENTION_STATE.FOUND;
   }
   return doors.anchors.has(mention.anchor) ? MENTION_STATE.FOUND : MENTION_STATE.GONE;
@@ -397,7 +397,7 @@ function MentionCard({
   standing: LinkStanding | undefined;
 }): ReactNode {
   const workspaceId = useWordsWorkspaceId({
-    taskId: holderTaskId(doors.holder),
+    taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
   const repository = doors.place.repository ?? undefined;
@@ -566,7 +566,7 @@ function MentionChip({
   const openLink = useOpenLink();
   const known = useKnownNames();
   const standing = useLinkStanding(mention, {
-    taskId: holderTaskId(doors.holder),
+    taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
   const section = mention.kind === MENTION_KIND.SECTION ? mention : undefined;

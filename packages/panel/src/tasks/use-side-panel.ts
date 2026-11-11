@@ -1,4 +1,4 @@
-import { type PagePlace, pagePlaceId } from "@repo/features/page-wire";
+import type { PagePlace } from "@repo/features/page-wire";
 import type { CodeRef } from "@repo/features/task-wire";
 import { CommentsIcon, DocumentIcon } from "@repo/ui";
 import {
@@ -143,7 +143,7 @@ import { useWindowAccount } from "./window-account.js";
  * A fixed tab, a file's, or a Changes tab may be pinned to the sidebar,
  * where it stands under Pinned beside the pinned tasks, newest pinned
  * first, and opens its holder on that tab from anywhere: a task's panel's
- * tab, or an agent's own page's, is pinned on the task (`PinHolder`). The pins are kept here, with the rest of the window's tab
+ * tab is pinned on the task (`PinHolder`). The pins are kept here, with the rest of the window's tab
  * preferences. The strip draws a pinned tab as it draws any other: it
  * closes, moves, and is closed by Close others the same way, and closing it
  * leaves its pin, which opens it again. A subagent's tab is a moment of its
@@ -508,7 +508,7 @@ const FIRST_LAUNCH: SidePanelState = {
 export interface SidePanelControl {
   /** Whether the panel is drawn: open, and its strip holding a tab; never with nothing in it. */
   open: boolean;
-  /** The stop the panel belongs to: a task, an agent's page, or an Inbox item, two items of one task being two stops; none while no task stands. */
+  /** The stop the panel belongs to: a task or an Inbox item, two items of one task being two stops; none while no task stands. */
   stop: string | undefined;
   /** Whether the toggle or ⌘T asked, with nothing to show, for the "+" menu, which hangs from the toggle rather than an empty panel. */
   toggleAsked: boolean;
@@ -575,8 +575,7 @@ export interface SidePanelControl {
   /**
    * Shows the panel on the tab as a link pressed opens it: a tab the strip
    * already draws is chosen, and any other opens at the strip's end. A
-   * page's tab opened with `place`, a task or an agent on no task other
-   * than the panel's own, reads on that place and is drawn here too
+   * page's tab opened with `place`, a task other than the panel's own, reads on that place and is drawn here too
    * (`OpenPage.shownOn`).
    */
   onOpen: (tab: SidePanelTab, place?: PagePlace) => void;
@@ -666,7 +665,7 @@ export interface OpenTask {
   holds: TaskHolds;
   /** Whether the panel draws none of the task's fixed tabs, standing beside the window's Inbox rather than the task's page, which draws what they show. */
   bare?: true | undefined;
-  /** Where a file opened here reads, as its tab saves it; none where the opener names it, as beside an agent on no task. */
+  /** Where a file opened here reads, as its tab saves it; none where the opener names it. */
   files?: FileReads | undefined;
   /** Where a page opened here stands, as its tab saves it. */
   pages?: PagePlace | undefined;
@@ -702,10 +701,10 @@ function taskTabs(held: HeldState, taskId: string | undefined): TaskTabs {
   return taskId === undefined ? NO_CHOICES : (held.tasks[taskId] ?? NO_CHOICES);
 }
 
-/** A page's tab as the panel holds it: the page, and the task or the agent on no task it stands on, saved as it opened, so it reads there whatever the panel stands beside; none for one opened before its place was known, which reads through the panel's own. */
+/** A page's tab as the panel holds it: the page, and the task it stands on, saved as it opened, so it reads there whatever the panel stands beside; none for one opened before its place was known, which reads through the panel's own. */
 export interface OpenPage extends PageStripTab {
   readonly place?: PagePlace | undefined;
-  /** The panel, by the task or the agent it stands for, a page of another place was last opened beside, whose strip draws it with its own; none for one opened on its own place. */
+  /** The panel, by the task it stands for, a page of another place was last opened beside, whose strip draws it with its own; none for one opened on its own place. */
   readonly shownOn?: string | undefined;
 }
 
@@ -1946,7 +1945,7 @@ export function useSidePanel(
   const [moved, setMoved] = useState<HeldState | undefined>(undefined);
   const [fullScreen, setFullScreen] = useState(false);
   const [newTabAsked, setNewTabAsked] = useState(false);
-  // The plan, or the agent's page, whose toggle or ⌘T asked for the "+" menu with nothing to show, which hangs from the toggle.
+  // The plan whose toggle or ⌘T asked for the "+" menu with nothing to show, which hangs from the toggle.
   const [toggleAskedOn, setToggleAskedOn] = useState<string | undefined>(undefined);
   const [seen, setSeen] = useState<OpenTask>(task);
   // The tab a pin, a notification, or a step of the history asked for, while it is still the one chosen, and whether it was asked for on another stop than the one standing, which it is carried to.
@@ -2099,7 +2098,7 @@ export function useSidePanel(
   const narrow = room === SHELL_ROOM.NARROW;
   const shown = state.open && strip.length > 0;
   // Note that the panel belongs to the stop it was opened at, so a new stop
-  // starts with it shut: a task, an agent's page, or an Inbox item, two
+  // starts with it shut: a task or an Inbox item, two
   // items of one task being two stops. A tab asked for on the stop arrived
   // at, as a link, a pin, or a step of the history opens one there, was
   // asked for, so it stands.
@@ -2249,7 +2248,7 @@ export function useSidePanel(
       const beside =
         place === undefined ||
         taskId === undefined ||
-        (pagePlace !== undefined && pagePlaceId(place) === pagePlaceId(pagePlace))
+        (pagePlace !== undefined && place.taskId === pagePlace.taskId)
           ? undefined
           : { place, on: taskId };
       // A page of another place is drawn here as it is opened, before the state naming it lands.

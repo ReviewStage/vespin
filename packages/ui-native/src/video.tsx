@@ -10,7 +10,7 @@ import { TEXT_SIZE } from "./tokens/type.js";
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
 const CANNOT_PLAY = "This video can't play here.";
 
-/** What the system's player stands as to a flow that drives the app, once it holds the video's file. */
+/** What the system's player stands as to a flow that drives the app, once it has read the video's file and can play it. */
 const VIDEO_PLAYER_ID = "video-player";
 
 /** What opens a video the player cannot play where it plays. */
@@ -95,7 +95,7 @@ export function Video({ source, label, onOpenElsewhere }: VideoProps) {
         fullscreenOptions={{ enable: true }}
         allowsPictureInPicture
         accessibilityLabel={label}
-        testID={VIDEO_PLAYER_ID}
+        testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
         style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
       />
       {status === "readyToPlay" ? null : (

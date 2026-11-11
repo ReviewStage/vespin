@@ -1377,7 +1377,6 @@ const PLAN_SCOPE = { kind: "plan", id: TASK_ID } as const;
 /** Steps taken until the host has told `times` inboxes, since a row's digest is the platform's own promise. */
 const toldTimes = (told: () => readonly unknown[], times: number) =>
   Effect.repeat(Effect.yieldNow, { until: () => told().length >= times, times: 10_000 });
-const AGENT_SCOPE = { kind: "agent", id: AGENT_ID } as const;
 
 /** One scope's read as the host last told the held inboxes, as a wire value; none where it holds none of the scope. */
 function heldOf(
@@ -1457,7 +1456,7 @@ it.effect(
 
       // Eight other holders held and let go push the plan out, and its read is let go with its rows.
       const others = Array.from({ length: 8 }, (_, at) => ({
-        kind: INBOX_SCOPE_KIND.AGENT,
+        kind: INBOX_SCOPE_KIND.PLAN,
         id: `0000000${at}-1111-4a6b-9c33-0d1e2f3a4b5c`,
       }));
       for (const scope of others) {
@@ -1513,27 +1512,27 @@ it.effect(
 );
 
 it.effect(
-  "an agent's inbox the account does not reach is told failed, as is one the service answers nothing for, Try again reads it anew telling nothing meanwhile, and behind a closed gate a hold reads nothing until the gate opens",
+  "a plan's inbox the account does not reach is told failed, as is one the service answers nothing for, Try again reads it anew telling nothing meanwhile, and behind a closed gate a hold reads nothing until the gate opens",
   () =>
     Effect.gen(function* () {
       const refused = yield* subject();
       refused.sealScope({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
-      yield* refused.acts.AGENTS_INBOX_FOLLOW.hold(AGENT_SCOPE);
+      yield* refused.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(refused.told, AGENT_SCOPE), { failed: true });
+      assert.deepEqual(heldOf(refused.told, PLAN_SCOPE), { failed: true });
 
       const unsealed = yield* subject();
-      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.hold(AGENT_SCOPE);
+      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(unsealed.told, AGENT_SCOPE), { failed: true });
-      assert.deepEqual(unsealed.asked, [`agent-inbox-live:${AGENT_ID}`]);
+      assert.deepEqual(heldOf(unsealed.told, PLAN_SCOPE), { failed: true });
+      assert.deepEqual(unsealed.asked, [`description-inbox-live:${TASK_ID}`]);
       unsealed.sealScope(LIVE_ANSWERED);
-      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.retry(AGENT_SCOPE);
+      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.retry(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(unsealed.told, AGENT_SCOPE), {});
+      assert.deepEqual(heldOf(unsealed.told, PLAN_SCOPE), {});
       assert.deepEqual(unsealed.asked, [
-        `agent-inbox-live:${AGENT_ID}`,
-        `agent-inbox-live:${AGENT_ID}`,
+        `description-inbox-live:${TASK_ID}`,
+        `description-inbox-live:${TASK_ID}`,
       ]);
 
       const signedOut = yield* subject({ signedIn: false });
@@ -1592,7 +1591,7 @@ it.effect(
       yield* reset;
       yield* settled;
       assert.equal(live.scope.held(), 0, "a sign-out lets its poll go");
-      assert.deepEqual(told().at(-1), { plan: {}, agent: {} });
+      assert.deepEqual(told().at(-1), { plan: {} });
 
       yield* open;
       yield* settled;

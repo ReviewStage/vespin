@@ -36,7 +36,6 @@ import {
 } from "@repo/features/inbox-wire";
 import { answeredNow, closedNow } from "@repo/features/inbox-writes";
 import { pageFrameUrl } from "@repo/features/page-frame";
-import type { PageLine } from "@repo/features/page-wire";
 import { TASK_SKILL_SOURCE, TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksFileParams } from "@repo/features/tasks-view";
 import {
@@ -288,8 +287,6 @@ class InboxWorld {
   root: Root | undefined;
   /** Each task's pages as a read of them answers. */
   taskPages = new Map<string, readonly (typeof FUNNEL)[]>();
-  /** Each agent's own pages, which an older link names under the agent, as a read of them answers, none for an agent the reader cannot reach. */
-  agentPages = new Map<string, readonly PageLine[]>();
   /** The task's agents as the service lists them, archived ones among them. */
   listedAgents: readonly AgentSummary[] = [AGENT];
   /** Each task's inbox as the service answers a read of it from the start. */
@@ -434,7 +431,7 @@ function heldInboxes() {
     isHeld,
     /** Every holder the host holds, as scopes. */
     heldScopes: (): AgentInboxScope[] =>
-      [INBOX_SCOPE_KIND.PLAN, INBOX_SCOPE_KIND.AGENT].flatMap((kind) =>
+      Object.values(INBOX_SCOPE_KIND).flatMap((kind) =>
         Object.keys(held[kind]).map((id) => ({ kind, id })),
       ),
     /** The holders as the host holds them now, for a mount to hand the window first. */
@@ -515,7 +512,6 @@ beforeEach(() => {
   ]);
   world.startRead = undefined;
   world.taskPages = new Map([[BILLING.id, [FUNNEL]]]);
-  world.agentPages = new Map();
   world.listedAgents = [AGENT];
   world.feedRefused = false;
   world.feedUnread = false;
@@ -705,13 +701,8 @@ export function mount({
   });
   // Note that a workspace's people are laid on the document as the window holds them, as the host lays them.
   holdMembers(reads.deliverMembers, () => ({ rows: { members: world.members } }));
-  // Note that a task's or an agent's pages are laid on the document as the window holds them, as the host lays them.
-  holdPages(reads.deliverPages, (place) => ({
-    rows:
-      "taskId" in place
-        ? (world.taskPages.get(place.taskId) ?? [])
-        : (world.agentPages.get(place.agentId) ?? []),
-  }));
+  // Note that a task's pages are laid on the document as the window holds them, as the host lays them.
+  holdPages(reads.deliverPages, (place) => ({ rows: world.taskPages.get(place.taskId) ?? [] }));
   const asked: Asked = {
     shownTasks: [],
     shownAgents: [],

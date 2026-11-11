@@ -286,7 +286,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
     tasksPage: (params) =>
       Effect.map(
         client.call(GATEWAY_METHOD.TASKS_PAGE, {
-          ...("taskId" in params ? { taskId: params.taskId } : { agentId: params.agentId }),
+          taskId: params.taskId,
           pageId: params.pageId,
           version: params.version,
         }),

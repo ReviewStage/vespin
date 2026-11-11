@@ -134,7 +134,6 @@ test("a page's chip on the open plan hangs the page's tab's card, previewing its
             rows: [{ id: PAGE, title: "Invite funnel", version: 2, at: 1_800_000_000_000 }],
           },
         },
-        [PAGE_OWNER.AGENT]: {},
       },
     },
   );

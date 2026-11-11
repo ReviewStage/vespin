@@ -132,10 +132,10 @@ it.each<[string, string, InboxItemHere, Route]>([
     NOTHING,
   ],
   [
-    "an Inbox item: a page an agent showed on itself, as an older link names it, beside it read on that agent",
+    "an Inbox item: a page an agent showed on itself, as an older link names it, the window's, which finds its task",
     `${APP}/agent/${OTHER}/page/${PAGE}`,
     ITEM,
-    beside({ kind: THING.PAGE, pageId: PAGE, place: { agentId: OTHER } }),
+    NOTHING,
   ],
   ["an Inbox item: its task's plan, the window's", `${APP}/plan/${TASK}`, ITEM, NOTHING],
   [

@@ -35,7 +35,7 @@ import { pressPlace, ReplyPress, roomAround, useReplyDoor } from "./reply-to-sel
  * fills its frame (`@repo/features/page-size`), heard from that frame alone
  * and only in that message's shape, and loads only as it nears the screen.
  * The row drawn above it opens it in its own tab. A line naming a page draws its newest version, from the
- * pages its plan or its agent on no task holds (`LIVE_READ.PAGES`), as a
+ * pages its task holds (`LIVE_READ.PAGES`), as a
  * page's chip hangs its card (`chip-cards.tsx`), and nothing while that read
  * is out or where the reader cannot reach the page.
  *
@@ -218,7 +218,7 @@ export function ShownPage({
   );
 }
 
-/** A page named by a line of words, drawn live at its newest version as its plan, or its agent on no task, holds its pages; nothing while they are read or where none is the page. */
+/** A page named by a line of words, drawn live at its newest version as its task holds its pages; nothing while they are read or where none is the page. */
 export function ShownNewestPage({
   place,
   pageId,

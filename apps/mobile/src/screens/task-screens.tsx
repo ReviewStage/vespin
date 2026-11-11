@@ -70,6 +70,7 @@ import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js"
 import { useSurfaceOpen } from "../surface-open.js";
 import {
   type StatusQuestion,
+  type TaskAgentLine,
   type TaskOverview,
   type TasksListing,
   useStatusAsk,
@@ -209,8 +210,8 @@ function rowActs(
   };
 }
 
-/** The question Done or Canceled asks first while a task's agents work, as the system's alert. */
-function StatusQuestionAsk({ question }: { readonly question: StatusQuestion }) {
+/** The question Done or Canceled asks first while a task's agents work, as the system's alert: every list of tasks draws it, the Search tab's among them. */
+export function StatusQuestionAsk({ question }: { readonly question: StatusQuestion }) {
   return (
     <ConfirmAsk
       title={question.words.title}
@@ -238,8 +239,8 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
   );
 }
 
-/** One task's row and, folded under it, its sub-tasks' rows, each a level deeper, to any depth. */
-function TaskNodeRow({
+/** One task's row and, folded under it, its sub-tasks' rows, each a level deeper, to any depth: the one row every list of tasks draws, the Search tab's among them. */
+export function TaskNodeRow({
   node,
   listing,
   depth = 0,
@@ -544,30 +545,38 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** The task's agents as the panel's Agents group lists them, each pull request's number opening its own screen, New agent after them, which opens its sheet, and the line of its threads that need you. */
+/** One agent's row, as a task's Agents lists it: its mark, its name, where it runs, its threads that need you, and its pull request's number, which opens its own screen. */
+export function TaskAgentRow({ line }: { readonly line: TaskAgentLine }) {
+  const router = useRouter();
+  const { agent, waiting, pullRequest } = line;
+  return (
+    <AgentRow
+      id={agent.id}
+      name={agentName(agent)}
+      state={agentState(agent.status)}
+      runsOn={agentRunsOnWords(agent)}
+      waiting={waiting}
+      pullRequest={
+        pullRequest === undefined
+          ? undefined
+          : {
+              number: pullRequest.number,
+              state: pullRequest.state,
+              onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
+            }
+      }
+    />
+  );
+}
+
+/** The task's agents as the panel's Agents group lists them, New agent after them, which opens its sheet, and the line of its threads that need you. */
 function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task } = overview;
   return (
     <ListSection title={WORDS.AGENTS} count={overview.agents.length}>
-      {overview.agents.map(({ agent, waiting, pullRequest }) => (
-        <AgentRow
-          key={agent.id}
-          id={agent.id}
-          name={agentName(agent)}
-          state={agentState(agent.status)}
-          runsOn={agentRunsOnWords(agent)}
-          waiting={waiting}
-          pullRequest={
-            pullRequest === undefined
-              ? undefined
-              : {
-                  number: pullRequest.number,
-                  state: pullRequest.state,
-                  onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
-                }
-          }
-        />
+      {overview.agents.map((line) => (
+        <TaskAgentRow key={line.agent.id} line={line} />
       ))}
       <LinkRow
         symbol="plus"

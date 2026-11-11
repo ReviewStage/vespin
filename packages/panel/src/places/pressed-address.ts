@@ -25,8 +25,8 @@
  *
  * - An Inbox item (`inbox-item-links.ts`) opens beside it what the panel
  *   standing for what holds it draws: a file of any repository, read through
- *   the item's workspace where it is not the item's own, a page of any task
- *   or agent on no task, read on its own place where it is not the item's,
+ *   the item's workspace where it is not the item's own, a page of any task,
+ *   read on its own place where it is not the item's,
  *   an archived agent's Changes, one of its task's agents' transcripts, at a
  *   message of it where the link names one, a review thread of one of its
  *   agents' pull requests, and a pull request as `pullRequestBeside` opens
@@ -120,8 +120,6 @@ export const HERE = {
   INBOX_ITEM: "inbox-item",
   /** A task's page. */
   TASK: "task",
-  /** An agent's own page. */
-  AGENT: "agent",
 } as const;
 
 /** The things a press opens beside a surface, in the panel there, or, an Inbox item, in the Inbox the surface stands in. */

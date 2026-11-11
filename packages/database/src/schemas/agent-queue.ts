@@ -10,7 +10,17 @@
 import type { HostedApiError } from "@repo/features";
 import type { QueuePause } from "@repo/features/agent-queue-wire";
 import type { AgentAttachment } from "@repo/features/agent-wire";
-import { boolean, index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { createdAt, timestamptz, updatedAt } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 import { user } from "./auth.js";
@@ -27,7 +37,14 @@ import { user } from "./auth.js";
  * the hand-off took it to send, after which no member's edit, delete, or
  * new order reaches it and no window lists it; null until then, and lapsed
  * once a claim's length has passed (`AGENT_QUEUE_BOUNDS.CLAIM_MS`), so a
- * send cut off is sent again under its id.
+ * send cut off is sent again under its id. A line a send diverted into the
+ * queue while the agent's machine boots keeps what the send named beside
+ * its words (`../models/agent-queue-store.ts`'s `QueuedLine`): `send_key`,
+ * the key it was sent under where that is not `id` (a carry-on's or a
+ * wakeup's key is no uuid), and `line`, its sender, what carried it, and
+ * the words the servers read, so the hand-off writes it as it was sent;
+ * both null for a member's message queued from the queue's own controls,
+ * which goes as `user_id`'s typed ask under `id`.
  */
 export const queuedMessage = pgTable(
   "queued_message",
@@ -46,10 +63,18 @@ export const queuedMessage = pgTable(
       jsonb("attachments").$type<readonly (AgentAttachment & { readonly id: string })[]>(),
     editing: boolean("editing").notNull().default(false),
     claimedAt: timestamptz("claimed_at"),
+    sendKey: text("send_key"),
+    line: jsonb("line").$type<unknown>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [index("queued_message_agent_position").on(table.agentId, table.position)],
+  (table) => [
+    index("queued_message_agent_position").on(table.agentId, table.position),
+    // A line diverted while its agent boots is queued once under the key it was sent under.
+    uniqueIndex("queued_message_agent_send_key")
+      .on(table.agentId, table.sendKey)
+      .where(sql`${table.sendKey} is not null`),
+  ],
 );
 
 /**

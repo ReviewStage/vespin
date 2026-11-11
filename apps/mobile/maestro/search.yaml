@@ -1,0 +1,46 @@
+# search.yaml -- the Search tab: what it says before anything is typed, the tasks, Inbox items, and agents a query finds, each in its own section, a task opened from them, and what it says where nothing matches.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `tasks.yaml` is, so the search
+# finds the fixture's tasks, the Inbox's threads, and the agents on the
+# tasks, and no server is reached (`@repo/host/fixture-inbox`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Inbox"
+# Note that the tab is tapped by its id, since a list's round search button
+# in a compact window's bar, and a split view's search field in a regular
+# one, are named Search too.
+- tapOn:
+    id: "search-tab"
+- assertVisible: "Find a task, an Inbox item, or an agent."
+- takeScreenshot: search-empty
+# The field is focused as the tab opens; it is pressed anyway, which a
+# focused field takes as nothing. Words nothing answers say so.
+- tapOn: "Search Vespin"
+- inputText: "zzqx"
+- assertVisible: "No results match “zzqx”."
+- takeScreenshot: search-no-results
+# The task "Ledger rounding" leads Tasks, its agent "Fix ledger rounding"
+# stands under Agents, and a task the words do not name is left out.
+- eraseText
+- inputText: "rounding"
+- assertVisible: "Ledger rounding"
+- assertNotVisible: "Weekly digest email"
+- scrollUntilVisible:
+    element: "Fix ledger rounding"
+    direction: DOWN
+- takeScreenshot: search-results
+# A task found opens on its Overview, in the Tasks tab, as its row there
+# opens it. It comes last, since the Tasks tab then stands over the search.
+- scrollUntilVisible:
+    element: "Ledger rounding"
+    direction: UP
+- waitForAnimationToEnd
+- tapOn: "Ledger rounding"
+- assertVisible: "Created by .*"
+- takeScreenshot: search-opened

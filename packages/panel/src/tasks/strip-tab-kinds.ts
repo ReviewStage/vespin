@@ -285,8 +285,8 @@ const STRIP_TAB_KINDS = {
     }),
     surface: surfaceOf(PRODUCT_SURFACE.SUBAGENT),
     // A worker's tab is its agent's, linked by the agent alone; a worker of the app's own is drawn nowhere a link opens.
-    link: (tab, holder) => {
-      const agent = tab.delegation?.agent ?? ("agentId" in holder ? holder.agentId : undefined);
+    link: (tab) => {
+      const agent = tab.delegation?.agent;
       return agent === undefined
         ? undefined
         : { kind: LINK_DESTINATION.WORKER, agentId: agent, callId: tab.subagent };
@@ -374,10 +374,11 @@ const STRIP_TAB_KINDS = {
     untitled: () => PAGE_WORDS,
     look: () => ({ kind: TAB_KIND.PAGE, title: PAGE_WORDS }),
     surface: surfaceOf(PRODUCT_SURFACE.PAGE),
-    link: (tab, holder) =>
-      "taskId" in holder
-        ? { kind: LINK_DESTINATION.PAGE, planId: holder.taskId, pageId: tab.page }
-        : { kind: LINK_DESTINATION.PAGE, agentId: holder.agentId, pageId: tab.page },
+    link: (tab, holder) => ({
+      kind: LINK_DESTINATION.PAGE,
+      planId: holder.taskId,
+      pageId: tab.page,
+    }),
     // A task's pages not read yet pass over no tab, and once read, a page gone since is passed over.
     drawsAgain: (tab, draws) => draws.pages === undefined || draws.pages.includes(tab.page),
     reopens: true,
@@ -457,7 +458,7 @@ export function stripTabSurface(tab: AnyKindTab, taskId: string): TabSurface {
   return declarationOf(tab).surface(tab, taskId);
 }
 
-/** The place a tab of the side panel shows, on the task or the agent's page holding the panel; none where nothing links to it. */
+/** The place a tab of the side panel shows, on the task holding the panel; none where nothing links to it. */
 export function stripTabLink(tab: AnyKindTab, holder: PagePlace): LinkDestination | undefined {
   return declarationOf(tab).link(tab, holder);
 }
