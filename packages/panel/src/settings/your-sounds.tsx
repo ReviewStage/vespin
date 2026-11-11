@@ -117,7 +117,7 @@ const SOUND_ACTS = [
 ] as const;
 
 /** Says that the service refused an act on one of the account's own sounds, in the app's own words, never the sound's name. */
-function toastRefused(words: string, answer: { readonly failure: unknown }): void {
+function toastRefused(words: string, answer: unknown): void {
   showToast({
     words,
     replayUnmasked: true,
@@ -186,13 +186,15 @@ function useSlot(
   const { mutate: sendChoice } = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
   const chosen = chosenSound(sounds, slot)?.id;
-  // Note that the row is stored as the account's own only once the service took the choice, so a refused one leaves the sound it played.
+  // Note that the row is stored as the account's own only once the service
+  // took this very choice, so a refused one, or one that answers another
+  // sound because this one was removed meanwhile, leaves the sound it played.
   const choose = (id: string) => {
     sendChoice(
       { slot, id },
       {
         onSuccess: (answer) => {
-          if ("failure" in answer) toastRefused(SOUND_WORDS.NOT_CHOSEN, answer);
+          if ("failure" in answer || answer.id !== id) toastRefused(SOUND_WORDS.NOT_CHOSEN, answer);
           else if (!stored) write.run(token);
         },
       },

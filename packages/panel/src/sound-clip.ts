@@ -151,9 +151,12 @@ function useClipLoaded(
     if (!read) return;
     if (id === undefined || sha256 === undefined) {
       if (loaded.has(slot)) clipLetGo(slot).catch(() => undefined);
+      else wanted.delete(slot);
       return;
     }
-    if (chosen && sha256 !== loaded.get(slot)) loadClip(slot, id, sha256).catch(() => undefined);
+    // Note that a slot set back to a built-in sound forgets the fetch still out, so it never lands as the slot is set to its own again.
+    if (!chosen) wanted.delete(slot);
+    else if (sha256 !== loaded.get(slot)) loadClip(slot, id, sha256).catch(() => undefined);
   }, [slot, read, id, sha256, chosen]);
 }
 
