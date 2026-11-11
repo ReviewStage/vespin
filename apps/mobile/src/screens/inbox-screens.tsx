@@ -145,40 +145,68 @@ function InboxRows({
       onRefresh={onRefresh}
       title={look === LIST_LOOK.SIDEBAR ? INBOX_TITLE : undefined}
     >
-      {listed.map(({ holder, item }) => {
-        const unread = isUnread(item);
-        const waitsOn = inboxWaitsOn(item);
-        return (
-          <ListRow
-            key={item.id}
-            id={item.id}
-            title={cardTitle(item.title)}
-            task={{
-              name: holder.task.name,
-              status: holder.task.status,
-            }}
-            line={inboxLineKind(item)}
-            summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
-            unread={unread}
-            done={isDone(item)}
-            face={waitsOn === undefined || waitsOn.userId === readerId ? undefined : waitsOn.name}
-            at={item.updatedAt}
-            due={item.remindAt}
-            trailingActions={[
-              { ...REMIND_ME, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => onRemind(item) },
-            ]}
-            leadingActions={[
-              {
-                label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-                symbol: unread ? "envelope.open" : "envelope.badge",
-                tone: ROW_ACTION_TONE.ACCENT,
-                onPress: () => onMark(item.id, !unread),
-              },
-            ]}
-          />
-        );
-      })}
+      {listed.map((each) => (
+        <InboxRow
+          key={each.item.id}
+          listed={each}
+          readerId={readerId}
+          onMark={onMark}
+          onRemind={onRemind}
+        />
+      ))}
     </RowList>
+  );
+}
+
+/**
+ * One Inbox item's row: the task's ring and name, the thread's title, and
+ * the line of what it asks led by its glyph, with the teammate it waits on
+ * before the time, and when its reminder comes due; a swipe from the leading
+ * edge marks it read or unread, and one from the trailing edge opens Remind
+ * me. The one row every list of Inbox items draws, the Search tab's among them.
+ */
+export function InboxRow({
+  listed,
+  readerId,
+  onMark,
+  onRemind,
+}: {
+  readonly listed: InboxListed;
+  readonly readerId: string | undefined;
+  readonly onMark: (itemId: string, unread: boolean) => void;
+  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
+  readonly onRemind: (item: InboxItem) => void;
+}) {
+  const { holder, item } = listed;
+  const unread = isUnread(item);
+  const waitsOn = inboxWaitsOn(item);
+  return (
+    <ListRow
+      id={item.id}
+      title={cardTitle(item.title)}
+      task={{
+        name: holder.task.name,
+        status: holder.task.status,
+      }}
+      line={inboxLineKind(item)}
+      summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
+      unread={unread}
+      done={isDone(item)}
+      face={waitsOn === undefined || waitsOn.userId === readerId ? undefined : waitsOn.name}
+      at={item.updatedAt}
+      due={item.remindAt}
+      trailingActions={[
+        { ...REMIND_ME, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => onRemind(item) },
+      ]}
+      leadingActions={[
+        {
+          label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+          symbol: unread ? "envelope.open" : "envelope.badge",
+          tone: ROW_ACTION_TONE.ACCENT,
+          onPress: () => onMark(item.id, !unread),
+        },
+      ]}
+    />
   );
 }
 
