@@ -129,6 +129,7 @@ export function CodeEditor({
   value,
   onChange,
   lines,
+  id,
   label,
   describedBy,
   invalid,
@@ -146,6 +147,8 @@ export function CodeEditor({
   onChange: (value: string) => void;
   /** The host's coloring of the code, possibly of words a few keystrokes old; none draws it plain. */
   lines?: CodeLines | undefined;
+  /** The id its field wears, which a form field's visible label names it by. */
+  id?: string | undefined;
   /** The accessible name. */
   label: string;
   /** The id of the words that describe it, its error among them while it has one. */
@@ -201,6 +204,7 @@ export function CodeEditor({
       <textarea
         ref={field}
         className={`${LAYER_BASE} ${start} ${TYPED}`}
+        id={id}
         rows={rows}
         aria-label={label}
         aria-describedby={describedBy}
