@@ -20,6 +20,7 @@ import {
 import { type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
 import { ToneGlyph } from "./marks.js";
+import { RowOpenContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -86,7 +87,7 @@ export function RowList({ look, selected, onSelect, title, onRefresh, children }
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
-      {children}
+      <RowOpenContext value={onSelect}>{children}</RowOpenContext>
     </List>
   );
 }

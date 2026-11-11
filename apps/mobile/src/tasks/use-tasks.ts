@@ -192,6 +192,30 @@ export interface TasksListing {
   readonly markRead: (taskId: string, unread: boolean) => void;
   /** Pins a task to the list's Pinned group, or unpins it. */
   readonly pin: (taskId: string, pinned: boolean) => void;
+  /** A task at a glance, as its row's preview draws it: how many of its threads wait on the reader, and its agents not archived, as its Overview lists them. */
+  readonly glanceOf: (taskId: string) => TaskGlance;
+}
+
+/** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
+export interface TaskGlance {
+  readonly waiting: number;
+  readonly agents: readonly ListedAgent[];
+}
+
+/** A task's agents not archived, in the order its Overview lists them: those waiting on the reader first. */
+function taskAgentsInOrder(
+  view: TasksView | undefined,
+  taskId: string,
+  waitingByAgent: ReadonlyMap<string, number>,
+): readonly ListedAgent[] {
+  const onTask = (view?.taskAgents ?? []).filter(
+    (agent) => agent.planId === taskId && agent.archivedAt === undefined,
+  );
+  return inAgentListOrder(
+    onTask,
+    (agent) => agent,
+    (agent) => (waitingByAgent.get(agent.id) ?? 0) > 0,
+  );
 }
 
 /**
@@ -240,7 +264,11 @@ export function useTasksListing(search: string): TasksListing {
       );
     };
     const agentsWorking = agentsWorkingIn(view, tasks);
-    return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin };
+    const glanceOf = (taskId: string): TaskGlance => ({
+      waiting: waiting.byTask.get(taskId) ?? 0,
+      agents: taskAgentsInOrder(view, taskId, waiting.byAgent),
+    });
+    return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin, glanceOf };
   }, [acts, listed, held, view, workspace, readerId, waiting, search]);
 }
 
@@ -316,14 +344,9 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   });
   return useMemo(() => {
     if (task === undefined) return undefined;
-    const onTask = (view?.taskAgents ?? []).filter(
-      (agent) => agent.planId === task.id && agent.archivedAt === undefined,
+    const agents = taskAgentsInOrder(view, task.id, waiting.byAgent).map((agent) =>
+      agentLine(agent, waiting.byAgent, view),
     );
-    const agents = inAgentListOrder(
-      onTask,
-      (agent) => agent,
-      (agent) => (waiting.byAgent.get(agent.id) ?? 0) > 0,
-    ).map((agent) => agentLine(agent, waiting.byAgent, view));
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
     return {

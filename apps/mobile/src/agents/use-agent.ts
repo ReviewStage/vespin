@@ -10,8 +10,9 @@
  */
 
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
@@ -20,7 +21,14 @@ import {
   selectFollowedAgent,
   selectTranscript,
 } from "@repo/host/app-state-reads";
-import type { OlderPages } from "@repo/ui-native";
+import {
+  BUZZ,
+  buzz,
+  latestStep,
+  NO_TOGGLES,
+  type OlderPages,
+  transcriptItems,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -55,6 +63,59 @@ export function useAgentPullRequests(agentId: string): readonly AgentPullRequest
     [agentId],
   );
   return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
+}
+
+/**
+ * The agent's latest step (`latestStep`), read off the transcript the host
+ * still holds for it, as one shown lately, and never followed for it, so a
+ * row's preview reads what the app already has, as the panel's card reads
+ * its step from what a tab holds; none where the host holds none.
+ */
+export function useHeldAgentStep(agentId: string, status: AgentStatus): string | undefined {
+  const select = useMemo(
+    () => selectTranscript({ kind: TRANSCRIPT_KIND.AGENT, agentId }),
+    [agentId],
+  );
+  const messages = useQuery({ ...appStateQuery, select }).data?.rows?.messages;
+  return useMemo(() => {
+    if (messages === undefined) return undefined;
+    // Note that the reader and the pull requests are left out, since a step is never a line sent or a card opened.
+    const items = transcriptItems(messages, {
+      writing: agentStillWriting(status),
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: Date.now(),
+      pullRequests: NO_PULL_REQUESTS,
+    });
+    return latestStep(items);
+  }, [messages, status]);
+}
+
+/** An agent row's swipes, as the panel's row menu offers them: Stop while it works, and Archive once it rests, each buzzing as it lands or is refused. */
+export function useAgentRowActs(): {
+  readonly stop: (agentId: string) => void;
+  readonly archive: (agentId: string) => void;
+} {
+  const acts = useHostActs();
+  return useMemo(() => {
+    // Each act buzzes as it lands or is refused, and says on the console what went wrong.
+    const told = (what: string) =>
+      [
+        (answer: object) => buzz("failure" in answer ? BUZZ.ERROR : BUZZ.SUCCESS),
+        (error: unknown) => {
+          console.error(`${what} did not go.`, error);
+          buzz(BUZZ.ERROR);
+        },
+      ] as const;
+    return {
+      stop: (agentId) => {
+        acts[ACT_KIND.AGENTS_STOP]({ agentId }).then(...told("The stop"));
+      },
+      archive: (agentId) => {
+        acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }).then(...told("The archive"));
+      },
+    };
+  }, [acts]);
 }
 
 /**

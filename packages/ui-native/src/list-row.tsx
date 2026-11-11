@@ -34,7 +34,8 @@ import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceText } from "@repo/features/time-format";
-import { type ReactElement, type ReactNode, useState } from "react";
+import { VERB } from "@repo/features/words";
+import { type ReactElement, type ReactNode, useContext, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import {
@@ -46,6 +47,7 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
+import { RowOpenContext } from "./row-open.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
@@ -94,16 +96,26 @@ export type RowSubmenu = {
   }[];
 };
 
-/** The acts a row carries: a swipe from either edge, the same acts in its long press menu, and what that menu holds alone. */
+/** What a swipe reveals: an act, or a menu of choices, such as a task's Status, which opens where the act would run. */
+export type RowSwipe = RowAction | RowSubmenu;
+
+/** Whether a swipe's piece is a menu of choices rather than one act. */
+function isSubmenu(swipe: RowSwipe): swipe is RowSubmenu {
+  return "choices" in swipe;
+}
+
+/** The acts a row carries: a swipe from either edge, the same acts in its long press menu, what that menu holds alone, and the preview it lifts. */
 type RowActs = {
-  /** The acts a swipe from the trailing edge reveals, the first of them on a full swipe. */
-  readonly trailingActions?: readonly RowAction[] | undefined;
-  /** The acts a swipe from the leading edge reveals. */
-  readonly leadingActions?: readonly RowAction[] | undefined;
+  /** What a swipe from the trailing edge reveals, the first of it on a full swipe, as Mail's rows take one. */
+  readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** What a swipe from the leading edge reveals, the first of it on a full swipe. */
+  readonly leadingActions?: readonly RowSwipe[] | undefined;
   /** Menus the long press menu holds after the swipes' acts, such as a task's Status. */
   readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
   /** Acts the long press menu alone holds, last, such as Pin or Open in browser. */
   readonly menuActions?: readonly RowAction[] | undefined;
+  /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
+  readonly preview?: ReactElement | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -167,9 +179,14 @@ function actionButton(action: RowAction, colors: BrandColors) {
 }
 
 /** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks. */
-function rowSubmenu(submenu: RowSubmenu) {
+function rowSubmenu(submenu: RowSubmenu, ink?: string) {
   return (
-    <Menu key={submenu.label} label={submenu.label} systemImage={submenu.symbol}>
+    <Menu
+      key={submenu.label}
+      label={submenu.label}
+      systemImage={submenu.symbol}
+      modifiers={ink === undefined ? [] : [tint(ink)]}
+    >
       {submenu.choices.map((choice) => (
         <Toggle
           key={choice.label}
@@ -239,14 +256,22 @@ export function rowPlacement(colors: BrandColors) {
   ];
 }
 
+/** A swipe's piece as SwiftUI draws it behind the row: an act's button, or a menu's, in the muted ink. */
+function swipeButton(swipe: RowSwipe, colors: BrandColors) {
+  return isSubmenu(swipe) ? rowSubmenu(swipe, colors.TEXT_MUTED) : actionButton(swipe, colors);
+}
+
 /**
  * A row's frame in its list: the id its list picks it by, the list's own
  * ground behind it rather than a card's, its insets, which stand the unread
  * dot in the margin, and its hairline, which starts under the words rather
  * than the mark. Its acts stand twice, as the system's own rows carry them:
- * behind a swipe from either edge, and in the menu a long press opens, the
- * trailing ones first, so a person who never swipes still finds them; that
- * menu then holds its submenus and the acts only it offers.
+ * behind a swipe from either edge, a full swipe running the first, and in
+ * the menu a long press opens, the trailing ones first, so a person who
+ * never swipes still finds them; that menu then holds its submenus and the
+ * acts only it offers. A row with a preview lifts it over the menu, which
+ * then leads with Open. Note that SwiftUI's preview takes no tap of its own,
+ * a tap on it closing the menu, so Open is what opens the row from there.
  */
 export function RowFrame({
   id,
@@ -255,24 +280,39 @@ export function RowFrame({
   leadingActions = [],
   menuSubmenus = [],
   menuActions = [],
+  preview,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
 }) {
   const colors = useColors();
+  const open = useContext(RowOpenContext);
   const swiped = [...trailingActions, ...leadingActions];
   const frameModifiers = [tag(id), ...rowPlacement(colors)];
-  if (swiped.length + menuSubmenus.length + menuActions.length === 0) {
+  if (swiped.length + menuSubmenus.length + menuActions.length === 0 && preview === undefined) {
     return <HStack modifiers={frameModifiers}>{row}</HStack>;
   }
+  const opening: readonly RowAction[] =
+    preview === undefined || open === undefined
+      ? []
+      : [
+          {
+            label: VERB.OPEN,
+            symbol: "arrow.up.forward.app",
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => open(id),
+          },
+        ];
   const menu = (
     <ContextMenu>
       <ContextMenu.Items>
-        {swiped.map((action) => actionButton(action, colors))}
-        {menuSubmenus.map(rowSubmenu)}
+        {opening.map((action) => actionButton(action, colors))}
+        {swiped.map((swipe) => swipeButton(swipe, colors))}
+        {menuSubmenus.map((submenu) => rowSubmenu(submenu))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
+      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
     </ContextMenu>
   );
   // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
@@ -281,13 +321,13 @@ export function RowFrame({
     <SwipeActions modifiers={frameModifiers}>
       {menu}
       {trailingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="trailing">
-          {trailingActions.map((action) => actionButton(action, colors))}
+        <SwipeActions.Actions edge="trailing" allowsFullSwipe>
+          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="leading">
-          {leadingActions.map((action) => actionButton(action, colors))}
+        <SwipeActions.Actions edge="leading" allowsFullSwipe>
+          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>

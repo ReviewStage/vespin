@@ -11,7 +11,7 @@
  * tab: its tree, read from the same list, a task's status set, pin, and read
  * mark, and a task's description and pages followed; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, and its model and effort
- * changed; New agent on a task and
+ * changed, and an agent archived from its row; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
  * and the phone's own push registration,
  * which no other client has a place for. Nothing else says which share, so
@@ -221,7 +221,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PORT_UNSHARE]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_RUN_ACTION]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_ARCHIVE]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_ARCHIVE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PIN]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_DELETE]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENTS),

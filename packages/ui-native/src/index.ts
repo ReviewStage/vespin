@@ -52,6 +52,7 @@ export {
   type RowAction,
   type RowActionTone,
   type RowSubmenu,
+  type RowSwipe,
   TaskRow,
 } from "./list-row.js";
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
@@ -83,6 +84,8 @@ export {
 export { ConfirmAsk, MarkRow, PullRequestHead, WriteNoteRow } from "./pull-request-page.js";
 export { RemindSheet } from "./remind-sheet.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
+export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./row-preview.js";
+export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 export { Screen, Spacer } from "./screen.js";
 export { ScreenFailure } from "./screen-failure.js";
 export { SealedPage } from "./sealed-page.js";

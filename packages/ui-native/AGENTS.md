@@ -8,7 +8,11 @@ builds a control of its own.
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow` (a
-  task on one line, its sub-tasks folded under the panel's chevron), a task
+  task on one line, its sub-tasks folded under the panel's chevron), each
+  row's acts behind a swipe from either edge, a full swipe running the
+  first, and in its long press menu, which lifts the row's preview
+  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open, a
+  task
   page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `GroupRow`, `LinkRow`,
   and `WordsRow` for its description), `SplitView` (two columns or three, its
   sidebar's bar holding an act, a `BarMenu` such as the ⋯ menu, and a
