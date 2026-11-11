@@ -167,7 +167,11 @@ test("a decide whose options carry media reads on a released desktop as its labe
   ];
   const message = {
     ...ASKING,
-    ask: { ...DEPLOY, options: [{ label: "Ship it", media }, { label: "Wait" }], status: "open" },
+    ask: {
+      ...DEPLOY,
+      options: [{ label: "Ship it", media }, { label: "Wait" }],
+      status: INBOX_ASK_STATUS.OPEN,
+    },
   };
   const ask = read(inboxMessageSchema, message)?.ask;
   assert.ok(ask?.type === INBOX_ASK.DECIDE && "options" in ask);

@@ -171,8 +171,15 @@ export const INBOX_BOUNDS = {
   MAX_STEP_CHARS: 600,
   /** The most characters a post's addressee may spell: a member's mention link written whole. */
   MAX_ADDRESSEE_CHARS: 512,
-  /** The most pieces of media one option of a `decide` may carry: what a card shows at a glance. */
-  MAX_OPTION_MEDIA: 4,
+  /**
+   * The most pieces of media one option of a `decide` may carry as a read
+   * carries it: a bound on a stored row, never on how much an agent may
+   * post, and wider than an agent may post (`MAX_POSTED_OPTION_MEDIA`), so a
+   * build reads an option a later service lets an agent post.
+   */
+  MAX_OPTION_MEDIA: 12,
+  /** The most pieces of media an agent may give one option for now: what a card shows at a glance. */
+  MAX_POSTED_OPTION_MEDIA: 4,
   /**
    * The most files a message ending in a `decide` may keep, its own pictures
    * and its options' together, and the most pieces of media its options may
@@ -534,7 +541,7 @@ export type InboxReadOptionMedia = typeof inboxOptionMediaSchema.Type;
 /** An option's file, kept as a file of the message whose ask offers it. */
 export type InboxOptionFile = Extract<InboxOptionMedia, { type: typeof INBOX_OPTION_MEDIA.FILE }>;
 
-/** An option's page, shown on the agent's task or, for an agent on no task, on itself. */
+/** An option's page, shown on the agent's task. */
 export type InboxOptionPage = Extract<InboxOptionMedia, { type: typeof INBOX_OPTION_MEDIA.PAGE }>;
 
 /** One option of a choice: its label, the trade-off in a sentence where the agent wrote one, and the media it carries. */
@@ -585,7 +592,7 @@ const inboxPostOptionSchema = EffectSchema.Struct({
   media: EffectSchema.optionalKey(
     EffectSchema.Array(inboxPostOptionMediaSchema).check(
       EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_OPTION_MEDIA),
+      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_POSTED_OPTION_MEDIA),
     ),
   ),
 });

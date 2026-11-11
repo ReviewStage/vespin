@@ -115,7 +115,7 @@ const POST_THREAD_WORDS =
   "A picture the message is about is drawn in it, never pointed at in a transcript, yours or another agent's, which the thread's reader does not see. " +
   "ask is what the message asks of them, which ends it: " +
   `decide (two to ${INBOX_BOUNDS.MAX_OPTIONS} options, each a short label and an optional detail; name the label you recommend; multiple lets them pick several, and recommended then takes a list of the labels you recommend; ` +
-  `where they pick between designs or variants, give each option its own media, at most ${INBOX_BOUNDS.MAX_OPTION_MEDIA}, which they look at on its card: ` +
+  `where they pick between designs or variants, give each option its own media, at most ${INBOX_BOUNDS.MAX_POSTED_OPTION_MEDIA}, which they look at on its card: ` +
   "a file in your sandbox as {path, caption}, a picture or a recording as a body's picture is, a page you showed with show_page as {page, version} by the id and version it answered, " +
   `or an https address to open, such as a preview, as {url, label}; at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} across the options, the message's own pictures counted; ` +
   "an option's extra screens go in its own media, never an option of their own, and a picture or recording an option carries stands on its card, so never draw it in body as well; " +
