@@ -368,6 +368,9 @@ importers:
       '@repo/host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@sentry/node':
+        specifier: 11.7.0
+        version: 11.7.0(@babel/core@7.29.7)(rollup@4.62.4)
       effect:
         specifier: 'catalog:'
         version: 4.0.4

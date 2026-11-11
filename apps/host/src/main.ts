@@ -73,7 +73,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { appendFileSync, mkdirSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -114,6 +114,7 @@ import {
 } from "@repo/host/daemon";
 import { Environment, reporterLayer } from "@repo/host/effect";
 import { armedWatchLayer, reportToStderr } from "@repo/host/node";
+import * as Sentry from "@sentry/node";
 import { ConfigProvider, Duration, Effect, Exit, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -121,6 +122,22 @@ import { ChildProcess } from "effect/process";
 
 /** The daemon's version, which the release's build writes in; a development run is below every floor. */
 const VERSION = process.env.APP_HOST_VERSION ?? "0.0.0";
+
+/** Where the daemon reports to Sentry, which the release's build writes in; none for a development run, which reports nowhere. */
+const SENTRY_DSN = process.env.APP_HOST_SENTRY_DSN ?? "";
+
+/**
+ * The log file a bundled daemon keeps, where the account install's plist
+ * sends its own output (`install.sh`'s log), since the app's LaunchAgent
+ * names none; none for any other run, whose output its service keeps.
+ */
+const LOG_FILE =
+  process.platform === "darwin" && process.argv.includes("--bundled")
+    ? path.join(os.homedir(), "Library", "Logs", "Vespin Host", "vespin-host.log")
+    : undefined;
+
+/** Whether a reported line says something failed, which Sentry is told as an error rather than a log line. */
+const FAILING = /could not|couldn't|failed|refused/i;
 
 /** The service a box connects to where its install script names none. */
 const DEFAULT_SERVICE_ORIGIN = LINK_ORIGIN;
@@ -221,6 +238,38 @@ const runtime: HostRuntime | undefined =
     ? runtimeOfOs
     : { ...runtimeOfOs, stateRoot: process.env.APP_HOST_STATE_ROOT };
 
+// Note that the daemon reports only its own lines: no default integration, so no request, local variable, or console output of a runner leaves with them.
+if (SENTRY_DSN !== "") {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    release: `vespin-host@${VERSION}`,
+    environment: "production",
+    defaultIntegrations: false,
+    sendClientReports: false,
+    initialScope: { tags: { component: "host", bundled: LOG_FILE !== undefined } },
+  });
+}
+
+/** Writes a line to the bundled daemon's log file, where it keeps one; a line it cannot write is left to stderr alone. */
+function logToFile(message: string): void {
+  if (LOG_FILE === undefined) return;
+  try {
+    mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    appendFileSync(LOG_FILE, `${new Date().toISOString()} ${message}\n`);
+  } catch {
+    // Note that a log the disk refuses never stops the daemon.
+  }
+}
+
+/** A line the daemon reports: to stderr, to its log file where it keeps one, and to Sentry, as an error where it says something failed. */
+function reportEverywhere(message: string): void {
+  reportToStderr(message);
+  logToFile(message);
+  if (SENTRY_DSN === "") return;
+  if (FAILING.test(message)) Sentry.captureMessage(message, "error");
+  else Sentry.logger.info(message);
+}
+
 const nodeServices = Layer.mergeAll(
   NodeChildProcessSpawner.layer.pipe(
     Layer.provideMerge(
@@ -228,7 +277,7 @@ const nodeServices = Layer.mergeAll(
     ),
   ),
   FetchHttpClient.layer,
-  reporterLayer(reportToStderr),
+  reporterLayer(reportEverywhere),
   Layer.succeed(Environment, ConfigProvider.fromEnv()),
 );
 

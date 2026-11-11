@@ -77,6 +77,24 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
   });
 }
 
+/** What every line This Mac's host setup reports opens with (`compose-this-mac-host.ts`). */
+const THIS_MAC_LINE = "this Mac's host";
+
+/** Whether a reported line says something failed, which Sentry is told as an error rather than a log line. */
+const FAILING = /could not|couldn't|failed|refused/i;
+
+/**
+ * A line main reports, told to Sentry where it is about This Mac's host
+ * setup: as an error where it says something failed, as a log line
+ * otherwise. Note that only those lines leave, our own words naming no
+ * secret, so every other line main reports stays on stderr.
+ */
+export function reportThisMacToSentry(message: string): void {
+  if (!message.startsWith(THIS_MAC_LINE)) return;
+  if (FAILING.test(message)) Sentry.captureMessage(message, "error");
+  else Sentry.logger.info(message);
+}
+
 /** Sentry's status code for a span that ended in error, as its SDK writes it. */
 const SPAN_STATUS_ERROR = 2;
 
