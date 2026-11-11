@@ -777,6 +777,44 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
+    "a side chat wakes nothing and copies nothing, stands apart from its source's continues and forks, and is archived with its source",
+    (t) =>
+      Effect.gen(function* () {
+        const { owner, task, ask, source, firstTurn, agentSessions, sandbox } =
+          yield* copyScenario(t);
+
+        const side = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* ask(
+            startAs(owner, task.id, {
+              idempotencyKey: randomUUID(),
+              from: { agentId: source.id, messageId: firstTurn, side: true },
+              note: "How long does an invite link stay valid?",
+            }),
+          ),
+        ).agent;
+
+        assert.deepEqual([side.from?.side, side.from?.branch], [true, undefined]);
+        assert.deepEqual(sandbox.ran, []);
+        const preamble = openedParts(agentSessions).parts.replay?.preamble ?? "";
+        assert.ok(preamble.includes("A side chat copies none of its work"), preamble);
+        // The side chat answered, so it stands idle as its source is archived.
+        yield* sourceIdle(Option.getOrThrow(yield* readAgent(owner, side.id)));
+        const archived = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(
+            request(AGENT, owner, { method: "PATCH", id: source.id, body: { archived: true } }),
+          ),
+        ).agent;
+        assert.equal(archived.continuedBy, undefined);
+        const stored = Option.getOrThrow(yield* readAgent(owner, side.id));
+        assert.ok(stored.archivedAt !== null);
+      }),
+  );
+
+  it.effect(
     "a continue of a source whose sandbox stopped on a snapshot wakes nothing and copies nothing, and tells the new agent its checkout is the source's own",
     (t) =>
       Effect.gen(function* () {

@@ -237,7 +237,11 @@ export function forksOf(
   const forks = new Map<string, string[]>();
   const started = [...agents].sort((a, b) => a.createdAt - b.createdAt);
   for (const agent of started) {
-    const messageId = agent.from?.agentId === sourceId ? agent.from.messageId : undefined;
+    // Note that a side chat stands under its source's side panel, never as a fork of its message.
+    const messageId =
+      agent.from?.agentId === sourceId && agent.from.side !== true
+        ? agent.from.messageId
+        : undefined;
     if (messageId === undefined) continue;
     const held = forks.get(messageId);
     if (held === undefined) forks.set(messageId, [agent.id]);

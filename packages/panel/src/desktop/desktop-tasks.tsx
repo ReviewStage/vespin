@@ -83,6 +83,7 @@ import type { AgentFork } from "../tasks/fork-model.js";
 import { keyedItem } from "../tasks/inbox-model.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
+import { isSideChat } from "../tasks/side-chat.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
@@ -752,8 +753,8 @@ function DescriptionDocument({
     (draft) => openColumnTab(draftTab(draft)),
   );
   // A side chat (`/btw`, `side-chat.ts`) opens beside the agent it was asked of, as a tab of the
-  // side panel in that agent's strip, and never as a tab of this column, so the agents there stay
-  // the task's own work; closing it archives it once it has answered, which offers Undo.
+  // side panel in that agent's strip; its mark keeps it out of this column (`use-tasks-tab.ts`),
+  // so the agents there stay the task's own work. Closing it archives it once it has answered.
   // Note that the tab opens only where the reader still stands on the task asked from, since one
   // who moved on while the start was out must not have the panel open over where they went.
   const openTaskNow = useRef(taskId);
@@ -762,7 +763,6 @@ function DescriptionDocument({
     const askedOn = taskId;
     const started = await agents.startSide(fork, question);
     if (started === undefined) return false;
-    mainTabs.onClose(agentTab(started.id));
     if (openTaskNow.current === askedOn) openPanelTab(transcriptTab(started.id));
     return true;
   });
@@ -770,7 +770,9 @@ function DescriptionDocument({
   const closeSideChat = useSteadyDoor((agentId: string) => {
     const standing = agents.agents?.find((each) => each.id === agentId);
     // Note that one still answering is left at work, since archiving it would stop it unasked.
-    if (standing === undefined || agentStillWriting(standing.status)) return;
+    if (standing === undefined || !isSideChat(standing) || agentStillWriting(standing.status)) {
+      return;
+    }
     void archivePress(agentId, true);
   });
   const openSideChatInTask = useSteadyDoor(openAgentColumn);

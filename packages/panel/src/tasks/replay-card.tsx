@@ -42,6 +42,7 @@ import {
   earlierStepsLine,
   leftOutLine,
   REPLAY_PAGE,
+  REPLAY_VERB,
   replayCallsServer,
   replayCount,
   replayPage,
@@ -53,6 +54,7 @@ import {
   stepView,
   summaryLine,
 } from "./replay-card-model.js";
+import { isSideChat } from "./side-chat.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { TranscriptTool, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
@@ -100,6 +102,8 @@ export interface ReplayPlace {
   /** Reads one agent by its id, as a page that lists only its own agent names the source; none where nothing reads one. */
   readonly readAgent: ((agentId: string) => Promise<AgentSummary | undefined>) | undefined;
   readonly openGitHub: (url: string) => void;
+  /** Whether the agent is a side chat (`side-chat.ts`), whose card names the agent it was asked of and replays nothing. */
+  readonly side: boolean;
 }
 
 /** No agents listed yet, one array so a render before the first read hands down the same one. */
@@ -134,6 +138,7 @@ export function replayPlace(input: {
     pullRequests: control.pullRequests,
     readAgent: control.readAgent,
     openGitHub,
+    side: isSideChat(agent),
   };
 }
 
@@ -486,14 +491,17 @@ export function ReplayCard({
                 ? { kind: LINK_DESTINATION.AGENT, agentId }
                 : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId },
             );
-  const left = leftOutLine(replay);
-  const summary = summaryLine(replay);
-  const count = replayCount(replay);
+  // A side chat's card only names the agent it was asked of, so it shows its own lines alone.
+  const { side } = place;
+  const verb = side ? REPLAY_VERB.ASKED : replayVerb(replay);
+  const left = side ? undefined : leftOutLine(replay);
+  const summary = side ? undefined : summaryLine(replay);
+  const count = side ? undefined : replayCount(replay);
   return (
     <Message from={MESSAGE_ROLE.USER} className="agent-origin">
       <Plan
         data-replay-card=""
-        aria-label={replayVerb(replay)}
+        aria-label={verb}
         actions={
           <span className={ORIGIN_CHIP}>
             <ActorRef actor={tile} card={place.card(agentId)} onOpen={openSource} faceOnly />
@@ -507,10 +515,10 @@ export function ReplayCard({
           {/* Note that the head names the source in words, its chip standing beside the head, because the head is the card's summary, which holds no control. */}
           <OneLine
             className="flex min-w-0 flex-1 items-center gap-tight-gap overflow-hidden whitespace-nowrap"
-            words={`${replayVerb(replay)} ${name}${count === undefined ? "" : ` · ${count}`}`}
+            words={`${verb} ${name}${count === undefined ? "" : ` · ${count}`}`}
           >
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-              {replayVerb(replay)}{" "}
+              {verb}{" "}
             </Text>
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION}>
               {name}
@@ -532,7 +540,7 @@ export function ReplayCard({
               <em>{left}</em>
             </Text>
           )}
-          <ReplaySteps steps={replay.steps} place={place} />
+          {side ? null : <ReplaySteps steps={replay.steps} place={place} />}
           <ReplayFoot agentId={agentId} place={place} />
         </PlanContent>
       </Plan>

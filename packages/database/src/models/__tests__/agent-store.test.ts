@@ -97,6 +97,7 @@ import {
   reserveTurnDescriptionNotes,
   settleAgentAuthor,
   settleTurnDescriptionNotes,
+  standingSideChatsOf,
   takeAgentMentionedServers,
   taskHasMergedPullRequest,
   taskNamesOf,
@@ -1500,7 +1501,7 @@ it.layer(getTestDB())("the coding-agent store's agent started from another", (it
   );
 
   it.effect(
-    "an agent's continues and forks are read by its id oldest first, an archived one among them, by a teammate as by its starter, and by no outsider",
+    "an agent's continues and forks are read by its id oldest first, an archived one among them, by a teammate as by its starter, and by no outsider; its side chats stand apart, read while unarchived",
     () =>
       Effect.gen(function* () {
         const starter = yield* openAccount;
@@ -1512,7 +1513,7 @@ it.layer(getTestDB())("the coding-agent store's agent started from another", (it
         const startOn = (
           by: string,
           createdAt: string,
-          startedFrom?: { agentId: string; messageId?: string },
+          startedFrom?: { agentId: string; messageId?: string; side?: true },
         ) =>
           Effect.gen(function* () {
             const { agent } = Option.getOrThrow(
@@ -1546,6 +1547,11 @@ it.layer(getTestDB())("the coding-agent store's agent started from another", (it
         });
         const continued = yield* startOn(starter, "2026-10-17T10:01:00Z", { agentId: source });
         const again = yield* startOn(starter, "2026-10-17T10:03:00Z", { agentId: continued });
+        const side = yield* startOn(starter, "2026-10-17T10:04:00Z", {
+          agentId: source,
+          messageId,
+          side: true,
+        });
         yield* archiveAgent(starter, continued, true);
 
         yield* renameAgent(teammate, fork, "Bill by seat");
@@ -1563,6 +1569,14 @@ it.layer(getTestDB())("the coding-agent store's agent started from another", (it
         assert.deepEqual(yield* continuationsOf(starter, asked), expected);
         assert.deepEqual(yield* continuationsOf(teammate, asked), expected);
         assert.deepEqual(yield* continuationsOf(outsider, asked), new Map());
+
+        // A side chat stands under its source alone, read while it stands unarchived.
+        const sidesOf = (by: string) =>
+          Effect.map(standingSideChatsOf(by, source), (agents) => agents.map((each) => each.id));
+        assert.deepEqual(yield* sidesOf(teammate), [side]);
+        assert.deepEqual(yield* sidesOf(outsider), []);
+        yield* archiveAgent(starter, side, true);
+        assert.deepEqual(yield* sidesOf(starter), []);
       }),
   );
 

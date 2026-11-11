@@ -212,6 +212,8 @@ export interface StoredStartedFrom {
   readonly session?: string;
   /** The client id of the source's line its session is cut just before as this agent forks it: the line that opened the turn after the message forked at, or the source's own rewind still waiting on a launch; absent where the session is forked whole. */
   readonly cutBefore?: string;
+  /** Whether this agent is a side chat asked beside the source (`/btw`), which copied none of its work and is archived with it; absent for any other fork or continue. */
+  readonly side?: true;
 }
 
 /**

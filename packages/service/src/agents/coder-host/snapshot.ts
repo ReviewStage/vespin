@@ -68,6 +68,8 @@ export const SNAPSHOT_MISS = {
   ON_DEVICE: "on-device",
   FAILED: "failed",
   TIMED_OUT: "timed-out",
+  /** A side chat (`/btw`), which copies none of its source's work. */
+  SIDE_CHAT: "side-chat",
 } as const;
 
 export type SnapshotMiss = (typeof SNAPSHOT_MISS)[keyof typeof SNAPSHOT_MISS];

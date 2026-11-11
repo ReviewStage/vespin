@@ -23,7 +23,7 @@ const WRITING = {
   parts: [step, words("Reading the queue."), step, words("Adding")],
 };
 
-test("a side chat forks at the newest settled reply, leaving out the one a running turn still writes, and keeping the last turn's while the new one has written none; with none settled, it cuts that one where it stands; with no reply begun, it takes the whole transcript", () => {
+test("a side chat forks at the newest settled reply, leaving out the one a running turn still writes, and keeping the last turn's while the new one has written none; with none settled, it cuts that one where it stands; with no reply begun, it offers none", () => {
   assert.deepEqual(sideChatFork(SOURCE, [ASKED, SETTLED, NEXT, WRITING], true), {
     agentId: SOURCE,
     messageId: "a1",
@@ -47,5 +47,5 @@ test("a side chat forks at the newest settled reply, leaving out the one a runni
     messageSteps: 2,
     messageStepParts: 1,
   });
-  assert.deepEqual(sideChatFork(SOURCE, [ASKED], true), { agentId: SOURCE, opening: "" });
+  assert.equal(sideChatFork(SOURCE, [ASKED], true), undefined);
 });

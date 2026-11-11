@@ -34,6 +34,7 @@ import {
   archiveUnmovedAgent,
   pinAgentCommitted,
   renameAgentCommitted,
+  standingSideChatsOf,
   updateAgentChoiceCommitted,
   updateAgentPermissionModeCommitted,
   updateAgentServersCommitted,
@@ -155,13 +156,38 @@ export const changedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * A side chat archived with its source, as the source was, after any turn it
+ * still runs is stopped; one that cannot be stopped yet is left standing and
+ * logged, since its source's archive already stands.
+ */
+const sideChatArchived = (
+  reach: SandboxDeleteReach,
+  writer: Effect.Effect<StoreWriter>,
+  userId: string,
+  side: Agent,
+  archivedBy: StoredArchive,
+) =>
+  Effect.gen(function* () {
+    yield* stoppedForGood(writer, userId, side);
+    const written = yield* hostedStoreOrUnavailable(
+      archiveAgentCommitted(userId, side.id, true, archivedBy),
+    );
+    if (Option.isSome(written)) yield* archivedInBackground(reach, [side]);
+  }).pipe(
+    Effect.catch((refusal) =>
+      Effect.logWarning(`a side chat was not archived with its source: ${String(refusal)}`),
+    ),
+  );
+
+/**
  * The agent archived by who the stamp names, or brought back. An archived
  * agent works on unseen, so a turn still running is stopped before the
  * stamp, refused where none can be stopped yet (`stoppedForGood`); once the
  * archive stands its repository's archive script runs in its sandbox, which
  * is left standing until it goes unused long enough to be released
  * (`session-sandboxes.ts`), and a local agent is let go of on its device.
- * Nothing where the agent left the account's reach.
+ * The side chats asked beside it go with it (`sideChatArchived`), since they
+ * stand under it. Nothing where the agent left the account's reach.
  */
 export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   reach: SandboxDeleteReach,
@@ -177,6 +203,14 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
   if (!archived || Option.isNone(written)) return written;
   yield* archivedInBackground(reach, [agent]);
+  const sides = yield* hostedStoreOrUnavailable(standingSideChatsOf(userId, agent.id));
+  yield* Effect.forEach(
+    sides,
+    (side) => sideChatArchived(reach, writer, userId, side, archivedBy),
+    {
+      discard: true,
+    },
+  );
   // Counted only where this write archived an agent standing unarchived, under the member it archived for.
   if (written.value.archivedNow) {
     yield* recordServerEvent(

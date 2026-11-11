@@ -272,11 +272,11 @@ export interface TaskGlance {
   readonly agents: readonly ListedAgent[];
 }
 
-/** The agents not archived, by the task they work on, read once for every row. */
+/** The agents not archived, by the task they work on, read once for every row; a side chat (`/btw`) stands under its source in the desktop's side panel, so it is left out as an archived one is. */
 function agentsByTask(view: TasksView | undefined): ReadonlyMap<string, readonly ListedAgent[]> {
   const byTask = new Map<string, ListedAgent[]>();
   for (const agent of view?.taskAgents ?? []) {
-    if (agent.archivedAt !== undefined) continue;
+    if (agent.archivedAt !== undefined || agent.from?.side === true) continue;
     const onTask = byTask.get(agent.planId);
     if (onTask === undefined) byTask.set(agent.planId, [agent]);
     else onTask.push(agent);
