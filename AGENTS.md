@@ -61,59 +61,6 @@ entry in `knip.json`, a runtime edge that runs its Effects, or a
 deployment or test-support file.
 Review places a module and a component alike under this rule.
 
-Lint holds the UI half of this (`anti-slop/no-raw-press-outside-ui`): outside
-`packages/ui`, every app, test, and the catalog included, an intrinsic
-(lowercase) JSX element is never a control. A raw `button`, `input` (bar
-`type="hidden"`), `select`, `textarea`, or `summary`, a pressable `role`
-(`button`, `tab`, `option`, `menuitem*`, `radio`, `checkbox`, `switch`,
-`slider`, `link` off an `<a>`, or one that is no literal), and a press event (`onClick`, `onDoubleClick`,
-`onAuxClick`, `onContextMenu`, `onMouseDown`/`Up`, `onPointerDown`/`Up`,
-`onTouchStart`/`End`, and their `Capture` forms) are errors, as is
-`onKeyDown`/`onKeyUp` on an element with `tabIndex` or `contentEditable`.
-Hover, drag and drop, focus, wheel, scroll, and clipboard events, keys on a
-container that takes no focus, and a spread from a ui helper
-(`menu.contextMenu()`) stay allowed. There is no escape hatch: `pnpm lint` runs
-`tools/anti-slop/press-guard-check.ts`, which fails on a disable comment that
-would silence the rule and on an `.oxlintrc.json` that weakens it. Where it
-fires, use a `@repo/ui` component, or add the component or variant there.
-
-A loading skeleton draws through the components its loaded state draws with,
-never a copy of their boxes, and takes its counts, order, and sizes from the
-declaration the loaded surface reads, never literals of its own. Lint holds
-the first half (`anti-slop/skeleton-through-components`, under the same
-no-suppression check): `Skeleton` and `SkeletonRegion` are drawn only by a
-component named `*Skeleton`, in which an intrinsic element's class must be a
-literal naming itself a skeleton's (`…-skeleton…`); every other box is a
-component, factored out of the surface where it builds the box by hand.
-
-What a row does lives in its row component, never in the page that draws
-it: its menu, its rename, its selection, and its muted and unread states
-are built inside the one component every list of that kind draws
-(`TaskListRow`, `AgentListRow`), so a list that draws the row gets all of
-it, and no page hands a shared row a menu, an editor, or a selection of its
-own. `[check: anti-slop/row-behavior-in-row]`, under the same no-suppression
-check: outside the row components `tools/anti-slop/row-behavior.json` names,
-each with its reason, handing `@repo/ui`'s `TaskRow` its `menu`, `editor`,
-`note`, `choosable`, `settled`, or `unread`, or `TaskListRow` or
-`AgentListRow` a `menu`, `editor`, or `note`, is an error, as is a spread
-onto one. `ListRow` is not held: it is the row of many kinds, each drawn
-where it is listed. A menu shows a shortcut exactly where pressing it would act on the
-menu's subject, so a key it prints always works and one it leaves out does
-not act there. `[check: anti-slop/no-shortcut-flag]`, under the same
-no-suppression check: `commandAction` and its siblings take the menu's
-subject, and the place offering a key says what it acts on
-(`useShortcutTarget`, `packages/panel/src/shortcut-target.ts`); a literal
-`true` or `false`, a negation, a comparison, `&&` or `||`, or a condition
-choosing between the subject and nothing where they take it is an error.
-
-Lint holds the iOS half too (`anti-slop/no-raw-press-outside-ui-native`,
-under the same no-suppression check): outside `packages/ui-native`, an
-import of React Native's `Pressable`, `TextInput`, `Switch`, `Button`, or a
-touchable, a press prop (`onPress`, `onPressIn`, `onPressOut`,
-`onLongPress`) on a React Native primitive, and an import of `@expo/ui` or
-`expo-glass-effect` are errors. Where it fires, use a `@repo/ui-native`
-component, or add the component or variant there.
-
 ## Never
 
 - Never let a credential or account secret enter a Gateway answer or event, a
@@ -250,8 +197,8 @@ pnpm check:affected                      # what changed since origin/main, from 
   flags, variants, sizes, themes) are one case, not a matrix.
 - `[review]` A test you wrote to explore the code while working is deleted
   before the push unless it passes this section.
-- `[check: anti-slop/no-source-read-in-test]` `[review]` Reach for the cheapest guard that holds: a type, then a lint rule
-  in `tools/anti-slop/`, then a test. A rule about source text, such as a
+- `[review]` Reach for the cheapest guard that holds: a type, then a lint rule,
+  then a test. A rule about source text, such as a
   banned class or import, is a lint rule, never a test that reads source
   files.
 
@@ -273,7 +220,7 @@ pnpm check:affected                      # what changed since origin/main, from 
 
 ### How a test is written
 
-- `[check: anti-slop/no-node-test]` Tests run on vitest.
+- `[review]` Tests run on vitest.
 - `[review]` A test owns its world: one process, a temp directory it created
   (`temporaryDirectory` from `@repo/runtime/testing`), its own database
   (`getTestDB()` from `@repo/database/testing`), and `TestClock` for time. It
@@ -281,7 +228,7 @@ pnpm check:affected                      # what changed since origin/main, from 
   and passes alone or in any order.
 - `[review]` A test finishes in about a second, and a file in about ten, on
   CI. One that cannot says why in a comment.
-- `[check: anti-slop/no-internal-vi-mock]` `[review]` Use real code first, then a fake, then a stub, and replace only
+- `[review]` Use real code first, then a fake, then a stub, and replace only
   what crosses a process boundary: provider HTTP, Apple, the model, the OS,
   the clock. An Effect service is replaced by a test `Layer` on its tag;
   anything else by `vi.spyOn`, restored with `vi.restoreAllMocks()`. Never
@@ -299,7 +246,7 @@ pnpm check:affected                      # what changed since origin/main, from 
 
 ### Changing and removing tests
 
-- `[check: anti-slop/no-focused-or-skipped-test]` `[review]` Never make a test pass by weakening it: no `.only`, `.skip`,
+- `[review]` Never make a test pass by weakening it: no `.only`, `.skip`,
   `.todo`, or `it.flakyTest`, no looser assertion, and no longer timeout or
   extra retry without evidence of what was slow. A flaky test is fixed or
   deleted.

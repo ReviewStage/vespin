@@ -13,8 +13,8 @@ import { cn } from "../cn.js";
  * leaves to its caller's `getAriaLabel` and `getAriaValueText`;
  * the one press cursor (`cursor-press`); and none of shadcn's outline or ring
  * utilities, because the window's own focus ring (`@repo/panel`'s
- * base.css) draws the keyboard's ring and a utility would outrank it
- * (`anti-slop/no-shadcn-focus-ring`). `@repo/ui`'s `Slider`
+ * base.css) draws the keyboard's ring and a utility would outrank it.
+ * `@repo/ui`'s `Slider`
  * (`components/slider/slider.tsx`) is what an app draws; this is its inside.
  */
 

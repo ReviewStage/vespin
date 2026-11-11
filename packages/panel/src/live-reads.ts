@@ -48,8 +48,7 @@
  *   holds nothing, or `getQueryData` in a callback.
  *
  * A read added here is its factory, its Try again, and its follow below,
- * and nothing else. This module is the only one that opens a follow
- * (`anti-slop/no-follow-outside-host-read`).
+ * and nothing else. This module is the only one that opens a follow.
  */
 
 import {

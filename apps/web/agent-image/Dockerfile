@@ -10,8 +10,7 @@
 # sandbox's API runs commands as. The `agent` user each harness runs as is the SDK's, made as a
 # sandbox opens (`packages/service/src/agents/machine/vercel-machine.ts`).
 #
-# The versions and paths are `@repo/agent-runner/pins`'s, whose versions
-# `tools/anti-slop/guards/agent-pins.ts` holds these `ARG`s to.
+# The versions and paths are `@repo/agent-runner/pins`'s; these `ARG`s must match its versions.
 
 FROM vcr.vercel.com/vercel/sandbox/node:24
 
