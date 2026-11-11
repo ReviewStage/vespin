@@ -71,7 +71,7 @@ export class DescriptionPictureKey extends Data.TaggedClass(KEPT_KIND.DESCRIPTIO
   readonly attachmentId: string;
 }> {}
 
-/** One version of a page, of a task or of an agent on no task: a version is never written again. */
+/** One version of a page of a task: a version is never written again. */
 export class PageVersionKey extends Data.TaggedClass(KEPT_KIND.PAGE_VERSION)<{
   readonly ownerKind: PageOwner["kind"];
   readonly ownerId: string;
@@ -162,15 +162,13 @@ function charactersOf(value: unknown): number {
   return characters;
 }
 
-/** Whether a key names content of the agent: its pictures and its workers', its pull request's images, and the pages it owns on no task. */
+/** Whether a key names content of the agent: its pictures and its workers', and its pull request's images. */
 export function keptOfAgent(agentId: string): (key: KeptKey) => boolean {
   return (key) => {
     switch (key._tag) {
       case KEPT_KIND.AGENT_PICTURE:
       case KEPT_KIND.GITHUB_IMAGE:
         return key.agentId === agentId;
-      case KEPT_KIND.PAGE_VERSION:
-        return key.ownerKind === PAGE_OWNER.AGENT && key.ownerId === agentId;
       default:
         return false;
     }

@@ -28,7 +28,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import type { MenuAction } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
-import { AGENT_ROW_CELLS, AgentListRow, AgentStartRow } from "./agent-list-row.js";
+import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 import type { ChosenRows } from "./tasks-selection.js";
@@ -41,8 +41,8 @@ import type { ChosenRows } from "./tasks-selection.js";
  * the head takes, a `GroupHeader` over their rows. Each row is the
  * task's agent as its "+" row draws it (`agentEntries`),
  * drawn as a person's page draws its agents too (`agent-list-row.tsx`), in
- * the columns a task's row stands in (`TaskRows`), New agent among them
- * (`AgentStartRow`), so every glyph and name of the group lines up: its
+ * the columns a task's row stands in (`TaskRows`), so every glyph and name
+ * of the group lines up: its
  * tab's glyph, which gives way to the working mark while it works, its
  * tab's name, its pull request, where it opened one, as a chip of GitHub's
  * mark in GitHub's color for where it stands and its number
@@ -169,8 +169,8 @@ function PlanAgentRow({
 /**
  * The task's agents at the head of its description, under their group's head,
  * those waiting on the developer first, then those at work, then the
- * newest, and what `starts` offers after them, or its head alone where it
- * lists none and offers New agent; nothing where it offers none of these.
+ * newest, or its head alone where it lists none and offers New agent;
+ * nothing where it offers neither.
  * A row's press is handed to `onOpenAgent` by its agent's id, and
  * `onOpenPullRequest` opens an agent's pull request as its own chip does.
  */
@@ -184,7 +184,6 @@ export function PlanAgents({
   onOpenAgent,
   onOpenPullRequest,
   newAgent,
-  starts,
   phone,
 }: {
   agents: AgentsControl;
@@ -202,8 +201,6 @@ export function PlanAgents({
   onOpenPullRequest: (agentId: string) => void;
   /** New agent, the + standing at rest on the group's head as the strip's "+" offers it (`newAgentStarts`); none on a task that starts no agent. */
   newAgent: MenuAction | undefined;
-  /** What the group offers after its agents: on a phone, the agents' read again where it never landed (`agentsRetry`). */
-  starts: readonly MenuAction[];
   /** A phone's additions; none elsewhere. */
   phone?: PlanAgentsPhone | undefined;
 }): React.JSX.Element | null {
@@ -227,7 +224,7 @@ export function PlanAgents({
   // Note that an empty group stands only once the agents are read, so a task loading its agents does not offer New agent.
   const empty = agents.agents?.length === 0 && newAgent !== undefined;
   // Note that a group over nothing folds nothing, since a fold over no rows would hide nothing.
-  const holds = entries.length > 0 || starts.length > 0 || archived > 0;
+  const holds = entries.length > 0 || archived > 0;
   const grouped = holds || empty;
   // Note that a phone's Inbox row counts only what no listed agent's row marks already.
   const listed = new Set(entries.map((entry) => entry.row.id));
@@ -270,7 +267,7 @@ export function PlanAgents({
             }
             fold={holds ? { defaultOpen: !folded } : undefined}
           >
-            {entries.length + starts.length === 0 ? null : (
+            {entries.length === 0 ? null : (
               <TaskRows
                 id={selection.regionId}
                 label={AGENTS_LIST}
@@ -292,16 +289,6 @@ export function PlanAgents({
                     more={more}
                     chosen={selection.chosenOf(entry.row.id)}
                     onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
-                  />
-                ))}
-                {starts.map((start) => (
-                  <AgentStartRow
-                    key={start.label}
-                    label={start.label}
-                    glyph={start.icon ?? <GLYPH.ADD />}
-                    detail={start.detail}
-                    disabled={start.disabled}
-                    onStart={start.onSelect}
                   />
                 ))}
               </TaskRows>

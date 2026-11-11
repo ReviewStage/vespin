@@ -8,7 +8,6 @@ import {
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { GLYPH } from "@repo/ui/icons";
 import { type InlineRename, useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -46,7 +45,7 @@ import { useAgentDelete } from "./agent-delete.js";
 import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
 
 /**
- * agent-actions.tsx -- one coding agent's menu, built once (`agentMenuGroups`) and drawn the same wherever the agent is drawn: its tab's right-click and its column's ⋯ on a task, its own page's ⋯, and its rows in the sidebar, a task's summary, a person's page, the sidebar's pins, and the summary's Archived.
+ * agent-actions.tsx -- one coding agent's menu, built once (`agentMenuGroups`) and drawn the same wherever the agent is drawn: its tab's right-click and its column's ⋯ on a task, and its rows in the sidebar, a task's summary, a person's page, the sidebar's pins, and the summary's Archived.
  *
  * Every surface that draws an agent offers what `useAgentActions` answers,
  * laid out by `agentMenuGroups` in the one order every menu of the window
@@ -72,23 +71,8 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * The doors that open a terminal are the column's, from where it stands
  * (`useAgentTerminalDoors`), and so are those that open a fork of one of its
  * messages or a continue of it as a draft (`useAgentDraftDoors`): the
- * task's draft tab, or the draft on an agent's own page, each started
- * through the same control.
+ * task's draft tab, started through the same control.
  */
-
-/**
- * The keys an agent's own page offers on it while shown, and a task's chosen
- * agent tab on what it shows, which every menu of it prints.
- */
-export const AGENT_KEYS: readonly KeyedCommand[] = [
-  APP_COMMAND.COPY_CONTENT,
-  APP_COMMAND.COPY_FULL_TRANSCRIPT,
-  APP_COMMAND.SHOW_TERMINAL,
-  APP_COMMAND.OPEN_IN_TASK,
-  APP_COMMAND.TOGGLE_READ,
-  APP_COMMAND.PIN,
-  APP_COMMAND.DELETE,
-];
 
 /** What the agent menu's one copy of its words is called, and the two ways it copies them. */
 const COPY_TRANSCRIPT = "Copy transcript";
@@ -101,7 +85,7 @@ const TRANSCRIPT_WAY = { CONCISE: "Concise", FULL: "Full" } as const;
  * other tab's, whose menu is these same groups over the few doors it has.
  */
 export interface AgentMenuDoors {
-  /** What the menu acts on as it is drawn, the agent's own page or tab, or its sidebar row, whose keys its items print (`shortcut-target.ts`); none where no key reaches it. */
+  /** What the menu acts on as it is drawn, the agent's tab or its sidebar row, whose keys its items print (`shortcut-target.ts`); none where no key reaches it. */
   subject?: ShortcutSubject | undefined;
   /** Copy link, and Open in new tab where the window opens tabs, for what the menu is about (`copy-link-item.tsx`'s `linkItems`). */
   links?: readonly MenuAction[] | undefined;
@@ -141,7 +125,7 @@ export interface AgentMenuDoors {
  * Add repository…, Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
  * terminal, Open in task, and Permanently delete print ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O,
  * and ⌘⌫ only where the chord acts on what the menu acts on (`subject`):
- * the chosen tab, the agent's page, or a sidebar row. A group with nothing in it is left
+ * the chosen tab or a sidebar row. A group with nothing in it is left
  * out, so a surface with few doors draws the few groups it has in the same
  * order.
  */

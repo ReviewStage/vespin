@@ -17,7 +17,6 @@ import {
   INLINE_EDIT_LOOK,
   InlineEdit,
   PlusIcon,
-  RetryButton,
   TABS_GROUND,
   TOOLBAR_INSET,
   TOOLBAR_LOOK,
@@ -26,7 +25,6 @@ import {
   Tooltip,
   useMenu,
 } from "@repo/ui";
-import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {
   agentTab,
   draftTab,
@@ -138,9 +136,6 @@ const NEW_AGENT_STARTING = "Starting…";
 
 /** The row that opens the task's Inbox, which no agent's id spells. */
 const INBOX_ROW = "inbox";
-
-/** What the press that reads the plan's agents again, after a first read did not land, says. */
-const RETRY_AGENTS = "Retry agents";
 
 /**
  * A tab whose name may be edited where it stands: an agent's.
@@ -460,17 +455,6 @@ function NewAgentButton({
   );
 }
 
-/**
- * What a phone's Overview offers after the task's agents, where no strip
- * stands to offer it (`plan-agents.tsx`): the agents' read again where it
- * never landed, as the strip's Retry offers it.
- */
-export function agentsRetry(agents: AgentsControl): MenuAction[] {
-  return agents.listFailed && agents.agents === undefined
-    ? [{ label: RETRY_AGENTS, onSelect: agents.onRetryList }]
-    : [];
-}
-
 /** The row the column's tabs stand in, which is its toolbar's title: the strip, what follows it, and the "+" last. */
 function MainTabsRow({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="main-tabs flex items-center gap-list-gap">{children}</div>;
@@ -487,8 +471,7 @@ export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
  * (`details`), as a channel's name opens its details, and whose right-click
  * is the task's own menu (`descriptionMenu`), whichever the page shows,
  * renamed where it stands while `rename` is editing, and led on a run's task
- * by the path to the automation whose run made it (`trail`), as the run's
- * agent's own page leads with it; then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
+ * by the path to the automation whose run made it (`trail`); then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
  * it: every menu there is a right-click. The window's side panel toggle
  * stands at its end (`desktop-shell.tsx`).
  */
@@ -737,16 +720,6 @@ export function MainTabBars({
               ),
             )}
           </TabStrip>
-          {/* The first read of the task's agents did not land: nothing is known
-                to draw, so the row offers the read again where the tabs would be,
-                after the strip rather than in it, so the strip's scrolling never
-                takes it out of reach, and as its glyph alone where the bar is
-                short of room (desktop.css's `main-tabs`). */}
-          {agents.listFailed && agents.agents === undefined ? (
-            <ReplayUnmask>
-              <RetryButton label={RETRY_AGENTS} onRetry={agents.onRetryList} />
-            </ReplayUnmask>
-          ) : null}
           <NewAgentButton
             start={newAgentStarts(main, agents)[0]}
             asked={main.newTabAsked}
@@ -883,7 +856,6 @@ export function MainTabContent({
             onOpenTarget={onOpenTarget}
             cards={cards.agent(agentId)}
             onHeld={views.onAgentHeld}
-            run={agents.origin}
             threads={threads}
           />
         </ForkProvider>
@@ -897,10 +869,7 @@ export function MainTabContent({
 /**
  * One agent's pane: what an agent's or the draft's tab shows
  * (`MainTabContent`), at the document's reading width (`.desktop-agent`).
- * The task column draws it for the tab it shows, as the panel of that tab,
- * and the page of an agent no plan holds draws it for its agent
- * (`desktop-agent-page.tsx`), so an agent reads, finds, and is written to
- * alike wherever it stands.
+ * The task column draws it for the tab it shows, as the panel of that tab.
  *
  * A memo boundary: the task's page drawn again over the same agent and the
  * same doors, as its column's focus and its side panel's width draw it,

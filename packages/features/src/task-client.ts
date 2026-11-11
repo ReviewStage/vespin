@@ -783,21 +783,15 @@ export class HostedTaskClient {
     );
   }
 
-  /** One version of one page of one plan, or of one coding agent on no task, with its HTML; nothing where the service did not answer it, or holds no such version. */
+  /** One version of one page of one task, with its HTML; nothing where the service did not answer it, or holds no such version. */
   readPageVersion(
     place: PagePlace,
     pageId: string,
     version: number,
   ): Effect.Effect<PageVersion | undefined, never, HttpClient.HttpClient> {
     const named = { page: pageId, version: String(version) };
-    if ("taskId" in place) {
-      return Effect.map(
-        hostedCall(this.#hosted.taskFiles.page, { id: place.taskId, ...named }),
-        (read) => ("failure" in read ? undefined : read.page),
-      );
-    }
     return Effect.map(
-      hostedCall(this.#hosted.agentPages.version, { id: place.agentId, ...named }),
+      hostedCall(this.#hosted.taskFiles.page, { id: place.taskId, ...named }),
       (read) => ("failure" in read ? undefined : read.page),
     );
   }

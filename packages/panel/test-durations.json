@@ -30,7 +30,6 @@
   "src/desktop/column-dock.test.ts": 165,
   "src/desktop/command-palette.test.ts": 15389,
   "src/desktop/desktop-admin.test.ts": 1847,
-  "src/desktop/desktop-agent-page.test.ts": 19915,
   "src/desktop/desktop-inbox-answering.test.ts": 58312,
   "src/desktop/desktop-inbox-item.test.ts": 51701,
   "src/desktop/desktop-inbox-list.test.ts": 52299,

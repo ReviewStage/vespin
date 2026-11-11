@@ -794,19 +794,12 @@ export const tasksPictureKeepAnswerSchema = EffectSchema.Union([
 
 export type TasksPictureKeepAnswer = typeof tasksPictureKeepAnswerSchema.Type;
 
-/** One version of one page, of a plan or of a coding agent on no task, as the frame drawing it names it. */
-export const tasksPageParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    taskId: EffectSchema.NonEmptyString,
-    pageId: EffectSchema.NonEmptyString,
-    version: pageVersionNumberSchema,
-  }),
-  EffectSchema.Struct({
-    agentId: EffectSchema.NonEmptyString,
-    pageId: EffectSchema.NonEmptyString,
-    version: pageVersionNumberSchema,
-  }),
-]);
+/** One version of one page of a task, as the frame drawing it names it. */
+export const tasksPageParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  pageId: EffectSchema.NonEmptyString,
+  version: pageVersionNumberSchema,
+});
 
 export type TasksPageParams = typeof tasksPageParamsSchema.Type;
 
@@ -818,7 +811,7 @@ export const tasksPageAnswerSchema = EffectSchema.Union([
 
 export type TasksPageAnswer = typeof tasksPageAnswerSchema.Type;
 
-/** One plan's pages, or one coding agent's on no task, held by a window while a surface of it draws them. */
+/** One task's pages, held by a window while a surface of it draws them. */
 export const taskPagesFollowSchema = pagePlaceSchema;
 
 /** A page tab's read of one version's source, as the window hears it: its HTML line by line, colored as HTML, or that the service did not answer. */

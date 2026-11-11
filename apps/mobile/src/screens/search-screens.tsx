@@ -1,5 +1,6 @@
 // search-screens.tsx -- the Search tab: the system's search field in its bar, focused as the tab opens, over the tasks, Inbox items, and agents it finds, each kind in its own section drawn by its own list's row.
 
+import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
@@ -17,6 +18,7 @@ import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useStatusAsk } from "../tasks/use-tasks.js";
+import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
 import { StatusQuestionAsk, TaskAgentRow, TaskNodeRow } from "./task-screens.js";
 
@@ -49,11 +51,14 @@ function FoundList({
   found,
   listing,
   onOpen,
+  onRemind,
 }: {
   readonly found: SearchFound;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
   readonly onOpen: (id: string) => void;
+  /** Opens Remind me on a thread found, as the Inbox's row does. */
+  readonly onRemind: (item: InboxItem) => void;
 }) {
   const { mark } = useInboxActs();
   return (
@@ -73,6 +78,7 @@ function FoundList({
               listed={listed}
               readerId={found.readerId}
               onMark={mark}
+              onRemind={onRemind}
             />
           ))}
         </ListSection>
@@ -112,6 +118,7 @@ export function SearchScreen() {
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents.
   const { setStatus, question } = useStatusAsk(found.listing);
   const listing: TasksListing = { ...found.listing, setStatus };
+  const remind = useRemindSheet();
   useFocusEffect(
     useCallback(() => {
       if (typed.current === "") field.current?.focus();
@@ -140,9 +147,10 @@ export function SearchScreen() {
         ) : none ? (
           <EmptyState title={noResultsWords(query)} symbol="magnifyingglass" />
         ) : (
-          <FoundList found={found} listing={listing} onOpen={open} />
+          <FoundList found={found} listing={listing} onOpen={open} onRemind={remind.open} />
         )}
         <StatusQuestionAsk question={question} />
+        {remind.sheet}
       </Screen>
     </>
   );

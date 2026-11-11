@@ -37,6 +37,7 @@ export { EmptyState } from "./empty-state.js";
 export { MenuPickRow, WordsField } from "./form-rows.js";
 export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
+export { BUZZ, type Buzz, buzz } from "./haptics.js";
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 export {
   ListRow,
@@ -73,6 +74,7 @@ export {
   REVIEW_LOOK,
 } from "./pull-request-look.js";
 export { ConfirmAsk, MarkRow, PullRequestHead, WriteNoteRow } from "./pull-request-page.js";
+export { RemindSheet } from "./remind-sheet.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
 export { ScreenFailure } from "./screen-failure.js";

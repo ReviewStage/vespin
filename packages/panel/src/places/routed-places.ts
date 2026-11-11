@@ -449,7 +449,8 @@ export const ROUTED_PLACE = {
     claims: everyAddress,
     // Note that its route draws the page under any address, as it always has, so this gate is Back and Forward's alone.
     gate: workspaceGate,
-    stillThere: () => true,
+    // Note that the page only opens its agent on its task (`desktop-agent-page.tsx`), so Back and Forward pass over its step to the task's.
+    stillThere: () => false,
     binding: PLACE_BINDING.KEPT,
     overThePlan: true,
     inTaskPlace: true,
@@ -457,9 +458,9 @@ export const ROUTED_PLACE = {
     listedOnly: false,
     title: (tasks, under) => (tasks.agentView.agentId === undefined ? under() : { label: "Agent" }),
     named: () => undefined,
-    links: ({ tasks, at, listed, under }) => {
+    links: ({ tasks, listed, under }) => {
       const { agentId } = tasks.agentView;
-      return agentId === undefined ? under() : agentPageLinks(tasks, at, listed, agentId);
+      return agentId === undefined ? under() : agentPageLinks(listed, agentId);
     },
     narrowBack: undefined,
     narrowInstead: undefined,

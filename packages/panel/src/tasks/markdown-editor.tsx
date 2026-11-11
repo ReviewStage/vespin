@@ -1,4 +1,3 @@
-import { holderTaskId } from "@repo/features/mention-holder";
 import { decodeMention } from "@repo/features/mention-link";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ANNOUNCE, Checkbox } from "@repo/ui";
@@ -338,7 +337,7 @@ export function MarkdownEditor({
               pastedMentionNode(words, mentions.doors.place, {
                 known,
                 taskIdOf,
-                taskId: holderTaskId(mentions.source.holder),
+                taskId: mentions.source.holder?.taskId,
                 text,
               }),
             namesMention: (target) =>

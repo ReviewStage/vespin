@@ -1,16 +1,23 @@
-import {
-  AGENT_BOUNDS,
-  AGENT_SOURCE,
-  type AgentStatus,
-  type AgentSummary,
-} from "@repo/features/agent-wire";
-import { dictationKeywords } from "@repo/features/dictation-keywords";
-import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
-import type { PagePlace } from "@repo/features/page-wire";
+/**
+ * desktop-agent-page.tsx -- an agent's own address, which opens the agent on its task, or says it is not found where it cannot be read.
+ *
+ * Every agent stands on a task, so an agent's page draws nothing of the
+ * agent: its address, `/<workspace>/agent/<agentId>`, which an older link,
+ * a step of the window's history, a reload, or a door naming an agent the
+ * task list does not carry still lands on, opens the agent on its task, as
+ * any door naming an agent does (`TasksControl.onShowAgent`). The agent is
+ * read from the task list where it carries it, and else once by its id.
+ * Until then the page stands in an agent tab's own shape saying Reading; an
+ * agent the service does not hold for the reader, deleted or of a workspace
+ * they are not in, is not found; and a read that did not land says so with
+ * Retry, and Escape leaves it for wherever it was opened from. Its step is
+ * never one Back or Forward goes to
+ * (`places/routed-places.ts`'s `AGENT`), so Back from the task it opened on
+ * passes over it.
+ */
+
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { TerminalSummary } from "@repo/features/terminal-wire";
-import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -18,901 +25,97 @@ import {
   ErrorState,
   FILL_ELEMENT,
   Fill,
-  type InlineEditEnd,
-  MoreButton,
-  moreLabel,
   NOT_FOUND_THING,
   NotFound,
-  ProviderMark,
-  SidePanelIcon,
-  STATUS_TONE,
   Toolbar,
-  type ToolbarPlace,
-  useMenu,
 } from "@repo/ui";
-import { pullRequestAgentOf, repositoryPullRequestOf } from "@repo/ui/pull-request-link";
-import {
-  agentTab,
-  draftTab,
-  pageTab,
-  type StripTab,
-  sameTab,
-  subagentTab,
-} from "@repo/ui/tab-strip-model";
-import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect } from "react";
 import { useAppCommand } from "../app-commands.js";
-import { appPlatform } from "../app-platform.js";
-import { AutomationDirectory } from "../automation-directory.js";
-import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
-import { FindScope } from "../find-in-tab.js";
-import { usePageWorkspace } from "../links-at-hand.js";
-import { agentOriginQuery } from "../live-reads.js";
-import { MemberDirectory } from "../member-directory.js";
-import { HERE } from "../places/pressed-address.js";
-import { useAutomationsDoor } from "../places/routed-doors.js";
-import { useShortcutTarget } from "../shortcut-target.js";
-import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { agentName } from "../tasks/agent-model.js";
-import { agentSubject } from "../tasks/agent-ref.js";
+import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
-import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
-import { useChangesPeople } from "../tasks/changes-people.js";
-import type { OpenFileLines } from "../tasks/mention-chip.js";
-import { peopleOf } from "../tasks/pull-request-card.js";
-import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
-import { SkillFiles } from "../tasks/skill-chip.js";
-import { TAB_KIND } from "../tasks/tab-look.js";
-import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
-import {
-  TaskMentions,
-  type TaskMentionsValue,
-  tasklessMentions,
-  useMentionAgentsReader,
-} from "../tasks/task-mentions.js";
-import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
-import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
-import { type AgentsControl, useAgents } from "../tasks/use-agents.js";
-import { WordsWorkspace } from "../tasks/use-link-standing.js";
-import {
-  OpenAddressesHere,
-  OpenLinkProvider,
-  openPullRequestsHere,
-  useOpenPlace,
-  useReadLinkOpener,
-} from "../tasks/use-open-link.js";
-import type { PinHolder, SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useToast } from "../toast.js";
-import { ActionMenu } from "./action-menu.js";
-import {
-  AGENT_KEYS,
-  type AgentTerminalDoors,
-  agentMenuGroups,
-  useAgentActions,
-  useAgentDraftDoors,
-  useAgentTerminalDoors,
-} from "./agent-actions.js";
-import {
-  AutomationRunSteps,
-  AutomationRunStrip,
-  automationTrail,
-  openRunAgent,
-  useAutomationRunPlace,
-} from "./automation-agent-run.js";
-import { AgentPane } from "./main-tabs.js";
-import { PhoneBack, PhoneHead, phoneBar, phoneFindGroups } from "./phone-head.js";
-import {
-  SIDE_PANEL_HOLDER,
-  SidePanel,
-  showPullRequest,
-  taskCards,
-  useColumnFocus,
-  useSidePanelDrawing,
-} from "./side-panel.js";
-import { useTabViews } from "./strip-tabs.js";
-import { tabCard } from "./tab-card.js";
-import { taskCardOf } from "./task-card.js";
+import { PhoneBack, PhoneHead, phoneBar } from "./phone-head.js";
 import type { TaskHeadBack } from "./task-pane-switcher.js";
-
-/**
- * desktop-agent-page.tsx -- one agent's page, the place a link to the agent names, drawn in the task's place as the task column draws an agent's tab.
- *
- * A link to an agent, as an older message may hold, names the agent's own
- * page, which still answers it, or says the agent is not found where it
- * cannot be read. Its page stands where the task would, beside the sidebar,
- * as the Inbox does, and
- * draws the task column's own agent pane (`main-tabs.tsx`'s `AgentPane`):
- * its transcript, its composer, its model and servers, and what it
- * published, at the document's reading width, each through the same
- * control a plan's agents are driven by, here holding the task list's row of
- * the one agent (`use-agents.ts`'s `agentId`), so opening it reads nothing
- * of the agent; an automation's agent holds the run that started it beside
- * it (`LIVE_READ.AGENT_ORIGINS`), read once while it is held. ⌘F finds in it as in a
- * plan's column. An `@` in its box offers its repository's files, its
- * skills, and the servers, read through its workspace since no plan names
- * them (`tasklessMentions`), the pages the agent showed and the pull request
- * it opened, and the workspace's agents, the app's box among
- * them, though it works in no repository; a skill a message names is its
- * chip, which opens the skill's `SKILL.md` in the panel beside it, read
- * through its workspace and repository, as a file it names does; and a
- * dictation listens for its repository and its title. A row of its inbox calls opens the window's Inbox on the
- * thread it names, as a link to the thread does. Beside it stands
- * the window's side panel, held by the agent while its page stands
- * (`use-plans-tab.ts`): a delegation's row opens its worker there, and its
- * pull request's chip its pull request, as on a task, and its toggle,
- * its width, and its keys are the plan's own; ⌘T opens its "+", the page's
- * one, since the agent's own column opens no tab. Its title names the agent as
- * its tab would, and its ⋯ offers the agent's one menu, the very one its
- * tab's ⋯ offers on a task (`agent-actions.tsx`'s `agentMenuGroups`): Copy
- * link and Copy transcript, Rename, which turns the title into
- * its name's field, Show terminal, Archive, and Permanently delete; ⌘J and
- * New terminal open its terminal as on a task (`terminal-commands.tsx`). An archived agent takes no message, so
- * its composer gives way to its own Unarchive, which its ⋯ offers in
- * Archive's place, and it is not renamed; one archived while its page
- * stands, by its ⋯ or by its task marked done or canceled, leaves the page
- * for Home. An agent the task list does not carry,
- * deleted or of a workspace the reader is not in, as a link may name, is not
- * found, and nothing of it is drawn. Whoever sent it a message is read against its
- * workspace's members, as on a plan, and the automation whose run started
- * it against its workspace's automations, so the prompt it opens on names
- * the automation and opens its page. An agent an automation's run started
- * leads its bar with the path to that automation, says under it what fired
- * the run, and steps through the automation's other runs' agents from the
- * bar's end (`automation-agent-run.tsx`). Escape leaves it for wherever it was
- * opened from, and so does any row of the sidebar.
- */
 
 /** What the page says where the agent could not be read. */
 const NOT_READ = "This agent could not be read.";
 
-/** Nothing to do, for the doors a task's column opens and this page does not have. */
-const nothing = (): void => undefined;
+/** What a phone's bar names the page by. */
+const PHONE_PLACE = "agent";
 
-/** No tab arrived anything: arrivals are a plan's. */
-const NO_UNREAD: readonly StripTab[] = [];
+/** Where the agent of the page's address stands: on a task, nowhere the reader may open, not read yet, or not read at all. */
+type AgentFound =
+  | { readonly taskId: string }
+  | { readonly missing: true }
+  | { readonly reading: true }
+  | { readonly failed: true; readonly onRetry: () => void };
 
-/** What the page's ⋯ is called. */
-const ACTIONS_THING = "Agent";
-
-/** What the title's field is called for a reader, as an agent's tab calls its own. */
-const NAME_LABEL = "Agent name";
-
-/** What the place an agent started from Slack leads its bar with is called. */
-const SLACK_PLACE = "Slack";
-
-/** The trail an agent started from Slack leads its bar with: Slack, on its mark, opening the message it was started from; none for any other agent, or where Slack answered no link. */
-function slackTrail(agent: Pick<AgentSummary, "source">): readonly ToolbarPlace[] | undefined {
-  const { source } = agent;
-  if (source?.kind !== AGENT_SOURCE.SLACK || source.url === undefined) return undefined;
-  const { url } = source;
-  return [
-    {
-      label: SLACK_PLACE,
-      icon: <ProviderMark provider={INTEGRATION_PROVIDER.SLACK} />,
-      onPress: () => appPlatform().openWeb(url),
-    },
-  ];
-}
-
-/**
- * What a tab of the agent's page is pinned on: the agent's task, whose
- * panel holds the same tab; none for an archived agent, or one not read
- * yet, which the sidebar draws no pin of.
- */
-function pagePinOn(agent: AgentSummary | undefined): PinHolder | undefined {
-  if (agent === undefined || agent.archivedAt !== undefined || agent.planId === null) {
-    return undefined;
+/** The agent of `agentId` as the task list carries it, else as its one read by its id answered. */
+function useAgentFound(tasks: TasksControl, agentId: string): AgentFound {
+  const listed = tasks.liveAgents?.find((each) => each.id === agentId);
+  const read = useQuery({ ...agentPageQueryOptions(agentId), enabled: listed === undefined });
+  if (listed !== undefined) return { taskId: listed.planId };
+  if (read.isPending) return { reading: true };
+  const answer = read.data;
+  if (answer !== undefined && !("failure" in answer)) return { taskId: answer.agent.planId };
+  if (answer !== undefined && answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) {
+    return { missing: true };
   }
-  return { task: agent.planId };
+  return { failed: true, onRetry: () => void read.refetch() };
 }
 
-/**
- * The page's bar: its title and its ⋯, which offer the agent's one menu as
- * its tab in a task's column does (`agent-actions.tsx`'s
- * `agentMenuGroups`): its title turned into its name's field by Rename. It
- * ends in the agent's Run button where its repository has run actions, as
- * a task's tab row does, which a phone's ⋯ offers as Run › instead
- * (`run-actions-button.tsx`).
- */
-function AgentPageBar({
-  agent,
-  agents,
-  shown,
-  terminals,
-  onShowShell,
-  onClose,
-  phone,
-  trail,
-  steps,
-}: {
-  agent: AgentSummary;
-  agents: AgentsControl;
-  shown: boolean;
-  /** The places above the page, an automation's agent's alone: Automations and its automation (`automation-agent-run.tsx`). */
-  trail: readonly ToolbarPlace[] | undefined;
-  /** What stands before the ⋯: the arrows through its automation's runs, an automation's agent's alone. */
-  steps: React.ReactNode;
-  terminals: Pick<AgentTerminalDoors, "onOpenTerminal" | "onOpenLocal">;
-  /** Shows a shell the service started for the agent, a run action's, in the side panel's Terminal tab; none where the platform runs no terminals. */
-  onShowShell: ((terminal: TerminalSummary) => void) | undefined;
-  /** Leaves the page, as Escape does, once the agent is deleted. */
-  onClose: () => void;
-  /** A phone's head (`phone-head.tsx`): its way back, and the panel its ⋯ opens; none elsewhere. */
-  phone?: AgentPagePhone | undefined;
-}): React.JSX.Element {
-  const label = agentName(agent, agents.models);
-  const run = useRunActions(agent.archivedAt === undefined ? agent : undefined, shown, onShowShell);
-  const actions = useAgentActions(agent, agents, {
-    label,
-    shown,
-    terminals,
-    run: phone === undefined ? undefined : runSubmenu(run),
-    onDeleted: onClose,
-  });
-  // The page's agent's ⌥⌘C, ⇧⌥⌘C, and ⌘⌫, as its ⋯'s items run them.
-  const { onCopy, deletion } = actions.doors;
-  const copies = shown ? onCopy : undefined;
-  useAppCommand(
-    APP_COMMAND.COPY_CONTENT,
-    copies === undefined ? undefined : () => copies(TRANSCRIPT_COPY.CONCISE),
-  );
-  useAppCommand(
-    APP_COMMAND.COPY_FULL_TRANSCRIPT,
-    copies === undefined ? undefined : () => copies(TRANSCRIPT_COPY.FULL),
-  );
-  useAppCommand(
-    APP_COMMAND.DELETE,
-    shown && deletion !== undefined && deletion.disabled !== true ? deletion.onSelect : undefined,
-  );
-  const menu = useMenu(shown);
-  // Note that the page's own head already leads with the Slack crumb an agent started from Slack opens, so its menu offers no Open in Slack beside it.
-  // The page's agent is what its keys act on while it stands, wherever a menu of it is drawn.
-  useShortcutTarget(shown ? actions.subject : undefined, AGENT_KEYS);
-  const groups = agentMenuGroups({
-    subject: actions.subject,
-    ...actions.doors,
-    onOpenInSlack: undefined,
-  });
-  const { rename } = actions;
-  const renaming = rename?.editing === true;
-  const title = renaming ? (rename.asked ?? label) : label;
-  const titleEdit = renaming
-    ? {
-        label: NAME_LABEL,
-        maxLength: AGENT_BOUNDS.MAX_TITLE_CHARS,
-        onEnd: (edit: InlineEditEnd) => rename.end(edit.value),
-      }
-    : undefined;
-  // The agent's menu: a right-click on its name, or a phone's ⋯, which has no right-click to offer it on.
-  const drawnMenu =
-    menu.drawn === undefined ? null : (
-      <ActionMenu
-        label={moreLabel(ACTIONS_THING)}
-        menu={menu.drawn}
-        // A phone's ⋯ also stands in for ⌘F, and for the panel's toggle it has no room for.
-        groups={
-          phone === undefined
-            ? groups
-            : [
-                ...phoneFindGroups(),
-                ...groups,
-                ...(phone.onShowPanel === undefined
-                  ? []
-                  : [
-                      [
-                        {
-                          label: SHOW_PANEL,
-                          icon: <SidePanelIcon />,
-                          onSelect: phone.onShowPanel,
-                        },
-                      ],
-                    ]),
-              ]
-        }
-        onClose={menu.close}
-      />
-    );
-  const dialogs = (
-    <>
-      {drawnMenu}
-      {actions.dialog}
-    </>
-  );
-  if (phone !== undefined) {
-    return (
-      <PhoneHead
-        place="agent"
-        start={<PhoneBack back={phone.back} />}
-        title={title}
-        titleEdit={titleEdit}
-        end={
-          <>
-            <MoreButton thing={ACTIONS_THING} {...menu.trigger()} />
-            {dialogs}
-          </>
-        }
-      />
-    );
-  }
-  return (
-    <>
-      <Toolbar
-        title={title}
-        titleEdit={titleEdit}
-        trail={trail}
-        titleMenu={{ contextMenu: menu.contextMenu(), keyMenu: menu.keyMenu }}
-        actions={
-          <>
-            {steps}
-            {run === undefined ? null : <RunActionsButton offer={run} agentName={label} />}
-          </>
-        }
-      />
-      {dialogs}
-    </>
-  );
-}
-
-/** What a phone's way back out of a draft calls the agent, before the agent is read. */
-const AGENT = "Agent";
-
-/** What Show panel is called in a phone's ⋯, where the title bar's toggle is not drawn. */
-const SHOW_PANEL = "Show panel";
-
-/** What a phone's agent page heads itself with (`phone-head.tsx`): its way back, and the panel its ⋯ shows, while it is shut. */
-interface AgentPagePhone {
-  readonly back: TaskHeadBack;
-  readonly onShowPanel: (() => void) | undefined;
-}
-
-/** The page's mentions, once there are any to hand; until then the box takes an `@` as the letter it is. */
-function AgentMentions({
-  value,
-  children,
-}: {
-  value: TaskMentionsValue | undefined;
-  children: React.ReactNode;
-}): React.ReactNode {
-  return value === undefined ? children : <TaskMentions value={value}>{children}</TaskMentions>;
-}
-
-/** The page of the agent its route's address names (`panel-router.tsx`), keyed by it, so another agent's page is a page of its own, holding nothing of the last. */
+/** The page the agent of the address stands on while it is read, or the words saying why it is not opened. */
 export function AgentRoutePage({
   tasks,
   away,
 }: {
   tasks: TasksControl;
+  /** A phone's way back out of the page, to the page it was opened from (`WindowHistory`'s `onLeave`); none elsewhere. */
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
   const { agentId } = useParams({ from: "/places/$workspace/agent/$agentId" });
-  return <DesktopAgentPage key={agentId} tasks={tasks} agentId={agentId} away={away} />;
-}
-
-/** One agent's page, in the plan's place: the agent read by its id, drawn as the task column's agent pane. */
-function DesktopAgentPage({
-  tasks,
-  agentId,
-  away,
-}: {
-  tasks: TasksControl;
-  agentId: string;
-  /** A phone's way back out of the page, to the page it was opened from (`WindowHistory`'s `onLeave`), which heads it as a phone's page (`phone-head.tsx`); none elsewhere. */
-  away?: TaskHeadBack | undefined;
-}): React.JSX.Element {
-  // The draft a Fork or a Continue opened on the page, by its key, which the pane shows in the agent's place.
-  const [drafting, setDrafting] = useState<{ agentId: string; draftId: string } | undefined>(
-    undefined,
-  );
-  const draftShown = drafting?.agentId === agentId ? drafting.draftId : undefined;
-  // Escape leaves a draft for the agent it was opened from, its words kept, and the page otherwise.
-  useAppCommand(
-    APP_COMMAND.EXIT_AGENT_PAGE,
-    draftShown === undefined ? tasks.agentView.onClose : () => setDrafting(undefined),
-  );
-  const views = useTabViews();
-  const { sidePanel } = tasks;
-  const drawing = useSidePanelDrawing(sidePanel);
-  const { onArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
-  // The panel holds the keys while the focus went into it last, or while it fills the window over the page.
-  const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
-  const openAgents = useMemo(() => [agentId], [agentId]);
-  // ⌘T opens the panel's "+", the page's one, handing it the keys: the agent's own column opens no tab of its own.
-  useAppCommand(APP_COMMAND.NEW_TAB, () => {
-    setFocus(COLUMN.SIDE);
-    sidePanel.onNewTab();
-  });
-  // The agent as the task list carries it, on a task or with none, with its own workspace and repository.
-  const { liveAgents } = tasks;
-  const listedPage = useMemo(
-    () => liveAgents?.find((each) => each.id === agentId),
-    [liveAgents, agentId],
-  );
-  const agents = useAgents({
-    taskId: undefined,
-    agentId,
-    repository: null,
-    listedAgents: liveAgents,
-    listedPage,
-    list: { read: tasks.listRead, failed: tasks.listFailed, onRetry: tasks.onRetryList },
-    listedPullRequests: tasks.listedPullRequests,
-    onOpenIntegrations: tasks.agents.onOpenIntegrations,
-    onOpenApiKeys: tasks.agents.onOpenApiKeys,
-    // An agent a Continue or a Fork started opens on its own page, as a Start's tab opens on a task.
-    onStarted: tasks.agentView.onOpen,
-    me: tasks.me,
-  });
-  const agent = agents.agents?.[0] ?? agents.archived?.[0];
-  // An agent archived while its page stands, as marking its task done or canceled archives it, leaves the page for Home.
-  // Note that only the move into archived does, because an agent opened archived, from History or a link, is read where it stands.
-  const archived = agent === undefined ? undefined : agent.archivedAt !== undefined;
-  const wasArchived = useRef(archived);
-  const { onGoHome } = tasks;
+  const found = useAgentFound(tasks, agentId);
+  const taskId = "taskId" in found ? found.taskId : undefined;
+  const { onShowAgent } = tasks;
+  useAppCommand(APP_COMMAND.EXIT_AGENT_PAGE, tasks.agentView.onClose);
   useEffect(() => {
-    const archivedHere = archived === true && wasArchived.current === false;
-    if (archived !== undefined) wasArchived.current = archived;
-    if (archivedHere) onGoHome();
-  }, [archived, onGoHome]);
-  // The run that started an automation's agent, held while its page stands; an agent the list names no automation of has none, and asks nothing.
-  const run = useQuery(agentOriginQuery(agent?.automationName === undefined ? undefined : agentId));
-  // Note that the models come from the open task's agents where this page has not read them, so
-  // the agent is named alike in both; and that an archived agent, which takes no message, is
-  // brought back by its own Unarchive, there being no task to bring back with it.
-  const { onArchive } = agents;
-  const toast = useToast();
-  const openLink = useReadLinkOpener();
-  // An Unarchive refused says why, as any other refusal of the agent's does.
-  // Note that it settles once the answer is said, so the note's Unarchive shows busy till then.
-  const unarchive = () =>
-    onArchive(agentId, false).then((result) => {
-      if (result.status !== ACTION_RESULT_STATUS.ACCEPTED) {
-        toast({
-          words: result.reason,
-          tone: STATUS_TONE.DANGER,
-          failure: { surface: FAILURE_SURFACE.AGENT_ARCHIVE, cause: result, about: { agentId } },
-        });
-      }
-    }, nothing);
-  // The agent's workspace as the account lists it, whose count reads its members again; by its id alone where the list does not hold it yet.
-  const { workspaceId, agentRepository } = agents;
-  usePageWorkspace(agentId, workspaceId);
-  // Show terminal, ⌘J, and New terminal open the agent's terminals in the side panel, as its tab's do on a task.
-  const terminalDoors = useAgentTerminalDoors(sidePanel, () => setFocus(COLUMN.SIDE));
-  // The workspace's agents an `@` offers, named by the tasks the window lists.
-  const readMentionAgents = useMentionAgentsReader(workspaceId, tasks.tasks, agents.models);
-  const listed = tasks.workspaces.find((each) => each.id === workspaceId);
-  const workspace = workspaceId === undefined ? undefined : (listed ?? { id: workspaceId });
-  // The words a dictation into the agent's box listens for: its repository and its title.
-  const keywords = useMemo(
-    () =>
-      dictationKeywords({
-        repository: agentRepository ?? null,
-        title: agent?.title ?? undefined,
-        body: undefined,
-      }),
-    [agentRepository, agent?.title],
-  );
-  // The pane draws the agent as the column's tab would: archived or not, it is the list's one agent.
-  // Note that what the pane is handed stands while it says the same, because the pane holds while it does (`memo`), and every row of the transcript with it.
-  const control = useSteadyDoors({
-    ...agents,
-    agents: agent === undefined ? agents.agents : [agent],
-    agentIds: agent === undefined ? agents.agentIds : [agent.id],
-    models: agents.models ?? tasks.agents.models,
-    keywords,
-    origin: run.data ?? undefined,
-    onUnarchive: agent?.archivedAt === undefined ? undefined : unarchive,
-  });
-  const tab = useMemo(() => agentTab(agentId), [agentId]);
-  // A Fork or a Continue opens the page's draft in the agent's place, through the same doors a task's column opens its own by.
-  const draftDoors = useAgentDraftDoors(agents, agent?.archivedAt !== undefined, (draftId) =>
-    setDrafting({ agentId, draftId }),
-  );
-  // The draft stands in the pane while it is the one the page opened, and the agent again once it starts or is let go.
-  const draftShownHere =
-    draftShown !== undefined && agents.draft?.id === draftShown ? draftShown : undefined;
-  const paneTab = useMemo(
-    () => (draftShownHere === undefined ? tab : draftTab(draftShownHere)),
-    [draftShownHere, tab],
-  );
-  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
-  const openAutomation = useCallback(
-    (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
-    [onOpenAutomations],
-  );
-  // Note that an inbox call and a page are the rows of a coding agent's own that open a tab, and a task's archive the one
-  // that opens another task, as a link to it opens (`use-open-link.ts`'s `throughWindow`), a worker's opening through its delegation.
-  const openPlace = useOpenPlace();
-  // What a row, a link, or a chip on the page names opens through the window's one door for a press, as on a task,
-  // handing the keys to the panel it opened in (`tab-press.ts`); the agent's own column opens no tab.
-  const onPressTab = (pressed: TabPressed) =>
-    pressTab({ sidePanel, mainTabs: tasks.mainTabs, onKeys: setFocus }, pressed);
-  const openPanelTab = (tab: SidePanelTab, place?: PagePlace) =>
-    onPressTab({ kind: TAB_PRESS.PANEL, tab, place });
-  const openTarget = useSteadyDoor((target: ToolTarget) => {
-    // An inbox call's row opens the window's Inbox on the thread its answer names, as a link to it does, without narrowing it (`openInboxItemOn`); one naming no thread opens the Inbox narrowed to the agent's task where it has one.
-    if (target.kind === TOOL_TARGET.INBOX) {
-      const { item } = target;
-      openPlace?.(
-        item === undefined
-          ? planId === null
-            ? { kind: LINK_DESTINATION.INBOX }
-            : { kind: LINK_DESTINATION.INBOX, planId }
-          : planId === null
-            ? { kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId: item }
-            : { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item },
-      );
-    }
-    if (target.kind === TOOL_TARGET.TASK) openPlace?.(placeOfTaskTarget(target));
-    // Its plan's card names its task, an archived agent's among them, whose press opens the plan.
-    if (target.kind === TOOL_TARGET.DESCRIPTION && planId !== null) {
-      openPlace?.({ kind: LINK_DESTINATION.TASK, planId });
-    }
-    // An agent's chip, such as one it was continued or forked to, opens that agent's own page.
-    if (target.kind === TOOL_TARGET.AGENT) tasks.agentView.onOpen(target.agent);
-    // A page the agent showed on itself opens in the panel beside it, as a task's opens beside its plan.
-    if (target.kind === TOOL_TARGET.PAGE) openPanelTab(pageTab(target.page));
-  });
-  // A delegation's row opens its worker in the side panel, and the pull request's chip the pull request, as on a task.
-  const openDelegation = useSteadyDoor(
-    (agent: string, callId: string, task: string, status: AgentStatus) => {
-      views.onWorkerStatus(callId, status);
-      openPanelTab(subagentTab(callId, { agent, task }));
-    },
-  );
-  const openPullRequest = useSteadyDoor((published: string, number?: number) =>
-    showPullRequest(
-      { ...sidePanel, onOpen: openPanelTab },
-      control,
-      published,
-      PULL_REQUEST_VIEW.CONVERSATION,
-      number,
-    ),
-  );
-  // A link in the agent's words to the pull request it opened opens that same tab rather than GitHub, as on a task,
-  // and one to any other pull request of its repository a Pull request tab by its number.
-  // Note that the three openers handed to the transcript stand while what they read does, because every link and chip in it is drawn again with each new one.
-  // A page of a task, or of another agent, opens beside the agent, read on its own place.
-  const openPageBeside = useSteadyDoor((page: string, place: PagePlace) =>
-    openPanelTab(pageTab(page), place),
-  );
-  const { pullRequests, agentIds, heldIds } = control;
-  const openHere = useMemo(
-    () =>
-      openPullRequestsHere(
-        { kind: HERE.AGENT, agentId, repository: agentRepository, pullRequests, agentIds, heldIds },
-        openPullRequest,
-        openPageBeside,
-      ),
-    [agentId, pullRequests, agentIds, heldIds, openPullRequest, openPageBeside, agentRepository],
-  );
-  // A link to the page's own agent, as a fork's chip opens its source, leaves the page's draft for the agent.
-  const openLinkHere = useMemo(
-    () =>
-      openLink === undefined
-        ? undefined
-        : (link: ReadLink) => {
-            const { place } = link;
-            const own =
-              (place.kind === LINK_DESTINATION.AGENT || place.kind === LINK_DESTINATION.MESSAGE) &&
-              place.agentId === agentId;
-            if (own) setDrafting(undefined);
-            openLink(link);
-          },
-    [openLink, agentId],
-  );
-  const shown = tasks.shown && !sidePanel.fullScreen;
-  // An agent an automation's run started: its run among the automation's, followed live.
-  const runPlace = useAutomationRunPlace(agent);
-  const sideTab = sidePanel.tab;
-  const planId = agent?.planId ?? null;
-  const planTask = planId === null ? undefined : tasks.tasks.find((each) => each.id === planId);
-  const cards = useMemo(
-    () =>
-      taskCards({
-        agents: control,
-        held: views.held,
-        chosen: (opened) =>
-          sameTab(opened, tab) || (sideTab !== undefined && sameTab(opened, sideTab)),
-        // Note that an agent on a task shows its pages on the task, so its rows read them there.
-        pages: planId === null ? { agentId } : { taskId: planId },
-        task:
-          planTask === undefined
-            ? undefined
-            : {
-                name: planTask.name,
-                status: planTask.status,
-                card: taskCardOf(tasks, planTask, undefined),
-              },
-      }),
-    [control, views.held, tab, sideTab, planId, agentId, planTask, tasks],
-  );
-  // The agent's repository, which the panel beside it reads a file of by its workspace, once the read named both.
-  const repositoryPlace = useMemo(
-    () =>
-      workspaceId === undefined || agentRepository === undefined
-        ? undefined
-        : { workspaceId, repository: agentRepository },
-    [workspaceId, agentRepository],
-  );
-  // A file the panel beside the agent opens is read through the agent's workspace and repository, as its tab saves it.
-  const fileReads = useMemo(
-    () =>
-      repositoryPlace === undefined
-        ? undefined
-        : { place: repositoryPlace, repository: repositoryPlace.repository },
-    [repositoryPlace],
-  );
-  // A file a mention names opens in the panel beside the agent, its lines at the commit the mention pins them to.
-  const openMentionedFile = useSteadyDoor((path: string, lines: OpenFileLines | undefined) =>
-    onPressTab(
-      lines === undefined
-        ? { kind: TAB_PRESS.FILE, ref: { path }, reads: fileReads }
-        : {
-            kind: TAB_PRESS.FILE,
-            ref: { path, startLine: lines.startLine, endLine: lines.endLine },
-            commit: lines.commit,
-            reads: fileReads,
-          },
-    ),
-  );
-  // A skill's file opens where a file the agent names does: in the panel beside it.
-  const openSkill = (skill: { readonly path: string }) => {
-    if (fileReads === undefined) return;
-    openMentionedFile(skill.path, undefined);
-  };
-  // A link to the pull request the agent opened, or a page under it, hangs its Pull request tab's card, as on a task.
-  const changesPeople = useChangesPeople(agentId);
-  const pullRequestCard = useSteadyDoor((url: string) => {
-    const pullRequest = control.pullRequests.get(agentId);
-    if (pullRequest === undefined) return undefined;
-    const number = repositoryPullRequestOf(url, agentRepository);
-    const own =
-      pullRequestAgentOf(url, [{ agentId, url: pullRequest.url }]) !== undefined ||
-      (number !== undefined &&
-        repositoryPullRequestOf(pullRequest.url, agentRepository) === number);
-    if (!own) return undefined;
-    const card = tabCard({
-      kind: TAB_KIND.CHANGES,
-      subject: agentSubject(control, agentId, views.held, false),
-      models: control.models,
-      pullRequest,
-      people: peopleOf(changesPeople, pullRequest),
-      onOpenAgent: () => setDrafting(undefined),
-    });
-    return card ?? undefined;
-  });
-  // What an `@` offers once the read named the agent's workspace, and its repository's files where it has one: the app works in none.
-  const mentionWorkspace = listed?.slug ?? workspaceId;
-  const { onShowMention } = tasks;
-  // An agent on no task offers the pages it showed and the pull request it opened, as a task offers its own.
-  const ownPages = tasks.agentView.pages;
-  const ownPullRequest = control.pullRequests.get(agentId);
-  const ownName = agent === undefined ? undefined : agentName(agent, control.models);
-  const holds = useMemo(
-    () =>
-      planId !== null
-        ? undefined
-        : {
-            agentId,
-            pages: ownPages,
-            pullRequests:
-              ownPullRequest === undefined ? [] : [{ ...ownPullRequest, agent: ownName }],
-          },
-    [planId, agentId, ownPages, ownPullRequest, ownName],
-  );
-  const mentions = useMemo(
-    () =>
-      workspaceId === undefined || mentionWorkspace === undefined
-        ? undefined
-        : tasklessMentions(
-            { workspace: mentionWorkspace, workspaceId, repository: agentRepository ?? null },
-            onShowMention,
-            readMentionAgents,
-            {
-              pullRequestOf: pullRequestCard,
-              onOpenFile: repositoryPlace === undefined ? undefined : openMentionedFile,
-            },
-            holds,
-          ),
-    [
-      workspaceId,
-      mentionWorkspace,
-      agentRepository,
-      onShowMention,
-      readMentionAgents,
-      pullRequestCard,
-      repositoryPlace,
-      openMentionedFile,
-      holds,
-    ],
-  );
-  // A phone's way back leaves a draft for the agent it was opened from first, as Escape does, and the page then.
-  const phoneHead: AgentPagePhone | undefined =
-    away === undefined
-      ? undefined
-      : {
-          back:
-            draftShown === undefined
-              ? away
-              : {
-                  label: agent === undefined ? AGENT : agentName(agent, control.models),
-                  onPress: () => setDrafting(undefined),
-                },
-          onShowPanel: sidePanel.open ? undefined : sidePanel.onToggle,
-        };
-  const toolbar =
-    agent === undefined ? (
-      phoneHead === undefined ? (
-        <Toolbar />
-      ) : (
-        <PhoneHead
-          place="agent"
-          start={<PhoneBack back={phoneHead.back} />}
-          title={null}
-          end={null}
-        />
-      )
-    ) : (
-      <AgentPageBar
-        agent={agent}
-        agents={control}
-        shown={tasks.shown}
-        terminals={terminalDoors}
-        onShowShell={
-          terminalDoors.onShowShell === undefined
-            ? undefined
-            : (terminal) => terminalDoors.onShowShell?.(agent.id, terminal)
-        }
-        onClose={tasks.agentView.onClose}
-        phone={phoneHead}
-        trail={automationTrail(agent, workspaceId, onOpenAutomations) ?? slackTrail(agent)}
-        steps={
-          runPlace === undefined ? null : (
-            <AutomationRunSteps place={runPlace} onOpenAgent={(id) => openRunAgent(tasks, id)} />
-          )
-        }
+    if (taskId !== undefined) onShowAgent(taskId, agentId);
+  }, [onShowAgent, taskId, agentId]);
+  const back = away === undefined ? undefined : <PhoneBack back={away} />;
+  if ("missing" in found) {
+    return (
+      <NotFound
+        thing={NOT_FOUND_THING.AGENT}
+        bar={back === undefined ? {} : phoneBar({ place: PHONE_PLACE, start: back, end: null })}
       />
     );
-  if (agent === undefined) {
-    // A page the service would not hand the reader keeps its bar over the words saying so.
-    // On a phone the bar keeps the page's way back, the drawer and the places bar out of reach.
-    if (agents.listMissing) {
-      return (
-        <NotFound
-          thing={NOT_FOUND_THING.AGENT}
-          bar={
-            phoneHead === undefined
-              ? {}
-              : phoneBar({ place: "agent", start: <PhoneBack back={phoneHead.back} />, end: null })
-          }
-        />
-      );
-    }
-    // In the page's own frame, so its row and sheet stand where the read page's will.
-    return (
-      <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
-        <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label="Agent">
-          {toolbar}
-          {agents.listFailed ? (
-            <ErrorState
-              failure={unreadShown(FAILURE_SURFACE.AGENTS_READ)}
-              onRetry={agents.onRetryList}
-              placement={ERROR_STATE_PLACEMENT.CENTERED}
-            >
-              {NOT_READ}
-            </ErrorState>
-          ) : (
-            <Fill className="desktop-task-column">
-              <AgentTabSkeleton label={readingWords("the agent")} />
-            </Fill>
-          )}
-        </Fill>
-      </div>
-    );
   }
+  // In the page's own frame, so its row and sheet stand where the task's agent tab will.
   return (
-    <LinkWorkspaceProvider value={listed?.slug ?? workspaceId}>
-      {/* Note that the words are of the agent's workspace by its id, because one with no slug is named by its id in the slug's place, which no chip's provider read can find it by. */}
-      <WordsWorkspace value={workspaceId}>
-        <MemberDirectory workspace={workspace} readerId={tasks.me}>
-          <AutomationDirectory
-            workspace={listed}
-            wanted={agent.automationId !== undefined}
-            onOpen={openAutomation}
+    <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
+      <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label="Agent">
+        {back === undefined ? (
+          <Toolbar />
+        ) : (
+          <PhoneHead place={PHONE_PLACE} start={back} title={null} end={null} />
+        )}
+        {"failed" in found ? (
+          <ErrorState
+            failure={unreadShown(FAILURE_SURFACE.AGENTS_READ)}
+            onRetry={found.onRetry}
+            placement={ERROR_STATE_PLACEMENT.CENTERED}
           >
-            <SkillFiles source={control.readSkills} onOpen={openSkill}>
-              <AgentMentions value={mentions}>
-                <OpenLinkProvider value={openLinkHere}>
-                  <OpenAddressesHere value={openHere}>
-                    {/* An archived agent's sandbox takes no shell, so ⌘J and New terminal stand only while it does not. */}
-                    {terminalDoors.terminals && agent.archivedAt === undefined ? (
-                      <TerminalCommands
-                        here={agentId}
-                        agents={control}
-                        sidePanel={sidePanel}
-                        onShown={() => setFocus(COLUMN.SIDE)}
-                      />
-                    ) : null}
-                    <div
-                      ref={onArea}
-                      className="desktop-task relative flex min-h-0 flex-1"
-                      data-panel-open={String(sidePanel.open)}
-                    >
-                      {/* Hidden rather than left out while the panel fills the window, as a plan's column is. */}
-                      <Fill
-                        as={FILL_ELEMENT.SECTION}
-                        className="agent-page"
-                        aria-label="Agent"
-                        hidden={sidePanel.fullScreen}
-                      >
-                        {toolbar}
-                        {runPlace === undefined ? null : (
-                          <AutomationRunStrip place={runPlace} status={agent.status} />
-                        )}
-                        <FindScope
-                          className="desktop-task-column"
-                          active={tasks.shown && !sideFocused}
-                          subject={tab}
-                        >
-                          <AgentPane
-                            label={agentName(agent, control.models)}
-                            tabbed={false}
-                            tab={paneTab}
-                            agents={control}
-                            shown={shown}
-                            views={views}
-                            onOpenDelegation={openDelegation}
-                            onOpenPullRequest={openPullRequest}
-                            onOpenTarget={openTarget}
-                            cards={cards}
-                            onFork={draftDoors.onFork}
-                            onContinue={draftDoors.onContinue}
-                          />
-                        </FindScope>
-                      </Fill>
-                      {/* Note that the panel stands while its toggle asks for its "+" with nothing to show, drawing the menu alone. */}
-                      {drawing.panel !== undefined || sidePanel.toggleAsked ? (
-                        <SidePanel
-                          {...drawing}
-                          panel={drawing.panel ?? sidePanel}
-                          unread={NO_UNREAD}
-                          holder={SIDE_PANEL_HOLDER.AGENT}
-                          taskId={agentId}
-                          pinOn={pagePinOn(agent)}
-                          repository={agentRepository ?? null}
-                          repositoryPlace={repositoryPlace}
-                          pages={tasks.agentView.pages}
-                          agents={control}
-                          openAgents={openAgents}
-                          shownAgent={shown ? agentId : undefined}
-                          views={views}
-                          shown={tasks.shown}
-                          focused={sideFocused}
-                          onOpenTarget={openTarget}
-                          taskOfTab={tasks}
-                          phone={
-                            away === undefined || agent === undefined
-                              ? undefined
-                              : {
-                                  back: agentName(agent, control.models),
-                                  onBack: sidePanel.onToggle,
-                                }
-                          }
-                        />
-                      ) : null}
-                    </div>
-                  </OpenAddressesHere>
-                </OpenLinkProvider>
-              </AgentMentions>
-            </SkillFiles>
-          </AutomationDirectory>
-        </MemberDirectory>
-      </WordsWorkspace>
-    </LinkWorkspaceProvider>
+            {NOT_READ}
+          </ErrorState>
+        ) : (
+          <Fill className="desktop-task-column">
+            <AgentTabSkeleton label={readingWords("the agent")} />
+          </Fill>
+        )}
+      </Fill>
+    </div>
   );
 }

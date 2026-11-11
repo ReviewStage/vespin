@@ -18,9 +18,14 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import type { AppTranscript } from "./app-state.js";
-import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
+import {
+  FIXTURE_PICTURE_PNG,
+  FIXTURE_VIDEO_MP4,
+  FIXTURE_VIDEO_WEBM,
+} from "./fixture-inbox-media.js";
 import { FIXTURE_PAGE } from "./fixture-stage.js";
 
 const MINUTE = 60_000;
@@ -283,13 +288,18 @@ export function fixtureAgentTranscript(
   };
 }
 
-/** A picture or the recording the transcript names, by its id, as the host answers one read; that it is not found for any other. */
-export function fixtureAgentPicture(pictureId: string): AgentInboxAttachmentView {
+/** A picture or the recording the transcript names, by its id, as the host answers one read, the recording as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of; that it is not found for any other. */
+export function fixtureAgentPicture(
+  pictureId: string,
+  playable: string | undefined,
+): AgentInboxAttachmentView {
   if (pictureId === KEPT.DIALOG || pictureId === KEPT.EMAIL) {
     return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
   }
   if (pictureId === KEPT.RECORDING) {
-    return { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+    return playable === MP4_TYPE
+      ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+      : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
   }
   return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 }

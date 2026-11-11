@@ -595,7 +595,7 @@ export function turnUnderWay(agent: Pick<AgentSummary, "status" | "stoppable">):
   return agent.status === AGENT_STATUS.RUNNING && agent.stoppable !== false;
 }
 
-/** Why a Start cannot run where neither a task nor an agent is open, which no draft is drawn without. */
+/** Why a Start cannot run where no task is open, which no draft is drawn without. */
 export const START_NEEDS_TASK = "Open a task to start an agent";
 
 /** What a message no answer came back for says while the app does not reach the service, in place of `NOT_HEARD_BACK`: in the composer, whose Retry stands again once the app does (`RetryOffered`), and alone where only the words are drawn, as an Inbox answer's are. */
