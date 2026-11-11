@@ -1,10 +1,10 @@
 /**
- * compose-this-mac-host.test.ts -- This Mac's host kept as the member and the account's experiments say: nothing enrolled until This Mac is turned on, then enrolled under a new id, its record written and its agent registered; turned off by unregistering its agent and removing the host; a record of the account's kept under its id, never enrolled again while it stands, registered again after an app update; an agent macOS holds for approval left for the member and told the windows; a refused record removed; the agent unregistered with its files kept where Bring your own host is off or its account signs out, and left alone by a run never signed in; how the member keeps this Mac awake handed to the host; a record that is not the account's left alone; a build that does not register touching nothing; and This Mac told the windows as its record moves.
+ * compose-this-mac-host.test.ts -- This Mac's host kept as the member and the account's experiments say: nothing enrolled until This Mac is turned on, then enrolled under a new id, its record written and its agent registered; turned off by unregistering its agent and removing the host; a record of the account's kept under its id, never enrolled again while it stands, registered again after an app update; a build that does not register running the install script and the install's own uninstall in their place; an agent macOS holds for approval left for the member and told the windows; a refused record removed; the agent unregistered with its files kept where Bring your own host is off or its account signs out, and left alone by a run never signed in; how the member keeps this Mac awake handed to the host; a record that is not the account's left alone; and This Mac told the windows as its record moves.
  *
  * The composer runs over a real state folder of its own, a fake service
- * that enrolls the Mac, lists the account's hosts, and takes a host's leave,
- * and a fake `SMAppService` that says what it was asked and holds the
- * agent's status, on the test's clock; the state folder is watched as the
+ * that enrolls the Mac, lists the account's hosts, serves the install
+ * script, and takes a host's leave, and a fake `SMAppService` and account
+ * install that say what they were asked and hold the agent's status, on the test's clock; the state folder is watched as the
  * app watches it, and the settings are told again by the test. Synthetic
  * ids and secrets throughout.
  */
@@ -50,6 +50,9 @@ const AGENT_ID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
 /** Where the fake service takes an enroll, so its responder reads the version the enroll carried, and a host's leave. */
 const ENROLL_URL = `${SERVICE}/enroll`;
 const LEAVE_URL = `${SERVICE}${HOSTED_SERVICE_PATH.DEVICE_AGENT_LEAVE}`;
+/** The install script the fake service serves, and where. */
+const INSTALL_URL = `${SERVICE}${HOST_WIRE.INSTALL_SCRIPT_PATH}`;
+const INSTALL_SCRIPT = "echo install fixture";
 const FILES = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 /** The desktop's own window, as the Gateway hands a method its caller. */
 
@@ -114,6 +117,8 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
     let failedRegisters = options.failedRegisters ?? 0;
     let status = options.status ?? THIS_MAC_AGENT_STATUS.NOT_REGISTERED;
     let registeredHere = options.registeredHere ?? true;
+    let loaded = false;
+    const scripts: string[] = [];
     const experiments: Partial<Record<Experiment, boolean>> = {
       ...(options.experiments ?? BRING_YOUR_OWN_HOST_ON),
     };
@@ -180,6 +185,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
               version = new Headers(init.headers).get(HOST_WIRE.VERSION_HEADER);
               return new Response("{}");
             }
+            if (url === INSTALL_URL) return new Response(INSTALL_SCRIPT);
             assert.equal(url, LEAVE_URL);
             asked.push("leave");
             return options.leaveTaken === false
@@ -219,6 +225,20 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
               status = THIS_MAC_AGENT_STATUS.NOT_REGISTERED;
               return Result.succeed(undefined);
             }),
+            loaded: Effect.sync(() => loaded),
+            install: (script) =>
+              Effect.sync(() => {
+                asked.push("install");
+                scripts.push(script);
+                loaded = true;
+                return Result.succeed(undefined);
+              }),
+            uninstall: (keepAgents) =>
+              Effect.sync(() => {
+                asked.push(keepAgents ? "uninstall --keep-agents" : "uninstall");
+                loaded = false;
+                return Result.succeed(undefined);
+              }),
           }),
         ),
       ),
@@ -251,7 +271,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       userId = undefined;
       return PubSub.publish(settingsTold, undefined);
     });
-    return { asked, enrolled, held, turn, flip, allow, keepAwakeChosen, signOut };
+    return { asked, enrolled, scripts, held, turn, flip, allow, keepAwakeChosen, signOut };
   });
 
 /** A state folder of the test's own, standing empty beside the home its host runs with (`homeOf`), which a removal of the host deletes. */
@@ -293,13 +313,20 @@ const UNENROLLED = {
   needsApproval: false,
 } as const;
 
-it.effect(
-  "a Mac with no record runs nothing until it is turned on, then is enrolled under a new id on the release's version, its record written, and its agent registered",
-  () =>
+it.effect.each([
+  { case: "its agent registered", registers: true, started: ["enroll", "register"] },
+  {
+    case: "the install script run, where this build does not register the agent",
+    registers: false,
+    started: ["enroll", "install"],
+  },
+] as const)(
+  "a Mac with no record runs nothing until it is turned on, then is enrolled under a new id on the release's version, its record written, and $case",
+  ({ registers, started }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* freshState;
-        const mac = yield* thisMac(stateRoot);
+        const mac = yield* thisMac(stateRoot, { registers });
         yield* until(() => mac.held() !== undefined);
         yield* nudged(Duration.minutes(1));
         assert.equal(mac.asked.length, 0, "nothing is enrolled unasked");
@@ -307,8 +334,10 @@ it.effect(
 
         assert.deepEqual(yield* mac.turn(true), { done: true });
         yield* until(() => mac.asked.length >= 2);
+        yield* nudged(Duration.minutes(1));
 
-        assert.deepEqual(mac.asked, ["enroll", "register"]);
+        assert.deepEqual(mac.asked, started);
+        assert.deepEqual(mac.scripts, registers ? [] : [INSTALL_SCRIPT]);
         assert.deepEqual(mac.enrolled, [{ deviceId: MINTED_ID, version: HOST_RELEASE?.VERSION }]);
         assert.deepEqual(Option.getOrUndefined(yield* readHostDevice(stateRoot)), {
           deviceId: MINTED_ID,
@@ -559,23 +588,40 @@ it.effect(
     ),
 );
 
-it.effect(
-  "turning This Mac off unregisters its agent before the host leaves and its state goes, and reads off until it is turned on again",
-  () =>
+it.effect.each([
+  {
+    case: "unregisters its agent before the host leaves and its state goes",
+    registers: true,
+    deleteFolders: true,
+    removed: ["unregister", "leave"],
+  },
+  {
+    case: "runs the account install's uninstall, keeping its agents' folders as asked, where this build does not register the agent",
+    registers: false,
+    deleteFolders: false,
+    removed: ["uninstall --keep-agents"],
+  },
+] as const)(
+  "turning This Mac off $case, and reads off until it is turned on again",
+  ({ registers, deleteFolders, removed }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* recorded(STANDING);
         const mac = yield* thisMac(stateRoot, {
           listed: [KEPT_ID],
+          registers,
           status: THIS_MAC_AGENT_STATUS.ENABLED,
         });
         yield* until(() => mac.held()?.enrolled === true);
+        yield* nudged(Duration.minutes(1));
+        // Note that a build that does not register runs the install script at launch, as it keeps the account's host running, so only what the turn asked is read.
+        const before = mac.asked.length;
 
-        assert.deepEqual(yield* mac.turn(false), { done: true });
+        assert.deepEqual(yield* mac.turn(false, deleteFolders), { done: true });
         yield* nudged(Duration.minutes(1));
 
-        assert.deepEqual(mac.asked, ["unregister", "leave"]);
-        assert.equal(yield* (yield* FileSystem.FileSystem).exists(stateRoot), false);
+        assert.deepEqual(mac.asked.slice(before), removed);
+        assert.ok(Option.isNone(yield* readHostDevice(stateRoot)), "its record is gone");
         assert.deepEqual(mac.held(), UNENROLLED);
       }).pipe(Effect.provide(FILES)),
     ),
@@ -649,33 +695,22 @@ it.effect.each([
   {
     case: "the record was enrolled with another service",
     record: { ...STANDING, serviceOrigin: "https://preview.app.test" },
-    registers: true,
     answer: { failure: "unanswered" },
   },
   {
     case: "the record is another account's",
     record: STANDING,
-    registers: true,
     answer: ANOTHER_ACCOUNTS,
-  },
-  {
-    case: "this build does not register the agent, as a development run does not",
-    record: STANDING,
-    registers: false,
-    answer: { failure: "unanswered" },
   },
 ] as const)(
   "nothing is enrolled, registered, unregistered, or removed where $case, even turned off",
-  ({ record, registers, answer }) =>
+  ({ record, answer }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* recorded(record);
-        const listed = registers ? [] : [KEPT_ID];
-        const on = yield* thisMac(stateRoot, { listed, registers });
+        const on = yield* thisMac(stateRoot);
         const off = yield* thisMac(stateRoot, {
           experiments: { [EXPERIMENT.BRING_YOUR_OWN_HOST]: false },
-          listed,
-          registers,
           status: THIS_MAC_AGENT_STATUS.ENABLED,
         });
         yield* nudged(Duration.minutes(1));
