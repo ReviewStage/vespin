@@ -1021,11 +1021,14 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
 });
 
-test("a column whose last agent is archived opens a new agent's draft in its place", async () => {
+test("the agent a column shows, archived, leaves its task for Home, and the column opens a new agent's draft in its place", async () => {
   const archived = { ...RUNNING_AGENT, archivedAt: 5 };
   const tab = mount(
     { shown: true, tasks: withAgents([RUNNING_AGENT]) },
-    { [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }) },
+    {
+      [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }),
+      [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve(),
+    },
   );
   await settle();
   const column = () => tab.control().mainTabs;
@@ -1042,6 +1045,7 @@ test("a column whose last agent is archived opens a new agent's draft in its pla
     "a draft, as a task with no agent opens on",
   );
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, shown]);
+  await vi.waitFor(() => assert.ok(tab.told.includes(ACT_KIND.TASKS_CLOSE), "the task is left"));
 });
 
 test("a tab closed on another plan opens that plan again, and the tab on it once the host has it open", async () => {
@@ -3972,6 +3976,11 @@ test("an archived agent opens in a tab of its task's column, which stays once it
   act(() => tab.control().onShowAgent(TASK.id, AGENT_ID));
   assert.equal(tab.control().agentView.agentId, undefined, "no page of its own stands");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
+  await settle();
+  assert.ok(
+    !tab.told.includes(ACT_KIND.TASKS_CLOSE),
+    "an agent opened archived is read on its task",
+  );
 
   tab.stand({ tasks: withAgents([RUNNING_AGENT]) });
   await settle();

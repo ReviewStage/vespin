@@ -1630,6 +1630,21 @@ export function useTasksTab(input: {
     const bound = homeNow.current.boundFor;
     if (!leaveMove() && fixture === undefined && bound !== undefined) unbindTask();
   }, [fixture, leaveMove, unbindTask]);
+  // The agent the column shows while it is live leaves the window for Home once it is archived, by its ⋯ or by its
+  // task marked done or canceled. Note that only the move into archived does, because an archived agent opened from
+  // History is read where it stands.
+  const shownLive = useRef<{ taskId: string; agentId: string } | undefined>(undefined);
+  const shownTaskId = viewed.activeTaskId;
+  const liveIds = agents.agentIds;
+  useEffect(() => {
+    const was = shownLive.current;
+    shownLive.current =
+      shownTaskId !== undefined && columnAgent !== undefined && liveIds?.includes(columnAgent)
+        ? { taskId: shownTaskId, agentId: columnAgent }
+        : undefined;
+    if (was === undefined || was.taskId !== shownTaskId) return;
+    if (archivedIds?.includes(was.agentId) === true) leaveTask();
+  }, [shownTaskId, columnAgent, liveIds, archivedIds, leaveTask]);
   // A workspace chosen on purpose, from the switcher, a workspace made, or
   // one left, is listed at once, and the task on screen follows: the task
   // last open there opens again, where it is still that workspace's, or
