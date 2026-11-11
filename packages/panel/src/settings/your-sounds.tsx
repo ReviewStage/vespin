@@ -23,6 +23,7 @@ import {
   IconButton,
   PlusIcon,
   SettingsSection,
+  STATUS_TONE,
   TEXT_FIELD_AUTO_COMPLETE,
   TextField,
   Tooltip,
@@ -56,6 +57,7 @@ import {
   soundBytes,
   soundNameOfFile,
 } from "../sound-clip.js";
+import { showToast } from "../toast.js";
 import { MenuRow } from "./menu-row.js";
 import { useSettingRowWrite } from "./row-write.js";
 import type { ChoiceMenu } from "./schema-rows.js";
@@ -98,6 +100,8 @@ const SOUND_WORDS = {
   LIST: "Your sounds",
   NOT_ADDED: "Your sound could not be added.",
   NOT_REMOVED: "Your sound could not be removed.",
+  NOT_RENAMED: "Your sound could not be renamed.",
+  NOT_CHOSEN: "Your sound could not be chosen.",
 } as const;
 
 /** What a sound of the account's own offers from its ⋯ in a sound's menu. */
@@ -112,6 +116,16 @@ const SOUND_ACTS = [
   { id: SOUND_ACT.REMOVE, label: SOUND_WORDS.REMOVE, icon: <TrashIcon /> },
 ] as const;
 
+/** Says that the service refused an act on one of the account's own sounds, in the app's own words, never the sound's name. */
+function toastRefused(words: string, answer: { readonly failure: unknown }): void {
+  showToast({
+    words,
+    replayUnmasked: true,
+    tone: STATUS_TONE.DANGER,
+    failure: { surface: FAILURE_SURFACE.SOUND_CLIP_WRITE, cause: answer },
+  });
+}
+
 /** The setting each of the account's two sounds is stored as. */
 const FIELD_OF_SLOT = {
   [SOUND_CLIP_SLOT.FINISH]: APP_SETTING_SCHEMA.completionSound.field,
@@ -120,8 +134,8 @@ const FIELD_OF_SLOT = {
 
 /** The slot whose setting `field` is; none for any other setting. */
 function slotOf(field: AppSettingField): SoundClipSlot | undefined {
-  if (field === FIELD_OF_SLOT.finish) return SOUND_CLIP_SLOT.FINISH;
-  if (field === FIELD_OF_SLOT.ask) return SOUND_CLIP_SLOT.ASK;
+  if (field === FIELD_OF_SLOT[SOUND_CLIP_SLOT.FINISH]) return SOUND_CLIP_SLOT.FINISH;
+  if (field === FIELD_OF_SLOT[SOUND_CLIP_SLOT.ASK]) return SOUND_CLIP_SLOT.ASK;
   return undefined;
 }
 
@@ -172,9 +186,17 @@ function useSlot(
   const { mutate: sendChoice } = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
   const chosen = chosenSound(sounds, slot)?.id;
+  // Note that the row is stored as the account's own only once the service took the choice, so a refused one leaves the sound it played.
   const choose = (id: string) => {
-    sendChoice({ slot, id });
-    if (!stored) write.run(token);
+    sendChoice(
+      { slot, id },
+      {
+        onSuccess: (answer) => {
+          if ("failure" in answer) toastRefused(SOUND_WORDS.NOT_CHOSEN, answer);
+          else if (!stored) write.run(token);
+        },
+      },
+    );
   };
   return {
     menu: {
@@ -231,7 +253,14 @@ function useNameDialog(
     neverBusyAct(() => {
       if (naming === undefined) return;
       if ("sound" in naming) {
-        sendRename({ id: naming.sound.id, name: trimmed });
+        sendRename(
+          { id: naming.sound.id, name: trimmed },
+          {
+            onSuccess: (answer) => {
+              if ("failure" in answer) toastRefused(SOUND_WORDS.NOT_RENAMED, answer);
+            },
+          },
+        );
         return;
       }
       const { slot, read } = naming;
@@ -403,8 +432,22 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
     setRemoving(sound);
     remove.ask();
   }
-  const finish = useSlot(SOUND_CLIP_SLOT.FINISH, view, sounds, add, manage, refusals.finish);
-  const ask = useSlot(SOUND_CLIP_SLOT.ASK, view, sounds, add, manage, refusals.ask);
+  const finish = useSlot(
+    SOUND_CLIP_SLOT.FINISH,
+    view,
+    sounds,
+    add,
+    manage,
+    refusals[SOUND_CLIP_SLOT.FINISH],
+  );
+  const ask = useSlot(
+    SOUND_CLIP_SLOT.ASK,
+    view,
+    sounds,
+    add,
+    manage,
+    refusals[SOUND_CLIP_SLOT.ASK],
+  );
   const slots = { [SOUND_CLIP_SLOT.FINISH]: finish, [SOUND_CLIP_SLOT.ASK]: ask } as const;
 
   const [removing, setRemoving] = useState<Sound>();
