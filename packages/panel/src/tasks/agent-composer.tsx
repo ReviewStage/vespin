@@ -41,12 +41,19 @@ import { PANEL_SPAN } from "../panel-spans.js";
 import type { AgentModeControl } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
-import { noteWhileOffline, paidByOf, planNameOf, providerOf } from "./agent-model.js";
+import {
+  noteWhileOffline,
+  paidByOf,
+  planNameOf,
+  providerOf,
+  type SentLine,
+} from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
 import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
+import type { MoveCarry } from "./move-agent.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { useMentionBox } from "./task-mentions.js";
@@ -284,6 +291,16 @@ export interface ComposerQueueing {
   readonly onCancel: () => void;
 }
 
+/** The continue in the cloud a note of the agent's machine gone offline offers, carrying the message the note is of; none where no move is offered. */
+function continuedInCloud(
+  noted: SentLine | undefined,
+  onContinueInCloud: ((carry: MoveCarry) => void) | undefined,
+): (() => void) | undefined {
+  if (onContinueInCloud === undefined) return undefined;
+  return () =>
+    onContinueInCloud({ words: noted?.text ?? "", attachments: noted?.attachments ?? [] });
+}
+
 export function AgentComposer({
   agentId,
   status,
@@ -325,6 +342,7 @@ export function AgentComposer({
   mode,
   approvalsWaiting = 0,
   onClear,
+  onContinueInCloud,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
@@ -403,6 +421,8 @@ export function AgentComposer({
   approvalsWaiting?: number;
   /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no commands, as New task's and a draft agent's, which have no session yet. */
   onClear?: (() => Promise<boolean>) | undefined;
+  /** The agent continued in the cloud with the message given, which a note of its machine gone offline offers (`FAILURE_REASON.CONTINUE_IN_CLOUD`); none where no such move is offered. */
+  onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
   // Who pays, as the chip's menu names it, is the context popover's last line too.
@@ -499,11 +519,13 @@ export function AgentComposer({
   const remedy =
     sendNote === undefined
       ? undefined
-      : // Note that a move's retry is the box's as the move lands, and only while the refusal it
-        // was pressed for still stands, so an edit or a later send meanwhile is never sent over.
-        repositoryRemedy(sendNote, () => {
-          if (latest.current.note === sendNote) latest.current.retry();
-        });
+      : sendNote.reason === FAILURE_REASON.CONTINUE_IN_CLOUD
+        ? continuedInCloud(composer.notedLine, onContinueInCloud)
+        : // Note that a move's retry is the box's as the move lands, and only while the refusal it
+          // was pressed for still stands, so an edit or a later send meanwhile is never sent over.
+          repositoryRemedy(sendNote, () => {
+            if (latest.current.note === sendNote) latest.current.retry();
+          });
   // Note that a remedy finished where we cannot watch keeps Retry beside it, since the same send goes once it is done.
   const remedyWords = sendNote === undefined ? undefined : remedyLabel(sendNote);
   /** A note of the box's that is a failure of the app's, which no Retry mends: why the box is closed, or a change of model did not take. */

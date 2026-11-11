@@ -40,6 +40,8 @@
     "./agents/browser/recording-cursor": "./src/agents/browser/recording-cursor.js",
     "./agents/browser/sandbox-browser": "./src/agents/browser/sandbox-browser.js",
     "./agents/coder-host/agent-queue": "./src/agents/coder-host/agent-queue.js",
+    "./agents/coder-host/agent-wakeup-bounds": "./src/agents/coder-host/agent-wakeup-bounds.js",
+    "./agents/coder-host/agent-wakeups": "./src/agents/coder-host/agent-wakeups.js",
     "./agents/coder-host/account-keys": "./src/agents/coder-host/account-keys.js",
     "./agents/coder-host/bounds": "./src/agents/coder-host/bounds.js",
     "./agents/coder-host/claude-code-sessions": "./src/agents/coder-host/claude-code-sessions.js",

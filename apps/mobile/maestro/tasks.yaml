@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a task's Overview with its status changed from its ⋯, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press menu, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with its status changed from its ⋯, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -65,6 +65,39 @@ onFlowComplete:
       - tapOn: "Mark done"
 - assertNotVisible: "Usage alerts"
 - takeScreenshot: tasks-marked-done
+# A long press on a task offers the panel's row menu: Mark done, Status,
+# Mark as unread, Unpin on a pinned task, and Open in browser. The pinned
+# Weekly digest email's agent is at work.
+- scrollUntilVisible:
+    element: "Weekly digest email"
+    direction: UP
+- waitForAnimationToEnd
+- longPressOn: "Weekly digest email"
+- assertVisible: "Status"
+- assertVisible: "Mark as unread"
+- assertVisible: "Unpin"
+- assertVisible: "Open in browser"
+- takeScreenshot: tasks-row-menu
+# Mark as unread draws the row's dot.
+- tapOn: "Mark as unread"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-row-unread
+# Mark done on a task whose agent is at work asks first, as the panel does,
+# and Cancel leaves the task where it stands.
+- longPressOn: "Weekly digest email"
+- tapOn: "Mark done"
+- assertVisible: "Mark as Done?"
+- assertVisible: "Stop agents"
+- takeScreenshot: tasks-mark-done-ask
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- assertVisible: "Weekly digest email"
+# Opening the task reads it, so its dot is gone once the list shows again.
+- tapOn: "Weekly digest email"
+- assertVisible: "Created by .*"
+- tapOn: "Tasks"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-row-read
 # A task opens on its Overview: its path in the bar, its name, its chips, and
 # who created it,
 # its relations, its agents with their pull request, its pages, and its

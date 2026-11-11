@@ -8,6 +8,7 @@
  */
 
 import { formatCount } from "./number-format.js";
+import { PRODUCT_NAME } from "./product-name.js";
 
 /** A noun as a count says it: its one form and its many form. */
 export interface Noun {
@@ -122,6 +123,9 @@ export function orListParts(
 
 /** What a page that needs an account says to someone not signed in. One line for every page, so none is worded its own way. */
 export const SIGNED_OUT_WORDS = "Sign in to use this page.";
+
+/** What every client says once the service refused its build as older than it serves (`network.updateNeeded`), beside the act that updates it. */
+export const BUILD_TOO_OLD_WORDS = `This ${PRODUCT_NAME} is older than the one now live`;
 
 /** What a wait is called while something is read: "Reading tasks". A label, so no "…". */
 export function readingWords(things: string): string {

@@ -8,7 +8,8 @@
  * itself, after the launch's bootstrap has been read into it and again after
  * each change the host writes (`compose-mobile.ts`): the Inbox profile's
  * account signed in, its tasks' items (`@repo/host/fixture-inbox`), which
- * the Inbox lists, and the tasks holding them, which name its rows. A live run, and a profile that stages nothing, is left as
+ * the Inbox lists, the tasks holding them, which name its rows, and, where
+ * the launch asks, the service's refusal of an old build. A live run, and a profile that stages nothing, is left as
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
@@ -70,8 +71,22 @@ function stagedPatch(held: AppStateSnapshot, staged: AppStateSnapshot): StorePat
   ) as StorePatch;
 }
 
-/** Lays the fixture profile's data over the host's document; nothing in a live run. */
-export function stageFixture(state: Pick<AppStateStore, "snapshot" | "update">): void {
+/** The network as held, or with the service refusing this build as older than it serves where the launch asks for that; the slice held where it says so already. */
+function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateSnapshot["network"] {
+  if (!updateNeeded || held.network.updateNeeded === true) return held.network;
+  return { ...held.network, updateNeeded: true };
+}
+
+/**
+ * Lays the fixture profile's data over the host's document; nothing in a
+ * live run. Where `updateNeeded`, as `-updateNeeded true` asks, the network
+ * stands as the service's refusal of an old build leaves it, so a flow
+ * shoots the screen that asks for the update (`maestro/update-needed.yaml`).
+ */
+export function stageFixture(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  updateNeeded = false,
+): void {
   const snapshot = state.snapshot();
   if (!snapshot.run.fixtureMode || snapshot.run.profile === RUN_PROFILE.IDLE) return;
   const held: AppStateSnapshot = { ...snapshot, window: { fullScreen: false } };
@@ -81,7 +96,11 @@ export function stageFixture(state: Pick<AppStateStore, "snapshot" | "update">):
     pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
     OLDER_ASKS.get(state) ?? 0,
   );
-  const staged = { ...parts, tasks: stagedTasks(held) };
+  const staged = {
+    ...parts,
+    tasks: stagedTasks(held),
+    network: stagedNetwork(held, updateNeeded),
+  };
   state.update(stagedPatch(held, staged));
 }
 
