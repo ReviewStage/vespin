@@ -77,7 +77,7 @@ const filledOne = (
   });
 
 /** Every repository the workspace's installations grant given a base drive where none stands. */
-const filledWorkspace = (run: SandboxRunner, workspace: BaseDriveWorkspace) =>
+export const filledWorkspace = (run: SandboxRunner, workspace: BaseDriveWorkspace) =>
   Effect.gen(function* () {
     const image = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.reference);
     const listed = yield* (yield* GitHubApp).workspaceRepositories(workspace.workspaceId);

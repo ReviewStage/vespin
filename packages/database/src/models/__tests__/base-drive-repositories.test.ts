@@ -19,6 +19,7 @@ import { createAgent } from "../agent-store.js";
 import {
   baseDriveWorkspaceOfInstallation,
   listBaseDriveRepositories,
+  listBaseDriveWorkspaces,
 } from "../base-drive-repositories.js";
 import { createTask } from "../task-store.js";
 
@@ -89,7 +90,7 @@ it.layer(getTestDB())("the repositories a base drive may stand for", (it) => {
   );
 
   it.effect(
-    "the workspace an active installation connects, under its owner, and none once the installation is suspended",
+    "the workspace an active installation connects, under its owner, singly and in the list, and none once the installation is suspended",
     () =>
       Effect.gen(function* () {
         const ada = yield* openAccount;
@@ -101,6 +102,9 @@ it.layer(getTestDB())("the repositories a base drive may stand for", (it) => {
         });
 
         const connected = yield* baseDriveWorkspaceOfInstallation(installationId);
+        const listedActive = (yield* listBaseDriveWorkspaces()).filter(
+          (each) => each.userId === ada,
+        );
         const db = yield* Database;
         yield* db
           .update(githubInstallation)
@@ -108,8 +112,12 @@ it.layer(getTestDB())("the repositories a base drive may stand for", (it) => {
           .where(eq(githubInstallation.installationId, installationId));
         const suspended = yield* baseDriveWorkspaceOfInstallation(installationId);
 
+        const listed = (yield* listBaseDriveWorkspaces()).filter((each) => each.userId === ada);
+
         assert.deepEqual(connected, Option.some({ workspaceId: acme, userId: ada }));
         assert.deepEqual(suspended, Option.none());
+        assert.deepEqual(listedActive, [{ workspaceId: acme, userId: ada }]);
+        assert.deepEqual(listed, []);
       }),
   );
 });

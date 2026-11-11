@@ -102,3 +102,30 @@ export function baseDriveWorkspaceOfInstallation(
 ): AgentStoreEffect<Option.Option<BaseDriveWorkspace>> {
   return findBaseDriveWorkspaceOfInstallation(installationId);
 }
+
+const findBaseDriveWorkspaces = SqlSchema.findAll({
+  Request: Schema.Void,
+  Result: BaseDriveWorkspaceSchema,
+  execute: () =>
+    Database.use((db) =>
+      db
+        .selectDistinctOn([member.organizationId], {
+          workspaceId: member.organizationId,
+          userId: member.userId,
+        })
+        .from(githubInstallation)
+        .innerJoin(member, eq(member.organizationId, githubInstallation.organizationId))
+        .where(
+          and(
+            eq(githubInstallation.status, GITHUB_INSTALLATION_STATUS.ACTIVE),
+            eq(member.role, WORKSPACE_ROLE.OWNER),
+          ),
+        )
+        .orderBy(member.organizationId, asc(member.createdAt)),
+    ),
+});
+
+/** Every workspace an active installation connects, with its first owner, across accounts, for the daily refresh's backfill alone. */
+export function listBaseDriveWorkspaces(): AgentStoreEffect<readonly BaseDriveWorkspace[]> {
+  return findBaseDriveWorkspaces(undefined);
+}

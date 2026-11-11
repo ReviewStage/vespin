@@ -18,6 +18,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type BaseDriveRepository,
   listBaseDriveRepositories,
+  listBaseDriveWorkspaces,
 } from "@repo/database/models/base-drive-repositories";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { causeKind } from "@repo/runtime/effect";
@@ -25,6 +26,7 @@ import { Sandbox } from "@repo/sandbox";
 import { Cause, Effect, Option } from "effect";
 import { GitHubApp } from "../github/github-app.js";
 import { BASE_WANTED, type BaseDriveOf, baseDriveName, fillBaseDrive } from "./base-drive.js";
+import { filledWorkspace } from "./base-drive-connect.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import {
   firewallSessionOf,
@@ -108,6 +110,17 @@ export const refreshBaseDrives = Effect.fn("web/refreshBaseDrives")(function* (r
     );
     if (outcome === undefined) counts.failed += 1;
     else counts[outcome] += 1;
+  }
+  // Note that this backfills the drives of repositories connected before connects filled them
+  // (`base-drive-connect.ts`); it is removed once one daily run has filled them.
+  for (const workspace of yield* listBaseDriveWorkspaces()) {
+    yield* filledWorkspace(run, workspace).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.logError(`a workspace's base drive backfill failed: ${causeKind(cause)}`),
+      ),
+    );
   }
   const refreshed: BaseDriveRefresh = counts;
   yield* Effect.logInfo(
