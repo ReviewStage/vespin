@@ -24,13 +24,12 @@ import {
   type PageLine,
   type PageOwner,
   type PagePlace,
-  pagePlaceId,
 } from "@repo/features/page-wire";
 import { markedAs, readMarkOf } from "@repo/features/read-mark";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import { revisionsOfLiveRows, TASK_HISTORY_READ } from "@repo/features/task-history-live";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
-import { AGENT_PAGES_READ, pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
+import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import {
   type DescriptionRevisionsAnswer,
@@ -175,7 +174,7 @@ import { followSidebarRows } from "./workspaces-follow.js";
  * to the version history that asks and held nowhere here; a revision
  * restored is the one write this concern carries to the service on the
  * developer's word, and the view takes the task it answers.
- * The pages agents wrote for a task, or for an agent on no task, are held
+ * The pages agents wrote for a task are held
  * for the windows that draw them, the open task's among them, by title and
  * newest version alone, and told on the app state (`LIVE_READ.PAGES`); a
  * page's HTML is answered to the frame that draws it and kept in this
@@ -262,7 +261,7 @@ class RepositorySkillsKey extends Data.Class<{
 /** Whose skills: a plan's, or a workspace's repository's no plan names. */
 type SkillsKey = PlanSkillsKey | RepositorySkillsKey;
 
-/** Whose pages: one task's, or one agent's on no task, by what they stand on and then its id. */
+/** Whose pages: one task's, by what they stand on and then its id. */
 class PageOwnerKey extends Data.Class<{
   readonly kind: PageOwner["kind"];
   readonly id: string;
@@ -270,14 +269,7 @@ class PageOwnerKey extends Data.Class<{
 
 /** The owner a window names pages by, as their key. */
 function pageOwnerOf(place: PagePlace): PageOwnerKey {
-  return "taskId" in place
-    ? new PageOwnerKey({ kind: PAGE_OWNER.TASK, id: place.taskId })
-    : new PageOwnerKey({ kind: PAGE_OWNER.AGENT, id: place.agentId });
-}
-
-/** The place the service names an owner's pages by. */
-function pagePlaceOf(owner: PageOwnerKey): PagePlace {
-  return owner.kind === PAGE_OWNER.TASK ? { taskId: owner.id } : { agentId: owner.id };
+  return new PageOwnerKey({ kind: PAGE_OWNER.TASK, id: place.taskId });
 }
 
 /** Whose Browser tabs: a task's agents' together, or one agent's, by what they are listed for and then its id. */
@@ -904,20 +896,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
   const decodePages = Schema.decodeUnknownOption(TASK_PAGES_READ.rows);
 
-  /** Follows the pages of `owner`, a task or an agent on no task, live until let go, each change told through `answers`. */
+  /** Follows the pages of `owner`'s task live until let go, each change told through `answers`. */
   function followPages(owner: PageOwnerKey, answers: HeldAnswers<readonly PageLine[]>) {
-    const place = pagePlaceOf(owner);
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
     const userId = dependencies.accountId();
     return pushLive({
       seal: (poll, after) =>
         gate() && userId !== undefined
-          ? sealedLive(
-              "taskId" in place ? TASK_PAGES_READ : AGENT_PAGES_READ,
-              { id: pagePlaceId(place), userId },
-              poll,
-              after,
-            )
+          ? sealedLive(TASK_PAGES_READ, { id: owner.id, userId }, poll, after)
           : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true }),
       decode: (rows) => Option.map(decodePages(rows), pagesOfLiveRows),
       publish: (pages) =>
@@ -926,7 +912,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   }
 
   /**
-   * The pages each window holds, a task's or an agent's on no task, and the
+   * The pages each window holds, a task's, and the
    * few let go latest, each as its read stands, told whole on the app state
    * every window draws (`LIVE_READ.PAGES`): followed from the first window's
    * hold (`heldSlice`), so a window opening a task again draws its pages
@@ -2017,7 +2003,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       if (!kernel.runMode.sendsNetwork) return fixturePage(read);
       if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
       const { pageId, version } = read;
-      const place = "taskId" in read ? { taskId: read.taskId } : { agentId: read.agentId };
+      const place = { taskId: read.taskId };
       const owner = pageOwnerOf(read);
       return yield* kept.answer(
         new PageVersionKey({ ownerKind: owner.kind, ownerId: owner.id, pageId, version }),
@@ -2351,7 +2337,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         const read = yield* readParams(
           tasksPageParamsSchema,
           params,
-          "reading a page names a task or an agent, the page, and its version",
+          "reading a page names its task, the page, and its version",
         );
         return carried<TasksPageAnswer>(yield* pageRead(read));
       }),

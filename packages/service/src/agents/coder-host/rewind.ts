@@ -85,8 +85,8 @@ const restorePointOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   return snapshot.value;
 });
 
-/** How a restore the machine refused is refused to the rewind's caller: a Mac away or removed by name, anything else as unavailable. */
-function refusedRestore(failure: unknown): HostedRefusal {
+/** How a call the machine refused is refused to the caller, a restore's or a diff's: a Mac away or removed by name, anything else as unavailable. */
+export function refusedByMachine(failure: unknown): HostedRefusal {
   if (failure instanceof LaunchRefused && failure.deviceRemoved === true)
     return HOST_REMOVED_REFUSAL;
   if (failure instanceof LaunchRefused && failure.deviceAway === true) {
@@ -105,7 +105,7 @@ const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   const machines = yield* deploymentLifecycle;
   const outcome = yield* machines
     .restoreCheckout(sessionId, snapshot)
-    .pipe(Effect.mapError(refusedRestore));
+    .pipe(Effect.mapError(refusedByMachine));
   if (outcome === RESTORE_OUTCOME.MISSING) {
     return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
   }

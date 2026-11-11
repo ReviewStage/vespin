@@ -27,6 +27,7 @@ import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { feedbackDelivery } from "@repo/features/feedback";
 import type { LinkPlatform } from "@repo/features/link-open";
 import { TERMINAL_PORT_CHANNEL } from "@repo/features/terminal-acts";
+import { BUILD_TOO_OLD_WORDS } from "@repo/features/words";
 import { runModeFor } from "@repo/host";
 import {
   type ActPortDependencies,
@@ -89,13 +90,7 @@ import { version as appVersion } from "../../package.json";
 import { type ConnectTabs, connectTabs, tabBrowser } from "./connect-tab";
 import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-file-system";
 import { type PageLeave, tabLeave } from "./page-leave";
-import {
-  BUILD_TOO_OLD,
-  failedChunkAnswer,
-  PART_DID_NOT_LOAD,
-  PRELOAD_ERROR,
-  staleBuildTab,
-} from "./stale-build";
+import { failedChunkAnswer, PART_DID_NOT_LOAD, PRELOAD_ERROR, staleBuildTab } from "./stale-build";
 import { developmentFixtureProfile } from "./web-fixture";
 import {
   askTabNotifications,
@@ -474,7 +469,7 @@ const composedWeb = (
       // A session that changes under the tab leaves it with a full page load (Neon's "When the session changes"), dropping the previous account's live reads.
       yield* linkSessionReload({ state, reload: () => location.reload() });
       // A tab the service refused as older than it serves asks to move onto the build now live, as a chunk that failed to load does.
-      const askUpdate = failedChunkAnswer(staleBuildTab(tab, BUILD_TOO_OLD));
+      const askUpdate = failedChunkAnswer(staleBuildTab(tab, BUILD_TOO_OLD_WORDS));
       yield* Effect.forkScoped(
         Stream.runForEach(
           Stream.changes(Stream.map(state.changes, ({ network }) => network.updateNeeded === true)),

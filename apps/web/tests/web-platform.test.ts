@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import { resolveObjectURL } from "node:buffer";
+import { getOpenAPIMeta } from "@orpc/openapi";
 import { hostedContract } from "@repo/features/contract";
 import { LINK_PLATFORM } from "@repo/features/link-open";
-import { getOpenAPIMeta } from "@orpc/openapi";
 import { afterEach, test, vi } from "vitest";
 import { downloadText, webPlatform } from "../src/app/web-platform";
 
@@ -116,11 +116,10 @@ test("the admin dashboard is a link to its page on the tab's own origin, whateve
   });
 });
 
-test("an agent's page is framed through the service's frame of its version on the tab's own origin, a task's page and an agent's alike", () => {
+test("a task's page is framed through the service's frame of its version on the tab's own origin", () => {
   window.history.replaceState(null, "", "/acme/plan/3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b");
   const platform = webPlatform(COUNTING);
   const task = "3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b";
-  const agent = "4b0d6b5e-0a8f-4a8e-9a43-1c5f7f8b2a10";
   const page = "0b6f6b52-2c1e-4f8e-9a4d-7f1c2e9d5a01";
   /** The address the contract declares for a procedure, its path's names filled in. */
   const declared = (
@@ -137,9 +136,5 @@ test("an agent's page is framed through the service's frame of its version on th
   assert.equal(
     platform.pageFrameUrl({ taskId: task, pageId: page, version: 3 }),
     declared(hostedContract.taskFiles.pageFrame, { id: task, page, version: "3" }),
-  );
-  assert.equal(
-    platform.pageFrameUrl({ agentId: agent, pageId: page, version: 1 }),
-    declared(hostedContract.agentPages.frame, { id: agent, page, version: "1" }),
   );
 });

@@ -12,7 +12,7 @@
  * agents, which its own page lists, filled out as the Tasks list stands one:
  * a task pinned, one in a section of the account's, a sub-task, two
  * repositories, and the reference journey's task with its agent's pull
- * request, its pages, its description, and a task it waits on. The items
+ * request, a call the agent holds for the account's answer, its pages, its description, and a task it waits on. The items
  * are an ask of each kind (a decision, an approval, steps to do, an answer
  * in words, and a form), a notice whose message carries code, a long
  * thread, one answered, and one closed. Every
@@ -23,7 +23,17 @@
  */
 
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
-import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPendingApproval,
+  APPROVAL_STATUS_OF_ANSWER,
+} from "@repo/features/agent-approval-wire";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentTranscriptOlderAnswer,
+  type AgentTranscriptOlderParams,
+  INBOX_SCOPE_KIND,
+} from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_RUNTIME,
@@ -70,7 +80,11 @@ import {
   RUN_PROFILE,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
-import { fixtureAgentPicture, fixtureAgentTranscript } from "./fixture-agent-transcript.js";
+import {
+  fixtureAgentOlderMessages,
+  fixtureAgentPicture,
+  fixtureAgentTranscript,
+} from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
   FIXTURE_VIDEO_MP4,
@@ -556,16 +570,38 @@ function agentOn(
   };
 }
 
+/** When the invitations agent's run began, which its transcript counts from. */
+const INVITES_STARTED = LANDED - 3 * DAY;
+
+/**
+ * The call the invitations agent holds for the account's answer, as it asks
+ * before a shell command in Ask mode: its last turn's test run, which its
+ * transcript draws still under way.
+ */
+const INVITES_HELD: AgentPendingApproval = {
+  id: fixtureId(94),
+  toolUseId: "fixture-invites-resend-test",
+  toolName: "Bash",
+  title: "Run pnpm test src/members",
+  description: "Run the members tests",
+  input: { command: "pnpm test src/members", description: "Run the members tests" },
+  askedAt: INVITES_STARTED + 72 * MINUTE,
+};
+
 const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
   [
     TASK.INVITES,
-    agentOn(
-      AGENT.INVITES,
-      TASK.INVITES,
-      "Build teammate invitations",
-      AGENT_STATUS.RUNNING,
-      3 * DAY,
-    ),
+    {
+      ...agentOn(
+        AGENT.INVITES,
+        TASK.INVITES,
+        "Build teammate invitations",
+        AGENT_STATUS.RUNNING,
+        3 * DAY,
+      ),
+      permissionMode: AGENT_PERMISSION_MODE.ASK,
+      pendingApprovals: [INVITES_HELD],
+    },
   ],
   [
     TASK.DIGEST,
@@ -968,7 +1004,7 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
 
 /** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
 const INVITES_TRANSCRIPT = withQueued(
-  fixtureAgentTranscript(LANDED - 3 * DAY, ADA, "Build teammate invitations"),
+  fixtureAgentTranscript(INVITES_STARTED, ADA, "Build teammate invitations"),
 );
 
 /** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
@@ -1000,6 +1036,52 @@ function stagedTranscripts(
   };
   STAGED_TRANSCRIPTS.set(held, staged);
   return staged;
+}
+
+/** Where the page older than the invitations agent's transcript is read below, which a phone's fixture run offers. */
+const INVITES_OLDER_CURSOR = "0:0";
+
+/** The read of the older page that lands it: the first is not heard back, so a run shows Try again before the page. */
+const OLDER_LANDS_ON = 2;
+
+/** The invitations agent's transcript as the older page leaves it: offered, or read and laid before its first. */
+const INVITES_OLDER = {
+  OFFERED: { ...INVITES_TRANSCRIPT, before: INVITES_OLDER_CURSOR },
+  READ: {
+    ...INVITES_TRANSCRIPT,
+    messages: [...fixtureAgentOlderMessages(INVITES_STARTED, ADA), ...INVITES_TRANSCRIPT.messages],
+  },
+} as const satisfies Record<string, AppTranscript>;
+
+/**
+ * The document with the invitations agent's transcript as `asks` reads of
+ * its older page leave it: the page offered below its first message until
+ * a read lands it, then laid before them with nothing older offered. The
+ * same document under any other profile. Note that only the phone's fixture
+ * host lays it, since a desktop's fixture run answers no older read.
+ */
+export function olderPageAppState(state: AppStateSnapshot, asks: number): AppStateSnapshot {
+  if (!STAGED_PROFILES.has(state.run.profile)) return state;
+  const held = state[LIVE_READ.TRANSCRIPT];
+  const rows = asks >= OLDER_LANDS_ON ? INVITES_OLDER.READ : INVITES_OLDER.OFFERED;
+  if (held[AGENT.INVITES]?.[OWN_TRANSCRIPT]?.rows === rows) return state;
+  return {
+    ...state,
+    [LIVE_READ.TRANSCRIPT]: {
+      ...held,
+      [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows } },
+    },
+  };
+}
+
+/** What the `asks`th read of the invitations agent's older page answers: not heard back the first time, and landed after; none for any other transcript or profile. */
+export function olderPageAnswer(
+  profile: string,
+  params: AgentTranscriptOlderParams,
+  asks: number,
+): AgentTranscriptOlderAnswer | undefined {
+  if (!STAGED_PROFILES.has(profile) || params.agentId !== AGENT.INVITES) return undefined;
+  return asks >= OLDER_LANDS_ON ? { landed: true } : { failure: AGENT_CALL_FAILURE.UNANSWERED };
 }
 
 /** The models the account may start an agent on, as the service's catalog lists them, and no device of its own. */
@@ -1078,6 +1160,41 @@ export function inboxAppState(
   };
 }
 
+/** The reminders a fixture run set, by item: an instant, or null where one was cleared. */
+export type InboxReminders = ReadonlyMap<string, number | null>;
+
+/** An item with the reminder set on it, or cleared, as `reminders` holds; the item handed in where they name it not. */
+function remindedItem(item: InboxItem, reminders: InboxReminders): InboxItem {
+  const until = reminders.get(item.id);
+  if (until === undefined) return item;
+  const { remindAt: _held, ...rest } = item;
+  return until === null ? rest : { ...rest, remindAt: until };
+}
+
+/**
+ * The document with the reminders a fixture run set laid over the staged
+ * feed's items, as the host draws one the moment it is asked, so a fixture
+ * run's Inbox puts the item away under Reminders. The very document where
+ * none was set.
+ */
+export function inboxRemindersAppState(
+  state: AppStateSnapshot,
+  reminders: InboxReminders,
+): AppStateSnapshot {
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.PLAN];
+  if (reminders.size === 0 || fed === undefined) return state;
+  const reminded = Object.fromEntries(
+    Object.entries(fed).map(([taskId, items]) => [
+      taskId,
+      items.map((item) => remindedItem(item, reminders)),
+    ]),
+  );
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
+  };
+}
+
 /* ----- The act door ----- */
 
 /** One staged item by its id, in whichever task's inbox holds it. */
@@ -1108,6 +1225,12 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
+  // Note that a reminder is taken as the service takes one, the item's read state echoed; the iOS run lays it over the document itself (`inboxRemindersAppState`).
+  [ACT_KIND.AGENTS_INBOX_REMIND]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { id: itemId, unread: held.unread === true };
+  },
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
@@ -1124,8 +1247,12 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
-  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
+  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+  // Note that an answer to the invitations agent's held call is taken as the service takes one, the call settled as answered, though its row still holds it, so the window draws its own answer.
+  [ACT_KIND.AGENTS_ANSWER_APPROVAL]: ({ approvalId, answer }) => ({
+    approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[answer] },
+  }),
   // Note that a reply and a resolve are taken as the service takes them, answered with the item as it then stands, though nothing here moves, so the window draws its own send; the migration's approval is refused.
   [ACT_KIND.AGENTS_INBOX_MESSAGE]: ({ itemId, clientKey, text, answers }) => {
     const held = stagedItem(itemId);

@@ -199,7 +199,7 @@ function taskLook(step: TaskStep, title: StepTitle | undefined, tasks: TasksCont
   };
 }
 
-/** An agent's own page's card: the agent as its tab would wear it, read off every agent the window lists, its automation under it. */
+/** An agent's card: the agent as its tab would wear it, read off every agent the window lists, its automation under it. */
 function agentLook(agentId: string, tasks: TasksControl): CardLook {
   const agent = tasks.liveAgents?.find((each) => each.id === agentId);
   if (agent === undefined) {

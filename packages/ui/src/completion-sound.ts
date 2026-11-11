@@ -1,5 +1,5 @@
 /**
- * completion-sound.ts -- plays the completion sounds, each synthesized with Web Audio, so there is no file to ship or license.
+ * completion-sound.ts -- plays the completion sounds, each synthesized with Web Audio, so there is no file to ship or license, and the account's own clip beside them.
  *
  * DOM-only and app-agnostic: the desktop's panel window, the web's tab, and
  * Settings' preview all call `playCompletionSound`. Every sound is a
@@ -24,11 +24,24 @@
  * dropped, so a burst is never a loud stack; another sound cuts the one
  * sounding short and plays, since the news it tells is the newer.
  *
+ * Two sounds are no recipe: the account's own clips, one for an agent's
+ * finish and one for something that needs it (`CUSTOM_COMPLETION_SOUNDS`),
+ * each of which the window that holds it hands the player as its bytes
+ * (`setCustomSoundClip`) and the player decodes once, ahead of any ask, so
+ * a finish plays it at once. It leaves through the same bus, at the bus's
+ * own level rather than the lift, since a clip comes mastered. Where no
+ * clip is loaded, or it did not decode, it plays the chime.
+ *
  * A sound never raises an error: where Web Audio is missing or refuses, it
  * is silent.
  */
 
-import { COMPLETION_SOUND, type CompletionSound } from "@repo/wire/app-settings";
+import {
+  COMPLETION_SOUND,
+  type CompletionSound,
+  type CustomCompletionSound,
+  isCustomCompletionSound,
+} from "@repo/wire/app-settings";
 
 /** A gain envelope cannot ramp from or to zero, so it rests here. */
 const SILENCE = 0.0001;
@@ -190,7 +203,10 @@ function knock(stage: Stage, when: number): void {
   sweep(stage, { when, fromHz: 220, toHz: 140, length: 0.12, gain: 0.3 });
 }
 
-const RECIPES: Record<CompletionSound, (stage: Stage) => void> = {
+/** The sounds a recipe plays: every one but the account's own clip. */
+type RecipeSound = Exclude<CompletionSound, CustomCompletionSound>;
+
+const RECIPES: Record<RecipeSound, (stage: Stage) => void> = {
   [COMPLETION_SOUND.CHIME]: (stage) => {
     tone(stage, { when: 0, hz: 1318.5, length: 0.45, gain: 0.22 });
     tone(stage, { when: 0.12, hz: 1760, length: 0.6, gain: 0.22 });
@@ -302,13 +318,18 @@ interface Player {
 
 /** The sound sounding now: which, its own gain, and the context's time at which it ends. */
 interface Sounding {
-  readonly sound: CompletionSound;
+  /** The sound of the set sounding, or none for a clip played alone. */
+  readonly sound: CompletionSound | undefined;
   readonly out: GainNode;
   readonly until: number;
 }
 
 let shared: Player | undefined;
 let sounding: Sounding | undefined;
+/** Each of the account's clips as last handed in, decoded; none until one decodes. */
+const customClips = new Map<CustomCompletionSound, AudioBuffer>();
+/** How many clips have been handed in for each sound, so a slow decode of one handed in before the latest never lands. */
+const clipsHanded = new Map<CustomCompletionSound, number>();
 
 /** A small room's ring: two channels of noise dying away, which a convolver turns into a room around the sound. */
 function roomOf(context: AudioContext): ConvolverNode {
@@ -369,6 +390,68 @@ function cut(context: AudioContext, { out }: Sounding): void {
   out.gain.linearRampToValueAtTime(0, context.currentTime + CUT);
 }
 
+/** The account's clip for `sound`, at the bus's own level, or the chime where none is decoded. */
+function clipOrChime(sound: CustomCompletionSound, stage: Stage): void {
+  const customClip = customClips.get(sound);
+  if (customClip === undefined) {
+    RECIPES[COMPLETION_SOUND.CHIME](stage);
+    return;
+  }
+  clip(stage, customClip);
+}
+
+/** A decoded clip, at the bus's own level rather than its lift, since a clip comes mastered. */
+function clip(stage: Stage, buffer: AudioBuffer): void {
+  const { context, at, out } = stage;
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  const level = context.createGain();
+  level.gain.value = 1 / MASTER_LEVEL;
+  source.connect(level).connect(out);
+  source.start(at);
+  reach(stage, buffer.duration);
+}
+
+/** Plays one sound's recipe, or the account's clip, on `stage`. */
+function perform(sound: CompletionSound, stage: Stage): void {
+  if (isCustomCompletionSound(sound)) clipOrChime(sound, stage);
+  else RECIPES[sound](stage);
+}
+
+/** The bytes decoded on the shared context; nothing where Web Audio is missing or they are no audio it reads. */
+async function decoded(bytes: Uint8Array): Promise<AudioBuffer | undefined> {
+  try {
+    const player = sharedPlayer();
+    // Note that the bytes are copied, because a decode takes the buffer it is handed away.
+    return await player?.context.decodeAudioData(bytes.slice().buffer);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The account's clip for `sound`, one of its own (`CUSTOM_COMPLETION_SOUNDS`),
+ * as its bytes, for that sound to play from now on; none to let it go, after
+ * which that sound plays the chime. Settles once the clip is decoded, or
+ * refused as no audio, which plays the chime as well. Throws nothing.
+ */
+export async function setCustomSoundClip(
+  sound: CustomCompletionSound,
+  bytes: Uint8Array | undefined,
+): Promise<void> {
+  const handed = (clipsHanded.get(sound) ?? 0) + 1;
+  clipsHanded.set(sound, handed);
+  const clip = bytes === undefined ? undefined : await decoded(bytes);
+  if (handed !== clipsHanded.get(sound)) return;
+  if (clip === undefined) customClips.delete(sound);
+  else customClips.set(sound, clip);
+}
+
+/** How long a clip plays, in seconds, as Web Audio decodes it; nothing where it is no audio Web Audio reads, or there is no Web Audio. */
+export async function soundClipSeconds(bytes: Uint8Array): Promise<number | undefined> {
+  return (await decoded(bytes))?.duration;
+}
+
 /**
  * Plays `sound` now. The same sound asked for while it still sounds plays
  * nothing, so a burst of finishes is one chime and never a loud stack;
@@ -377,13 +460,33 @@ function cut(context: AudioContext, { out }: Sounding): void {
  * and throws nothing.
  */
 export function playCompletionSound(sound: CompletionSound): void {
+  sounded(sound, (stage) => perform(sound, stage));
+}
+
+/**
+ * Plays a clip of the account's own now, as its bytes, as Settings' list of
+ * them plays one: decoded first, then sounded as any sound is, cutting the
+ * one sounding short. A clip that is no audio Web Audio reads plays
+ * nothing. Settles once it starts or is dropped; throws nothing.
+ */
+export async function playSoundClip(bytes: Uint8Array): Promise<void> {
+  const buffer = await decoded(bytes);
+  if (buffer !== undefined) sounded(undefined, (stage) => clip(stage, buffer));
+}
+
+/**
+ * Sounds what `draw` schedules on a stage of its own, as `sound`, or as no
+ * sound of the set where it is a clip played alone, which is never dropped
+ * as one already sounding.
+ */
+function sounded(sound: CompletionSound | undefined, draw: (stage: Stage) => void): void {
   try {
     const player = sharedPlayer();
     if (player === undefined) return;
     const { context, bus } = player;
     const now = context.currentTime;
     const still = sounding !== undefined && now < sounding.until ? sounding : undefined;
-    if (still?.sound === sound) return;
+    if (sound !== undefined && still?.sound === sound) return;
     if (context.state !== "running") {
       resumeSoon(context);
       return;
@@ -392,7 +495,7 @@ export function playCompletionSound(sound: CompletionSound): void {
     const out = context.createGain();
     out.connect(bus);
     const stage: Stage = { context, out, at: now, end: 0 };
-    RECIPES[sound](stage);
+    draw(stage);
     sounding = { sound, out, until: stage.at + stage.end };
   } catch {
     // A sound is never worth an error.

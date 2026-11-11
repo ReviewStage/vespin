@@ -205,7 +205,6 @@ describe("a host's daemon", () => {
       platform: "linux",
       uid: 0,
       sandboxed: "1",
-      pnpmConfig: ".config/pnpm",
     },
     {
       os: { ...DARWIN_HOST, deviceName: () => "Studio", machine: () => STUDIO_MACHINE },
@@ -214,11 +213,10 @@ describe("a host's daemon", () => {
       platform: "darwin",
       uid: 501,
       sandboxed: undefined,
-      pnpmConfig: "Library/Preferences/pnpm",
     },
   ])(
-    "registers as its OS ($platform) and machine on its device secret with its version on every call, runs a launch straight on the box in its agent's folder on its own Node, telling Claude Code it may skip its permissions as root (uid $uid), with the claim's secrets and the box's one pnpm store and npm cache named in its agent's home, takes no notice of a newer release with no releases of an account install to update, and stops its runner's group, marks its record refused, and ends once its beat hears it was removed",
-    ({ os, name, machine, platform: devicePlatform, uid, sandboxed, pnpmConfig }) =>
+    "registers as its OS ($platform) and machine on its device secret with its version on every call, runs a launch straight on the box in its agent's folder on its own Node, telling Claude Code it may skip its permissions as root (uid $uid), with the claim's secrets on the box user's own home, the pinned gh behind their PATH, takes no notice of a newer release with no releases of an account install to update, and stops its runner's group, marks its record refused, and ends once its beat hears it was removed",
+    ({ os, name, machine, platform: devicePlatform, uid, sandboxed }) =>
       Effect.gen(function* () {
         const { home, stateRoot } = yield* box;
         const reports: string[] = [];
@@ -272,6 +270,7 @@ describe("a host's daemon", () => {
 
         const daemon = yield* hostDaemon({
           stateRoot,
+          pid: process.pid,
           device: DEVICE,
           version: VERSION,
           platform,
@@ -308,25 +307,13 @@ describe("a host's daemon", () => {
         expect(runner?.env).toMatchObject({
           CLAUDE_CODE_OAUTH_TOKEN: RUNNER_TOKEN,
           APP_RUNNER_PLACE: "host",
-          HOME: `${folder}/home`,
-          XDG_CACHE_HOME: `${folder}/cache`,
-          PNPM_HOME: `${folder}/home/.local/share/pnpm`,
-          NPM_CONFIG_PREFIX: `${folder}/home/.npm-global`,
-          PATH: `${folder}/home/.local/share/pnpm:${folder}/home/.npm-global/bin:/opt/agent/agent-tools:/usr/bin:/bin`,
+          HOME: home,
+          PATH: "/usr/bin:/bin:/opt/agent/agent-tools",
         });
+        for (const variable of ["XDG_CACHE_HOME", "PNPM_HOME", "NPM_CONFIG_PREFIX"]) {
+          expect(runner?.env?.[variable]).toBeUndefined();
+        }
         expect(runner?.env?.IS_SANDBOX).toBe(sandboxed);
-        // Note that every agent's settings name the same folders under the host's state, outside any agent's folder.
-        const fileSystem = yield* FileSystem.FileSystem;
-        const pnpmStore = `"${stateRoot}/agent-packages/pnpm-store"`;
-        expect(yield* fileSystem.readFileString(`${folder}/home/${pnpmConfig}/rc`)).toBe(
-          `store-dir=${pnpmStore}\n`,
-        );
-        expect(yield* fileSystem.readFileString(`${folder}/home/${pnpmConfig}/config.yaml`)).toBe(
-          `storeDir: ${pnpmStore}\n`,
-        );
-        expect(yield* fileSystem.readFileString(`${folder}/home/.npmrc`)).toBe(
-          `cache="${stateRoot}/agent-packages/npm-cache"\n`,
-        );
         expect(reports).toContain("Vespin host: Connected to Vespin.");
 
         removed = true;
@@ -362,6 +349,7 @@ describe("a host's daemon", () => {
 
         const daemon = yield* hostDaemon({
           stateRoot,
+          pid: process.pid,
           device: DEVICE,
           version: VERSION,
           platform: platformOn(FRA_01, stateRoot),
@@ -397,6 +385,7 @@ describe("a host's daemon", () => {
 
         yield* hostDaemon({
           stateRoot,
+          pid: process.pid,
           device: { deviceId: DEVICE_ID, deviceSecret: DEVICE_SECRET, serviceOrigin: SERVICE },
           version: VERSION,
           platform,

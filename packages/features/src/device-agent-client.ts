@@ -19,6 +19,7 @@ import type {
   DeviceSetup,
   HostUpdate,
 } from "./device-agent-wire.js";
+import { DEVICE_AGENT_REQUEST_KIND } from "./device-agent-wire.js";
 import {
   type HostEnrollAnswer,
   type HostPairingPollAnswer,
@@ -440,7 +441,11 @@ export class HostedDeviceAgentClient {
     id: string,
     answer: DeviceAgentAnswer,
   ): Effect.Effect<boolean, never, HttpClient.HttpClient> {
-    const wire = { ...answer, bytes: answer.bytes === null ? null : encodeBytes(answer.bytes) };
+    // A read's bytes travel in base64; a diff's text travels as it is.
+    const wire =
+      answer.kind === DEVICE_AGENT_REQUEST_KIND.READ_FILE
+        ? { ...answer, bytes: answer.bytes === null ? null : encodeBytes(answer.bytes) }
+        : answer;
     return Effect.map(
       hostedCall(this.#hosted.deviceAgents.answerRequest, { deviceId, id, answer: wire }),
       (answered) => !("failure" in answered),

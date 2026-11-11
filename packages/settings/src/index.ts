@@ -45,6 +45,14 @@ export {
   workspaceExperimentChoicesFrom,
 } from "./experiments.js";
 export {
+  isKeepAwake,
+  KEEP_AWAKE,
+  KEEP_AWAKE_DEFAULT,
+  KEEP_AWAKE_LABEL,
+  KEEP_AWAKE_LIST,
+  type KeepAwake,
+} from "./keep-awake.js";
+export {
   isMacCommandMode,
   MAC_COMMAND_MODE,
   MAC_COMMAND_MODE_LABEL,

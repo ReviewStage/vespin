@@ -77,6 +77,12 @@ import {
 } from "./push-device-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
+import {
+  soundAddRequestSchema,
+  soundChoiceRequestSchema,
+  soundIdSchema,
+  soundRenameRequestSchema,
+} from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
 
 /**
@@ -133,6 +139,11 @@ const AGENT_ACCOUNT_CALLS = {
     startChatGptDeviceLogin: accountContract.startChatGptDeviceLogin,
     pollChatGptDeviceLogin: accountContract.pollChatGptDeviceLogin,
     cancelChatGptDeviceLogin: accountContract.cancelChatGptDeviceLogin,
+    sound: accountContract.sound,
+    addSound: accountContract.addSound,
+    renameSound: accountContract.renameSound,
+    removeSound: accountContract.removeSound,
+    chooseSound: accountContract.chooseSound,
   },
 };
 
@@ -521,6 +532,46 @@ export const githubTokenSaveParamsSchema = githubTokenSaveRequestSchema;
 
 export type GitHubTokenSaveParams = typeof githubTokenSaveParamsSchema.Type;
 
+/** Which of the account's own sounds a read or a removal names. */
+export const soundIdParamsSchema = EffectSchema.Struct({ id: soundIdSchema });
+
+export type SoundIdParams = typeof soundIdParamsSchema.Type;
+
+/** One of the account's own sounds' clips, as the window hears it read: its bytes in base64 under its type with their hash, null where the account keeps no such sound, or why there is no answer. The host fetched it under the account, so the window holds no bearer and no address. */
+export const soundClipAnswerViewSchema = answerView(accountContract.sound);
+
+export type SoundClipAnswerView = typeof soundClipAnswerViewSchema.Type;
+
+/** A sound added, as Settings asks it: its name, the clip as a `data:` URL, never its file's name, and the sound to play it as at once, where the press was a sound's. */
+export const soundAddParamsSchema = soundAddRequestSchema;
+
+export type SoundAddParams = typeof soundAddParamsSchema.Type;
+
+/** A sound added, as the window hears it: the sound kept, or why there is no answer. */
+export const soundAddAnswerViewSchema = answerView(accountContract.addSound);
+
+export type SoundAddAnswerView = typeof soundAddAnswerViewSchema.Type;
+
+/** A sound renamed, as Settings asks it. */
+export const soundRenameParamsSchema = soundRenameRequestSchema;
+
+export type SoundRenameParams = typeof soundRenameParamsSchema.Type;
+
+/** A sound renamed or removed, as the window hears it: the sound as it now stands, null where it is gone, or why there is no answer. */
+export const soundStateViewSchema = answerView(accountContract.renameSound);
+
+export type SoundStateView = typeof soundStateViewSchema.Type;
+
+/** Which of the account's sounds one of its two sounds plays, as Settings asks it. */
+export const soundChoiceParamsSchema = soundChoiceRequestSchema;
+
+export type SoundChoiceParams = typeof soundChoiceParamsSchema.Type;
+
+/** A choice, as the window hears it: the sound the slot now plays, or why there is no answer. */
+export const soundChoiceAnswerViewSchema = answerView(accountContract.chooseSound);
+
+export type SoundChoiceAnswerView = typeof soundChoiceAnswerViewSchema.Type;
+
 /** A workspace's memories, as the window hears one forgotten: the memories as they stand, or why there are none. */
 export const memoriesAnswerViewSchema = answerView(accountContract.forgetMemory);
 
@@ -875,6 +926,11 @@ export const agentChangesAnswerViewSchema = answerView(agentsContract.changes, {
 
 export type AgentChangesAnswerView = typeof agentChangesAnswerViewSchema.Type;
 
+/** The files one of an agent's turns changed, as the window hears them: the files, or why there are none to draw, a snapshot gone and a Mac away among the whys. */
+export const agentTurnChangesAnswerViewSchema = answerView(agentsContract.turnChanges);
+
+export type AgentTurnChangesAnswerView = typeof agentTurnChangesAnswerViewSchema.Type;
+
 /** One agent's pull request itself as its overview draws it, as the window hears it: the pull request, why there is none yet, or why there is no answer. */
 const agentOverviewPullRequestAnswerViewSchema = answerView(
   agentPullRequestsContract.overviewPullRequest,
@@ -1000,13 +1056,12 @@ export type LiveActivityEndedAnswerView = typeof liveActivityEndedAnswerViewSche
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {
   PLAN: "plan",
-  AGENT: "agent",
 } as const;
 
-/** The kind of holder an inbox item is on: a plan, or an agent with no task. */
+/** The kind of holder an inbox item is on: a plan. */
 export type InboxScopeKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
-/** One plan's inbox, or one agent's, as the window follows it: which kind, and the plan's or agent's id. */
+/** One plan's inbox, as the window follows it: which kind, and the plan's id. */
 export const agentInboxScopeSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(INBOX_SCOPE_KIND)),
   id: EffectSchema.NonEmptyString,

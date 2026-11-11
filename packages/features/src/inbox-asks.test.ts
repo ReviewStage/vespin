@@ -8,6 +8,7 @@ import {
   INBOX_ASK_STATUS,
   INBOX_FIELD,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_RESPONSE,
   type InboxAsk,
@@ -159,6 +160,28 @@ test("a decide posted recommending several is kept as its first label and every 
   });
 });
 
+test("a decide whose options carry media reads on a released desktop as its labels, and media of a kind this build does not know as its type alone", () => {
+  const media = [
+    { type: INBOX_OPTION_MEDIA.FILE, attachmentId: ITEM_ID, mediaType: "video/webm" },
+    { type: "model", attachmentId: ITEM_ID, format: "glb" },
+  ];
+  const message = {
+    ...ASKING,
+    ask: {
+      ...DEPLOY,
+      options: [{ label: "Ship it", media }, { label: "Wait" }],
+      status: INBOX_ASK_STATUS.OPEN,
+    },
+  };
+  const ask = read(inboxMessageSchema, message)?.ask;
+  assert.ok(ask?.type === INBOX_ASK.DECIDE && "options" in ask);
+  assert.deepEqual(ask.options[0]?.media, [media[0], { type: "model" }]);
+  assert.deepEqual(read(oneRecommendedMessageSchema, message)?.ask.options, [
+    { label: "Ship it" },
+    { label: "Wait" },
+  ]);
+});
+
 test("an agent's answer ask keeps the option its select recommends", () => {
   const ask = {
     type: INBOX_ASK.ANSWER,
@@ -263,6 +286,13 @@ test("a decide takes a pick of its offered options, or words or files where none
     undefined,
   );
   assert.equal(inboxAnswersRefusal(DEPLOY, answer(INBOX_REPLY.ANSWERED), "Neither."), undefined);
+  // None of these is a pick of no option, which only a choice whose options carry media offers.
+  const shot = { type: INBOX_OPTION_MEDIA.FILE, attachmentId: ITEM_ID, mediaType: "image/png" };
+  const designs = {
+    ...DEPLOY,
+    options: [{ label: "Ship it", media: [shot] }, { label: "Wait" }],
+  } as const;
+  assert.equal(inboxAnswersRefusal(designs, answer(INBOX_REPLY.CHOSE), ""), undefined);
   const file = { attachmentId: ITEM_ID, name: "plan.pdf", mediaType: "application/pdf" };
   assert.equal(inboxAnswersRefusal(DEPLOY, answer(INBOX_REPLY.ANSWERED), "", [file]), undefined);
   const refusals = [

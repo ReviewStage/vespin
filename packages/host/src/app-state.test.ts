@@ -155,11 +155,11 @@ describe("a delivery that crosses the wire", () => {
   });
   const held = (plans: AppHolderInboxes["plan"]): AppStateSnapshot => ({
     ...document,
-    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} },
+    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.PLAN]: plans },
   });
   const pages = (tasks: AppPages["task"]): AppStateSnapshot => ({
     ...document,
-    [LIVE_READ.PAGES]: { [PAGE_OWNER.TASK]: tasks, [PAGE_OWNER.AGENT]: {} },
+    [LIVE_READ.PAGES]: { [PAGE_OWNER.TASK]: tasks },
   });
   /** One task as the list names it, its name the words it is told apart by. */
   const summary = (id: string, name: string): TaskSummary => ({

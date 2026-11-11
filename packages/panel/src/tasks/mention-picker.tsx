@@ -17,7 +17,7 @@ import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { holderTaskId, type MentionHolder } from "@repo/features/mention-holder";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   encodeMention,
   isMentionableTool,
@@ -27,6 +27,12 @@ import {
   sectionAnchors,
 } from "@repo/features/mention-link";
 import type { PageLine } from "@repo/features/page-wire";
+import {
+  hitRangesIn,
+  LOOSE_FROM,
+  type SearchSubject,
+  searchHit,
+} from "@repo/features/search-score";
 import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { skillWord } from "@repo/features/skill-word";
@@ -77,7 +83,6 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
-import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
 import type { SkillOption } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import {
@@ -142,7 +147,7 @@ import { useKnownNames } from "./use-known-names.js";
  * things of the task itself, its agents, open threads, pull requests, and
  * pages in that order, and lists each kind to browse below them, as an
  * editor's `@` menu lists its kinds; typed, it finds each kind's best few by the words typed, scored
- * as ⌘K scores them (`@repo/ui/search-score`), each row marking what found
+ * as ⌘K scores them (`@repo/features/search-score`), each row marking what found
  * it, letters typed in order finding only a path, each group in a fixed place
  * so a later read never moves the rows above it: agents first, then tasks,
  * people, the description, pages, and files and folders, since agents and tasks are
@@ -204,7 +209,7 @@ import { useKnownNames } from "./use-known-names.js";
  * Wherever the words stand in a workspace, the list offers its Inbox
  * threads too once a word is typed, as the account's feed holds them
  * (`../live-reads.ts`), the plan's own first, each by its title and
- * what it asks, said by its task or its agent on no task, hanging its
+ * what it asks, said by its task, hanging its
  * Inbox row's card: no mention names a thread, so a pick writes the
  * thread's link (`@repo/features/link-grammar`), which every place draws
  * as its chip.
@@ -617,7 +622,7 @@ function taskRows(
 }
 
 /**
- * Each of the holder's pages' rows, the plan's or the agent's on no task,
+ * Each of the holder's pages' rows, the task's,
  * by its title, its version where it has more than one and else how long
  * ago it was written, as its card says them, hanging that card; none where
  * nothing holds the place.
@@ -629,10 +634,7 @@ function pageRows(
 ): MentionRow[] {
   if (holder === undefined) return [];
   return pages.map((page) => ({
-    mention:
-      "taskId" in holder
-        ? { kind: MENTION_KIND.PAGE, taskId: holder.taskId, pageId: page.id }
-        : { kind: MENTION_KIND.PAGE, agentId: holder.agentId, pageId: page.id },
+    mention: { kind: MENTION_KIND.PAGE, taskId: holder.taskId, pageId: page.id },
     name: page.title,
     detail:
       page.version > 1 ? versionWords(page.version) : <Time at={page.at} now={now} hint={false} />,
@@ -1534,9 +1536,9 @@ const NO_PAGES: readonly MentionablePage[] = [];
 const NO_AGENTS: readonly MentionableAgent[] = [];
 const NO_PULL_REQUESTS: readonly MentionablePullRequest[] = [];
 
-/** The plan whose sections and repository the list offers, the workspace it stands in, and its text as it stands now; a page no task holds offers its repository, and an agent's own page its pages and pull request beside it. */
+/** The plan whose sections and repository the list offers, the workspace it stands in, and its text as it stands now; a place no task holds offers its repository. */
 export interface MentionSource {
-  /** The task, or the agent on no task, whose page the list stands on; none for a place neither holds. */
+  /** The task whose page the list stands on; none for a place no task holds. */
   readonly holder: MentionHolder | undefined;
   readonly taskName: string;
   /** The slug of the task's workspace, which a mention of it is written under. */
@@ -1546,13 +1548,13 @@ export interface MentionSource {
   /** The id of the workspace whose installation the repository is read through, where no plan names it. */
   readonly workspaceId?: string | undefined;
   readonly text: () => string;
-  /** The pages agents showed on the plan, or the agent on no task showed itself; none where the place offers none. */
+  /** The pages agents showed on the plan; none where the place offers none. */
   readonly pages?: readonly MentionablePage[] | undefined;
   /** The plan's coding agents, as its page holds them now; none where the place offers none. */
   readonly agents?: readonly MentionableAgent[] | undefined;
   /** Reads the workspace's coding agents, which the list offers after the plan's own; none where the place offers none. */
   readonly readAgents?: MentionAgentsReader | undefined;
-  /** The pull requests the plan's agents published, or the agent on no task did, as its page holds them now; none where the place offers none. */
+  /** The pull requests the plan's agents published, as its page holds them now; none where the place offers none. */
   readonly pullRequests?: readonly MentionablePullRequest[] | undefined;
 }
 
@@ -1608,7 +1610,7 @@ function repositoryPathsQueryOptions(place: {
  * Descriptions on, the pages of what
  * holds it, its repository's files and folders where it names one, its
  * Inbox threads and automations where it holds any, the pull requests
- * the plan's agents or the agent on no task published, the repository's skills where the words go
+ * the plan's agents published, the repository's skills where the words go
  * to an agent, dates wherever the list stands, every connected server at
  * once, and each connected server alone, the first of each provider
  * narrowed to by the provider's own word.
@@ -1624,7 +1626,7 @@ function kindsOf(
   descriptionsOn: boolean,
 ): readonly MentionKind[] {
   const { holder, repository } = source;
-  const taskId = holderTaskId(holder);
+  const taskId = holder?.taskId;
   const pages = holder === undefined ? 0 : (source.pages ?? NO_PAGES).length;
   const pullRequests = (source.pullRequests ?? NO_PULL_REQUESTS).length;
   const agents =
@@ -1734,7 +1736,7 @@ export function useMentionPicker({
   const [narrowing, setNarrowing] = useState<Held | undefined>(undefined);
 
   const holder = source?.holder;
-  const taskId = holderTaskId(holder);
+  const taskId = holder?.taskId;
   const agentPlace = useAgentRowPlace(taskId);
   const workspaceId = source?.workspaceId;
   const repository = source?.repository ?? null;

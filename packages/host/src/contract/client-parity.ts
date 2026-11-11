@@ -6,10 +6,10 @@
  * all of it, the web all but what only an app on the Mac can carry, and the
  * iOS app what its screens have been built for: today its sign-in and
  * sign-out; the Inbox: its list, which the host reads from the account
- * gate opening with no act of the app's, its read marks, its retry, its
- * pictures, and a thread's answer, reply, and resolve; the Tasks tab: its
- * tree, read from the same list, a task's status set, and a task's
- * description and pages followed; an agent's page: a message sent or
+ * gate opening with no act of the app's, its read marks, its reminders, its
+ * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
+ * tab: its tree, read from the same list, a task's status set, pin, and read
+ * mark, and a task's description and pages followed; an agent's page: a message sent or
  * queued, its queue steered, and its turn stopped; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
  * and the phone's own push registration,
@@ -86,7 +86,7 @@ const WEB = {
 const IOS = {
   ADMIN: byDesign("iOS v1 opens the admin dashboard in Safari"),
   AGENTS: notYet("iOS v1 has no agent screens"),
-  AUTOMATIONS: byDesign("iOS v1 opens Automations in Safari"),
+  AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
   COMPOSER: notYet(
     "iOS's New task and New agent sheets offer no Try again, skills, or warm-keeping yet",
   ),
@@ -105,6 +105,7 @@ const IOS = {
   PRESENCE: byDesign("The phone isn't a desk; presence comes from the desktop and the web only"),
   SETTINGS: byDesign("iOS v1 opens Settings in Safari"),
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
+  SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
   TRANSCRIPT_FOLLOW_UP: notYet("Left for a follow-up to iOS's agent page (#8008)"),
   UPDATER: byDesign("The App Store updates the app"),
@@ -161,6 +162,11 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MEMORIES_FOLLOW]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.MEMORIES_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.MEMORIES_FORGET]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.SOUND_READ]: panel(IOS.SOUNDS),
+  [PORT_ACT_KIND.SOUND_ADD]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.SOUND_RENAME]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.SOUND_REMOVE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.SOUND_CHOOSE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: panel(IOS.DICTATION),
   [PORT_ACT_KIND.ACCOUNT_ACTIVE]: panel(IOS.PRESENCE),
   [PORT_ACT_KIND.PUSH_DEVICE_REGISTER]: PHONE_ONLY,
@@ -193,15 +199,15 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGES]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: panel(IOS.TRANSCRIPT_FOLLOW_UP),
+  [PORT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PART]: panel(IOS.TRANSCRIPT_FOLLOW_UP),
-  [PORT_ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: panel(IOS.TRANSCRIPT_FOLLOW_UP),
+  [PORT_ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHOOSE]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_RENAME]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_SERVERS]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_PERMISSION_MODE]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_ADD_REPOSITORY]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_QUEUE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_STOP]: EVERYWHERE,
@@ -243,7 +249,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: panel(notYet("iOS v1 sets no reminders")),
+  [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: panel(notYet("iOS v1 opens no Inbox item by its link")),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,
@@ -310,8 +316,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_START]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DELETE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_RENAME]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_PIN]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_MARK_READ]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PIN]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_MARK_READ]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,

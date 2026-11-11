@@ -105,7 +105,6 @@ const STATE: AppStateSnapshot = stateWith(
       [PAGE_OWNER.TASK]: {
         [TASK_ID]: { rows: [{ id: PAGE_ID, title: "Invite funnel", version: 2, at: AT }] },
       },
-      [PAGE_OWNER.AGENT]: {},
     },
   },
 );

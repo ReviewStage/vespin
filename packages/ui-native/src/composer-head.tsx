@@ -4,10 +4,12 @@ import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-
 import {
   accessibilityLabel,
   buttonStyle,
+  contentShape,
   font,
   foregroundStyle,
   frame,
   lineLimit,
+  shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { Chip } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -21,6 +23,9 @@ const WORDS = {
   DELETE: "Delete",
   SENDING: "Sending",
 } as const;
+
+/** The least a press stands as, in points, as Apple's guidelines ask of a target, so a queued line's small act is pressed as easily as a row. */
+const PRESS_FRAME = 44;
 
 /** One message waiting behind the turn: queued, which its starter may steer or delete, or on its way. */
 export type QueuedLine = {
@@ -40,7 +45,7 @@ type QueuedLinesProps = {
   readonly onDelete?: ((id: string) => void) | undefined;
 };
 
-/** A queued line's small act at its end: its words in the muted ink, or its glyph alone. */
+/** A queued line's small act at its end: its words in the muted ink, or its glyph alone, pressed anywhere in a frame of a press's size. */
 function LineAct({
   label,
   symbol,
@@ -52,7 +57,15 @@ function LineAct({
 }) {
   const colors = useColors();
   return (
-    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(label)]}>
+    <Button
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("plain"),
+        frame({ minWidth: PRESS_FRAME, minHeight: PRESS_FRAME }),
+        contentShape(shapes.rectangle()),
+        accessibilityLabel(label),
+      ]}
+    >
       {symbol === undefined ? (
         <Text
           modifiers={[
@@ -79,7 +92,7 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
   const colors = useColors();
   if (lines.length === 0 && paused === undefined) return null;
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+    <VStack alignment="leading" spacing={0}>
       {paused === undefined ? null : (
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
@@ -88,7 +101,7 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
         </Text>
       )}
       {lines.map((line) => (
-        <HStack key={line.id} spacing={SPACE.ROW}>
+        <HStack key={line.id} spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_FRAME })]}>
           <Image
             systemName={line.sending ? "arrow.up.circle" : "clock"}
             size={MARK_SIZE.GLYPH}

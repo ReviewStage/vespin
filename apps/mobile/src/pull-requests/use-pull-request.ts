@@ -31,6 +31,7 @@ import type {
 } from "@repo/features/pull-request-write-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot } from "@repo/host/app-state";
+import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -188,12 +189,14 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
         });
         if (answer === undefined) {
           setNote(UNANSWERED);
+          buzz(BUZZ.ERROR);
           return false;
         }
         // Note that a refusal may still have moved the pull request, so every answer from GitHub reads again.
         if (!("failure" in answer)) await retry();
         const words = pullRequestWriteWords(answer);
         setNote(words);
+        buzz(words === undefined ? BUZZ.SUCCESS : BUZZ.ERROR);
         return words === undefined;
       } finally {
         out.current = false;

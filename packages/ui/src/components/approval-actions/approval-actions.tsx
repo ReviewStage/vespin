@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { APPROVAL_PRESS_WORDS } from "@repo/features/agent-approval-model";
+import { type ReactNode, useState } from "react";
 import type { ShownError } from "../../reported-failure.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { ErrorLine } from "../error-line/error-line.js";
@@ -17,8 +18,11 @@ import { TextField } from "../text-field/text-field.js";
  * Deny, quiet, opens one field in their place for the words that tell the
  * agent why, optional and held to the bound its owner names, with Deny to
  * send it and Cancel to close it again, Enter denying and Escape
- * canceling. They ask nothing of their place, so a dock over a composer
- * can draw them as well.
+ * canceling. An owner that writes to its agent in a box of its own draws
+ * that field itself (`note`), so the words to the agent are written as
+ * every other message to it is; a plain text field stands where it does
+ * not. They ask nothing of their place, so a dock over a composer can draw
+ * them as well.
  *
  * While an answer is out (`answering`) its press stands busy and the
  * others take nothing, and a failure to send it says why under them
@@ -35,30 +39,37 @@ export const APPROVAL_ACTION = {
 
 export type ApprovalAction = (typeof APPROVAL_ACTION)[keyof typeof APPROVAL_ACTION];
 
-/** The presses' words. */
-const WORDS = {
-  ALLOW: "Allow",
-  ALLOW_FOR_AGENT: "Always allow",
-  DENY: "Deny",
-  ALLOWING: "Allowing",
-  DENYING: "Denying",
+/** What the denial's field and its presses say, wherever its field is drawn. */
+export const DENY_NOTE_WORDS = {
+  DENY: APPROVAL_PRESS_WORDS.DENY,
+  DENYING: APPROVAL_PRESS_WORDS.DENYING,
   CANCEL: "Cancel",
-  NOTE_LABEL: "Why you denied it",
-  NOTE_PLACEHOLDER: "Tell the agent why (optional)",
+  LABEL: "Why you denied it",
+  PLACEHOLDER: "Tell the agent why (optional)",
 } as const;
 
+/** The presses' words. */
+const WORDS = {
+  ALLOW: APPROVAL_PRESS_WORDS.ALLOW,
+  ALLOW_FOR_AGENT: APPROVAL_PRESS_WORDS.ALLOW_FOR_AGENT,
+  ALLOWING: APPROVAL_PRESS_WORDS.ALLOWING,
+  ...DENY_NOTE_WORDS,
+} as const;
+
+/** What the denial's field is handed, by `ApprovalActions` or by an owner drawing its own (`note`). */
+export interface DenyNoteDoors {
+  /** Whether the denial is on its way, which holds the field and its presses. */
+  readonly busy: boolean;
+  /** The most characters the words take; no bound where none is named. */
+  readonly maxLength: number | undefined;
+  /** Denies the call, with the words where some were written. */
+  readonly onDeny: (message: string | undefined) => void;
+  /** Closes the field, the answers offered again. */
+  readonly onCancel: () => void;
+}
+
 /** The denial's field, with Deny and Cancel after it. */
-function DenyNote({
-  busy,
-  maxLength,
-  onDeny,
-  onCancel,
-}: {
-  busy: boolean;
-  maxLength: number | undefined;
-  onDeny: (message: string | undefined) => void;
-  onCancel: () => void;
-}): React.JSX.Element {
+function DenyNote({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): React.JSX.Element {
   const [words, setWords] = useState("");
   const deny = () => {
     if (busy) return;
@@ -69,8 +80,8 @@ function DenyNote({
     <Inline gap={GAP.CONTROL} grow>
       <Inline gap={GAP.CONTROL} grow>
         <TextField
-          label={WORDS.NOTE_LABEL}
-          placeholder={WORDS.NOTE_PLACEHOLDER}
+          label={WORDS.LABEL}
+          placeholder={WORDS.PLACEHOLDER}
           value={words}
           onChange={setWords}
           maxLength={maxLength}
@@ -101,6 +112,7 @@ export function ApprovalActions({
   answering,
   error,
   noteMaxLength,
+  note,
   onAnswer,
 }: {
   /** The answer that is out, whose press stands busy while the others take nothing; none while none is. */
@@ -109,20 +121,27 @@ export function ApprovalActions({
   error?: ShownError | undefined;
   /** The most characters a denial's words take, which its field stops at; no bound where none is named. */
   noteMaxLength?: number | undefined;
+  /** Draws the denial's field the owner writes to its agent in; a plain text field where none is given. */
+  note?: ((doors: DenyNoteDoors) => ReactNode) | undefined;
   /** Answers the call, a denial with its words where it has some. */
   onAnswer: (action: ApprovalAction, message?: string) => void;
 }): React.JSX.Element {
   const [denying, setDenying] = useState(false);
   const out = answering !== undefined;
+  const doors: DenyNoteDoors = {
+    busy: answering === APPROVAL_ACTION.DENY,
+    maxLength: noteMaxLength,
+    onDeny: (message) => onAnswer(APPROVAL_ACTION.DENY, message),
+    onCancel: () => setDenying(false),
+  };
   return (
     <Stack gap={GAP.TIGHT}>
       {denying ? (
-        <DenyNote
-          busy={answering === APPROVAL_ACTION.DENY}
-          maxLength={noteMaxLength}
-          onDeny={(message) => onAnswer(APPROVAL_ACTION.DENY, message)}
-          onCancel={() => setDenying(false)}
-        />
+        note === undefined ? (
+          <DenyNote {...doors} />
+        ) : (
+          note(doors)
+        )
       ) : (
         <Inline gap={GAP.CONTROL}>
           <Button

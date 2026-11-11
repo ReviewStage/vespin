@@ -1,3 +1,4 @@
+import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import {
   AGENT_PART,
   type AgentPart,
@@ -38,7 +39,12 @@ import {
 import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import type { KnownNames } from "@repo/features/entity-kind";
-import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
+import {
+  CONTINUE_IN_CLOUD_LABEL,
+  FAILURE_REASON,
+  type FailureReason,
+  remedyLabel,
+} from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
@@ -175,6 +181,7 @@ import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectListedTasks } from "../use-app-state.js";
@@ -190,7 +197,6 @@ import {
   useAgentApprovals,
   useAgentPermissionMode,
   useCallHeld,
-  waitingOnYouWords,
 } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";
@@ -294,7 +300,7 @@ import {
   MessagePlaceProvider,
   useMessageReveal,
 } from "./message-links.js";
-import { type PlaceMove, useMovePlace, useMoveToCloud } from "./move-agent.js";
+import { type MoveCarry, type PlaceMove, useMovePlace, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
@@ -2881,7 +2887,7 @@ function AgentTabView({
   bringIn?: RefObject<MessageBringer | undefined> | undefined;
   /** Where a replay the agent opens on is drawn (`replay-card.tsx`); none where none is read. */
   replay?: ReplayPlace | undefined;
-  /** The automation's run that started the agent, as its page reads it; none on a plan's tab, and for an agent started by hand. */
+  /** The automation's run that started the agent, as its tab reads it; none for an agent started by hand, and before the run is read. */
   run?: AgentOrigin | undefined;
   models: readonly CatalogModel[] | undefined;
   modelsFailed: boolean;
@@ -2941,8 +2947,8 @@ function AgentTabView({
   continuedNote?: ReactNode;
   /** Whether the tab offers Continue somewhere, or another agent continued this one, so the end line tells no one to start a new one. */
   continuable?: boolean;
-  /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers; none where Move to would not. */
-  onMoveToCloud?: (() => void) | undefined;
+  /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers, and the box's note of its Mac gone offline, carrying the message the Mac did not take; none where Move to would not. */
+  onMoveToCloud?: ((carry?: MoveCarry) => void) | undefined;
   /** The move the box's place chip offers (`useMovePlace`); none where the chip takes no press. */
   placeMove?: PlaceMove | undefined;
 }): React.JSX.Element {
@@ -3024,7 +3030,7 @@ function AgentTabView({
           host: agent.mac?.name,
           repository: published?.repository ?? undefined,
           onRetry,
-          onMoveToCloud,
+          onMoveToCloud: onMoveToCloud === undefined ? undefined : () => onMoveToCloud(),
           copy: copyThroughShell,
         }
       : undefined;
@@ -3304,6 +3310,7 @@ function AgentTabView({
             replyDoor={replyDoor}
             closedRemedy={closedRemedy}
             sendsEmpty={sendsEmpty}
+            onContinueInCloud={onMoveToCloud}
             queueing={
               agent.runtime === undefined || !controlsQueue
                 ? undefined
@@ -3327,8 +3334,6 @@ function AgentTabView({
 
 /** What an agent's tab is handed beside the agent. */
 interface AgentTabDoors {
-  /** The automation's run that started the agent, as its page reads it; none on a plan's tab. */
-  run?: AgentOrigin | undefined;
   /** The threads the agent posted that wait on the developer, docked over its box (`ThreadsDock`); none where nothing waits or none are read. */
   threads?: AgentThreads | undefined;
   control: AgentsControl;
@@ -3477,13 +3482,16 @@ function AgentTabBody({
   onOpenPullRequest,
   onOpenTarget,
   cards,
-  run,
   threads,
 }: Omit<AgentTabDoors, "onHeld"> & {
   agent: AgentSummary;
   transcript: AgentTranscriptControl;
 }): React.JSX.Element {
   const { messages } = transcript;
+  // The run that started an automation's agent, held while its tab stands; an agent the list names no automation of has none, and asks nothing.
+  const run = useQuery(
+    agentOriginQuery(agent.automationName === undefined ? undefined : agent.id),
+  ).data;
   const starter = teammateStarter(agent.startedBy, control.me);
   const approvals = useAgentApprovals({ agent, write: control.onAnswerApproval });
   const { messageSent } = approvals;
@@ -3715,7 +3723,7 @@ function AgentTabBody({
         skills={control.readSkills}
         starter={starter}
         readerId={control.me}
-        run={run}
+        run={run ?? undefined}
         replay={replayPlace({
           agent,
           control,
@@ -3733,6 +3741,15 @@ function AgentTabBody({
               carry={continued.length > 0 ? carry : undefined}
               label={continued.length > 0 ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL}
             />
+          ) : transcript.hostLost !== undefined && moveToCloud !== undefined ? (
+            // Note that a turn its machine dropped is carried on in the cloud, since a message to the machine waits on it coming back.
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<GLYPH.CLOUD />}
+              onClick={() => moveToCloud()}
+            >
+              {CONTINUE_IN_CLOUD_LABEL}
+            </Button>
           ) : otherModel ? (
             <RefusalContinue agent={agent} control={control} carry={carry} />
           ) : triesAgain ? (

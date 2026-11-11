@@ -5,6 +5,7 @@ import {
   isUnread,
   settledOnRead,
 } from "@repo/features/inbox-list-model";
+import { remindWords } from "@repo/features/inbox-remind-times";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
@@ -18,7 +19,7 @@ import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
 import { useToast } from "../toast.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
-import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
+import type { InboxReminder, RemindSaying } from "./inbox-remind.js";
 import { markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 

@@ -122,6 +122,7 @@ import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
  */
 
 const AGENT_REWIND = "/api/agents/rewind";
+const AGENT_TURN_CHANGES = "/api/agents/turn-changes";
 
 it.layer(getTestDB())("starting an agent from another", (it) => {
   /** A source agent on the owner's plan, on a choice and servers of its own, with a transcript of two turns, a branch, and a pull request, its GitHub answering as given. */
@@ -226,6 +227,34 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         assert.deepEqual(answered.body, { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING });
         assert.equal(answered.status, HOSTED_HTTP_STATUS.CONFLICT);
         assert.deepEqual(yield* rowsOf(), before, "nothing was cut");
+      }),
+  );
+
+  it.effect(
+    "a turn's changes are refused as malformed while the workspace has the experiment off, and by name where no snapshot of the turn stands once it is on",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, source, laterLine } = yield* sourceAgent;
+        const asked = () =>
+          ask(request(AGENT_TURN_CHANGES, owner, { id: source.id, messageId: laterLine }));
+
+        const off = yield* asked();
+        yield* setWorkspaceExperiment({
+          organizationId: task.workspaceId,
+          experiment: EXPERIMENT.REWIND_FILES,
+          on: true,
+          by: owner,
+        });
+        const unrecorded = yield* asked();
+
+        assert.deepEqual(
+          [off.status, off.body],
+          [HOSTED_HTTP_STATUS.BAD_REQUEST, { error: HOSTED_API_ERROR.INVALID_REQUEST }],
+        );
+        assert.deepEqual(
+          [unrecorded.status, unrecorded.body],
+          [HOSTED_HTTP_STATUS.CONFLICT, { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING }],
+        );
       }),
   );
 

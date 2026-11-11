@@ -23,6 +23,7 @@ import {
   needsYou as needsYouOf,
   readersItem,
 } from "@repo/features/inbox-list-model";
+import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import {
   INBOX_STATUS,
   type InboxItem,
@@ -78,9 +79,6 @@ import { useTaskAgent } from "./use-task-work.js";
  */
 const INBOX_ROW_DUE =
   "inbox-row-due inline-flex items-center gap-tight-gap text-accent-ink [&>svg]:size-caption-glyph";
-
-/** What a reminded row says to a reader before its time, the glyph being drawn for the eye alone. */
-const REMINDER_DUE = "Reminder";
 
 /** What a teammate's open item says to a reader beside their face, which is drawn for the eye alone: it waits on them, not the reader. */
 function waitingOn(starter: Actor): string {
@@ -437,7 +435,7 @@ export function InboxItemMarks({
       ) : (
         <span className={INBOX_ROW_DUE}>
           <GLYPH.TIME />
-          <VisuallyHidden>{REMINDER_DUE}</VisuallyHidden>
+          <VisuallyHidden>{REMIND_WORDS.DUE}</VisuallyHidden>
           <Time at={item.remindAt} look={TIME_LOOK.DUE} now={now} hint={false} />
         </span>
       )}

@@ -6,7 +6,6 @@ import {
 } from "@repo/features/agent-pictures-model";
 import type { FileChip } from "@repo/features/attachment-model";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
-import { holderTaskId } from "@repo/features/mention-holder";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -244,7 +243,7 @@ export function useAddToDescription(): ViewerAction | undefined {
   const queryClient = useQueryClient();
   const working = useWorkingToast();
   return useMemo(() => {
-    const taskId = holderTaskId(page?.holder);
+    const taskId = page?.holder?.taskId;
     if (!descriptionsOn || page === undefined || taskId === undefined || page.workspace === "") {
       return undefined;
     }

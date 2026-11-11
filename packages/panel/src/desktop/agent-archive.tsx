@@ -47,8 +47,8 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
 /**
  * agent-archive.tsx -- a coding agent's Archive, asked first while the agent still works, and the task's archived agents, each a row with its Unarchive, folded under Archived at the foot of a phone's Overview agents; the tab bar's History lists them as it lists a closed agent (`agent-history.tsx`).
  *
- * Archive stands in an agent's tab menu, and for an agent with no task in its page's ⋯ and its
- * sidebar row's menu, whose Unarchive stands in its place once archived
+ * Archive stands in an agent's tab menu and its sidebar row's menu, whose
+ * Unarchive stands in its place once archived
  * (`useAgentUnarchive`). An agent at rest is archived at once, since the
  * toast's Undo brings it back with its transcript. One still working, the
  * reader's own or a teammate's, asks first, in red, since archiving it

@@ -1040,16 +1040,13 @@ export function ShellPlaces(): React.JSX.Element {
   } = useShellPlaces();
   const { account } = settings;
   useFocusHandedBack(focusHolder);
-  const pageAgent = tasks.agentView.agentId;
   const bar = useBarStanding(tasks);
   const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = bar.inbox.chosen !== undefined;
   // A phone's task is headed by a row of its own, whose ⋯ stands for the panel's toggle (`task-pane-switcher.tsx`).
   const panelToggle =
-    (descriptionToggle && room !== SHELL_ROOM.NARROW) ||
-    pageAgent !== undefined ||
-    (inboxOpen && inboxItemShown);
+    (descriptionToggle && room !== SHELL_ROOM.NARROW) || (inboxOpen && inboxItemShown);
   // A phone's drawer is modal, as a phone's own drawers are: while it stands
   // over the work, the work is inert, so neither a screen reader nor a
   // keyboard reaches what the drawer covers, and a press there only puts it

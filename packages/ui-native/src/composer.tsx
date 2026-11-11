@@ -1,6 +1,14 @@
 // composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
 
-import { Button, HStack, Image, TextField, useNativeState, VStack } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  ProgressView,
+  TextField,
+  useNativeState,
+  VStack,
+} from "@expo/ui/swift-ui";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
@@ -13,6 +21,7 @@ import {
   lineLimit,
   padding,
   shapes,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BAR_RADIUS, GlassBar } from "./glass-bar.js";
@@ -43,13 +52,13 @@ type ComposerProps = {
   readonly onDictate?: (() => void) | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
   readonly onStop?: (() => void) | undefined;
-  /** Whether a Stop is out, which stands pressed and dimmed until the agent stops. */
+  /** Whether a Stop is out, which stands as the system's spinner in Stop's place until the agent stops. */
   readonly stopping?: boolean | undefined;
   /** What stands over the field inside the same glass: the messages queued behind the turn, the pictures attached, and what a send that did not go said. */
   readonly head?: ReactNode;
 };
 
-/** The round button at the field's end: Send, filled with the ink, or, while nothing is typed, Stop while a turn runs, else the mic. */
+/** The round button at the field's end: Send, filled with the ink once there is something to send and a faint well until then, or, while nothing is typed, Stop while a turn runs, the system's spinner once it is pressed, else the mic. */
 function SendButton({
   empty,
   onSend,
@@ -64,23 +73,27 @@ function SendButton({
   readonly stopping: boolean;
 }) {
   const colors = useColors();
+  if (empty && onStop !== undefined && stopping) {
+    return (
+      <ProgressView
+        modifiers={[
+          frame({ width: SEND_SIZE, height: SEND_SIZE }),
+          tint(colors.TEXT_MUTED),
+          accessibilityLabel("Stopping"),
+        ]}
+      />
+    );
+  }
   if (empty && onStop !== undefined) {
     return (
-      <Button
-        onPress={onStop}
-        modifiers={[
-          buttonStyle("plain"),
-          disabled(stopping),
-          accessibilityLabel(stopping ? "Stopping" : "Stop"),
-        ]}
-      >
+      <Button onPress={onStop} modifiers={[buttonStyle("plain"), accessibilityLabel("Stop")]}>
         <Image
           systemName="stop.fill"
           size={MARK_SIZE.GLYPH - 2}
           color={colors.GROUND}
           modifiers={[
             frame({ width: SEND_SIZE, height: SEND_SIZE }),
-            background(stopping ? colors.TEXT_MUTED : colors.TEXT, shapes.circle()),
+            background(colors.TEXT, shapes.circle()),
           ]}
         />
       </Button>
@@ -105,10 +118,10 @@ function SendButton({
       <Image
         systemName="arrow.up"
         size={MARK_SIZE.GLYPH + 2}
-        color={colors.GROUND}
+        color={empty ? colors.TEXT_MUTED : colors.GROUND}
         modifiers={[
           frame({ width: SEND_SIZE, height: SEND_SIZE }),
-          background(empty ? colors.TEXT_MUTED : colors.TEXT, shapes.circle()),
+          background(empty ? colors.CHIP_EDGE : colors.TEXT, shapes.circle()),
         ]}
       />
     </Button>

@@ -46,7 +46,7 @@ appId: dev.vespin.ios
 - tapOn: "Steer"
 - assertNotVisible:
     id: "ask-note"
-# Stop, with nothing typed, stands pressed until the agent stops.
+# Stop, with nothing typed, stands as the system's spinner until the agent stops.
 - tapOn: "Stop"
 - assertVisible: "Stopping"
 - waitForAnimationToEnd:

@@ -5,6 +5,7 @@
 export { hostDeviceWhen, readHostDevice, writeHostDevice } from "../host-device-record.js";
 export { HOST_DAEMON_END, hostDaemon, hostRefusedRest } from "./host-daemon.js";
 export { HOST_LEAVE_OUTCOME, leaveHostDevice } from "./host-leave.js";
+export { HOST_LOCK, hostLockTaken } from "./host-lock.js";
 export {
   DARWIN_HOST,
   type HostRuntime,

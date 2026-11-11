@@ -9,7 +9,7 @@
  * any time, where they mean Back and Forward elsewhere; once anything is
  * typed, ← and → move the caret, as in any text field. A press on a filter
  * chooses it. The palette ranks the rows itself with the one tiered scorer
- * (`@repo/ui/search-score`), so each kind keeps its own best few however
+ * (`@repo/features/search-score`), so each kind keeps its own best few however
  * many rows the others hold, and marks in each row what found it. Letters
  * typed in order find only a file and a command, whose words are typed by
  * their first letters, so "thm" finds no Theme setting.
@@ -68,6 +68,13 @@ import { type InboxListed, inboxItemWords } from "@repo/features/inbox-list-mode
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  hitRangesIn,
+  SEARCH_TIER,
+  type SearchHit,
+  type SearchSubject,
+  searchHit,
+} from "@repo/features/search-score";
 import {
   type MatchRange,
   matchesTokens,
@@ -146,13 +153,6 @@ import {
   type CommandGroup,
   type CommandItem,
 } from "@repo/ui/command";
-import {
-  hitRangesIn,
-  SEARCH_TIER,
-  type SearchHit,
-  type SearchSubject,
-  searchHit,
-} from "@repo/ui/search-score";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

@@ -52,7 +52,7 @@ interface RowSpec<Field extends string, Id extends AppSettingId> {
   id: Id;
   label: string;
   /** What the row cannot say for itself, drawn under its label; worded by the settings as they stand where it follows the choice. */
-  detail?: string | ((settings: AppSettingReader) => string);
+  detail?: string | ((settings: AppSettingReader) => string | undefined);
   page: SettingsPage;
   section?: SettingSection;
   order: number;
@@ -64,6 +64,15 @@ interface RowSpec<Field extends string, Id extends AppSettingId> {
 /** What a toggle declares of its own; the rest is fixed by its being a toggle. */
 interface ToggleSpec<Field extends string, Id extends AppSettingId> extends RowSpec<Field, Id> {
   default: boolean;
+}
+
+/** A row's line under its label as the settings stand, none where it says nothing for them. */
+function detailOf(
+  detail: RowSpec<string, AppSettingId>["detail"],
+  settings: AppSettingReader,
+): { detail: string } | undefined {
+  const worded = typeof detail === "function" ? detail(settings) : detail;
+  return worded === undefined ? undefined : { detail: worded };
 }
 
 /**
@@ -99,9 +108,7 @@ function rowEntry<Field extends string, Id extends AppSettingId>(
     describe: (settings) => ({
       id: spec.id,
       label: spec.label,
-      ...(spec.detail === undefined
-        ? undefined
-        : { detail: typeof spec.detail === "string" ? spec.detail : spec.detail(settings) }),
+      ...detailOf(spec.detail, settings),
       kind,
       value: value(settings),
     }),

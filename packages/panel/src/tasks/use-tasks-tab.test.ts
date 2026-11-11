@@ -2465,9 +2465,7 @@ test("a tab its strip no longer draws, its page gone since, is passed over for t
   act(() => panel().onChoose(pageTab(page.id)));
   act(() => panel().onClose(pageTab(page.id)));
   // The page is gone since: the task's pages, read again, hold none.
-  act(() =>
-    reads.deliverPages({ [PAGE_OWNER.TASK]: { [TASK.id]: { rows: [] } }, [PAGE_OWNER.AGENT]: {} }),
-  );
+  act(() => reads.deliverPages({ [PAGE_OWNER.TASK]: { [TASK.id]: { rows: [] } } }));
   await settle();
   await vi.waitFor(() => assert.equal(tab.control().pages?.length, 0));
 

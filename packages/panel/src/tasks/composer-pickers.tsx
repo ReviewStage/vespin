@@ -1,5 +1,4 @@
 import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
-import { holderTaskId } from "@repo/features/mention-holder";
 import { namedServers } from "@repo/ui/agent-servers-model";
 import type { ReactNode, RefObject } from "react";
 import type {
@@ -192,7 +191,7 @@ export function useComposerPickers({
                   : pastedMentionNode(words, taskMentions.doors.place, {
                       known,
                       taskIdOf,
-                      taskId: holderTaskId(taskMentions.holder),
+                      taskId: taskMentions.holder?.taskId,
                       text: taskMentions.text,
                     }),
             },

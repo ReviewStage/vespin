@@ -16,8 +16,8 @@
  * (`deviceAgentLayout`). A Mac whose release bundles a runner that keeps the
  * CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`), by the
  * host version it last called with, has it kept there, as a sandbox's is,
- * Codex's threads at their default under the agent's home named for the
- * mirror; an older one keeps its sessions on its disk alone. Either resumes
+ * its runner mirroring Codex's threads from their default under the
+ * machine's own home; an older one keeps its sessions on its disk alone. Either resumes
  * a session the store does not hold whole from its disk (`diskSessions`).
  * `launchRunner` queues the launch line, its runner's
  * environment and first lines sealed together under the deployment's key
@@ -83,6 +83,7 @@ import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_MACHINE, MAC_PRESENCE } from "@repo/features/agent-wire";
+import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_BOUNDS,
@@ -93,6 +94,7 @@ import {
   type DeviceAgentAnswer,
   type DeviceAgentLaunchPayload,
   type DeviceAgentObject,
+  type DeviceCapability,
   deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
   deviceAgentLaunchSecretsSchema,
@@ -127,6 +129,8 @@ import { heldUntil } from "../../http/held-read.js";
 import { agentCommitIdentity, type CheckoutServices } from "../coder-host/checkout.js";
 import {
   type AgentMachineService,
+  CHECKOUT_DIFF_OUTCOME,
+  type CheckoutDiffOutcome,
   type DeliveredCredentials,
   type FoundPlace,
   LaunchRefused,
@@ -161,9 +165,6 @@ export const MAC_MACHINE = {
    */
   TRANSCRIPTS_SINCE: "0.11.0",
 } as const;
-
-/** Codex's own folder under a home, where it keeps its threads unless `CODEX_HOME` names another. */
-const CODEX_DEFAULT_HOME = ".codex";
 
 /**
  * The machine over the Mac, and whether a session is a local agent's, which
@@ -334,9 +335,9 @@ function deviceMachineOver(
         sharedFiles: folders.temp,
         claudeExecutable: device.value.claudeExecutable,
         codexExecutable: device.value.codexExecutable ?? undefined,
-        // Note that a Mac's Codex keeps its threads at its default under the agent's own home, named
-        // only where the runner mirrors them, since the runner finds them by `CODEX_HOME` alone.
-        codexHome: kept ? [folders.home, CODEX_DEFAULT_HOME].join("/") : undefined,
+        // Note that a Mac's Codex keeps its threads and its login at its own default under the machine's
+        // home, which its runner finds by itself, so nothing names `CODEX_HOME` for it.
+        codexHome: undefined,
         // Note that the Mac's follower writes its lines to the stdin of the runner its release bundled.
         linesRead: false,
         transcriptsKept: kept,
@@ -435,15 +436,17 @@ function deviceMachineOver(
   /** The runner's exit as its launch line was settled, as `exitOfLine` reads it. */
   const exitOf = (pin: DeviceAgentPin, handle: RunnerHandle) => exitOfLine(pin, handle.command);
 
-  /** Whether the agent's Mac registered that it takes a restore line (`DEVICE_CAPABILITY.RESTORE_CHECKOUT`). */
-  const restoresCheckout = (pin: DeviceAgentPin) =>
+  /** Whether the agent's Mac registered the capability (`DEVICE_CAPABILITY`); a Mac removed registered none. */
+  const registered = (pin: DeviceAgentPin, capability: DeviceCapability) =>
     pin.deviceId === null
       ? Effect.succeed(false)
       : Effect.map(stored(deviceLayout(pin.userId, pin.deviceId)), (standing) =>
-          Option.exists(standing, (device) =>
-            device.capabilities.includes(DEVICE_CAPABILITY.RESTORE_CHECKOUT),
-          ),
+          Option.exists(standing, (device) => device.capabilities.includes(capability)),
         );
+
+  /** Whether the agent's Mac registered that it takes a restore line (`DEVICE_CAPABILITY.RESTORE_CHECKOUT`). */
+  const restoresCheckout = (pin: DeviceAgentPin) =>
+    registered(pin, DEVICE_CAPABILITY.RESTORE_CHECKOUT);
 
   /** Whether the agent's Mac registered that it launches an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   const signsInOwnGithub = (pin: DeviceAgentPin) =>
@@ -729,6 +732,35 @@ function deviceMachineOver(
         // A follower from before the line settles it with no exit, having acted on nothing.
         if (exit === COMMAND_GONE) return RESTORE_OUTCOME.UNSUPPORTED;
         return RESTORE_OUTCOME.FAILED;
+      }),
+
+    // A diff request the Mac's host answers with the script's exit and what it printed; a Mac whose host
+    // takes no such request diffs nothing, and one away is refused as every request to it is.
+    diffCheckout: (session, range) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+        const missing: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.MISSING };
+        if (Option.isNone(pin)) return missing;
+        yield* refuseAway(pin.value);
+        if (!(yield* registered(pin.value, DEVICE_CAPABILITY.DIFF_CHECKOUT))) {
+          const unsupported: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED };
+          return unsupported;
+        }
+        const answer = yield* asked(session, DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, {
+          from: range.from,
+          to: range.to,
+        });
+        if (answer.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return missing;
+        if (answer.exit === 0) {
+          const diffed: CheckoutDiffOutcome = {
+            outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
+            diff: answer.diff,
+          };
+          return diffed;
+        }
+        if (answer.exit === CHECKOUT_DIFF_EXIT.MISSING) return missing;
+        const failed: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
+        return failed;
       }),
 
     // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.

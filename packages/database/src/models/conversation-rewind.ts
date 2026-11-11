@@ -1,5 +1,5 @@
 import { MESSAGE_ROLE } from "@repo/wire";
-import { and, asc, eq, gt, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Clock, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -301,6 +301,8 @@ const findLineSnapshot = SqlSchema.findOneOption({
     messageId: Schema.String,
   }),
   Result: Schema.Struct({
+    turnId: Schema.String,
+    queuedAt: Schema.Date,
     commit: Schema.NullOr(Schema.String),
     head: Schema.NullOr(Schema.String),
     branch: Schema.NullOr(Schema.String),
@@ -309,6 +311,8 @@ const findLineSnapshot = SqlSchema.findOneOption({
     Database.use((db) =>
       db
         .select({
+          turnId: turns.id,
+          queuedAt: turns.queuedAt,
           commit: turns.snapshotCommit,
           head: turns.snapshotHead,
           branch: turns.snapshotBranch,
@@ -323,6 +327,34 @@ const findLineSnapshot = SqlSchema.findOneOption({
             eq(messages.role, MESSAGE_ROLE.USER),
           ),
         ),
+    ),
+});
+
+/** The first checkout a runner recorded before a later turn of the conversation than the one given, by the order the turns were queued in; none where no later turn recorded one. */
+const findNextSnapshot = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    turnId: Schema.String,
+    queuedAt: Schema.Date,
+  }),
+  Result: Schema.Struct({ commit: Schema.String }),
+  execute: ({ conversationId, turnId, queuedAt }) =>
+    Database.use((db) =>
+      db
+        .select({ commit: sql<string>`${turns.snapshotCommit}` })
+        .from(turns)
+        .where(
+          and(
+            eq(turns.conversationId, conversationId),
+            isNotNull(turns.snapshotCommit),
+            or(
+              gt(turns.queuedAt, queuedAt),
+              and(eq(turns.queuedAt, queuedAt), gt(turns.id, turnId)),
+            ),
+          ),
+        )
+        .orderBy(asc(turns.queuedAt), asc(turns.id))
+        .limit(1),
     ),
 });
 
@@ -515,6 +547,40 @@ export function readRewindSnapshot(
         : Option.some({ commit: row.commit, head: row.head, branch: row.branch }),
     ),
   );
+}
+
+/** The two checkouts a turn's changes stand between: the one its runner recorded before it, and the next one recorded, or null for the checkout as it stands. */
+export interface TurnCheckoutRange {
+  readonly from: string;
+  readonly to: string | null;
+}
+
+/**
+ * The checkouts the changes of the turn one of the account's own lines
+ * opened stand between: the one its runner recorded before the turn, and the
+ * first one recorded before a later turn, or none, where the checkout as it
+ * stands is the other side. Note that a later turn that recorded no checkout
+ * is passed over, as a turn that never started or whose snapshot missed, so
+ * what such a turn changed reads as this one's. None where the line awaits
+ * its turn or that turn recorded none.
+ */
+export function readTurnCheckoutRange(
+  target: ConversationTarget,
+  messageId: string,
+): Effect.Effect<Option.Option<TurnCheckoutRange>, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const line = yield* findLineSnapshot({ ...target, messageId });
+    if (Option.isNone(line) || line.value.commit === null) return Option.none();
+    const next = yield* findNextSnapshot({
+      conversationId: target.conversationId,
+      turnId: line.value.turnId,
+      queuedAt: line.value.queuedAt,
+    });
+    return Option.some({
+      from: line.value.commit,
+      to: Option.isSome(next) ? next.value.commit : null,
+    });
+  });
 }
 
 /**

@@ -52,14 +52,24 @@ class StandInAudioContext {
   createBuffer = (): StandInNode => new StandInNode();
   createBufferSource = (): StandInNode => new StandInNode();
   createConvolver = (): StandInNode => new StandInNode();
+  /** Decodes any bytes that open with a byte of one, as a clip a second long; refuses every other. */
+  decodeAudioData = (data: ArrayBuffer): Promise<{ duration: number }> =>
+    new Uint8Array(data)[0] === 1
+      ? Promise.resolve({ duration: 1 })
+      : Promise.reject(new Error("Unable to decode audio data"));
 }
 
-/** A fresh player, since its one audio context and its busy mark live as long as the module. */
+/** A fresh player module, since its one audio context, its busy mark, and its clip live as long as the module. */
+async function freshModule(): Promise<typeof import("./completion-sound.js")> {
+  vi.resetModules();
+  return await import("./completion-sound.js");
+}
+
+/** A fresh player. */
 async function freshPlayer(): Promise<
   typeof import("./completion-sound.js")["playCompletionSound"]
 > {
-  vi.resetModules();
-  return (await import("./completion-sound.js")).playCompletionSound;
+  return (await freshModule()).playCompletionSound;
 }
 
 describe("playCompletionSound", () => {
@@ -108,6 +118,26 @@ describe("playCompletionSound", () => {
     contextState = "running";
     play(COMPLETION_SOUND.CHIME);
     expect(started.length).toBeGreaterThan(0);
+  });
+
+  it("plays each sound's own clip once it decodes, and the chime while none has", async () => {
+    vi.stubGlobal("AudioContext", StandInAudioContext);
+    const { playCompletionSound: play, setCustomSoundClip } = await freshModule();
+
+    await setCustomSoundClip(COMPLETION_SOUND.CUSTOM, new Uint8Array([2]));
+    play(COMPLETION_SOUND.CUSTOM);
+    const chime = started.length;
+    expect(chime).toBeGreaterThan(1);
+
+    clock.now += 2;
+    await setCustomSoundClip(COMPLETION_SOUND.CUSTOM, new Uint8Array([1]));
+    play(COMPLETION_SOUND.CUSTOM);
+    expect(started).toHaveLength(chime + 1);
+
+    // The other sound's clip is its own, so with none handed in it still plays the chime.
+    clock.now += 2;
+    play(COMPLETION_SOUND.CUSTOM_ASK);
+    expect(started).toHaveLength(2 * chime + 1);
   });
 
   it("is silent, and throws nothing, where Web Audio is missing or refuses", async () => {

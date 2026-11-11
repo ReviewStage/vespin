@@ -2,9 +2,11 @@
  * wakeup-tool.ts -- `schedule_wakeup`: a coding agent's booking of a wakeup for later, on either harness.
  *
  * An agent waiting on something slow, its pull request's checks most of
- * all, books a prompt and a delay, ends its turn, and the scheduled sweep
- * hands the prompt back as a line of the agent's own once the delay has run
- * (`../../maintenance/wakeup-sweep.ts`), which opens its next turn. Note
+ * all, books a prompt and a delay, ends its turn, and a queue message
+ * delayed until then hands the prompt back as a line of the agent's own
+ * (`agent-wakeups.ts`), which opens its next turn. A booking the queue did
+ * not take is deleted and refused, so the agent books again rather than
+ * waiting on a wakeup that never comes. Note
  * that Claude Code's CLI is denied its own `ScheduleWakeup`
  * (`@repo/agent-runner`'s `CLAUDE_CODE_TOOLS`), because the runner would
  * hold the CLI, and so its sandbox, up for the whole wait, where this one
@@ -18,15 +20,19 @@
  * what it got.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
-import { bookAgentWakeup, cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
+import {
+  bookAgentWakeup,
+  cancelAgentWakeup,
+  deleteAgentWakeup,
+} from "@repo/database/models/agent-wakeups";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Clock, Effect, Result, Schema } from "effect";
+import { Clock, Duration, Effect, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { type AgentCall, agentToolRejected, callerAgent, orStoreRefusal } from "../agent-tools.js";
+import { type AgentWakeupServices, AgentWakeups } from "./agent-wakeups.js";
 
 /** The bounds a booked delay is held to, in seconds: Claude Code's own for `ScheduleWakeup`. */
 export const WAKEUP_DELAY = {
@@ -49,6 +55,7 @@ const WAKEUP_REFUSAL = {
   TOO_LONG: (length: number) =>
     `Not booked: the prompt is ${length} characters, over the ${WAKEUP_PROMPT_CHARS} one may spell; cut it to fit.`,
   NOT_AGENT: "Not booked: only a coding agent books a wakeup.",
+  NOT_PUBLISHED: "Not booked: the wakeup could not be scheduled just now; book it again.",
 } as const;
 
 const SCHEDULE_WAKEUP_INPUT = Schema.Struct({
@@ -128,13 +135,22 @@ function heldDelay(delaySeconds: number): number {
   return Math.min(WAKEUP_DELAY.MAX_SECONDS, Math.max(WAKEUP_DELAY.MIN_SECONDS, delaySeconds));
 }
 
-/** One booking for the agent: its wakeup replaced by one due the held delay from now, answering the instant and the delay held. */
+/** One booking for the agent: its wakeup replaced by one due the held delay from now and published to come then, answering the instant and the delay held, or deleted and refused where the queue did not take it. */
 const booked = (agent: Agent, delaySeconds: number, prompt: string) =>
   Effect.gen(function* () {
     const held = heldDelay(delaySeconds);
     const now = yield* Clock.currentTimeMillis;
     const at = new Date(now + held * SECOND_MS);
-    yield* bookAgentWakeup(agent.id, { at, prompt });
+    const wakeupId = yield* bookAgentWakeup(agent.id, { at, prompt });
+    const wakeups = yield* AgentWakeups;
+    const published = yield* Effect.result(
+      wakeups.publish({ wakeupId, delay: Duration.seconds(held) }),
+    );
+    if (Result.isFailure(published)) {
+      yield* Effect.logWarning(`a wakeup was not published: ${published.failure.reason}`);
+      yield* deleteAgentWakeup(wakeupId);
+      return agentToolRejected(WAKEUP_REFUSAL.NOT_PUBLISHED);
+    }
     const answer: WireRecord = {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       wakeup: { at: at.toISOString(), delaySeconds: held },
@@ -146,7 +162,7 @@ const booked = (agent: Agent, delaySeconds: number, prompt: string) =>
 export function runScheduleWakeup(
   call: AgentCall,
   input: UnparsedWireValue,
-): Effect.Effect<WireRecord, never, DatabaseServices> {
+): Effect.Effect<WireRecord, never, AgentWakeupServices> {
   const asked = readAsk(input);
   if (Result.isFailure(asked)) return Effect.succeed(agentToolRejected(asked.failure));
   const agent = callerAgent(call.caller);

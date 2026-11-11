@@ -188,10 +188,6 @@ test("each place over the plan names its step for itself, and Admin's as the pla
   assert.deepEqual(titled({}, "ADMIN"), { label: "Home" });
 });
 
-test("Back still reaches an agent's page once another workspace is listed than the one its address names", () => {
-  assert.equal(stepStands("/acme/agent/a", ACCESS, { ...THERE, listed: () => false }), true);
-});
-
 test.each([
   ["by its id", "/workspace-acme/automation/automation-1/runs", true],
   ["under another workspace", "/beta/automation/automation-1/runs", false],

@@ -35,6 +35,7 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { DEVICE_LAYOUT, expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
+import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -83,7 +84,7 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
-import { LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
+import { CHECKOUT_DIFF_OUTCOME, LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
 import { deviceMachine, MAC_MACHINE } from "./device-machine.js";
 
 const RING = `1:${Buffer.alloc(32, 7).toString("base64")}`;
@@ -358,6 +359,56 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             [],
             `the line ${third.id} is withdrawn`,
           );
+        }),
+    );
+
+    it.effect(
+      "a diff asks the agent's Mac for it with the two sides and answers what the script printed, and a Mac whose host takes no such request diffs nothing, asking none",
+      () =>
+        Effect.gen(function* () {
+          const { userId, deviceId, session } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const range = { from: "0123456789abcdef0123456789abcdef01234567", to: null };
+
+          assert.deepEqual(yield* machine.diffCheckout(session, range), {
+            outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED,
+          });
+          assert.deepEqual(yield* deviceAgentRequestsWaiting(userId, deviceId), []);
+
+          yield* registerDevice(userId, {
+            id: deviceId,
+            name: "Studio",
+            ...DEVICE_LAYOUT,
+            capabilities: [DEVICE_CAPABILITY.DIFF_CHECKOUT],
+          });
+          const diffing = yield* Effect.forkChild(machine.diffCheckout(session, range));
+          const request = yield* untilAsked(userId, deviceId);
+          assert.deepEqual(
+            [request.kind, request.args],
+            [DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, range],
+          );
+          yield* claimDeviceAgentRequest(userId, deviceId, request.id);
+          yield* answerDeviceAgentRequest(userId, deviceId, request.id, {
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            exit: 0,
+            diff: "diff --git a/x b/x\n",
+          });
+          yield* TestClock.adjust("1 second");
+          assert.deepEqual(yield* Fiber.join(diffing), {
+            outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
+            diff: "diff --git a/x b/x\n",
+          });
+
+          const gone = yield* Effect.forkChild(machine.diffCheckout(session, range));
+          const again = yield* untilAsked(userId, deviceId);
+          yield* claimDeviceAgentRequest(userId, deviceId, again.id);
+          yield* answerDeviceAgentRequest(userId, deviceId, again.id, {
+            kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+            exit: CHECKOUT_DIFF_EXIT.MISSING,
+            diff: "",
+          });
+          yield* TestClock.adjust("1 second");
+          assert.deepEqual(yield* Fiber.join(gone), { outcome: CHECKOUT_DIFF_OUTCOME.MISSING });
         }),
     );
 

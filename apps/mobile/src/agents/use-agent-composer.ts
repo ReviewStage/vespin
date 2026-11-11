@@ -44,10 +44,9 @@ import {
   selectInboxReader,
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
-import type { AttachedPicture, QueuedLine } from "@repo/ui-native";
+import { type AttachedPicture, BUZZ, buzz, type QueuedLine } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useEffect, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -78,11 +77,6 @@ interface Sending {
   readonly id: string;
   readonly words: string;
   readonly pictures: readonly Attached[];
-}
-
-/** Buzzes the phone as the system does for an outcome: a send taken, or one refused. */
-function buzz(type: NotificationFeedbackType): void {
-  notificationAsync(type).catch((error: unknown) => console.error("The buzz did not go.", error));
 }
 
 /** The pictures' attachments, in the order they were attached. */
@@ -122,6 +116,8 @@ export interface AgentComposer {
   /** Whether Send stands lit with no words typed: a picture is attached. */
   readonly sendable: boolean;
   readonly send: () => void;
+  /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
+  readonly sendQueues: boolean;
   readonly attached: readonly AttachedPicture[];
   readonly attach: () => void;
   readonly detach: (id: string) => void;
@@ -143,13 +139,15 @@ export interface AgentComposer {
  * The composer of the agent `agentId` names, whose followed row is `agent`
  * and whose transcript the page holds as `transcript`. Only the agent's
  * starter may change its queue, as the service holds, so a teammate's
- * Send never queues and their queue offers no Steer or Delete.
+ * Send never queues and their queue offers no Steer or Delete. `onMessage`
+ * hears each message sent straight to the agent, and whether it was taken.
  */
 export function useAgentComposer(
   agentId: string,
   agent: FollowedAgent | undefined,
   transcript: AppTranscript | undefined,
   status: AgentStatus | undefined,
+  onMessage?: (taken: Promise<boolean>) => void,
 ): AgentComposer {
   const acts = useHostActs();
   const { data: enterQueues = false } = useQuery({
@@ -167,6 +165,8 @@ export function useAgentComposer(
   const starter = agent?.startedBy;
   const controlsQueue =
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
+  // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
+  const sendQueues = writing && enterQueues && controlsQueue;
   // A Stop stands pressed until the agent stops writing.
   useEffect(() => {
     if (!writing) setStopping(false);
@@ -177,11 +177,11 @@ export function useAgentComposer(
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
     setPictures((held) => [...sent.pictures, ...held]);
     setNote(refusal);
-    buzz(NotificationFeedbackType.Error);
+    buzz(BUZZ.ERROR);
   };
   const settled = (sent: Sending) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
-    buzz(NotificationFeedbackType.Success);
+    buzz(BUZZ.SUCCESS);
   };
   const send = () => {
     const text = words.trim();
@@ -189,7 +189,7 @@ export function useAgentComposer(
     const refusal = pictureRefusal(pictures);
     if (refusal !== undefined) {
       setNote(refusal);
-      buzz(NotificationFeedbackType.Warning);
+      buzz(BUZZ.WARNING);
       return;
     }
     const sent: Sending = { id: randomUUID(), words: text, pictures };
@@ -198,7 +198,7 @@ export function useAgentComposer(
     setWords("");
     setPictures([]);
     setNote(undefined);
-    if (writing && enterQueues && controlsQueue) {
+    if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
       acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change })
         .then((answer) => {
@@ -211,7 +211,19 @@ export function useAgentComposer(
         });
       return;
     }
-    acts[ACT_KIND.AGENTS_MESSAGE]({ agentId, text, clientKey: sent.id, ...attachments })
+    const message = acts[ACT_KIND.AGENTS_MESSAGE]({
+      agentId,
+      text,
+      clientKey: sent.id,
+      ...attachments,
+    });
+    onMessage?.(
+      message.then(
+        (answer) => !("failure" in answer),
+        () => false,
+      ),
+    );
+    message
       .then((answer) => {
         if ("failure" in answer) handBack(sent, messageFailureWords(answer.failure));
         else settled(sent);
@@ -271,7 +283,7 @@ export function useAgentComposer(
         console.error("The stop did not go.", error);
         setStopping(false);
         setNote(STOP_FAILED);
-        buzz(NotificationFeedbackType.Error);
+        buzz(BUZZ.ERROR);
       });
   };
   const change = (next: AgentQueueChange) => {
@@ -304,6 +316,7 @@ export function useAgentComposer(
   ];
   return {
     placeholder: PLACEHOLDER,
+    sendQueues,
     words,
     onWords: (typed) => {
       setWords(typed);

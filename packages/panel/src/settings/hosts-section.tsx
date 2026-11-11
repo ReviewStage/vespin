@@ -271,7 +271,7 @@ function deleteFoldersWords(count: number): { readonly label: string; readonly d
 }
 
 /** What Remove says goes, whatever the machine: the host removes itself from the machine as it hears so (`apps/host`'s `removeItself`). */
-const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, its agents' folders included. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
+const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, keeping its agents' folders in ~/.vespin/agents. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
 
 /** What Remove adds for a host that reads offline, which hears it was removed only once it is online again, and the command for one that never is. */
 const REMOVED_OFFLINE =

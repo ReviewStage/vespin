@@ -37,12 +37,20 @@ export { EmptyState } from "./empty-state.js";
 export { MenuPickRow, WordsField } from "./form-rows.js";
 export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
+export { BUZZ, type Buzz, buzz } from "./haptics.js";
+export {
+  HELD_ANSWER,
+  type HeldAnswer,
+  type HeldCall,
+  HeldCallBanner,
+} from "./held-call.js";
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 export {
   ListRow,
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowSubmenu,
   TaskRow,
 } from "./list-row.js";
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
@@ -72,6 +80,7 @@ export {
   REVIEW_LOOK,
 } from "./pull-request-look.js";
 export { ConfirmAsk, MarkRow, PullRequestHead, WriteNoteRow } from "./pull-request-page.js";
+export { RemindSheet } from "./remind-sheet.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
 export { ScreenFailure } from "./screen-failure.js";
@@ -117,7 +126,7 @@ export {
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 export { MARK_SIZE, SPACE } from "./tokens/space.js";
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
-export { AgentHead, AgentTranscript } from "./transcript.js";
+export { AgentHead, AgentTranscript, type OlderPages } from "./transcript.js";
 export {
   NO_TOGGLES,
   shownMediaIds,

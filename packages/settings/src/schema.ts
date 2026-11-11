@@ -7,6 +7,7 @@ import {
   COMPLETION_SOUND_LABEL,
   COMPLETION_SOUNDS,
   isAppSettingId,
+  isCustomCompletionSound,
 } from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import {
@@ -38,6 +39,14 @@ import {
   INLINE_DIFF,
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
+import {
+  isKeepAwake,
+  KEEP_AWAKE_DEFAULT,
+  KEEP_AWAKE_DETAIL,
+  KEEP_AWAKE_LABEL,
+  KEEP_AWAKE_LIST,
+  KEEP_AWAKE_OPTION_LABEL,
+} from "./keep-awake.js";
 import {
   isMacCommandMode,
   MAC_COMMAND_MODE,
@@ -118,6 +127,15 @@ function oneOf<Value extends string>(values: readonly Value[]) {
   const reads = Schema.is(Schema.Literals(values));
   return (value: UnparsedWireValue): value is Value => reads(value);
 }
+
+/** The sounds a recipe plays, every one but the account's own clips. */
+const RECIPE_SOUNDS = COMPLETION_SOUNDS.filter((sound) => !isCustomCompletionSound(sound));
+
+/** The sounds an agent's finish may play: the account's own finish clip first, as its menu lists it under Yours, then every recipe. */
+const FINISH_SOUNDS = [COMPLETION_SOUND.CUSTOM, ...RECIPE_SOUNDS];
+
+/** The sounds something that needs the account may play: its own ask clip first, then every recipe. */
+const ASK_SOUNDS = [COMPLETION_SOUND.CUSTOM_ASK, ...RECIPE_SOUNDS];
 
 const DIFF_LAYOUT_LIST = Object.values(DIFF_LAYOUT);
 const DIFF_INDICATORS_LIST = Object.values(DIFF_INDICATORS);
@@ -215,6 +233,30 @@ export const APP_SETTING_SCHEMA = {
     page: SETTINGS_PAGE.THIS_MAC,
     order: 2,
     // Nothing to run per write: the host reads the setting before each read for commands and as each command is about to run.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  /*
+   * Whether This Mac's host keeps the Mac awake for its agents. Kept on
+   * this device, since the Mac is the device's; the app hands it to the
+   * host in the host's own state (`@repo/host`'s `keep-awake-record.ts`).
+   */
+  keepAwake: choiceSetting({
+    field: "keepAwake",
+    id: APP_SETTING_ID.KEEP_AWAKE,
+    label: KEEP_AWAKE_LABEL,
+    detail: (settings) =>
+      KEEP_AWAKE_DETAIL[
+        KEEP_AWAKE_LIST.find((choice) => choice === settings("keepAwake")) ?? KEEP_AWAKE_DEFAULT
+      ],
+    values: KEEP_AWAKE_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => KEEP_AWAKE_OPTION_LABEL[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isKeepAwake),
+    default: KEEP_AWAKE_DEFAULT,
+    page: SETTINGS_PAGE.THIS_MAC,
+    order: 3,
+    visible: desktopAppDrawn,
+    // Nothing to run per write: This Mac's host is handed the choice as the settings are told again.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
   /*
@@ -417,10 +459,10 @@ export const APP_SETTING_SCHEMA = {
     field: "completionSound",
     id: APP_SETTING_ID.COMPLETION_SOUND,
     label: "When an agent finishes",
-    values: COMPLETION_SOUNDS,
+    values: FINISH_SOUNDS,
     token: (sound) => sound,
     optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
-    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(FINISH_SOUNDS)),
     default: COMPLETION_SOUND.CHIME,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.NOTIFICATIONS,
@@ -435,10 +477,10 @@ export const APP_SETTING_SCHEMA = {
     id: APP_SETTING_ID.ASK_SOUND,
     label: "When something needs you",
     detail: "A question for you, or a command waiting on your Mac",
-    values: COMPLETION_SOUNDS,
+    values: ASK_SOUNDS,
     token: (sound) => sound,
     optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
-    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(ASK_SOUNDS)),
     default: COMPLETION_SOUND.KNOCK,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.NOTIFICATIONS,

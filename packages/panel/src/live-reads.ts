@@ -203,11 +203,8 @@ const LIVE_FOLLOWS: { readonly [Read in LiveReadName]?: LiveFollow } = {
       workspaceId: String(workspaceId),
       address: String(address),
     }),
-  [LIVE_READ.PAGES]: ([owner, id = ""]) =>
-    askAct(
-      ACT_KIND.TASKS_PAGES_FOLLOW,
-      owner === PAGE_OWNER.TASK ? { taskId: String(id) } : { agentId: String(id) },
-    ),
+  [LIVE_READ.PAGES]: ([_owner, id = ""]) =>
+    askAct(ACT_KIND.TASKS_PAGES_FOLLOW, { taskId: String(id) }),
   [LIVE_READ.BROWSER_TABS]: ([kind, id = ""]) =>
     askAct(
       ACT_KIND.TASKS_BROWSER_TABS_FOLLOW,
@@ -498,7 +495,7 @@ export const hostsQuery = (accountId: string | undefined) =>
 export const thisMacHostQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.THIS_MAC_HOST, accountIds(accountId));
 
-/** The run that started one agent, by the agent, which its page holds. */
+/** The run that started one agent, by the agent, which its tab holds. */
 export const agentOriginQuery = (agentId: string | undefined) =>
   liveReadQuery(LIVE_READ.AGENT_ORIGINS, agentId === undefined ? undefined : [agentId]);
 
@@ -531,16 +528,9 @@ export const transcriptQuery = (transcript: AgentTranscriptKey | undefined) =>
 export const historyQuery = (taskId: string | undefined) =>
   liveReadQuery(LIVE_READ.HISTORY, taskId === undefined ? undefined : [taskId]);
 
-/** One task's pages, or one agent's on no task, by its place; none offers Try again, since the host reads them again on its own. */
+/** One task's pages, by its place; none offers Try again, since the host reads them again on its own. */
 export const pagesQuery = (place: PagePlace | undefined) =>
-  liveReadQuery(
-    LIVE_READ.PAGES,
-    place === undefined
-      ? undefined
-      : "taskId" in place
-        ? [PAGE_OWNER.TASK, place.taskId]
-        : [PAGE_OWNER.AGENT, place.agentId],
-  );
+  liveReadQuery(LIVE_READ.PAGES, place === undefined ? undefined : [PAGE_OWNER.TASK, place.taskId]);
 
 /** One task's cloud Browser tabs, every one of its agents', or one agent's, by its place; none offers Try again, since the host reads them again on its own. */
 export const browserTabsQuery = (place: BrowserTabsPlace | undefined) =>

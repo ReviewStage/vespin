@@ -15,7 +15,6 @@ import {
 import { CHECKOUT_RESTORE_SCRIPT, checkoutRestoreEnv } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_LINE_KIND,
-  DEVICE_GITHUB_ACCESS,
   DEVICE_LAUNCH_STEP,
   DEVICE_LAUNCH_UNSTARTED,
   DEVICE_SETUP,
@@ -33,10 +32,8 @@ import {
   deviceAgentStdinPayloadSchema,
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
-import { GITHUB_TOKEN_REFRESH } from "@repo/features/host-wire";
 import { cappedExponential } from "@repo/wire/effect";
 import {
-  Clock,
   Config,
   Duration,
   Effect,
@@ -61,19 +58,16 @@ import { ChildProcess, type ChildProcessSpawner } from "effect/process";
 import type { Composer } from "./composer.js";
 import { Environment, LocalAgentPlatform, Reporter } from "./effect/seams.js";
 import type { HostKernel } from "./host-kernel.js";
-import {
-  AGENT_GIT_HELPER_SCRIPT,
-  agentFoldersMade,
-  agentGitHelperEnv,
-  agentGithubEnv,
-  agentGithubForgotten,
-  agentGithubWritten,
-  agentOnBox,
-  agentOwnSignInWritten,
-} from "./local-agent-box.js";
+import { agentOnBox } from "./local-agent-box.js";
 import { LAUNCH_NOTE, notedFirstLines, sessionResumed } from "./local-agent-first-lines.js";
 import { answeredLocalAgentRequest } from "./local-agent-requests.js";
-import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-state.js";
+import {
+  forgetOwnedAgent,
+  forgetRunnerGroup,
+  keepOwnedAgent,
+  keepRunnerGroup,
+  ownedAgents,
+} from "./local-agent-state.js";
 
 /**
  * compose-local-agents.ts -- runs on this device the coding agents the account starts on it, each straight on the box in a folder of its own: their runners started, fed, and stopped as the service's lines say, and their tools' reads and commands answered, for as long as its gate stands (`LocalAgentsDependencies.switchedOn`: open but while the service refuses the device, `daemon/host-standing.ts`).
@@ -91,9 +85,8 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  * all, and is tried again `SETUP_RETRY` later, for as long as the gate
  * stands. Once it has them it registers with
  * its home folder and the Claude Code and Codex its agents run on
- * (`LocalAgentPlatformSeam.tools`); no login of the device's is what its
- * agents' harnesses run on, so every launch carries the sign-in saved in the
- * account.
+ * (`LocalAgentPlatformSeam.tools`), which run on the logins signed in on the
+ * device, never a sign-in saved in the account.
  * Then it beats every `BEAT_EVERY` from then on, while it lets go of what the
  * run before left and while it follows, each beat given `BEAT_DEADLINE` to
  * be answered, on a fiber of its own, so nothing the device does with an
@@ -112,8 +105,7 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  * box's shared clone under its folder (`deviceAgentLayout`) where it has
  * none, through the platform's script, sets in the clone's config who the
  * agent's commits are by where the line says, as a cloud checkout sets it
- * (`@repo/features/checkout-identity`), and gh's credential helper, and
- * starts the runner (`LocalAgentPlatformSeam.launch`), with the claim's
+ * (`@repo/features/checkout-identity`), and starts the runner (`LocalAgentPlatformSeam.launch`), with the claim's
  * secrets in its environment and nowhere else, never a file, an argument, or
  * a log, and its first lines on its stdin; its line is settled with the
  * runner's exit code once it exits. As it goes, it reports on its line the
@@ -138,41 +130,35 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  *
  * Every host runs its agents straight on the box: the runner is a child of
  * the host's own process, the leader of a process group of its own, on the
- * host's own Node and the CLIs it keeps, as its user, in the agent's folder, with the
- * agent's home and caches there (`local-agent-box.ts`). Stopping it signals
+ * host's own Node and the CLIs it keeps, as its user, in the agent's folder, on the
+ * box user's own home and logins (`local-agent-box.ts`). Stopping it signals
  * its group alone, and kills the group once `KILL_GRACE` has passed, so
- * nothing of the host's or of any other agent's is stopped with it. Its
- * folder lives as long as the agent: a turn's end lets go of its GitHub
- * token and empties its `tmp`, and the next turn's runner goes on from the
- * rest, its repository and its harness's session, until the agent's
- * discard line removes it, and nothing else does. An agent whose discard
+ * nothing of the host's or of any other agent's is stopped with it. The
+ * group is kept in the machine's state while it runs (`keepRunnerGroup`),
+ * so one that outlived a daemon killed outright is ended as the next
+ * daemon starts (`daemon/host-runners-left.ts`). Its
+ * folder lives as long as the agent: a turn's end empties its `tmp`, and
+ * the next turn's runner goes on from the rest, its repository, and its
+ * harness's session in the box user's own home, until the agent's discard
+ * line removes it, and nothing else does. An agent whose discard
  * line never reached the device, as one archived while the device was away
  * for longer than its line waits, keeps its folder until it is removed by
  * hand. A launch that finds none of the agent's work in its folder, as an
  * agent brought back after its discard does, and would continue a
  * harness's session, starts the agent afresh with none, from a repository
  * made anew, rebuilt from its snapshot where its discard saved one on this
- * box, and tells it so (`LAUNCH_NOTE.CLEARED`). For an
- * agent working in a repository, the device asks the service for an
- * installation token before the repository is made, and again once the
- * last is `GITHUB_TOKEN_REFRESH` old by the wall clock, read every minute,
- * while its runner runs, since such a token lasts an hour and a turn can
- * last a day, and a sleeping machine stretches a long wait but not the
- * hour; it writes it into gh's config in the agent's home, which its `gh`
- * and its repository's `git` read on every call, so a renewal reaches a
- * turn already running. An agent whose repository is reached on its
- * starter's own token (`DEVICE_GITHUB_ACCESS.TOKEN`), which never leaves
- * the service for a device, is handed no token and none is renewed: it
- * reaches GitHub as whoever is signed in on the box, its home's Git
- * settings and gh config set to the box user's own and their SSH agent
- * handed on (`local-agent-box.ts`'s `agentOwnSignInWritten`), its
- * repository made in the host's own environment, and no gh helper set in
- * it. Before its repository is made, the launch checks as the agent that
- * the box's sign-in reaches the repository, prompting for nothing
+ * box, and tells it so (`LAUNCH_NOTE.CLEARED`). An
+ * agent working in a repository reaches GitHub as whoever is signed in on
+ * the box, through the box user's own Git settings, gh sign-in, and SSH
+ * agent, which is handed on; the device is handed no GitHub token for it,
+ * and its repository is made in the host's own environment. Before its
+ * repository is made, the launch checks that the box's sign-in reaches the
+ * repository, prompting for nothing
  * (`LocalAgentPlatformSeam.repositoryReachedScript`), and a launch it does
  * not reach is settled as not started for that reason
  * (`DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN`), which its transcript words as
- * signing in with `gh auth login` or setting up SSH.
+ * signing in with `gh auth login` or setting up SSH; a launch whose
+ * worktree already stands is not checked again.
  *
  * A runner ends with the host, or with the gate, so none runs as the gate
  * opens, and every agent this machine made (`ownedAgents`) has its turn let
@@ -244,8 +230,6 @@ const WORKTREE_DEADLINE = Duration.minutes(25);
 const RESTORE_DEADLINE = Duration.minutes(2);
 /** The exit code a launch is settled with where its worktree could not be made or its runner started. */
 const NOT_STARTED = 1;
-/** How often an agent's GitHub token's age is read off the wall clock, and so how soon one the service did not hand is asked for again, well inside the hour the last one lasts. */
-const GITHUB_TOKEN_CHECK = Duration.minutes(1);
 /** How long the check that the box's own GitHub sign-in reaches an agent's repository may take, its own steps bounded sooner, before the launch is given up as unreached. */
 const SIGN_IN_CHECK_DEADLINE = Duration.minutes(2);
 
@@ -285,7 +269,6 @@ type LocalAgentClient = Pick<
   | "requests"
   | "claimRequest"
   | "answerRequest"
-  | "githubToken"
 >;
 
 /**
@@ -313,6 +296,8 @@ export interface LocalAgentsDependencies {
   client: LocalAgentClient;
   /** The host's update of itself, where it runs from an account install's releases; none where it takes no notice of a newer release. */
   update?: LocalAgentsUpdate | undefined;
+  /** Set to whether any runner runs, each time one starts or ends, as the host keeping its Mac awake reads it (`daemon/host-keep-awake.ts`); none where nothing reads it. */
+  working?: SubscriptionRef.SubscriptionRef<boolean> | undefined;
 }
 
 /** A runner this Mac started: the launch line it settles, its stdin, and the process it is. */
@@ -366,7 +351,7 @@ export function composeLocalAgents(
       const value = yield* Effect.orDie(Config.option(Config.String(name)).parse(environment));
       if (Option.isSome(value)) handedOn[name] = value.value;
     }
-    /** The host user's SSH agent, handed on only to an agent on the box's own GitHub sign-in, whose Git may reach GitHub over SSH with the keys it holds. */
+    /** The host user's SSH agent, handed on to every agent, whose Git may reach GitHub over SSH with the keys it holds. */
     const sshAgent = Option.match(
       yield* Effect.orDie(Config.option(Config.String(VARIABLE.SSH_AUTH_SOCK)).parse(environment)),
       {
@@ -393,15 +378,10 @@ export function composeLocalAgents(
 
     /**
      * The end of one of the agent's turns, whatever ended it, a run that
-     * died with the host or the gate among it: its GitHub token let go of,
-     * since no turn reads it any more, and its `tmp` emptied; the rest of
-     * its folder, its repository, home and caches, stays for its next turn.
+     * died with the host or the gate among it: its `tmp` emptied; the rest
+     * of its folder, its repository among it, stays for its next turn.
      */
-    const turnLetGo = (layout: DeviceAgentLayout) =>
-      Effect.gen(function* () {
-        yield* agentGithubForgotten(layout.folder);
-        yield* tempEmptied(layout);
-      });
+    const turnLetGo = tempEmptied;
 
     // -- the gate --------------------------------------------------------------
 
@@ -543,6 +523,18 @@ export function composeLocalAgents(
         const workers = yield* FiberMap.make<string>();
         const mailboxes = new Map<string, Queue.Queue<DeviceAgentClaimedLine>>();
         const runners = new Map<string, Runner>();
+        /** Whether any runner runs, told where the host reads it. */
+        const workingTold = Effect.suspend(() =>
+          dependencies.working === undefined
+            ? Effect.void
+            : SubscriptionRef.set(dependencies.working, runners.size > 0),
+        );
+        // Note that a follow that ends leaves no runner running, whatever its runners' own exits got to say.
+        yield* Effect.addFinalizer(() =>
+          dependencies.working === undefined
+            ? Effect.void
+            : SubscriptionRef.set(dependencies.working, false),
+        );
         /** The launch lines no beat settles: those claimed and handed to their agents whose runners are not yet running or settled unstarted, and those whose runner ended until its settle is answered. */
         const starting = new Set<string>();
         /** Held by each claim and by a beat's settle of a launch the device runs nothing for, so neither runs while the other is unanswered. */
@@ -575,17 +567,16 @@ export function composeLocalAgents(
           asked(client.settleLine(deviceId, id, NOT_STARTED, unstarted));
 
         /**
-         * The agent's worktree made where it has none, reading the
-         * agent's GitHub token where it has one through gh's helper, never
-         * the token itself, and `fetching` run just before its script: a
-         * folder for an agent with no repository.
+         * The agent's worktree made where it has none, in the host's own
+         * environment, which reaches GitHub on the box user's own sign-in,
+         * and `fetching` run just before its script: a folder for an agent
+         * with no repository.
          */
         const madeWorktree = (
           agentId: string,
           layout: DeviceAgentLayout,
           repository: string | null,
           branch: string | null,
-          github: Readonly<Record<string, string>> | undefined,
           fetching: Effect.Effect<void>,
         ) =>
           Effect.gen(function* () {
@@ -607,7 +598,6 @@ export function composeLocalAgents(
               Effect.flatMap(
                 ChildProcess.make("/bin/bash", ["-c", script], {
                   cwd: folder,
-                  ...(github === undefined ? undefined : { env: { ...github }, extendEnv: true }),
                   stdin: "ignore",
                   stdout: "ignore",
                   stderr: "ignore",
@@ -627,39 +617,22 @@ export function composeLocalAgents(
 
         /**
          * Who the agent's commits are by, as the service settled it, set by
-         * the step a cloud checkout sets it with (`CHECKOUT_IDENTITY_SCRIPT`),
-         * where the line names one, and gh's credential helper beside it
-         * (`AGENT_GIT_HELPER_SCRIPT`), so the worktree's every `git` reads the
-         * token gh's config holds; whether both were. Both are set in the
-         * shared clone's config, which every worktree of it reads, and which
-         * holds the same for every agent of the box: its owner's identity,
-         * and a helper that reads gh's config in whichever agent's home runs
-         * it. A folder made before worktrees has them set in its own
-         * repository's config. Note that it runs as the agent, in its
-         * worktree with its home and caches in its folder, never as the
-         * device's own git, which a repository the agent rigged could steer;
-         * and on every launch, since a clone made before the launch line
-         * carried an identity holds none. An agent on the box's own GitHub
-         * sign-in has no helper set (`withHelper`), so its Git reads the
-         * box user's own.
+         * the step a cloud checkout sets it with (`CHECKOUT_IDENTITY_SCRIPT`);
+         * whether it was. It is set in the shared clone's config, which every
+         * worktree of it reads, and which holds the same for every agent of
+         * the box: its owner's identity, read over the box user's own. Note
+         * that it runs as the agent, in its worktree, never as the device's
+         * own git, which a repository the agent rigged could steer; and on
+         * every launch, since a clone made before the launch line carried an
+         * identity holds none.
          */
-        const checkoutSet = (
-          layout: DeviceAgentLayout,
-          identity: CheckoutIdentity | undefined,
-          withHelper: boolean,
-        ) => {
-          const script = [
-            ...(identity === undefined ? [] : [CHECKOUT_IDENTITY_SCRIPT]),
-            ...(withHelper ? [AGENT_GIT_HELPER_SCRIPT] : []),
-            "true",
-          ].join("\n");
-          const env = {
-            ...shellVariables,
-            ...(identity === undefined ? {} : checkoutIdentityEnv(identity)),
-            ...(withHelper ? agentGitHelperEnv(platform.clis.paths.gh) : {}),
-          };
+        const identitySet = (layout: DeviceAgentLayout, identity: CheckoutIdentity) => {
           const run = agentOnBox(
-            { folder: layout.folder, command: "/bin/bash", args: ["-c", script], env },
+            {
+              command: "/bin/bash",
+              args: ["-c", CHECKOUT_IDENTITY_SCRIPT],
+              env: { ...shellVariables, ...checkoutIdentityEnv(identity) },
+            },
             platform.clis.paths.gh,
           );
           return Effect.scoped(
@@ -682,68 +655,15 @@ export function composeLocalAgents(
         };
 
         /**
-         * A fresh token for the agent's repository from the service, written
-         * into gh's config in the agent's home, which its `gh` and `git` read
-         * on every call (`agentGithubWritten`); whether it was. A token
-         * refused or unanswered is reported in those words alone.
+         * Whether the box's own GitHub sign-in reaches the agent's
+         * repository: `repositoryReachedScript` run in the box user's home
+         * with their SSH agent, prompting for nothing, within
+         * `SIGN_IN_CHECK_DEADLINE`. Nothing it prints is kept.
          */
-        const gaveGithubToken = (agentId: string) =>
+        const signInReaches = (repository: string) =>
           Effect.gen(function* () {
-            const token = yield* asked(client.githubToken(agentId));
-            if (token === undefined) return false;
-            yield* agentGithubWritten(deviceAgentLayout(folder, agentId).folder, token);
-            return true;
-          }).pipe(
-            Effect.orElseSucceed(() => false),
-            Effect.tap((had) =>
-              had
-                ? Effect.void
-                : Effect.sync(() => report("a local agent's GitHub token was not had")),
-            ),
-          );
-
-        /**
-         * The agent's GitHub token renewed once the last one had is
-         * `GITHUB_TOKEN_REFRESH` old, or a minute after one that was not had,
-         * for as long as it runs. Note that its age is read off the wall
-         * clock every `GITHUB_TOKEN_CHECK`, never waited out in one sleep,
-         * because a machine asleep stretches a wait but not the token's hour.
-         */
-        const renewingGithub = (
-          agentId: string,
-          had: boolean,
-        ): Effect.Effect<never, never, FileSystem.FileSystem> =>
-          Effect.gen(function* () {
-            let hadAt = had ? yield* Clock.currentTimeMillis : undefined;
-            for (;;) {
-              yield* Effect.sleep(GITHUB_TOKEN_CHECK);
-              const now = yield* Clock.currentTimeMillis;
-              if (hadAt !== undefined && now - hadAt < Duration.toMillis(GITHUB_TOKEN_REFRESH)) {
-                continue;
-              }
-              if (yield* gaveGithubToken(agentId)) hadAt = now;
-            }
-          });
-
-        /**
-         * Whether the box's own GitHub sign-in reaches the repository of an
-         * agent on its starter's own token, checked as the agent: its home's
-         * Git settings and gh config set to the box user's own first
-         * (`agentOwnSignInWritten`), then `repositoryReachedScript` run in
-         * its folder with its home and the box user's SSH agent, prompting
-         * for nothing, within `SIGN_IN_CHECK_DEADLINE`. Nothing it prints is
-         * kept.
-         */
-        const ownSignInReaches = (layout: DeviceAgentLayout, repository: string) =>
-          Effect.gen(function* () {
-            yield* agentFoldersMade(layout.folder, {
-              stateRoot: kernel.stateRoot,
-              platform: platform.devicePlatform,
-            });
-            yield* agentOwnSignInWritten(layout.folder, folder);
             const run = agentOnBox(
               {
-                folder: layout.folder,
                 command: "/bin/bash",
                 args: ["-c", platform.repositoryReachedScript(repository)],
                 env: { ...shellVariables, ...sshAgent },
@@ -753,7 +673,7 @@ export function composeLocalAgents(
             const code = yield* Effect.scoped(
               Effect.flatMap(
                 ChildProcess.make(run.command, [...run.args], {
-                  cwd: layout.folder,
+                  cwd: folder,
                   env: run.env,
                   extendEnv: false,
                   stdin: "ignore",
@@ -802,78 +722,56 @@ export function composeLocalAgents(
             ) {
               return yield* notStarted(line.id);
             }
-            const { repository } = payload.value;
+            const { repository, identity } = payload.value;
             const withRepository = repository !== null;
-            // Note that an agent on its starter's own token is handed no token, since that token never leaves the service, and reaches GitHub on the box's own sign-in instead.
-            const onOwnSignIn =
-              withRepository && payload.value.githubAccess === DEVICE_GITHUB_ACCESS.TOKEN;
-            const withToken = withRepository && !onOwnSignIn;
             // Note that the agent is kept as this machine's before its folder is made, so an uninstall finds whatever a launch cut off left.
             yield* keepOwnedAgent(kernel.stateRoot, agentId);
-            const cleared =
-              sessionResumed(secrets.stdin) && !(yield* workExists(layout, withRepository));
+            const worked = yield* workExists(layout, withRepository);
+            const cleared = sessionResumed(secrets.stdin) && !worked;
             if (cleared) {
               report("a local agent's folder was cleared since its last turn, so it starts afresh");
             }
-            // Note that the token is had before the repository is made, since the clone reads it too, through gh's helper.
-            const hadToken = withToken && (yield* gaveGithubToken(agentId));
-            // Note that the box's own sign-in is checked before the repository is made, so a sign-in that cannot reach it fails the launch in words of its own rather than as a fetch.
-            if (onOwnSignIn && !(yield* ownSignInReaches(layout, repository))) {
+            // Note that the box's own sign-in is checked only where the repository is to be made, so a sign-in that cannot reach it fails the launch in words of its own rather than as a fetch, and a later turn's launch on the worktree that stands waits on no network.
+            if (withRepository && !worked && !(yield* signInReaches(repository))) {
               report(
                 "a local agent's repository is not reached on this machine's own GitHub sign-in, so its launch was not started",
               );
               return yield* notStarted(line.id, DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN);
             }
-            // Note that the repository of an agent on the box's own sign-in is made in the host's own environment, which is the box user's.
             const made = yield* madeWorktree(
               agentId,
               layout,
               repository,
               payload.value.startBranch,
-              withToken ? agentGithubEnv(layout.folder, platform.clis.paths.gh) : undefined,
               stepReported(agentScope, line.id, DEVICE_LAUNCH_STEP.FETCHING),
             );
-            if (!made) {
-              // Note that the token was written before the repository was made, and no turn reads it where none starts.
-              yield* agentGithubForgotten(layout.folder);
-              return yield* notStarted(line.id);
-            }
+            if (!made) return yield* notStarted(line.id);
             // Note that starting is said before the agent's folders and Git are set up, so a launch that stops there is worded as starting rather than by the step before.
             yield* stepReported(agentScope, line.id, DEVICE_LAUNCH_STEP.STARTING);
             const temp = layout.temp;
             yield* Effect.ignore(fileSystem.makeDirectory(temp, { recursive: true, mode: 0o700 }));
             const runnerScope = yield* Scope.fork(agentScope);
             // Note that the turn is let go of last as the runner's scope closes, once the runner has ended.
-            const refused = yield* Scope.addFinalizer(
+            yield* Scope.addFinalizer(
               runnerScope,
               Effect.provideContext(turnLetGo(layout), services),
-            ).pipe(
-              Effect.andThen(
-                agentFoldersMade(layout.folder, {
-                  stateRoot: kernel.stateRoot,
-                  platform: platform.devicePlatform,
-                }),
-              ),
-              Effect.as(Option.none<string>()),
-              Effect.orElseSucceed(() => Option.some("the agent's folders could not be made")),
             );
-            if (Option.isSome(refused)) {
-              yield* Scope.close(runnerScope, Exit.void);
-              report(`a local agent could not be readied to start: ${refused.value}`);
-              return yield* notStarted(line.id);
-            }
             if (
               withRepository &&
-              !(yield* checkoutSet(layout, payload.value.identity, withToken))
+              identity !== undefined &&
+              !(yield* identitySet(layout, identity))
             ) {
               yield* Scope.close(runnerScope, Exit.void);
-              report(
-                "a local agent's commit identity or GitHub helper could not be set in its repository",
-              );
+              report("a local agent's commit identity could not be set in its repository");
               return yield* notStarted(line.id);
             }
             const stdin = yield* Queue.unbounded<string>();
             const encoder = new TextEncoder();
+            // Note that the runner's record is forgotten only once its group has been ended as its scope closes, so a daemon killed meanwhile leaves it for the next start (`daemon/host-runners-left.ts`).
+            yield* Scope.addFinalizer(
+              runnerScope,
+              Effect.provideContext(forgetRunnerGroup(kernel.stateRoot, agentId), services),
+            );
             const command = platform.launch({
               agentId,
               folder: layout.folder,
@@ -882,7 +780,7 @@ export function composeLocalAgents(
               bundle: platform.runnerBundle,
               env: {
                 ...shellVariables,
-                ...(onOwnSignIn ? sshAgent : {}),
+                ...sshAgent,
                 TMPDIR: temp,
                 ...platform.runnerEnv,
                 ...secrets.env,
@@ -907,7 +805,7 @@ export function composeLocalAgents(
               return yield* notStarted(line.id);
             }
             const handle = started.value;
-            if (withToken) yield* Effect.forkIn(renewingGithub(agentId, hadToken), runnerScope);
+            yield* keepRunnerGroup(kernel.stateRoot, agentId, handle.pid);
             yield* Queue.offer(
               stdin,
               notedFirstLines(secrets.stdin, cleared ? [LAUNCH_NOTE.CLEARED] : [], cleared),
@@ -917,12 +815,19 @@ export function composeLocalAgents(
               runners.delete(agentId);
               // Note that the launch is starting again until its settle is answered, so no beat settles it as a runner gone before its turn is let go of and its exit code sent.
               starting.add(line.id);
+              // Note that whether any runner works is told once the turn is let go of and settled, so a Mac kept awake for it does not sleep while it is.
               yield* Scope.close(runnerScope, Exit.void).pipe(
                 Effect.andThen(settle(line.id, Option.getOrUndefined(Option.map(code, Number)))),
-                Effect.ensuring(Effect.sync(() => starting.delete(line.id))),
+                Effect.ensuring(
+                  Effect.andThen(
+                    Effect.sync(() => starting.delete(line.id)),
+                    workingTold,
+                  ),
+                ),
               );
             }).pipe(Effect.forkIn(agentScope));
             runners.set(agentId, { lineId: line.id, stdin, handle, exited });
+            yield* workingTold;
           });
 
         /**
@@ -951,8 +856,8 @@ export function composeLocalAgents(
          * worktree held in the shared clone pruned (`git worktree prune`), so
          * the clone lists no worktree that stands no more. The clone is read
          * from the link the worktree's `.git` file holds, before the folder
-         * goes; a folder made before worktrees holds a repository of its own,
-         * which links to none. Note that a prune that fails is let be, since
+         * goes; an agent with no repository has no link. Note that a prune
+         * that fails is let be, since
          * the next removal's prune takes every entry of the clone whose
          * worktree is gone.
          */
@@ -1083,7 +988,6 @@ export function composeLocalAgents(
             const layout = deviceAgentLayout(folder, agentId);
             const run = agentOnBox(
               {
-                folder: layout.folder,
                 command: "/bin/bash",
                 args: ["-c", CHECKOUT_RESTORE_SCRIPT],
                 env: { ...shellVariables, ...checkoutRestoreEnv(snapshot.value) },
@@ -1264,9 +1168,11 @@ export function composeLocalAgents(
             const claimed = yield* asked(client.claimRequest(deviceId, request.id));
             if (claimed === undefined || !("agentId" in claimed)) return;
             const layout = deviceAgentLayout(folder, claimed.agentId);
-            const answer = yield* answeredLocalAgentRequest(layout, claimed).pipe(
-              Effect.provideContext(services),
-            );
+            const answer = yield* answeredLocalAgentRequest(
+              layout,
+              { env: shellVariables, gh: platform.clis.paths.gh },
+              claimed,
+            ).pipe(Effect.provideContext(services));
             yield* asked(client.answerRequest(deviceId, claimed.id, answer));
           });
 
