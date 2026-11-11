@@ -137,7 +137,9 @@ export function pageZoomWords(zoom: number): string {
  * page is scrolled to as its length scales. It hands on ⌘+ (or ⌘=), ⌘−, and
  * ⌘0, with Control in place of Command as other systems press them, and each
  * Control-held wheel event, held to a turn's limit, and claims each so
- * neither the window nor the browser zooms as well.
+ * neither the window nor the browser zooms as well, but only once the window
+ * has sent a size: a page drawn in a transcript or a thread is sized by no
+ * tab, so its keys and wheel are left as they were.
  */
 export const PAGE_ZOOM_SCRIPT = `(() => {
   "use strict";
@@ -147,6 +149,8 @@ export const PAGE_ZOOM_SCRIPT = `(() => {
   const LIMIT = ${PINCH_DELTA_LIMIT};
   const KEYS = { "=": ${JSON.stringify(PAGE_ZOOM_KEY.IN)}, "+": ${JSON.stringify(PAGE_ZOOM_KEY.IN)}, "-": ${JSON.stringify(PAGE_ZOOM_KEY.OUT)}, "0": ${JSON.stringify(PAGE_ZOOM_KEY.ACTUAL)} };
   let zoom = 1;
+  // Whether a tab sizes this page; a page drawn in words has none, so its keys and wheel are left to the window.
+  let sized = false;
 
   const post = (message) => parent.postMessage(Object.assign({ type: TYPE }, message), "*");
 
@@ -164,11 +168,12 @@ export const PAGE_ZOOM_SCRIPT = `(() => {
     if (event.source !== parent) return;
     const data = event.data;
     if (data === null || typeof data !== "object" || data.type !== TYPE) return;
+    sized = true;
     draw(data.zoom);
   });
 
   addEventListener("keydown", (event) => {
-    if (event.metaKey === event.ctrlKey || event.altKey) return;
+    if (!sized || event.metaKey === event.ctrlKey || event.altKey) return;
     const key = Object.prototype.hasOwnProperty.call(KEYS, event.key) ? KEYS[event.key] : undefined;
     if (key === undefined) return;
     event.preventDefault();
@@ -177,7 +182,7 @@ export const PAGE_ZOOM_SCRIPT = `(() => {
   }, true);
 
   addEventListener("wheel", (event) => {
-    if (!event.ctrlKey) return;
+    if (!sized || !event.ctrlKey) return;
     event.preventDefault();
     post({ pinch: Math.max(-LIMIT, Math.min(LIMIT, event.deltaY)) });
   }, { capture: true, passive: false });

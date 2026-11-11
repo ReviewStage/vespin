@@ -7,7 +7,7 @@ import {
   pageZoomTell,
 } from "@repo/features/page-zoom";
 import { Option, Schema } from "effect";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * page-zoom.ts -- the size a page's tab draws its page at: held by the tab, stepped by its menu, by ⌘+, ⌘−, and ⌘0 pressed in the page, and by a pinch over it, and handed to the frame (`@repo/features/page-zoom`).
@@ -29,7 +29,9 @@ export function usePageZoom(frame: RefObject<HTMLIFrameElement | null>): {
 } {
   const [zoom, setZoom] = useState(PAGE_ZOOM_ACTUAL);
   const latest = useRef(zoom);
-  latest.current = zoom;
+  useLayoutEffect(() => {
+    latest.current = zoom;
+  }, [zoom]);
   useEffect(() => {
     frame.current?.contentWindow?.postMessage(pageZoomTell(zoom), "*");
   }, [frame, zoom]);
