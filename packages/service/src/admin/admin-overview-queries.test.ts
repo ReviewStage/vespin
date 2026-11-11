@@ -145,11 +145,18 @@ const startAgent = (
     return id;
   });
 
-const answerInboxItem = (userId: string, organizationId: string, agentId: string, when: string) =>
+const answerInboxItem = (
+  userId: string,
+  organizationId: string,
+  taskId: string,
+  agentId: string,
+  when: string,
+) =>
   Effect.gen(function* () {
     const db = yield* Database;
     yield* db.insert(inboxItem).values({
       userId,
+      taskId,
       organizationId,
       agentId,
       key: randomUUID(),
@@ -257,7 +264,7 @@ const seedService = Effect.gen(function* () {
       prompt: "",
     },
   });
-  yield* answerInboxItem(ada, adaWorkspace, merged, "2026-10-20T12:00:00Z");
+  yield* answerInboxItem(ada, adaWorkspace, adaTask, merged, "2026-10-20T12:00:00Z");
   yield* connectIntegration(ada);
   yield* signIn(ada, "2026-10-21T09:00:00Z");
 

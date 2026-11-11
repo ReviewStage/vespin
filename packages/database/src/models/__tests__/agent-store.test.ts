@@ -760,7 +760,11 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
       Effect.gen(function* () {
         const starter = yield* openAccount;
         const workspace = yield* openWorkspace(starter);
-        const { agentId, conversationId } = yield* workspaceAgent(starter, workspace);
+        const { id: taskId } = yield* createTask(starter, {
+          organizationId: workspace,
+          name: "Flaky tests",
+        });
+        const { agentId, conversationId } = yield* workspaceAgent(starter, workspace, { taskId });
         const byApp = { by: AGENT_ARCHIVER.APP, userId: starter, reason: "Run finished" } as const;
         const db = yield* Database;
         const [read] = yield* db
@@ -797,7 +801,7 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
         const reopened = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
         yield* pullRequest(PULL_REQUEST_STATE.MERGED);
         // A question it posted after the read, which moves no line of its conversation either.
-        const asked = yield* openInboxItem(starter, workspace, null, agentId, true);
+        const asked = yield* openInboxItem(starter, workspace, taskId, agentId, true);
         const waiting = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
         yield* db
           .update(inboxItem)

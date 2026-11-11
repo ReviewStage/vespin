@@ -58,23 +58,24 @@ const CUT_MARK = "… (cut to fit; read_agent reads the rest)";
 /** What the line says of a turn that ended in words of its own. */
 const NO_WORDS = "(it said nothing)";
 
-/** The summary of the turn's last `end_turn` its answer took; none where it ended no turn that way, or the call was refused or never answered. */
+/** The summary of the turn's last `end_turn`, where its answer took it; none where it ended no turn that way, or that call was refused or never answered. */
 function endTurnSummary(journal: StoredUIMessage): string | undefined {
-  const summaries = journal.parts.flatMap((part) => {
-    if (!isToolUIPart(part) || getToolName(part) !== AGENT_TOOL.END_TURN) return [];
-    const input: unknown = part.input;
-    if (part.state !== "output-available" || typeof input !== "object" || input === null) return [];
-    // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
-    const output: unknown = part.output;
-    const status =
-      typeof output === "object" && output !== null && "status" in output
-        ? output.status
-        : undefined;
-    if (status !== ACTION_RESULT_STATUS.ACCEPTED) return [];
-    const summary = "summary" in input ? input.summary : undefined;
-    return typeof summary === "string" && summary.trim().length > 0 ? [summary.trim()] : [];
-  });
-  return summaries.at(-1);
+  // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
+  const part = journal.parts.findLast(
+    (each) => isToolUIPart(each) && getToolName(each) === AGENT_TOOL.END_TURN,
+  );
+  if (part === undefined || !isToolUIPart(part) || part.state !== "output-available")
+    return undefined;
+  // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
+  const output: unknown = part.output;
+  const status =
+    typeof output === "object" && output !== null && "status" in output ? output.status : undefined;
+  const input: unknown = part.input;
+  if (status !== ACTION_RESULT_STATUS.ACCEPTED || typeof input !== "object" || input === null) {
+    return undefined;
+  }
+  const summary = "summary" in input ? input.summary : undefined;
+  return typeof summary === "string" && summary.trim().length > 0 ? summary.trim() : undefined;
 }
 
 /**

@@ -39,6 +39,7 @@ import type { LaunchPath } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
@@ -137,6 +138,8 @@ export interface RunnerMark {
   readonly firstSequence: number;
   /** None for a launch from before fingerprints were recorded. */
   readonly fingerprint?: string;
+  /** The permission mode the launch runs its agent in; none for a launch from before it was recorded, and for a Mac's, whose sends never pass it by. */
+  readonly permissionMode?: AgentPermissionMode;
   /** Whether the launch reads its lines from the service (`MachineLayout`'s `linesRead`); none for one the service writes them to the stdin of, a launch from before the read among them. */
   readonly linesRead?: boolean;
 }

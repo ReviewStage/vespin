@@ -20,6 +20,16 @@ import { tasksControl } from "../testing/tasks-control.js";
 
 const roots: Root[] = [];
 
+/**
+ * Note that this test draws the whole sidebar over sixty rows and scrolls
+ * it, which takes about 4 s in jsdom and runs past vitest's 5 s default on a
+ * busy CI runner: profiled, the drawing, the scroll, and Home each take 1.1
+ * to 1.5 s, most of it jsdom matching each mounted tooltip's
+ * `[aria-describedby~=…]` lookup against the whole document (276 of them)
+ * and React's development render. It is given 15 s.
+ */
+const WALK_TIMEOUT_MS = 15_000;
+
 beforeEach(() => {
   window.localStorage.clear();
   // The window's motion as a Mac with none reduced answers it.
@@ -68,7 +78,9 @@ function press(key: string): void {
   });
 }
 
-test("Home from the last row reaches the first one left undrawn, and ↑ and ↓ wrap at the ends", () => {
+test("Home from the last row reaches the first one left undrawn, and ↑ and ↓ wrap at the ends", {
+  timeout: WALK_TIMEOUT_MS,
+}, () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

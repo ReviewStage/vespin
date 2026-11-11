@@ -1202,6 +1202,7 @@ export const runnerSessions = <
               const mark: RunnerMark = {
                 firstSequence: made.firstSequence,
                 fingerprint: made.fingerprint,
+                permissionMode: permissionModeOf(agent),
                 ...(layout.linesRead ? { linesRead: true } : undefined),
               };
               const config = { ...made.config, ...(trace === undefined ? undefined : { trace }) };
@@ -2386,6 +2387,21 @@ export const runnerSessions = <
         if (Option.isSome(found) && found.value.agentId !== agent.id) {
           return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
         }
+        // A runner launched in another mode than the agent's now would take the message on the mode
+        // it has, so the message waits on the lease, under which a warm runner on a changed mode is
+        // launched again first (`staleWarm`), rather than being queued for it at once.
+        const recorded = Option.isSome(found) ? found.value.runner : undefined;
+        if (
+          recorded !== undefined &&
+          (recorded.mark.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS) !==
+            permissionModeOf(agent)
+        ) {
+          return yield* holdingRunner(
+            agent.id,
+            sendHolding(sessionId, message, layout, sent, handsOn),
+            CODER.RUNNER_LEASE.SEND_WAIT,
+          );
+        }
         // The harness's lines are read as `sendHolding` reads them, so a plan refused now refuses
         // the message, and go ahead of it for a recorded runner's launch; with none recorded, the
         // message alone is queued for whichever launch runs, its words composed on whether that
@@ -2396,7 +2412,6 @@ export const runnerSessions = <
         // call holding the lease leaves up reads it, and where none is, the turn's delivery
         // launches one (`deliverTurn`).
         const ahead = yield* harness.ahead(agent);
-        const recorded = Option.isSome(found) ? found.value.runner : undefined;
         const from =
           recorded === undefined ? yield* resumedSessionOf(agent, layout, false) : undefined;
         const opened = yield* openedLine(
