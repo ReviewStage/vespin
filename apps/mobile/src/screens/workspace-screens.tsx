@@ -15,7 +15,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -36,8 +36,12 @@ const NAME_FIELD_ID = "new-workspace-name";
  * New workspace: the team's name, then Create in the bar, lit once a name is
  * typed and while no create is out. The workspace is made by the host's own
  * act, as the panel's New workspace makes it, and once it is made the phone
- * works in it, so the Inbox and Tasks stand on the new team at once, and the
- * sheet closes; a refusal says why under the name and keeps the sheet. Its
+ * works in it, so the Inbox and Tasks stand on the new team, and the sheet
+ * closes once the account's list holds it. Note that the sheet waits on the
+ * list, because the act answers before the workspaces' follow carries the new
+ * one, and the choice falls back to the first workspace until it does; and
+ * that Create stays dimmed while it waits, so a second press makes no second
+ * workspace. A refusal says why under the name and keeps the sheet. Its
  * teammates are invited from Workspace settings, as the panel's cards
  * invite them after the name.
  */
@@ -49,17 +53,21 @@ export function NewWorkspaceScreen() {
   const { choose } = useChosenWorkspace(workspaces);
   const [name, setName] = useState("");
   const create = useAsyncAction(rejectionWords);
+  // The workspace made, until the account's list holds it.
+  const [made, setMade] = useState<string | undefined>(undefined);
+  const listed = made !== undefined && workspaces.some((workspace) => workspace.id === made);
+  useEffect(() => {
+    if (listed) router.back();
+  }, [listed, router]);
+  const waiting = create.running || made !== undefined;
   const make = () => {
-    void create
-      .run(() =>
-        acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
-          choose(workspace.id);
-          return undefined;
-        }),
-      )
-      .then((made) => {
-        if (made) router.back();
-      });
+    void create.run(() =>
+      acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
+        choose(workspace.id);
+        setMade(workspace.id);
+        return undefined;
+      }),
+    );
   };
   return (
     <>
@@ -81,10 +89,10 @@ export function NewWorkspaceScreen() {
         <Stack.Toolbar.Button
           variant="prominent"
           tintColor={colors.ACCENT}
-          disabled={name.trim() === "" || create.running}
+          disabled={name.trim() === "" || waiting}
           onPress={make}
         >
-          {create.running ? WORDS.CREATING : WORDS.CREATE}
+          {waiting ? WORDS.CREATING : WORDS.CREATE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
