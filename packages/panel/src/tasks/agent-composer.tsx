@@ -45,7 +45,6 @@ import {
   paidByOf,
   planNameOf,
   providerOf,
-  SENT_LINE_STATE,
   type SentLine,
 } from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
@@ -291,18 +290,14 @@ export interface ComposerQueueing {
   readonly onCancel: () => void;
 }
 
-/** The continue in the cloud a note of the agent's machine gone offline offers, carrying the newest message that did not go; none where no move is offered. */
+/** The continue in the cloud a note of the agent's machine gone offline offers, carrying the message the note is of; none where no move is offered. */
 function continuedInCloud(
-  sent: readonly SentLine[],
+  noted: SentLine | undefined,
   onContinueInCloud: ((carry: MoveCarry) => void) | undefined,
 ): (() => void) | undefined {
   if (onContinueInCloud === undefined) return undefined;
-  const undelivered = sent.findLast((line) => line.state === SENT_LINE_STATE.FAILED);
   return () =>
-    onContinueInCloud({
-      words: undelivered?.text ?? "",
-      attachments: undelivered?.attachments ?? [],
-    });
+    onContinueInCloud({ words: noted?.text ?? "", attachments: noted?.attachments ?? [] });
 }
 
 export function AgentComposer({
@@ -524,7 +519,7 @@ export function AgentComposer({
     sendNote === undefined
       ? undefined
       : sendNote.reason === FAILURE_REASON.CONTINUE_IN_CLOUD
-        ? continuedInCloud(composer.sent, onContinueInCloud)
+        ? continuedInCloud(composer.notedLine, onContinueInCloud)
         : // Note that a move's retry is the box's as the move lands, and only while the refusal it
           // was pressed for still stands, so an edit or a later send meanwhile is never sent over.
           repositoryRemedy(sendNote, () => {
