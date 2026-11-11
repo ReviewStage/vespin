@@ -5,6 +5,7 @@ import type { Transaction } from "@tiptap/pm/state";
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import type { DescriptionEditorPictures, PictureNode, PictureTaken } from "./contract.js";
+import { inTableCell } from "./writing-keys.js";
 
 /**
  * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
@@ -142,10 +143,12 @@ function removedAt(view: EditorView, pos: number): void {
  * Where pictures laid in at `pos` stand, `tr` changed to make room: a
  * paragraph split where `pos` falls inside its words, else the nearest
  * place beside `pos` that takes a paragraph (a list item's among them),
- * else after the top-level block `pos` stands in.
+ * else after the top-level block `pos` stands in, as it is from a table's
+ * cell, whose Markdown holds no block.
  */
 function pictureRoom(tr: Transaction, pos: number, paragraph: NodeType): number {
   const $at = tr.doc.resolve(pos);
+  if (inTableCell($at)) return $at.after(1);
   const { parent, parentOffset } = $at;
   const within = parentOffset > 0 && parentOffset < parent.content.size;
   if (parent.type === paragraph && within) {

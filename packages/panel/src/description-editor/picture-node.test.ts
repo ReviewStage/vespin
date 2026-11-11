@@ -121,6 +121,18 @@ test("an image pasted with the caret in a list's first item stands in that item,
   assert.ok(picture < written.indexOf("Show the agent at work."));
 });
 
+test("a merged answer that changes the list a picture is still being kept in leaves the picture standing", () => {
+  const sent = "## Beats\n\n1. Open on the inbox.\n2. End on the logo.\n\n## Next\n\nShip.\n";
+  const caret = { section: 0, text: "End on the logo.", occurrence: 0, offset: 16, code: false };
+  const { handle, taken } = opened(sent, { x: 0, y: 0, words: { ...caret, top: 0 } });
+  handle.insertPictures([PNG()]);
+
+  handle.take(sent, sent.replace("logo.\n", "logo.\n3. Fade out.\n"));
+  handle.settlePicture(taken[0]?.upload ?? "", KEPT);
+
+  assert.ok(handle.markdown().includes(`![members](${KEPT})`));
+});
+
 test("a picture of another description pasted in is kept again on this one, and one of this description's is pasted as it is", () => {
   const { handle, taken, host } = opened();
   const editable = host.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
