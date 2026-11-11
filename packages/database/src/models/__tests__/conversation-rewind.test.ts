@@ -21,6 +21,7 @@ import {
   readNativeRewind,
   readRewindable,
   readRewindSnapshot,
+  readTurnCheckoutRange,
   rewindConversation,
 } from "../conversation-rewind.js";
 
@@ -170,6 +171,39 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
         );
         assert.ok(Option.isNone(yield* readRewindSnapshot(target, secondLine)));
         assert.ok(Option.isNone(yield* readRewindSnapshot(target, yield* rowOf(target, 5))));
+      }),
+  );
+
+  it.effect(
+    "reads the checkouts a turn's changes stand between: its own snapshot and the next one recorded, the checkout as it stands where none follows, and none for a turn that recorded none",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const { first, firstLine, second, secondLine } = yield* threeLines(target);
+        const db = yield* Database;
+        const [before, after] = [
+          "0123456789abcdef0123456789abcdef01234567",
+          "89abcdef0123456789abcdef0123456789abcdef",
+        ];
+
+        const unrecorded = yield* readTurnCheckoutRange(target, firstLine);
+        yield* db.update(turns).set({ snapshotCommit: before }).where(eq(turns.id, first));
+        const lastRecorded = yield* readTurnCheckoutRange(target, firstLine);
+        // A later turn that recorded no checkout, as one that never started, is passed over for the next that did.
+        yield* turnAt(target, 1_500);
+        yield* db.update(turns).set({ snapshotCommit: after }).where(eq(turns.id, second));
+
+        assert.ok(Option.isNone(unrecorded), "a turn that recorded no checkout has no range");
+        assert.deepEqual(Option.getOrUndefined(lastRecorded), { from: before, to: null });
+        assert.deepEqual(Option.getOrUndefined(yield* readTurnCheckoutRange(target, firstLine)), {
+          from: before,
+          to: after,
+        });
+        assert.deepEqual(Option.getOrUndefined(yield* readTurnCheckoutRange(target, secondLine)), {
+          from: after,
+          to: null,
+        });
+        assert.ok(Option.isNone(yield* readTurnCheckoutRange(target, yield* rowOf(target, 5))));
       }),
   );
 

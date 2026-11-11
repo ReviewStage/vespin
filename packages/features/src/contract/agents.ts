@@ -43,6 +43,7 @@ import {
   agentRewindRequestSchema,
   agentServersRequestSchema,
   agentStartRequestSchema,
+  agentTurnChangesAnswerSchema,
   agentWarmAnswerSchema,
   agentWorkspaceListAnswerSchema,
   MAXIMUM_START_BODY_BYTES,
@@ -390,6 +391,25 @@ export const agentsContract = {
       }),
     )
     .output(EffectSchema.flip(agentChangesAnswerSchema)),
+  /**
+   * The files one of the agent's turns changed, the turn one of the
+   * developer's lines opened, between the checkout its runner recorded
+   * before it and the next one recorded, or the checkout as it stands; read
+   * on the agent's machine, so refused as a line to an away or removed Mac
+   * is, and where no snapshot of the turn stands any more.
+   */
+  turnChanges: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING,
+        HOSTED_API_ERROR.LOCAL_AGENT_REFUSED,
+        HOSTED_API_ERROR.DEVICE_REMOVED,
+      ),
+    )
+    .meta(openapi({ method: HTTP_METHOD.GET, path: `${AGENT_PATH}/turn-changes` }))
+    .input(EffectSchema.Struct({ id: EffectSchema.String, messageId: EffectSchema.String }))
+    .output(EffectSchema.flip(agentTurnChangesAnswerSchema)),
   /** What the reviewer and label pickers of one agent's Pull request tab offer. */
   reviewOptions: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE))

@@ -1752,6 +1752,22 @@ export const agentChangesAnswerSchema = EffectSchema.Struct({
 
 type AgentChanges = NonNullable<(typeof agentChangesAnswerSchema.Type)["pullRequest"]>;
 
+/**
+ * The files one of an agent's turns changed, as git tells them apart
+ * between the checkout its runner recorded before the turn and the next one
+ * recorded, or the checkout as it stands (`checkout-diff.ts`), each as a
+ * pull request's file is carried; cut short where the diff ran past its
+ * bounds, which `truncated` says.
+ */
+export const agentTurnChangesAnswerSchema = EffectSchema.Struct({
+  files: EffectSchema.Array(changedFileSchema).check(
+    EffectSchema.isMaxLength(CHANGES_BOUNDS.MAX_FILES),
+  ),
+  truncated: EffectSchema.Boolean,
+});
+
+export type AgentTurnChangesAnswer = typeof agentTurnChangesAnswerSchema.Type;
+
 /** Who an agent's pull request names, as its changes carry them; every key absent from a service before them, or where they could not be read. */
 export type AgentChangesPeople = Pick<
   AgentChanges,

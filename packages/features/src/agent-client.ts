@@ -55,6 +55,7 @@ import {
   type AgentPullRequestWriteAnswerView,
   type AgentQueueAnswerView,
   type AgentReviewOptionsAnswerView,
+  type AgentTurnChangesAnswerView,
   type AgentWarmAnswerView,
   type AgentWorkspaceListParams,
   type AgentWorkspaceToolsAnswerView,
@@ -1171,6 +1172,14 @@ export class HostedAgentClient {
       ),
       unansweredBare,
     );
+  }
+
+  /** The files one of the agent's turns changed, the turn the developer's line named opened, as git tells them apart on the agent's machine. */
+  turnChanges(
+    agentId: string,
+    messageId: string,
+  ): Effect.Effect<AgentTurnChangesAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.turnChanges, { id: agentId, messageId });
   }
 
   /** One agent's pull request itself as its overview draws it: its description, branches, mergeability, and people as GitHub holds them now. */

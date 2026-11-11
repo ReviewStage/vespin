@@ -127,6 +127,7 @@ import { heldUntil } from "../../http/held-read.js";
 import { agentCommitIdentity, type CheckoutServices } from "../coder-host/checkout.js";
 import {
   type AgentMachineService,
+  CHECKOUT_DIFF_OUTCOME,
   type DeliveredCredentials,
   type FoundPlace,
   LaunchRefused,
@@ -730,6 +731,9 @@ function deviceMachineOver(
         if (exit === COMMAND_GONE) return RESTORE_OUTCOME.UNSUPPORTED;
         return RESTORE_OUTCOME.FAILED;
       }),
+
+    // A Mac's host takes no diff request yet, so a turn's changes are read on a sandbox alone.
+    diffCheckout: () => Effect.succeed({ outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED }),
 
     // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
     phoneVideo: () => Effect.succeed(undefined),
