@@ -4412,6 +4412,25 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             skills.observe(sent);
           },
         });
+        // The repository's skills are read only to shadow installed ones, so the member has one installed.
+        yield* writeAccountPreferences(agent.userId, {
+          experiments: { [EXPERIMENT.SKILLS]: true },
+        });
+        yield* installSkill(agent.userId, {
+          owner: { scope: INSTALLED_SKILL_SCOPE.PERSONAL },
+          name: "incident-notes",
+          description: "Write incident notes.",
+          userInvocable: true,
+          source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+          files: [
+            {
+              path: "SKILL.md",
+              bytes: new TextEncoder().encode(
+                "---\ndescription: Write incident notes.\n---\nWrite them.\n",
+              ),
+            },
+          ],
+        });
         api.hooks.onRun = async (env) => {
           if (isClone({ env })) await clone.pass();
         };
