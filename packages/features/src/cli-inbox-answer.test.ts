@@ -37,6 +37,16 @@ const DESIGNS = asking({
     { label: "A dock" },
   ],
 });
+const NAMED_NONE = asking({
+  type: INBOX_ASK.DECIDE,
+  options: [
+    {
+      label: "none of these",
+      media: [{ type: "file", attachmentId: MESSAGE_ID, mediaType: "image/png" }],
+    },
+    { label: "A dock" },
+  ],
+});
 const DO = asking({ type: INBOX_ASK.DO, steps: ["Add the secret", "Rerun the job"] });
 const FORM = asking({
   type: INBOX_ASK.ANSWER,
@@ -63,6 +73,12 @@ describe("cliInboxAnswer", () => {
       DESIGNS,
       { words: ["none of these"] },
       { text: "", answers: { ask: MESSAGE_ID, reply: "chose", choices: [] } },
+    ],
+    [
+      "an option an agent labeled none of these, as that option rather than a pick of none",
+      NAMED_NONE,
+      { words: ["None of these"] },
+      { text: "", answers: { ask: MESSAGE_ID, reply: "chose", choices: ["none of these"] } },
     ],
     [
       "a to-do marked done, every step ticked",

@@ -74,16 +74,20 @@ function answerOf(ask: InboxAsk, id: string, given: CliAnswerInput): CliAnswer {
     case INBOX_ASK.DECIDE: {
       if (given.words.length === 0) return { refusal: "Name the option to pick." };
       const labels = ask.options.map((option) => option.label);
-      // None of these is a pick of no option, which a choice whose options carry media offers.
+      const choices = given.words.map((word) => labelOf(labels, word));
+      const unknown = choices.find((choice) => !labels.includes(choice));
+      // None of these is a pick of no option, which a choice whose options carry media offers; an option labeled so is that option.
       const [only, ...more] = given.words;
-      if (more.length === 0 && only?.toLowerCase() === NONE_OF_THESE.toLowerCase()) {
+      if (
+        unknown !== undefined &&
+        more.length === 0 &&
+        only?.trim().toLowerCase() === NONE_OF_THESE.toLowerCase()
+      ) {
         return {
           text: given.input ?? "",
           answers: { ask: id, reply: INBOX_REPLY.CHOSE, choices: [] },
         };
       }
-      const choices = given.words.map((word) => labelOf(labels, word));
-      const unknown = choices.find((choice) => !labels.includes(choice));
       if (unknown !== undefined) {
         return { refusal: `${unknown} is not an option. The options: ${labels.join(", ")}.` };
       }
