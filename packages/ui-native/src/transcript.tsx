@@ -34,7 +34,7 @@ import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
@@ -807,6 +807,9 @@ export function AgentTranscript({
   // Whether the reader stands at the newest row, which the list keeps in view as rows land; it opens there.
   const anchored = useRef(true);
   const [away, setAway] = useState(false);
+  // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
+  const [width, setWidth] = useState(0);
+  const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   const foot = bottom + TAB_BAR_ROOM + footRoom;
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
@@ -832,7 +835,10 @@ export function AgentTranscript({
     if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
   }, []);
   return (
-    <View style={[styles.list, { backgroundColor: colors.GROUND }]}>
+    <View
+      style={[styles.list, { backgroundColor: colors.GROUND }]}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+    >
       <FlatList
         ref={list}
         data={items}
@@ -854,7 +860,10 @@ export function AgentTranscript({
         }
         ListFooterComponent={<View style={{ height: foot }} />}
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
-        contentContainerStyle={[styles.content, { paddingLeft: left, paddingRight: right }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingLeft: left + sides, paddingRight: right + sides },
+        ]}
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
