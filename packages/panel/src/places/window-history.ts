@@ -866,7 +866,6 @@ export function useWindowHistory(input: {
     | "onGoHome"
     | "history"
     | "signedIn"
-    | "agentView"
     | "workspace"
     | "placeLeave"
     | "sidePanel"
@@ -899,7 +898,6 @@ export function useWindowHistory(input: {
   // The side panel as the stop standing holds it: its tab while open, and shut otherwise.
   const sideHeld = panelTab ?? null;
   const taskSide = stripsKnown && !narrow ? sideHeld : undefined;
-  const pageAgent = tasks.agentView.agentId;
   // A routed step is reachable as its route's gate would let the window stand there (`route-gates.ts`).
   const access = useRouteAccess();
   const router = useRouter();
@@ -962,9 +960,8 @@ export function useWindowHistory(input: {
     // leaves Home, or arriving on Home lets go of the task (`place-binding.ts`).
     if (homeBound) return undefined;
     if (routedAddress !== undefined) {
-      // Note that an Inbox item's step and an agent page's hold the side panel beside them, as a task's does, which no address says.
-      const besideItem = inboxOpen && inboxChosen !== undefined;
-      const side = besideItem || pageAgent !== undefined ? sideHeld : undefined;
+      // Note that an Inbox item's step holds the side panel beside it, as a task's does, which no address says.
+      const side = inboxOpen && inboxChosen !== undefined ? sideHeld : undefined;
       return side === undefined
         ? routedPlace(routedAddress)
         : { ...routedPlace(routedAddress), side };
@@ -997,7 +994,6 @@ export function useWindowHistory(input: {
     sideHeld,
     inboxOpen,
     inboxChosen,
-    pageAgent,
     linkedStands,
     openNow,
   ]);
@@ -1011,12 +1007,9 @@ export function useWindowHistory(input: {
         sideTab === undefined || boundFor === undefined
           ? undefined
           : tabSurface(boundFor, sideTab, true);
-      // Note that the side panel beside an Inbox item or an agent's page counts as it does beside a task, wide rooms alone.
+      // Note that the side panel beside an Inbox item counts as it does beside a task, wide rooms alone.
       const besideRouted =
-        (routed?.place === ROUTED_PLACE.INBOX || routed?.place === ROUTED_PLACE.AGENT) &&
-        beside !== undefined
-          ? [beside]
-          : [];
+        routed?.place === ROUTED_PLACE.INBOX && beside !== undefined ? [beside] : [];
       // Note that a task's step is counted by what it holds, the task's own place's declaration reading it.
       const shown = { historyTask: routedHistory, taskStep: untitled?.task, columnKnown };
       return untitled !== undefined && !isTaskPlace(untitled) && routed !== undefined
@@ -1042,12 +1035,11 @@ export function useWindowHistory(input: {
     }
     const matches = router.matchRoutes(pathOf(to.address));
     if (routedPlaceOf(matches, access)?.overThePlan !== true) return;
-    // An Inbox item's step and an agent page's stand the side panel beside them as it stood, on the item's own task or agent, or the page's agent.
-    const { itemId, agentId } = placeParamsOf(matches);
+    // An Inbox item's step stands the side panel beside it as it stood, on the item's own task.
+    const { itemId } = placeParamsOf(matches);
     const chosen = itemId === undefined ? undefined : inbox.choiceOf(itemId);
-    // Note that the panel's stop is the item standing, or the page's agent, as `standSide` shuts it on the stop standing alone.
-    const holder = chosen === undefined ? agentId : choiceHolder(chosen);
-    standSide(holder, itemId ?? agentId, to.side);
+    // Note that the panel's stop is the item standing, as `standSide` shuts it on the stop standing alone.
+    standSide(chosen === undefined ? undefined : choiceHolder(chosen), itemId, to.side);
   };
   // The task a step holds, with the tabs its panes showed; its task is asked for as the window arrives on its place (`place-binding.ts`).
   const goToTask = (to: TaskStep) => {
@@ -1055,7 +1047,7 @@ export function useWindowHistory(input: {
     if (to.panel !== undefined) standPanel(to.taskId, to.panel);
     else standSide(to.taskId, to.taskId, to.side);
   };
-  // The side panel as a wide step, an Inbox item's, or an agent page's held it: shut, or open on its tab, on the stop's own task or agent; one not yet known is left as it stands.
+  // The side panel as a wide step or an Inbox item's held it: shut, or open on its tab, on the stop's own task; one not yet known is left as it stands.
   // Note that it is shut only where the step is the stop standing, because another stop starts with it shut, and
   // shutting it here first would slide it out over the place the window is leaving.
   const standSide = (holder: string | undefined, stop: string | undefined, side: SideStep) => {

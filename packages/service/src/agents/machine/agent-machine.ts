@@ -100,7 +100,7 @@ export interface MachineLayout {
   readonly claudeExecutable: string | undefined;
   /** The image's Codex in a sandbox, and on a Mac the one it checked against the pin; none on a Mac that checked none yet, which runs no Codex agent. */
   readonly codexExecutable: string | undefined;
-  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk, and on a Mac its default under the agent's own home, named where the runner mirrors it (`transcriptsKept`); none on an older Mac, whose Codex keeps that default unnamed. */
+  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk; none on a Mac, whose Codex keeps its own default under the machine's home, which its runner finds by itself. */
   readonly codexHome: string | undefined;
   /**
    * Whether the runner reads its lines past its config from the service

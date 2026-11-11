@@ -1,24 +1,18 @@
 /**
- * codex-token.ts -- the plan's access token asked of the service under the runner's bearer: for a host's token command, answered for app-server alone, and for a sandbox's sign-in of app-server and its refreshes.
+ * codex-token.ts -- the plan's access token asked of the service under the runner's bearer, for a sandbox's sign-in of app-server and its refreshes.
  *
- * On a host app-server runs `node <bundle> codex-token <tokenUrl>` (its
- * provider's `auth` command, `codex.ts`) for the bearer it sends OpenAI: as
- * it first needs one, again once its cached one is older than the refresh
- * interval, and again after a 401, mid-turn included. The command inherits
- * app-server's environment, which holds the runner's bearer (which our MCP
- * server's header already reads from there), asks the service for the token
- * under it, and prints it on stdout, which app-server reads and nothing else
- * does. In the cloud's sandbox the launch itself asks (`askPlanTokens`), as
- * it signs app-server in with the token and as app-server asks for another
- * after a 401 (`codex.ts`'s `chatgptAuthTokens`). A refusal or failure says
- * only its status, which app-server may quote in a turn's error, so no
- * secret is ever written there.
+ * In the cloud's sandbox the launch asks (`askPlanTokens`), as it signs
+ * app-server in with the token and as app-server asks for another after a
+ * 401 (`codex.ts`'s `chatgptAuthTokens`). A host's app-server runs on the
+ * machine's own login and asks for none. A refusal or failure says only its
+ * status, which app-server may quote in a turn's error, so no secret is
+ * ever written there.
  */
 
 import { Data, Duration, Effect, Option, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import { RUNNER_ENV, type RunnerTokenAnswer, RunnerTokenAnswerSchema } from "./protocol.js";
+import { type RunnerTokenAnswer, RunnerTokenAnswerSchema } from "./protocol.js";
 
 /** How long the service is given to answer, within app-server's own timeout for the command. */
 const ASK_TIMEOUT = Duration.seconds(20);
@@ -60,17 +54,4 @@ export const askPlanTokens = Effect.fn("agent-runner/askPlanTokens")(function* (
     return yield* new CodexTokenFailed({ detail: "The service's answer holds no token" });
   }
   return answer.value satisfies RunnerTokenAnswer;
-});
-
-/** The bearer a host's app-server sends OpenAI: the plan's access token, asked of the service at `url` under the bearer in `env`. */
-export const codexToken = Effect.fn("agent-runner/codexToken")(function* (
-  url: string,
-  env: Readonly<Record<string, string | undefined>>,
-) {
-  const bearer = env[RUNNER_ENV.BEARER];
-  if (bearer === undefined || bearer === "") {
-    return yield* new CodexTokenFailed({ detail: `${RUNNER_ENV.BEARER} is not set` });
-  }
-  const answer = yield* askPlanTokens(url, Redacted.make(bearer));
-  return answer.accessToken;
 });

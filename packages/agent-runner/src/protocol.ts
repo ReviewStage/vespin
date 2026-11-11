@@ -10,12 +10,12 @@
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
  * through `codex app-server` (P20). Secrets never travel in argv or on
- * stdin: the runner's bearer and the harness's credential are in its
- * environment. Codex's ChatGPT access token is never handed in at all: the
- * runner asks the service for each over HTTPS (`codex-token.ts`), on a host
- * through its token command and in the cloud's sandbox as it signs
- * app-server in, so no line carries one, on a Mac's queue
- * (`@repo/features/device-agent-wire`) or anywhere else.
+ * stdin: the runner's bearer and, in the cloud, the harness's credential are
+ * in its environment; on a host the harnesses run on the machine's own
+ * logins. Codex's ChatGPT access token is never handed in at all: in the
+ * cloud's sandbox the runner asks the service for each over HTTPS
+ * (`codex-token.ts`) as it signs app-server in, so no line carries one, on a
+ * Mac's queue (`@repo/features/device-agent-wire`) or anywhere else.
  */
 
 import type {
@@ -37,11 +37,12 @@ import type { ServerNotification } from "./codex-protocol/index.js";
  * stands in its place for an agent the account's key pays for. In a sandbox
  * either is a placeholder minted for the launch, which the sandbox's firewall
  * swaps for the real one on Anthropic's API, so neither enters the sandbox;
- * on a host it is the credential itself. Codex's token is never in it: the
- * runner asks the service for it, on a host through its token command and in
- * the cloud's sandbox as it signs app-server in (`codex-token.ts`). An OpenAI
- * API key in the sandbox is a placeholder, swapped for the real one at the
- * sandbox's firewall, as Anthropic's are.
+ * on a host the runner hands its harnesses none of them, whatever it was
+ * started with, since they run on the machine's own logins
+ * (`launch.ts`'s `harnessEnvOf`). Codex's token is never in it: the runner
+ * asks the service for it in the cloud's sandbox as it signs app-server in
+ * (`codex-token.ts`). An OpenAI API key in the sandbox is a placeholder,
+ * swapped for the real one at the sandbox's firewall, as Anthropic's are.
  */
 export const RUNNER_ENV = {
   BEARER: "APP_RUNNER_TOKEN",
@@ -298,13 +299,6 @@ export const APPROVAL_INPUT = {
   TEXT_MAX: 2_000,
   ITEMS_MAX: 50,
 } as const;
-
-/**
- * The argument that starts the runner's bundle as a host's Codex token command
- * rather than as a launch: `node <bundle> codex-token <tokenUrl>`, which prints
- * the plan's access token the service answers, and nothing else, on stdout.
- */
-export const CODEX_TOKEN_COMMAND = "codex-token";
 
 /**
  * What the service's token route answers a runner: the plan's access token,
@@ -647,11 +641,11 @@ export const CodexConfigSchema = Schema.Struct({
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
   /**
    * Where the runner asks the service for the plan's access token, under its bearer
-   * (`/api/agents/runner-token`). App-server takes its token from the
-   * runner's `codex-token` command (Codex's provider `auth`), which Codex runs
-   * again as its cached token ages and after a 401, so a turn outlives any
-   * one token. Not asked where the launch's environment holds
-   * `OPENAI_API_KEY`: the account's API key pays, and app-server reads it.
+   * (`/api/agents/runner-token`), in the cloud's sandbox, as it signs
+   * app-server in and again after a 401, so a turn outlives any one token.
+   * Not asked where the launch's environment holds `OPENAI_API_KEY`, the
+   * account's API key paying, nor on a host, whose app-server runs on the
+   * machine's own login.
    */
   tokenUrl: Schema.String,
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), whose `skills/` is set as an extra skills root where it is there. */

@@ -5,8 +5,8 @@
  * show, its address naming the task alone, so its step holds the rest in its
  * entry's typed history state (`window-history.ts`): the column's tab,
  * the side panel's, and, in a narrow room, which shows one pane at a time,
- * the panel as a pane of its own, its sub-step. An Inbox item's step and an
- * agent page's hold the side panel beside them the same way.
+ * the panel as a pane of its own, its sub-step. An Inbox item's step holds
+ * the side panel beside it the same way.
  *
  * Choosing another thing within the page standing is a step of its own only
  * where the developer led to it: another column tab chosen by a press or a

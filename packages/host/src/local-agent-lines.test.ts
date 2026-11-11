@@ -283,8 +283,6 @@ const launching = (workStands: boolean, repositoryHangs = false) =>
             return json({ done: true });
           }
           return linesRead++ === 0 ? json({ lines: [LAUNCH] }) : held();
-        case HOSTED_SERVICE_PATH.RUNNER_TOKEN:
-          return json({ githubToken: "ghs_fixture" });
         default:
           return held();
       }
