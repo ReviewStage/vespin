@@ -21,11 +21,12 @@ onFlowComplete:
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-list
-# A group folds under its header, heard with its count and whether it is
-# folded, and opens again.
-- tapOn: "Launch, [0-9]+, unfolded"
+# A group folds under its header, heard by its title and count (whether it is
+# collapsed or expanded is its value, which Maestro does not match), and
+# opens again.
+- tapOn: "Launch, [0-9]+"
 - assertNotVisible: "Launch checklist"
-- tapOn: "Launch, [0-9]+, folded"
+- tapOn: "Launch, [0-9]+"
 - assertVisible: "Launch checklist"
 # A long press offers Mark done in the row's menu, and a swipe from the
 # trailing edge marks it done at once; either way the row leaves the list.

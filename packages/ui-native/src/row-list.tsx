@@ -4,7 +4,9 @@ import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swi
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHint,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   contentShape,
@@ -27,6 +29,12 @@ import { RowOpenContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+
+/** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
+const FOLD_HEARD = { OPEN: "Expanded", SHUT: "Collapsed" } as const;
+
+/** What a press on a foldable section's header is heard to do. */
+const FOLD_HINT = "Shows or hides the rows it holds";
 
 /** The fold chevron's size, a little under the header's words. */
 const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
@@ -200,9 +208,9 @@ export function ListSection({
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
-          accessibilityLabel(
-            `${title}${count === undefined ? "" : `, ${count}`}, ${folded ? "folded" : "unfolded"}`,
-          ),
+          accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
+          accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
+          accessibilityHint(FOLD_HINT),
         ]}
       >
         {label}
