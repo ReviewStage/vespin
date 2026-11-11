@@ -2101,6 +2101,16 @@ test("Memory digest is suggested under the list, and under an empty one, only wh
   assert.ok(suggestion(empty, "Memory digest"));
 });
 
+test("Memory digest is suggested no more once the list holds it", async () => {
+  memoryOn();
+  standing = [SWEEP, automation(4, { name: "Memory digest", scope: AUTOMATION_SCOPE.PERSONAL })];
+  const page = mount();
+  await settle();
+
+  assert.equal(automationRows(page).length, 2);
+  assert.equal(suggestion(page, "Memory digest") === undefined, true);
+});
+
 test("a new automation started from Memory digest is made every Monday at nine in the member's zone, in no repository, archiving its finished runs", async () => {
   memoryOn();
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
