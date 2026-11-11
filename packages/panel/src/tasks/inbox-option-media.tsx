@@ -172,9 +172,7 @@ export function OptionCardMedia({ option }: { option: InboxOption }): React.JSX.
     openPage: (page) =>
       openPlace?.({
         kind: LINK_DESTINATION.PAGE,
-        ...("taskId" in page.place
-          ? { planId: page.place.taskId }
-          : { agentId: page.place.agentId }),
+        planId: page.place.taskId,
         pageId: page.pageId,
       }),
   };
