@@ -12,6 +12,8 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   autocorrectionDisabled,
+  buttonStyle,
+  controlSize,
   disabled,
   font,
   foregroundStyle,
@@ -23,6 +25,7 @@ import {
   listRowSeparator,
   monospacedDigit,
   textInputAutocapitalization,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { type ReactElement, useEffect, useState } from "react";
@@ -237,6 +240,58 @@ export function WriteNoteRow({
         )}
       </VStack>
     </HStack>
+  );
+}
+
+/**
+ * The merge's one press as a row of the page, where a regular window's bar
+ * folds its acts out of sight, as GitHub's own app stands Merge under a
+ * pull request's checks: the system's large button across the row, filled
+ * in the accent with its words in the brand's ink where it is the page's
+ * one act, such as Squash and merge, and outlined in it otherwise, such as
+ * Remove from queue. It is dimmed while a change is out, its words then
+ * saying what is under way.
+ */
+export function MergeActRow({
+  label,
+  prominent,
+  disabled: dimmed,
+  onPress,
+}: {
+  readonly label: string;
+  readonly prominent: boolean;
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        buttonStyle(prominent ? "borderedProminent" : "bordered"),
+        controlSize("large"),
+        tint(colors.ACCENT),
+        disabled(dimmed),
+        listRowBackground("clear"),
+        listRowSeparator("hidden"),
+        listRowInsets({
+          leading: SPACE.EDGE,
+          trailing: SPACE.EDGE,
+          top: SPACE.TIGHT,
+          bottom: SPACE.TIGHT,
+        }),
+      ]}
+    >
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+          foregroundStyle(prominent ? colors.ON_ACCENT : colors.ACCENT_TEXT),
+          frame({ maxWidth: Number.POSITIVE_INFINITY }),
+        ]}
+      >
+        {label}
+      </Text>
+    </SwiftUIButton>
   );
 }
 
