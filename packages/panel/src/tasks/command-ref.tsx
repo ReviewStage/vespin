@@ -31,11 +31,12 @@ interface CommandEntry {
   readonly alias?: SlashCommand;
 }
 
-/** The commands the `/` list offers, in its order, `/new` named by `/clear`'s alias rather than a row of its own. */
+/** The commands the `/` list offers, in its order, `/new` named by `/clear`'s alias and `/side` by `/btw`'s rather than rows of their own. */
 export const LISTED_COMMANDS = [
   SLASH_COMMAND.MODEL,
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,
+  SLASH_COMMAND.BTW,
 ] as const satisfies readonly SlashCommand[];
 
 const COMMANDS = {
@@ -50,6 +51,15 @@ const COMMANDS = {
     alias: SLASH_COMMAND.NEW,
   },
   [SLASH_COMMAND.NEW]: { glyph: () => <GLYPH.NEW_SESSION />, detail: "Start a fresh session" },
+  [SLASH_COMMAND.BTW]: {
+    glyph: () => <GLYPH.SIDE_CHAT />,
+    detail: "Ask a side question",
+    alias: SLASH_COMMAND.SIDE,
+  },
+  [SLASH_COMMAND.SIDE]: {
+    glyph: () => <GLYPH.SIDE_CHAT />,
+    detail: "Ask a side question",
+  },
 } as const satisfies Record<SlashCommand, CommandEntry>;
 
 /** Every name a command chip stands for in the box, its alias among them; `/model` opens its menu as it is chosen, so it never stands there as a chip. */
@@ -57,6 +67,8 @@ export const COMMAND_NAMES: ReadonlySet<string> = new Set([
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,
   SLASH_COMMAND.NEW,
+  SLASH_COMMAND.BTW,
+  SLASH_COMMAND.SIDE,
 ]);
 
 /** The commands a sent message carries as its first word, which its bubble draws as their chip: the others run in the box and never go. */

@@ -284,7 +284,7 @@ import {
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
-import { ForkedToLine, useForkOffered } from "./fork-action.js";
+import { ForkedToLine, useForkOffered, useSideDoor } from "./fork-action.js";
 import { type ForkCut, forkCutOf, openReply } from "./fork-model.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
 import {
@@ -308,6 +308,7 @@ import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-sel
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
+import { sideChatFork } from "./side-chat.js";
 import { SentWords, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
@@ -3029,6 +3030,12 @@ function AgentTabView({
   );
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
+  // A side chat (`/btw`) forks the transcript as it stands at the press, offered where `/clear` is.
+  const sideDoor = useSideDoor();
+  const onSide =
+    sideDoor === undefined || agent.runtime === undefined || !controlsQueue
+      ? undefined
+      : (question: string) => sideDoor(sideChatFork(agent.id, kept, standing.working), question);
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
@@ -3308,6 +3315,7 @@ function AgentTabView({
             onStop={onStop}
             // Note that only an agent on a harness has a session to clear, and only one the reader controls.
             onClear={agent.runtime === undefined || !controlsQueue ? undefined : onClear}
+            onSide={onSide}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
             followsUp

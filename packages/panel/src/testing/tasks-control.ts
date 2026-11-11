@@ -285,6 +285,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onDiscardDraft: ignore,
     startPrompt: () => Promise.resolve(undefined),
     startFork: () => Promise.resolve(undefined),
+    startSide: () => Promise.resolve(undefined),
     onRetryList: ignore,
     models: undefined,
     modelsFailed: false,

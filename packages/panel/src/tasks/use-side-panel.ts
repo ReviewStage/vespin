@@ -1260,15 +1260,14 @@ export function drawsChanges(
  * stands in for it meanwhile, and the tabs are held across the tasks.
  */
 /**
- * Whether the panel draws an agent's transcript tab: beside the Inbox alone,
- * where the item's task's agents stand in no column of their own, once its
- * agents are read and the agent is among them.
+ * Whether the panel draws an agent's transcript tab: once the task's agents
+ * are read and the agent is among them. Beside the Inbox it is an earlier
+ * version's, the item's task's agents standing in no column of their own;
+ * on a task's page it is a side chat's (`side-chat.ts`), standing in the
+ * strip of the agent it was asked of.
  */
-function drawsTranscript(
-  tab: TranscriptStripTab,
-  drawn: Pick<DrawnTabs, "taskAgents" | "task">,
-): boolean {
-  return drawn.task.bare === true && drawn.taskAgents?.includes(tab.transcript) === true;
+function drawsTranscript(tab: TranscriptStripTab, drawn: Pick<DrawnTabs, "taskAgents">): boolean {
+  return drawn.taskAgents?.includes(tab.transcript) === true;
 }
 
 /** Whether a Terminal tab is drawn: its agent the task's, and its terminal held for the account signed in where the caller reads the lists. */

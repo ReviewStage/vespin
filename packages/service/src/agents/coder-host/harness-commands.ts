@@ -38,13 +38,17 @@ export type CommandRoute = (typeof COMMAND_ROUTE)[keyof typeof COMMAND_ROUTE];
 
 /**
  * The commands Claude Code would run that are held back as words: the ones
- * that change what the service keeps for the agent, and the ones of the
- * CLI's terminal, which say nothing an agent's transcript can use.
+ * that change what the service keeps for the agent, the ones of the CLI's
+ * terminal, which say nothing an agent's transcript can use, and the box's
+ * own side question (`/btw`, `/side`), which the panel runs as a fork and
+ * which reaches the agent only where a box older than it sent it.
  */
 const CLAUDE_CODE_HELD: ReadonlySet<string> = new Set([
   SLASH_COMMAND.MODEL,
   SLASH_COMMAND.CLEAR,
   SLASH_COMMAND.NEW,
+  SLASH_COMMAND.BTW,
+  SLASH_COMMAND.SIDE,
   "effort",
   "fast",
   "rename",

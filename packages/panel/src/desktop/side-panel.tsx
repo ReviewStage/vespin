@@ -1095,6 +1095,8 @@ function stripTabs(input: {
   people: ReadonlyMap<string, HeldPeople>;
   /** The account signed in, whose cloud Browser draft a closed draft's tab lets go. */
   account: string | undefined;
+  /** What closing an agent's transcript tab does beside closing it (`TranscriptDoors.onClosed`). */
+  onTranscriptClosed: ((agentId: string) => void) | undefined;
 }): DrawnTab[] {
   const { panel, unread, agents, subagents, files, changes, pages, terminals, locals, held } =
     input;
@@ -1273,7 +1275,10 @@ function stripTabs(input: {
             ...tabLook({ kind: TAB_KIND.AGENT, name: subject.name, agent }),
             card: hungCard({ kind: TAB_KIND.AGENT, subject, models }),
           }),
-          close: () => panel.onClose(tab),
+          close: () => {
+            panel.onClose(tab);
+            input.onTranscriptClosed?.(agent.id);
+          },
           agent,
         },
       ];
@@ -1296,6 +1301,8 @@ export interface TranscriptDoors {
   readonly onOpenInTask: (agentId: string) => void;
   /** None where the platform runs no terminals. */
   readonly onOpenTerminal: ((agentId: string) => void) | undefined;
+  /** What closing an agent's transcript tab does beside closing it: a side chat's archived on a task's page (`side-chat.ts`); none beside the Inbox. */
+  readonly onClosed?: ((agentId: string) => void) | undefined;
 }
 
 /** The ids the chosen tab and the panel it shows stand under: the tab controls the panel, and the panel is labeled by the tab. */
@@ -1427,6 +1434,7 @@ function PanelTabs({
     // Note that beside the window's Inbox the one Inbox tab is the chosen thread, never a task's Inbox.
     thread: holder === SIDE_PANEL_HOLDER.INBOX,
     people,
+    onTranscriptClosed: transcriptDoors?.onClosed,
   });
   const strip = inTaskOrder(kinds, panel.order, (entry) => entry.tab);
   // Note that only a task's panel hands its looks over, since the Inbox's borrows its task's.
