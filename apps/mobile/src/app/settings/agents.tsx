@@ -2,6 +2,7 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
+  choiceOn,
   effortFor,
   effortsOf,
   FAST_WORD,
@@ -77,10 +78,23 @@ const SCHEMA_GROUPS = [
 const selectCapabilities = (state: AppStateSnapshot) => state.run.capabilities;
 
 /**
- * The choice a pick of a model sends: the model at the speed the default
- * runs where the catalog offers it, else its standard version; the effort
- * the default runs where the model lists it, else the nearest it lists.
+ * The choice a move to another catalog id sends: the effort the default
+ * runs where the model lists it, else the nearest it lists, and the window
+ * the default runs on where the model offers two (`choiceOn`), as the
+ * panel's Agents page carries them; none where the model lists no effort.
  */
+function choiceAt(
+  catalog: readonly CatalogModel[],
+  model: string,
+  current: ModelChoice,
+): ModelChoice | undefined {
+  const effort = effortFor(effortsOf(catalog, model), current.effort);
+  return effort === undefined
+    ? undefined
+    : choiceOn(catalog, { model, effort }, current.contextWindow);
+}
+
+/** The choice a pick of a model sends: the model at the speed the default runs where the catalog offers it, else its standard version. */
 function modelPicked(
   catalog: readonly CatalogModel[],
   standardId: string,
@@ -88,9 +102,7 @@ function modelPicked(
 ): ModelChoice | undefined {
   const speed = modelSpeedOf(current.model);
   const kept = speedsOffered(catalog, standardId).includes(speed) ? speed : MODEL_SPEED.STANDARD;
-  const model = modelIdAtSpeed(standardId, kept);
-  const effort = effortFor(effortsOf(catalog, model), current.effort);
-  return effort === undefined ? undefined : { model, effort };
+  return choiceAt(catalog, modelIdAtSpeed(standardId, kept), current);
 }
 
 export default function AgentsScreen() {
@@ -132,9 +144,7 @@ export default function AgentsScreen() {
   };
   const atSpeed = (next: ModelSpeed) => {
     if (current === undefined || standard === undefined) return;
-    const model = modelIdAtSpeed(standard, next);
-    const effort = effortFor(effortsOf(catalog, model), current.effort);
-    choose(effort === undefined ? undefined : { model, effort });
+    choose(choiceAt(catalog, modelIdAtSpeed(standard, next), current));
   };
   const store = (field: AppSettingField, token: string) => {
     if (view === undefined) return;

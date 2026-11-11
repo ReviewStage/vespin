@@ -1,12 +1,15 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
 import {
+  choiceOn,
+  contextWindowsOf,
   effortFor,
   effortLabel,
   effortsOf,
   FAST_WORD,
   SPEED_LABEL,
   SPEED_WORD,
+  windowOf,
 } from "@repo/features/model-effort";
 import {
   type CatalogModel,
@@ -56,8 +59,6 @@ import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import { MODE_GLYPH } from "../tasks/agent-approvals.js";
 import {
   choiceModelId,
-  choiceOn,
-  contextWindowsOf,
   FAST_ACCESS_URL,
   fastRestingNote,
   longWindowNote,
@@ -71,7 +72,6 @@ import {
   unrunnableChoice,
   unsearchedModels,
   windowLabel,
-  windowOf,
 } from "../tasks/agent-model.js";
 import { useRepositoryRemedy } from "../tasks/repository-remedy.js";
 import { useOpenLink } from "../tasks/use-open-link.js";

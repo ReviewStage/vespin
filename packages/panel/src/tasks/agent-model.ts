@@ -53,7 +53,6 @@ import {
   type AgentTurn,
   type AgentUsage,
   CONTEXT_WINDOW,
-  type ContextWindow,
   LOCAL_AGENT_REFUSAL,
   type NativeAgentRuntime,
   PULL_REQUEST_STATE,
@@ -66,7 +65,7 @@ import {
   remedyLabel,
 } from "@repo/features/failure-remedy";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
-import { effortLabel, SPEED_WORD } from "@repo/features/model-effort";
+import { contextWindowsOf, effortLabel, SPEED_WORD, windowOf } from "@repo/features/model-effort";
 import { agentName, CATALOG_ID_SEPARATOR, modelLabel } from "@repo/features/model-label";
 import {
   type CatalogModel,
@@ -1430,41 +1429,6 @@ const WINDOW_CUT = { THOUSAND: 1_000, TENTH_OF_A_MILLION: 100_000, MILLION: 1_00
 export function windowLabel(tokens: number): string {
   const step = tokens >= WINDOW_CUT.MILLION ? WINDOW_CUT.TENTH_OF_A_MILLION : WINDOW_CUT.THOUSAND;
   return formatCompact(Math.floor(tokens / step) * step);
-}
-
-/** The two windows the model offers, or nothing for a model with one, or one the catalog does not offer now. */
-export function contextWindowsOf(
-  models: readonly CatalogModel[],
-  modelId: string,
-): ContextWindows | undefined {
-  return models.find((model) => model.id === modelId)?.contextWindows;
-}
-
-/** The window a choice runs on as the catalog stands: the standard one only where it was chosen and the model offers two, else the model's whole window. */
-export function windowOf(models: readonly CatalogModel[], choice: ModelChoice): ContextWindow {
-  return choice.contextWindow === CONTEXT_WINDOW.STANDARD &&
-    contextWindowsOf(models, choice.model) !== undefined
-    ? CONTEXT_WINDOW.STANDARD
-    : CONTEXT_WINDOW.LONG;
-}
-
-/**
- * A model and effort on the window given, as a request names them: the
- * standard window only where the model offers two, so a change to a model
- * with one window drops it, and nothing for the model's whole window, the
- * default, so a service that predates the window is sent no key it would
- * refuse.
- */
-export function choiceOn(
-  models: readonly CatalogModel[],
-  pair: { readonly model: string; readonly effort: string },
-  window: ContextWindow | undefined,
-): ModelChoice {
-  const choice = { model: pair.model, effort: pair.effort };
-  return windowOf(models, { ...choice, contextWindow: window ?? CONTEXT_WINDOW.LONG }) ===
-    CONTEXT_WINDOW.STANDARD
-    ? { ...choice, contextWindow: CONTEXT_WINDOW.STANDARD }
-    : choice;
 }
 
 /** A choice as a request carries it: the model, the effort, and the window only where it is the standard one. */

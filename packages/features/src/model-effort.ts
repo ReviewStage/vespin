@@ -1,9 +1,12 @@
-// model-effort.ts -- a model's efforts and speeds as a picker offers them: the efforts it lists, the one a choice keeps across a change of model, each effort's label, the speeds it runs at, and their words.
+// model-effort.ts -- a model's efforts, speeds, and windows as a picker offers them: the efforts it lists, the one a choice keeps across a change of model, each effort's label, the speeds it runs at and their words, and the window a choice keeps.
 
+import { CONTEXT_WINDOW, type ContextWindow } from "./agent-wire.js";
 import {
   type CatalogModel,
+  type ContextWindows,
   MODEL_SPEED,
   MODEL_SPEED_SUFFIX,
+  type ModelChoice,
   type ModelSpeed,
 } from "./models-wire.js";
 
@@ -85,4 +88,39 @@ export function speedsOffered(
   return Object.values(MODEL_SPEED).filter((speed) =>
     models.some(({ id }) => id === modelIdAtSpeed(standardId, speed)),
   );
+}
+
+/** The two windows the model offers, or nothing for a model with one, or one the catalog does not offer now. */
+export function contextWindowsOf(
+  models: readonly CatalogModel[],
+  modelId: string,
+): ContextWindows | undefined {
+  return models.find((model) => model.id === modelId)?.contextWindows;
+}
+
+/** The window a choice runs on as the catalog stands: the standard one only where it was chosen and the model offers two, else the model's whole window. */
+export function windowOf(models: readonly CatalogModel[], choice: ModelChoice): ContextWindow {
+  return choice.contextWindow === CONTEXT_WINDOW.STANDARD &&
+    contextWindowsOf(models, choice.model) !== undefined
+    ? CONTEXT_WINDOW.STANDARD
+    : CONTEXT_WINDOW.LONG;
+}
+
+/**
+ * A model and effort on the window given, as a request names them: the
+ * standard window only where the model offers two, so a change to a model
+ * with one window drops it, and nothing for the model's whole window, the
+ * default, so a service that predates the window is sent no key it would
+ * refuse.
+ */
+export function choiceOn(
+  models: readonly CatalogModel[],
+  pair: { readonly model: string; readonly effort: string },
+  window: ContextWindow | undefined,
+): ModelChoice {
+  const choice = { model: pair.model, effort: pair.effort };
+  return windowOf(models, { ...choice, contextWindow: window ?? CONTEXT_WINDOW.LONG }) ===
+    CONTEXT_WINDOW.STANDARD
+    ? { ...choice, contextWindow: CONTEXT_WINDOW.STANDARD }
+    : choice;
 }

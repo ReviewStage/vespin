@@ -28,7 +28,8 @@ export type SettingsRoute = (typeof SETTINGS_ROUTE)[keyof typeof SETTINGS_ROUTE]
  */
 export function useOpenSettings(): (route?: SettingsRoute) => void {
   const router = useRouter();
-  return (route = SETTINGS_ROUTE.MAIN) => router.push(route);
+  // Note that a page is pushed with its stack's anchor, so Settings opened on Workspace stands its main list under it and Back goes there.
+  return (route = SETTINGS_ROUTE.MAIN) => router.push(route, { withAnchor: true });
 }
 
 /** The signed-in account as its photo button, opening Settings as a sheet over the tabs; none while nobody is signed in. */
