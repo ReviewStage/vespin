@@ -1039,12 +1039,43 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
+    "list_threads with a status lists the latest threads standing there, however many settled otherwise since",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+        yield* post(agent, QUEUE);
+        const asked = yield* onlyItem(agent);
+        yield* answerInboxAsk(agent.userId, asked.id, {
+          answers: { ask: openAsk(asked).id, reply: INBOX_REPLY.CHOSE, choices: ["Redis"] },
+          text: "",
+          clientKey: randomUUID(),
+        });
+        // Note that it takes about a second, because it must settle as many threads as a list's bound to push the answered one past it.
+        for (let done = 1; done <= INBOX_BOUNDS.MAX_SETTLED_TOLD; done += 1) {
+          yield* TestClock.adjust(Duration.seconds(1));
+          yield* post(agent, { ...SETTINGS, key: `done-${done}` });
+          yield* withdrawAsk(agent, input({ key: `done-${done}`, reason: "Did it myself." }));
+        }
+
+        const answered = acceptedList(
+          yield* listThreads(agent, input({ status: INBOX_STATUS.ANSWERED })),
+        );
+
+        assert.deepEqual(
+          answered.map((row) => [row.key, row.status]),
+          [[QUEUE.key, INBOX_STATUS.ANSWERED]],
+        );
+      }),
+  );
+
+  it.effect(
     "read_thread pages a long thread back from its latest messages, and names the open ask the first page leaves out",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
         yield* post(agent, QUEUE);
         const asked = yield* onlyItem(agent);
+        // Note that it takes about a second, because it must write one more message than a page's bound.
         const replies = INBOX_BOUNDS.MAX_MESSAGES_READ + 1;
         for (let reply = 1; reply <= replies; reply += 1) {
           yield* TestClock.adjust(Duration.seconds(1));

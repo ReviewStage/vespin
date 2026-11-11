@@ -1152,16 +1152,30 @@ const findOpenItems = SqlSchema.findAll({
     ),
 });
 
-/** The scope's settled items, the latest changed first, as many as the read carries. */
+/** Where a settled item stands, as a read that keeps to one names it. */
+const SettledStatusSchema = Schema.Literals([INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED]);
+
+/** The scope's settled items, the latest changed first, as many as the read carries: those standing where `status` names, or every settled one where it names none. */
 const findSettledItems = SqlSchema.findAll({
-  Request: Schema.Struct({ ...ScopeSchema.fields, limit: Schema.Number }),
+  Request: Schema.Struct({
+    ...ScopeSchema.fields,
+    limit: Schema.Number,
+    status: Schema.optionalKey(SettledStatusSchema),
+  }),
   Result: InboxRowSchema,
-  execute: ({ limit, ...scope }) =>
+  execute: ({ limit, status, ...scope }) =>
     Database.use((db) =>
       db
         .select(inboxColumns(scope.userId))
         .from(inboxItem)
-        .where(and(inScope(scope), ne(inboxItem.status, INBOX_STATUS.OPEN)))
+        .where(
+          and(
+            inScope(scope),
+            status === undefined
+              ? ne(inboxItem.status, INBOX_STATUS.OPEN)
+              : eq(inboxItem.status, status),
+          ),
+        )
         .orderBy(...LATEST_FIRST)
         .limit(limit),
     ),
@@ -1789,12 +1803,23 @@ function scopeItems(
   scope: InboxScope,
   settledLimit: number,
   keysFor?: string,
+  standing?: InboxStatus,
 ): InboxStoreEffect<readonly InboxItem[]> {
+  // Note that a read keeping to one standing filters before the settled bound, so the latest of that standing are read however many of another changed since.
+  const open = standing === undefined || standing === INBOX_STATUS.OPEN;
+  const settled =
+    standing === undefined ? {} : standing === INBOX_STATUS.OPEN ? undefined : { status: standing };
   return Effect.map(
-    Effect.all([findOpenItems(scope), findSettledItems({ ...scope, limit: settledLimit })], {
-      concurrency: 2,
-    }),
-    ([open, settled]) => [...open, ...settled].map((row) => storedItem(row, keysFor).item),
+    Effect.all(
+      [
+        open ? findOpenItems(scope) : Effect.succeed([]),
+        settled === undefined
+          ? Effect.succeed([])
+          : findSettledItems({ ...scope, limit: settledLimit, ...settled }),
+      ],
+      { concurrency: 2 },
+    ),
+    ([opened, kept]) => [...opened, ...kept].map((row) => storedItem(row, keysFor).item),
   );
 }
 
@@ -2590,11 +2615,14 @@ export function closeInboxItem(
  */
 export function agentInboxItems(
   agent: Pick<InboxAgent, "userId" | "agentId">,
+  standing?: InboxStatus,
 ): InboxStoreEffect<readonly InboxItem[]> {
   // Note that the agent's own read names no member, so it is handed no member's key.
   return scopeItems(
     { userId: agent.userId, scope: INBOX_SCOPE.AGENT, id: agent.agentId },
     INBOX_BOUNDS.MAX_SETTLED_TOLD,
+    undefined,
+    standing,
   );
 }
 
@@ -2637,6 +2665,7 @@ export function memberAgentInboxItems(
 export function agentReachedInboxItems(
   reader: { readonly userId: string; readonly workspaceId: string },
   of: { readonly agentId: string } | { readonly taskId: string },
+  standing?: InboxStatus,
 ): InboxStoreEffect<readonly InboxItem[]> {
   const named =
     "agentId" in of
@@ -2645,6 +2674,8 @@ export function agentReachedInboxItems(
   return scopeItems(
     { userId: reader.userId, workspaceId: reader.workspaceId, ...named },
     INBOX_BOUNDS.MAX_SETTLED_TOLD,
+    undefined,
+    standing,
   );
 }
 

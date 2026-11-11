@@ -971,17 +971,14 @@ export function listThreads(
   const reader = { userId: agent.userId, workspaceId: agent.organizationId };
   const items =
     taskId !== undefined
-      ? agentReachedInboxItems(reader, { taskId })
+      ? agentReachedInboxItems(reader, { taskId }, status)
       : agentId === undefined || agentId === agent.agentId
-        ? agentInboxItems(agent)
-        : agentReachedInboxItems(reader, { agentId });
+        ? agentInboxItems(agent, status)
+        : agentReachedInboxItems(reader, { agentId }, status);
   return orUnavailable(
     Effect.map(items, (read) => ({
       status: ACTION_RESULT_STATUS.ACCEPTED,
-      threads: rowsOf(
-        status === undefined ? read : read.filter((item) => item.status === status),
-        agent.agentId,
-      ),
+      threads: rowsOf(read, agent.agentId),
     })),
   );
 }
