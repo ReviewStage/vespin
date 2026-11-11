@@ -23,6 +23,7 @@ import * as FileSystem from "effect/FileSystem";
 import { TestClock } from "effect/testing";
 import { Environment, reporterLayer } from "../effect/seams.js";
 import { hostDeviceWhen, readHostDevice, writeHostDevice } from "../host-device-record.js";
+import { armedWatchLayer } from "../node/armed-watch.js";
 import { fakeClis } from "../testing/fake-clis.js";
 import { scriptedSpawner } from "../testing/scripted-spawner.js";
 import { hostDaemon, hostRefusedRest } from "./host-daemon.js";
@@ -416,12 +417,23 @@ describe("a host's daemon", () => {
 });
 
 describe("a host waiting on its record", () => {
-  /** The clock moved on until the wait ends, each step letting the folder's watch and its read of the record, real file work, land in real time. */
+  /** The file system a host on Node runs on, its watches laid at once (`armedWatchLayer`). */
+  const armedNode = Layer.mergeAll(
+    NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)),
+    NodePath.layer,
+  );
+
+  /**
+   * The clock moved on until the wait ends, each step letting the folder's
+   * watch and its read of the record, real file work, land in real time.
+   * Note that no count of steps bounds it, because a busy runner hears a move
+   * after however many steps it takes: the test's own timeout calls a wait
+   * that never ends.
+   */
   const untilEnded = (waiting: Fiber.Fiber<unknown, unknown>) =>
     TestClock.adjust(Duration.seconds(1)).pipe(
       Effect.andThen(Effect.yieldNow.pipe(Effect.repeat({ times: 200 }))),
-      Effect.repeat({ until: () => waiting.pollUnsafe() !== undefined, times: 200 }),
-      Effect.andThen(Effect.sync(() => expect(waiting.pollUnsafe()).toBeDefined())),
+      Effect.repeat({ until: () => waiting.pollUnsafe() !== undefined }),
       Effect.andThen(Fiber.join(waiting)),
     );
 
@@ -447,7 +459,7 @@ describe("a host waiting on its record", () => {
         expect(reports).toEqual([
           "Vespin host: Vespin refused this box's secret, so it was removed. Connect it again to follow its agents.",
         ]);
-      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+      }).pipe(Effect.scoped, Effect.provide(armedNode)),
   );
 
   it.effect(
@@ -460,7 +472,7 @@ describe("a host waiting on its record", () => {
         expect(waiting.pollUnsafe()).toBeUndefined();
         yield* writeHostDevice(stateRoot, DEVICE);
         yield* untilEnded(waiting);
-      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+      }).pipe(Effect.scoped, Effect.provide(armedNode)),
   );
 
   it.effect.each([
@@ -481,7 +493,7 @@ describe("a host waiting on its record", () => {
         yield* elapsed(Duration.seconds(30));
         yield* writeHostDevice(stateRoot, DEVICE);
         yield* untilEnded(waiting);
-      }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+      }).pipe(Effect.scoped, Effect.provide(armedNode)),
   );
 
   it.effect(
