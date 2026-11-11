@@ -1,6 +1,6 @@
 // inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note or replies, and Remind me and Resolve.
 
-import { ASK_PRESS, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
+import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
   picksNone,
@@ -175,6 +175,8 @@ export function OpenAskCard({
           recommended={recommendedLabels(ask)}
           picked={draft.choices}
           multiple={ask.multiple === true}
+          // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
+          title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
           onChange={(choices) => onDraft(withPicks(draft, choices))}
           none={
             cards

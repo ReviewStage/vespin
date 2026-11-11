@@ -14,8 +14,8 @@ import {
   accessibilityHint,
   accessibilityLabel,
   background,
+  buttonBorderShape,
   buttonStyle,
-  contentShape,
   controlSize,
   disabled as disabledModifier,
   fixedSize,
@@ -178,37 +178,31 @@ type ChipProps = {
 };
 
 /**
- * A small capsule a person picks among others, such as a scope or a model:
- * filled with the ink once chosen, as a selection reads without the accent,
- * and on the surface inside a hairline otherwise. VoiceOver hears the chosen
- * one as selected, since its fill alone says so on screen.
+ * A small act or choice as the system's own small capsule button, as Mail
+ * and the App Store stand an act under a card: bordered in the ink, and
+ * filled with the ink once chosen, as a selection reads without the accent.
+ * The system draws its press, its dimming, Button Shapes and Increase
+ * Contrast. VoiceOver hears the chosen one as selected, since its fill
+ * alone says so on screen.
  */
 export function Chip({ label, symbol, count, selected = false, hint, onPress }: ChipProps) {
   const colors = useColors();
-  const ink = selected ? colors.GROUND : colors.TEXT_BODY;
   return (
     <SwiftUIButton
+      label={count === undefined ? label : `${label} ${count}`}
+      {...(symbol === undefined ? {} : { systemImage: symbol })}
       onPress={onPress}
       modifiers={[
-        buttonStyle("plain"),
-        contentShape(shapes.capsule(), "hoverEffect"),
+        buttonStyle(selected ? "borderedProminent" : "bordered"),
+        buttonBorderShape("capsule"),
+        controlSize("small"),
+        tint(colors.TEXT),
+        ...(selected ? [foregroundStyle(colors.GROUND)] : []),
         hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
         ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
-    >
-      <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, selected)}>
-        {symbol === undefined ? null : (
-          <Image systemName={symbol} size={MARK_SIZE.GLYPH - 2} color={ink} />
-        )}
-        <CapsuleWords
-          label={label}
-          count={count}
-          ink={ink}
-          countInk={selected ? colors.GROUND : colors.TEXT_MUTED}
-        />
-      </HStack>
-    </SwiftUIButton>
+    />
   );
 }
 

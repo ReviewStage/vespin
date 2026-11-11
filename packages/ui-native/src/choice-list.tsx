@@ -51,7 +51,7 @@ type ChoiceListProps = {
   readonly recommended?: readonly string[] | undefined;
   /** The labels picked so far. */
   readonly picked: readonly string[];
-  /** Whether a person may pick several, which draws squares rather than circles. */
+  /** Whether a person may pick several, which draws Reminders' round checks once picked; the caller says so in `title`, since an unpicked row reads as a circle either way. */
   readonly multiple?: boolean | undefined;
   /** Called with the labels picked once a row is pressed. */
   readonly onChange: (picked: readonly string[]) => void;
@@ -64,9 +64,9 @@ type ChoiceListProps = {
 /** How thick the card's and the tag's edges are drawn. */
 const HAIRLINE = 0.5;
 
-/** The mark leading an option, 18 pt: a ring or a square, the ring filled with the accent at its heart once picked. */
+/** The mark leading an option, 18 pt: a ring filled with the accent at its heart once picked, or, where several may be picked, Reminders' round check, since iOS has no square checkbox. */
 function pickMark(picked: boolean, multiple: boolean) {
-  if (multiple) return picked ? "checkmark.square.fill" : "square";
+  if (multiple) return picked ? "checkmark.circle.fill" : "circle";
   return picked ? "smallcircle.filled.circle.fill" : "circle";
 }
 

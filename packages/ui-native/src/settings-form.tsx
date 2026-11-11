@@ -6,7 +6,6 @@ import {
   Image,
   LabeledContent,
   Menu,
-  Picker,
   Spacer,
   Button as SwiftUIButton,
   Text,
@@ -14,6 +13,7 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
@@ -23,16 +23,14 @@ import {
   disabled,
   font,
   foregroundStyle,
-  labelsHidden,
   listRowBackground,
-  pickerStyle,
   scrollContentBackground,
   scrollDismissesKeyboard,
   shapes,
-  tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { Avatar } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -300,36 +298,58 @@ export function ActionRow({ label, symbol, destructive = false, onPress }: Actio
 export type PickOption = { readonly id: string; readonly label: string };
 
 type PickRowsProps = {
-  /** What is picked, for VoiceOver; the section's title heads it on screen. */
-  readonly label: string;
   readonly options: readonly PickOption[];
   readonly picked: string | undefined;
   readonly onPick: (id: string) => void;
 };
 
-/** A choice among a few, each a row of its own with the picked one checked, as SwiftUI's inline picker draws it. */
-export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
+/** The picked row's check, as iOS's own Settings draws it at a row's end. */
+const PICKED_MARK = "checkmark";
+
+/** The check's size, as small and heavy as the system's own. */
+const PICKED_MARK_SIZE = 15;
+
+/**
+ * A choice among a few, each a row of its own with the picked one checked
+ * in copper, as iOS's own Settings checks a choice. Note that the rows are
+ * drawn here rather than by SwiftUI's inline picker, because its check takes
+ * the form's tint, which stands in the ink, and neither a tint on the picker
+ * nor one on a group around it reached the check. VoiceOver hears each row
+ * as a button by its words, the picked one selected, under the section's
+ * title.
+ */
+export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
+  const markSize = useScaledSize(PICKED_MARK_SIZE);
+  // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
-    <Picker<string | null>
-      label={label}
-      selection={picked ?? null}
-      onSelectionChange={(id) => {
-        if (id !== null) onPick(id);
-      }}
-      modifiers={[
-        pickerStyle("inline"),
-        labelsHidden(),
-        tint(colors.ACCENT),
-        listRowBackground(colors.SURFACE),
-      ]}
-    >
+    <>
       {options.map((option) => (
-        <Text key={option.id} modifiers={[tag(option.id), foregroundStyle(colors.TEXT)]}>
-          {option.label}
-        </Text>
+        <SwiftUIButton
+          key={option.id}
+          onPress={() => onPick(option.id)}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(option.label),
+            ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
+            listRowBackground(colors.SURFACE),
+          ]}
+        >
+          <HStack modifiers={[contentShape(shapes.rectangle())]}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
+            <Spacer />
+            {option.id === picked ? (
+              <Image
+                systemName={PICKED_MARK}
+                size={markSize}
+                color={colors.ACCENT}
+                modifiers={[font({ size: markSize, weight: "semibold" })]}
+              />
+            ) : null}
+          </HStack>
+        </SwiftUIButton>
       ))}
-    </Picker>
+    </>
   );
 }
 
