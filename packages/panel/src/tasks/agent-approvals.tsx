@@ -87,8 +87,8 @@ import type { HeldCall } from "./transcript-blocks.js";
  * a draft agent's, a fork's and a continue's among them
  * (`useNewAgentPermissionMode`): it opens on the member's Default
  * permissions, a pick goes with the Start, so the first launch already runs
- * on it, and it writes no setting, as the Codex app's chip sets the mode of
- * the thread it starts; its submenu says nothing of a next turn. Claude Code
+ * on it, and it writes no setting, since it is the new agent's alone; its
+ * submenu says nothing of a next turn. Claude Code
  * and Codex agents each ask in their own harness's terms, which these words
  * and hints, Codex's own, fit both; an agent on neither asks nothing, so no
  * other is offered a mode.
