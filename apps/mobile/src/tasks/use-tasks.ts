@@ -58,7 +58,7 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** No task list read yet. */
 const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
@@ -189,6 +189,7 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
       {
         refused: (landed) => (landed ? undefined : settleFailedNote(status, 1)),
         retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_STATUS, id: taskId },
         went: BUZZ.SUCCESS,
       },
     );
@@ -278,7 +279,10 @@ export function useTasksListing(search: string): TasksListing {
     // Note that the host draws a mark and a pin on the row the moment they are asked, and puts either back where the service refused it.
     const markRead = (taskId: string, unread: boolean) => {
       const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
-      write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }), { retry: true });
+      write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }), {
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_READ, id: taskId },
+      });
     };
     // Note that a pin taps as a toggle does, lighter than a status's buzz.
     const pin = (taskId: string, pinned: boolean) => {
@@ -286,6 +290,7 @@ export function useTasksListing(search: string): TasksListing {
         refused: (landed) =>
           landed ? undefined : MARK_FAILED_NOTES[pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN],
         retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_PIN, id: taskId },
         went: BUZZ.SELECTION,
       });
     };

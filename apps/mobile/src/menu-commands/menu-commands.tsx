@@ -16,12 +16,17 @@ import { READ_MARK } from "@repo/features/read-mark";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { taskRowLook } from "@repo/features/task-tree-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
-import { settleStopWords } from "@repo/features/tasks-model";
+import {
+  MARK_FAILED_NOTES,
+  settleFailedNote,
+  settleStopWords,
+  TASK_MARK,
+} from "@repo/features/tasks-model";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import { BUZZ, buzz, ConfirmAsk } from "@repo/ui-native";
+import { BUZZ, ConfirmAsk } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
@@ -34,6 +39,7 @@ import { useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
@@ -196,6 +202,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const acts = useHostActs();
+  const write = useWrite();
   const inbox = useInboxActs();
   const signOut = useSignOut();
   const openSettings = useOpenSettings();
@@ -247,11 +254,13 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     const taskId = subject.task?.id;
     if (taskId === undefined) return;
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
-    acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status: TASK_STATUS.DONE, ...stopping }).then(
-      (landed) => buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR),
-      (error: unknown) => {
-        console.error("Mark Done did not go.", error);
-        buzz(BUZZ.ERROR);
+    write(
+      () => acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status: TASK_STATUS.DONE, ...stopping }),
+      {
+        refused: (landed) => (landed ? undefined : settleFailedNote(TASK_STATUS.DONE, 1)),
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_STATUS, id: taskId },
+        went: BUZZ.SUCCESS,
       },
     );
   };
@@ -301,21 +310,25 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         if (threadId !== undefined) inbox.mark(threadId, !subject.threadUnread);
         else if (task !== undefined) {
           const unread = subject.toggled.includes(MENU_COMMAND.TOGGLE_READ);
-          acts[ACT_KIND.TASKS_MARK_READ]({
-            taskId: task.id,
-            readMark: unread ? READ_MARK.READ : READ_MARK.UNREAD,
-          }).catch((error: unknown) => console.error("The mark did not go.", error));
+          const readMark = unread ? READ_MARK.READ : READ_MARK.UNREAD;
+          write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId: task.id, readMark }), {
+            retry: true,
+            subject: { kind: WRITE_SUBJECT.TASK_READ, id: task.id },
+          });
         }
         return;
       case MENU_COMMAND.PIN:
         if (task === undefined) return;
-        acts[ACT_KIND.TASKS_PIN]({ taskId: task.id, pinned: task.pinnedAt === undefined }).then(
-          (landed) => buzz(landed ? BUZZ.SELECTION : BUZZ.ERROR),
-          (error: unknown) => {
-            console.error("The pin did not go.", error);
-            buzz(BUZZ.ERROR);
-          },
-        );
+        {
+          const pinned = task.pinnedAt === undefined;
+          write(() => acts[ACT_KIND.TASKS_PIN]({ taskId: task.id, pinned }), {
+            refused: (landed) =>
+              landed ? undefined : MARK_FAILED_NOTES[pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN],
+            retry: true,
+            subject: { kind: WRITE_SUBJECT.TASK_PIN, id: task.id },
+            went: BUZZ.SELECTION,
+          });
+        }
         return;
       case MENU_COMMAND.REMIND_CLEAR:
         if (threadId !== undefined) inbox.remind(threadId, null);

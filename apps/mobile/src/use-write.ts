@@ -35,8 +35,18 @@ interface WriteSaying<Answer> {
   readonly refused?: ((answer: Answer) => string | undefined) | undefined;
   /** What a write that got no answer, and no sentence of the host's, says in place of the fixed sentence, such as a send's own words for it. */
   readonly unanswered?: string | undefined;
-  /** Whether the notice offers Try again, which sends the write again as it was. */
-  readonly retry?: boolean | undefined;
+  /**
+   * Whether the notice offers Try again, which sends the write again as it
+   * was: always, or, for a refusal the answer carried, only where the answer
+   * says another attempt could go, as a thread resolved already never can.
+   */
+  readonly retry?: boolean | ((answer: Answer) => boolean) | undefined;
+  /**
+   * What the write sets, such as a thread's reminder or a task's status, by
+   * which a newer write of the same thing makes an older one's Try again do
+   * nothing, so it never puts back an older choice over a newer one.
+   */
+  readonly subject?: WriteSubject | undefined;
   /** The buzz a write that went plays; none for one that goes quietly, such as a read mark. */
   readonly went?: Buzz | undefined;
   /**
@@ -53,6 +63,39 @@ export type Write = <Answer>(
   act: () => PromiseLike<Answer>,
   saying?: WriteSaying<Answer>,
 ) => Promise<boolean>;
+
+/** What a write sets, of which a newer write makes an older one's Try again do nothing. */
+export const WRITE_SUBJECT = {
+  THREAD_READ: "thread-read",
+  THREAD_REMINDER: "thread-reminder",
+  TASK_STATUS: "task-status",
+  TASK_PIN: "task-pin",
+  TASK_READ: "task-read",
+} as const;
+
+export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
+
+/** One thing a write sets: its kind, and the thread's or the task's id. */
+export interface WriteSubject {
+  readonly kind: WriteSubjectKind;
+  readonly id: string;
+}
+
+/** The newest write of each subject, by kind then id, counted, which a Try again checks it still is. */
+const newestWrite = new Map<WriteSubjectKind, Map<string, number>>();
+
+/** The count of `subject`'s newest write, once one more is sent. */
+function sentAnew(subject: WriteSubject): number {
+  const ofKind = newestWrite.get(subject.kind) ?? new Map<string, number>();
+  const sent = (ofKind.get(subject.id) ?? 0) + 1;
+  newestWrite.set(subject.kind, ofKind.set(subject.id, sent));
+  return sent;
+}
+
+/** Whether the write counted `sent` is still `subject`'s newest. */
+function stillNewest(subject: WriteSubject, sent: number): boolean {
+  return newestWrite.get(subject.kind)?.get(subject.id) === sent;
+}
 
 /** The marks that say the service cannot be reached now. */
 const OFFLINE_MARKS: ReadonlySet<LiveMark | undefined> = new Set([
@@ -103,7 +146,13 @@ export function useWrite(): Write {
   const write: Write = useCallback(
     <Answer>(act: () => PromiseLike<Answer>, saying: WriteSaying<Answer> = {}) => {
       const send = (): Promise<boolean> => {
-        const failed = (words: string, unreached: boolean): false => {
+        const { subject } = saying;
+        const sent = subject === undefined ? 0 : sentAnew(subject);
+        // Note that Try again sends nothing once a newer write of the same subject was sent.
+        const again = () => {
+          if (subject === undefined || stillNewest(subject, sent)) void send();
+        };
+        const failed = (words: string, unreached: boolean, retry: boolean): false => {
           buzz(BUZZ.ERROR);
           const now = markNow.current;
           const offline = unreached && now !== undefined && OFFLINE_MARKS.has(now);
@@ -114,7 +163,7 @@ export function useWrite(): Write {
             notices.say({
               kind: NOTICE_KIND.REFUSED,
               words,
-              retry: saying.retry === true ? () => void send() : undefined,
+              retry: retry ? again : undefined,
             });
           }
           return false;
@@ -128,15 +177,18 @@ export function useWrite(): Write {
         return Promise.resolve(started).then(
           (answer) => {
             const words = saying.refused?.(answer);
-            if (words !== undefined) return failed(words, false);
+            const retry =
+              typeof saying.retry === "function" ? saying.retry(answer) : saying.retry === true;
+            if (words !== undefined) return failed(words, false, retry);
             if (saying.went !== undefined) buzz(saying.went);
             return true;
           },
           (cause: unknown) => {
             const sentence = actRefusalSentence(cause);
-            if (sentence !== undefined) return failed(sentence, false);
+            const retry = saying.retry !== undefined && saying.retry !== false;
+            if (sentence !== undefined) return failed(sentence, false, retry);
             console.error("A write did not go.", cause);
-            return failed(saying.unanswered ?? ACT_UNREACHED_WORDS, true);
+            return failed(saying.unanswered ?? ACT_UNREACHED_WORDS, true, retry);
           },
         );
       };

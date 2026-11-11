@@ -51,7 +51,7 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { dismissThreadNotifications } from "../notification-task.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { NOT_RESOLVED, refusedWords, useSendsDrawn } from "./use-thread-answer.js";
 
 /** What a thread's videos are named under among the app's caches. */
@@ -228,6 +228,7 @@ export function useInboxActs(): {
         write(() => acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }), {
           refused: (answer) => ("failure" in answer ? markedNote(unread, 0, 1) : undefined),
           retry: true,
+          subject: { kind: WRITE_SUBJECT.THREAD_READ, id: itemId },
         });
       },
       remind: (itemId, until) => {
@@ -239,6 +240,7 @@ export function useInboxActs(): {
                 : REMIND_REFUSED.SET
               : undefined,
           retry: true,
+          subject: { kind: WRITE_SUBJECT.THREAD_REMINDER, id: itemId },
           went: BUZZ.SUCCESS,
         });
       },
@@ -260,7 +262,8 @@ export function useInboxActs(): {
                   ? undefined
                   : NOT_RESOLVED[answer.item.status],
             unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-            retry: true,
+            // Note that a thread answered or resolved already offers no Try again, which could never take.
+            retry: (answer) => "failure" in answer,
             went: BUZZ.SUCCESS,
           },
         );

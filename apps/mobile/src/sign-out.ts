@@ -29,9 +29,11 @@ export function useSignOut(): (saying?: SignOutSaying) => Promise<boolean> {
   const signingOut = useRef(false);
   return (saying = {}) => {
     if (signingOut.current) return Promise.resolve(false);
-    signingOut.current = true;
-    const signOut = () =>
-      unregisterPushDevice(acts, fixture)
+    // Note that every attempt, Try again's among them, holds the guard while it runs, so two never overlap.
+    const signOut = () => {
+      if (signingOut.current) return Promise.resolve();
+      signingOut.current = true;
+      return unregisterPushDevice(acts, fixture)
         .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
         .then(
           () =>
@@ -42,12 +44,11 @@ export function useSignOut(): (saying?: SignOutSaying) => Promise<boolean> {
             reregisterPushDevice(acts, fixture).catch(() => undefined);
             throw refused;
           },
-        );
-    return write(signOut, {
-      inPlace: saying.inPlace,
-      retry: saying.inPlace === undefined,
-    }).finally(() => {
-      signingOut.current = false;
-    });
+        )
+        .finally(() => {
+          signingOut.current = false;
+        });
+    };
+    return write(signOut, { inPlace: saying.inPlace, retry: saying.inPlace === undefined });
   };
 }
