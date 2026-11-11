@@ -26,6 +26,7 @@ import {
   Button,
   CONFIRM_LOSS,
   CodeEditor,
+  CodePreview,
   ConfirmDialog,
   GAP,
   GlyphSlot,
@@ -50,7 +51,6 @@ import {
   SettingsRowsSkeleton,
   SettingsSection,
   TEXT_ELEMENT,
-  TEXT_FONT,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
@@ -797,19 +797,11 @@ function useRunActionOrder(
   return { ordered, move };
 }
 
-/** What a row says of its command under its label: its first line with words in it, and an ellipsis where more lines follow, which the row cuts at its edge. */
-function commandSummary(command: string): string {
-  const said = command
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "");
-  return said.length > 1 ? `${said[0]} …` : (said[0] ?? "");
-}
-
 /**
  * One run action's row, as compact as a subscription's: its icon in the
  * row's mark column, its label, renamed in place, a Default badge on the
- * repository's default, and its command's first line under the label. Its
+ * repository's default, and its command's first lines under the label in
+ * its colors (`CodePreview`). Its
  * chevron folds the whole command open under the row, on the label's edge,
  * in the numbered, Bash-colored editor a setup script stands in, to read; an owner or admin edits it there as a script is
  * edited, Discard and Save standing at the row's end once it differs from
@@ -862,6 +854,7 @@ function RunActionRow({
     setEdited(undefined);
   }
   const command = edited ?? savedCommand;
+  const previewLines = useTypedCodeColoring(SCRIPT_LANGUAGE, savedCommand);
   const changed = action !== undefined && edited !== undefined && edited !== savedCommand;
   const editing = changed || added !== undefined;
   const standing = () => actions.map(writtenOf);
@@ -1033,19 +1026,11 @@ function RunActionRow({
             </ReplayMask>
           ),
           adornment: isDefault ? <Badge>Default</Badge> : undefined,
+          // Note that the command's first lines stand under the label in its colors, so a script of several lines reads as several at a glance.
           description:
             savedCommand === "" ? undefined : (
               <ReplayMask>
-                <OneLine words={commandSummary(savedCommand)}>
-                  <Text
-                    as={TEXT_ELEMENT.SPAN}
-                    variant={TEXT_VARIANT.INHERIT}
-                    font={TEXT_FONT.MONO}
-                    tone={TEXT_TONE.MUTED}
-                  >
-                    {commandSummary(savedCommand)}
-                  </Text>
-                </OneLine>
+                <CodePreview code={savedCommand} lines={previewLines} />
               </ReplayMask>
             ),
           // Note that Discard and Save stay beside the label at any width, the label giving way, since dropping under it would move the editor at a phone's width.

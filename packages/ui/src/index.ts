@@ -38,6 +38,7 @@ export * from "./components/choice-bar/choice-bar.js";
 export * from "./components/choice-list/choice-list.js";
 export * from "./components/code-card/code-card.js";
 export * from "./components/code-card/code-editor.js";
+export * from "./components/code-card/code-preview.js";
 export * from "./components/code-card/file-code-card.js";
 export * from "./components/collection-page/collection-page.js";
 export * from "./components/combobox/combobox.js";
