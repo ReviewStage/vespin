@@ -24,7 +24,8 @@ import { agentOnBox } from "./local-agent-box.js";
  * path of one of the agent's own places (`agentPlaces`): its folder, which
  * holds its worktree and installed skills, its attachments under the host's
  * state, and its shared files under the machine's own temp folder, never
- * that temp folder itself. Anything else is refused as a path
+ * that temp folder itself, and those only while they are this machine's own
+ * (`sharedFilesPrivate`). Anything else is refused as a path
  * that names no file the agent may read, and a read answers no bytes. A
  * path that does not exist resolves to nothing, and is refused the same
  * way. No credential stands in the agent's folder: its GitHub sign-in is
@@ -54,6 +55,32 @@ export function agentPlaces(layout: DeviceAgentLayout): readonly string[] {
   return [layout.folder, layout.attachments, layout.sharedFiles];
 }
 
+/**
+ * Whether the agent's shared files folder and its root under the machine's
+ * temp folder are each a real folder, never a link, owned by whoever owns
+ * the agent's own folder. Note that it is asked on every read as well as at
+ * launch, since a root the OS cleared from a temp folder every user shares
+ * (Linux's `/tmp`) could be made again by someone else, who could then swap
+ * the agent's folder beneath it for a link to anything the host can read.
+ */
+export const sharedFilesPrivate = (
+  layout: DeviceAgentLayout,
+): Effect.Effect<boolean, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const owner = (yield* fileSystem.stat(layout.folder)).uid;
+    if (Option.isNone(owner)) return false;
+    const root = layout.sharedFiles.slice(0, layout.sharedFiles.lastIndexOf("/"));
+    for (const place of [root, layout.sharedFiles]) {
+      if (Option.isSome(yield* Effect.option(fileSystem.readLink(place)))) return false;
+      const info = yield* fileSystem.stat(place);
+      if (info.type !== "Directory" || Option.getOrUndefined(info.uid) !== owner.value) {
+        return false;
+      }
+    }
+    return true;
+  }).pipe(Effect.orElseSucceed(() => false));
+
 /** Whether `path`, already real, stands at or under `root`, already real. */
 function within(root: string, path: string): boolean {
   const base = root.replace(/\/+$/u, "");
@@ -62,8 +89,9 @@ function within(root: string, path: string): boolean {
 
 /**
  * The real path of `target` where it stands inside one of the agent's own
- * places, every symlink in either followed; nothing where the target cannot
- * be resolved, or resolves outside every place that can.
+ * places, every symlink in either followed, its shared files counted only
+ * while they are private (`sharedFilesPrivate`); nothing where the target
+ * cannot be resolved, or resolves outside every place that can.
  */
 const confinedPath = (
   layout: DeviceAgentLayout,
@@ -74,7 +102,9 @@ const confinedPath = (
     if (!target.startsWith("/")) return Option.none();
     const resolved = yield* Effect.option(fileSystem.realPath(target));
     if (Option.isNone(resolved)) return Option.none();
+    const sharedPrivate = yield* sharedFilesPrivate(layout);
     for (const place of agentPlaces(layout)) {
+      if (place === layout.sharedFiles && !sharedPrivate) continue;
       const root = yield* Effect.option(fileSystem.realPath(place));
       if (Option.isSome(root) && within(root.value, resolved.value)) return resolved;
     }

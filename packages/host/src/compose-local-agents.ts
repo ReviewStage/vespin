@@ -63,7 +63,11 @@ import { Environment, LocalAgentPlatform, Reporter } from "./effect/seams.js";
 import type { HostKernel } from "./host-kernel.js";
 import { agentOnBox } from "./local-agent-box.js";
 import { LAUNCH_NOTE, notedFirstLines, sessionResumed } from "./local-agent-first-lines.js";
-import { agentPlaces, answeredLocalAgentRequest } from "./local-agent-requests.js";
+import {
+  agentPlaces,
+  answeredLocalAgentRequest,
+  sharedFilesPrivate,
+} from "./local-agent-requests.js";
 import {
   forgetOwnedAgent,
   forgetRunnerGroup,
@@ -385,23 +389,17 @@ export function composeLocalAgents(
 
     /**
      * Whether the agent's shared files folder is this machine's own and
-     * private, made where it stands not: it and its root under the machine's
-     * temp folder each a real folder, never a link, owned by whoever owns the
-     * agent's own folder, and made `0700`. Note that a root someone else made
-     * first, as another user may on a temp folder every user shares (Linux's
-     * `/tmp`), is refused rather than used, since whoever owns it could swap
-     * the agent's folder beneath it for one of their own.
+     * private (`sharedFilesPrivate`), made where it stands not, and then it
+     * and its root made `0700`. Note that a root someone else made first, as
+     * another user may on a temp folder every user shares (Linux's `/tmp`), is
+     * refused rather than used, since whoever owns it could swap the agent's
+     * folder beneath it for one of their own.
      */
     const sharedFilesSecured = (layout: DeviceAgentLayout) =>
       Effect.gen(function* () {
         yield* fileSystem.makeDirectory(layout.sharedFiles, { recursive: true, mode: 0o700 });
-        const owner = (yield* fileSystem.stat(layout.folder)).uid;
-        if (Option.isNone(owner)) return false;
+        if (!(yield* sharedFilesPrivate(layout))) return false;
         for (const place of [path.dirname(layout.sharedFiles), layout.sharedFiles]) {
-          if (Option.isSome(yield* Effect.option(fileSystem.readLink(place)))) return false;
-          const info = yield* fileSystem.stat(place);
-          if (info.type !== "Directory") return false;
-          if (Option.getOrUndefined(info.uid) !== owner.value) return false;
           yield* fileSystem.chmod(place, 0o700);
         }
         return true;

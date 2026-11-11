@@ -95,6 +95,19 @@ const stagedRepository = Effect.gen(function* () {
 });
 
 describe("answeredLocalAgentRequest", () => {
+  it.effect(
+    "refuses a read in its shared files once their root is a link someone else left in the machine's temp folder",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const { root, layout } = yield* staged;
+        yield* fileSystem.rename(`${root}/tmp/vespin`, `${root}/planted`);
+        yield* fileSystem.symlink(`${root}/planted`, `${root}/tmp/vespin`);
+        const answer = yield* read(layout, `${layout.sharedFiles}/notes.txt`);
+        assert.deepStrictEqual(answer, { kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE, bytes: null });
+      }).pipe(Effect.scoped, Effect.provide(NODE)),
+  );
+
   it.effect.each([
     { case: "its worktree", place: (layout: DeviceAgentLayout) => layout.checkoutPath },
     { case: "its attachments", place: (layout: DeviceAgentLayout) => layout.attachments },
