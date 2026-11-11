@@ -1,3 +1,4 @@
+import { literalsReadingUnknown } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
@@ -49,8 +50,8 @@ import {
   type TaskPullRequestLine,
   type TaskPullRequests,
   type TaskSummary,
-  taskPrioritySchema,
-  taskStatusSchema,
+  taskPriorityReadSchema,
+  taskStatusReadSchema,
   taskSummarySchema,
 } from "./task-wire.js";
 
@@ -103,17 +104,16 @@ const taskLiveRowSchema = EffectSchema.Struct({
   completedAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   createdAt: countedNumber,
   updatedAt: countedNumber,
-  status: taskStatusSchema,
-  priority: taskPrioritySchema,
+  status: taskStatusReadSchema,
+  priority: taskPriorityReadSchema,
   /** The task's number in its workspace, from 1, as the list says it; absent from a row the host draws for a task it started before the service numbered it. */
   number: EffectSchema.optionalKey(EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(1))),
   /** Who made the task for its owner (`DESCRIPTION_ACTOR`); absent from a service before it was sent, read as made by hand. */
   creatorActor: EffectSchema.optionalKey(
-    EffectSchema.Literals([
+    literalsReadingUnknown(
+      [DESCRIPTION_ACTOR.DEVELOPER, DESCRIPTION_ACTOR.NOTETAKER, DESCRIPTION_ACTOR.AGENT],
       DESCRIPTION_ACTOR.DEVELOPER,
-      DESCRIPTION_ACTOR.NOTETAKER,
-      DESCRIPTION_ACTOR.AGENT,
-    ]),
+    ),
   ),
   /** The coding agent that made the task; null for any other maker and once its row is gone. */
   creatorAgentId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
@@ -148,7 +148,7 @@ const agentLiveRowSchema = EffectSchema.Struct({
   title: EffectSchema.NullOr(EffectSchema.String),
   /** Whether the agent was handed a prompt rather than its description. */
   /** What the agent was handed as its first message: the description, the developer's prompt, or nothing, for one started blank. */
-  brief: EffectSchema.Literals(Object.values(AGENT_BRIEF)),
+  brief: literalsReadingUnknown(Object.values(AGENT_BRIEF), AGENT_BRIEF.PROMPT),
   /** The repository the agent works in; null for one that works in none. */
   repository: EffectSchema.NullOr(EffectSchema.String),
   starterId: EffectSchema.String,
