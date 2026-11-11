@@ -19,7 +19,9 @@ public class MenuCommandsModule: Module {
         forName: menuCommandPosted, object: nil, queue: .main
       ) { [weak self] note in
         guard let command = note.userInfo?["command"] as? String else { return }
-        self?.sendEvent("onCommand", ["command": command])
+        var event: [String: Any] = ["command": command]
+        if let index = note.userInfo?["index"] as? Int { event["index"] = index }
+        self?.sendEvent("onCommand", event)
       }
     }
 
@@ -28,9 +30,15 @@ public class MenuCommandsModule: Module {
       self.observer = nil
     }
 
-    // What stands in front: its kind, the commands that may act on it, and those that read toggled.
-    Function("setState") { (subject: String, enabled: [String], toggled: [String]) -> Void in
-      Task { @MainActor in MenuBar.update(subject: subject, enabled: enabled, toggled: toggled) }
+    // What stands in front: its kind, the commands that may act on it, those that read toggled, and the account's workspaces with the chosen one's place.
+    Function("setState") {
+      (subject: String, enabled: [String], toggled: [String], workspaces: [String], chosenWorkspace: Int)
+        -> Void in
+      Task { @MainActor in
+        MenuBar.update(
+          subject: subject, enabled: enabled, toggled: toggled, workspaces: workspaces,
+          chosenWorkspace: chosenWorkspace)
+      }
     }
   }
 }

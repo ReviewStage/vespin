@@ -82,6 +82,12 @@ private let commands: [Command] = [
 private let subjectTitles = ["thread": "Thread", "task": "Task", "agent": "Agent"]
 private let subjectMenu = UIMenu.Identifier("dev.vespin.menu.subject")
 private let settingsGroup = UIMenu.Identifier("dev.vespin.menu.settings")
+private let workspacesGroup = UIMenu.Identifier("dev.vespin.menu.workspaces")
+
+/// The id Switch Workspace's items are posted under, beside the workspace's place in the list.
+let switchWorkspaceCommand = "switchWorkspace"
+/// How many workspaces take a key, ⌥⌘1 through ⌥⌘9; the rest are listed with none.
+private let keyedWorkspaces = 9
 
 @MainActor
 enum MenuBar {
@@ -89,6 +95,9 @@ enum MenuBar {
   private static var enabled: Set<String> = []
   private static var toggled: Set<String> = []
   private static var subject = ""
+  /// The account's workspaces by name, in the switcher's order, and which is chosen.
+  private static var workspaces: [String] = []
+  private static var chosenWorkspace = -1
 
   /// Configures the main menu once, on iPadOS 26 and later, where the system has a menu bar to draw it in.
   static func install() {
@@ -110,8 +119,12 @@ enum MenuBar {
   }
 
   /// What JavaScript says stands in front: its kind, the commands that may act on it, and those that read toggled.
-  static func update(subject: String, enabled: [String], toggled: [String]) {
+  static func update(
+    subject: String, enabled: [String], toggled: [String], workspaces: [String], chosenWorkspace: Int
+  ) {
     self.subject = subject
+    self.workspaces = workspaces
+    self.chosenWorkspace = chosenWorkspace
     self.enabled = Set(enabled)
     self.toggled = Set(toggled)
     guard #available(iOS 26.0, *) else { return }
@@ -151,7 +164,10 @@ enum MenuBar {
     } else {
       builder.replace(menu: .preferences, with: settingsMenu)
     }
-    builder.insertSibling(inline(mine.filter { !settings.contains($0) }), afterMenu: settingsGroup)
+    builder.insertSibling(
+      UIMenu(identifier: workspacesGroup, options: .displayInline, children: [switchWorkspace()]),
+      afterMenu: settingsGroup)
+    builder.insertSibling(inline(mine.filter { !settings.contains($0) }), afterMenu: workspacesGroup)
 
     insert(elements(.file), atStartOf: .file, title: "File", after: .application, into: builder)
     insert(
@@ -167,6 +183,35 @@ enum MenuBar {
     builder.insertSibling(showingImages(menu), afterMenu: .view)
 
     insert(elements(.help), atStartOf: .help, title: "Help", after: .window, into: builder)
+  }
+
+  /// Switch Workspace ▸: every workspace of the account's, the chosen one checked, the first nine on ⌥⌘1–9.
+  private static func switchWorkspace() -> UIMenu {
+    let action = #selector(UIApplication.vespinSwitchWorkspace(_:))
+    let items = workspaces.enumerated().map { index, name -> UIMenuElement in
+      let item: UICommand =
+        index < keyedWorkspaces
+        ? UIKeyCommand(
+          title: name, action: action, input: String(index + 1), modifierFlags: [.command, .alternate],
+          propertyList: index)
+        : UICommand(title: name, action: action, propertyList: index)
+      lookWorkspace(item, index: index)
+      return item
+    }
+    return showingImages(
+      UIMenu(
+        title: "Switch Workspace", image: UIImage(systemName: "square.stack"), children: items))
+  }
+
+  /// Checks the chosen workspace and enables the list while JavaScript says it may be switched.
+  static func lookWorkspace(_ command: UICommand, index: Int) {
+    command.state = index == chosenWorkspace ? .on : .off
+    command.attributes = enabled.contains(switchWorkspaceCommand) ? [] : .disabled
+  }
+
+  /// Whether a workspace may be switched to now.
+  static func maySwitchWorkspace(_ index: Int) -> Bool {
+    enabled.contains(switchWorkspaceCommand) && workspaces.indices.contains(index)
   }
 
   /// Puts `children` at the start of a system menu, or in a menu of that name where the system left none.
@@ -270,8 +315,19 @@ extension UIApplication {
     NotificationCenter.default.post(name: menuCommandPosted, object: nil, userInfo: ["command": id])
   }
 
+  /// A workspace picked from Switch Workspace, by its place in the account's list.
+  @objc func vespinSwitchWorkspace(_ sender: UICommand) {
+    guard let index = sender.propertyList as? Int, MenuBar.maySwitchWorkspace(index) else { return }
+    NotificationCenter.default.post(
+      name: menuCommandPosted, object: nil,
+      userInfo: ["command": switchWorkspaceCommand, "index": index])
+  }
+
   /// Each of Vespin's commands worded and enabled as it is shown or pressed; every other command as UIKit validates it.
   override public func validate(_ command: UICommand) {
+    if command.action == #selector(vespinSwitchWorkspace(_:)), let index = command.propertyList as? Int {
+      return MenuBar.lookWorkspace(command, index: index)
+    }
     guard command.action == #selector(vespinMenuCommand(_:)), let id = command.propertyList as? String
     else { return super.validate(command) }
     MenuBar.validate(command, id: id)

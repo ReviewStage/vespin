@@ -32,6 +32,7 @@ import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { useOpenSettings } from "../settings-button.js";
 import { signOutRefusalWords, useSignOut } from "../sign-out.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
 
 /** What Sign Out asks first, since it leaves the phone with no account until the next sign-in. */
@@ -191,16 +192,34 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const signOut = useSignOut();
   const openSettings = useOpenSettings();
   const subject = useSubject(signedIn);
+  const switcher = useWorkspaceSwitcher();
+  const workspaces = signedIn ? (switcher?.workspaces ?? []) : [];
+  const workspaceNames = workspaces.map(({ name }) => name);
+  const chosenWorkspace = workspaces.findIndex(({ id }) => id === switcher?.chosen.id);
+  const enabled =
+    workspaces.length > 0 ? [...subject.enabled, MENU_COMMAND.SWITCH_WORKSPACE] : subject.enabled;
   const working = useAgentsWorking(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
   const [refusal, setRefusal] = useState<string>();
   // Note that the menu is told only as what it shows changes, since each telling rebuilds it.
   const told = useRef<string>(undefined);
   useEffect(() => {
-    const now = JSON.stringify([subject.focus.kind, subject.enabled, subject.toggled]);
+    const now = JSON.stringify([
+      subject.focus.kind,
+      enabled,
+      subject.toggled,
+      workspaceNames,
+      chosenWorkspace,
+    ]);
     if (told.current === now) return;
     told.current = now;
-    menuCommandsModule?.setState(subject.focus.kind, subject.enabled, subject.toggled);
+    menuCommandsModule?.setState(
+      subject.focus.kind,
+      enabled,
+      subject.toggled,
+      workspaceNames,
+      chosenWorkspace,
+    );
   });
 
   // Note that a refused sign-out says why and offers it again, since the phone is still signed in.
@@ -224,8 +243,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     );
   };
 
-  const act = (command: MenuCommand) => {
-    if (!subject.enabled.includes(command)) return;
+  const act = (command: MenuCommand, index: number | undefined) => {
+    if (!enabled.includes(command)) return;
     const { task, threadId } = subject;
     const preset = REMIND_PRESETS.get(command);
     if (preset !== undefined) {
@@ -235,6 +254,11 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     switch (command) {
       case MENU_COMMAND.SETTINGS:
         return openSettings();
+      case MENU_COMMAND.SWITCH_WORKSPACE: {
+        const picked = index === undefined ? undefined : workspaces[index];
+        if (picked !== undefined) switcher?.onChoose(picked.id);
+        return;
+      }
       case MENU_COMMAND.SIGN_OUT:
         return setAsking(ASK.SIGN_OUT);
       case MENU_COMMAND.NEW_TASK:
@@ -305,8 +329,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     latest.current = act;
   });
   useEffect(() => {
-    const listening = menuCommandsModule?.addListener("onCommand", ({ command }) =>
-      latest.current(command),
+    const listening = menuCommandsModule?.addListener("onCommand", ({ command, index }) =>
+      latest.current(command, index),
     );
     return () => listening?.remove();
   }, []);

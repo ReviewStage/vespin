@@ -13,6 +13,7 @@
 /** Every command the menu bar hands the app's JavaScript, by the id the native module names it. */
 export const MENU_COMMAND = {
   SETTINGS: "settings",
+  SWITCH_WORKSPACE: "switchWorkspace",
   SIGN_OUT: "signOut",
   NEW_TASK: "newTask",
   NEW_AGENT: "newAgent",
