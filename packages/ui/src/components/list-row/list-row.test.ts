@@ -953,3 +953,31 @@ test("a row that ticks a box is read as a checkbox, checked as its owner holds i
   press(row);
   expect(row.getAttribute("aria-checked")).toBe("true");
 });
+
+test("a row taken away with the pointer on its press is heard as the pointer leaving it, as a row left is", () => {
+  const heard: boolean[] = [];
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const list = (rows: readonly string[]) =>
+    createElement(
+      List,
+      { label: "Members" },
+      rows.map((name) =>
+        createElement(ListRow, {
+          key: name,
+          title: name,
+          onPress: ignore,
+          onPoint: (over: boolean) => heard.push(over),
+        }),
+      ),
+    );
+  act(() => root.render(list(["ada", "grace"])));
+  // Note that React hears the pointer come onto an element from the `pointerover` it bubbles.
+  act(() => {
+    button(container, "ada").dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+  });
+  act(() => root.render(list(["grace"])));
+  expect(heard).toEqual([true, false]);
+  act(() => root.unmount());
+});

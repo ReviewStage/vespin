@@ -66,6 +66,7 @@ import { type AutomationsRoute, useAutomationsRoute } from "../automations-route
 import { useHomeNewTask } from "../desktop/desktop-welcome.js";
 import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
+import { descriptionDocumentQuery } from "../live-reads.js";
 import {
   installPanelSpanRecorder,
   PANEL_SPAN,
@@ -1109,6 +1110,48 @@ test("a tab closed on another plan opens that plan again, and the tab on it once
   tab.stand({ tasks: OPEN });
   assert.deepEqual(panelOf(tab), { open: true, tab: FILE });
 });
+
+it.effect(
+  "a task's description is read once the pointer rests on its row, never for a row it only crosses, and from its press, before the host opens it",
+  () =>
+    Effect.gen(function* () {
+      const clock = yield* Clock.Clock;
+      serveClock(clock);
+      const tab = mount(
+        { shown: true, tasks: LISTING },
+        { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
+      );
+      yield* landed;
+      // Whether the window holds the task's description, which the host reads for as long as it is held.
+      const held = (taskId: string) =>
+        testQueryClientNow()
+          .getQueryCache()
+          .find({ queryKey: descriptionDocumentQuery(taskId).queryKey })
+          ?.isActive() === true;
+      const crossed = "7e2f3a4b-5c6d-4e7f-8a9b-0c1d2e3f4a5b";
+      const rested = "5d1e2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a";
+
+      act(() => tab.control().onPointTask(crossed));
+      yield* passing("50 millis");
+      act(() => tab.control().onPointTask(undefined));
+      yield* passing("200 millis");
+      assert.equal(held(crossed), false, "a row the pointer left before resting is never read");
+      act(() => tab.control().onPointTask(crossed));
+      yield* passing("50 millis");
+      act(() => tab.control().onPointTask(rested));
+      yield* passing("50 millis");
+      assert.equal(held(rested), false, "nothing is read before the pointer rests");
+      yield* passing("100 millis");
+      assert.equal(held(crossed), false, "a row the pointer only crossed is never read");
+      assert.equal(held(rested), true, "the task the pointer rests on is read ahead of a press");
+
+      // Note that the host is never made to open it, so only the press holds it.
+      act(() => tab.control().onSelect(OTHER_TASK_ID));
+      yield* landed;
+      assert.equal(tab.control().activeTaskId, TASK.id);
+      assert.equal(held(OTHER_TASK_ID), true, "the task pressed is read before the host opens it");
+    }),
+);
 
 test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it stands shut once a plan with no tab was passed through", () => {
   for (const room of [SHELL_ROOM.NARROW, SHELL_ROOM.WIDE]) {

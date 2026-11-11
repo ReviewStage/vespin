@@ -1282,6 +1282,8 @@ export function SidebarTask({
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}
+          // Note that the open task's row reads nothing ahead, but still calls off a rest begun on another row.
+          onPoint={(over) => tasks.onPointTask(over && !current ? task.id : undefined)}
           onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           selectKey={task.id}
           menu={

@@ -43,7 +43,7 @@ import type { AppInboxTask } from "@repo/host/app-state";
 import { workspaceExperimentChoices } from "@repo/host/app-state-reads";
 import { EXPERIMENT, experimentOn } from "@repo/settings";
 import type { SettingsLink } from "@repo/settings/settings-views";
-import { STATUS_TONE } from "@repo/ui";
+import { STATUS_TONE, useWait } from "@repo/ui";
 import {
   agentTab,
   changesTab,
@@ -59,12 +59,13 @@ import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import {
   mutationOptions,
   type QueryClient,
+  QueryObserver,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { absurd } from "effect";
+import { absurd, Effect } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { askAct, sendAct, unreachedAs } from "../act.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
@@ -353,6 +354,8 @@ export interface TasksControl {
    * home page, asked for or standing.
    */
   boundFor: string | undefined;
+  /** Reads `taskId`'s description once the pointer rests on its row, ahead of a press it says is coming, so the task opens on it drawn; none calls off a rest begun, as the pointer leaving the row does. */
+  onPointTask: (taskId: string | undefined) => void;
   listFailed: boolean;
   /** Whether the list drawn is one the service answered, rather than the empty one before the first read lands. */
   listRead: boolean;
@@ -606,6 +609,9 @@ interface PinChoice {
 
 /** Takes back nothing, as a fixture run's select, which asks nothing of the host it binds. */
 const NO_TAKE_BACK = (): void => undefined;
+
+/** How long the pointer rests on a task's row before its description is read ahead of a press: long enough that a pointer crossing the rows reads none. */
+const POINT_RESTS = "120 millis";
 
 /**
  * Does nothing: a door's move that is none of the router's, which a page holding unsaved work asks about up front, or
@@ -1338,6 +1344,39 @@ export function useTasksTab(input: {
   // back (`places/place-binding.ts`). A fixture's tasks are opened nowhere, so nothing is asked of them.
   const openTaskId = tasks.activeTaskId;
   const { boundFor, ask, boundNow, boundForNow } = useTaskAsk(openTaskId);
+  // The description of the task a press asked for is held from the press, rather than once the host binds it a round
+  // trip later, so its read runs beside the select. Note that a fixture's tasks are read nowhere, so nothing is read
+  // ahead of them.
+  useQuery(descriptionDocumentQuery(fixture === undefined ? boundFor : undefined));
+  // The description of the task the pointer comes to rest on is held ahead of the press, by an observer of its own
+  // rather than state, because a pointer crossing the sidebar must not draw the tab again at every row. Note that it is
+  // held only once the pointer rests (`POINT_RESTS`), because a read started for every row crossed would push the
+  // descriptions the host keeps for the tasks open lately out of its keeping.
+  const pointedHold = useRef<{ readonly taskId: string; readonly release: () => void } | undefined>(
+    undefined,
+  );
+  const pointRest = useWait();
+  const pointTask = useCallback(
+    (taskId: string | undefined) => {
+      if (fixture !== undefined) return;
+      if (taskId === undefined || pointedHold.current?.taskId === taskId) {
+        pointRest.stop();
+        return;
+      }
+      pointRest.start(
+        Effect.andThen(
+          Effect.sleep(POINT_RESTS),
+          Effect.sync(() => {
+            pointedHold.current?.release();
+            const observer = new QueryObserver(queryClient, descriptionDocumentQuery(taskId));
+            pointedHold.current = { taskId, release: observer.subscribe(() => {}) };
+          }),
+        ),
+      );
+    },
+    [fixture, queryClient, pointRest],
+  );
+  useEffect(() => () => pointedHold.current?.release(), []);
   // Home is the listed workspace's too, at `/app` while none is listed, so another listed, or the first one read, stands its
   // Home in the step's place. Note that Home with a task still bound is left as it is, since the binding moves it next
   // (`places/place-binding.ts`).
@@ -3014,6 +3053,7 @@ export function useTasksTab(input: {
     },
     activeTaskId: tasks.activeTaskId,
     boundFor,
+    onPointTask: pointTask,
     listFailed: tasks.listStatus === TASKS_READ.FAILED,
     listRead: tasks.listStatus === TASKS_READ.READY,
     region,
