@@ -162,11 +162,9 @@ function SearchStackScreen() {
         />
       </Stack.Screen>
       <SettingsBarButton />
-      <Screen>
-        {results}
-        <StatusQuestionAsk question={question} />
-        {remind.sheet}
-      </Screen>
+      <Screen>{results}</Screen>
+      <StatusQuestionAsk question={question} />
+      {remind.sheet}
     </>
   );
 }
@@ -191,10 +189,10 @@ function SearchSplitScreen() {
             search: { placeholder: SEARCH_EVERYTHING, onChange: setQuery },
           }}
         />
-        <StatusQuestionAsk question={question} />
-        {sidebar.ask}
-        {remind.sheet}
       </Screen>
+      <StatusQuestionAsk question={question} />
+      {sidebar.ask}
+      {remind.sheet}
     </>
   );
 }

@@ -642,8 +642,8 @@ function TasksStackList() {
           onSelect={(id) => router.push(`/tasks/${encodeURIComponent(id)}`)}
           onRefresh={refreshTasks}
         />
-        <StatusQuestionAsk question={question} />
       </Screen>
+      <StatusQuestionAsk question={question} />
     </>
   );
 }
@@ -709,9 +709,9 @@ function TasksSplitScreen({
                 }
           }
         />
-        <StatusQuestionAsk question={question} />
-        {sidebar.ask}
       </Screen>
+      <StatusQuestionAsk question={question} />
+      {sidebar.ask}
     </>
   );
 }
@@ -791,8 +791,8 @@ export function TaskScreen() {
         ) : (
           <EmptyState title={READING_TASK} symbol="checklist" />
         )}
-        <StatusQuestionAsk question={question} />
       </Screen>
+      <StatusQuestionAsk question={question} />
     </>
   );
 }

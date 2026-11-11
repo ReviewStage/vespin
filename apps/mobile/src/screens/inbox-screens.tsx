@@ -46,7 +46,6 @@ import {
 import {
   BAR_TITLE,
   type BarMenu,
-  DOCK_ROOM,
   EmptyState,
   GlassDock,
   LIST_LOOK,
@@ -455,9 +454,7 @@ function ThreadDetail({
           }}
         />
       }
-      {...(inStack
-        ? { footRoom: DOCK_ROOM }
-        : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
+      {...(inStack ? {} : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
     />
   );
   if (!inStack) return page;
@@ -661,8 +658,8 @@ function InboxSplitScreen({
             )
           }
         />
-        {sidebar.ask}
       </Screen>
+      {sidebar.ask}
       {remind.sheet}
     </>
   );
