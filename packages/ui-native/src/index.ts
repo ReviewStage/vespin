@@ -93,6 +93,7 @@ export {
 export {
   ConfirmAsk,
   MarkRow,
+  MergeActRow,
   PullRequestHead,
   WORDS_ASK_KIND,
   WordsAsk,
