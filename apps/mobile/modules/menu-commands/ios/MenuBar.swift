@@ -44,14 +44,16 @@ private let noKey: String? = nil
 private let commands: [Command] = [
   Command(
     id: "settings", place: .application, title: "Vespin Settings…", symbol: "gearshape",
-    input: ","),
+    input: ",", nonRepeatable: true),
   Command(
     id: "signOut", place: .application, title: "Sign Out…",
     symbol: "rectangle.portrait.and.arrow.right", input: noKey, nonRepeatable: true),
-  Command(id: "newTask", place: .file, title: "New Task", symbol: "square.and.pencil", input: "n"),
+  Command(
+    id: "newTask", place: .file, title: "New Task", symbol: "square.and.pencil", input: "n",
+    nonRepeatable: true),
   Command(
     id: "newAgent", place: .file, title: "New Agent", symbol: "plus.bubble", input: "n",
-    modifiers: [.command, .shift]),
+    modifiers: [.command, .shift], nonRepeatable: true),
   Command(id: "inbox", place: .view, title: "Inbox", symbol: "tray", input: "1"),
   Command(id: "tasks", place: .view, title: "Tasks", symbol: "checklist", input: "2"),
   Command(id: "search", place: .view, title: "Search", symbol: "magnifyingglass", input: "3"),

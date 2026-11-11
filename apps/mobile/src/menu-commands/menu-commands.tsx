@@ -46,6 +46,13 @@ const SIGN_OUT_ASK = {
   AGAIN: "Try again",
 } as const;
 
+/** The sheets a command opens, by their routes. */
+const SHEET_ROUTE = {
+  SETTINGS: "/settings",
+  NEW_TASK: "/start-task",
+  NEW_AGENT: "/start-agent",
+} as const;
+
 /** The commands that act on no one thing, enabled whenever an account is signed in. */
 const SIGNED_IN_COMMANDS: readonly MenuCommand[] = [
   MENU_COMMAND.SETTINGS,
@@ -190,6 +197,7 @@ type Ask = (typeof ASK)[keyof typeof ASK];
  */
 export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const acts = useHostActs();
   const inbox = useInboxActs();
   const signOut = useSignOut();
@@ -255,6 +263,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     );
   };
 
+  // Note that a sheet already standing is not opened again, so a key pressed twice never stacks two of it.
+  const standing = (route: string) => pathname === route || pathname.startsWith(`${route}/`);
+
   const act = (command: MenuCommand, index: number | undefined) => {
     if (!enabled.includes(command)) return;
     const { task, threadId } = subject;
@@ -265,7 +276,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     }
     switch (command) {
       case MENU_COMMAND.SETTINGS:
-        return openSettings();
+        if (!standing(SHEET_ROUTE.SETTINGS)) openSettings();
+        return;
       case MENU_COMMAND.SWITCH_WORKSPACE: {
         const picked = index === undefined ? undefined : workspaces[index];
         if (picked !== undefined) switcher?.onChoose(picked.id);
@@ -274,10 +286,11 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.SIGN_OUT:
         return setAsking(ASK.SIGN_OUT);
       case MENU_COMMAND.NEW_TASK:
-        return router.push("/start-task");
+        if (!standing(SHEET_ROUTE.NEW_TASK)) router.push(SHEET_ROUTE.NEW_TASK);
+        return;
       case MENU_COMMAND.NEW_AGENT:
-        if (task !== undefined)
-          router.push({ pathname: "/start-agent", params: { task: task.id } });
+        if (task !== undefined && !standing(SHEET_ROUTE.NEW_AGENT))
+          router.push({ pathname: SHEET_ROUTE.NEW_AGENT, params: { task: task.id } });
         return;
       case MENU_COMMAND.INBOX:
         return router.navigate("/inbox");
