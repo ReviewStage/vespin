@@ -184,6 +184,7 @@ export {
 } from "./use-async-action.js";
 export { Video } from "./video.js";
 export {
+  NoBarTitle,
   newWorkspaceAction,
   type SwitcherAction,
   type SwitcherWorkspace,
