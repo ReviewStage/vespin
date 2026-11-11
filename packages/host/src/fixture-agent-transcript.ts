@@ -24,6 +24,7 @@ import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.j
 import { FIXTURE_PAGE } from "./fixture-stage.js";
 
 const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
 
 /** The pictures and the recording the agent showed, by the ids the service kept them under. */
 const KEPT = {
@@ -265,6 +266,45 @@ function transcriptMessages(
         }),
       ],
       startedAt: startedAt + 70 * MINUTE,
+    },
+  ];
+}
+
+/**
+ * The page older than the transcript's first, as a read below it answers:
+ * the account's ask that came before the run, a day earlier, and the agent's
+ * answer, which settled what an invite is before the work began.
+ */
+export function fixtureAgentOlderMessages(
+  startedAt: number,
+  reader: { readonly userId: string; readonly name: string },
+): readonly AgentTranscriptMessage[] {
+  const asking = startedAt - DAY;
+  return [
+    asked(
+      "fixture-invites-plan-ask",
+      asking,
+      "Before you build anything: what does the description already settle about invites?",
+      reader,
+    ),
+    {
+      id: "fixture-invites-plan",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        toolPart(
+          AGENT_TOOL.READ_FILE,
+          "fixture-invites-plan-read",
+          { filePath: "docs/invites.md" },
+          { content: "# Invites\n\nA member invites a teammate by email…" },
+        ),
+        {
+          type: "text",
+          text: "It settles three things: an invite is a **pending membership**, its link expires after seven days, and only an owner may invite.",
+        },
+      ],
+      startedAt: asking,
+      finishedAt: asking + 2 * MINUTE,
     },
   ];
 }

@@ -15,11 +15,18 @@
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
-import type { ActPortClient, PortActKind, PortActPayload } from "@repo/host/contract";
+import type {
+  ActPortClient,
+  PortActKind,
+  PortActPayload,
+  PortActResult,
+} from "@repo/host/contract";
 import {
   inboxActAnswer,
   inboxAppState,
   inboxTasksView,
+  olderPageAnswer,
+  olderPageAppState,
   type PullRequestMove,
   pullRequestMoveOf,
   pullRequestPartsAppState,
@@ -42,6 +49,9 @@ function stagedTasks(held: AppStateSnapshot): AppStateSnapshot["tasks"] {
 
 /** The moves each run's changes made to the fixture's pull requests, by the store the run stages, each map replaced whole as a change lands so a staging reads it anew. */
 const MOVES = new WeakMap<object, ReadonlyMap<number, PullRequestMove>>();
+
+/** How many reads of the invitations agent's older page each run's screens asked, by the store the run stages. */
+const OLDER_ASKS = new WeakMap<object, number>();
 
 /** No pull request moved yet. */
 const NO_MOVES: ReadonlyMap<number, PullRequestMove> = new Map();
@@ -67,7 +77,10 @@ export function stageFixture(state: Pick<AppStateStore, "snapshot" | "update">):
   const held: AppStateSnapshot = { ...snapshot, window: { fullScreen: false } };
   const inbox = inboxAppState(held, FIXTURE_WORKSPACE_IDS);
   if (inbox === held) return;
-  const parts = pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES);
+  const parts = olderPageAppState(
+    pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
+    OLDER_ASKS.get(state) ?? 0,
+  );
   const staged = { ...parts, tasks: stagedTasks(held) };
   state.update(stagedPatch(held, staged));
 }
@@ -87,12 +100,33 @@ function keepMove(
   stageFixture(state);
 }
 
+/** What a read of the invitations agent's older page answers, counted, its page laid over the document at once where it lands; none for any other act or transcript. */
+function olderRead(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  profile: RunProfile,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): PortActResult<typeof ACT_KIND.AGENTS_TRANSCRIPT_OLDER> | undefined {
+  if (kind !== ACT_KIND.AGENTS_TRANSCRIPT_OLDER) return undefined;
+  const asks = (OLDER_ASKS.get(state) ?? 0) + 1;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const params = payload as PortActPayload<typeof ACT_KIND.AGENTS_TRANSCRIPT_OLDER>;
+  const answer = olderPageAnswer(profile, params, asks);
+  if (answer === undefined) return undefined;
+  OLDER_ASKS.set(state, asks);
+  stageFixture(state);
+  return answer;
+}
+
 /**
  * The act port a fixture run's screens act through: each act the profile
  * answers, such as a mark, a thread's file read, or a reply or a resolve on
  * a thread, one of them refused (`inboxActAnswer`),
  * answered by the fixture, as the panel's fixture run answers it on the
- * window's side, and every other act sent to the host. Note that a mark is
+ * window's side, and every other act sent to the host. The invitations
+ * agent's older page is read as the service would read it, though its first
+ * read is not heard back, so a flow sees Try again, and the next lays the
+ * page before the transcript's first message. Note that a mark is
  * echoed and moves no dot, as on the panel's, but a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
  * would, so a screen draws it merged or out of the queue.
@@ -107,6 +141,10 @@ export function fixtureActs(
       const sent: unknown = Reflect.get(target, kind, receiver);
       if (typeof kind !== "string" || typeof sent !== "function") return sent;
       return (payload: unknown, ...rest: unknown[]) => {
+        // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
+        const asked = payload as PortActPayload<PortActKind>;
+        const older = olderRead(state, profile, kind as PortActKind, asked);
+        if (older !== undefined) return Promise.resolve(older);
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         const staged = inboxActAnswer(
           profile,

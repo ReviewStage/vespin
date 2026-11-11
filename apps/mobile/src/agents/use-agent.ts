@@ -1,5 +1,5 @@
 /**
- * use-agent.ts -- one agent as its page reads it: the agent as the task list follows it, its transcript held live while the page shows, the pictures and recordings it showed read into what the system draws them from, and a page it showed read whole.
+ * use-agent.ts -- one agent as its page reads it: the agent as the task list follows it, its transcript held live while the page shows, its older pages read as the reader scrolls up to them, the pictures and recordings it showed read into what the system draws them from, and a page it showed read whole.
  *
  * The transcript is held as the panel's tab holds it: its follow
  * (`ACT_KIND.AGENTS_TRANSCRIPT`) kept open on the host while the page is in
@@ -20,6 +20,7 @@ import {
   selectFollowedAgent,
   selectTranscript,
 } from "@repo/host/app-state-reads";
+import type { OlderPages } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -168,4 +169,67 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
     };
   }, [acts, taskId, pageId, version]);
   return read;
+}
+
+/** The older read asked last: of which agent, below where, and whether it failed. */
+interface OlderAsk {
+  readonly agentId: string;
+  readonly before: string;
+  readonly failed: boolean;
+}
+
+/**
+ * The pages of the agent's transcript older than the oldest message the host
+ * holds, read one at a time as the reader scrolls up to it, as the panel's
+ * tab reads them (`ACT_KIND.AGENTS_TRANSCRIPT_OLDER`): the host lays each
+ * before the messages it holds while they still begin where it was asked,
+ * which moves where the next is read below and ends the read. A read that
+ * did not answer says so until it is asked again; one the host did not lay,
+ * since newer messages took their place meanwhile, may be asked again at
+ * once. None where nothing older stands.
+ */
+export function useOlderPages(agentId: string, before: string | undefined): OlderPages | undefined {
+  const acts = useHostActs();
+  const [asked, setAsked] = useState<OlderAsk | undefined>(undefined);
+  // Note that the read out is held apart from what is drawn, since the list may ask twice before it draws the first ask.
+  const out = useRef<OlderAsk | undefined>(undefined);
+  const read = useCallback(() => {
+    if (before === undefined) return;
+    const held = out.current;
+    if (held !== undefined && !held.failed && held.agentId === agentId && held.before === before) {
+      return;
+    }
+    const ask: OlderAsk = { agentId, before, failed: false };
+    out.current = ask;
+    setAsked(ask);
+    // An answer settles the ask it answers alone, never a newer one.
+    const settle = (next: OlderAsk | undefined) => {
+      if (out.current !== ask) return;
+      out.current = next;
+      setAsked(next);
+    };
+    acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ kind: TRANSCRIPT_KIND.AGENT, agentId, before }).then(
+      (answer) => {
+        if ("failure" in answer) settle({ ...ask, failed: true });
+        else if (!answer.landed) settle(undefined);
+      },
+      (error: unknown) => {
+        refused("An older page of the transcript")(error);
+        settle({ ...ask, failed: true });
+      },
+    );
+  }, [acts, agentId, before]);
+  if (before === undefined) return undefined;
+  const here = asked !== undefined && asked.agentId === agentId && asked.before === before;
+  return { reading: here && !asked.failed, failed: here && asked.failed, onRead: read };
+}
+
+/** Reads the agent's transcript anew where it could not be read, as the panel's Try again does (`ACT_KIND.AGENTS_TRANSCRIPT_RETRY`). */
+export function useTranscriptRetry(agentId: string): () => void {
+  const acts = useHostActs();
+  return useCallback(() => {
+    acts[ACT_KIND.AGENTS_TRANSCRIPT_RETRY]({ kind: TRANSCRIPT_KIND.AGENT, agentId }).catch(
+      refused("Reading the transcript again"),
+    );
+  }, [acts, agentId]);
 }

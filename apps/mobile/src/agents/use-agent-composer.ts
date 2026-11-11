@@ -143,13 +143,15 @@ export interface AgentComposer {
  * The composer of the agent `agentId` names, whose followed row is `agent`
  * and whose transcript the page holds as `transcript`. Only the agent's
  * starter may change its queue, as the service holds, so a teammate's
- * Send never queues and their queue offers no Steer or Delete.
+ * Send never queues and their queue offers no Steer or Delete. `onMessage`
+ * hears each message sent straight to the agent, and whether it was taken.
  */
 export function useAgentComposer(
   agentId: string,
   agent: FollowedAgent | undefined,
   transcript: AppTranscript | undefined,
   status: AgentStatus | undefined,
+  onMessage?: (taken: Promise<boolean>) => void,
 ): AgentComposer {
   const acts = useHostActs();
   const { data: enterQueues = false } = useQuery({
@@ -211,7 +213,19 @@ export function useAgentComposer(
         });
       return;
     }
-    acts[ACT_KIND.AGENTS_MESSAGE]({ agentId, text, clientKey: sent.id, ...attachments })
+    const message = acts[ACT_KIND.AGENTS_MESSAGE]({
+      agentId,
+      text,
+      clientKey: sent.id,
+      ...attachments,
+    });
+    onMessage?.(
+      message.then(
+        (answer) => !("failure" in answer),
+        () => false,
+      ),
+    );
+    message
       .then((answer) => {
         if ("failure" in answer) handBack(sent, messageFailureWords(answer.failure));
         else settled(sent);

@@ -1,15 +1,23 @@
 import {
+  answerFailedOf,
+  HELD_WORDS,
+  type HeldAsk as HeldAskOf,
+  heldAbout,
+  heldWith,
+  markedAsk as markedAskOf,
+  SETTLED_WORD,
+  sameHeld,
+} from "@repo/features/agent-approval-model";
+import {
   AGENT_PERMISSION_MODE,
   type AgentPendingApproval,
   type AgentPermissionMode,
   APPROVAL_ANSWER,
   APPROVAL_BOUNDS,
-  APPROVAL_STATUS,
   type ApprovalAnswerRequest,
-  type ApprovalStatus,
 } from "@repo/features/agent-approval-wire";
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
-import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
+import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
@@ -132,44 +140,12 @@ export const MODE_APPLIES = "Takes effect from the next turn.";
 /** Why a change of mode did not take, said under the composer's bar. */
 const MODE_CHANGE_FAILED = "The permission mode could not be changed.";
 
-/** What the composer says over its field while an ask waits. */
-export const DENIES_WAITING = "Sending a message denies the waiting approval.";
-
-/** What a held call's line says: that it waits, then how it came out. */
-const HELD_WORDS = {
-  WAITING: "Waiting for approval",
-  ALLOWED: "Allowed",
-  ALLOWED_FOR_AGENT: "Always allowed",
-  DENIED: "Denied",
-  EXPIRED: "Expired",
-  ELSEWHERE: "Answered elsewhere",
-} as const;
-
-/** Why an answer did not go, said under the card's row: refused as not the reader's to answer or gone, or not heard back, which a press again may mend. */
-const ANSWER_FAILED = {
-  NOT_PERMITTED: "Only a member who controls this agent can answer it.",
-  NOT_FOUND: "This approval is no longer here.",
-  UNANSWERED: "The answer did not reach the agent. Try again.",
-} as const;
-
-/** Who asks, where a subagent does, said in the row's body. */
-const SUBAGENT_ASKS = "Asked by a subagent.";
-
 /** The answer each of the card's presses sends. */
 const WIRE_ANSWER = {
   [APPROVAL_ACTION.ALLOW]: APPROVAL_ANSWER.ALLOW,
   [APPROVAL_ACTION.ALLOW_FOR_AGENT]: APPROVAL_ANSWER.ALLOW_FOR_AGENT,
   [APPROVAL_ACTION.DENY]: APPROVAL_ANSWER.DENY,
 } as const satisfies Record<ApprovalAction, (typeof APPROVAL_ANSWER)[keyof typeof APPROVAL_ANSWER]>;
-
-/** The word an ask's line settles into by the status it stands at, as this window's answer lands or as an answer finds it settled already. */
-const SETTLED_WORD = {
-  [APPROVAL_STATUS.PENDING]: undefined,
-  [APPROVAL_STATUS.ALLOWED]: HELD_WORDS.ALLOWED,
-  [APPROVAL_STATUS.ALLOWED_FOR_AGENT]: HELD_WORDS.ALLOWED_FOR_AGENT,
-  [APPROVAL_STATUS.DENIED]: HELD_WORDS.DENIED,
-  [APPROVAL_STATUS.EXPIRED]: HELD_WORDS.EXPIRED,
-} as const satisfies Record<ApprovalStatus, string | undefined>;
 
 /** The mode an agent runs on: full access where its row names none. */
 function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMode {
@@ -251,16 +227,11 @@ export function modeMenuRows(): readonly MenuRow[] {
 }
 
 /** One ask as this window holds it: the ask, the answer out, how it settled, and why an answer did not go. */
-interface HeldAsk {
-  readonly approval: AgentPendingApproval;
-  readonly answering?: ApprovalAction | undefined;
-  /** The word its line settled into; none while it waits. */
-  readonly settled?: string | undefined;
-  /** Whether it was settled only by leaving the row's waiting asks, which its return to them takes back. */
-  readonly vanished?: boolean | undefined;
-  /** Whether a message went while it waited, which the service denies it with; a return to the waiting asks clears it. */
-  readonly messaged?: boolean | undefined;
-  readonly error?: ShownError | undefined;
+type HeldAsk = HeldAskOf<ApprovalAction, ShownError>;
+
+/** An ask marked as a message's to deny, or the mark taken back, by where the agent stands. */
+function markedAsk(ask: HeldAsk, messaged: boolean, agent: Pick<AgentSummary, "status">): HeldAsk {
+  return markedAskOf(ask, messaged, agent.status === AGENT_STATUS.RUNNING);
 }
 
 /** One ask as its call's row draws it. */
@@ -280,46 +251,6 @@ export interface AgentApprovalsControl {
   readonly waiting: number;
   /** Says a message went while asks waited, which the service denies them with once it takes the message; a refused send takes that back. */
   readonly messageSent: (sent: Promise<AgentActAnswer>) => void;
-}
-
-/** The line an ask that stopped waiting with no answer of this window's settles into. */
-function vanishedLine(byMessage: boolean, running: boolean): string {
-  if (byMessage) return HELD_WORDS.DENIED;
-  return running ? HELD_WORDS.ELSEWHERE : HELD_WORDS.EXPIRED;
-}
-
-/**
- * The asks held with the agent's row laid over them: each waiting one taken
- * in, and each that stopped waiting with no answer of this window's settled.
- * Note that one settled only by leaving the waiting asks opens again as it
- * comes back to them, its last failure kept, because a write that left it
- * may still let it go, and an answer that did not reach the agent is the
- * reader's to send again.
- */
-function heldWith(
-  held: ReadonlyMap<string, HeldAsk>,
-  pending: readonly AgentPendingApproval[],
-  running: boolean,
-): ReadonlyMap<string, HeldAsk> {
-  const waiting = new Set(pending.map((each) => each.id));
-  const next = new Map(held);
-  for (const approval of pending) {
-    const was = next.get(approval.id);
-    if (was === undefined) next.set(approval.id, { approval });
-    else if (was.vanished === true) next.set(approval.id, { approval, error: was.error });
-  }
-  for (const [id, ask] of next) {
-    if (waiting.has(id) || ask.settled !== undefined || ask.answering !== undefined) continue;
-    next.set(id, { ...ask, settled: vanishedLine(ask.messaged === true, running), vanished: true });
-  }
-  return next;
-}
-
-/** Whether two holdings hold the same asks as they stand. */
-function sameHeld(a: ReadonlyMap<string, HeldAsk>, b: ReadonlyMap<string, HeldAsk>): boolean {
-  if (a.size !== b.size) return false;
-  for (const [id, ask] of a) if (b.get(id) !== ask) return false;
-  return true;
 }
 
 /**
@@ -413,16 +344,6 @@ export function useAgentApprovals(input: {
   };
 }
 
-/** An ask marked as a message's to deny, or the mark taken back, its line said again where it was settled by leaving the waiting asks. */
-function markedAsk(ask: HeldAsk, messaged: boolean, agent: Pick<AgentSummary, "status">): HeldAsk {
-  if (messaged) return ask.settled === undefined ? { ...ask, messaged: true } : ask;
-  if (ask.messaged !== true) return ask;
-  const running = agent.status === AGENT_STATUS.RUNNING;
-  return ask.vanished === true
-    ? { ...ask, messaged: false, settled: vanishedLine(false, running) }
-    : { ...ask, messaged: false };
-}
-
 /** An ask once its answer came back: settled as the answer says, or offered again with why it did not go. */
 function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string): HeldAsk {
   if ("approval" in answered) {
@@ -432,19 +353,12 @@ function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string)
     return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approvalStatus] };
   }
   // Note that a refusal names why, and only an answer not heard back asks for another press.
-  const refused =
-    answered.failure === AGENT_CALL_FAILURE.NOT_PERMITTED ||
-    answered.failure === AGENT_CALL_FAILURE.NOT_FOUND;
+  const { words, refused } = answerFailedOf(answered.failure);
   return {
     ...ask,
     answering: undefined,
     error: {
-      words:
-        answered.failure === AGENT_CALL_FAILURE.NOT_PERMITTED
-          ? ANSWER_FAILED.NOT_PERMITTED
-          : answered.failure === AGENT_CALL_FAILURE.NOT_FOUND
-            ? ANSWER_FAILED.NOT_FOUND
-            : ANSWER_FAILED.UNANSWERED,
+      words,
       failure: failureShown({
         surface: FAILURE_SURFACE.AGENT_APPROVAL,
         cause: "cause" in answered && answered.cause !== undefined ? answered.cause : answered,
@@ -456,16 +370,6 @@ function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string)
 }
 
 const NO_ASKS: readonly AgentPendingApproval[] = [];
-
-/** What the row's body says of who asks and why: the subagent where one does, and the CLI's own words where it gave some. */
-function aboutOf(approval: AgentPendingApproval): string | undefined {
-  const asker = approval.subagentId === undefined ? undefined : SUBAGENT_ASKS;
-  // Note that the CLI's words are left out where they are the call's own description, which the row's line says already.
-  const why =
-    approval.description === approval.input.description ? undefined : approval.description;
-  const words = [asker, why].filter((each) => each !== undefined);
-  return words.length === 0 ? undefined : words.join(" ");
-}
 
 /**
  * The words that tell the agent why its call was denied, written in the
@@ -525,7 +429,7 @@ export function heldCallOf(ask: ApprovalView): HeldCall {
   return {
     status: ask.settled ?? HELD_WORDS.WAITING,
     waiting: ask.settled === undefined,
-    about: aboutOf(ask.approval),
+    about: heldAbout(ask.approval),
     actions:
       ask.settled === undefined ? (
         <ApprovalActions
@@ -604,9 +508,4 @@ export function heldCallPart(
     output: undefined,
     errorText: undefined,
   };
-}
-
-/** What the working line says while asks wait: that the agent waits on the reader, and on how many. */
-export function waitingOnYouWords(waiting: number): string {
-  return `Waiting on you · ${waiting} ${waiting === 1 ? "approval" : "approvals"}`;
 }
