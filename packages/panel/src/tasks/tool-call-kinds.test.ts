@@ -75,7 +75,7 @@ test("each of Vespin's tools that fell through to 'Used' reads as its own verb, 
       { text: "Words are lowercase mid-sentence." },
       "Saved to memory: Words are lowercase mid-sentence.",
     ],
-    [AGENT_TOOL.SEARCH_MEMORY, { query: "transcript words" }, "Searched memory transcript words"],
+    [AGENT_TOOL.SEARCH_MEMORY, { query: "transcript words" }, "Recalled transcript words"],
     [AGENT_TOOL.READ_COMMENTS, {}, "Read the comments"],
     [
       AGENT_TOOL.REPLY_TO_COMMENT,
@@ -84,7 +84,7 @@ test("each of Vespin's tools that fell through to 'Used' reads as its own verb, 
     ],
     [AGENT_TOOL.UPDATE_COMMENT, { thread: "t1", resolved: true }, "Resolved a thread"],
     [AGENT_TOOL.UPDATE_COMMENT, { thread: "t1", resolved: false }, "Reopened a thread"],
-    [RETIRED_TOOL.RECALL, { query: "transcript words" }, "Searched memory transcript words"],
+    [RETIRED_TOOL.RECALL, { query: "transcript words" }, "Recalled transcript words"],
   ] as const;
   for (const [tool, input, words] of rows) {
     assert.equal(rowOf(tool, input, NO_ANSWER), words, tool);

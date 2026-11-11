@@ -147,6 +147,9 @@ const OTHER_MEMORY: MemorySummary = {
   forgettable: true,
   createdAt: 3,
   updatedAt: 4,
+  source: null,
+  recalls30d: 0,
+  lastRecalledAt: null,
 };
 
 /** A memory as the workspace's live read delivers it. */
@@ -159,6 +162,12 @@ function memoryRow(memory: MemorySummary) {
     forgettable: memory.forgettable,
     createdAt: memory.createdAt,
     updatedAt: memory.updatedAt,
+    sourceAgentId: memory.source?.agentId ?? null,
+    sourceMessageId: memory.source?.messageId ?? null,
+    sourceTaskId: memory.source?.taskId ?? null,
+    sourceTaskName: memory.source?.taskName ?? null,
+    recalls30d: memory.recalls30d,
+    lastRecalledAt: memory.lastRecalledAt,
   };
 }
 

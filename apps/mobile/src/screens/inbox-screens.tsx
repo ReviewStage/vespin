@@ -64,6 +64,7 @@ import {
   type ThreadMessage,
   ThreadPage,
   useColors,
+  WorkspaceSwitcherMenu,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -85,6 +86,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
@@ -543,16 +545,18 @@ function useInboxScreen(chosen?: string | undefined) {
   return { show, search, setSearch, listing, acts, scopes, menu, remind };
 }
 
-// A compact window: the list under the Stack's inline title and the scope
-// pills, the account's photo opening Settings at the bar's leading edge, and
-// its search and its ⋯ menu as round glass buttons at its trailing one, each
-// row pushing its thread as the Stack's next screen.
+// A compact window: the list under the workspace switcher, standing as the
+// Stack's inline title, and the scope pills, the account's photo opening
+// Settings at the bar's leading edge, and its search and its ⋯ menu as round
+// glass buttons at its trailing one, each row pushing its thread as the Stack's
+// next screen.
 function InboxStackList() {
   const router = useRouter();
+  const switcher = useWorkspaceSwitcher();
   const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen();
   return (
     <>
-      <Stack.Screen options={{ title: INBOX_TITLE }}>
+      <Stack.Screen options={{ title: INBOX_TITLE, ...switcherTitle(switcher) }}>
         <Stack.SearchBar
           placeholder={SEARCH_INBOX}
           placement="integratedButton"
@@ -617,6 +621,7 @@ function InboxSplitScreen({
 }) {
   const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(selected);
   const account = useSettingsAccount();
+  const switcher = useWorkspaceSwitcher();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
   return (
     <>
@@ -654,6 +659,9 @@ function InboxSplitScreen({
             )
           }
           sidebarAccount={account}
+          sidebarHeader={
+            switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />
+          }
           sidebarMenu={menu}
           sidebarSearch={{ placeholder: SEARCH_INBOX, onChange: setSearch }}
         />

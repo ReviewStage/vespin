@@ -15,6 +15,7 @@ import {
   type WorkspaceInvitation,
 } from "@repo/features/workspace-invitation-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
+import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import {
   WORKSPACE_BOUNDS,
   WORKSPACE_ROLE,
@@ -96,7 +97,6 @@ import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { useFormDialog } from "../desktop/use-form-dialog.js";
-import { sharedWords } from "../desktop/workspace-ref.js";
 import { TILE_SIZE, useWorkspaceTileUrl, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import {
@@ -1816,7 +1816,7 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
               />
             </ReplayMask>
           ),
-          description: sharedWords(workspace.memberCount, workspace.personal === true),
+          description: workspaceSharedWords(workspace.memberCount, workspace.personal === true),
           // Note that a rename's refusal is the rename's own, so a photo picked meanwhile does not erase it.
           error: replayMaskedError(
             refusedShown(

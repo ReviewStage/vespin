@@ -50,7 +50,7 @@ import { installedSkill } from "../schemas/installed-skill.js";
 import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
 import { macCommand } from "../schemas/mac-command.js";
-import { memory } from "../schemas/memory.js";
+import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
 import { pullRequestChapters } from "../schemas/pull-request-chapters.js";
@@ -687,6 +687,15 @@ export const memorySync = defineSyncTable(memory, {
 });
 
 /**
+ * One memory handed to a coding agent, on its workspace's memory topic, so
+ * the open memory reads of the workspace count it. No column is ignored:
+ * a row is written once, and moves after only when its agent goes.
+ */
+export const memoryRecallSync = defineSyncTable(memoryRecall, {
+  topics: [{ kind: TOPIC.MEMORY, column: memoryRecall.organizationId }],
+});
+
+/**
  * A workspace's installation of an integration's own app, on the
  * workspace's integrations topic, which only the open integration reads of
  * the workspace are woken on. No column is ignored: Settings reads the
@@ -870,6 +879,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentBrowserTabSync,
   pullRequestChaptersSync,
   memorySync,
+  memoryRecallSync,
   installedSkillSync,
   integrationInstallationSync,
   slackInstallationSync,
