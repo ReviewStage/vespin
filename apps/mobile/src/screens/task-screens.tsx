@@ -120,7 +120,6 @@ const WORDS = {
   NO_TASKS: "No tasks to do",
   UNLISTED_TASK: "Task",
   STOP: "Stop",
-  ARCHIVE: "Archive",
 } as const;
 
 /** The statuses the ⋯ menu's Status offers, in the panel's order. */
@@ -575,27 +574,22 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** An agent row's swipe, as the panel's row menu offers it: Stop while it works, which a full swipe runs, and Archive once it rests, which takes it off the task's list. */
+/**
+ * An agent row's swipe: Stop while it works, which a full swipe runs. Note
+ * that Archive stays in the agent page's menu, which asks first, as the
+ * phone asks of any archive since it has no Undo to offer after.
+ */
 function agentSwipes(
   agent: TaskAgentLine["agent"],
   acts: ReturnType<typeof useAgentRowActs>,
 ): readonly RowSwipe[] {
-  if (agentStillWriting(agent.status)) {
-    return [
-      {
-        label: WORDS.STOP,
-        symbol: "stop.circle",
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => acts.stop(agent.id),
-      },
-    ];
-  }
+  if (!agentStillWriting(agent.status)) return [];
   return [
     {
-      label: WORDS.ARCHIVE,
-      symbol: "archivebox",
-      tone: ROW_ACTION_TONE.DESTRUCTIVE,
-      onPress: () => acts.archive(agent.id),
+      label: WORDS.STOP,
+      symbol: "stop.circle",
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: () => acts.stop(agent.id),
     },
   ];
 }
@@ -603,9 +597,9 @@ function agentSwipes(
 /**
  * One agent's row, as a task's Agents lists it: its mark, its name, where it
  * runs, its threads that need you, and its pull request's number, which
- * opens its own screen; a swipe stops it while it works or archives it once
- * it rests, and a long press lifts its preview, its latest step among it
- * where the app holds its transcript.
+ * opens its own screen; a swipe stops it while it works, and a long press
+ * lifts its preview, its latest step among it where the app holds its
+ * transcript.
  */
 export function TaskAgentRow({
   line,

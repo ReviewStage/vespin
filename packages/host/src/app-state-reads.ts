@@ -14,6 +14,7 @@ import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
+import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -475,6 +476,19 @@ export function selectTranscript(
 export function selectModels(state: AppStateSnapshot): AppHostRead<ModelsAnswer> | undefined {
   const accountId = signedInAccountId(state.account);
   return accountId === undefined ? undefined : state[LIVE_READ.MODELS][accountId];
+}
+
+/** Where every one of the signed-in account's integrations stands, as the host holds its read (`ACT_KIND.INTEGRATIONS_FOLLOW`), as a `select`; none before it is read. */
+export function selectIntegrations(
+  state: AppStateSnapshot,
+): AppHostRead<IntegrationStatusesAnswer> | undefined {
+  const accountId = signedInAccountId(state.account);
+  return accountId === undefined ? undefined : state[LIVE_READ.INTEGRATIONS][accountId];
+}
+
+/** Whether the reader pinned the agent, as the task list follows their pins, as a `select`. */
+export function selectAgentPinned(agentId: string): (state: AppStateSnapshot) => boolean {
+  return (state) => (state.tasks.taskAgentPins ?? []).some((pin) => pin.agentId === agentId);
 }
 
 /**

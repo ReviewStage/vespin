@@ -21,7 +21,12 @@ import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
-import { PERMISSION_MODE_HINT, PERMISSION_MODE_LABEL, PERMISSION_MODE_LIST } from "@repo/settings";
+import {
+  PERMISSION_MODE_HINT,
+  PERMISSION_MODE_LABEL,
+  PERMISSION_MODE_LIST,
+  PERMISSION_MODE_WORDS,
+} from "@repo/settings";
 import {
   APPROVAL_ACTION,
   type ApprovalAction,
@@ -129,16 +134,16 @@ export const MODE_GLYPH = {
 export const MODES = PERMISSION_MODE_LIST;
 
 /** What the modes are called as a row among the model menu's. */
-export const MODE_GROUP = "Permissions";
+export const MODE_GROUP = PERMISSION_MODE_WORDS.GROUP;
 
 /** The question the modes answer, heading their submenu. */
-export const MODE_QUESTION = "How should actions be approved?";
+export const MODE_QUESTION = PERMISSION_MODE_WORDS.QUESTION;
 
 /** When a change reaches the agent, said under the menu and on the change's toast. */
-export const MODE_APPLIES = "Takes effect from the next turn.";
+export const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
 
 /** Why a change of mode did not take, said under the composer's bar. */
-const MODE_CHANGE_FAILED = "The permission mode could not be changed.";
+const MODE_CHANGE_FAILED = PERMISSION_MODE_WORDS.CHANGE_FAILED;
 
 /** The answer each of the card's presses sends. */
 const WIRE_ANSWER = {

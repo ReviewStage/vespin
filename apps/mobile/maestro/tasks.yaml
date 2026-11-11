@@ -130,9 +130,9 @@ onFlowComplete:
 - takeScreenshot: task-overview
 # A long press on an agent lifts its preview: its tile and name, where it
 # stands with its model and where it runs, its latest step where the app
-# holds its transcript, and its pull request, over Open and Stop or Archive,
-# which a swipe from its trailing edge reveals too. A tap off the preview
-# closes it.
+# holds its transcript, and its pull request, over Open and Stop, which a
+# swipe from its trailing edge reveals too while it works. A tap off the
+# preview closes it.
 - longPressOn: "Build teammate invitations"
 - assertVisible: "Open"
 - waitForAnimationToEnd

@@ -1,16 +1,4 @@
 import assert from "node:assert/strict";
-import { CONNECTION_HEALTH, connectionHealth } from "@repo/features/integration-health";
-import {
-  INTEGRATION_CALL_FAILURE,
-  type IntegrationToolsView,
-} from "@repo/features/integration-view";
-import {
-  INTEGRATION_PROVIDER,
-  INTEGRATION_STATUS,
-  INTEGRATION_TOOLS_PROBLEM,
-  type IntegrationProvider,
-  integrationProviderFromWire,
-} from "@repo/features/integration-wire";
 import { test } from "vitest";
 import {
   SERVER_ROW,
@@ -20,6 +8,15 @@ import {
   serverRows,
   switchedServers,
 } from "./agent-servers-model.js";
+import { CONNECTION_HEALTH, connectionHealth } from "./integration-health.js";
+import { INTEGRATION_CALL_FAILURE, type IntegrationToolsView } from "./integration-view.js";
+import {
+  INTEGRATION_PROVIDER,
+  INTEGRATION_STATUS,
+  INTEGRATION_TOOLS_PROBLEM,
+  type IntegrationProvider,
+  integrationProviderFromWire,
+} from "./integration-wire.js";
 
 /**
  * What the MCP servers popover draws of a connected integration, from what

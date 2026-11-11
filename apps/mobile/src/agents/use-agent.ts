@@ -91,31 +91,23 @@ export function useHeldAgentStep(agentId: string, status: AgentStatus): string |
   }, [messages, status]);
 }
 
-/** An agent row's swipes, as the panel's row menu offers them: Stop while it works, and Archive once it rests, each buzzing as it lands or is refused. */
-export function useAgentRowActs(): {
-  readonly stop: (agentId: string) => void;
-  readonly archive: (agentId: string) => void;
-} {
+/** An agent row's swipe, as the panel's row menu offers it: Stop while it works, buzzing as it lands or is refused. */
+export function useAgentRowActs(): { readonly stop: (agentId: string) => void } {
   const acts = useHostActs();
-  return useMemo(() => {
-    // Each act buzzes as it lands or is refused, and says on the console what went wrong.
-    const told = (what: string) =>
-      [
-        (answer: object) => buzz("failure" in answer ? BUZZ.ERROR : BUZZ.SUCCESS),
-        (error: unknown) => {
-          console.error(`${what} did not go.`, error);
-          buzz(BUZZ.ERROR);
-        },
-      ] as const;
-    return {
+  return useMemo(
+    () => ({
       stop: (agentId) => {
-        acts[ACT_KIND.AGENTS_STOP]({ agentId }).then(...told("The stop"));
+        acts[ACT_KIND.AGENTS_STOP]({ agentId }).then(
+          (answer) => buzz("failure" in answer ? BUZZ.ERROR : BUZZ.SUCCESS),
+          (error: unknown) => {
+            console.error("The stop did not go.", error);
+            buzz(BUZZ.ERROR);
+          },
+        );
       },
-      archive: (agentId) => {
-        acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }).then(...told("The archive"));
-      },
-    };
-  }, [acts]);
+    }),
+    [acts],
+  );
 }
 
 /**
