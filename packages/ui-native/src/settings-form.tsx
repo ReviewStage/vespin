@@ -71,7 +71,11 @@ function spokenValue(...parts: readonly (string | undefined)[]) {
  * A row's content made one press, as a Form's navigation row is: the whole
  * row takes the press, its words keep their own ink rather than the tint a
  * button lends, and VoiceOver hears it by its name, then its other words as
- * its value, so a flow still finds it by the name alone.
+ * its value, so a flow still finds it by the name alone. Note that the
+ * whole row takes the press only because each row's own stack carries the
+ * rectangle as its content shape: a plain button answers only where its label
+ * draws, and a shape set on the button itself does not widen that, so the
+ * blank run between a row's words and its chevron took no tap.
  */
 function PressedRow({
   label,
@@ -93,7 +97,6 @@ function PressedRow({
       onPress={onPress}
       modifiers={[
         buttonStyle("plain"),
-        contentShape(shapes.rectangle()),
         accessibilityLabel(label),
         ...spokenValue(...(value ?? [])),
         listRowBackground(colors.SURFACE),
@@ -150,7 +153,10 @@ type AccountRowProps = {
 export function AccountRow({ name, email, picture, detail, onPress }: AccountRowProps) {
   const colors = useColors();
   const face = (
-    <HStack spacing={SPACE.ROW + 2} modifiers={[listRowBackground(colors.SURFACE)]}>
+    <HStack
+      spacing={SPACE.ROW + 2}
+      modifiers={[listRowBackground(colors.SURFACE), contentShape(shapes.rectangle())]}
+    >
       <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />
       <VStack alignment="leading" spacing={2}>
         <Text
@@ -212,7 +218,7 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
   const colors = useColors();
   return (
     <PressedRow label={label} value={[detail]} onPress={onPress} testId={testId}>
-      <HStack spacing={SPACE.ROW}>
+      <HStack spacing={SPACE.ROW} modifiers={[contentShape(shapes.rectangle())]}>
         {symbol === undefined ? null : (
           <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
         )}
