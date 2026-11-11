@@ -837,6 +837,10 @@ function RunActionsSection({
 }): React.JSX.Element {
   const saving = useSaveRunActions(workspaceId);
   const dialog = useRunActionDialog(saving, lists);
+  // A repository whose list is full is left out of Add action's menu, as its own row's Add action stands still, so no card opens on a save the service would refuse.
+  const full = lists
+    .filter((list) => list.actions.length >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS)
+    .map((list) => list.repository);
   return (
     <SettingsSection
       title="Run actions"
@@ -846,7 +850,7 @@ function RunActionsSection({
           <AddRepositoryButton
             workspaceId={workspaceId}
             label="Add action"
-            taken={[]}
+            taken={full}
             onPick={(repository) => {
               if (!saving.isPending) dialog.open({ repository });
             }}
