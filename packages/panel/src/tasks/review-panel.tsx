@@ -138,6 +138,8 @@ function ReviewPanel({
     onSubmit: () => {
       if (!sending) draft.submit();
     },
+    // Note that Esc in the words closes the panel as its own Esc does, handing the focus back to the Review press, once no list or dictation took it; a review on its way holds the panel open.
+    onLeave: sending ? undefined : onClose,
     held: sending,
     takesFiles: false,
     focus: true,
