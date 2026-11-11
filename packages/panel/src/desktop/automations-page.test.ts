@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
+import { AUTOMATION_PRESET, automationPreset } from "@repo/features/automation-presets";
 import {
   AUTOMATION_CALL_FAILURE,
   AUTOMATION_FOLLOW,
@@ -2101,14 +2102,22 @@ test("Memory digest is suggested under the list, and under an empty one, only wh
   assert.ok(suggestion(empty, "Memory digest"));
 });
 
-test("Memory digest is suggested no more once the list holds it", async () => {
+test("Memory digest is suggested no more once the list holds it by its name or, renamed, by its prompt", async () => {
   memoryOn();
-  standing = [SWEEP, automation(4, { name: "Memory digest", scope: AUTOMATION_SCOPE.PERSONAL })];
-  const page = mount();
-  await settle();
+  const prompt = automationPreset(AUTOMATION_PRESET.MEMORY_DIGEST).prompt;
+  for (const held of [
+    { name: "memory digest" },
+    { name: "Weekly memories", action: { kind: AUTOMATION_ACTION.AGENT, prompt } },
+  ]) {
+    standing = [SWEEP, automation(4, { ...held, scope: AUTOMATION_SCOPE.PERSONAL })];
+    const page = mount();
+    await settle();
 
-  assert.equal(automationRows(page).length, 2);
-  assert.equal(suggestion(page, "Memory digest") === undefined, true);
+    assert.equal(automationRows(page).length, 2);
+    assert.equal(page.querySelector("[aria-label='Suggested']") === null, true, held.name);
+    act(() => root?.unmount());
+    document.body.innerHTML = "";
+  }
 });
 
 test("a new automation started from Memory digest is made every Monday at nine in the member's zone, in no repository, archiving its finished runs", async () => {
