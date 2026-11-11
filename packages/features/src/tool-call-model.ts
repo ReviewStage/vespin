@@ -574,6 +574,15 @@ function inboxToolView(
       output: refused,
     };
   }
+  if (tool === AGENT_TOOL.READ_THREAD) {
+    const thread = isRecord(output) ? output.thread : undefined;
+    return {
+      kind: CALL_KIND.INBOX_THREAD_READ,
+      subject: cardTitle(stringAt(thread, "title") ?? ""),
+      input: textBlock(""),
+      output: refused,
+    };
+  }
   return { kind: CALL_KIND.INBOX_READ, subject: "", input: textBlock(""), output: refused };
 }
 
@@ -1149,7 +1158,8 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.WRITE_TODOS]: ({ input }) => todosToolView(input),
   [AGENT_TOOL.POST_THREAD]: READ_INBOX_CALL,
   [AGENT_TOOL.WITHDRAW_ASK]: READ_INBOX_CALL,
-  [AGENT_TOOL.READ_THREADS]: READ_INBOX_CALL,
+  [AGENT_TOOL.LIST_THREADS]: READ_INBOX_CALL,
+  [AGENT_TOOL.READ_THREAD]: READ_INBOX_CALL,
   [AGENT_TOOL.OPEN_PULL_REQUEST]: ({ input, output }) => openedPullRequestView(input, output),
   [AGENT_TOOL.LOAD_SKILL]: ({ input, output }) => {
     const skillName = loadedSkill(input);
@@ -1277,6 +1287,7 @@ const RETIRED_TOOL_VIEWS = {
   [RETIRED_TOOL.REPLY_INBOX]: READ_INBOX_CALL,
   [RETIRED_TOOL.POST_TO_INBOX]: READ_INBOX_CALL,
   [RETIRED_TOOL.READ_INBOX]: READ_INBOX_CALL,
+  [RETIRED_TOOL.READ_THREADS]: READ_INBOX_CALL,
   [RETIRED_TOOL.LIST_ISSUES]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_ISSUES, input, output, undefined),
   [RETIRED_TOOL.READ_ISSUE]: ({ input, output }) => issueCall(CALL_KIND.READ_ISSUE, input, output),
@@ -1407,14 +1418,23 @@ interface TargetedCall {
 const TASK_TARGET: ToolTarget = { kind: TOOL_TARGET.DESCRIPTION };
 const INBOX_TARGET: ToolTarget = { kind: TOOL_TARGET.INBOX };
 
-/** The thread a call names by its key, a post's or a withdrawal's, whose item its row opens, by the id its answer lists the thread under; the whole Inbox where it names none. */
+/**
+ * The thread a call names by its key, a post's or a withdrawal's, whose item
+ * its row opens, by the id its answer names the thread by: the thread it
+ * answers with, or, in an answer from before posts answered with one thread,
+ * the one under its key among the whole inbox it answered; the whole Inbox
+ * where it names none.
+ */
 function namedThread(call: TargetedCall): ToolTarget {
   const key = stringAt(call.input, "key");
   if (key === undefined || key === "") return INBOX_TARGET;
+  const answered = isRecord(call.output) ? call.output.thread : undefined;
   const threads =
     isRecord(call.output) && Array.isArray(call.output.inbox) ? call.output.inbox : [];
   const item = stringAt(
-    threads.find((thread) => stringAt(thread, "key") === key),
+    stringAt(answered, "key") === key
+      ? answered
+      : threads.find((thread) => stringAt(thread, "key") === key),
     "id",
   );
   return item === undefined
@@ -1553,7 +1573,9 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [RETIRED_TOOL.POST_TO_INBOX, namedThread],
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
-  [AGENT_TOOL.READ_THREADS, () => INBOX_TARGET],
+  [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
+  [AGENT_TOOL.READ_THREAD, () => INBOX_TARGET],
+  [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],
 ]);

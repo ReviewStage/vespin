@@ -51,8 +51,11 @@ import {
 import { CODER } from "./bounds.js";
 import {
   INBOX_REFUSAL,
+  type InboxListResult,
+  type InboxReadResult,
+  listThreads,
   postToInbox,
-  readThreads,
+  readThread,
   type ThreadPoster,
   withdrawAsk,
 } from "./inbox.js";
@@ -172,6 +175,23 @@ const onlyItem = (agent: Pick<InboxAgent, "userId"> & { readonly taskId: string 
     return item;
   });
 
+/** The lines a list accepted, failing where it refused. */
+function acceptedList(result: InboxListResult) {
+  assert.ok("threads" in result, "the list was accepted");
+  return result.threads;
+}
+
+/** The thread a read accepted, failing where it refused. */
+function acceptedRead(result: InboxReadResult) {
+  assert.ok("thread" in result, "the read was accepted");
+  return result.thread;
+}
+
+/** A read's messages without when each was written, which the store's clock sets. */
+function untimed<Line extends { readonly at: string }>(messages: readonly Line[]) {
+  return messages.map(({ at: _at, ...line }) => line);
+}
+
 /** The message whose ask the thread holds open. */
 function openAsk(item: InboxItem) {
   const asking = item.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
@@ -195,21 +215,20 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const first = yield* onlyItem(agent);
         assert.deepEqual(posted, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
-          inbox: [
-            {
-              key: QUEUE.key,
-              title: QUEUE.title,
-              id: first.id,
-              status: INBOX_STATUS.OPEN,
-              thread: [
-                {
-                  from: "you",
-                  text: QUEUE.body,
-                  ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN },
-                },
-              ],
-            },
-          ],
+          thread: {
+            key: QUEUE.key,
+            title: QUEUE.title,
+            id: first.id,
+            status: INBOX_STATUS.OPEN,
+            thread: [
+              {
+                from: "you",
+                text: QUEUE.body,
+                ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN },
+              },
+            ],
+          },
+          open: [],
         });
         assert.deepEqual(openAsk(first).ask, { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN });
 
@@ -287,15 +306,14 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const notice = yield* onlyItem(agent);
         assert.deepEqual(noted, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
-          inbox: [
-            {
-              key: "pr-ready",
-              title: "PR ready",
-              id: notice.id,
-              status: INBOX_STATUS.OPEN,
-              thread: [{ from: "you", text: "Opened." }],
-            },
-          ],
+          thread: {
+            key: "pr-ready",
+            title: "PR ready",
+            id: notice.id,
+            status: INBOX_STATUS.OPEN,
+            thread: [{ from: "you", text: "Opened." }],
+          },
+          open: [],
         });
         assert.deepEqual([notice.status, notice.needsReply], [INBOX_STATUS.OPEN, false]);
         assert.equal(
@@ -708,25 +726,24 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const settings = yield* onlyItem(agent);
         assert.deepEqual(withdrawn, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
-          inbox: [
-            {
-              key: SETTINGS.key,
-              title: SETTINGS.title,
-              id: settings.id,
-              status: INBOX_STATUS.CLOSED,
-              thread: [
-                {
-                  from: "you",
-                  text: SETTINGS.body,
-                  ask: {
-                    type: INBOX_ASK.DO,
-                    status: INBOX_ASK_STATUS.WITHDRAWN,
-                    withdrawnReason: "Did it myself.",
-                  },
+          thread: {
+            key: SETTINGS.key,
+            title: SETTINGS.title,
+            id: settings.id,
+            status: INBOX_STATUS.CLOSED,
+            thread: [
+              {
+                from: "you",
+                text: SETTINGS.body,
+                ask: {
+                  type: INBOX_ASK.DO,
+                  status: INBOX_ASK_STATUS.WITHDRAWN,
+                  withdrawnReason: "Did it myself.",
                 },
-              ],
-            },
-          ],
+              },
+            ],
+          },
+          open: [],
         });
         const again = yield* withdrawAsk(agent, input({ key: SETTINGS.key, reason: "Twice." }));
         assert.equal(refusalOf(again), INBOX_REFUSAL.NO_OPEN_ASK);
@@ -764,7 +781,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "read_inbox answers each thread's messages in order, each ask with where it stands and each answer by whom, a settled thread by its latest messages",
+    "read_thread answers a thread's every message in order, each ask whole with where it stands and each answer by whom, a settled one as much as an open one",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -785,9 +802,8 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         yield* TestClock.adjust(Duration.seconds(1));
         yield* post(agent, { key: QUEUE.key, body: "No: it needs a new service." });
 
-        const open = yield* readThreads(agent, input({}));
-        assert.equal(open.status, ACTION_RESULT_STATUS.ACCEPTED);
-        assert.deepEqual(open.inbox?.[0]?.thread, [
+        const open = acceptedRead(yield* readThread(agent, input({ threadId: asked.id })));
+        assert.deepEqual(untimed(open.messages), [
           { from: "you", text: QUEUE.body, ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN } },
           {
             from: "Test User",
@@ -823,38 +839,39 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           revision: notice.revision,
         });
 
-        const settled = yield* readThreads(agent, input({}));
-        assert.equal(settled.status, ACTION_RESULT_STATUS.ACCEPTED);
-        assert.deepEqual(settled.inbox, [
+        const settled = acceptedRead(yield* readThread(agent, input({ threadId: asked.id })));
+        assert.deepEqual(
+          [settled.status, settled.answeredBy, settled.answeredByUserId, settled.older],
+          [INBOX_STATUS.ANSWERED, "Test User", agent.userId, undefined],
+        );
+        assert.deepEqual(untimed(settled.messages), [
           {
-            key: QUEUE.key,
-            title: QUEUE.title,
-            id: asked.id,
-            status: INBOX_STATUS.ANSWERED,
-            earlier: 2,
-            thread: [
-              {
-                from: "you",
-                text: QUEUE.body,
-                ask: { type: INBOX_ASK.DECIDE, status: INBOX_ASK_STATUS.ANSWERED },
-              },
-              {
-                from: "Test User",
-                fromUserId: agent.userId,
-                text: "Go with the outbox.",
-                answers: { reply: INBOX_REPLY.CHOSE, choices: ["Postgres outbox"] },
-              },
-              { from: "you", text: "Thanks." },
-              { from: "you", text: "Shipping it." },
-              { from: "Test User", fromUserId: agent.userId, text: "Great." },
-            ],
+            from: "you",
+            text: QUEUE.body,
+            ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.ANSWERED },
           },
+          {
+            from: "Test User",
+            fromUserId: agent.userId,
+            text: "Is Redis free?",
+            files: ["pricing.txt"],
+          },
+          { from: "you", text: "No: it needs a new service." },
+          {
+            from: "Test User",
+            fromUserId: agent.userId,
+            text: "Go with the outbox.",
+            answers: { reply: INBOX_REPLY.CHOSE, choices: ["Postgres outbox"] },
+          },
+          { from: "you", text: "Thanks." },
+          { from: "you", text: "Shipping it." },
+          { from: "Test User", fromUserId: agent.userId, text: "Great." },
         ]);
       }),
   );
 
   it.effect(
-    "a settled do reads back its steps beside the places of those the member ticked, so the agent knows which are left",
+    "a settled do reads back whole beside the places of the steps the member ticked, so the agent knows which are left",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -867,16 +884,12 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           clientKey: randomUUID(),
         });
 
-        const read = yield* readThreads(agent, input({}));
+        const read = acceptedRead(yield* readThread(agent, input({ threadId: asked.id })));
 
-        assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
-          read.inbox?.[0]?.thread.map((line) => [line.ask, line.answers]),
+          read.messages.map((line) => [line.ask, line.answers]),
           [
-            [
-              { type: INBOX_ASK.DO, status: INBOX_ASK_STATUS.ANSWERED, steps: SETTINGS.ask.steps },
-              undefined,
-            ],
+            [{ ...SETTINGS.ask, status: INBOX_ASK_STATUS.ANSWERED }, undefined],
             [undefined, { reply: INBOX_REPLY.NOT_DONE, steps: [0] }],
           ],
         );
@@ -884,56 +897,36 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "the agent reads back which member closed a thread without an answer, by name and by the account their link names them by, and its own withdrawal by its reason",
+    "a post answers the thread it changed and one line for each other open thread, and the list names who closed a thread without an answer and why the agent withdrew its own",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
         yield* post(agent, SETTINGS);
-        yield* post(agent, { ...SETTINGS, key: "own" });
+        const second = yield* post(agent, { ...SETTINGS, key: "own" });
+        assert.ok("thread" in second);
+        assert.deepEqual(
+          [second.thread.key, second.open.map((row) => row.key)],
+          ["own", [SETTINGS.key]],
+        );
         const items = yield* taskInboxItems(agent.userId, agent.taskId);
         const settings = items.find((item) => item.key === SETTINGS.key);
         assert.ok(settings);
         yield* closeInboxItemAsMember(agent.userId, settings.id, settings.revision, randomUUID());
         yield* withdrawAsk(agent, input({ key: "own", reason: "Did it myself." }));
 
-        const read = yield* readThreads(agent, input({}));
-        assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
+        const listed = acceptedList(yield* listThreads(agent, input({})));
         assert.deepEqual(
-          read.inbox
-            ?.map((line) => [
-              line.key,
-              line.status,
-              line.closedBy,
-              line.closedByUserId,
-              line.thread[0]?.ask,
-            ])
-            .sort(),
+          listed.map((row) => [row.key, row.status, row.closedBy, row.closedReason]).sort(),
           [
-            [
-              "own",
-              INBOX_STATUS.CLOSED,
-              undefined,
-              undefined,
-              {
-                type: INBOX_ASK.DO,
-                status: INBOX_ASK_STATUS.WITHDRAWN,
-                withdrawnReason: "Did it myself.",
-              },
-            ],
-            [
-              SETTINGS.key,
-              INBOX_STATUS.CLOSED,
-              "Test User",
-              agent.userId,
-              { type: INBOX_ASK.DO, status: INBOX_ASK_STATUS.WITHDRAWN },
-            ],
+            ["own", INBOX_STATUS.CLOSED, undefined, "Did it myself."],
+            [SETTINGS.key, INBOX_STATUS.CLOSED, "Test User", undefined],
           ].sort(),
         );
       }),
   );
 
   it.effect(
-    "the agent reads back a notice the member nodded as answered, with nothing beside its own message, and one closed before threads by its reason alone",
+    "the list names a notice the member nodded as answered, with no answer beside it, and one closed before threads by its reason alone",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -959,26 +952,25 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             .where(eq(inboxItem.id, merged.id)),
         );
 
-        const read = yield* readThreads(agent, input({}));
+        const listed = acceptedList(yield* listThreads(agent, input({})));
 
-        assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
-          read.inbox?.toSorted((left, right) => left.key.localeCompare(right.key)),
+          listed.map(({ updatedAt: _at, ...row }) => row),
           [
             {
-              key: "pr-merged",
-              title: "PR merged",
-              id: merged.id,
-              status: INBOX_STATUS.CLOSED,
-              thread: [{ from: "you", text: "Merged." }],
-              closedReason: "Merged by hand.",
-            },
-            {
+              id: ready.id,
               key: "pr-ready",
               title: "PR ready",
-              id: ready.id,
               status: INBOX_STATUS.ANSWERED,
-              thread: [{ from: "you", text: "Opened." }],
+              lastFrom: "you",
+            },
+            {
+              id: merged.id,
+              key: "pr-merged",
+              title: "PR merged",
+              status: INBOX_STATUS.CLOSED,
+              lastFrom: "you",
+              closedReason: "Merged by hand.",
             },
           ],
         );
@@ -986,7 +978,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "an agent reads a teammate's agent's threads, and its task's, of its own workspace alone, and never an agent's of another workspace its developer belongs to",
+    "an agent lists a teammate's agent's threads, and its task's, of its own workspace alone, and never lists or reads an agent's of another workspace its developer belongs to",
     () =>
       Effect.gen(function* () {
         const { workspaceId, ...agent } = yield* openAgent;
@@ -1009,30 +1001,75 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         );
         yield* post(elsewhere, SETTINGS);
 
-        const byAgent = yield* readThreads(agent, input({ agentId: teammate.agentId }));
-        const byTask = yield* readThreads(agent, input({ taskId: teammate.taskId }));
-        const outside = yield* readThreads(agent, input({ agentId: elsewhere.agentId }));
-        const misspelled = yield* readThreads(agent, input({ agentID: teammate.agentId }));
+        const byAgent = acceptedList(
+          yield* listThreads(agent, input({ agentId: teammate.agentId })),
+        );
+        const byTask = acceptedList(yield* listThreads(agent, input({ taskId: teammate.taskId })));
+        const outside = acceptedList(
+          yield* listThreads(agent, input({ agentId: elsewhere.agentId })),
+        );
+        const misspelled = yield* listThreads(agent, input({ agentID: teammate.agentId }));
+        const [elsewhereItem] = yield* taskInboxItems(agent.userId, elsewhere.taskId);
+        assert.ok(elsewhereItem);
+        const outsideRead = yield* readThread(agent, input({ threadId: elsewhereItem.id }));
 
         const teammateThread = [
           {
             key: QUEUE.key,
             agentId: teammate.agentId,
             status: INBOX_STATUS.OPEN,
-            from: "agent",
+            lastFrom: "agent",
+            ask: { type: INBOX_ASK.DECIDE, text: QUEUE.body },
           },
         ];
-        const summary = (read: typeof byAgent) =>
-          read.inbox?.map((line) => ({
-            key: line.key,
-            agentId: line.agentId,
-            status: line.status,
-            from: line.thread[0]?.from,
+        const summary = (rows: typeof byAgent) =>
+          rows.map(({ key, agentId, status, lastFrom, ask }) => ({
+            key,
+            agentId,
+            status,
+            lastFrom,
+            ask,
           }));
         assert.deepEqual(summary(byAgent), teammateThread);
         assert.deepEqual(summary(byTask), teammateThread);
-        assert.deepEqual(outside, { status: ACTION_RESULT_STATUS.ACCEPTED, inbox: [] });
-        assert.equal(refusalOf(misspelled), INBOX_REFUSAL.UNREADABLE_READ);
+        assert.deepEqual(outside, []);
+        assert.equal(refusalOf(misspelled), INBOX_REFUSAL.UNREADABLE_LIST);
+        assert.equal(refusalOf(outsideRead), INBOX_REFUSAL.NO_THREAD);
+      }),
+  );
+
+  it.effect(
+    "read_thread pages a long thread back from its latest messages, and names the open ask the first page leaves out",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+        yield* post(agent, QUEUE);
+        const asked = yield* onlyItem(agent);
+        const replies = INBOX_BOUNDS.MAX_MESSAGES_READ + 1;
+        for (let reply = 1; reply <= replies; reply += 1) {
+          yield* TestClock.adjust(Duration.seconds(1));
+          yield* postInboxMessage(agent.userId, asked.id, {
+            text: `Reply ${reply}.`,
+            clientKey: randomUUID(),
+          });
+        }
+
+        const latest = acceptedRead(yield* readThread(agent, input({ threadId: asked.id })));
+        assert.ok(latest.older);
+        const earlier = acceptedRead(
+          yield* readThread(agent, input({ threadId: asked.id, before: latest.older })),
+        );
+
+        const texts = (messages: typeof latest.messages) => messages.map((line) => line.text);
+        assert.deepEqual(
+          texts(latest.messages),
+          Array.from({ length: INBOX_BOUNDS.MAX_MESSAGES_READ }, (_, at) => `Reply ${at + 2}.`),
+        );
+        assert.equal(latest.openAsk?.text, QUEUE.body);
+        assert.deepEqual(
+          [texts(earlier.messages), earlier.older, earlier.openAsk],
+          [[QUEUE.body, "Reply 1."], undefined, undefined],
+        );
       }),
   );
 

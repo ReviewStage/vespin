@@ -2709,6 +2709,83 @@ export function readInboxItem(
   );
 }
 
+/**
+ * The messages one page of a thread's read takes: the latest written before
+ * the message `before` names, or before none, as many as a read carries and
+ * one more, which tells that an earlier page stands; none where `before`
+ * names a message of another thread. Note that the cursor is read under its
+ * own name, because the page's rows go by the table's name.
+ */
+function pageMessages(before: string | null): SQL {
+  const cursor = sql.identifier("cursor");
+  const column = (name: string) => sql`${cursor}.${sql.identifier(name)}`;
+  const older =
+    before === null
+      ? sql``
+      : sql` and (${inboxMessage.createdAt}, ${inboxMessage.id}) < (select ${column(inboxMessage.createdAt.name)}, ${column(inboxMessage.id.name)} from ${inboxMessage} as ${cursor} where ${column(inboxMessage.id.name)} = ${before} and ${column(inboxMessage.itemId.name)} = ${ITEM_ID})`;
+  return messagesAs(
+    sql`select * from ${inboxMessage} where ${inboxMessage.itemId} = ${ITEM_ID}${older} order by ${inboxMessage.createdAt} desc, ${inboxMessage.id} desc limit ${sql.raw(String(INBOX_BOUNDS.MAX_MESSAGES_READ + 1))}`,
+  );
+}
+
+const ThreadPageRowSchema = Schema.Struct({
+  status: Schema.Literals(Object.values(INBOX_STATUS)),
+  openAskMessageId: Schema.NullOr(Schema.String),
+  closedReason: Schema.NullOr(Schema.String),
+  messages: Schema.Array(MessageRowSchema),
+});
+
+/** One page of the item's messages, with where its asks stand, where the account may read the item. */
+const findThreadPage = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    itemId: Schema.String,
+    before: Schema.NullOr(Schema.String),
+  }),
+  Result: ThreadPageRowSchema,
+  execute: ({ userId, itemId, before }) =>
+    Database.use((db) =>
+      db
+        .select({
+          status: inboxItem.status,
+          openAskMessageId: inboxItem.openAskMessageId,
+          closedReason: inboxItem.closedReason,
+          messages: messagesOf(pageMessages(before)),
+        })
+        .from(inboxItem)
+        .where(and(eq(inboxItem.id, itemId), itemVisibleTo(userId))),
+    ),
+});
+
+/** One page of a thread's messages, oldest first, and whether an earlier page stands before it. */
+export interface InboxThreadPage {
+  readonly messages: readonly InboxMessage[];
+  readonly older: boolean;
+}
+
+/**
+ * One page of a thread's messages as the account may read them, oldest
+ * first, each ask as it stands on the item: the latest as many as a read
+ * carries, written before the message `before` names, or the thread's
+ * latest where it names none; nothing for an item the account may not read.
+ * Note that it is handed no member's key, since the reader is no window
+ * that sent one.
+ */
+export function inboxThreadPage(
+  userId: string,
+  itemId: string,
+  before: string | undefined,
+): InboxStoreEffect<Option.Option<InboxThreadPage>> {
+  return Effect.map(
+    findThreadPage({ userId, itemId, before: before ?? null }),
+    Option.map((row) => {
+      const older = row.messages.length > INBOX_BOUNDS.MAX_MESSAGES_READ;
+      const kept = older ? row.messages.slice(1) : row.messages;
+      return { messages: kept.map((each) => storedMessage(each, row, undefined)), older };
+    }),
+  );
+}
+
 /** Where the item stands, its agent, task, and workspace, as a link by its id alone is opened; nothing for one the account may not read, as for one that does not exist. */
 export function readInboxItemHome(
   userId: string,

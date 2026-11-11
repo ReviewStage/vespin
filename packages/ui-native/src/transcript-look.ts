@@ -22,6 +22,7 @@ export const CALL_SYMBOL = {
   [CALL_KIND.INBOX_POST]: "tray",
   [CALL_KIND.INBOX_CLOSE]: "tray",
   [CALL_KIND.INBOX_READ]: "tray",
+  [CALL_KIND.INBOX_THREAD_READ]: "tray",
   [CALL_KIND.INBOX_REPLY]: "tray",
   [CALL_KIND.INBOX_WITHDRAW]: "tray",
   [CALL_KIND.WORKER]: "gearshape.2",

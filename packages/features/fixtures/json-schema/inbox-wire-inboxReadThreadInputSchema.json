@@ -1,17 +1,19 @@
 {
   "type": "object",
   "properties": {
-    "agentId": {
+    "threadId": {
       "type": "string",
       "minLength": 1,
       "maxLength": 36
     },
-    "taskId": {
+    "before": {
       "type": "string",
       "minLength": 1,
       "maxLength": 36
     }
   },
-  "required": [],
+  "required": [
+    "threadId"
+  ],
   "additionalProperties": false
 }
