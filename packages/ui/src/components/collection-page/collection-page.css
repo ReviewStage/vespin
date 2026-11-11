@@ -71,7 +71,7 @@
 
   /* The rows of blocks a read in progress stands, where the caller hands no
      skeleton: a skeleton's elements wear only classes naming themselves a
-     skeleton's (root AGENTS.md's Layout), so they are laid
+     skeleton's (`packages/ui/README.md`'s Skeletons), so they are laid
      out here. */
   .ui-collection-page-skeleton {
     display: flex;
