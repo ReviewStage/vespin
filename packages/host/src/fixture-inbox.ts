@@ -1504,7 +1504,10 @@ export function inboxAppState(
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
-    [LIVE_READ.WORKSPACE_PHOTOS]: { [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO } },
+    [LIVE_READ.WORKSPACE_PHOTOS]: {
+      ...state[LIVE_READ.WORKSPACE_PHOTOS],
+      [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
+    },
     [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),

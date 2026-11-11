@@ -80,7 +80,7 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
-import { useMemberPictures } from "../member-pictures.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -155,6 +155,8 @@ function InboxRows({
   onRemind,
   onResolve,
 }: InboxRowsProps) {
+  // The members' pictures, read once for every row rather than once a row.
+  const pictureOf = useMemberPictures();
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {listed.map((each) => (
@@ -162,6 +164,7 @@ function InboxRows({
           key={each.item.id}
           listed={each}
           readerId={readerId}
+          pictureOf={pictureOf}
           onMark={onMark}
           onRemind={onRemind}
           onResolve={onResolve}
@@ -184,12 +187,15 @@ function InboxRows({
 export function InboxRow({
   listed,
   readerId,
+  pictureOf,
   onMark,
   onRemind,
   onResolve,
 }: {
   readonly listed: InboxListed;
   readonly readerId: string | undefined;
+  /** Each member's picture by their id, read once by the list the row stands in. */
+  readonly pictureOf: PictureOf;
   readonly onMark: (itemId: string, unread: boolean) => void;
   /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
   readonly onRemind: (item: InboxItem) => void;
@@ -202,7 +208,6 @@ export function InboxRow({
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const title = cardTitle(item.title);
-  const pictureOf = useMemberPictures();
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
