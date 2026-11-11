@@ -1,3 +1,16 @@
+import {
+  namedServers,
+  SERVER_ACTION,
+  SERVER_ROW,
+  SERVER_SECTION,
+  SERVERS_LABEL,
+  type ServerRow,
+  searchServers,
+  serverGroups,
+  serverRows,
+  serversOnWords,
+  switchedServers,
+} from "@repo/features/agent-servers-model";
 import { connectionHealth } from "@repo/features/integration-health";
 import { SIGN_IN_ACTION } from "@repo/features/integration-sign-in";
 import {
@@ -47,19 +60,6 @@ import {
   VisuallyHidden,
   wholeWordsHint,
 } from "@repo/ui";
-import {
-  namedServers,
-  SERVER_ACTION,
-  SERVER_ROW,
-  SERVER_SECTION,
-  SERVERS_LABEL,
-  type ServerRow,
-  searchServers,
-  serverGroups,
-  serverRows,
-  serversOnWords,
-  switchedServers,
-} from "@repo/ui/agent-servers-model";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {
   cloneElement,

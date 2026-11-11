@@ -14,7 +14,6 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
-  accessibilityHidden,
   accessibilityIdentifier,
   accessibilityLabel,
   background,
@@ -35,6 +34,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { FIELD_WORDS } from "@repo/features/words";
 import { Fragment, type ReactNode } from "react";
+import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -114,11 +114,13 @@ function Card({ children }: { readonly children: readonly ReactNode[] }) {
 /** What the box's last send said where it did not go, under the ask: what the answer lacks, or the refusal, in the danger's ink. */
 export function AskNote({ words }: { readonly words: string }) {
   const colors = useColors();
+  // Note that a note stands because a send did not go, so VoiceOver is told it at once, rather than the reader finding it only by walking the screen.
+  useAnnounced(words, true);
   return (
     <Text
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(colors.DANGER),
+        foregroundStyle(colors.DANGER_TEXT),
         accessibilityIdentifier("ask-note"),
       ]}
     >
@@ -165,7 +167,7 @@ function StepRow({
         modifiers={[padding(ROW_PADDING), contentShape(shapes.rectangle())]}
       >
         <Image
-          systemName={ticked ? "checkmark.square.fill" : "square"}
+          systemName={ticked ? "checkmark.circle.fill" : "circle"}
           size={MARK_SIZE.LEAD}
           color={ticked ? colors.ACCENT : colors.TEXT_MUTED}
         />
@@ -295,7 +297,7 @@ function SelectRow({
         label={field.label}
         selection={typeof field.value === "string" ? field.value : ""}
         onSelectionChange={onChange}
-        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.ACCENT)]}
+        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
       >
         <Text modifiers={[tag("")]}>{CHOOSE}</Text>
         {(field.options ?? []).map((option) => (
@@ -309,9 +311,9 @@ function SelectRow({
 }
 
 /**
- * A boolean: its label and the system's switch at the row's end. Note that
- * the label flips it too, since the switch alone takes a press on its knob;
- * the switch carries the label for VoiceOver, so the words are not heard twice.
+ * A boolean: the system's switch with its label, as Settings' rows stand,
+ * the system laying out the words and the switch at the row's end and
+ * hearing them as one control.
  */
 function BooleanRow({
   field,
@@ -321,28 +323,19 @@ function BooleanRow({
   readonly onChange: (value: boolean) => void;
 }) {
   const colors = useColors();
-  const on = field.value === true;
   return (
-    <HStack spacing={SPACE.ROW} modifiers={[padding(ROW_PADDING)]}>
-      <SwiftUIButton
-        onPress={() => onChange(!on)}
-        modifiers={[buttonStyle("plain"), accessibilityHidden(true)]}
-      >
-        <FieldWords
-          label={field.label}
-          required={field.required}
-          textStyle={TYPE_ROLE.ROW_TITLE}
-          ink={colors.TEXT}
-        />
-      </SwiftUIButton>
-      <Spacer />
-      <Toggle
+    <Toggle
+      isOn={field.value === true}
+      onIsOnChange={onChange}
+      modifiers={[toggleStyle("switch"), tint(colors.ACCENT), padding(ROW_PADDING)]}
+    >
+      <FieldWords
         label={field.label}
-        isOn={on}
-        onIsOnChange={onChange}
-        modifiers={[toggleStyle("switch"), labelsHidden(), tint(colors.ACCENT)]}
+        required={field.required}
+        textStyle={TYPE_ROLE.ROW_TITLE}
+        ink={colors.TEXT}
       />
-    </HStack>
+    </Toggle>
   );
 }
 

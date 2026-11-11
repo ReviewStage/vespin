@@ -19,7 +19,10 @@ import { useBlobUrl } from "../video-player/video-player.js";
  * so a newer version's frame holds its place again until it loads.
  *
  * It comes as a card's preview, as wide as its container, or as a row's
- * tile, a line of media tall. It takes no class or style: its outer layout
+ * tile, a line of media tall. A picture or a video's frame covers the box,
+ * cut to its shape, or, `contain`ed, stands whole on the ground and never
+ * past its own size, so a tall phone screenshot or a wide banner shown as
+ * evidence keeps every edge, and a small icon stays sharp. It takes no class or style: its outer layout
  * is its container's. It is drawn by shadcn/ui's aspect ratio
  * (`../../shadcn/aspect-ratio.tsx`) in Tailwind utilities over the theme.
  */
@@ -31,6 +34,20 @@ export const PAGE_THUMB_SIZE = {
 } as const;
 
 export type PageThumbSize = (typeof PAGE_THUMB_SIZE)[keyof typeof PAGE_THUMB_SIZE];
+
+/** How a picture or a video's frame fills the thumb: cut to its shape, or whole on its ground. */
+export const PAGE_THUMB_FIT = {
+  COVER: "cover",
+  CONTAIN: "contain",
+} as const;
+
+export type PageThumbFit = (typeof PAGE_THUMB_FIT)[keyof typeof PAGE_THUMB_FIT];
+
+/** Each fit's class on a picture or a frame. */
+const FIT_CLASS: Record<PageThumbFit, string> = {
+  [PAGE_THUMB_FIT.COVER]: "object-cover",
+  [PAGE_THUMB_FIT.CONTAIN]: "object-scale-down",
+};
 
 /** A thumb's shape: a window's, 16 by 10. */
 const THUMB_RATIO = 16 / 10;
@@ -51,12 +68,18 @@ export interface PageThumbFrame {
 }
 
 /** A video's first frame, still, filling the thumb once its bytes are made an address it may load. */
-function VideoStill({ dataUrl }: { dataUrl: string }): React.JSX.Element | null {
+function VideoStill({
+  dataUrl,
+  fit,
+}: {
+  dataUrl: string;
+  fit: PageThumbFit;
+}): React.JSX.Element | null {
   const url = useBlobUrl(dataUrl);
   if (url === undefined) return null;
   return (
     <video
-      className="ui-page-thumb-image pointer-events-none size-full object-cover"
+      className={`ui-page-thumb-image pointer-events-none size-full ${FIT_CLASS[fit]}`}
       src={url}
       muted
       playsInline
@@ -70,6 +93,7 @@ function VideoStill({ dataUrl }: { dataUrl: string }): React.JSX.Element | null 
 /** A page, a picture, or a video's first frame, small and inert. */
 export function PageThumb({
   size = PAGE_THUMB_SIZE.CARD,
+  fit = PAGE_THUMB_FIT.COVER,
   frame,
   frameRef,
   image,
@@ -77,6 +101,8 @@ export function PageThumb({
   glyph,
 }: {
   size?: PageThumbSize;
+  /** How a picture or a video's frame fills it; covered where none is given. */
+  fit?: PageThumbFit;
   /** A page to draw small. */
   frame?: PageThumbFrame | undefined;
   /** The page's frame itself, which the caller hears the page's messages from. */
@@ -95,7 +121,10 @@ export function PageThumb({
       ratio={THUMB_RATIO}
       className={[
         "ui-page-thumb group/page-thumb flex-none overflow-hidden rounded-control border border-border bg-muted text-muted-foreground",
-        SIZE_CLASS[size],
+        // A card's glyph stands at its middle, as a row's does.
+        glyph !== undefined && size === PAGE_THUMB_SIZE.CARD
+          ? "flex items-center justify-center"
+          : SIZE_CLASS[size],
         glyph === undefined ? "" : "[&_svg]:size-control-icon",
         frame === undefined ? "" : "ph-no-capture",
       ]
@@ -107,13 +136,13 @@ export function PageThumb({
     >
       {image === undefined ? null : (
         <img
-          className="ui-page-thumb-image size-full object-cover"
+          className={`ui-page-thumb-image size-full ${FIT_CLASS[fit]}`}
           src={image}
           alt=""
           draggable={false}
         />
       )}
-      {video === undefined ? null : <VideoStill dataUrl={video} />}
+      {video === undefined ? null : <VideoStill dataUrl={video} fit={fit} />}
       {frame === undefined ? null : (
         <iframe
           ref={frameRef}

@@ -5,10 +5,18 @@ import {
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
-import { AGENT_PART, type AgentPart, agentParts, messageWords } from "@repo/features/agent-parts";
+import {
+  AGENT_PART,
+  type AgentPart,
+  agentParts,
+  endTurnOf,
+  endTurnSummary,
+  messageWords,
+} from "@repo/features/agent-parts";
 import {
   ACTION,
   credentialMissingWords,
+  deviceAwayWords,
   extraRepositoryRefusalWords,
   HOST_REMOVED,
   keyUnreadableWords,
@@ -45,7 +53,6 @@ import {
   type AgentTurn,
   type AgentUsage,
   CONTEXT_WINDOW,
-  type ContextWindow,
   LOCAL_AGENT_REFUSAL,
   type NativeAgentRuntime,
   PULL_REQUEST_STATE,
@@ -58,8 +65,13 @@ import {
   remedyLabel,
 } from "@repo/features/failure-remedy";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
-import { effortLabel } from "@repo/features/model-effort";
-import { agentName, CATALOG_ID_SEPARATOR, modelLabel } from "@repo/features/model-label";
+import { contextWindowsOf, effortLabel, SPEED_WORD, windowOf } from "@repo/features/model-effort";
+import {
+  agentName,
+  CATALOG_ID_SEPARATOR,
+  modelLabel,
+  providerOf,
+} from "@repo/features/model-label";
 import {
   type CatalogModel,
   type ContextWindows,
@@ -587,7 +599,7 @@ export function turnUnderWay(agent: Pick<AgentSummary, "status" | "stoppable">):
   return agent.status === AGENT_STATUS.RUNNING && agent.stoppable !== false;
 }
 
-/** Why a Start cannot run where neither a task nor an agent is open, which no draft is drawn without. */
+/** Why a Start cannot run where no task is open, which no draft is drawn without. */
 export const START_NEEDS_TASK = "Open a task to start an agent";
 
 /** What a message no answer came back for says while the app does not reach the service, in place of `NOT_HEARD_BACK`: in the composer, whose Retry stands again once the app does (`RetryOffered`), and alone where only the words are drawn, as an Inbox answer's are. */
@@ -738,44 +750,6 @@ export function endLineOffersTryAgain(input: {
   if (input.continued || input.boxClosed) return false;
   if (input.failure === undefined) return true;
   return !mendedByNewAgent(input.failure) && !MENDED_BY_CHOICE.has(input.failure);
-}
-
-/** Said under an agent's box when the model or effort its chip chose could not be changed. */
-const MODEL_CHANGE_FAILED = "The model could not be changed. Try again.";
-
-/** What a change of an agent's model that did not take says under its box. */
-export function chooseFailureNote(failure: AgentCallFailure): string {
-  switch (failure) {
-    case AGENT_CALL_FAILURE.NOT_FOUND:
-      return "This agent no longer exists.";
-    case AGENT_CALL_FAILURE.INVALID_CHOICE:
-      return "That model isn't offered any more. Choose another.";
-    case AGENT_CALL_FAILURE.UNANSWERED:
-    case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
-    case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
-    case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
-    case AGENT_CALL_FAILURE.NO_REPOSITORY:
-    case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
-    case AGENT_CALL_FAILURE.GITHUB_UNANSWERED:
-    case AGENT_CALL_FAILURE.MESSAGE_TOO_LONG:
-    case AGENT_CALL_FAILURE.AGENT_NOT_READY:
-    case AGENT_CALL_FAILURE.AGENT_RETIRED:
-    case AGENT_CALL_FAILURE.DEVICE_REMOVED:
-    case AGENT_CALL_FAILURE.NOT_PERMITTED:
-    case AGENT_CALL_FAILURE.NATIVE_AGENT_NOT_HERE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_SIGNED_OUT:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_UNREACHABLE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_INELIGIBLE:
-    case AGENT_CALL_FAILURE.AGENT_CREDENTIAL_MISSING:
-    case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
-    case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
-    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
-    case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
-    // Note that a model change asks no files back, so never meets a rewind's refusal.
-    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
-      return MODEL_CHANGE_FAILED;
-  }
 }
 
 /** What the toast says when a Start the developer left the task behind did not start; the task's own note says why. */
@@ -1153,14 +1127,12 @@ export function messageFailureNote(
   // Note that the box's note stands beside Continue in new agent, so it tells no one to continue.
   if (refused.failure === AGENT_CALL_FAILURE.AGENT_RETIRED) return callFailure(BOX_RETIRED);
   if (refused.failure === AGENT_CALL_FAILURE.DEVICE_REMOVED) return callFailure(HOST_REMOVED);
-  // Note that a device away refuses a message in the words it refuses a Start in.
+  // Note that a device that refuses a message for another reason says it in the words it refuses a Start in.
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
-    return callFailure(
-      localAgentRefusalWords(
-        refused.localAgentRefusal ?? LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        refused.refusedDevice,
-      ),
-    );
+    const refusal = refused.localAgentRefusal ?? LOCAL_AGENT_REFUSAL.MAC_AWAY;
+    return refusal === LOCAL_AGENT_REFUSAL.MAC_AWAY
+      ? { reason: FAILURE_REASON.CONTINUE_IN_CLOUD, text: deviceAwayWords(refused.refusedDevice) }
+      : callFailure(localAgentRefusalWords(refusal, refused.refusedDevice));
   }
   const theirs = starter === undefined ? undefined : starterKeyWords(refused.failure, starter);
   if (theirs !== undefined) return callFailure(theirs);
@@ -1215,18 +1187,7 @@ export function closesComposer(failure: AgentCallFailure): boolean {
  * process's notifications so neither is ever named two ways
  * (`@repo/features/model-label`).
  */
-export { agentName, modelLabel };
-
-/**
- * The provider whose harness runs a model, read from its catalog id, whose
- * prefix is the provider's word (`models-wire.ts`), so a tab wears its
- * harness's mark before the catalog itself is read; none for a provider
- * we run no agent on.
- */
-export function providerOf(modelId: string): ModelProvider | undefined {
-  const prefix = modelId.slice(0, Math.max(0, modelId.indexOf(CATALOG_ID_SEPARATOR)));
-  return Object.values(MODEL_PROVIDER).find((provider) => provider === prefix);
-}
+export { agentName, modelLabel, providerOf };
 
 /** The first run of digits and points in a model's own name, which is its version: `claude-opus-5.5` is 5.5, `gpt-6-astra` is 6. */
 const MODEL_VERSION = /\d+(?:\.\d+)*/u;
@@ -1319,19 +1280,6 @@ function orderedModels(models: readonly CatalogModel[]): readonly CatalogModel[]
 
 /** What the model menu and Settings say where the catalog could not be read. */
 export const MODELS_READ_FAILED = readFailedWords("the models");
-
-/** The word a choice label, the Fast row, and the Speed choice say for each speed. */
-export const SPEED_WORD = {
-  [MODEL_SPEED.STANDARD]: "Standard",
-  [MODEL_SPEED.FAST]: "Fast",
-  [MODEL_SPEED.ULTRAFAST]: "Ultrafast",
-} as const satisfies Record<ModelSpeed, string>;
-
-/** The word a choice label and the Fast row say for the fast version. */
-export const FAST_WORD = SPEED_WORD[MODEL_SPEED.FAST];
-
-/** The word the Speed choice is named by, which stands in the Fast row's place for a model with an Ultrafast version. */
-export const SPEED_LABEL = "Speed";
 
 /** What the Fast row says where the service withholds the model's fast version because Anthropic never granted the organization of the key the account's agents run on fast mode. */
 const FAST_NOT_ENABLED_NOTE = "Fast isn't enabled for this key's Anthropic organization";
@@ -1475,41 +1423,6 @@ const WINDOW_CUT = { THOUSAND: 1_000, TENTH_OF_A_MILLION: 100_000, MILLION: 1_00
 export function windowLabel(tokens: number): string {
   const step = tokens >= WINDOW_CUT.MILLION ? WINDOW_CUT.TENTH_OF_A_MILLION : WINDOW_CUT.THOUSAND;
   return formatCompact(Math.floor(tokens / step) * step);
-}
-
-/** The two windows the model offers, or nothing for a model with one, or one the catalog does not offer now. */
-export function contextWindowsOf(
-  models: readonly CatalogModel[],
-  modelId: string,
-): ContextWindows | undefined {
-  return models.find((model) => model.id === modelId)?.contextWindows;
-}
-
-/** The window a choice runs on as the catalog stands: the standard one only where it was chosen and the model offers two, else the model's whole window. */
-export function windowOf(models: readonly CatalogModel[], choice: ModelChoice): ContextWindow {
-  return choice.contextWindow === CONTEXT_WINDOW.STANDARD &&
-    contextWindowsOf(models, choice.model) !== undefined
-    ? CONTEXT_WINDOW.STANDARD
-    : CONTEXT_WINDOW.LONG;
-}
-
-/**
- * A model and effort on the window given, as a request names them: the
- * standard window only where the model offers two, so a change to a model
- * with one window drops it, and nothing for the model's whole window, the
- * default, so a service that predates the window is sent no key it would
- * refuse.
- */
-export function choiceOn(
-  models: readonly CatalogModel[],
-  pair: { readonly model: string; readonly effort: string },
-  window: ContextWindow | undefined,
-): ModelChoice {
-  const choice = { model: pair.model, effort: pair.effort };
-  return windowOf(models, { ...choice, contextWindow: window ?? CONTEXT_WINDOW.LONG }) ===
-    CONTEXT_WINDOW.STANDARD
-    ? { ...choice, contextWindow: CONTEXT_WINDOW.STANDARD }
-    : choice;
 }
 
 /** A choice as a request carries it: the model, the effort, and the window only where it is the standard one. */
@@ -2026,7 +1939,8 @@ const SENTENCE_END = /[.!?](?=\s|$)/u;
 /**
  * What a turn that finished replied, as a reader hears it: its newest
  * reply's last stretch of words, after the turn's last call, cut to its
- * first sentence, or to its first words where that runs on. Nothing where
+ * first sentence, or to its first words where that runs on; the summary of
+ * its `end_turn`, where it ended with one. Nothing where
  * there is no reply, or no words follow its last call, as a turn that ended
  * on a call.
  */
@@ -2039,7 +1953,9 @@ export function finishedReplyLead(
   const parts = agentParts(reply);
   const lastCall = parts.findLastIndex((part) => part.kind === AGENT_PART.TOOL);
   const last = parts.slice(lastCall + 1).findLast((part) => part.kind === AGENT_PART.TEXT);
-  const words = last?.kind === AGENT_PART.TEXT ? plainWords(last.text) : "";
+  // Note that a turn ended with `end_turn` replied in its summary, whatever it wrote around the call.
+  const said = endTurnSummary(parts) ?? (last?.kind === AGENT_PART.TEXT ? last.text : "");
+  const words = plainWords(said);
   if (words === "") return undefined;
   const end = SENTENCE_END.exec(words);
   const sentence = end === null ? words : words.slice(0, end.index + 1);
@@ -2047,6 +1963,22 @@ export function finishedReplyLead(
   const lead =
     cut.length <= REPLY_LEAD_WORDS ? sentence : `${cut.slice(0, REPLY_LEAD_WORDS).join(" ")}…`;
   return { messageId: reply.id, lead };
+}
+
+/**
+ * The follow-ups of the newest turn, where it ended with an `end_turn` that
+ * was taken: the turn's message, which ticks are kept against so a later
+ * turn starts with none ticked, and what it offered; none where the newest
+ * turn ended another way.
+ */
+export function lastTurnEnding(
+  messages: readonly AgentTranscriptMessage[],
+): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
+  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next.
+  const last = messages.findLast((message) => message.arrivedIn === undefined);
+  if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
+  const ending = endTurnOf(agentParts(last));
+  return ending === undefined ? undefined : { messageId: last.id, followUps: ending.followUps };
 }
 
 /** Where a line the developer sent stands, before the service's row for it lands. */
@@ -2161,9 +2093,9 @@ function sentLineMessage(line: SentLine): AgentTranscriptMessage {
 }
 
 /**
- * The line an agent New task started is drawn on before its transcript is
- * read: the developer's words as they went, under the id their start's key
- * names, on their way.
+ * The words an agent New task started on, as its tab draws them before the
+ * service has made it: the developer's words as they went, under the id
+ * their start's key names, which that tab draws as its queue's row.
  */
 export function openingLineOf(words: {
   readonly key: string;
@@ -2181,20 +2113,6 @@ export function openingLineOf(words: {
     sentAt: words.sentAt ?? Date.now(),
     state: SENT_LINE_STATE.PENDING,
   };
-}
-
-/**
- * The line an agent was started on, while its transcript reads back no line
- * of the developer's. Note that the service writes that first row under a
- * key of its own, or the retired runtime under none, so the line is let go by any row of
- * theirs rather than by its id, and the first is always that one.
- */
-export function unreadOpeningLine(
-  opening: SentLine | undefined,
-  messages: readonly AgentTranscriptMessage[],
-): SentLine | undefined {
-  if (opening === undefined) return undefined;
-  return messages.some((message) => message.role === MESSAGE_ROLE.USER) ? undefined : opening;
 }
 
 /** The transcript's rows, with the lines sent and not yet read back at its end, in the order they went. */

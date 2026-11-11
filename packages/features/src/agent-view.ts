@@ -56,7 +56,7 @@ import {
   liveActivityEndedRequestSchema,
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
-import { memoryIdSchema } from "./memory-wire.js";
+import { memoryIdSchema, memorySaveRequestSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
@@ -77,6 +77,12 @@ import {
 } from "./push-device-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
+import {
+  soundAddRequestSchema,
+  soundChoiceRequestSchema,
+  soundIdSchema,
+  soundRenameRequestSchema,
+} from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
 
 /**
@@ -133,6 +139,11 @@ const AGENT_ACCOUNT_CALLS = {
     startChatGptDeviceLogin: accountContract.startChatGptDeviceLogin,
     pollChatGptDeviceLogin: accountContract.pollChatGptDeviceLogin,
     cancelChatGptDeviceLogin: accountContract.cancelChatGptDeviceLogin,
+    sound: accountContract.sound,
+    addSound: accountContract.addSound,
+    renameSound: accountContract.renameSound,
+    removeSound: accountContract.removeSound,
+    chooseSound: accountContract.chooseSound,
   },
 };
 
@@ -413,6 +424,29 @@ export type HostDoneAnswerView = typeof hostDoneAnswerViewSchema.Type;
 /** What removing a host names: its id. */
 export const hostIdParamsSchema = hostIdRequestSchema;
 
+/**
+ * What turning Run agents on this Mac on or off answers: done, with what of
+ * a turn off did not land, or why it could not be. Turned off, the host's
+ * state is gone either way; the service may not have taken its leave, so
+ * the account may still list it (`stillListed`), and an agent's folder may
+ * still stand, the words it could not be removed with (`folderLeft`).
+ * Refused where this Mac's host is another account's (`anotherAccount`),
+ * which the account signed in does not hold, so cannot turn on or off.
+ */
+export const thisMacHostSetAnswerViewSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    done: EffectSchema.Literal(true),
+    stillListed: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+    folderLeft: EffectSchema.optionalKey(EffectSchema.String),
+  }),
+  EffectSchema.Struct({
+    ...hostDoneAnswerViewSchema.members[1].fields,
+    anotherAccount: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  }),
+]);
+
+export type ThisMacHostSetAnswerView = typeof thisMacHostSetAnswerViewSchema.Type;
+
 /** What turning Run agents on this Mac on or off says: whether it is on, and, turning it off, whether its agents' folders go with it. */
 export const thisMacHostSetParamsSchema = EffectSchema.Struct({
   on: EffectSchema.Boolean,
@@ -503,6 +537,46 @@ export const githubTokenSaveParamsSchema = githubTokenSaveRequestSchema;
 
 export type GitHubTokenSaveParams = typeof githubTokenSaveParamsSchema.Type;
 
+/** Which of the account's own sounds a read or a removal names. */
+export const soundIdParamsSchema = EffectSchema.Struct({ id: soundIdSchema });
+
+export type SoundIdParams = typeof soundIdParamsSchema.Type;
+
+/** One of the account's own sounds' clips, as the window hears it read: its bytes in base64 under its type with their hash, null where the account keeps no such sound, or why there is no answer. The host fetched it under the account, so the window holds no bearer and no address. */
+export const soundClipAnswerViewSchema = answerView(accountContract.sound);
+
+export type SoundClipAnswerView = typeof soundClipAnswerViewSchema.Type;
+
+/** A sound added, as Settings asks it: its name, the clip as a `data:` URL, never its file's name, and the sound to play it as at once, where the press was a sound's. */
+export const soundAddParamsSchema = soundAddRequestSchema;
+
+export type SoundAddParams = typeof soundAddParamsSchema.Type;
+
+/** A sound added, as the window hears it: the sound kept, or why there is no answer. */
+export const soundAddAnswerViewSchema = answerView(accountContract.addSound);
+
+export type SoundAddAnswerView = typeof soundAddAnswerViewSchema.Type;
+
+/** A sound renamed, as Settings asks it. */
+export const soundRenameParamsSchema = soundRenameRequestSchema;
+
+export type SoundRenameParams = typeof soundRenameParamsSchema.Type;
+
+/** A sound renamed or removed, as the window hears it: the sound as it now stands, null where it is gone, or why there is no answer. */
+export const soundStateViewSchema = answerView(accountContract.renameSound);
+
+export type SoundStateView = typeof soundStateViewSchema.Type;
+
+/** Which of the account's sounds one of its two sounds plays, as Settings asks it. */
+export const soundChoiceParamsSchema = soundChoiceRequestSchema;
+
+export type SoundChoiceParams = typeof soundChoiceParamsSchema.Type;
+
+/** A choice, as the window hears it: the sound the slot now plays, or why there is no answer. */
+export const soundChoiceAnswerViewSchema = answerView(accountContract.chooseSound);
+
+export type SoundChoiceAnswerView = typeof soundChoiceAnswerViewSchema.Type;
+
 /** A workspace's memories, as the window hears one forgotten: the memories as they stand, or why there are none. */
 export const memoriesAnswerViewSchema = answerView(accountContract.forgetMemory);
 
@@ -520,6 +594,28 @@ export const memoryForgetParamsSchema = EffectSchema.Struct({
 });
 
 export type MemoryForgetParams = typeof memoryForgetParamsSchema.Type;
+
+/** A memory kept in the member's own words, or one corrected in place where it names the memory it `replaces`, as Settings asks it. */
+export const memorySaveParamsSchema = memorySaveRequestSchema;
+
+export type MemorySaveParams = typeof memorySaveParamsSchema.Type;
+
+/**
+ * Why a keep kept nothing, apart from the coding-agent calls' failures: the
+ * member has Memory off (`memory-off`), the workspace or the memory it
+ * replaces names nothing (`not-found`), its words look like a credential
+ * (`memory-credential`), the workspace holds all it may (`memory-full`), the
+ * method refused (`method-not-allowed`), which a save's POST never meets, or
+ * no answer at all (`unanswered`).
+ */
+export const MEMORY_SAVE_FAILURE = failureSetOf({ saveMemory: accountContract.saveMemory });
+
+export type MemorySaveFailure = (typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE];
+
+/** A keep, as the window hears it: what it came to and the memory as it then stands, or why nothing was kept. */
+export const memorySaveAnswerViewSchema = answerView(accountContract.saveMemory);
+
+export type MemorySaveAnswerView = typeof memorySaveAnswerViewSchema.Type;
 
 /** Writing the default, as the window asks it: the choice to keep. */
 export const agentDefaultWriteParamsSchema = modelChoiceSchema;
@@ -559,8 +655,7 @@ export type AgentListAnswer = typeof agentListAnswerViewSchema.Type;
 /**
  * Starting an agent, as the window asks it: the task, and the Start request
  * the service takes; or, for a Start from another agent, no task, the new
- * agent going where that agent is, its task or its workspace where it has
- * none. A Start naming neither a task nor an agent to start from starts
+ * agent going on that agent's task. A Start naming neither a task nor an agent to start from starts
  * nowhere, and is refused.
  */
 export const agentStartParamsSchema = EffectSchema.Struct({
@@ -576,6 +671,8 @@ export const agentAgentAnswerSchema = EffectSchema.Union([
     agent: agentSummarySchema,
     txid: agentAnswerSchema.fields.txid,
     addedCheckout: agentAnswerSchema.fields.addedCheckout,
+    /** That a message sent waits in the agent's queue while its first launch boots, rather than in its transcript; absent for every other answer. */
+    queued: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   }),
   failedReaching,
 ]);
@@ -626,6 +723,22 @@ export type AgentApprovalAnswerView = typeof agentApprovalAnswerViewSchema.Type;
 export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
 export type AgentWarmAnswerView = typeof agentWarmAnswerViewSchema.Type;
+
+/** One of an agent's repository's run actions, as the window names it: the agent, and the action by its id. */
+export const agentRunActionParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  actionId: EffectSchema.NonEmptyString,
+});
+
+/** A run action run, as the window hears it: the shell that runs it, or why it did not run. */
+export const agentRunActionAnswerViewSchema = answerView(agentsContract.runAction);
+
+export type AgentRunActionAnswerView = typeof agentRunActionAnswerViewSchema.Type;
+
+/** A run action's shell interrupted, as the window hears it: the agent's shells as they then stand, or why it was not. */
+export const agentRunActionStopAnswerViewSchema = answerView(agentsContract.stopRunAction);
+
+export type AgentRunActionStopAnswerView = typeof agentRunActionStopAnswerViewSchema.Type;
 
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */
 export const agentMessagesParamsSchema = EffectSchema.Struct({
@@ -781,7 +894,7 @@ export const agentRewindParamsSchema = EffectSchema.Struct({
   restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
-/** One agent, as the window asks to read it whole as its own page, on a task or with none. */
+/** One agent, as the window asks to read it whole by its id. */
 export const agentPageParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
@@ -807,6 +920,12 @@ export const agentPullRequestReadParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentPullRequestReadParams = typeof agentPullRequestReadParamsSchema.Type;
+
+/** What a read of one turn's changes names: the agent, and the developer's line that opened the turn. */
+export const agentTurnChangesParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  messageId: EffectSchema.NonEmptyString,
+});
 
 /** The parts of a pull request its Pull request tab holds, each a read of its own: the pull request itself, its checks, its conversation, what the agent published, what its reviewer and label pickers offer, and which of its files the member marked viewed. */
 export const PULL_REQUEST_PART = {
@@ -841,6 +960,11 @@ export const agentChangesAnswerViewSchema = answerView(agentsContract.changes, {
 });
 
 export type AgentChangesAnswerView = typeof agentChangesAnswerViewSchema.Type;
+
+/** The files one of an agent's turns changed, as the window hears them: the files, or why there are none to draw, a snapshot gone and a Mac away among the whys. */
+export const agentTurnChangesAnswerViewSchema = answerView(agentsContract.turnChanges);
+
+export type AgentTurnChangesAnswerView = typeof agentTurnChangesAnswerViewSchema.Type;
 
 /** One agent's pull request itself as its overview draws it, as the window hears it: the pull request, why there is none yet, or why there is no answer. */
 const agentOverviewPullRequestAnswerViewSchema = answerView(
@@ -967,13 +1091,12 @@ export type LiveActivityEndedAnswerView = typeof liveActivityEndedAnswerViewSche
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {
   PLAN: "plan",
-  AGENT: "agent",
 } as const;
 
-/** The kind of holder an inbox item is on: a plan, or an agent with no task. */
+/** The kind of holder an inbox item is on: a plan. */
 export type InboxScopeKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
-/** One plan's inbox, or one agent's, as the window follows it: which kind, and the plan's or agent's id. */
+/** One plan's inbox, as the window follows it: which kind, and the plan's id. */
 export const agentInboxScopeSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(INBOX_SCOPE_KIND)),
   id: EffectSchema.NonEmptyString,

@@ -13,7 +13,6 @@ import {
   type InboxShow,
   type InboxWhose,
   inboxLineKind,
-  inboxPreview,
   inboxPreviewHeard,
   isDone,
   isUnread,
@@ -31,7 +30,7 @@ import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sameShape } from "@repo/features/turn-rows";
-import { countWords, selectedWords, TERM } from "@repo/features/words";
+import { CHOOSE_AN_ITEM_WORDS, countWords, selectedWords, TERM } from "@repo/features/words";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   CHIP_LOOK,
@@ -145,6 +144,7 @@ import { PEOPLE_FILTER, PEOPLE_FILTER_WORDS, peopleFilterActions } from "../memb
 import { useShortcutTarget } from "../shortcut-target.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { LineWords } from "./file-chips.js";
 import type { InboxResolver } from "./inbox-close.js";
 import {
   INBOX_COLUMNS,
@@ -161,6 +161,7 @@ import {
   inboxLineGlyph,
   useInboxStanding,
 } from "./inbox-item-parts.js";
+import { useInboxLinePieces } from "./inbox-message.js";
 import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";
@@ -494,7 +495,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   const _reader = directory.readerId ?? readerId;
   const { nameOf } = useInboxStanding(listed, readerId);
   const lineKind = inboxLineKind(item);
-  const preview = inboxPreview(item, nameOf, ticked);
+  const preview = useInboxLinePieces(item, nameOf, ticked);
   const heard = inboxPreviewHeard(item, nameOf, ticked);
   const addressedTo = inboxAddressedTo(item);
   const addressee = usePerson(addressedTo);
@@ -522,7 +523,7 @@ export const InboxItemRow = memo(function InboxItemRow({
             data-line={lineKind}
           >
             {inboxLineGlyph(lineKind)}
-            {preview}
+            <LineWords pieces={preview} />
           </span>
         }
         describedAs={heard}
@@ -1188,9 +1189,6 @@ export function newTaskAction(onNewTask: (() => void) | undefined): EmptyStateAc
       };
 }
 
-/** What the pane beside a list with items in it says while none is chosen. */
-const CHOOSE_AN_ITEM = "Choose an item";
-
 /**
  * The pane beside the list while nothing is chosen, as a mail app's stands
  * empty: how to choose an item, by a press or by stepping with the keys that
@@ -1224,10 +1222,10 @@ export function InboxPaneEmpty({
     <ReplayUnmask>
       <EmptyState replayUnmasked icon={<InboxIcon />}>
         {coarse ? (
-          CHOOSE_AN_ITEM
+          CHOOSE_AN_ITEM_WORDS
         ) : (
           <>
-            {CHOOSE_AN_ITEM}, or step with{" "}
+            {CHOOSE_AN_ITEM_WORDS}, or step with{" "}
             <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].chord} spoken />{" "}
             <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].chord} spoken />
           </>

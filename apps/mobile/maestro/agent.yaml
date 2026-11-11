@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a run of calls opened, the pictures and the recording it showed, the pull request it opened as its card, and the page it showed opened whole.
+# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and over the composer, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, and Archive; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -20,6 +20,12 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-latest
+# Its last call, the test run, is held for the account's answer, as Ask mode
+# holds a shell command: its line says so with Deny and Allow under it, and a
+# banner over the composer offers the same, however far the list scrolls.
+- assertVisible: "Waiting for approval"
+- assertVisible: "Waiting on you · 1 approval"
+- takeScreenshot: agent-held
 # A call opens in place on its body: a command as a terminal, its prompt over
 # what it printed.
 - tapOn: "Edited.*"
@@ -28,8 +34,8 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: agent-call
 - tapOn: "Edited.*"
-# The second turn: the page it showed as a card, and its recording, which the
-# system's player cannot play, offering Safari in its place.
+# The second turn: the page it showed as a card, and its recording, read as
+# its MP4 copy, which the system's player plays in place.
 # Note that the card is left near the top as it scrolls in, clear of Jump to
 # latest, which floats over the middle of a short window such as the Duo's.
 - scrollUntilVisible:
@@ -49,6 +55,23 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
     optional: true
+# The recording under the card: the flow waits for the player to report it
+# can play the file, so a read that never lands, or a file it cannot play,
+# fails here rather than leaving a well with its spinner in the screenshot.
+# Note that the flow scrolls to the recording by its caption, which its well
+# and its player both carry, since the player is named only once it can play
+# and a scroll to that name would run past a recording still read.
+- scrollUntilVisible:
+    element: "Accepting an invite.*"
+    direction: DOWN
+- extendedWaitUntil:
+    visible:
+      id: "video-player"
+    timeout: 15000
+- assertNotVisible: ".*can't play here.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-recording
 # The first turn finished: its run of calls folded under one line, the
 # pictures it showed standing apart after it.
 - scrollUntilVisible:
@@ -75,9 +98,143 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-fold
+# At the top, the page older than the transcript's first is read; the
+# fixture's first read is not heard back, so it offers Try again, and the
+# next lays the older turn before the first.
+- scrollUntilVisible:
+    element: "Try again"
+    direction: UP
+- assertVisible: "Earlier messages could not be read."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-older-failed
+- tapOn: "Try again"
+- assertVisible: "Before you build anything.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-older
 # Read back, the list offers to jump to the newest row.
 - tapOn: "Jump to latest"
 - assertVisible: "Add a way to resend an invite that expired."
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-jump
+# Allowed, the held call says so in a word, and the banner goes.
+- tapOn:
+    text: "Allow"
+    index: 0
+- assertVisible: "Allowed"
+- assertNotVisible: "Waiting on you · 1 approval"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-allowed
+# The page's menu opens the options sheet, as the panel's chip and + open
+# their menus: the model and effort the agent runs on, each a menu of what its
+# harness runs, Opus 5.5 to start, with Fast, since the fixture's catalog lists
+# Opus's fast version; its permission mode, Ask for approval to start, each
+# mode with what it does; and the MCP servers it is handed, each connected
+# one with its switch. A change is drawn on the agent at once, as the fixture
+# lays it.
+- tapOn: "More"
+- assertVisible: "Copy link"
+- assertVisible: "Rename"
+- assertVisible: "Pin"
+- assertVisible: "Archive"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-menu
+- tapOn: "Options"
+- assertVisible: "Takes effect from the agent's next step."
+- assertVisible: ".*Opus 5.5.*"
+- assertVisible: "Fast"
+- assertVisible: "Ask for approval"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-options
+- tapOn:
+    id: "options-fast"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-options-fast
+- tapOn: "Approve for me.*"
+- assertVisible: "Takes effect from the next turn."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-options-mode
+- scrollUntilVisible:
+    element: "Notion · Personal"
+    direction: DOWN
+- assertVisible: "Linear"
+- tapOn: "Notion · Personal"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-options-servers
+- scrollUntilVisible:
+    element: "Model.*"
+    direction: UP
+- tapOn: "Model.*"
+- assertVisible: ".*Sonnet 5.5"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-model-menu
+- tapOn: ".*Sonnet 5.5"
+- assertVisible: "Effort.*"
+- assertNotVisible: ".*Opus 5.5.*"
+- assertNotVisible:
+    id: "options-fast"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-model-picked
+- tapOn: "Done"
+# Rename asks for the name in the system's alert, holding the name as it
+# stands; the new one is drawn in the bar at once.
+- tapOn: "More"
+- tapOn: "Rename"
+- assertVisible: "Rename agent"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-rename
+- eraseText: 40
+- inputText: "Invite by email"
+- tapOn: "Rename"
+- assertVisible: "Invite by email"
+# Pinned, the menu offers Unpin in its place.
+- tapOn: "More"
+- tapOn: "Pin"
+- tapOn: "More"
+- assertVisible: "Unpin"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-pinned
+# Archive asks first, in the panel's words, since the agent still works and
+# archiving it stops it; Cancel leaves it.
+- tapOn: "Archive"
+- assertVisible: "Archive agent?"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-archive
+- tapOn: "Cancel"
+- assertNotVisible: "Archive agent?"
+- assertVisible: "Invite by email"
+# Confirmed, the archive is taken, as the fixture takes it, with no refusal
+# said over the composer; launched straight onto the page, there is nothing
+# to go back to, so the page stays.
+- tapOn: "More"
+- tapOn: "Archive"
+- tapOn: "Stop agents"
+- assertNotVisible: "Archive agent?"
+- assertNotVisible:
+    id: "ask-note"
+# An agent whose transcript is not read yet, or could not be: the fixture
+# holds none for this id, so the list stands empty and its empty state, which
+# is SwiftUI's, stands in the rows' place in a host of its own, rather than
+# crashing the app as it did mounted bare in the list.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 00000000-0000-4000-8000-000000000000
+- assertVisible: "Reading the transcript|The transcript could not be read\\."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-empty

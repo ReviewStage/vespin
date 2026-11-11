@@ -79,13 +79,19 @@ import {
 /** What a reader hears before the name, which the glyph says to the eye. */
 const RUNS_ON = "Runs on: ";
 
+/** What a device the label names is said to be, where it is not simply there. */
+const STANDING_WORDS = {
+  [DEVICE_STANDING.OFFLINE]: RUNS_ON_WORDS.OFFLINE,
+  [DEVICE_STANDING.UNKNOWN]: RUNS_ON_WORDS.UNKNOWN,
+  [DEVICE_STANDING.SETTING_UP]: RUNS_ON_WORDS.SETTING_UP,
+  [DEVICE_STANDING.FAILED]: RUNS_ON_WORDS.FAILED,
+} as const;
+
 /** The label's words, by where the device stands. */
 function macWords(name: string, standing: DeviceStanding | undefined): string {
   if (standing === undefined || standing === DEVICE_STANDING.ONLINE) return name;
   if (standing === DEVICE_STANDING.CHECKING) return name;
-  return standing === DEVICE_STANDING.OFFLINE
-    ? `${name} · Offline`
-    : `${name} · Can't check status`;
+  return `${name} · ${STANDING_WORDS[standing]}`;
 }
 
 /** What the card says under its head of an agent on a device. */
@@ -129,7 +135,8 @@ function cloudFacts(
  * and in the popover, never in a hint on the chip. A press opens its
  * popover (`@repo/ui`'s `ChipPopover`), headed "Cloud sandbox": the sandbox's Status, CPU, and Memory, and where a
  * move is offered, the places to move the agent to under "Move to", as the
- * move control lists them (`useMoveMenu`).
+ * move control lists them (`useMoveMenu`), its own Cloud row wearing the
+ * chip's dot as each device's row wears its own.
  */
 function CloudChip({
   sandbox,
@@ -146,16 +153,25 @@ function CloudChip({
   const state = useSandboxState(sandbox);
   const menu = useMoveMenu(CLOUD_ROW, move);
   const stateWords = SANDBOX_STATE_WORDS[state];
+  const glyph = <SandboxStateGlyph state={state} />;
+  const moveMenu =
+    menu === undefined
+      ? undefined
+      : {
+          heading: CLOUD_WORDS.MOVE_TO,
+          ...menu,
+          rows: menu.rows.map((row) => (row.id === CLOUD_ROW ? { ...row, icon: glyph } : row)),
+        };
   return (
     <ChipPopover
       label={RUNS_ON_WORDS.LABEL}
-      glyph={<SandboxStateGlyph state={state} />}
+      glyph={glyph}
       words={RUNS_ON_WORDS.CLOUD}
       said={stateWords}
       iconOnly={narrow}
       title={CLOUD_WORDS.TITLE}
       facts={cloudFacts(state, vcpus)}
-      menu={menu === undefined ? undefined : { heading: CLOUD_WORDS.MOVE_TO, ...menu }}
+      menu={moveMenu}
     />
   );
 }

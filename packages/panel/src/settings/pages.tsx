@@ -1,8 +1,8 @@
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { type ExperimentChoices, HOST_CAPABILITY, type HostCapability } from "@repo/settings";
 import {
   SETTINGS_PAGE_GROUP,
   SETTINGS_PAGE_GROUPS,
+  SETTINGS_PAGE_TITLE,
   SETTINGS_VIEW,
   type SettingsPageGroup,
   type SettingsView,
@@ -24,34 +24,32 @@ interface SettingsPage {
 }
 
 /**
- * What each page is called in the Settings sidebar and at its own head. One
- * table, because the row that opens a page and the title over it must never
- * disagree about its name. The name and the glyph are the whole row: what a
- * page holds is one press away. Account's own page is Account, because it is
- * where the account itself is kept, and "Your profile" in the account menu
- * opens the person page; Preferences beside it holds how the app works for
- * the account; the Workspace page's row is Workspace under the
- * listed workspace's name, and its head names that workspace.
+ * Each page's glyph in the Settings sidebar, beside the name
+ * `SETTINGS_PAGE_TITLE` gives it everywhere it is named. The name and the
+ * glyph are the whole row: what a page holds is one press away. Account's
+ * own page is Account, because it is where the account itself is kept, and
+ * "Your profile" in the account menu opens the person page; the Workspace
+ * page's row is Workspace under the listed workspace's name, and its head
+ * names that workspace.
  */
-const SETTINGS_PAGE = {
-  [SETTINGS_VIEW.ACCOUNT]: { title: "Account", icon: <GLYPH.PERSON /> },
-  [SETTINGS_VIEW.PREFERENCES]: { title: "Preferences", icon: <SlidersHorizontalIcon /> },
-  [SETTINGS_VIEW.WORKSPACE]: { title: "Workspace", icon: <GLYPH.PEOPLE /> },
-  // Note that the cloud agents' variables and scripts stand on one page, since both exist only for those agents.
-  [SETTINGS_VIEW.ENVIRONMENT]: { title: "Cloud environment", icon: <CloudCogIcon /> },
-  [SETTINGS_VIEW.AGENTS]: { title: "Agents", icon: <GLYPH.AGENT /> },
-  [SETTINGS_VIEW.HOSTS]: { title: "Machines", icon: <GLYPH.HOST /> },
-  [SETTINGS_VIEW.INTEGRATIONS]: { title: "Integrations", icon: <PlugIcon /> },
-  // Note that the outside agents' and the command's page is named and marked for the product, never the protocol alone, because the MCP glyph and "MCP servers" are what the window calls the servers its own agents use.
-  [SETTINGS_VIEW.MCP]: { title: `${PRODUCT_NAME} MCP & CLI`, icon: <ProductMark small glyph /> },
-  [SETTINGS_VIEW.SKILLS]: { title: "Skills", icon: <GLYPH.SKILL /> },
-  [SETTINGS_VIEW.MEMORY]: { title: "Memory", icon: <GLYPH.MEMORY /> },
-  [SETTINGS_VIEW.APPEARANCE]: { title: "Appearance", icon: <DisplayIcon /> },
-  [SETTINGS_VIEW.THIS_MAC]: { title: "This Mac", icon: <LaptopIcon /> },
-  [SETTINGS_VIEW.EXPERIMENTAL]: { title: "Experimental", icon: <FlaskConicalIcon /> },
-  [SETTINGS_VIEW.ABOUT]: { title: "About", icon: <InfoIcon /> },
-  [SETTINGS_VIEW.SHORTCUTS]: { title: "Keyboard shortcuts", icon: <KeyboardIcon /> },
-} satisfies Record<SettingsView, SettingsPage>;
+const SETTINGS_PAGE_ICON = {
+  [SETTINGS_VIEW.ACCOUNT]: <GLYPH.PERSON />,
+  [SETTINGS_VIEW.PREFERENCES]: <SlidersHorizontalIcon />,
+  [SETTINGS_VIEW.WORKSPACE]: <GLYPH.PEOPLE />,
+  [SETTINGS_VIEW.ENVIRONMENT]: <CloudCogIcon />,
+  [SETTINGS_VIEW.AGENTS]: <GLYPH.AGENT />,
+  [SETTINGS_VIEW.HOSTS]: <GLYPH.HOST />,
+  [SETTINGS_VIEW.INTEGRATIONS]: <PlugIcon />,
+  // Note that the outside agents' and the command's page is marked for the product, never the protocol alone, because the MCP glyph marks the servers the window's own agents use.
+  [SETTINGS_VIEW.MCP]: <ProductMark small glyph />,
+  [SETTINGS_VIEW.SKILLS]: <GLYPH.SKILL />,
+  [SETTINGS_VIEW.MEMORY]: <GLYPH.MEMORY />,
+  [SETTINGS_VIEW.APPEARANCE]: <DisplayIcon />,
+  [SETTINGS_VIEW.THIS_MAC]: <LaptopIcon />,
+  [SETTINGS_VIEW.EXPERIMENTAL]: <FlaskConicalIcon />,
+  [SETTINGS_VIEW.ABOUT]: <InfoIcon />,
+  [SETTINGS_VIEW.SHORTCUTS]: <KeyboardIcon />,
+} satisfies Record<SettingsView, React.JSX.Element>;
 
 /**
  * The Workspace page's group of what the workspace connects for everyone, its
@@ -73,7 +71,7 @@ const THIS_DEVICE_HEADING = "This device";
 
 /** Any page's name and glyph: what the Settings sidebar, a page's title, and the command palette name it by. */
 export function settingsPageOf(view: SettingsView): SettingsPage {
-  return SETTINGS_PAGE[view];
+  return { title: SETTINGS_PAGE_TITLE[view], icon: SETTINGS_PAGE_ICON[view] };
 }
 
 /** The Settings sidebar's groups with the pages this platform and the account's experiments offer, a group left with none dropped. */

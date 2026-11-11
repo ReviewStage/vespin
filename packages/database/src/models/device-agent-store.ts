@@ -134,6 +134,31 @@ const AnswerRowSchema = Schema.Struct({
 
 const decodeAnswer = Schema.decodeUnknownEffect(deviceAgentAnswerSchema);
 
+/**
+ * An answer as the request's one bytes column keeps it: a read's bytes as
+ * they are, and a diff's exit on a first line of its own ahead of what it
+ * printed, so the column takes both and no column is added for the exit.
+ */
+function answerBytes(answer: DeviceAgentAnswer): Uint8Array | null {
+  if (answer.kind === DEVICE_AGENT_REQUEST_KIND.READ_FILE) return answer.bytes;
+  return new TextEncoder().encode(`${answer.exit}\n${answer.diff}`);
+}
+
+/** An answer read back off the column, as `answerBytes` kept it. */
+function answerOf(row: typeof AnswerRowSchema.Type): unknown {
+  if (row.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return row;
+  const kept = new TextDecoder().decode(row.bytes ?? new Uint8Array());
+  const line = kept.indexOf("\n");
+  const head = line === -1 ? kept : kept.slice(0, line);
+  const exit = head === "" ? Number.NaN : Number(head);
+  return {
+    kind: row.kind,
+    // A row with no exit line, as one answered no bytes, reads as a failed diff, never as exit 0.
+    exit: Number.isInteger(exit) ? exit : 1,
+    diff: line === -1 ? "" : kept.slice(line + 1),
+  };
+}
+
 /** The line as it stood before its claim, read beside the update for the secrets the update clears. */
 const lineBefore = alias(deviceAgentLine, "line_before");
 
@@ -733,7 +758,7 @@ const writeAnswer = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(deviceAgentRequest)
-        .set({ settledAt: now, bytes: answer.bytes })
+        .set({ settledAt: now, bytes: answerBytes(answer) })
         .where(
           and(
             eq(deviceAgentRequest.id, id),
@@ -775,6 +800,21 @@ const deleteRequest = SqlSchema.void({
       db
         .delete(deviceAgentRequest)
         .where(and(eq(deviceAgentRequest.id, id), eq(deviceAgentRequest.userId, userId))),
+    ),
+});
+
+const deleteUnclaimedLine = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, id: Schema.String }),
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db.delete(deviceAgentLine).where(
+        and(
+          eq(deviceAgentLine.id, id),
+          eq(deviceAgentLine.userId, userId),
+          // A line claimed is a runner at work on it, whose exit is still to come.
+          isNull(deviceAgentLine.claimedAt),
+        ),
+      ),
     ),
 });
 
@@ -1088,17 +1128,19 @@ export function claimDeviceAgentLine(
  * Keeps the step the account's Mac reported its launch of a launch line it
  * claimed and has not settled has reached, where it moves the line's step
  * forward, and leaves it as it stands where it does not, or where the line
- * holds a step a newer build wrote that this build cannot place; whether the Mac
- * holds such a line, which is false for another Mac's or account's line, a
- * line of any other kind, one waiting, and one settled.
+ * holds a step a newer build wrote that this build cannot place; answers the
+ * line's agent where the Mac holds such a line, none for another Mac's or
+ * account's line, a line of any other kind, one waiting, and one settled.
  */
 export function stepDeviceAgentLaunch(
   userId: string,
   deviceId: string,
   id: string,
   step: DeviceLaunchStep,
-): DeviceAgentEffect<boolean> {
-  return Effect.map(writeLaunchStep({ userId, deviceId, id, step }), (rows) => rows.length > 0);
+): DeviceAgentEffect<Option.Option<string>> {
+  return Effect.map(writeLaunchStep({ userId, deviceId, id, step }), ([row]) =>
+    Option.fromNullishOr(row?.agentId),
+  );
 }
 
 /**
@@ -1249,8 +1291,7 @@ export function deviceAgentRequestAnswer(
   return Effect.flatMap(findAnswer({ userId, id }), (row) =>
     Option.match(row, {
       onNone: () => Effect.succeed(Option.none()),
-      onSome: (answer) =>
-        Effect.map(decodeAnswer({ kind: answer.kind, bytes: answer.bytes }), Option.some),
+      onSome: (answer) => Effect.map(decodeAnswer(answerOf(answer)), Option.some),
     }),
   );
 }
@@ -1258,6 +1299,18 @@ export function deviceAgentRequestAnswer(
 /** Withdraws a request, answered or not, once its caller stops waiting on it. */
 export function withdrawDeviceAgentRequest(userId: string, id: string): DeviceAgentEffect<void> {
   return deleteRequest({ userId, id });
+}
+
+/**
+ * Withdraws a line its Mac has not claimed, once its caller stops waiting
+ * on it, so a Mac back later does not act on what nobody waits for; one
+ * claimed stands, its runner at work on it and its exit still to come.
+ */
+export function withdrawUnclaimedDeviceAgentLine(
+  userId: string,
+  id: string,
+): DeviceAgentEffect<void> {
+  return deleteUnclaimedLine({ userId, id });
 }
 
 /**

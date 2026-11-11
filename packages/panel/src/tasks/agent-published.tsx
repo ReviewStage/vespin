@@ -4,7 +4,6 @@ import {
   CHECK_SUMMARY,
 } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { holderTaskId } from "@repo/features/mention-holder";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import {
   CountParts,
@@ -192,7 +191,7 @@ export function PublishedRow({
     url: pullRequest.url,
   } as const;
   const standing = useLinkStanding(mention, {
-    taskId: holderTaskId(mentionDoors.holder),
+    taskId: mentionDoors.holder?.taskId,
     workspace: mentionDoors.place.workspace,
   });
   const card = (

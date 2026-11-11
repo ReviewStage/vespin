@@ -400,8 +400,8 @@ function liveReminderFor(readerId: string): { remindAt: SQL; snoozedUntil: SQL }
 /**
  * The member an item waits on: the member its agent addressed it to, or,
  * where it names none, its task's assignee while a member of its workspace,
- * or the member who started its agent where the task has nobody assigned,
- * is assigned to a member who left, or the agent works on no task. A
+ * or the member who started its agent where the task has nobody assigned
+ * or is assigned to a member who left. A
  * scalar read rather than a join, because `returning` projects it too and
  * joins nothing, and every name is qualified, because it is nested in reads
  * that join the task themselves.
@@ -614,7 +614,7 @@ function itemAgentSeenBy(userId: string): SQL {
   return sql`(${isNull(inboxItem.agentId)} or ${seen})`;
 }
 
-/** The condition that the account is a member of the workspace of the item a statement reads, an item of an agent with no task as much as one on a task, and sees the agent that posted it: what an agent's own reads of its items keep, under the member who started it, as it acts as itself (`agentReachableBy`). What a member reads keeps `itemVisibleTo`. */
+/** The condition that the account is a member of the workspace of the item a statement reads, and sees the agent that posted it: what an agent's own reads of its items keep, under the member who started it, as it acts as itself (`agentReachableBy`). What a member reads keeps `itemVisibleTo`. */
 function itemReachableBy(userId: string): SQL {
   return sql`(${workspaceReachableBy(userId, ITEM_WORKSPACE)} and ${itemAgentSeenBy(userId)})`;
 }
@@ -1232,7 +1232,7 @@ function toDoCount(userId: string): SQL<number> {
 
 /**
  * The settled items still unread that wait on the reader (`WAITS_ON`) in
- * their workspaces, a task's or an agent's with no task, among those they
+ * their workspaces, among those they
  * may read (`itemVisibleTo`): what To do lists beside the open items, so
  * their read marks and new messages on those items move the account's
  * cursor as an open item's change does. Note that who it waits on is
@@ -1241,8 +1241,8 @@ function toDoCount(userId: string): SQL<number> {
  * reader's own index (`inbox_item_user_status_updated`) and the assignee's
  * by the task's, where a `coalesce` would read every settled item of their
  * workspaces on each look; an item addressed to someone waits on them
- * alone, one whose task's assignee left on its starter, as `WAITS_ON` reads
- * it, and one with no task, which joins no assignee, on its starter.
+ * alone, and one whose task's assignee left on its starter, as `WAITS_ON` reads
+ * it.
  */
 function accountUnreadSettled(userId: string) {
   const assigneeLeft = notExists(
@@ -2236,8 +2236,8 @@ interface PostView {
   readonly needsReply: boolean;
 }
 
-/** One picture a post keeps as a file of its message: the id its blocks and words name it by, its file's own name, its type, and its bytes. */
-interface PostPicture extends InboxNamedImage {
+/** One picture a post keeps as a file of its message: the id its words or its ask's options name it by, its file's own name, its type, and its bytes. */
+export interface PostPicture extends InboxNamedImage {
   readonly id: string;
 }
 
@@ -2253,6 +2253,7 @@ interface PostWrite {
   /** The message's words, its pictures written by the addresses the item gives them. */
   readonly body: (addressOf: PictureAddress) => string;
   readonly ask: InboxAsk | undefined;
+  /** The message's files: the pictures its words name, then those its ask's options carry. */
   readonly pictures: readonly PostPicture[];
   readonly addresseeId: string | null;
 }
@@ -2461,7 +2462,9 @@ function followUp(
  * words in Markdown, and the ask they end with, if any. The pictures are
  * those the words name by their paths in the agent's sandbox, read by the
  * caller, each kept as a file of the agent's message under an id minted
- * here, its path in the words written as its address. A post that asks is
+ * here, its path in the words written as its address; the files its ask's
+ * options carry follow them, under the ids the caller minted and the ask
+ * names them by, and are written only with an ask. A post that asks is
  * written as `keepPost` writes one; it is refused where the agent would hold more open
  * asks than the bound, and a notice where it would hold more open notices
  * than the same bound. A post that asks nothing on a thread whose ask
@@ -2481,6 +2484,7 @@ export function postInboxThread(
   agent: InboxAgent,
   post: InboxThreadPost,
   pictures: readonly InboxBodyPicture[] = [],
+  optionFiles: readonly PostPicture[] = [],
 ): InboxStoreEffect<Result.Result<InboxItem, InboxPostRefusal>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -2507,7 +2511,7 @@ export function postInboxThread(
           view,
           body,
           ask: post.ask,
-          pictures: kept,
+          pictures: [...kept, ...optionFiles],
           ...placed.success,
         };
         return Result.succeed(yield* keepPost(agent, locked.value, write, now));
@@ -2601,7 +2605,7 @@ export function taskInboxItems(
   );
 }
 
-/** One agent's items as any member of its workspace reads them, an agent with no task as much as one on a task: every open one, then the latest settled. */
+/** One agent's items as any member of its workspace reads them: every open one, then the latest settled. */
 export function memberAgentInboxItems(
   userId: string,
   agentId: string,
@@ -2614,8 +2618,7 @@ export function memberAgentInboxItems(
 }
 
 /**
- * Every item of one workspace the member may read, a task's or an agent's
- * with no task, any member's agents' alike: every open one, then the latest
+ * Every item of one workspace the member may read, any member's agents' alike: every open one, then the latest
  * settled as many as an agent's own read is told (`MAX_SETTLED_TOLD`), what
  * an outside agent acting for the member reads of their inbox
  * (`member-mcp/inbox.ts`). Note that it is handed no member's key, since

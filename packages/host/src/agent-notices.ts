@@ -121,10 +121,13 @@ export type NoticeSubject =
   | { readonly kind: typeof NOTICE_KIND.AGENT_FINISHED; readonly agentId: string }
   | { readonly kind: typeof NOTICE_KIND.ITEM_ASKED; readonly itemId: string };
 
-/** When a sound plays as news is heard, and which one, as the account's preferences hold them now. */
+/** When a sound plays as news is heard, and which one for a finish and for an ask, as the account's preferences hold them now. */
 interface SoundChoice {
   readonly when: SoundWhen;
+  /** What an agent's finish plays (`completionSound`). */
   readonly sound: CompletionSound;
+  /** What something new that needs the account plays, a question or a command waiting on this Mac (`askSound`). */
+  readonly askSound: CompletionSound;
 }
 
 /** What one piece of news says in a notification, and the place its click opens. */
@@ -388,6 +391,8 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     let asking: ReadonlySet<string> | undefined;
     /** When the last chime played, by the Clock; none before the first. */
     let chimedAt: number | undefined;
+    /** Whether the last chime told of something that needs the account, rather than a finish. */
+    let chimedAsking = false;
     /** The news the notification gathering now will tell of, the oldest first; none while none gathers. */
     let gathering: Told[] = [];
     /** Forks the wait for the gathering notification, on the services and the scope the notices were built with. */
@@ -428,19 +433,25 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
      * News the developer may want told of, heard once each: the one place an
      * agent's finish, a new ask, and a command waiting on this Mac land. It
      * chimes where the account turned a sound on, in the background only
-     * while the window is behind, and once for a burst: news within `BURST`
-     * of the last chime is told by that chime. What the notices heard
-     * themselves, an agent's finish or an ask, is said too (`told`), which
-     * a notification posts (`notify`).
+     * while the window is behind: a finish its finish sound, and an ask or a
+     * waiting command its ask sound, so the two are told apart by ear. A
+     * burst chimes once: news within `BURST` of the last chime is told by
+     * that chime, unless it needs the account and the chime only told of a
+     * finish, since what needs the developer is the news worth hearing. What
+     * the notices heard themselves, an agent's finish or an ask, is said too
+     * (`told`), which a notification posts (`notify`).
      */
     function heard(subject: NoticeSubject, told?: Told): void {
       if (told !== undefined) notify(subject, told);
-      const { when, sound } = dependencies.sound();
+      const { when, sound, askSound } = dependencies.sound();
       if (when === SOUND_WHEN.OFF || (when === SOUND_WHEN.BACKGROUND && focused)) return;
+      const asking = subject.kind !== NOTICE_KIND.AGENT_FINISHED;
       const now = clock.currentTimeMillisUnsafe();
-      if (chimedAt !== undefined && now - chimedAt < Duration.toMillis(BURST)) return;
+      const inBurst = chimedAt !== undefined && now - chimedAt < Duration.toMillis(BURST);
+      if (inBurst && (chimedAsking || !asking)) return;
       chimedAt = now;
-      doors.chime(sound);
+      chimedAsking = asking;
+      doors.chime(asking ? askSound : sound);
     }
 
     /** A turn ended: dot its tab, unless the developer is looking at it, and tell of it where the account started the agent. */
@@ -659,7 +670,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       publishUnseen();
     }
 
-    /** The agent as the ledger holds it, on a plan or with none. */
+    /** The agent as the ledger holds it. */
     function heldOf(
       agent: Pick<AgentSummary, "planId" | "status" | "turn" | "turnId" | "startedBy" | "title">,
     ): HeldAgent {
@@ -674,9 +685,8 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       };
     }
 
-    // Note that the ledger holds every agent a read names, any member's, on a
-    // plan or with none, because a teammate's turn ending is news to whoever
-    // reads its page, whether or not it has a plan.
+    // Note that the ledger holds every agent a read names, any member's,
+    // because a teammate's turn ending is news to whoever reads its page.
     const notices: AgentNotices = {
       observeAgents: (agents) => {
         for (const agent of agents) observe(agent.id, heldOf(agent));

@@ -109,6 +109,7 @@ import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
 import { REPOSITORIES_EXAMPLE } from "./examples/repositories";
 import { RESIZE_EDGES_EXAMPLE } from "./examples/resize-edges";
+import { RESOURCES_POPOVERS_EXAMPLE } from "./examples/resources-popovers";
 import { REVEALS_EXAMPLE } from "./examples/reveals";
 import { ROLLING_NUMBER_EXAMPLE } from "./examples/rolling-number";
 import { ROVING_KEYS_EXAMPLE } from "./examples/roving-keys";
@@ -134,6 +135,7 @@ import { SPINNERS_EXAMPLE } from "./examples/spinners";
 import { SPLIT_BARS_EXAMPLE } from "./examples/split-bars";
 import { SPLIT_BUTTONS_EXAMPLE } from "./examples/split-buttons";
 import { STEPS_EXAMPLE } from "./examples/steps";
+import { SUGGESTION_CARDS_EXAMPLE } from "./examples/suggestion-cards";
 import { SWATCHES_EXAMPLE } from "./examples/swatches";
 import { SWITCHES_EXAMPLE } from "./examples/switches";
 import { TAB_NOTICES_EXAMPLE } from "./examples/tab-notices";
@@ -193,6 +195,7 @@ export const EXAMPLES: readonly Example[] = [
   COMPOSER_FRAMES_EXAMPLE,
   COMPOSER_FOOTS_EXAMPLE,
   CHIP_POPOVERS_EXAMPLE,
+  RESOURCES_POPOVERS_EXAMPLE,
   CHIPS_EXAMPLE,
   BAR_ITEMS_EXAMPLE,
   CHOICE_BAR_EXAMPLE,
@@ -231,6 +234,7 @@ export const EXAMPLES: readonly Example[] = [
   HOVER_CARDS_EXAMPLE,
   INLINE_EDITS_EXAMPLE,
   INLINE_REFS_EXAMPLE,
+  SUGGESTION_CARDS_EXAMPLE,
   SWATCHES_EXAMPLE,
   TEXT_BUTTONS_EXAMPLE,
   TEXT_FIELDS_EXAMPLE,

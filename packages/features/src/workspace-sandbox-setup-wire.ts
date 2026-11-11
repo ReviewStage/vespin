@@ -1,10 +1,10 @@
 import { Schema as EffectSchema } from "effect";
 import { githubRepositoryFullNameSchema } from "./link-grammar.js";
-import { countedNumber } from "./service-wire.js";
+import { countedNumber, wireUuidSchema } from "./service-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
 
 /**
- * workspace-sandbox-setup-wire.ts -- a workspace's cloud sandbox setup, as Settings reads and saves it: its install script, and each repository's setup and archive scripts.
+ * workspace-sandbox-setup-wire.ts -- a workspace's cloud sandbox setup, as Settings reads and saves it: its install script, each repository's setup and archive scripts, and each repository's run actions.
  *
  * As Conductor Cloud keeps them, in the workspace's settings: the install
  * script runs once per build of each of the workspace's repositories' base
@@ -14,8 +14,13 @@ import { workspaceIdSchema } from "./task-wire.js";
  * `GET /api/workspaces/sandbox-setup` answers them all to any member;
  * `PUT /api/workspaces/sandbox-setup/install` and
  * `PUT /api/workspaces/sandbox-setup/repository` save one, each to an owner
- * or admin, an empty script removing it. Every answer is the setup as it
- * then stands.
+ * or admin, an empty script removing it. A repository's run actions are the
+ * commands a member runs in one of its cloud agents' sandboxes, each only
+ * when pressed, from the Run menu in the agent's message box, behind the
+ * Run actions experiment; `PUT /api/workspaces/sandbox-setup/run-actions`
+ * saves one repository's whole list in its order, to an owner or admin, an
+ * empty list removing it. Every answer is the setup as it then stands, each
+ * script with how it last ran in a sandbox where it has.
  */
 
 /** The query the read names its workspace by. */
@@ -24,6 +29,12 @@ export const WORKSPACE_SANDBOX_SETUP_QUERY = { WORKSPACE_ID: "workspaceId" } as 
 export const WORKSPACE_SANDBOX_SETUP_BOUNDS = {
   /** The longest script taken: 64 KB of characters. */
   MAX_SCRIPT_CHARS: 64 * 1024,
+  /** The most run actions a repository keeps. */
+  MAX_RUN_ACTIONS: 20,
+  /** The longest run action's label taken, as the Run menu and a Terminal tab's title draw it. */
+  MAX_RUN_ACTION_LABEL_CHARS: 40,
+  /** The longest run action's command taken: 4 KB of characters. */
+  MAX_RUN_ACTION_COMMAND_CHARS: 4 * 1024,
 } as const;
 
 /** Which of a repository's scripts a row holds: the one its new sandboxes run after their checkout, or the one each runs just before it is deleted for good. */
@@ -35,14 +46,44 @@ export const REPOSITORY_SCRIPT_KIND = {
 export type RepositoryScriptKind =
   (typeof REPOSITORY_SCRIPT_KIND)[keyof typeof REPOSITORY_SCRIPT_KIND];
 
+/** Which of the workspace's scripts a run was of: its install script, or a repository's setup or archive script. */
+export const CLOUD_SETUP_SCRIPT = {
+  INSTALL: "install",
+  ...REPOSITORY_SCRIPT_KIND,
+} as const;
+
+export type CloudSetupScript = (typeof CLOUD_SETUP_SCRIPT)[keyof typeof CLOUD_SETUP_SCRIPT];
+
 const scriptSchema = EffectSchema.String.check(
   EffectSchema.isMaxLength(WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_SCRIPT_CHARS),
 );
+
+/**
+ * How a script last ran in a cloud sandbox: when it started, how it exited,
+ * and the agent whose sandbox it ran in, whose Terminal reads what it
+ * printed for as long as the sandbox stands. Facts alone, never what the
+ * script printed, which may carry a workspace variable's value.
+ */
+const scriptRunSchema = EffectSchema.Struct({
+  /** When the run started, in epoch milliseconds: a script saved since has not run as it stands. */
+  ranAt: countedNumber,
+  exitCode: EffectSchema.Int,
+  /** The agent whose sandbox it ran in, by its id, its task's, and the name every place gives it. */
+  agent: EffectSchema.Struct({
+    id: EffectSchema.String,
+    taskId: EffectSchema.String,
+    name: EffectSchema.String,
+  }),
+});
+
+export type CloudSetupScriptRun = typeof scriptRunSchema.Type;
 
 const savedScriptSchema = EffectSchema.Struct({
   script: EffectSchema.String,
   /** When the script was last saved, in epoch milliseconds. */
   updatedAt: countedNumber,
+  /** How the script, as saved now or before, last ran; absent where it never has, and from a service from before runs were kept. */
+  lastRun: EffectSchema.optionalKey(scriptRunSchema),
 });
 
 const repositorySetupSchema = EffectSchema.Struct({
@@ -51,11 +92,45 @@ const repositorySetupSchema = EffectSchema.Struct({
   repository: EffectSchema.String,
 });
 
-/** The workspace's sandbox setup (GET, and every save's answer): its install script where one is saved, and each repository's setup script and archive script, each list in the order of their names. */
+/** A run action's label: words to draw, with something in them. */
+const runActionLabelSchema = EffectSchema.Trim.check(
+  EffectSchema.isNonEmpty(),
+  EffectSchema.isMaxLength(WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS),
+);
+
+/** A run action's command: the bash it runs from the checkout, with something in it. */
+const runActionCommandSchema = EffectSchema.String.check(
+  EffectSchema.isMaxLength(WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_COMMAND_CHARS),
+  EffectSchema.isPattern(/\S/u),
+);
+
+/** One run action as it is kept: its id, which a run of it is known by while the list around it changes, its label, and its command. */
+export const runActionSchema = EffectSchema.Struct({
+  id: EffectSchema.String,
+  label: EffectSchema.String,
+  command: EffectSchema.String,
+});
+
+export type RunAction = typeof runActionSchema.Type;
+
+const repositoryRunActionsSchema = EffectSchema.Struct({
+  /** `owner/name` as its latest save spelled it. */
+  repository: EffectSchema.String,
+  /** Its actions in their order: the first is the Run button's. */
+  actions: EffectSchema.Array(runActionSchema),
+  /** When the list was last saved, in epoch milliseconds. */
+  updatedAt: countedNumber,
+});
+
+export type RepositoryRunActions = typeof repositoryRunActionsSchema.Type;
+
+/** The workspace's sandbox setup (GET, and every save's answer): its install script where one is saved, each repository's setup script and archive script, and each repository's run actions, each list in the order of their names. */
 export const workspaceSandboxSetupAnswerSchema = EffectSchema.Struct({
   install: EffectSchema.NullOr(savedScriptSchema),
   setups: EffectSchema.Array(repositorySetupSchema),
   archives: EffectSchema.Array(repositorySetupSchema),
+  /** Absent from a service older than run actions, which reads as none. */
+  runActions: EffectSchema.optionalKey(EffectSchema.Array(repositoryRunActionsSchema)),
 });
 
 export type WorkspaceSandboxSetupAnswer = typeof workspaceSandboxSetupAnswerSchema.Type;
@@ -74,3 +149,21 @@ export const workspaceRepositorySetupPutRequestSchema = EffectSchema.Struct({
   /** Which of the repository's scripts is saved; its setup script where unsaid. */
   kind: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(REPOSITORY_SCRIPT_KIND))),
 });
+
+/** One run action as a save names it: the id it was read with, to keep its runs known as it, or none for an action new to the list, which the service names. */
+const runActionPutSchema = EffectSchema.Struct({
+  id: EffectSchema.optionalKey(wireUuidSchema),
+  label: runActionLabelSchema,
+  command: runActionCommandSchema,
+});
+
+/** Saving a repository's run actions (PUT to `/run-actions`), the whole list in its order, replacing the one that stood under any casing of its name; an empty list removes it. */
+export const workspaceRunActionsPutRequestSchema = EffectSchema.Struct({
+  workspaceId: workspaceIdSchema,
+  repository: githubRepositoryFullNameSchema,
+  actions: EffectSchema.Array(runActionPutSchema).check(
+    EffectSchema.isMaxLength(WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS),
+  ),
+});
+
+export type RunActionPut = typeof runActionPutSchema.Type;

@@ -11,12 +11,8 @@ import {
   type TaskOrigin,
 } from "@repo/features/task-wire";
 import { andList } from "@repo/features/words";
-import {
-  type FormerMember,
-  WORKSPACE_ROLE,
-  type WorkspaceMember,
-  type WorkspaceRole,
-} from "@repo/features/workspace-wire";
+import { WORKSPACE_ROLE_WORDS } from "@repo/features/workspace-role";
+import type { FormerMember, WorkspaceMember, WorkspaceRole } from "@repo/features/workspace-wire";
 import { TAB_WORDS } from "./tab-strip-model.js";
 
 /**
@@ -131,11 +127,7 @@ export interface GitHubActor {
 const OPENING_SECTION = "Opening";
 
 /** A member's role in their workspace, in the words a row and a card say it. */
-export const ROLE_WORDS = {
-  [WORKSPACE_ROLE.OWNER]: "Owner",
-  [WORKSPACE_ROLE.ADMIN]: "Admin",
-  [WORKSPACE_ROLE.MEMBER]: "Member",
-} as const satisfies Record<WorkspaceRole, string>;
+export const ROLE_WORDS: Readonly<Record<WorkspaceRole, string>> = WORKSPACE_ROLE_WORDS;
 
 /** The app itself, which is always the same actor. */
 export const APP_ACTOR: Actor = { kind: ACTOR_KIND.APP };
@@ -149,12 +141,6 @@ export const DELETED_ACCOUNT_ACTOR: Actor = {
   kind: ACTOR_KIND.SOMEONE,
   reason: SOMEONE_REASON.DELETED,
 };
-
-/** How many hues an identity's letter is drawn on: `--ui-color-identity-1` through `--ui-color-identity-6`. */
-const IDENTITY_HUES = 6;
-
-/** Splits a name into the characters a reader sees, an emoji's parts as one. */
-const CHARACTERS = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 /** The words for someone the window cannot name, by why, as a line's start says them. */
 const SOMEONE_WORDS = {
@@ -171,23 +157,6 @@ const SOMEONE_SENTENCE_WORDS = {
   [SOMEONE_REASON.UNNAMED]: "someone",
   [SOMEONE_REASON.EARLIER]: "earlier",
 } as const satisfies Record<SomeoneReason, string>;
-
-/**
- * The hue an identity is drawn in, from 1, read off its id alone, so a
- * rename keeps the mark its members know it by: a workspace's tile and a
- * person's letter alike.
- */
-export function identityHue(id: string): number {
-  let hash = 0;
-  for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return (hash % IDENTITY_HUES) + 1;
-}
-
-/** A name's first character as a reader sees it, an emoji's whole, upper-cased; none for a blank name. */
-export function identityLetter(name: string): string {
-  const [first] = CHARACTERS.segment(name.trim());
-  return first === undefined ? "" : first.segment.toUpperCase();
-}
 
 /** The suffix GitHub gives an App's bot's login, which its name drops since its square says it is one. */
 const BOT_LOGIN_SUFFIX = "[bot]";

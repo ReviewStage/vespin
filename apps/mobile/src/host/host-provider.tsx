@@ -10,7 +10,12 @@ import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.
 import { HostFailedScreen } from "../screens/host-failed.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
-import { launchFixtureProfile, launchStubsAuthServer } from "./launch-arguments.js";
+import {
+  launchFixtureProfile,
+  launchRefusesWrites,
+  launchStubsAuthServer,
+  launchUpdateNeeded,
+} from "./launch-arguments.js";
 import {
   type HostFollow,
   type MobileHostStartOptions,
@@ -21,6 +26,9 @@ import { standStubAuthServer, stubAuthSession } from "./stub-auth-server.js";
 
 /** The version a build that names none reports, which no shipped build is. */
 const UNVERSIONED = "0.0.0";
+
+/** The app's version, as the host and the share sheet name it to the service. */
+export const APP_VERSION = Constants.expoConfig?.version ?? UNVERSIONED;
 
 /** How a screen counts a moment of the panel's surface vocabulary, such as a surface opened, through the host's bridge. */
 export type HostCount = AppBridge["recordSurfaceEvent"];
@@ -76,7 +84,9 @@ function launchOptions(): MobileHostStartOptions {
   const base = {
     errorReporting: crashReportsErrorReporting,
     fixture: launchFixtureProfile(),
-    appVersion: Constants.expoConfig?.version ?? UNVERSIONED,
+    fixtureUpdateNeeded: launchUpdateNeeded(),
+    fixtureRefusesWrites: launchRefusesWrites(),
+    appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),
   };
   if (!launchStubsAuthServer()) return { ...base, device };

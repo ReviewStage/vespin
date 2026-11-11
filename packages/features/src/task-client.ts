@@ -38,7 +38,7 @@ import type {
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { HOSTED_CALL_FAILURE } from "./hosted-failure.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
-import { imageBodyOf } from "./image-body.js";
+import { imageBodyOf, imageBodyUnread } from "./image-body.js";
 import { WRITE_UNTAKEN, type WriteUntaken, writeUntakenOf } from "./keyed-write.js";
 import type { LinkPreviewView } from "./link-preview-view.js";
 import { LINK_PREVIEW_QUERY } from "./link-preview-wire.js";
@@ -758,7 +758,9 @@ export class HostedTaskClient {
         return { failure: refused.ok ? TASK_CALL_FAILURE.UNANSWERED : refused.failure };
       }
       const picture = yield* imageBodyOf(answer.response, descriptionAttachmentTypeSchema);
-      return picture ?? { failure: TASK_CALL_FAILURE.UNANSWERED };
+      return picture === undefined || imageBodyUnread(picture)
+        ? { failure: TASK_CALL_FAILURE.UNANSWERED }
+        : picture;
     });
   }
 
@@ -783,21 +785,15 @@ export class HostedTaskClient {
     );
   }
 
-  /** One version of one page of one plan, or of one coding agent on no task, with its HTML; nothing where the service did not answer it, or holds no such version. */
+  /** One version of one page of one task, with its HTML; nothing where the service did not answer it, or holds no such version. */
   readPageVersion(
     place: PagePlace,
     pageId: string,
     version: number,
   ): Effect.Effect<PageVersion | undefined, never, HttpClient.HttpClient> {
     const named = { page: pageId, version: String(version) };
-    if ("taskId" in place) {
-      return Effect.map(
-        hostedCall(this.#hosted.taskFiles.page, { id: place.taskId, ...named }),
-        (read) => ("failure" in read ? undefined : read.page),
-      );
-    }
     return Effect.map(
-      hostedCall(this.#hosted.agentPages.version, { id: place.agentId, ...named }),
+      hostedCall(this.#hosted.taskFiles.page, { id: place.taskId, ...named }),
       (read) => ("failure" in read ? undefined : read.page),
     );
   }

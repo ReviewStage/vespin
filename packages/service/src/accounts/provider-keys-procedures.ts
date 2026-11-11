@@ -264,7 +264,6 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
     /** A save: braked, checked with the provider, and kept sealed only where the provider accepts it. */
     saveProviderKey: keyed.saveProviderKey.effect(function* ({ context, input }) {
       const { userId, ring } = context;
-      // Note that a refusal's wording is never logged or answered, because it may quote the key.
       const { provider } = input;
       const kind = input.kind ?? PROVIDER_KEY_KIND.API_KEY;
       const key = Redacted.make(input.key);
@@ -308,6 +307,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         ],
         { concurrency: "unbounded" },
       );
+      // Note that a refusal's wording is never logged or answered, because it may quote the key.
       if (checked !== PROVIDER_KEY_CHECK.ACCEPTED) return yield* keysAnswer(userId, ring, checked);
       const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
       const now = yield* DateTime.nowAsDate;

@@ -15,6 +15,7 @@ import {
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
   type MemoriesAnswerView,
+  type MemorySaveAnswerView,
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import {
@@ -32,12 +33,7 @@ import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
-import {
-  ACCOUNT_INBOX_READ,
-  AGENT_INBOX_READ,
-  INBOX_ITEMS_READ,
-  TASK_INBOX_READ,
-} from "@repo/features/inbox-live";
+import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import {
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
@@ -159,6 +155,12 @@ export const CHANGES = {
   },
 };
 
+/** The files one of the agent's turns changed, as the service answers them: the pull request's first file, as the turn's. */
+export const TURN_CHANGES = {
+  files: CHANGES.pullRequest === null ? [] : CHANGES.pullRequest.files.slice(0, 1),
+  truncated: false,
+} as const;
+
 /** That pull request itself, its checks, and its conversation, as its Pull request tab's overview reads them. */
 /** What the reviewer and label pickers offer, as the service answers it. */
 const REVIEW_OPTIONS = {
@@ -209,6 +211,9 @@ export const MEMORY: MemorySummary = {
   forgettable: true,
   createdAt: 1,
   updatedAt: 2,
+  source: null,
+  recalls30d: 0,
+  lastRecalledAt: null,
 };
 
 export const KEPT: ProviderKeySummary = {
@@ -288,8 +293,12 @@ function fakeService() {
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     hosts: polledLive(["hosts"]),
-    // Note that the account stored no preferences until a test sets a row, as a new account has none.
-    preferences: polledLive(["preferences"], () => ({ preferences: [] })),
+    // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
+    preferences: polledLive(["preferences", "sounds", "soundChoices"], () => ({
+      preferences: [],
+      sounds: [],
+      soundChoices: [],
+    })),
   };
   /** The models the account is offered, as the service answers them; the one Claude model from the start. */
   let offeredModels: readonly CatalogModel[] = MODELS;
@@ -320,6 +329,10 @@ function fakeService() {
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
   let forgetGate: Effect.Effect<void> = Effect.void;
+  /** What a memory's save answers, once its gate lets it; unanswered from the start. */
+  let saveAnswer: MemorySaveAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
+  /** What a memory's save waits on before the service answers it; nothing from the start. */
+  let saveGate: Effect.Effect<void> = Effect.void;
   /** What a message on an inbox thread waits on before the service answers it; nothing from the start. */
   let messageGate: Effect.Effect<void> = Effect.void;
   /** What a host's removal answers, once its gate lets it; unanswered from the start. */
@@ -330,7 +343,7 @@ function fakeService() {
   let presence: Effect.Effect<DevicePresenceAnswerView> = Effect.succeed({
     failure: AGENT_CALL_FAILURE.UNANSWERED,
   });
-  /** A plan's or an agent's inbox as its live read answers it: polled from the one script, or the refusal standing. */
+  /** A plan's inbox as its live read answers it: polled from the one script, or the refusal standing. */
   const scopeLive = (poll: boolean | undefined, after: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
       if (scope === undefined) return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
@@ -437,9 +450,6 @@ function fakeService() {
             return transcriptLive(params.id, params.call, poll !== undefined, poll?.after);
           case TASK_INBOX_READ.name:
             if (poll === undefined) asked.push(`description-inbox-live:${params.id}`);
-            return scopeLive(poll !== undefined, poll?.after);
-          case AGENT_INBOX_READ.name:
-            if (poll === undefined) asked.push(`agent-inbox-live:${params.id}`);
             return scopeLive(poll !== undefined, poll?.after);
           case ACCOUNT_INBOX_READ.name:
             return accountInboxLive(params.userId, poll !== undefined, poll?.after);
@@ -585,7 +595,19 @@ function fakeService() {
         asked.push(`rewind:${agentId}:${messageId}`);
         return { agent: AGENT };
       }),
+    clear: (agentId) =>
+      Effect.sync(() => {
+        asked.push(`clear:${agentId}`);
+        return { agent: AGENT };
+      }),
     warm: () => Effect.succeed({ warm: true as const }),
+    runAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    stopRunAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    boot: (agentId) =>
+      Effect.sync(() => {
+        asked.push(`boot:${agentId}`);
+        return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
+      }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
@@ -615,6 +637,11 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`changes:${agentId}${number === undefined ? "" : `#${number}`}`);
         return CHANGES;
+      }),
+    turnChanges: (agentId, messageId) =>
+      Effect.sync(() => {
+        asked.push(`turn-changes:${agentId}:${messageId}`);
+        return TURN_CHANGES;
       }),
     generateChapters: (agentId, number) =>
       Effect.sync(() => {
@@ -718,6 +745,21 @@ function fakeService() {
           Effect.sync(() => forgetAnswer),
         ),
       ),
+    saveMemory: (save) =>
+      Effect.andThen(
+        Effect.sync(() => {
+          asked.push(`save-memory:${save.workspaceId}:${save.replaces ?? "new"}`);
+        }),
+        Effect.andThen(
+          Effect.suspend(() => saveGate),
+          Effect.sync(() => saveAnswer),
+        ),
+      ),
+    readSound: () => Effect.succeed({ clip: null }),
+    addSound: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    renameSound: () => Effect.succeed({ sound: null }),
+    removeSound: () => Effect.succeed({ sound: null }),
+    chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
     markActive: () => Effect.sync(() => void asked.push("active")),
     registerPushDevice: () => Effect.succeed({ done: true as const }),
     unregisterPushDevice: () => Effect.succeed({ done: true as const }),
@@ -761,7 +803,7 @@ function fakeService() {
     inboxItemHome: (itemId) =>
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
-        return { agentId: ITEM.agentId, planId: null, workspaceId: "workspace-1" };
+        return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {
@@ -898,7 +940,7 @@ function fakeService() {
       queueAnswer = answer;
       queueGate = gate;
     },
-    /** Whether the service answers a plan's or an agent's inbox's live read, or that the account reaches none; none answers unanswered. */
+    /** Whether the service answers a plan's inbox's live read, or that the account reaches none; none answers unanswered. */
     sealScope: (next: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined) => {
       scope = next;
     },
@@ -940,6 +982,11 @@ function fakeService() {
       forgetAnswer = answer;
       forgetGate = gate;
     },
+    /** What each memory's save answers from now on, and what it waits on before it does. */
+    answerSaves: (answer: MemorySaveAnswerView, gate: Effect.Effect<void> = Effect.void) => {
+      saveAnswer = answer;
+      saveGate = gate;
+    },
     /** How long ago the account's devices beat, as the service answers from now on. */
     answerPresence: (next: DevicePresenceAnswerView) => {
       presence = Effect.succeed(next);
@@ -976,7 +1023,7 @@ export const GATE_CLOSED_SIGNED_OUT = {
   cause: { _tag: FAILURE_FACT.GATE_CLOSED, code: GATE_CLOSED_BY.NO_ACCOUNT },
 };
 
-/** The parts of a transcript's live read, of a plan's or an agent's inbox's, and of the account inbox's. */
+/** The parts of a transcript's live read, of a plan's inbox's, and of the account inbox's. */
 const TRANSCRIPT_PARTS = [
   "messages",
   "turns",
@@ -987,6 +1034,7 @@ const TRANSCRIPT_PARTS = [
   "windowParts",
   "queueRevision",
   "launch",
+  "boot",
 ] as const;
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
 export const ACCOUNT_PARTS = ["items", "planless", "plans", "automations", "failedRuns"] as const;
@@ -1216,6 +1264,7 @@ export function subject(
       leaveStartsUnanswered: service.leaveStartsUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
+      answerSaves: service.answerSaves,
       answerPresence: service.answerPresence,
       answerKeys: service.answerKeys,
       markKeys: service.markKeys,

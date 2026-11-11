@@ -3,52 +3,31 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { archiveStopWords } from "@repo/features/tasks-model";
 import {
-  ArchiveIcon,
-  BUTTON_SIZE,
   CONFIRM_LOSS,
   ConfirmDialog,
   type DialogQuestion,
-  GROUP_HEADING,
-  GroupHeader,
-  IconButton,
-  LIST_DENSITY,
-  LIST_ROW_ACTIONS,
-  List,
-  ListRow,
   nextRowOrHead,
-  RowHint,
-  RowHintOptions,
   STATUS_TONE,
-  Tooltip,
   useConfirmDialog,
 } from "@repo/ui";
-import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
-import { Schema } from "effect";
 import { useState } from "react";
-import { useCoarsePointer } from "../coarse-pointer.js";
-import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
+import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import { teammateStarter } from "../tasks/agent-model.js";
-import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
-import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useToast } from "../toast.js";
-import { keptKey, useKept } from "../use-kept.js";
-import { type MenuAction, rowMenu } from "./action-menu.js";
-import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
-import { type CountNoun, foldedCount } from "./sidebar-fold.js";
+import type { MenuAction } from "./action-menu.js";
 import { useRefusalHeard } from "./use-refusal-heard.js";
 
 /**
- * agent-archive.tsx -- a coding agent's Archive, asked first while the agent still works, and the task's archived agents, each a row with its Unarchive, folded under Archived at the foot of a phone's Overview agents; the tab bar's History lists them as it lists a closed agent (`agent-history.tsx`).
+ * agent-archive.tsx -- a coding agent's Archive, asked first while the agent still works, and its Unarchive; the tab bar's History lists archived agents as it lists a closed agent (`agent-history.tsx`), and a phone's Overview folds them under its agents (`plan-agents.tsx`).
  *
- * Archive stands in an agent's tab menu, and for an agent with no task in its page's ⋯ and its
- * sidebar row's menu, whose Unarchive stands in its place once archived
+ * Archive stands in an agent's tab menu and its sidebar row's menu, whose
+ * Unarchive stands in its place once archived
  * (`useAgentUnarchive`). An agent at rest is archived at once, since the
  * toast's Undo brings it back with its transcript. One still working, the
  * reader's own or a teammate's, asks first, in red, since archiving it
@@ -64,46 +43,11 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
  * transcript and its pull request are kept, ⌘K still finds it, saying it is
  * archived and opening its tab again, and a toast offers Undo
  * (`use-agents.ts`).
- *
- * The archived agents are folded away behind the header every group of the
- * window folds under (`GroupHeader`), an archive box that gives way to the fold's
- * chevron while hovered or reached from the keyboard, and folded, the count
- * after its name, the rows unrolling as they fade in and fading out as it
- * folds.
- * Unfolded, each archived agent is a muted row in the summary's shape, a failed one's mark at
- * its end as a standing row's, whose Unarchive stands in the mark's place
- * while it is hovered or reached from the keyboard, as the sidebar task
- * rows' Pin and Archive do, a ⋯ beside it: at rest they take no room, the name running the
- * row's full width. The ⋯, a right-click, a long press, and the menu key open
- * the agent's one menu over the doors a row has (`agent-actions.tsx`): Copy link, Unarchive, and
- * Permanently delete, asked first; a finger's row draws neither the Unarchive nor the ⋯, its
- * long press offering both. The
- * row hangs the agent's card beside it as a standing row does, saying it
- * was archived and when (`agent-ref.tsx`), and a press opens the agent's
- * tab again, where its transcript is read and Unarchive brings it back. It draws nothing while no agent is archived, and
- * starts folded, then stands as the reader left it, kept on this Mac.
  */
 
 /** A summary row's glyph, at a control's glyph size in the muted ink; one wearing where its work stands takes a glyph's footprint, so every row's label starts on one edge. */
 export const SUMMARY_GLYPH =
   "task-summary-glyph flex flex-none text-muted-foreground [&_.state-glyph]:[--state-glyph-size:var(--spacing-control-icon)] [&_svg]:size-control-icon";
-
-/** Whether the reader left Archived open, one choice for every task's summary, kept on this Mac. */
-const KEPT = {
-  UNFOLDED: keptKey("app.taskArchivedUnfolded", Schema.fromJsonString(Schema.Boolean)),
-} as const;
-
-/** What the archived agents' fold says. */
-const ARCHIVED_LABEL = "Archived";
-
-/** What the fold's count is read as while folded. */
-const ARCHIVED_NOUN: CountNoun = { one: "archived agent", many: "archived agents" };
-
-/** What an archived agent's one action says, in an archived task's words. */
-const UNARCHIVE = commandHead(PANEL_COMMAND.UNARCHIVE_AGENT);
-
-/** What the Unarchive button is named while the service answers, as the composer's own is. */
-const UNARCHIVING = "Unarchiving";
 
 /**
  * What asking to archive a working agent says. Unarchive brings the agent
@@ -202,115 +146,4 @@ export function useAgentArchive(
       <ConfirmDialog open confirm={confirm} question={ARCHIVE_QUESTION} restoreTo={nextRowOrHead} />
     ),
   };
-}
-
-/** What an archived agent's row is, naming its ⋯ and menu "Archived agent actions". */
-const ARCHIVED_THING = "Archived agent";
-
-/** One archived agent: its glyph and name, muted, hanging its card, opening its tab on a press, its Unarchive and its ⋯ at its end, and its right-click, long press, and the menu key opening the ⋯'s menu. */
-function ArchivedAgentRow({
-  agent,
-  agents,
-  shown,
-  onOpen,
-}: {
-  agent: AgentSummary;
-  agents: AgentsControl;
-  shown: boolean;
-  onOpen: (agentId: string) => void;
-}): React.JSX.Element {
-  const press = useArchivePress(agents);
-  const subject = agentSubject(agents, agent.id, NOTHING_HELD, false);
-  // The agent's menu over the doors a row has: an archived agent's Copy link, Unarchive, and Permanently delete,
-  // and no Rename, since the row draws no name's field.
-  const actions = useAgentActions(agent, agents, {
-    label: subject.name,
-    shown,
-    terminals: { onOpenTerminal: undefined },
-  });
-  const unarchiving = useAsyncAction(rejectionWords);
-  const coarse = useCoarsePointer();
-  return (
-    <>
-      <RowHintOptions card={<AgentCard subject={subject} models={agents.models} />}>
-        <ListRow
-          leading={
-            <span className={SUMMARY_GLYPH}>
-              <AgentGlyph agent={agent} />
-            </span>
-          }
-          title={<ReplayMask>{subject.name}</ReplayMask>}
-          meta={agentEndMark(agent, false)}
-          muted
-          hint={{ Hint: RowHint, label: subject.name }}
-          onPress={() => onOpen(agent.id)}
-          menu={rowMenu(
-            ARCHIVED_THING,
-            agentMenuGroups({ ...rowDoors(actions.doors), onRename: undefined }),
-            shown,
-            true,
-          )}
-          more={!coarse}
-          actionsAt={LIST_ROW_ACTIONS.HOVER}
-          actions={
-            coarse ? null : (
-              <Tooltip label={UNARCHIVE.label}>
-                <IconButton
-                  icon={UNARCHIVE.icon}
-                  label={UNARCHIVE.label}
-                  size={BUTTON_SIZE.COMPACT}
-                  busy={unarchiving.running}
-                  busyLabel={UNARCHIVING}
-                  onClick={() => void unarchiving.run(() => press(agent.id, false))}
-                />
-              </Tooltip>
-            )
-          }
-        />
-      </RowHintOptions>
-      {actions.dialog}
-    </>
-  );
-}
-
-/** The task's archived agents, folded away under Archived at the foot of a phone's Overview agents; nothing while none is archived. */
-export function ArchivedAgents({
-  agents,
-  shown,
-  onOpen,
-}: {
-  agents: AgentsControl;
-  /** Whether the summary is on screen: off it, an archived row's menu stands over nothing. */
-  shown: boolean;
-  /** Opens an archived agent's tab, where its transcript is read and it is brought back. */
-  onOpen: (agentId: string) => void;
-}): React.JSX.Element | null {
-  const [unfolded, setUnfolded] = useKept(KEPT.UNFOLDED, false);
-  const archived = agents.archived ?? [];
-  if (archived.length === 0) return null;
-  return (
-    <div className="task-summary-archived mt-list-gap">
-      <ReplayUnmask>
-        <GroupHeader
-          heading={GROUP_HEADING.NONE}
-          glyph={<ArchiveIcon />}
-          label={ARCHIVED_LABEL}
-          fold={{ open: unfolded, onOpenChange: setUnfolded }}
-          count={foldedCount(!unfolded, archived.length, ARCHIVED_NOUN)}
-        >
-          <List label="Archived agents" density={LIST_DENSITY.DENSE}>
-            {archived.map((agent) => (
-              <ArchivedAgentRow
-                key={agent.id}
-                agent={agent}
-                agents={agents}
-                shown={shown}
-                onOpen={onOpen}
-              />
-            ))}
-          </List>
-        </GroupHeader>
-      </ReplayUnmask>
-    </div>
-  );
 }

@@ -471,9 +471,13 @@ class NativeTurnFailed extends Data.TaggedError("NativeTurnFailed")<{
 /** A failed turn of the batch, which it says once its row is written. */
 type FailedTurn = Extract<NativeWrite, { kind: typeof NATIVE_WRITE.FAILED }>;
 
-/** Whether the payer is the starter's own credential, whose refusal is theirs to mend rather than ours. */
+/** Whether the payer is the starter's own credential, or their machine's own login, whose refusal is theirs to mend rather than ours. */
 function paysOwnCredential(payer: AgentPayer | undefined): boolean {
-  return payer === AGENT_PAYER.API_KEY || (payer !== undefined && PLAN_ROW[payer] !== undefined);
+  return (
+    payer === AGENT_PAYER.API_KEY ||
+    payer === AGENT_PAYER.MAC_SIGN_IN ||
+    (payer !== undefined && PLAN_ROW[payer] !== undefined)
+  );
 }
 
 /**
@@ -812,6 +816,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
+        machineLogin: applying.payer === AGENT_PAYER.MAC_SIGN_IN,
         movedAfterLimit: afterLimit?.moved,
         resetsBeside: afterLimit?.resetsBeside,
         registered,

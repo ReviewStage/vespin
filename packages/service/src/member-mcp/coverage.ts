@@ -260,6 +260,11 @@ export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
     active: INTERNAL,
+    sound: SCREEN_ONLY,
+    addSound: SCREEN_ONLY,
+    renameSound: SCREEN_ONLY,
+    removeSound: SCREEN_ONLY,
+    chooseSound: SCREEN_ONLY,
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
@@ -286,13 +291,19 @@ export const MEMBER_MCP_EXCLUSIONS = {
   agents: {
     // Note that an ask is held for a person's own answer, so no agent answers one for them.
     answerApproval: SECURITY,
+    // Note that Retry is the bar's press over a failed first launch, which a person reads before pressing.
+    boot: SCREEN_ONLY,
     reviewOptions: SCREEN_ONLY,
+    turnChanges: SCREEN_ONLY,
     workspaceTools: SCREEN_ONLY,
     // Note that a Terminal tab is interactive, so the CLI's `vespin agent shell` reaches it and no tool does.
     terminals: SCREEN_ONLY,
     openTerminal: SCREEN_ONLY,
     renameTerminal: SCREEN_ONLY,
     endTerminal: SCREEN_ONLY,
+    runAction: NOT_YET_BUILT,
+    stopRunAction: NOT_YET_BUILT,
+    clear: NOT_YET_BUILT,
   },
   dictation: { transcribe: SCREEN_ONLY },
   events: { record: INTERNAL },
@@ -380,6 +391,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
+  workspaceSandboxSetup: { putRunActions: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {

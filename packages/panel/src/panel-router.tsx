@@ -260,9 +260,8 @@ const taskAgentMessageRoute = createRoute({
 });
 
 /**
- * An agent's own page, the page of an agent on no task or of an archived
- * one opened on its own, under the workspace its address names, at its own
- * address (`AgentPlace`). The places under it, a worker, its Changes, a
+ * An agent's own address, under the workspace it names, which opens the
+ * agent on its task once read (`AgentPlace`). The places under it, a worker, its Changes, a
  * message, a page, or an Inbox item of it, are what a link to them names,
  * and what a step on a task's tab is written at, so they draw the place the
  * window's state says, as every route not yet moved does.
@@ -372,7 +371,18 @@ const automationsIndexRoute = createRoute({ getParentRoute: () => automationsRou
 
 const automationsRunsRoute = createRoute({ getParentRoute: () => automationsRoute, path: "runs" });
 
-const automationsNewRoute = createRoute({ getParentRoute: () => automationsRoute, path: "new" });
+/** A new automation's address names the suggestion it was opened from, if any, as `?preset=`. */
+const automationsNewSearchSchema = Schema.toStandardSchemaV1(
+  Schema.StructWithRest(Schema.Struct({ preset: Schema.optionalKey(Schema.String) }), [
+    Schema.Record(Schema.String, Schema.String),
+  ]),
+);
+
+const automationsNewRoute = createRoute({
+  getParentRoute: () => automationsRoute,
+  path: "new",
+  validateSearch: automationsNewSearchSchema,
+});
 
 const automationRoute = createRoute({
   getParentRoute: () => automationPagesRoute,

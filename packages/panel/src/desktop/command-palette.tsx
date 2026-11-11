@@ -9,7 +9,7 @@
  * any time, where they mean Back and Forward elsewhere; once anything is
  * typed, ← and → move the caret, as in any text field. A press on a filter
  * chooses it. The palette ranks the rows itself with the one tiered scorer
- * (`@repo/ui/search-score`), so each kind keeps its own best few however
+ * (`@repo/features/search-score`), so each kind keeps its own best few however
  * many rows the others hold, and marks in each row what found it. Letters
  * typed in order find only a file and a command, whose words are typed by
  * their first letters, so "thm" finds no Theme setting.
@@ -68,6 +68,13 @@ import { type InboxListed, inboxItemWords } from "@repo/features/inbox-list-mode
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  hitRangesIn,
+  SEARCH_TIER,
+  type SearchHit,
+  type SearchSubject,
+  searchHit,
+} from "@repo/features/search-score";
 import {
   type MatchRange,
   matchesTokens,
@@ -146,13 +153,6 @@ import {
   type CommandGroup,
   type CommandItem,
 } from "@repo/ui/command";
-import {
-  hitRangesIn,
-  SEARCH_TIER,
-  type SearchHit,
-  type SearchSubject,
-  searchHit,
-} from "@repo/ui/search-score";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -217,6 +217,7 @@ import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, inboxItemGlyph } from "../tasks/inbox-item-parts.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
+import { type RunOffer, runPaletteRows, useRunActions } from "../tasks/run-actions-button.js";
 import { openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { TaskKey } from "../tasks/task-standing.js";
@@ -236,7 +237,7 @@ import {
   useTaskRelationWrites,
 } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
+import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -270,6 +271,11 @@ type PaletteFilter = (typeof PALETTE_FILTER)[keyof typeof PALETTE_FILTER];
 type PaletteKind = Exclude<PaletteFilter, typeof PALETTE_FILTER.ALL>;
 
 const PALETTE_FILTERS: readonly PaletteFilter[] = Object.values(PALETTE_FILTER);
+
+/** The filters while no task is open, which offer no This task, since it would list nothing. */
+const TASKLESS_FILTERS: readonly PaletteFilter[] = PALETTE_FILTERS.filter(
+  (each) => each !== PALETTE_FILTER.THIS_TASK,
+);
 
 /** Each filter's name, which is also each kind's heading under All. */
 const FILTER_LABEL = {
@@ -1034,6 +1040,28 @@ function agentRows(
 }
 
 /**
+ * The shown agent's run actions, each worded as the act it is, Run or Stop
+ * and its name, beside the task's name, and the first printing ⌥⌘R where the
+ * key acts on it (`run-actions-button.tsx`'s `runPaletteRows`).
+ */
+function runRows(
+  offer: RunOffer | undefined,
+  tasks: TasksControl,
+  show: (pick: () => void) => void,
+): readonly PaletteRow[] {
+  const taskName = tasks.tasks.find((task) => task.id === tasks.activeTaskId)?.name;
+  return runPaletteRows(offer).map((row) => ({
+    replayMasked: true,
+    icon: row.icon,
+    label: row.label,
+    detail: [row.detail, taskName].filter((word) => word !== undefined).join(" · "),
+    command: row.keyed ? APP_COMMAND.RUN_ACTION : undefined,
+    terms: [row.label, row.detail],
+    onChoose: () => show(row.onPress),
+  }));
+}
+
+/**
  * The open plan's archived agents, in the order started, each in its tab's
  * look and found by its name as a standing one is, its detail saying it is
  * archived before the plan's name, and hanging its card. One opens its tab
@@ -1223,13 +1251,14 @@ const OPEN_THING_COMMANDS: readonly AppCommand[] = [
 
 /**
  * The commands a row of the open thing's own offers with its chord
- * (`readMarkRows`, `taskPinRows`, `taskCommandRows`), so no run of commands
- * lists them again: U, but the Inbox's, which only the run lists, P, and
- * Version history.
+ * (`readMarkRows`, `taskPinRows`, `taskCommandRows`, `runRows`), so no run
+ * of commands lists them again: U, but the Inbox's, which only the run
+ * lists, P, Version history, and ⌥⌘R, whose row names the action it runs.
  */
 const OWN_ROW_COMMANDS: ReadonlySet<AppCommand> = new Set([
   APP_COMMAND.PIN,
   APP_COMMAND.VERSION_HISTORY,
+  APP_COMMAND.RUN_ACTION,
 ]);
 
 /** The open thing's commands as its run lists them: U only while the Inbox stands, whose chosen item no row of its own marks. */
@@ -1697,22 +1726,25 @@ function revealChecked(band: HTMLElement): void {
  * moving there would bring it.
  */
 function PaletteFilters({
+  filters,
   filter,
   onFilter,
 }: {
+  filters: readonly PaletteFilter[];
   filter: PaletteFilter;
   onFilter: (filter: PaletteFilter) => void;
 }): React.JSX.Element {
   const band = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
+    // Note that the list changing reveals it too, since a filter gone, as This task is when its task closes, moves the chosen one along the row.
     if (band.current !== null) revealChecked(band.current);
-  }, [filter]);
+  }, [filter, filters]);
   return (
     <div ref={band}>
       <ReplayUnmask>
         <ChoiceBar
           label="Filter"
-          items={PALETTE_FILTERS.map((each) => ({ value: each, label: FILTER_LABEL[each] }))}
+          items={filters.map((each) => ({ value: each, label: FILTER_LABEL[each] }))}
           value={filter}
           onChange={onFilter}
           look={CHOICE_BAR_LOOK.FILL}
@@ -1847,6 +1879,10 @@ export function CommandPalette({
   const directory = useWorkspaceDirectory(tasks.workspace);
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
+  // Note that This task is offered only while a task is open, as its rows are (`agentRows`), since it would list nothing otherwise.
+  const filters = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
+  // Note that a filter gone with its task, as This task is when the task closes under the palette, gives way to All.
+  if (!filters.includes(filter)) setFilter(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
   const [openings, setOpenings] = useState(0);
   const [query, setQuery] = useState("");
@@ -1972,7 +2008,7 @@ export function CommandPalette({
       const step = arrowStep(event, query);
       if (step !== 0) {
         event.preventDefault();
-        setFilter(steppedFilter(PALETTE_FILTERS, filter, step));
+        setFilter(steppedFilter(filters, filter, step));
         return;
       }
       const pressed = commandForKey(
@@ -1984,9 +2020,9 @@ export function CommandPalette({
       // claims their chords for its filters while it stands.
       event.preventDefault();
       if (pressed === APP_COMMAND.COMMAND_PALETTE) setOpen(false);
-      else setFilter(steppedFilter(PALETTE_FILTERS, filter, pressed === APP_COMMAND.BACK ? -1 : 1));
+      else setFilter(steppedFilter(filters, filter, pressed === APP_COMMAND.BACK ? -1 : 1));
     },
-    [sought, query, filter],
+    [sought, query, filter, filters],
   );
 
   const tokens = searchTokens(sought);
@@ -2033,6 +2069,22 @@ export function CommandPalette({
   const offeredChanges = tasks.sidePanel.changes;
   const changesPeople = useChangesPeopleOf(
     useMemo(() => offeredChanges.map((tab) => tab.changes), [offeredChanges]),
+  );
+  // The run actions of the agent the open task's column shows, each a row of its own, Run or Stop as it stands (`run-actions-button.tsx`).
+  const showShell = useShowShellTab(tasks.sidePanel, noFocusMove);
+  const terminalsRun =
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
+    true;
+  const runAgentId = tasks.sidePanel.agent;
+  const runAgent = tasks.agents.agents?.find(
+    (agent) => agent.id === runAgentId && agent.archivedAt === undefined,
+  );
+  const runOffer = useRunActions(
+    runAgent,
+    open,
+    runAgent === undefined || !terminalsRun
+      ? undefined
+      : (terminal) => showShell(runAgent.id, terminal),
   );
   const offerDoors: PanelOfferDoors = {
     account: useWindowAccount(),
@@ -2120,7 +2172,18 @@ export function CommandPalette({
   // while open: every row a tier matches ranks above the next tier's.
   const tiersOf = {
     [PALETTE_FILTER.THIS_TASK]: () => [
-      agentRows(tasks, inboxWaiting, inboxStanding, offerDoors, onTasks, changesPeople, directory),
+      [
+        ...agentRows(
+          tasks,
+          inboxWaiting,
+          inboxStanding,
+          offerDoors,
+          onTasks,
+          changesPeople,
+          directory,
+        ),
+        ...runRows(runOffer, tasks, onTasks),
+      ],
     ],
     [PALETTE_FILTER.PEOPLE]: () => [
       peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.onOpenPerson(userId))),
@@ -2188,7 +2251,7 @@ export function CommandPalette({
       .flatMap((tier) => ranked(tier, sought, limit, byRow))
       .slice(0, limit);
   };
-  const kinds = PALETTE_FILTERS.filter((each): each is PaletteKind =>
+  const kinds = filters.filter((each): each is PaletteKind =>
     filter === PALETTE_FILTER.ALL ? each !== PALETTE_FILTER.ALL : each === filter,
   );
   // Each kind's word for its rows' absence: still reading, refused, or a line of its own.
@@ -2254,7 +2317,10 @@ export function CommandPalette({
   // The render a key paints the field in draws the ranking already standing, and only the
   // render the words sought catch up in ranks them, so no key waits on the ranking.
   if (open) stood.current = sought === query ? rank() : stood.current;
-  const band = useMemo(() => <PaletteFilters filter={filter} onFilter={setFilter} />, [filter]);
+  const band = useMemo(
+    () => <PaletteFilters filters={filters} filter={filter} onFilter={setFilter} />,
+    [filters, filter],
+  );
 
   return (
     <>

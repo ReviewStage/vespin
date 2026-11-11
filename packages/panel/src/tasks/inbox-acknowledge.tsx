@@ -26,6 +26,7 @@ import {
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
 import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { acknowledgedNote } from "@repo/features/inbox-write-words";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
@@ -36,7 +37,6 @@ import { useCallback, useRef } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
-
 import {
   type Send,
   type Settles,
@@ -45,19 +45,18 @@ import {
   tookBack,
   untakenSettles,
 } from "./inbox-close.js";
-import { acknowledgedNote } from "./inbox-writes.js";
 
 /** What a nod the act channel refused hears, as the service not answering, with the error beneath. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
 
-/** What a toast says of a nod the service did not take on a notice still open: its agent changed it since it was shown. */
-const CHANGED = "The agent changed this item before you acknowledged it.";
+/** What a toast says of a nod the service did not take on a notice still open: its agent changed it since it was shown, so it stands open. Note that it names no press, since Mark as read, U, and Mark all as read send the same nod as Got it. */
+const CHANGED = "The agent changed this item first, so it is still open.";
 
 /** What a Got it's Undo says where the service did not take it back. */
 const ACKNOWLEDGE_UNTAKEN = {
-  unreached: "Could not undo acknowledging.",
+  unreached: "Could not undo Got it.",
   told: "Can't undo: the agent was already told.",
-  movedOn: "Can't undo: it changed since you acknowledged it.",
+  movedOn: "Can't undo: it has changed since.",
 } as const;
 
 /** Acknowledges the notices given, at once, with Undo; one already on its way is passed over. */
@@ -76,8 +75,8 @@ type NodAnswer = AgentInboxAnsweredView | { readonly failure: AgentCallFailure }
 function acknowledgedWords(items: readonly InboxItem[]): string {
   const [only] = items;
   return items.length === 1 && only !== undefined
-    ? `Acknowledged “${cardTitle(only.title)}”`
-    : `${countWords(items.length, TERM.INBOX_ITEM)} acknowledged`;
+    ? `Got it: “${cardTitle(only.title)}”`
+    : `Got it: ${countWords(items.length, TERM.INBOX_ITEM)}`;
 }
 
 /** Why the service did not take one nod, in a toast's words; none where it took it, or where the notice was settled first, which is what the press asked. */

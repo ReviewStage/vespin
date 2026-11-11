@@ -31,11 +31,13 @@ import type {
 } from "@repo/features/pull-request-write-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot } from "@repo/host/app-state";
+import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 
 /** The parts a pull request screen holds: the pull request, its checks, and its conversation. */
 const SHOWN_PARTS: readonly PullRequestPart[] = [
@@ -153,9 +155,6 @@ export interface PullRequestWrites {
   readonly write: (request: PullRequestActionRequest) => Promise<boolean>;
 }
 
-/** What a change that never reached the service leaves the screen to say. */
-const UNANSWERED: WriteNote = { words: PULL_REQUEST_WRITE_WORDS.UNREACHED };
-
 /**
  * The pull request's changes, one at a time, as the panel's tab makes
  * them: a press while one is out sends nothing; once GitHub answers,
@@ -171,38 +170,43 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
   const [note, setNote] = useState<WriteNote | undefined>(undefined);
   // Note that the change out is held in a ref as well, because two presses in one frame both read the state from before either.
   const out = useRef(false);
-  const write = useCallback(
+  const write = useWrite();
+  const change = useCallback(
     async (request: PullRequestActionRequest) => {
       if (out.current) return false;
       out.current = true;
       setPending(request.action);
       setNote(undefined);
       try {
-        const answer = await acts[ACT_KIND.AGENTS_PULL_REQUEST_ACTION]({
-          agentId,
-          number,
-          request,
-        }).catch((error: unknown) => {
-          refused("A change to the pull request")(error);
-          return undefined;
-        });
-        if (answer === undefined) {
-          setNote(UNANSWERED);
-          return false;
-        }
-        // Note that a refusal may still have moved the pull request, so every answer from GitHub reads again.
-        if (!("failure" in answer)) await retry();
-        const words = pullRequestWriteWords(answer);
-        setNote(words);
-        return words === undefined;
+        // Note that GitHub's own sentence of a refusal is kept beside the words, so the note says both; a change that got no answer says the words alone.
+        let said: WriteNote | undefined;
+        return await write(
+          async () => {
+            const answer = await acts[ACT_KIND.AGENTS_PULL_REQUEST_ACTION]({
+              agentId,
+              number,
+              request,
+            });
+            // Note that a refusal may still have moved the pull request, so every answer from GitHub reads again.
+            if (!("failure" in answer)) await retry();
+            said = pullRequestWriteWords(answer);
+            return answer;
+          },
+          {
+            refused: () => said?.words,
+            unanswered: PULL_REQUEST_WRITE_WORDS.UNREACHED,
+            inPlace: (words) => setNote(said ?? { words }),
+            went: BUZZ.SUCCESS,
+          },
+        );
       } finally {
         out.current = false;
         setPending(undefined);
       }
     },
-    [acts, retry, agentId, number],
+    [acts, write, retry, agentId, number],
   );
-  return { pending, note, write };
+  return { pending, note, write: change };
 }
 
 /** No pull request read, held as one map so a screen that holds none reads the same each time. */
@@ -210,12 +214,13 @@ const NO_PULL_REQUESTS: ReadonlyMap<number, AgentOverviewPullRequest> = new Map(
 
 /** The numbers handed, as the same array while they are the same numbers, so a follow over them is not opened again as the list is drawn again. */
 function useSameNumbers(numbers: readonly number[]): readonly number[] {
-  const held = useRef(numbers);
+  const [held, setHeld] = useState(numbers);
   const same =
-    held.current.length === numbers.length &&
-    held.current.every((number, index) => numbers[index] === number);
-  if (!same) held.current = numbers;
-  return held.current;
+    held.length === numbers.length && held.every((number, index) => numbers[index] === number);
+  // Note that new numbers are taken as they are drawn, as React keeps a value from the last render, rather than through a ref read while drawing.
+  if (same) return held;
+  setHeld(numbers);
+  return numbers;
 }
 
 /**

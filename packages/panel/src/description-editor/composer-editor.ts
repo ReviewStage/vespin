@@ -8,6 +8,13 @@ import {
 } from "@repo/features/composer-markdown";
 import { fenceAfter } from "@repo/features/description-document";
 import { fileMarker, fileMarkers } from "@repo/features/file-marker";
+import {
+  insideCode,
+  leadingCommandToken,
+  mentionAt,
+  skillTokens,
+  type TextRange,
+} from "@repo/features/skill-mention";
 import { skillWord } from "@repo/features/skill-word";
 import { WRITING_BLOCK, WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
@@ -19,7 +26,6 @@ import {
   QUOTE_GAP,
   quoteOf,
 } from "@repo/ui/reply-quote";
-import { insideCode, mentionAt, skillTokens, type TextRange } from "@repo/ui/skill-mention";
 import { type AnyExtension, Editor, Extension, Node } from "@tiptap/core";
 import {
   chainCommands,
@@ -154,6 +160,9 @@ const SKILL_NODE = "skill";
 const FILE_NODE = "fileChip";
 const QUOTE_NODE = "blockquote";
 const HARD_BREAK_NODE = "hardBreak";
+
+/** No commands, for a box that runs none, and for words laid in among others, which open no message. */
+const NO_COMMANDS: ReadonlySet<string> = new Set();
 
 /** A run of plain text in the words: where it starts in the string, and where in the document. */
 interface TextRun {
@@ -330,9 +339,10 @@ interface ChipToken {
   readonly node: (schema: Schema) => PmNode;
 }
 
-/** What words are made chips of: the skills a `/name` names, the files a marker names, and whether the box takes mentions. */
+/** What words are made chips of: the skills a `/name` names, the commands the message's first word may name, the files a marker names, and whether the box takes mentions. */
 interface Chipping {
   readonly skills: ReadonlySet<string>;
+  readonly commands: ReadonlySet<string>;
   readonly files: ReadonlySet<string>;
   readonly mentions: boolean;
 }
@@ -351,7 +361,7 @@ function fileTokens(text: string, files: ReadonlySet<string>): readonly ChipToke
 /** Every chip the words spell, in order: each `/name` of a known skill, and each mention written as its link where the box takes mentions, none overlapping another. */
 function chipTokens(
   text: string,
-  { skills, files, mentions: takesMentions }: Chipping,
+  { skills, commands, files, mentions: takesMentions }: Chipping,
 ): readonly ChipToken[] {
   // Note that a box that takes no mentions keeps a mention's link as the words it is, which it can edit.
   const mentions = (takesMentions ? mentionTokens(text) : []).map(
@@ -361,8 +371,18 @@ function chipTokens(
       node: (schema) => schema.node(MENTION_NODE, { ...token.mention }),
     }),
   );
+  // A command the message opens with is the command's chip, even where a skill shares its name, since the command is what it runs.
+  const leading = leadingCommandToken(text, commands);
+  const commanded = (leading === undefined ? [] : [leading]).map(
+    (range): ChipToken => ({
+      ...range,
+      node: (schema) =>
+        schema.node(SKILL_NODE, { name: text.slice(range.start + 1, range.end), command: true }),
+    }),
+  );
   // Note that a `/name` inside a mention's link is the link's words, never a chip of its own.
   const skilled = skillTokens(text, skills)
+    .filter((range) => range.start !== leading?.start)
     .filter((range) => !mentions.some((each) => range.start < each.end && range.end > each.start))
     .map(
       (range): ChipToken => ({
@@ -374,7 +394,9 @@ function chipTokens(
   const filed = fileTokens(text, files).filter(
     (token) => !mentions.some((each) => token.start < each.end && token.end > each.start),
   );
-  return [...mentions, ...skilled, ...filed].sort((first, second) => first.start - second.start);
+  return [...mentions, ...commanded, ...skilled, ...filed].sort(
+    (first, second) => first.start - second.start,
+  );
 }
 
 /** A mark the words wear as the schema holds it. */
@@ -443,7 +465,8 @@ function documentOf(schema: Schema, text: string, chipping: Chipping): PmNode {
 
 /** The words as a slice that lays in where a caret or a selection stands, its first and last lines joining the lines around them. */
 function sliceOf(schema: Schema, text: string, chipping: Chipping): Slice {
-  return Slice.maxOpen(documentOf(schema, text, chipping).content);
+  // Note that words laid in among others open no message, so a command among them stays words.
+  return Slice.maxOpen(documentOf(schema, text, { ...chipping, commands: NO_COMMANDS }).content);
 }
 
 /**
@@ -453,23 +476,34 @@ function sliceOf(schema: Schema, text: string, chipping: Chipping): Slice {
  */
 function chipped(
   state: EditorState,
-  chipping: Pick<Chipping, "skills" | "files">,
+  chipping: Pick<Chipping, "skills" | "commands" | "files">,
   spareCaret: boolean,
 ): Transaction | undefined {
   const { doc, selection, schema } = state;
   const runs = textRuns(doc);
   const text = textOf(doc);
   const caret = selection.empty ? offsetAt(doc, selection.from) : undefined;
+  const leading = leadingCommandToken(text, chipping.commands);
   const tokens: {
     start: number;
     end: number;
     node: (place: { from: number; to: number }) => PmNode;
   }[] = [
-    ...skillTokens(text, chipping.skills).map((token) => ({
+    ...(leading === undefined ? [] : [leading]).map((token) => ({
       ...token,
       node: (place: { from: number; to: number }) =>
-        schema.node(SKILL_NODE, { name: doc.textBetween(place.from + 1, place.to) }),
+        schema.node(SKILL_NODE, {
+          name: doc.textBetween(place.from + 1, place.to),
+          command: true,
+        }),
     })),
+    ...skillTokens(text, chipping.skills)
+      .filter((token) => token.start !== leading?.start)
+      .map((token) => ({
+        ...token,
+        node: (place: { from: number; to: number }) =>
+          schema.node(SKILL_NODE, { name: doc.textBetween(place.from + 1, place.to) }),
+      })),
     ...fileTokens(text, chipping.files).map((token) => ({
       ...token,
       node: () => token.node(schema),
@@ -581,7 +615,10 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
     atom: true,
     selectable: false,
     addAttributes() {
-      return { name: { default: "", rendered: false } };
+      return {
+        name: { default: "", rendered: false },
+        command: { default: false, rendered: false },
+      };
     },
     // Note that a chip copied out and pasted back is read by its words, since its name is in no
     // attribute, and stays words where this repository keeps no skill of that name.
@@ -607,7 +644,10 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
         const dom = document.createElement("span");
         dom.contentEditable = "false";
         dom.dataset.chip = SKILL_NODE;
-        const undraw = drawChip(dom, { name: String(node.attrs.name) });
+        const undraw = drawChip(dom, {
+          name: String(node.attrs.name),
+          command: node.attrs.command === true,
+        });
         return { dom, ignoreMutation: () => true, destroy: undraw };
       };
     },
@@ -720,6 +760,7 @@ function unmarkedChips(tr: Transaction): Transaction {
 /** What a mounted box keeps between its events: the skills it chips, whether it takes words, what ties it to its list, the last words and word it reported, and its marks. */
 interface ComposerState {
   skills: ReadonlySet<string>;
+  commands: ReadonlySet<string>;
   files: ReadonlySet<string>;
   input: ComposerInput;
   aria: EditorAria;
@@ -1108,6 +1149,7 @@ function attributed(
 export function mountComposer(host: HTMLElement, props: ComposerEditorProps): ComposerEditorHandle {
   const state: ComposerState = {
     skills: props.skills,
+    commands: NO_COMMANDS,
     files: props.files ?? new Set(),
     input: COMPOSER_INPUT.EDITABLE,
     aria: {},
@@ -1164,6 +1206,11 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
       choseChip(editor, state.mentionTrigger, editor.schema.node(SKILL_NODE, { name })),
     setSkills: (skills) => {
       state.skills = skills;
+      const tr = chipped(editor.state, state, true);
+      if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
+    },
+    setCommands: (commands) => {
+      state.commands = commands;
       const tr = chipped(editor.state, state, true);
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },

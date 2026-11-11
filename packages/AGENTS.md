@@ -80,9 +80,8 @@ walks a door's own relative-import graph, so a later re-export cannot quietly
 carry a Node-reaching layer a few files deep.
 
 A door is not what keeps `effect` out of a bundle generally; `@repo/wire`'s
-barrel resolves `Schema` beneath it. Root AGENTS.md's "Effect idioms" section
-records that cost against the renderer bundle: one copy per bundle,
-paid once. What a door still keeps out is a Node-reaching companion like
+barrel resolves `Schema` beneath it, a cost against the renderer bundle of
+one copy per bundle, paid once. What a door still keeps out is a Node-reaching companion like
 `@effect/platform-node`.
 
 A barrel over modules that are all one vocabulary is written as `export *` per

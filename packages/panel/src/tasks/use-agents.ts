@@ -1,14 +1,13 @@
-import { STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent-refusal-words";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
+import { CLEAR_FAILED, STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
   type AgentChangesPeople,
-  type AgentOrigin,
   type AgentPullRequest,
   type AgentRunsOnRequest,
   type AgentSummary,
   CONTEXT_WINDOW,
-  type ListedAgent,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type {
@@ -90,11 +89,9 @@ import {
   choiceRequest,
   continueFailureNote,
   DELETE_WORDS,
-  openingLineOf,
   RENAME_FAILED,
   RETRY_FAILED,
   SERVERS_FAILED,
-  type SentLine,
   START_FAILED_AWAY,
   START_NEEDS_TASK,
   startFailureNote,
@@ -275,8 +272,8 @@ const MODELS_READ_BOUND_MS = 15_000;
  * New task's Agent mode starts its agent with its task, in the task's one
  * start (`use-tasks-tab.ts`): an agent that landed joins the list of the
  * task it started on where that task stands open (`onTaskStarted`), drawn
- * at once with the words it was started on as its first line (`opening`),
- * before the task's list or the agent's transcript is read, and one
+ * at once, before the task's list or the agent's transcript is read, its
+ * words waiting in its queue while its first launch boots, and one
  * the service refused leaves the task a draft holding the words, the files,
  * and the model picked on New task's chip, where one was, with why
  * (`onHandDraft`), under the key that start carried, so its tab's Retry is
@@ -297,21 +294,6 @@ const MODELS_READ_BOUND_MS = 15_000;
  * press are another request under a key of its own. Its tab opens as a
  * Start's does.
  */
-
-/** The words New task started an agent on: the key its start carried, the prompt, and the files. */
-interface StartedWords {
-  readonly key: string;
-  readonly prompt: string;
-  readonly attachments: readonly AgentAttachment[];
-  /** When Start was pressed, which the agent's first line is stamped with. */
-  readonly sentAt: number;
-}
-
-/** The line an agent was started on, by the agent. */
-interface OpeningLine {
-  readonly agentId: string;
-  readonly line: SentLine;
-}
 
 /** How an archive was pressed: whether a question was asked first, which keeps it off ⌘Z. */
 interface ArchivePress {
@@ -364,22 +346,12 @@ export interface AgentsControl {
   archived: readonly AgentSummary[] | undefined;
   /** Every agent the followed task list carries, on any task or none, the archived ones among them, which names an agent of another task that wrote on the open task's description; none where the list is not followed or does not list the open task. */
   listed?: readonly AgentSummary[] | undefined;
-  /** The workspace the page's one agent belongs to, as the task list carries it; none on a task, where the task says it, and before the list carries the agent. */
-  workspaceId?: string | undefined;
-  /** The repository of the page's one agent, `owner/name`, on the same terms as its workspace. */
-  agentRepository?: string | undefined;
-  /** The automation's run that started the page's one agent, which its page holds (`LIVE_READ.AGENT_ORIGINS`); none on a plan, for an agent started by hand, and before the run is read. */
-  origin?: AgentOrigin | undefined;
+  /** Reads the task list again where its read failed; the list follows itself otherwise, a task's agents among it. */
+  onRetryList: () => void;
   /** The agent tabs the panel may show, by agent id; nothing before the task list carries the task. */
   agentIds: readonly string[] | undefined;
   /** Every agent of the task by id, an archived one among them, which its Inbox stands on, since an archived agent's items still stand; nothing before the task list carries the task. */
   heldIds: readonly string[] | undefined;
-  /** Whether the task list carries no row of the page's agent and its read failed, or the one lookup of the agent by its id did. */
-  listFailed: boolean;
-  /** Whether the task list, read, carries no row of the page's agent, and the agent is not there for the reader: dropped from the list since the page opened, or answered not found by its one lookup, deleted or of a workspace they are not in. */
-  listMissing: boolean;
-  /** Reads the task list again where its read failed while it carries no row of the page's agent, or looks the agent up again where its lookup failed; the list follows itself otherwise, a task's agents among it. */
-  onRetryList: () => void;
   /** The models the menu offers, as the host holds them for the account (`LIVE_READ.MODELS`); nothing before they are first read. */
   models: readonly CatalogModel[] | undefined;
   /** Whether the models could not be read, or the newest ask of them ran past its bound, so the menu says so with Retry rather than reading for ever. */
@@ -415,10 +387,13 @@ export interface AgentsControl {
   ) => string;
   /** Lets the open task's draft's fork go, leaving an ordinary draft with its words and chips. */
   onDropFork: () => void;
-  /** Writes the open task's draft: the words in its box, the choice on its chip, the MCP servers it switched off, or that the refusal it was handed was let go. */
+  /** Writes the open task's draft: the words in its box, the choice on its chip, the MCP servers it switched off, the mode its Permissions row picked, or that the refusal it was handed was let go. */
   onDraftChange: (
     change: Partial<
-      Pick<AgentDraft, "prompt" | "choice" | "disabledServers" | "runsOn" | "refused">
+      Pick<
+        AgentDraft,
+        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
+      >
     >,
   ) => void;
   /**
@@ -429,14 +404,13 @@ export interface AgentsControl {
    */
   onHandDraft: (taskId: string, handed: HandedDraft) => void;
   /**
-   * Takes an agent New task started with its task, and the words it was
-   * started on: it joins the list where that task stands open, or stands
-   * as that task's whole list until the list is read, which is read again,
-   * and its words are its first line until its transcript reads one back.
+   * Takes an agent New task started with its task: it joins the list where
+   * that task stands open, or stands as that task's whole list until the
+   * list is read, which is read again. Note that its words are no line of
+   * its transcript yet, because they wait in its queue until its first
+   * launch hands them off.
    */
-  onTaskStarted: (taskId: string, agent: AgentSummary, words: StartedWords) => void;
-  /** The first line of the agent New task last started, drawn as the developer's until its transcript reads a line of theirs back (`unreadOpeningLine`). */
-  opening: OpeningLine | undefined;
+  onTaskStarted: (taskId: string, agent: AgentSummary) => void;
   /** Changes the open task's draft's files from those it holds as the change lands. */
   onDraftAttachments: (
     next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[],
@@ -450,7 +424,8 @@ export interface AgentsControl {
   /**
    * Starts the draft's agent with the words as its prompt, never the task,
    * and the files attached to them, on the choice where one was made and else the account's default,
-   * with the MCP servers the draft switched off, where `runsOn` names, else where the service decides; the
+   * with the MCP servers the draft switched off, where `runsOn` names, else where the service decides,
+   * in the mode `permissionMode` names, else the member's Default permissions; the
    * agent's tab opens as a Start's does. Answers why it did not start, or
    * nothing once it did.
    */
@@ -461,12 +436,13 @@ export interface AgentsControl {
     attachments: readonly AgentAttachment[],
     disabledServers?: readonly string[],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
   /**
    * Starts the draft's fork: from its source at its message, under the
    * draft's key, with the box's words and files as a note where it holds
    * any, the MCP servers the draft switched off, the choice
-   * where one was made, and the place where one was picked; the agent's tab opens as a Start's does. Answers
+   * where one was made, the place where one was picked, and the mode where one was picked; the agent's tab opens as a Start's does. Answers
    * why it did not start, or nothing once it did.
    */
   startFork: (
@@ -477,6 +453,7 @@ export interface AgentsControl {
     attachments: readonly AgentAttachment[],
     disabledServers?: readonly string[],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
   /** Brings back the archived agent a surface draws alone, as its own page does; none from here, where every agent is a task's. */
   onUnarchive: (() => void | Promise<void>) | undefined;
@@ -496,6 +473,8 @@ export interface AgentsControl {
   onStop: (agentId: string) => Promise<boolean>;
   /** Takes one agent back to just before one of the developer's lines, stopping it first. */
   onRewind: (agentId: string, messageId: string, restoreFiles?: boolean) => Promise<AgentActAnswer>;
+  /** Starts one agent's harness on a fresh session in the same agent (`/clear`), answering whether the service did; a refusal is said in a toast. */
+  onClear: (agentId: string) => Promise<boolean>;
   /** Sends one agent a message under the key the composer made. */
   onMessage: MessageSender;
   /**
@@ -572,8 +551,9 @@ export interface AgentsControl {
  * words written so far, the files attached to them, the choice made on its
  * chip, none while it runs on the account's default, or on its source's
  * where it is a fork, the MCP servers switched off for it, where it runs
- * where the developer picked it, and the agent and message it forks, where
- * it is a fork (`fork-model.ts`).
+ * where the developer picked it, the permission mode its Permissions row
+ * picked, and the agent and message it forks, where it is a fork
+ * (`fork-model.ts`).
  */
 export interface AgentDraft {
   readonly id: string;
@@ -584,6 +564,8 @@ export interface AgentDraft {
   readonly fork?: AgentFork | undefined;
   /** Where its agent runs, as its Runs on chip picked it; none until picked, when the service decides (`runs-on.tsx`'s `useStartRunsOn`). */
   readonly runsOn?: AgentRunsOnRequest | undefined;
+  /** The mode its agent starts in, as its Permissions row picked it; none until picked, when it starts on the member's Default permissions (`useNewAgentPermissionMode`). */
+  readonly permissionMode?: AgentPermissionMode | undefined;
   /** Why the service refused the agent of a draft New task handed over (`onHandDraft`), which its tab shows under the box until the next send. */
   readonly refused?: StartFailure | undefined;
 }
@@ -591,7 +573,7 @@ export interface AgentDraft {
 /** What a draft agent holds beside its words and files: its key, what its chips chose, the fork it is, and why New task's start of it was refused. */
 type DraftChoices = Pick<
   AgentDraft,
-  "id" | "choice" | "disabledServers" | "fork" | "runsOn" | "refused"
+  "id" | "choice" | "disabledServers" | "fork" | "runsOn" | "permissionMode" | "refused"
 >;
 
 /** The plan's draft agent: the key and chips held, with the words and files kept for it, or the words kept under their own key where nothing is held, as after a relaunch. */
@@ -610,23 +592,32 @@ function taskDraft(
     // Note that a fork is kept with the words too, so a relaunch keeps the draft a fork.
     ...forkOf(held === undefined ? kept?.place.fork : held.fork),
     ...runsOnOf(held?.runsOn),
+    ...pickedModeOf(held?.permissionMode),
     ...(held?.refused === undefined ? undefined : { refused: held.refused }),
   };
 }
 
-/** What New task hands a task it started whose agent was refused: the key that start carried, the prompt, its files, the choice picked on its chip, none where the chip was left on the account's default, which the draft's tab then reads afresh, the servers its + menu switched off, and why. */
+/** What New task hands a task it started whose agent was refused: the key that start carried, the prompt, its files, the choice picked on its chip, none where the chip was left on the account's default, which the draft's tab then reads afresh, the servers its + menu switched off, the mode its Permissions row picked, none where left on the default, and why. */
 interface HandedDraft {
   readonly id: string;
   readonly prompt: string;
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
   readonly disabledServers: readonly string[];
+  readonly permissionMode?: AgentPermissionMode | undefined;
   readonly refused: StartFailure;
 }
 
 /** A draft's fork as an optional key, absent where it forks nothing. */
 function forkOf(fork: AgentFork | undefined): { readonly fork?: AgentFork } {
   return fork === undefined ? {} : { fork };
+}
+
+/** A draft's permission mode as an optional key, absent where none was picked. */
+function pickedModeOf(permissionMode: AgentPermissionMode | undefined): {
+  readonly permissionMode?: AgentPermissionMode;
+} {
+  return permissionMode === undefined ? {} : { permissionMode };
 }
 
 /** A draft's place as an optional key, absent where none was picked. */
@@ -657,13 +648,14 @@ interface ClosedDraft {
 
 /** What a draft holds beside its words and files, as the drafts hold it. */
 function choicesOf(draft: AgentDraft): DraftChoices {
-  const { id, choice, disabledServers, fork, runsOn, refused } = draft;
+  const { id, choice, disabledServers, fork, runsOn, permissionMode, refused } = draft;
   return {
     id,
     choice,
     disabledServers,
     ...forkOf(fork),
     ...runsOnOf(runsOn),
+    ...pickedModeOf(permissionMode),
     ...(refused === undefined ? undefined : { refused }),
   };
 }
@@ -681,6 +673,7 @@ export function holdsNothing(draft: AgentDraft): boolean {
     draft.choice === undefined &&
     draft.disabledServers.length === 0 &&
     draft.runsOn === undefined &&
+    draft.permissionMode === undefined &&
     draft.refused === undefined
   );
 }
@@ -697,7 +690,7 @@ function closedDraft(on: string, draft: AgentDraft): ClosedDraft | undefined {
 
 /** Where a closed draft is read and put back: the plan the drafts stand on now, the draft standing there, and the hook's own letting go and putting back. */
 interface DraftDoors {
-  readonly startsOn: string | undefined;
+  readonly taskId: string | undefined;
   readonly draft: AgentDraft | undefined;
   readonly letGo: (draftId: string) => void;
   readonly restore: (closed: ClosedDraft) => void;
@@ -719,9 +712,9 @@ const DRAFT_CLOSING = {
   unmasked: () => true,
   act: ({ letGo }, { choices }) => letGo(choices.id),
   undo: ({ restore }, closed) => restore(closed),
-  holds: ({ startsOn, draft }, { on, choices }) => on === startsOn && draft?.id !== choices.id,
-  undone: ({ startsOn, draft }, { on, choices, words }) =>
-    on === startsOn && draft?.id === choices.id && holdsWords(draft, words),
+  holds: ({ taskId, draft }, { on, choices }) => on === taskId && draft?.id !== choices.id,
+  undone: ({ taskId, draft }, { on, choices, words }) =>
+    on === taskId && draft?.id === choices.id && holdsWords(draft, words),
 } satisfies LocalWrite<DraftDoors, ClosedDraft>;
 
 /** A Start on its way or asked again: the task, the key the press minted, and the choice it was for. */
@@ -796,28 +789,6 @@ export function readAgentById(
   );
 }
 
-/** What one lookup of an agent by its id answered: that the service holds it for the reader, that it does not, or nothing. */
-const AGENT_LOOKUP = {
-  FOUND: "found",
-  MISSING: "missing",
-  FAILED: "failed",
-} as const;
-
-type AgentLookup = (typeof AGENT_LOOKUP)[keyof typeof AGENT_LOOKUP];
-
-/** Whether the service still holds the agent for the reader, read once by its id, as a link to one the task list does not carry yet is opened. */
-function lookUpAgent(queryClient: QueryClient, agentId: string): Promise<AgentLookup> {
-  return queryClient.fetchQuery(agentPageQueryOptions(agentId)).then(
-    (answer) => {
-      if (!("failure" in answer)) return AGENT_LOOKUP.FOUND;
-      return answer.failure === AGENT_CALL_FAILURE.NOT_FOUND
-        ? AGENT_LOOKUP.MISSING
-        : AGENT_LOOKUP.FAILED;
-    },
-    () => AGENT_LOOKUP.FAILED,
-  );
-}
-
 /** Whether two choices ask the same of a Start, read as `choiceRequest` sends them: only the standard window is a window apart. */
 function sameChoice(a: ModelChoice | undefined, b: ModelChoice | undefined): boolean {
   return (
@@ -852,12 +823,6 @@ export interface ModelsRead {
 export function useAgents(input: {
   /** The open task, or none. */
   taskId: string | undefined;
-  /**
-   * The one agent drawn by its id where no task is open, as the agent page
-   * draws an agent: the task list's row of it alone, so every change the
-   * list carries moves the page's agent too.
-   */
-  agentId?: string | undefined;
   /** The open task's repository, or null while it names none. */
   repository: string | null;
   /**
@@ -866,12 +831,8 @@ export function useAgents(input: {
    * task.
    */
   listedAgents?: readonly AgentSummary[] | undefined;
-  /** The page's agent as the task list carries it, with its workspace and its repository. */
-  listedPage?: Pick<ListedAgent, "id" | "workspaceId" | "repository"> | undefined;
-  /** Where the task list's read stands, which the page's agent is drawn from: read, failed, and its Try again; none on a task, whose agents the task's own tab waits on. */
-  list?:
-    | { readonly read: boolean; readonly failed: boolean; readonly onRetry: () => void }
-    | undefined;
+  /** Where the task list's read stands, which an answer on the task's Inbox reads again where it failed: failed, and its Try again; none where nothing reads it again. */
+  list?: { readonly failed: boolean; readonly onRetry: () => void } | undefined;
   /**
    * The pull request of every agent the task list followed live carries,
    * on a task or with none, the archived ones among them; none where it is
@@ -893,7 +854,7 @@ export function useAgents(input: {
   /** Mints one press's key. */
   mintKey?: () => string;
 }): AgentsControl {
-  const { taskId, agentId, repository } = input;
+  const { taskId, repository } = input;
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation.
   const queryClient = useQueryClient();
   const { mutateAsync: sendStart, isPending: starting } = useMutation(
@@ -901,6 +862,7 @@ export function useAgents(input: {
   );
   const { mutateAsync: sendStop } = useMutation(actMutation(ACT_KIND.AGENTS_STOP));
   const { mutateAsync: sendRewind } = useMutation(actMutation(ACT_KIND.AGENTS_REWIND));
+  const { mutateAsync: sendClear } = useMutation(actMutation(ACT_KIND.AGENTS_CLEAR));
   const { mutateAsync: sendMessage } = useMutation(
     sendMutation(ACT_KIND.AGENTS_MESSAGE, () => SENTRY_SEND_SPAN.AGENT_SEND),
   );
@@ -920,29 +882,22 @@ export function useAgents(input: {
   // Note that an archive is out while any of the window's is, ⌘Z's sends among them, as the host draws each at once.
   const archiving = useIsMutating({ mutationKey: [ROW_WRITE.AGENT_ARCHIVE.kind] }) > 0;
   const mintKey = input.mintKey ?? (() => crypto.randomUUID());
-  // Note that the page's agent is drawn from the task list's row of it, its workspace and repository among it, so choosing it reads nothing.
-  const listedPage =
-    taskId === undefined && input.listedPage?.id === agentId ? input.listedPage : undefined;
-  const onPage = taskId === undefined && agentId !== undefined;
   const offered = useOfferedModels();
   const [modelsRead, setModelsRead] = useState<ModelsRead>({
     state: MODELS_READ.UNREAD,
     generation: 0,
   });
   const modelsGeneration = useRef(0);
-  // Where a Start from an agent and a draft stand: the open task, or the page's agent where no task
-  // is open, whose Start the service puts where that agent is (its task, or its workspace).
-  const startsOn = taskId ?? agentId;
-  // Each place's draft's key and chip, by the plan's id or the page's agent's; its words and files are kept apart.
+  // Each task's draft's key and chip, by the task's id; its words and files are kept apart.
   const [drafts, setDrafts] = useState<ReadonlyMap<string, DraftChoices>>(new Map());
-  const heldDraft = startsOn === undefined ? undefined : drafts.get(startsOn);
-  const keptDraft = useNewAgentDraft(startsOn, heldDraft?.id);
+  const heldDraft = taskId === undefined ? undefined : drafts.get(taskId);
+  const keptDraft = useNewAgentDraft(taskId, heldDraft?.id);
   const writer = useDraftWriter();
-  const draft = startsOn === undefined ? undefined : taskDraft(heldDraft, keptDraft);
-  // The agent New task last started, its task, and the line it was started on.
-  const [started, setStarted] = useState<
-    { taskId: string; agent: AgentSummary; line: SentLine } | undefined
-  >(undefined);
+  const draft = taskId === undefined ? undefined : taskDraft(heldDraft, keptDraft);
+  // The agent New task last started, and its task.
+  const [started, setStarted] = useState<{ taskId: string; agent: AgentSummary } | undefined>(
+    undefined,
+  );
   const pending = useRef<PendingStart | undefined>(undefined);
   // The Start out now on a task, whose tab stands under its key until it answers.
   const [pressed, setPressed] = useState<{ taskId: string; starting: StartingAgent } | undefined>(
@@ -981,20 +936,16 @@ export function useAgents(input: {
   // The agent New task just started on the open task, which stands until the list carries it, so its tab draws at once.
   const seed = useMemo(() => (started === undefined ? undefined : [started.agent]), [started]);
   const held = taskId !== undefined && started?.taskId === taskId ? seed : undefined;
-  const opening = useMemo(
-    () => (started === undefined ? undefined : { agentId: started.agent.id, line: started.line }),
-    [started],
-  );
-  // The task's agents as the followed task list carries them, or the page's agent; none where it carries neither.
+  // The task's agents as the followed task list carries them; none where it does not carry the task.
   const { listedAgents } = input;
-  const listedHere = useMemo(() => {
-    if (taskId !== undefined) return listedAgents?.filter((agent) => agent.planId === taskId);
-    const page = listedAgents?.filter((agent) => agent.id === agentId);
-    return page?.length === 0 ? undefined : page;
-  }, [listedAgents, taskId, agentId]);
+  const listedHere = useMemo(
+    () =>
+      taskId === undefined ? undefined : listedAgents?.filter((agent) => agent.planId === taskId),
+    [listedAgents, taskId],
+  );
   // Note that an agent New task holds stands beside the list's until the list first carries it,
   // and leaves with it once it no longer does, so a tab never leaves between the two.
-  const subject = taskId ?? agentId;
+  const subject = taskId;
   const carried = useRef({ subject, ids: new Set<string>() });
   if (carried.current.subject !== subject) carried.current = { subject, ids: new Set() };
   for (const agent of listedHere ?? []) carried.current.ids.add(agent.id);
@@ -1018,42 +969,11 @@ export function useAgents(input: {
     () => standing?.filter((agent) => agent.archivedAt !== undefined),
     [standing],
   );
-  // Note that the page's agent stands or falls with the task list's row of it, so an agent deleted turns to Not found as the list drops it.
-  // An agent the read list has not carried since the page opened, as a teammate's just started or
-  // one a notification names ahead of the list, is looked up once by its id: one the service holds
-  // reads as Reading until the list carries it, and only one it does not hold is not found. One the
-  // list carried and then dropped, deleted or moved away, is not found at once.
   const { list } = input;
-  const absent =
-    onPage && list?.read === true && listedAgents !== undefined && listedHere === undefined;
-  const dropped = agentId !== undefined && carried.current.ids.has(agentId);
-  const [lookedUp, setLookedUp] = useState<
-    { readonly agentId: string; readonly outcome: AgentLookup } | undefined
-  >(undefined);
-  const [lookups, setLookups] = useState(0);
-  const lookUp = absent && !dropped ? agentId : undefined;
-  useEffect(() => {
-    if (lookUp === undefined) return;
-    let live = true;
-    lookUpAgent(queryClient, lookUp).then((outcome) => {
-      if (live) setLookedUp({ agentId: lookUp, outcome });
-    });
-    return () => {
-      live = false;
-    };
-  }, [lookUp, lookups]);
-  const looked =
-    lookedUp !== undefined && lookedUp.agentId === agentId ? lookedUp.outcome : undefined;
-  const listMissing = absent && (dropped || looked === AGENT_LOOKUP.MISSING);
-  const lookupFailed = lookUp !== undefined && looked === AGENT_LOOKUP.FAILED;
-  const listFailed = onPage && listedHere === undefined && (list?.failed === true || lookupFailed);
   const retryList = list?.onRetry;
   const onRetryList = useCallback(() => {
-    if (list?.failed === true) return retryList?.();
-    if (!lookupFailed) return;
-    setLookedUp(undefined);
-    setLookups((count) => count + 1);
-  }, [list?.failed, lookupFailed, retryList]);
+    if (list?.failed === true) retryList?.();
+  }, [list?.failed, retryList]);
   // The archives asked here and still out.
 
   /** Settles the ask of `generation` where it is still the newest: read at any point, failed only while it is out. */
@@ -1109,7 +1029,7 @@ export function useAgents(input: {
    * no tab on the task now open.
    */
   const landed = (on: string, agent: AgentSummary) => {
-    if ((latest.current.taskId ?? latest.current.agentId) !== on) return;
+    if (latest.current.taskId !== on) return;
     latest.current.onStarted(agent.id);
   };
 
@@ -1152,12 +1072,12 @@ export function useAgents(input: {
     runsOn,
     choice,
   ) => {
-    if (startsOn === undefined) return undefined;
+    if (taskId === undefined) return undefined;
     const held = continues.current.get(sourceId);
     const carried = note !== undefined || attachments.length > 0 ? (note ?? "") : undefined;
     const key =
       held !== undefined &&
-      held.on === startsOn &&
+      held.on === taskId &&
       held.note === carried &&
       sameFiles(held.attachments, attachments) &&
       samePlace(held.runsOn, runsOn) &&
@@ -1165,7 +1085,7 @@ export function useAgents(input: {
         ? held.key
         : mintKey();
     continues.current.set(sourceId, {
-      on: startsOn,
+      on: taskId,
       key,
       note: carried,
       attachments,
@@ -1177,7 +1097,7 @@ export function useAgents(input: {
     const forgetPress = () => {
       if (continues.current.get(sourceId)?.key === key) continues.current.delete(sourceId);
     };
-    const answer = await askStart(startsOn, {
+    const answer = await askStart(taskId, {
       idempotencyKey: key,
       from: { agentId: sourceId },
       ...(carried === undefined ? undefined : { note: carried }),
@@ -1196,7 +1116,7 @@ export function useAgents(input: {
       };
       // Note that a move is chosen from a menu, which has no line beside it to say why, so its
       // refusal is said in a toast wherever the developer stands.
-      const away = (latest.current.taskId ?? latest.current.agentId) !== startsOn;
+      const away = latest.current.taskId !== taskId;
       // A plan's reached limit is said calmly in its own words, never as a failure to start.
       if (answer.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED) {
         if (runsOn !== undefined || away) limitReached(refused.text);
@@ -1205,7 +1125,7 @@ export function useAgents(input: {
       return refused;
     }
     forgetPress();
-    landed(startsOn, answer.agent);
+    landed(taskId, answer.agent);
     return undefined;
   };
 
@@ -1273,10 +1193,10 @@ export function useAgents(input: {
   // developer picks otherwise.
   const onForkDraft = (fork: AgentFork): string => {
     const id = mintKey();
-    if (startsOn === undefined) return id;
+    if (taskId === undefined) return id;
     const source = standing?.find((agent) => agent.id === fork.agentId);
-    moveWords(startsOn, id, fork);
-    withDraft(startsOn, {
+    moveWords(taskId, id, fork);
+    withDraft(taskId, {
       id,
       choice: undefined,
       disabledServers: source?.disabledServers ?? [],
@@ -1298,16 +1218,17 @@ export function useAgents(input: {
     const joins = draft?.fork?.agentId === sourceId && draft.fork.messageId === undefined;
     const adds = words.trim() !== "" || attachments.length > 0;
     const id = joins && !adds ? draft.id : mintKey();
-    if (startsOn === undefined) return id;
+    if (taskId === undefined) return id;
     const source = standing?.find((agent) => agent.id === sourceId);
     const fork = continueFork(sourceId);
-    moveWords(startsOn, id, fork, { text: words.trim(), attachments });
-    withDraft(startsOn, {
+    moveWords(taskId, id, fork, { text: words.trim(), attachments });
+    withDraft(taskId, {
       id,
       choice: joins ? draft.choice : undefined,
       disabledServers: joins ? draft.disabledServers : (source?.disabledServers ?? []),
       fork,
       ...runsOnOf(joins ? draft.runsOn : undefined),
+      ...pickedModeOf(joins ? draft.permissionMode : undefined),
     });
     return id;
   };
@@ -1325,30 +1246,35 @@ export function useAgents(input: {
       choice: draft.choice,
       disabledServers: draft.disabledServers,
       ...runsOnOf(draft.runsOn),
+      ...pickedModeOf(draft.permissionMode),
     });
   };
 
   /** The open plan's draft's words and files moved on from those kept for it. */
   const writeWords = (next: (was: Draft) => Draft) => {
-    if (startsOn === undefined || draft === undefined) return;
-    writer.update(wordsPlace(startsOn, draft.id, draft.fork), next);
+    if (taskId === undefined || draft === undefined) return;
+    writer.update(wordsPlace(taskId, draft.id, draft.fork), next);
   };
 
   const onDraftChange = (
     change: Partial<
-      Pick<AgentDraft, "prompt" | "choice" | "disabledServers" | "runsOn" | "refused">
+      Pick<
+        AgentDraft,
+        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
+      >
     >,
   ) => {
-    if (startsOn === undefined || draft === undefined) return;
+    if (taskId === undefined || draft === undefined) return;
     const { prompt, ...choices } = change;
     if (prompt !== undefined) writeWords((was) => ({ ...was, text: prompt }));
     if (Object.keys(choices).length === 0) return;
-    withDraft(startsOn, {
+    withDraft(taskId, {
       id: draft.id,
       choice: draft.choice,
       disabledServers: draft.disabledServers,
       ...(draft.fork === undefined ? undefined : { fork: draft.fork }),
       ...runsOnOf(draft.runsOn),
+      ...pickedModeOf(draft.permissionMode),
       ...(draft.refused === undefined ? undefined : { refused: draft.refused }),
       ...choices,
     });
@@ -1369,6 +1295,7 @@ export function useAgents(input: {
       id: handed.id,
       choice: handed.choice,
       disabledServers: handed.disabledServers,
+      ...pickedModeOf(handed.permissionMode),
       refused: handed.refused,
     });
   };
@@ -1376,8 +1303,8 @@ export function useAgents(input: {
   // Note that the task New task started may not stand open yet as its start
   // answers. Until the task list carries its agent, the agent stands as its
   // task's, so its tab draws at once rather than after the list.
-  const onTaskStarted = (on: string, agent: AgentSummary, words: StartedWords) => {
-    setStarted({ taskId: on, agent, line: openingLineOf(words) });
+  const onTaskStarted = (on: string, agent: AgentSummary) => {
+    setStarted({ taskId: on, agent });
   };
 
   // Note that the files are changed from the draft as it stands when the
@@ -1390,7 +1317,7 @@ export function useAgents(input: {
   // act that can be taken back is, and ⌘Z and its toast's Undo put it back.
   const onDiscardDraft = (draftId: string) => {
     const closed =
-      startsOn === undefined || draft?.id !== draftId ? undefined : closedDraft(startsOn, draft);
+      taskId === undefined || draft?.id !== draftId ? undefined : closedDraft(taskId, draft);
     if (closed === undefined) {
       letGo(draftId);
       return;
@@ -1406,7 +1333,7 @@ export function useAgents(input: {
       for (const subject of undoable.current) withdrawUndo(subject);
       undoable.current.clear();
     },
-    [startsOn],
+    [taskId],
   );
 
   // Note that Undo stands only while the plan the draft was closed on is
@@ -1430,8 +1357,8 @@ export function useAgents(input: {
     }
     latest.current.onDraftRestored?.(on, id);
   };
-  const draftDoors = useRef<DraftDoors>({ startsOn, draft, letGo, restore: restoreDraft });
-  draftDoors.current = { startsOn, draft, letGo, restore: restoreDraft };
+  const draftDoors = useRef<DraftDoors>({ taskId, draft, letGo, restore: restoreDraft });
+  draftDoors.current = { taskId, draft, letGo, restore: restoreDraft };
 
   // Note that the draft's key is the Start's every time it is sent, because
   // nothing a refused send asked was made, and a send whose answer was lost
@@ -1443,6 +1370,7 @@ export function useAgents(input: {
     attachments: readonly AgentAttachment[],
     disabledServers: readonly string[] = [],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
     if (taskId === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
     const answer = await askStart(taskId, {
@@ -1452,6 +1380,7 @@ export function useAgents(input: {
       ...(disabledServers.length === 0 ? undefined : { disabledServers }),
       ...(choice === undefined ? undefined : choiceRequest(choice)),
       ...runsOnOf(runsOn),
+      ...pickedModeOf(permissionMode),
     });
     if ("failure" in answer) return { ...startFailureNote(answer, taskId), cause: answer };
     withDraft(taskId, undefined);
@@ -1469,8 +1398,9 @@ export function useAgents(input: {
     attachments: readonly AgentAttachment[],
     disabledServers: readonly string[] = [],
     runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
-    if (startsOn === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
+    if (taskId === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
     const asked = forkStart({
       draftId,
       fork,
@@ -1479,12 +1409,13 @@ export function useAgents(input: {
       choice,
       disabledServers,
       runsOn,
+      permissionMode,
     });
-    const answer = await askStart(startsOn, asked);
+    const answer = await askStart(taskId, asked);
     if ("failure" in answer) return { ...startFailureNote(answer, taskId ?? null), cause: answer };
-    withDraft(startsOn, undefined);
+    withDraft(taskId, undefined);
     writer.drop((kept) => kept.kind === DRAFT_PLACE.NEW_AGENT && kept.draftId === draftId);
-    landed(startsOn, answer.agent);
+    landed(taskId, answer.agent);
     return undefined;
   };
 
@@ -1539,6 +1470,17 @@ export function useAgents(input: {
       }).catch(agentUnreached),
     [sendRewind],
   );
+
+  const onClear = async (agentId: string): Promise<boolean> => {
+    const answer = await sendClear({ agentId }).catch(agentUnreached);
+    if (!("failure" in answer)) return true;
+    failed(CLEAR_FAILED, {
+      surface: FAILURE_SURFACE.AGENT_CLEAR,
+      cause: answer,
+      about: { agentId },
+    });
+    return false;
+  };
 
   const onMessage = useCallback<MessageSender>(
     async (agentId, text, clientKey, attachments) => {
@@ -1729,11 +1671,8 @@ export function useAgents(input: {
   );
 
   // Note that every agent's pull request, an archived one's among them, is the task list's, so
-  // choosing a task, or the page of an agent on none, reads none of them.
-  const pullRequests = useListedPullRequests(
-    input.listedPullRequests,
-    taskId !== undefined ? { taskId } : agentId !== undefined ? { agentId } : undefined,
-  );
+  // choosing a task reads none of them.
+  const pullRequests = useListedPullRequests(input.listedPullRequests, taskId);
 
   // A pull request a tab names by its number is kept by agent and number,
   // apart from the agents' own, so it never stands for what an agent published.
@@ -1767,30 +1706,18 @@ export function useAgents(input: {
   // Note that the skills are kept for the plan and its repository as they
   // stand, and the host keeps each one's for the session (`compose-tasks.ts`),
   // so choosing the plan again reads none; another plan, or the plan moved to
-  // another repository, is another one. An agent no plan holds reads its
-  // repository's through the workspace it belongs to, once the list has
-  // named that workspace.
-  const workspaceId = listedPage?.workspaceId;
-  const agentRepository = listedPage?.repository ?? undefined;
-  // Note that a plan or an agent with no repository still reads its member's installed skills, and
+  // another repository, is another one.
+  // Note that a plan with no repository still reads its member's installed skills, and
   // that the plan's repository stays a dependency, so a plan moved to another repository reads afresh.
   // While the Skills experiment is off, no box offers a skill and no sent message draws one.
   const skillsOn =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.SKILLS) }).data === true;
   const readSkills = useMemo(() => {
-    if (!skillsOn) return undefined;
-    if (taskId !== undefined) {
-      return keptSkills(() =>
-        queryClient.fetchQuery(repositorySkillsQueryOptions({ planId: taskId })),
-      );
-    }
-    if (workspaceId === undefined) return undefined;
-    const asked =
-      agentRepository === undefined
-        ? { workspaceId }
-        : { workspaceId, repository: agentRepository };
-    return keptSkills(() => queryClient.fetchQuery(repositorySkillsQueryOptions(asked)));
-  }, [queryClient, skillsOn, taskId, workspaceId, agentRepository, repository]);
+    if (!skillsOn || taskId === undefined) return undefined;
+    return keptSkills(() =>
+      queryClient.fetchQuery(repositorySkillsQueryOptions({ planId: taskId })),
+    );
+  }, [queryClient, skillsOn, taskId, repository]);
 
   // A start reads the agents as they stand when it is pressed, so the doors to it stand across draws.
   const steadyStartPrompt = useSteadyDoor(startPrompt);
@@ -1807,8 +1734,6 @@ export function useAgents(input: {
     agents,
     archived: archivedAgents,
     listed: listedAgents,
-    workspaceId,
-    agentRepository,
     agentIds,
     heldIds: standing?.map((agent) => agent.id),
     draft,
@@ -1819,13 +1744,10 @@ export function useAgents(input: {
     onDraftChange,
     onHandDraft,
     onTaskStarted,
-    opening,
     onDraftAttachments,
     onDiscardDraft,
     startPrompt: steadyStartPrompt,
     startFork: steadyStartFork,
-    listFailed,
-    listMissing,
     onRetryList,
     models: offered.data?.models,
     modelsFailed: offered.isError || modelsRead.state === MODELS_READ.FAILED,
@@ -1833,7 +1755,7 @@ export function useAgents(input: {
     macs: offered.data === undefined ? undefined : (offered.data.macs ?? []),
     readModels,
     onUnarchive: undefined,
-    continueAgent: startsOn === undefined ? undefined : steadyContinueAgent,
+    continueAgent: taskId === undefined ? undefined : steadyContinueAgent,
     start: {
       available: taskId !== undefined,
       busy: starting,
@@ -1842,6 +1764,7 @@ export function useAgents(input: {
     },
     onStop,
     onRewind,
+    onClear,
     onMessage,
     onRetry,
     onChoose,

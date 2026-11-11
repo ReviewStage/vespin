@@ -10,7 +10,7 @@ import {
   pageShowerSchema,
   pageWriteSchema,
 } from "@repo/features/page-wire";
-import { and, desc, eq, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, type SQL } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
@@ -24,9 +24,7 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
  * task-pages.ts -- the pages shown on a task: write a page or its next version as who showed it, list a task's pages, and read one version, by its task or by the page's id alone.
  *
  * A page stands on a task, whose pages any agent on it and the brain write.
- * An agent owner (`PAGE_OWNER.AGENT`), which a released desktop still names
- * for the pages an agent on no task once showed on itself, holds none, since
- * every page stands on a task. A write is a page's next version, taken under
+ * A write is a page's next version, taken under
  * the task row's own lock, so two writes of one page never take one number
  * and a task deleted meanwhile reads as gone rather than written back into
  * being. Every statement names the account beside the task and gates on the
@@ -41,10 +39,7 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
 
 const OwnerKeySchema = Schema.Struct({
   userId: Schema.String,
-  owner: Schema.Union([
-    Schema.Struct({ kind: Schema.Literal(PAGE_OWNER.TASK), taskId: Schema.String }),
-    Schema.Struct({ kind: Schema.Literal(PAGE_OWNER.AGENT), agentId: Schema.String }),
-  ]),
+  owner: Schema.Struct({ kind: Schema.Literal(PAGE_OWNER.TASK), taskId: Schema.String }),
 });
 
 const PageLineRowSchema = Schema.Struct({
@@ -63,9 +58,9 @@ const PAGE_LINE_COLUMNS = {
   shownBy: taskPageVersion.shownBy,
 };
 
-/** The versions that stand on the owner: a task's by its column; none of an agent's, since every page stands on a task. */
+/** The versions that stand on the owner, by its task's column. */
 function ownedBy(owner: PageOwner): SQL {
-  return owner.kind === PAGE_OWNER.TASK ? eq(taskPageVersion.taskId, owner.taskId) : sql`false`;
+  return eq(taskPageVersion.taskId, owner.taskId);
 }
 
 /** The task's id under its row's lock until the transaction ends; nothing where the account reaches no such task. */
@@ -217,7 +212,6 @@ export function writePage(
     client.withTransaction(
       Effect.gen(function* () {
         const admitted = yield* Schema.decodeUnknownEffect(pageWriteSchema)(write);
-        if (owner.kind !== PAGE_OWNER.TASK) return Option.none<PageLine>();
         const locked = yield* lockTask({ userId, taskId: owner.taskId });
         if (Option.isNone(locked)) return Option.none<PageLine>();
         const newest =
@@ -261,17 +255,17 @@ export function readPageVersion(
   );
 }
 
-/** A page read by its id alone: the owner it stands on, the version asked for, and the newest version there is. */
+/** A page read by its id alone: the task it stands on, the version asked for, and the newest version there is. */
 export interface FoundPage {
-  readonly owner: PageOwner;
+  readonly taskId: string;
   readonly page: PageVersion;
   readonly newestVersion: number;
 }
 
 /**
  * One version of the page by the page's id alone, the newest where none is
- * named, with the owner it stands on and its newest version; nothing where
- * the account reaches no owner holding such a page or version.
+ * named, with the task it stands on and its newest version; nothing where
+ * the account reaches no task holding such a page or version.
  */
 export function readPageById(
   userId: string,
@@ -282,10 +276,9 @@ export function readPageById(
     const found = yield* findPageById({ userId, pageId, version: version ?? null });
     if (Option.isNone(found)) return Option.none();
     const { taskId, html, ...line } = found.value;
-    const owner = { kind: PAGE_OWNER.TASK, taskId } as const;
-    const newest = yield* findNewestVersion({ owner, pageId });
+    const newest = yield* findNewestVersion({ owner: { kind: PAGE_OWNER.TASK, taskId }, pageId });
     return Option.some({
-      owner,
+      taskId,
       page: { ...lineOf(line), html },
       newestVersion: Option.match(newest, {
         onNone: () => line.version,

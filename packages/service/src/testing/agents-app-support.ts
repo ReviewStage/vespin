@@ -60,6 +60,8 @@ import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { messagesProcedures } from "../agents/messages-procedures.js";
 import { type SandboxDeleteReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
 import {
+  type AgentSessions,
+  MACHINE_UP,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -293,7 +295,35 @@ export function fakeAgentSessions(
   const answered: (readonly [string, ApprovalLine])[] = [];
   let sessions = 0;
   let deliveries = 0;
-  const agentSessions = (authorization: string): ScriptedSessions => ({
+  // Note that a boot's session takes its first message as a send, which is what an open took before a
+  // first launch booted its machine first, so it is written down as the session's open.
+  const booted = new Set<string>();
+  const agentSessions = (
+    authorization: string,
+  ): ScriptedSessions & Pick<AgentSessions, "boot"> => ({
+    boot: () =>
+      Effect.suspend(() => {
+        if (options.reachable === false) {
+          return Effect.fail(
+            new SessionUnreachable({
+              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
+              cause: {
+                _tag: "RequestError",
+                reason: { _tag: "TransportError" },
+                message: "refused",
+              } as never,
+            }),
+          );
+        }
+        sessions += 1;
+        const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${String(sessions).padStart(22, "0")}`;
+        booted.add(sessionId);
+        return Effect.succeed({
+          outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+          sessionId,
+          up: Effect.succeed(MACHINE_UP.READY),
+        } as const);
+      }),
     answer: (sessionId, _conversationId, line) =>
       Effect.sync(() => {
         const outcome = options.answers ?? RUNNER_ANSWER.WRITTEN;
@@ -322,6 +352,15 @@ export function fakeAgentSessions(
       }),
     send: (sessionId, message) =>
       Effect.sync(() => {
+        if (booted.delete(sessionId)) {
+          opened.push({ authorization, message, sessionId });
+          deliveries += 1;
+          return {
+            outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+            sessionId,
+            deliveryId: `delivery-${deliveries}`,
+          } as const;
+        }
         sent.push({ authorization, sessionId, message });
         switch (options.sends ?? SESSION_SEND_OUTCOME.ACCEPTED) {
           case SESSION_SEND_OUTCOME.ACCEPTED:
@@ -412,6 +451,7 @@ const ORPC_PUBLIC_PATH: ReadonlyMap<string, (id: string) => string> = new Map([
   ["/api/agents/agents", (id: string) => `/api/agents/${id}/agents`],
   ["/api/agents/messages-newest", (id: string) => `/api/agents/${id}/messages/newest`],
   ["/api/agents/changes", (id: string) => `/api/agents/${id}/changes`],
+  ["/api/agents/turn-changes", (id: string) => `/api/agents/${id}/turn-changes`],
   ["/api/agents/review-options", (id: string) => `/api/agents/${id}/review-options`],
   ["/api/agents/workspace-tools", (id: string) => `/api/agents/${id}/workspace-tools`],
   ["/api/agents/pull-request", (id: string) => `/api/agents/${id}/pull-request`],
@@ -608,6 +648,7 @@ export function request(
     picture?: string;
     src?: string;
     number?: string;
+    messageId?: string;
     /** A browser's session cookie, sent beside the bearer or, with no account named, in its place. */
     cookie?: string;
     /** The media types the caller takes, as the iOS app names the video it plays. */
@@ -631,6 +672,7 @@ export function request(
   if (init.picture !== undefined) url.searchParams.set("picture", init.picture);
   if (init.src !== undefined) url.searchParams.set("src", init.src);
   if (init.number !== undefined) url.searchParams.set("number", init.number);
+  if (init.messageId !== undefined) url.searchParams.set("messageId", init.messageId);
   const headers = new Headers();
   if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
   if (init.accept !== undefined) headers.set("accept", init.accept);
@@ -1037,15 +1079,15 @@ export const messagedAgent = (
   agentSessions: ReturnType<typeof fakeAgentSessions>,
   turn: { readonly running: boolean } | undefined,
   sessionSandboxes?: SandboxDeleteReach["sessionSandboxes"],
-  afterResponse?: Layer.Layer<AfterResponse>,
+  afterResponse?: { readonly layer: Layer.Layer<AfterResponse>; readonly run: Effect.Effect<void> },
 ) =>
   Effect.flatMap(
     openTask({
       agentSessions,
       ...(sessionSandboxes === undefined ? undefined : { sessionSandboxes }),
-      ...(afterResponse === undefined ? undefined : { afterResponse }),
+      ...(afterResponse === undefined ? undefined : { afterResponse: afterResponse.layer }),
     }),
-    (opened) => agentStartedOn(opened, agentSessions, turn),
+    (opened) => agentStartedOn(opened, agentSessions, turn, afterResponse?.run),
   );
 
 /** Another agent the owner starts on the task opened, its turn running or ended as `turn` says, as `messagedAgent` starts the first. */
@@ -1053,6 +1095,7 @@ export const agentStartedOn = (
   opened: Effect.Success<ReturnType<typeof openTask>>,
   agentSessions: ReturnType<typeof fakeAgentSessions>,
   turn: { readonly running: boolean } | undefined,
+  afterStart: Effect.Effect<void> = Effect.void,
 ) =>
   Effect.gen(function* () {
     const agent = readAnswer(
@@ -1060,6 +1103,8 @@ export const agentStartedOn = (
       HOSTED_HTTP_STATUS.CREATED,
       yield* opened.ask(startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID() })),
     ).agent;
+    // Note that the Start's machine comes up past its answer, which hands its first message on.
+    yield* afterStart;
     const stored = yield* readAgent(opened.owner, agent.id);
     assert.ok(Option.isSome(stored));
     const target = { userId: opened.owner, conversationId: stored.value.conversationId };

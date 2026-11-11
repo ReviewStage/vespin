@@ -5,12 +5,7 @@ import {
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
-import {
-  DEVICE_PLATFORM,
-  DEVICE_SETUP,
-  type DevicePlatform,
-  type DeviceSetup,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import { devicePlatformOf } from "@repo/features/device-platform";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
@@ -74,12 +69,6 @@ import { keptKey, useKept } from "../use-kept.js";
  * (`plan-agents.tsx`).
  */
 
-/** What a device still setting itself up is called, which Runs on says of a device that takes no agent yet. */
-const DEVICE_SETUP_WORDS = {
-  [DEVICE_SETUP.PREPARING]: "Getting ready…",
-  [DEVICE_SETUP.FAILED]: "Couldn't set up",
-} as const satisfies Record<DeviceSetup, string>;
-
 /** The id the Cloud row is picked by, which no device's id is. */
 export const CLOUD_ROW = "cloud";
 
@@ -104,8 +93,10 @@ export function DeviceGlyph({
 
 /** Where a device offered stands now; one a service before beats said nothing of is online, as it listed only those, and one the presence read does not name, though it is the account's own, is gone. */
 function offerStanding(device: MacOffer, book: PresenceBook): DeviceStanding {
-  if (device.seenAt === undefined) return DEVICE_STANDING.ONLINE;
-  return presenceStanding(book, device.deviceId) ?? DEVICE_STANDING.OFFLINE;
+  return (
+    presenceStanding(book, device.deviceId) ??
+    (device.seenAt === undefined ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE)
+  );
 }
 
 /** What each standing is called. */
@@ -114,43 +105,36 @@ const STANDING_WORDS = {
   [DEVICE_STANDING.OFFLINE]: RUNS_ON_WORDS.OFFLINE,
   [DEVICE_STANDING.UNKNOWN]: RUNS_ON_WORDS.UNKNOWN,
   [DEVICE_STANDING.CHECKING]: RUNS_ON_WORDS.CHECKING,
-} as const;
+  [DEVICE_STANDING.SETTING_UP]: RUNS_ON_WORDS.SETTING_UP,
+  [DEVICE_STANDING.FAILED]: RUNS_ON_WORDS.FAILED,
+} as const satisfies Record<DeviceStanding, string>;
 
-/** The tone of each standing's dot: green online, gray away or still being checked, the attention tone where it cannot be checked. */
+/** The tone of each standing's dot: green online, working while setting up, danger where it failed, gray away or still being checked, the attention tone where it cannot be checked. */
 const STANDING_TONE = {
   [DEVICE_STANDING.ONLINE]: STATUS_TONE.COMPLETE,
   [DEVICE_STANDING.OFFLINE]: STATUS_TONE.NEUTRAL,
   [DEVICE_STANDING.UNKNOWN]: STATUS_TONE.ATTENTION,
   [DEVICE_STANDING.CHECKING]: STATUS_TONE.NEUTRAL,
-} as const;
+  [DEVICE_STANDING.SETTING_UP]: STATUS_TONE.WORKING,
+  [DEVICE_STANDING.FAILED]: STATUS_TONE.DANGER,
+} as const satisfies Record<DeviceStanding, StatusTone>;
 
-/** The tone of the dot of a device online but not ready: still getting ready is working, one that couldn't set up failed. */
-const SETUP_TONE = {
-  [DEVICE_SETUP.PREPARING]: STATUS_TONE.WORKING,
-  [DEVICE_SETUP.FAILED]: STATUS_TONE.DANGER,
-} as const;
+/** The standings that take no agent, which a list draws dimmed and unpicked; one whose standing cannot be told yet is not among them. */
+const TAKES_NO_AGENT: ReadonlySet<DeviceStanding> = new Set([
+  DEVICE_STANDING.OFFLINE,
+  DEVICE_STANDING.SETTING_UP,
+  DEVICE_STANDING.FAILED,
+]);
 
-/** Why a device offered takes no agent now, and its dot's tone: away, or still getting ready or not set up, whatever its standing; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
+/** Why a device offered takes no agent now, and its dot's tone: away, setting up, or failed; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
 function offerUnready(
   device: MacOffer,
   book: PresenceBook,
 ): { readonly words: string; readonly tone: StatusTone } | undefined {
-  if (offerStanding(device, book) === DEVICE_STANDING.OFFLINE)
-    return { words: RUNS_ON_WORDS.OFFLINE, tone: STANDING_TONE[DEVICE_STANDING.OFFLINE] };
-  switch (device.setup) {
-    case DEVICE_SETUP.PREPARING:
-      return {
-        words: DEVICE_SETUP_WORDS[DEVICE_SETUP.PREPARING],
-        tone: SETUP_TONE[DEVICE_SETUP.PREPARING],
-      };
-    case DEVICE_SETUP.FAILED:
-      return {
-        words: DEVICE_SETUP_WORDS[DEVICE_SETUP.FAILED],
-        tone: SETUP_TONE[DEVICE_SETUP.FAILED],
-      };
-    case undefined:
-      return undefined;
-  }
+  const standing = offerStanding(device, book);
+  return TAKES_NO_AGENT.has(standing)
+    ? { words: STANDING_WORDS[standing], tone: STANDING_TONE[standing] }
+    : undefined;
 }
 
 /** A device as a list of places draws it: its platform's glyph wearing one dot, its words on hover and to a reader, and why it takes no agent now, none where it does. */

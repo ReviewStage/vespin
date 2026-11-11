@@ -4,6 +4,12 @@
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
 ---
+# Note that what a step types is pressed Send on only once Send stands lit,
+# and is typed again where it does not light, because the field now and then
+# keeps a word Maestro typed without telling the app of it, so Send stays
+# dimmed with the words still in the field, which a person's typing never
+# did (checked with idb's keys on the iPhone 18 Pro, iOS 27.2).
+#
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so no server is
 # reached: the fixture takes each reply and resolve as the service would, but
 # for the migration's approval, which it refuses (`@repo/host/fixture-inbox`).
@@ -78,12 +84,37 @@ appId: dev.vespin.ios
 # without them.
 - tapOn:
     id: "answer-field-Invites a member may send a day"
+- waitForAnimationToEnd
 - inputText: "."
+- runFlow:
+    when:
+      visible:
+        text: "Send"
+        enabled: false
+    commands:
+      - eraseText: 60
+      - inputText: "."
+- assertVisible:
+    text: "Send"
+    enabled: true
 - tapOn: "Send"
 - assertVisible: "Write a number in Invites a member may send a day."
 - eraseText: 1
 - inputText: "20"
-- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        text: "Send"
+        enabled: false
+    commands:
+      - eraseText: 60
+      - inputText: "20"
+- assertVisible:
+    text: "Send"
+    enabled: true
+- assertVisible:
+    id: "answer-field-Invites a member may send a day"
+    text: "20"
 - takeScreenshot: answer-fields-filled
 - tapOn: "Send"
 - extendedWaitUntil:
@@ -129,7 +160,19 @@ appId: dev.vespin.ios
 - tapOn: "The digest's subject line"
 - tapOn:
     id: "composer-field"
+- waitForAnimationToEnd
 - inputText: "What shipped in Relay this week"
+- runFlow:
+    when:
+      visible:
+        text: "Send"
+        enabled: false
+    commands:
+      - eraseText: 60
+      - inputText: "What shipped in Relay this week"
+- assertVisible:
+    text: "Send"
+    enabled: true
 - takeScreenshot: answer-words
 - tapOn: "Send"
 - extendedWaitUntil:
@@ -157,7 +200,19 @@ appId: dev.vespin.ios
 - assertVisible: "Reply"
 - tapOn:
     id: "composer-field"
+- waitForAnimationToEnd
 - inputText: "Thanks, one transaction sounds right."
+- runFlow:
+    when:
+      visible:
+        text: "Send"
+        enabled: false
+    commands:
+      - eraseText: 60
+      - inputText: "Thanks, one transaction sounds right."
+- assertVisible:
+    text: "Send"
+    enabled: true
 - tapOn: "Send"
 - assertVisible: "Thanks, one transaction sounds right."
 # A drag down the thread puts the keyboard away, as the thread's scroll lets it.

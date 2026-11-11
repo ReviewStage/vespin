@@ -7,6 +7,7 @@ import {
   COMPLETION_SOUND_LABEL,
   COMPLETION_SOUNDS,
   isAppSettingId,
+  isCustomCompletionSound,
 } from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import {
@@ -39,6 +40,14 @@ import {
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
 import {
+  isKeepAwake,
+  KEEP_AWAKE_DEFAULT,
+  KEEP_AWAKE_DETAIL,
+  KEEP_AWAKE_LABEL,
+  KEEP_AWAKE_LIST,
+  KEEP_AWAKE_OPTION_LABEL,
+} from "./keep-awake.js";
+import {
   isMacCommandMode,
   MAC_COMMAND_MODE,
   MAC_COMMAND_MODE_LABEL,
@@ -46,6 +55,13 @@ import {
   MAC_COMMANDS_LABEL,
 } from "./mac-commands.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
+import {
+  isPermissionMode,
+  PERMISSION_MODE_DEFAULT,
+  PERMISSION_MODE_HINT,
+  PERMISSION_MODE_LABEL,
+  PERMISSION_MODE_LIST,
+} from "./permission-mode.js";
 import {
   isPullRequestOpen,
   PULL_REQUEST_OPEN_DEFAULT,
@@ -111,6 +127,15 @@ function oneOf<Value extends string>(values: readonly Value[]) {
   const reads = Schema.is(Schema.Literals(values));
   return (value: UnparsedWireValue): value is Value => reads(value);
 }
+
+/** The sounds a recipe plays, every one but the account's own clips. */
+const RECIPE_SOUNDS = COMPLETION_SOUNDS.filter((sound) => !isCustomCompletionSound(sound));
+
+/** The sounds an agent's finish may play: the account's own finish clip first, as its menu lists it under Yours, then every recipe. */
+const FINISH_SOUNDS = [COMPLETION_SOUND.CUSTOM, ...RECIPE_SOUNDS];
+
+/** The sounds something that needs the account may play: its own ask clip first, then every recipe. */
+const ASK_SOUNDS = [COMPLETION_SOUND.CUSTOM_ASK, ...RECIPE_SOUNDS];
 
 const DIFF_LAYOUT_LIST = Object.values(DIFF_LAYOUT);
 const DIFF_INDICATORS_LIST = Object.values(DIFF_INDICATORS);
@@ -208,6 +233,30 @@ export const APP_SETTING_SCHEMA = {
     page: SETTINGS_PAGE.THIS_MAC,
     order: 2,
     // Nothing to run per write: the host reads the setting before each read for commands and as each command is about to run.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  /*
+   * Whether This Mac's host keeps the Mac awake for its agents. Kept on
+   * this device, since the Mac is the device's; the app hands it to the
+   * host in the host's own state (`@repo/host`'s `keep-awake-record.ts`).
+   */
+  keepAwake: choiceSetting({
+    field: "keepAwake",
+    id: APP_SETTING_ID.KEEP_AWAKE,
+    label: KEEP_AWAKE_LABEL,
+    detail: (settings) =>
+      KEEP_AWAKE_DETAIL[
+        KEEP_AWAKE_LIST.find((choice) => choice === settings("keepAwake")) ?? KEEP_AWAKE_DEFAULT
+      ],
+    values: KEEP_AWAKE_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => KEEP_AWAKE_OPTION_LABEL[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isKeepAwake),
+    default: KEEP_AWAKE_DEFAULT,
+    page: SETTINGS_PAGE.THIS_MAC,
+    order: 3,
+    visible: desktopAppDrawn,
+    // Nothing to run per write: This Mac's host is handed the choice as the settings are told again.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
   /*
@@ -358,10 +407,37 @@ export const APP_SETTING_SCHEMA = {
     visible: accountDrawn,
   }),
   /*
-   * When a sound plays as an agent finishes or asks, and which one. Account
-   * preferences, as Enter's choice is, each riding a part of the snapshot
-   * of its own. The sound's row stands only while one plays at all, and
-   * Settings draws a Play beside it.
+   * How a new agent's actions are approved: the mode a Claude Code agent
+   * starts on, Full access until the account chooses (`permission-mode.ts`).
+   * An account preference riding a part of the snapshot of its own, as the
+   * commit author does, since the service reads it as an agent starts
+   * wherever it was chosen. A running agent's own is changed from its
+   * model menu.
+   */
+  agentPermissionMode: choiceSetting({
+    field: "agentPermissionMode",
+    id: APP_SETTING_ID.AGENT_PERMISSION_MODE,
+    label: "Default permissions",
+    values: PERMISSION_MODE_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => PERMISSION_MODE_LABEL[choice],
+    optionHint: (choice) => PERMISSION_MODE_HINT[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isPermissionMode),
+    default: PERMISSION_MODE_DEFAULT,
+    page: SETTINGS_PAGE.AGENTS,
+    section: SETTING_SECTION.NEW_AGENTS,
+    order: 100,
+    // Nothing to run per write: the service reads the choice as an agent starts.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  /*
+   * When a sound plays as an agent finishes or asks, and which one for each:
+   * a finish, completed or failed, and something new that needs the
+   * account, a question or a command waiting on a Mac, so the two are told
+   * apart by ear. Account preferences, as Enter's choice is, each riding a
+   * part of the snapshot of its own. The sounds' rows stand only while one
+   * plays at all, and Settings draws a Play beside each.
    */
   soundWhen: choiceSetting({
     field: "soundWhen",
@@ -382,16 +458,34 @@ export const APP_SETTING_SCHEMA = {
   completionSound: choiceSetting({
     field: "completionSound",
     id: APP_SETTING_ID.COMPLETION_SOUND,
-    label: "Sound",
-    values: COMPLETION_SOUNDS,
+    label: "When an agent finishes",
+    values: FINISH_SOUNDS,
     token: (sound) => sound,
     optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
-    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(FINISH_SOUNDS)),
     default: COMPLETION_SOUND.CHIME,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.NOTIFICATIONS,
     order: 510,
     // Nothing to run per write: an agent's finish reads the choice as it plays.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: (view) =>
+      view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,
+  }),
+  askSound: choiceSetting({
+    field: "askSound",
+    id: APP_SETTING_ID.ASK_SOUND,
+    label: "When something needs you",
+    detail: "A question for you, or a command waiting on your Mac",
+    values: ASK_SOUNDS,
+    token: (sound) => sound,
+    optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(ASK_SOUNDS)),
+    default: COMPLETION_SOUND.KNOCK,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.NOTIFICATIONS,
+    order: 515,
+    // Nothing to run per write: an ask reads the choice as it plays.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: (view) =>
       view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,

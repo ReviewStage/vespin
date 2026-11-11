@@ -5,36 +5,36 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
 import {
-  keepDescriptionAttachment,
   DESCRIPTION_ATTACHMENT_KEEP,
+  keepDescriptionAttachment,
   readDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
+import { descriptionSections } from "@repo/features/description-document";
 import {
   PICTURE_BOUNDS,
   PICTURE_MEDIA_TYPE,
   PICTURE_TYPE,
   type Picture,
 } from "@repo/features/picture-wire";
-import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
-import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import { unparsedWire } from "@repo/wire";
 import { paddedTo, webmBytes } from "@repo/wire/testing";
 import { Effect, Option } from "effect";
 import { Base64 } from "effect/encoding";
 import { ACTION_RESULT_STATUS } from "../../core.js";
 import { CODER } from "./bounds.js";
-import type { InboxSandboxDoor } from "./inbox-image.js";
 import {
   DESCRIPTION_EDIT_REFUSAL,
   descriptionEditRejected,
   recordDescriptionEdit,
   TASK_PICTURE_FILE_REFUSAL,
 } from "./description-edit.js";
+import type { InboxSandboxDoor } from "./inbox-image.js";
 
 /**
  * A coding agent's `edit_description` adding a screenshot from its sandbox to its
@@ -185,7 +185,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
   );
 
   it.effect(
-    "a missing file, a file that is no image, one past the bound, and pictures past the plan's bound each refuse the call, nothing is saved, and no picture kept before the refusal holds a place in the bound",
+    "a missing file, a file that is no image, one past the bound, pictures past the plan's bound, and a later note's link that leads nowhere each refuse the call, nothing is saved, and no picture kept before the refusal holds a place in the bound",
     () =>
       Effect.gen(function* () {
         const { owner, taskId, agentId } = yield* openAgentTask;
@@ -231,7 +231,27 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           descriptionEditRejected(`${TASK_PICTURE_FILE_REFUSAL.TOO_LARGE} huge.png`),
           descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_PICTURES),
         ]);
-        assert.equal(Option.getOrThrow(yield* readTask(owner, taskId)).text, before);
+        // A link written before the tool that answers its id has answered holds a placeholder, which leads nowhere.
+        const placeholder = "https://vespin.dev/acme/agent/{AGENT}";
+        const unread = yield* recordDescriptionEdit(
+          { userId: owner, taskId },
+          { agentId },
+          unparsedWire({
+            notes: [
+              { kind: "add", section: "Approach", text: "- The members page lists invites." },
+              { kind: "add", section: "Approach", text: `- Started [@its agent](${placeholder}).` },
+            ],
+          }),
+          0,
+          sandbox,
+        );
+        assert.ok(
+          unread.status === ACTION_RESULT_STATUS.REJECTED && unread.reason.includes(placeholder),
+          JSON.stringify(unread),
+        );
+        const stored = Option.getOrThrow(yield* readTask(owner, taskId));
+        assert.equal(stored.text, before);
+        assert.deepEqual(stored.agentEdits, []);
         assert.deepEqual(lastPlace, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           taken: 1,

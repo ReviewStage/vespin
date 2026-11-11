@@ -38,8 +38,11 @@
 import type { LaunchPath } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
+import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
+import type { CheckoutDiffRange } from "@repo/features/checkout-diff";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
   type Brand,
@@ -82,22 +85,24 @@ export interface MachinePlace {
  * Where a machine keeps an agent's things, decided from the agent alone, so
  * a launch names them before the machine is asked anything: its checkout,
  * where the harness starts and the instructions name, where the member's
- * installed skills are installed and where they are written for that, the
- * folder a message's files are written under, the Claude Code CLI and the
+ * installed skills are installed and where they are written for that, none
+ * on a machine whose agents are handed none, the folder a message's files are written under, the Claude Code CLI and the
  * Codex a launch runs, none where the harness's own default stands, and the
  * home Codex keeps its threads in.
  */
 export interface MachineLayout {
   readonly checkoutPath: string;
-  readonly installedSkills: string;
-  readonly skillsUpload: string;
+  /** Where the member's installed skills are installed, which a launch's config names: a sandbox's; none on a device, whose harnesses find whatever skills the machine's own home holds. */
+  readonly installedSkills: string | undefined;
+  /** Where the member's installed skills are written for that; none where they are not installed. */
+  readonly skillsUpload: string | undefined;
   readonly attachments: string;
   /** Where the agent saves a file the service reads back, a screenshot it shows or a page it posts: a folder the service's reads reach on that machine. */
   readonly sharedFiles: string;
   readonly claudeExecutable: string | undefined;
   /** The image's Codex in a sandbox, and on a Mac the one it checked against the pin; none on a Mac that checked none yet, which runs no Codex agent. */
   readonly codexExecutable: string | undefined;
-  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk, and on a Mac its default under the agent's own home, named where the runner mirrors it (`transcriptsKept`); none on an older Mac, whose Codex keeps that default unnamed. */
+  /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk; none on a Mac, whose Codex keeps its own default under the machine's home, which its runner finds by itself. */
   readonly codexHome: string | undefined;
   /**
    * Whether the runner reads its lines past its config from the service
@@ -137,6 +142,8 @@ export interface RunnerMark {
   readonly firstSequence: number;
   /** None for a launch from before fingerprints were recorded. */
   readonly fingerprint?: string;
+  /** The permission mode the launch runs its agent in; none for a launch from before it was recorded, and for a Mac's, whose sends never pass it by. */
+  readonly permissionMode?: AgentPermissionMode;
   /** Whether the launch reads its lines from the service (`MachineLayout`'s `linesRead`); none for one the service writes them to the stdin of, a launch from before the read among them. */
   readonly linesRead?: boolean;
 }
@@ -231,6 +238,34 @@ export interface DeliveredCredentials {
   readonly env: Readonly<Record<string, string>>;
   readonly swaps: LaunchSwaps;
 }
+
+/** What a checkout's restore came to: put back, the snapshot not in the checkout any more, a failure, or a machine that restores none, a Mac whose host predates the line. */
+export const RESTORE_OUTCOME = {
+  RESTORED: "restored",
+  MISSING: "missing",
+  FAILED: "failed",
+  UNSUPPORTED: "unsupported",
+} as const;
+
+export type RestoreOutcome = (typeof RESTORE_OUTCOME)[keyof typeof RESTORE_OUTCOME];
+
+/** What a diff of a session's checkout came to: diffed, a commit it was handed missing from the checkout, the diff failed, or a machine that diffs none. */
+export const CHECKOUT_DIFF_OUTCOME = {
+  DIFFED: "diffed",
+  MISSING: "missing",
+  FAILED: "failed",
+  UNSUPPORTED: "unsupported",
+} as const;
+
+/** The outcome of a diff: the diff git printed where it diffed, and why not otherwise. */
+export type CheckoutDiffOutcome =
+  | { readonly outcome: typeof CHECKOUT_DIFF_OUTCOME.DIFFED; readonly diff: string }
+  | {
+      readonly outcome: Exclude<
+        (typeof CHECKOUT_DIFF_OUTCOME)[keyof typeof CHECKOUT_DIFF_OUTCOME],
+        typeof CHECKOUT_DIFF_OUTCOME.DIFFED
+      >;
+    };
 
 /** A runner launched in a place: the place, and the machine's own id for the runner's process. */
 export interface RunnerHandle extends MachinePlace {
@@ -455,6 +490,31 @@ export interface AgentMachineService {
    * false.
    */
   readonly wrote: (handle: RunnerHandle, text: string) => Effect.Effect<boolean, SandboxError>;
+  /**
+   * The session's checkout put back to the snapshot its runner took before
+   * a turn, by the one restore script both machines run
+   * (`@repo/features/checkout-restore`), once the runner is ended: in a
+   * sandbox, woken where it stopped; on a Mac, by a restore line its host
+   * follows and settles with the script's exit. Refused (`LaunchRefused`)
+   * where the Mac is away or removed, as a line to it is. A sandbox's
+   * restore is a use of it, recorded in the store (`../sandbox-use.ts`).
+   */
+  readonly restoreCheckout: (
+    session: string,
+    snapshot: TurnCheckoutSnapshot,
+  ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices>;
+  /**
+   * The diff of the session's checkout between two snapshots its runner
+   * recorded, or one and the working tree, by the one diff script both
+   * machines run (`@repo/features/checkout-diff`): in a sandbox, woken where
+   * it stopped; on a Mac, asked of its host. Refused (`LaunchRefused`) where
+   * the Mac is away or removed, as a line to it is. A sandbox's diff is a
+   * use of it, recorded in the store (`../sandbox-use.ts`).
+   */
+  readonly diffCheckout: (
+    session: string,
+    range: CheckoutDiffRange,
+  ) => Effect.Effect<CheckoutDiffOutcome, SandboxError | LaunchRefused, DatabaseServices>;
   /** The runner's exit code, null while it runs, or gone where the machine no longer knows it; waiting at most `within` for the exit. */
   readonly runnerExit: (
     handle: RunnerHandle,

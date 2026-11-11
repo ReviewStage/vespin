@@ -35,7 +35,7 @@ import {
   type SandboxService,
   UP_STATUSES,
 } from "@repo/sandbox";
-import { Duration, Effect, Option, Result, Schedule } from "effect";
+import { DateTime, Duration, Effect, Option, Result, Schedule } from "effect";
 import { HostedEnvironment } from "../environment.js";
 import { SESSION_TAG } from "./agent-sandbox-open.js";
 import { CODER } from "./coder-host/bounds.js";
@@ -76,6 +76,12 @@ const ARCHIVE_RUN_SCRIPT = [
   `echo "--- exit $status" >> ${SETUP_LOG} 2> /dev/null`,
   'exit "$status"',
 ].join("\n");
+
+/** How an archive script that exited ran: when it started, and its exit. */
+export interface ArchiveScriptRan {
+  readonly ranAt: Date;
+  readonly exitCode: number;
+}
 
 /** A repository's archive script as an archive runs it: the bash, and the workspace's variables it runs with. */
 export interface ArchiveScript {
@@ -163,7 +169,8 @@ const exitWithin = (api: SandboxService, place: SandboxRunning, commandId: strin
  * The archive script run in the session's newest sandbox, as the agent's
  * user from its checkout, resumed first where it stopped, and how it ended
  * logged: its exit with its stderr's tail, redacted, or that it ran past its
- * bound and was ended, or that no sandbox stood to run it in. Fails only
+ * bound and was ended, or that no sandbox stood to run it in. Answers when
+ * it started and how it exited, or nothing where it did not exit. Fails only
  * where the sandbox refused a call, its snapshot gone among them, which the
  * caller logs and lets go of.
  */
@@ -171,17 +178,19 @@ export const archiveScriptRun = (
   api: SandboxService,
   sessionId: string,
   archive: ArchiveScript,
-): Effect.Effect<void, SandboxError> =>
+): Effect.Effect<ArchiveScriptRan | undefined, SandboxError> =>
   Effect.gen(function* () {
     const place = yield* runningOf(api, sessionId);
     if (place === undefined) {
-      return yield* Effect.logInfo(
+      yield* Effect.logInfo(
         "An archived agent's sandbox was already gone, so its archive script was skipped",
       );
+      return undefined;
     }
     yield* api.writeFiles(place, [
       { path: ARCHIVE_FILE, contents: new TextEncoder().encode(archive.script), mode: 0o644 },
     ]);
+    const ranAt = yield* DateTime.nowAsDate;
     const commandId = yield* api.start(place, {
       user: AGENT_USER,
       command: "bash",
@@ -195,18 +204,22 @@ export const archiveScriptRun = (
       },
     });
     const exit = yield* exitWithin(api, place, commandId);
-    if (Option.isNone(exit)) {
+    // Note that an exit still null is one the repeat stopped asking after, which ran past its bound too.
+    if (Option.isNone(exit) || exit.value === null) {
       yield* Effect.ignore(api.kill(place, commandId));
-      return yield* Effect.logWarning(
+      yield* Effect.logWarning(
         `An archive script ran past ${Duration.format(ARCHIVE_SCRIPT.RUN_TIMEOUT)} and was ended`,
       );
+      return undefined;
     }
     if (exit.value === COMMAND_GONE) {
-      return yield* Effect.logWarning("An archive script's sandbox stopped before it exited");
+      yield* Effect.logWarning("An archive script's sandbox stopped before it exited");
+      return undefined;
     }
     const stderr = yield* api
       .commandStderrTail(place, commandId, Object.values(archive.environment))
       .pipe(Effect.orElseSucceed(() => undefined));
     const said = `An archive script exited ${String(exit.value)}: ${stderr ?? "nothing printed"}`;
     yield* exit.value === 0 ? Effect.logInfo(said) : Effect.logWarning(said);
+    return { ranAt, exitCode: exit.value };
   }).pipe(Effect.withSpan("web/archiveScript"));

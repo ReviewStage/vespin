@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { act, createElement, type ReactElement } from "react";
+import { act, createElement, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
-import { CODE_ROW, CodeCard, type CodeRow } from "./code-card.js";
+import { CODE_ROW, CodeCard, CodeCardHeader, type CodeRow } from "./code-card.js";
 
 /**
  * code-card.test.ts -- a code card names its lines in its header with a
@@ -14,7 +14,8 @@ import { CODE_ROW, CodeCard, type CodeRow } from "./code-card.js";
  * are cut as the block is. A block drawn as rows is cut as any block is; one
  * may copy other words than it shows; and one whose
  * body the caller draws keeps the header, the Copy of the lines it names,
- * and the actions beside it, with no cut. Synthetic code.
+ * and the actions beside it, with no cut; and a header whose language is
+ * picked names its press by it and says while its menu is open. Synthetic code.
  */
 
 declare global {
@@ -208,4 +209,28 @@ test("a block drawn as rows keeps an empty last row", () => {
     "old",
     "\n",
   ]);
+});
+
+test("a header whose language is picked names the press by it, and says while its menu is open", () => {
+  function Picked(): ReactElement {
+    const [open, setOpen] = useState(false);
+    return createElement(CodeCardHeader, {
+      title: "Shell",
+      copied: "pnpm install",
+      copy: noCopy,
+      picker: {
+        label: "Language: Shell",
+        open,
+        menuId: "menu",
+        onPress: () => setOpen(!open),
+        menu: open ? createElement("div", { id: "menu" }, "Languages") : null,
+      },
+    });
+  }
+  draw(createElement(Picked));
+  expect(buttonNamed("Language: Shell")?.getAttribute("aria-expanded")).toBe("false");
+  press("Language: Shell");
+  expect(buttonNamed("Language: Shell")?.getAttribute("aria-controls")).toBe("menu");
+  expect(document.getElementById("menu")?.textContent).toBe("Languages");
+  expect(buttonNamed("Copy code")).toBeDefined();
 });

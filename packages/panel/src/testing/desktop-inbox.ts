@@ -36,7 +36,6 @@ import {
 } from "@repo/features/inbox-wire";
 import { answeredNow, closedNow } from "@repo/features/inbox-writes";
 import { pageFrameUrl } from "@repo/features/page-frame";
-import type { PageLine } from "@repo/features/page-wire";
 import { TASK_SKILL_SOURCE, TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksFileParams } from "@repo/features/tasks-view";
 import {
@@ -288,8 +287,6 @@ class InboxWorld {
   root: Root | undefined;
   /** Each task's pages as a read of them answers. */
   taskPages = new Map<string, readonly (typeof FUNNEL)[]>();
-  /** Each agent's own pages, which an older link names under the agent, as a read of them answers, none for an agent the reader cannot reach. */
-  agentPages = new Map<string, readonly PageLine[]>();
   /** The task's agents as the service lists them, archived ones among them. */
   listedAgents: readonly AgentSummary[] = [AGENT];
   /** Each task's inbox as the service answers a read of it from the start. */
@@ -434,7 +431,7 @@ function heldInboxes() {
     isHeld,
     /** Every holder the host holds, as scopes. */
     heldScopes: (): AgentInboxScope[] =>
-      [INBOX_SCOPE_KIND.PLAN, INBOX_SCOPE_KIND.AGENT].flatMap((kind) =>
+      Object.values(INBOX_SCOPE_KIND).flatMap((kind) =>
         Object.keys(held[kind]).map((id) => ({ kind, id })),
       ),
     /** The holders as the host holds them now, for a mount to hand the window first. */
@@ -515,7 +512,6 @@ beforeEach(() => {
   ]);
   world.startRead = undefined;
   world.taskPages = new Map([[BILLING.id, [FUNNEL]]]);
-  world.agentPages = new Map();
   world.listedAgents = [AGENT];
   world.feedRefused = false;
   world.feedUnread = false;
@@ -656,6 +652,7 @@ export function mount({
   readerKnown = true,
   toasts = false,
   chosen: firstChosen,
+  byAddress = false,
   drawnWhileOpen = false,
   bundles,
 }: {
@@ -676,6 +673,8 @@ export function mount({
   toasts?: boolean;
   /** The item the Inbox opens on, as a row's press chose it before; none where nothing is chosen yet. */
   chosen?: InboxChoice;
+  /** Whether the item chosen stands at its address alone, held by no door, as a reloaded window opens it. */
+  byAddress?: boolean;
   /** Whether the Inbox is drawn only while open, as the shell draws it. */
   drawnWhileOpen?: boolean;
   /** The bundles the window's surfaces load, where the test hands importers of its own; the window's where none are handed. */
@@ -705,13 +704,8 @@ export function mount({
   });
   // Note that a workspace's people are laid on the document as the window holds them, as the host lays them.
   holdMembers(reads.deliverMembers, () => ({ rows: { members: world.members } }));
-  // Note that a task's or an agent's pages are laid on the document as the window holds them, as the host lays them.
-  holdPages(reads.deliverPages, (place) => ({
-    rows:
-      "taskId" in place
-        ? (world.taskPages.get(place.taskId) ?? [])
-        : (world.agentPages.get(place.agentId) ?? []),
-  }));
+  // Note that a task's pages are laid on the document as the window holds them, as the host lays them.
+  holdPages(reads.deliverPages, (place) => ({ rows: world.taskPages.get(place.taskId) ?? [] }));
   const asked: Asked = {
     shownTasks: [],
     shownAgents: [],
@@ -832,7 +826,7 @@ export function mount({
   const leaves = leavingBy(() => {
     asked.closed += 1;
   });
-  const held = firstChosen === undefined ? null : holdingInboxChoice(firstChosen);
+  const held = firstChosen === undefined || byAddress ? null : holdingInboxChoice(firstChosen);
   const drawn = createElement(Fragment, null, leaves, held, page);
   act(() => world.root?.render(withQueryClient(router.provide(drawn))));
   return { page: container, asked, windowPath: () => router.history.location.pathname };
@@ -1053,7 +1047,8 @@ export function sendHeld(pane: HTMLElement): boolean {
 
 /**
  * What the open item's box says outside its controls, its files, its note
- * line, and the agent's own presses (its model chip, which names the model),
+ * line, and the agent's own presses (its model chip, which names the model,
+ * and the chips after the + that name where it runs and what it forwards),
  * Send's words among it: nothing but a notice's Got it, or what an
  * unfinished answer lacks once a send of it was refused, since the box
  * carries no helper text, its Send held until it holds something to send.
@@ -1063,7 +1058,7 @@ export function footWords(pane: HTMLElement): string {
   const copy = box.cloneNode(true);
   assert.ok(copy instanceof Element);
   for (const part of copy.querySelectorAll(
-    ":scope > :is([data-inbox-draft-ask], .agent-composer-field), .attached-files, .ui-composer-foot-note, .message-box-actions",
+    ":scope > :is([data-inbox-draft-ask], .agent-composer-field), .attached-files, .ui-composer-foot-note, .ui-composer-foot-tools, .message-box-actions",
   )) {
     part.remove();
   }

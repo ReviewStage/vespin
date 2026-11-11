@@ -9,6 +9,7 @@
  */
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { localAgentRefusalWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
@@ -33,7 +34,7 @@ import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
 import { agentTab, draftTab } from "@repo/ui/tab-strip-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sendMutation } from "../act-mutations.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useToast } from "../toast.js";
@@ -94,7 +95,9 @@ const NO_WORKSPACES: readonly Workspace[] = [];
  * same again (`new-task-composer.tsx`), its prompt, the files attached,
  * the model picked on its chip, none where the chip was left on the
  * account's default, so the service runs the default it holds at the start,
- * and the MCP servers its + menu switched off, none by default.
+ * the MCP servers its + menu switched off, none by default, and the mode its
+ * Permissions row picked, none where left on the member's Default
+ * permissions, which the service reads at the start as it does the model's.
  */
 export interface NewTaskAgent {
   readonly idempotencyKey: string;
@@ -102,11 +105,13 @@ export interface NewTaskAgent {
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
   readonly disabledServers: readonly string[];
+  /** The mode the agent starts in, as the chip's Permissions row picked it; none for the member's Default permissions. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
   /** The repositories the agent works in beside the task's, `owner/name`, which the card's repository chip picks after the task's own; none where left out. */
   readonly alsoRepositories?: readonly string[] | undefined;
 }
 
-/** The agent a task's start starts on it, as the act carries it: the card's key, the prompt, the files where any, the chip's model where one was picked, the servers switched off where any, and the repositories beside the task's where any. */
+/** The agent a task's start starts on it, as the act carries it: the card's key, the prompt, the files where any, the chip's model where one was picked, the servers switched off where any, the mode where one was picked, and the repositories beside the task's where any. */
 function agentRequest(handed: NewTaskAgent) {
   const also = handed.alsoRepositories ?? [];
   return {
@@ -117,6 +122,9 @@ function agentRequest(handed: NewTaskAgent) {
     ...(handed.disabledServers.length === 0
       ? undefined
       : { disabledServers: handed.disabledServers }),
+    ...(handed.permissionMode === undefined
+      ? undefined
+      : { permissionMode: handed.permissionMode }),
     ...(also.length === 0
       ? undefined
       : { alsoRepositories: also.map((repository) => ({ repository })) }),
@@ -407,6 +415,8 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   >(undefined);
   // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
   const [homeNewTasks, setHomeNewTasks] = useState(0);
+  // A plain New task pressed while the tab was not shown, read once the window stands where the press brought the tab.
+  const [newTaskAway, setNewTaskAway] = useState(false);
   // New task's own page: an agent's start under way, or a start Home's own composer refused while Home stood.
   const [page, setPage] = useState<NewTaskPage | undefined>(undefined);
   // How many starts Home's own composer had refused, each a new opening it draws afresh.
@@ -445,7 +455,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     // service answers; a refusal opens the card again where it was left.
     const { handed, card } = from;
     const stays = !opensNewTask;
-    // Note that the agent's first line is stamped at the press, which its line after the answer keeps.
+    // Note that the starting page's line is stamped at the press.
     const sentAt = Date.now();
     const line =
       handed === undefined || stays
@@ -563,7 +573,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
         // what stands now is the developer's since, a New task opened again among it, and stays.
         if (stays) {
           if (handed === undefined) setNewTaskAsk(undefined);
-          else openAgent(answer.planId, handed, answer.agentStart, from.device, sentAt);
+          else openAgent(answer.planId, handed, answer.agentStart, from.device);
           const { agentStart } = answer;
           sayStarted(
             answer.planId,
@@ -578,7 +588,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
           return undefined;
         }
         letGoOfPage();
-        openAgent(answer.planId, handed, answer.agentStart, from.device, sentAt);
+        openAgent(answer.planId, handed, answer.agentStart, from.device);
         return undefined;
       },
       (refused: Error) =>
@@ -617,15 +627,9 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     handed: NewTaskAgent,
     started: AgentAgentAnswer | undefined,
     device: MacOffer | undefined,
-    sentAt: number,
   ) => {
     if (started !== undefined && !("failure" in started)) {
-      agents.onTaskStarted(planId, started.agent, {
-        key: handed.idempotencyKey,
-        prompt: handed.prompt,
-        attachments: handed.attachments,
-        sentAt,
-      });
+      agents.onTaskStarted(planId, started.agent);
       showTab(planId, agentTab(started.agent.id));
       return;
     }
@@ -647,16 +651,31 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   const newTaskWith = (preset: NewTaskPreset | undefined) =>
     setNewTaskAsk((standing) => standing ?? { preset });
   // Home opens on New task's composer, so a plain New task there takes its
-  // caret rather than drawing the same card again in a dialog over it. Note
-  // that the tab need not be shown, because every New task press brings it
-  // forward first.
-  const newTask = () => {
+  // caret rather than drawing the same card again in a dialog over it.
+  const newTaskHere = () => {
     if (place.atHome() && signedIn && newTaskAsk === undefined) setHomeNewTasks((n) => n + 1);
     else newTaskWith(undefined);
+  };
+  // Note that a press while Settings holds the window brings the tab forward
+  // first, and the window stands Home only once that lands, so the press is
+  // read once the place it landed on is drawn rather than where it was made.
+  const newTask = () => {
+    if (shown) newTaskHere();
+    else setNewTaskAway(true);
   };
   // The dialog is the Tasks tab's, so Settings taking the window puts it
   // away rather than leaving it to stand again on the way back.
   if (!shown && newTaskAsk !== undefined) setNewTaskAsk(undefined);
+  // Note that a press from Settings is read only once Home's composer is drawn, because the composer takes no ask
+  // standing as it is first drawn, and a phone's first draw takes no caret of its own; and that a press whose move
+  // left the tab unshown, as one kept at a page's ask, opens nothing.
+  const newTaskHereNow = useRef(newTaskHere);
+  newTaskHereNow.current = newTaskHere;
+  useEffect(() => {
+    if (!newTaskAway) return;
+    setNewTaskAway(false);
+    if (shown) newTaskHereNow.current();
+  }, [newTaskAway, shown]);
 
   // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.

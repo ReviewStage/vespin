@@ -1,29 +1,54 @@
 import {
+  answerFailedOf,
+  HELD_WORDS,
+  type HeldAsk as HeldAskOf,
+  heldAbout,
+  heldWith,
+  markedAsk as markedAskOf,
+  SETTLED_WORD,
+  sameHeld,
+} from "@repo/features/agent-approval-model";
+import {
   AGENT_PERMISSION_MODE,
   type AgentPendingApproval,
   type AgentPermissionMode,
   APPROVAL_ANSWER,
   APPROVAL_BOUNDS,
-  APPROVAL_STATUS,
   type ApprovalAnswerRequest,
-  type ApprovalStatus,
 } from "@repo/features/agent-approval-wire";
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
-import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
+import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { providerOf } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import {
+  PERMISSION_MODE_HINT,
+  PERMISSION_MODE_LABEL,
+  PERMISSION_MODE_LIST,
+  PERMISSION_MODE_WORDS,
+} from "@repo/settings";
 import {
   APPROVAL_ACTION,
   type ApprovalAction,
   ApprovalActions,
   AskFirstIcon,
   AutoApproveIcon,
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
+  COMPOSER_LOOK,
+  COMPOSER_SEND_TONE,
+  DENY_NOTE_WORDS,
+  type DenyNoteDoors,
   FullAccessIcon,
   type MenuRow,
   STATUS_TONE,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { useQuery } from "@tanstack/react-query";
 import {
   createContext,
   type ReactNode,
@@ -36,6 +61,8 @@ import {
 import type { AgentActAnswer, Unreached } from "../act.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
+import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
+import { MessageBox, useMessageBox } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
 
 /**
@@ -55,9 +82,16 @@ import type { HeldCall } from "./transcript-blocks.js";
  * started with. Off Full access the model chip wears the mode's glyph
  * before the model's name, so a mode that asks is seen at rest. The host
  * draws a change on the agent's row at once and takes it back where the
- * service refused it, which the composer says under its bar. Only a Claude
- * Code agent asks, so no other is offered a mode: a Codex agent runs with
- * full access for now.
+ * service refused it, which the composer says under its bar. A new
+ * agent's menu offers the same row before it starts, on New task's box and
+ * a draft agent's, a fork's and a continue's among them
+ * (`useNewAgentPermissionMode`): it opens on the member's Default
+ * permissions, a pick goes with the Start, so the first launch already runs
+ * on it, and it writes no setting, since it is the new agent's alone; its
+ * submenu says nothing of a next turn. Claude Code
+ * and Codex agents each ask in their own harness's terms, which these words
+ * and hints, Codex's own, fit both; an agent on neither asks nothing, so no
+ * other is offered a mode.
  *
  * A call the agent holds waits on a member's answer (`pendingApprovals`),
  * which the call's own row says, found by the call's id (`toolUseId`): its
@@ -99,22 +133,6 @@ export type ApprovalAnswerWriter = (
   request: ApprovalAnswerRequest,
 ) => Promise<ApprovalActAnswer>;
 
-/** What the menu calls each mode, and what each does, in the Codex app's words. */
-export const MODE_WORDS = {
-  [AGENT_PERMISSION_MODE.ASK]: {
-    label: "Ask for approval",
-    hint: "Always ask to edit external files and use the internet",
-  },
-  [AGENT_PERMISSION_MODE.AUTO]: {
-    label: "Approve for me",
-    hint: "Only ask for actions detected as potentially unsafe",
-  },
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: {
-    label: "Full access",
-    hint: "Unrestricted access to the internet and any file on your computer",
-  },
-} as const satisfies Record<AgentPermissionMode, { label: string; hint: string }>;
-
 /** The glyph each mode wears: a hand, a shield round a prompt, a shield round a "!". */
 export const MODE_GLYPH = {
   [AGENT_PERMISSION_MODE.ASK]: AskFirstIcon,
@@ -123,46 +141,19 @@ export const MODE_GLYPH = {
 } as const satisfies Record<AgentPermissionMode, () => React.JSX.Element>;
 
 /** The modes in the order the menu offers them: the most asking first, Full access last, as Codex orders its own. */
-export const MODES = [
-  AGENT_PERMISSION_MODE.ASK,
-  AGENT_PERMISSION_MODE.AUTO,
-  AGENT_PERMISSION_MODE.FULL_ACCESS,
-] as const;
+export const MODES = PERMISSION_MODE_LIST;
 
 /** What the modes are called as a row among the model menu's. */
-export const MODE_GROUP = "Permissions";
+export const MODE_GROUP = PERMISSION_MODE_WORDS.GROUP;
 
 /** The question the modes answer, heading their submenu. */
-export const MODE_QUESTION = "How should actions be approved?";
+export const MODE_QUESTION = PERMISSION_MODE_WORDS.QUESTION;
 
 /** When a change reaches the agent, said under the menu and on the change's toast. */
-export const MODE_APPLIES = "Takes effect from the next turn.";
+export const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
 
 /** Why a change of mode did not take, said under the composer's bar. */
-const MODE_CHANGE_FAILED = "The permission mode could not be changed.";
-
-/** What the composer says over its field while an ask waits. */
-export const DENIES_WAITING = "Sending a message denies the waiting approval.";
-
-/** What a held call's line says: that it waits, then how it came out. */
-const HELD_WORDS = {
-  WAITING: "Waiting for approval",
-  ALLOWED: "Allowed",
-  ALLOWED_FOR_AGENT: "Always allowed",
-  DENIED: "Denied",
-  EXPIRED: "Expired",
-  ELSEWHERE: "Answered elsewhere",
-} as const;
-
-/** Why an answer did not go, said under the card's row: refused as not the reader's to answer or gone, or not heard back, which a press again may mend. */
-const ANSWER_FAILED = {
-  NOT_PERMITTED: "Only a member who controls this agent can answer it.",
-  NOT_FOUND: "This approval is no longer here.",
-  UNANSWERED: "The answer did not reach the agent. Try again.",
-} as const;
-
-/** Who asks, where a subagent does, said in the row's body. */
-const SUBAGENT_ASKS = "Asked by a subagent.";
+const MODE_CHANGE_FAILED = PERMISSION_MODE_WORDS.CHANGE_FAILED;
 
 /** The answer each of the card's presses sends. */
 const WIRE_ANSWER = {
@@ -171,32 +162,25 @@ const WIRE_ANSWER = {
   [APPROVAL_ACTION.DENY]: APPROVAL_ANSWER.DENY,
 } as const satisfies Record<ApprovalAction, (typeof APPROVAL_ANSWER)[keyof typeof APPROVAL_ANSWER]>;
 
-/** The word an ask's line settles into by the status it stands at, as this window's answer lands or as an answer finds it settled already. */
-const SETTLED_WORD = {
-  [APPROVAL_STATUS.PENDING]: undefined,
-  [APPROVAL_STATUS.ALLOWED]: HELD_WORDS.ALLOWED,
-  [APPROVAL_STATUS.ALLOWED_FOR_AGENT]: HELD_WORDS.ALLOWED_FOR_AGENT,
-  [APPROVAL_STATUS.DENIED]: HELD_WORDS.DENIED,
-  [APPROVAL_STATUS.EXPIRED]: HELD_WORDS.EXPIRED,
-} as const satisfies Record<ApprovalStatus, string | undefined>;
-
 /** The mode an agent runs on: full access where its row names none. */
 function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMode {
   return agent.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS;
 }
 
-/** The mode chip's control: the mode it shows, a change, and why the last did not take. */
+/** The mode chip's control: the mode it shows, a change, when a change reaches the agent, and why the last did not take. */
 export interface AgentModeControl {
   readonly mode: AgentPermissionMode;
-  /** Changes the agent's mode from its next turn. */
+  /** Changes the agent's mode: from its next turn for a running agent, from its first for a new one. */
   readonly choose: (mode: AgentPermissionMode) => void;
+  /** When a change reaches the agent, said under the Permissions submenu: from its next turn for a running agent; nothing for a new one, whose first launch runs on it. */
+  readonly applies: string | undefined;
   /** Why the last change did not take, said under the composer's bar; nothing while none failed. */
   readonly note: string | undefined;
 }
 
 /**
  * The mode chip of an agent: none for an agent that never asks, which is
- * every agent but a Claude Code one. Note that the mode is read off the
+ * every agent on neither Claude Code nor Codex. Note that the mode is read off the
  * agent's row, which the host draws a change on at once, as the model
  * chip's is.
  */
@@ -209,7 +193,12 @@ export function useAgentPermissionMode(input: {
   const latest = useRef(input);
   latest.current = input;
   const writes = useRef(0);
-  if (agent === undefined || agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE) return undefined;
+  if (
+    agent === undefined ||
+    (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
+  ) {
+    return undefined;
+  }
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
     writes.current += 1;
@@ -217,7 +206,7 @@ export function useAgentPermissionMode(input: {
     setNote(undefined);
     showToast({
       replayUnmasked: true,
-      words: `${MODE_WORDS[mode].label}. ${MODE_APPLIES}`,
+      words: `${PERMISSION_MODE_LABEL[mode]}. ${MODE_APPLIES}`,
       tone: STATUS_TONE.COMPLETE,
       glyph: MODE_GLYPH[mode],
     });
@@ -229,7 +218,38 @@ export function useAgentPermissionMode(input: {
   return {
     mode: modeOf(agent),
     choose,
+    applies: MODE_APPLIES,
     note: note?.agentId === agent.id ? note.words : undefined,
+  };
+}
+
+/** The member's Default permissions, which a new agent starts on where its menu picks none: full access until the settings are read, as the service's own default is. */
+const selectDefaultMode = (state: AppStateSnapshot): AgentPermissionMode =>
+  selectAppSettingsView(state)?.agentPermissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS;
+
+/**
+ * The Permissions row of a new agent's menu: the mode picked on it, else
+ * the member's Default permissions, for a model whose harness takes a mode,
+ * a Claude model's Claude Code or a GPT model's Codex; none before a model
+ * is chosen, or for one on neither. Note that a pick is the new agent's
+ * alone, sent with its Start, and writes no setting.
+ */
+export function useNewAgentPermissionMode(input: {
+  /** The catalog id of the model the agent would start on; none before one is chosen. */
+  model: string | undefined;
+  /** The mode picked on the row; none while the agent would start on the member's default. */
+  picked: AgentPermissionMode | undefined;
+  choose: (mode: AgentPermissionMode) => void;
+}): AgentModeControl | undefined {
+  const fallback =
+    useQuery({ ...appStateQuery, select: selectDefaultMode }).data ??
+    AGENT_PERMISSION_MODE.FULL_ACCESS;
+  if (input.model === undefined || providerOf(input.model) === undefined) return undefined;
+  return {
+    mode: input.picked ?? fallback,
+    choose: input.choose,
+    applies: undefined,
+    note: undefined,
   };
 }
 
@@ -246,25 +266,20 @@ export function modeMenuRows(): readonly MenuRow[] {
     const Glyph = MODE_GLYPH[mode];
     return {
       id: mode,
-      label: MODE_WORDS[mode].label,
+      label: PERMISSION_MODE_LABEL[mode],
       icon: <Glyph />,
-      detail: MODE_WORDS[mode].hint,
+      detail: PERMISSION_MODE_HINT[mode],
       detailUnder: true,
     };
   });
 }
 
 /** One ask as this window holds it: the ask, the answer out, how it settled, and why an answer did not go. */
-interface HeldAsk {
-  readonly approval: AgentPendingApproval;
-  readonly answering?: ApprovalAction | undefined;
-  /** The word its line settled into; none while it waits. */
-  readonly settled?: string | undefined;
-  /** Whether it was settled only by leaving the row's waiting asks, which its return to them takes back. */
-  readonly vanished?: boolean | undefined;
-  /** Whether a message went while it waited, which the service denies it with; a return to the waiting asks clears it. */
-  readonly messaged?: boolean | undefined;
-  readonly error?: ShownError | undefined;
+type HeldAsk = HeldAskOf<ApprovalAction, ShownError>;
+
+/** An ask marked as a message's to deny, or the mark taken back, by where the agent stands. */
+function markedAsk(ask: HeldAsk, messaged: boolean, agent: Pick<AgentSummary, "status">): HeldAsk {
+  return markedAskOf(ask, messaged, agent.status === AGENT_STATUS.RUNNING);
 }
 
 /** One ask as its call's row draws it. */
@@ -284,46 +299,6 @@ export interface AgentApprovalsControl {
   readonly waiting: number;
   /** Says a message went while asks waited, which the service denies them with once it takes the message; a refused send takes that back. */
   readonly messageSent: (sent: Promise<AgentActAnswer>) => void;
-}
-
-/** The line an ask that stopped waiting with no answer of this window's settles into. */
-function vanishedLine(byMessage: boolean, running: boolean): string {
-  if (byMessage) return HELD_WORDS.DENIED;
-  return running ? HELD_WORDS.ELSEWHERE : HELD_WORDS.EXPIRED;
-}
-
-/**
- * The asks held with the agent's row laid over them: each waiting one taken
- * in, and each that stopped waiting with no answer of this window's settled.
- * Note that one settled only by leaving the waiting asks opens again as it
- * comes back to them, its last failure kept, because a write that left it
- * may still let it go, and an answer that did not reach the agent is the
- * reader's to send again.
- */
-function heldWith(
-  held: ReadonlyMap<string, HeldAsk>,
-  pending: readonly AgentPendingApproval[],
-  running: boolean,
-): ReadonlyMap<string, HeldAsk> {
-  const waiting = new Set(pending.map((each) => each.id));
-  const next = new Map(held);
-  for (const approval of pending) {
-    const was = next.get(approval.id);
-    if (was === undefined) next.set(approval.id, { approval });
-    else if (was.vanished === true) next.set(approval.id, { approval, error: was.error });
-  }
-  for (const [id, ask] of next) {
-    if (waiting.has(id) || ask.settled !== undefined || ask.answering !== undefined) continue;
-    next.set(id, { ...ask, settled: vanishedLine(ask.messaged === true, running), vanished: true });
-  }
-  return next;
-}
-
-/** Whether two holdings hold the same asks as they stand. */
-function sameHeld(a: ReadonlyMap<string, HeldAsk>, b: ReadonlyMap<string, HeldAsk>): boolean {
-  if (a.size !== b.size) return false;
-  for (const [id, ask] of a) if (b.get(id) !== ask) return false;
-  return true;
 }
 
 /**
@@ -417,16 +392,6 @@ export function useAgentApprovals(input: {
   };
 }
 
-/** An ask marked as a message's to deny, or the mark taken back, its line said again where it was settled by leaving the waiting asks. */
-function markedAsk(ask: HeldAsk, messaged: boolean, agent: Pick<AgentSummary, "status">): HeldAsk {
-  if (messaged) return ask.settled === undefined ? { ...ask, messaged: true } : ask;
-  if (ask.messaged !== true) return ask;
-  const running = agent.status === AGENT_STATUS.RUNNING;
-  return ask.vanished === true
-    ? { ...ask, messaged: false, settled: vanishedLine(false, running) }
-    : { ...ask, messaged: false };
-}
-
 /** An ask once its answer came back: settled as the answer says, or offered again with why it did not go. */
 function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string): HeldAsk {
   if ("approval" in answered) {
@@ -436,19 +401,12 @@ function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string)
     return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approvalStatus] };
   }
   // Note that a refusal names why, and only an answer not heard back asks for another press.
-  const refused =
-    answered.failure === AGENT_CALL_FAILURE.NOT_PERMITTED ||
-    answered.failure === AGENT_CALL_FAILURE.NOT_FOUND;
+  const { words, refused } = answerFailedOf(answered.failure);
   return {
     ...ask,
     answering: undefined,
     error: {
-      words:
-        answered.failure === AGENT_CALL_FAILURE.NOT_PERMITTED
-          ? ANSWER_FAILED.NOT_PERMITTED
-          : answered.failure === AGENT_CALL_FAILURE.NOT_FOUND
-            ? ANSWER_FAILED.NOT_FOUND
-            : ANSWER_FAILED.UNANSWERED,
+      words,
       failure: failureShown({
         surface: FAILURE_SURFACE.AGENT_APPROVAL,
         cause: "cause" in answered && answered.cause !== undefined ? answered.cause : answered,
@@ -461,14 +419,57 @@ function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string)
 
 const NO_ASKS: readonly AgentPendingApproval[] = [];
 
-/** What the row's body says of who asks and why: the subagent where one does, and the CLI's own words where it gave some. */
-function aboutOf(approval: AgentPendingApproval): string | undefined {
-  const asker = approval.subagentId === undefined ? undefined : SUBAGENT_ASKS;
-  // Note that the CLI's words are left out where they are the call's own description, which the row's line says already.
-  const why =
-    approval.description === approval.input.description ? undefined : approval.description;
-  const words = [asker, why].filter((each) => each !== undefined);
-  return words.length === 0 ? undefined : words.join(" ");
+/**
+ * The words that tell the agent why its call was denied, written in the
+ * composer's own box (`MessageBox`) as every message to it is, its `@` list
+ * the task's: under them a quiet Cancel, which offers the answers again, as
+ * Esc does, and Deny in the danger ink, which Enter presses too, with the
+ * words or without them, since they are optional.
+ */
+function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): React.JSX.Element {
+  const [words, setWords] = useState("");
+  const deny = () => {
+    if (busy) return;
+    const message = words.trim();
+    onDeny(message === "" ? undefined : message);
+  };
+  const box = useMessageBox({
+    draft: words,
+    setDraft: setWords,
+    placeholder: DENY_NOTE_WORDS.PLACEHOLDER,
+    label: DENY_NOTE_WORDS.LABEL,
+    maxLength: maxLength ?? APPROVAL_BOUNDS.MAX_MESSAGE_CHARS,
+    onSubmit: deny,
+    onLeave: busy ? undefined : onCancel,
+    held: busy,
+    takesFiles: false,
+    focus: true,
+  });
+  return (
+    <MessageBox
+      box={box}
+      look={COMPOSER_LOOK.CARD}
+      className="comment-field approval-deny-note"
+      beforeSend={
+        <Button
+          variant={BUTTON_VARIANT.QUIET}
+          size={BUTTON_SIZE.COMPACT}
+          disabled={busy}
+          onClick={onCancel}
+        >
+          <ReplayUnmask>{DENY_NOTE_WORDS.CANCEL}</ReplayUnmask>
+        </Button>
+      }
+      send={{
+        label: DENY_NOTE_WORDS.DENY,
+        inWords: true,
+        tone: COMPOSER_SEND_TONE.DANGER,
+        empty: false,
+        busy,
+        busyLabel: DENY_NOTE_WORDS.DENYING,
+      }}
+    />
+  );
 }
 
 /** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
@@ -476,13 +477,14 @@ export function heldCallOf(ask: ApprovalView): HeldCall {
   return {
     status: ask.settled ?? HELD_WORDS.WAITING,
     waiting: ask.settled === undefined,
-    about: aboutOf(ask.approval),
+    about: heldAbout(ask.approval),
     actions:
       ask.settled === undefined ? (
         <ApprovalActions
           answering={ask.answering}
           error={ask.error}
           noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
+          note={(doors) => <DenyNoteBox {...doors} />}
           onAnswer={ask.onAnswer}
         />
       ) : undefined,
@@ -554,9 +556,4 @@ export function heldCallPart(
     output: undefined,
     errorText: undefined,
   };
-}
-
-/** What the working line says while asks wait: that the agent waits on the reader, and on how many. */
-export function waitingOnYouWords(waiting: number): string {
-  return `Waiting on you · ${waiting} ${waiting === 1 ? "approval" : "approvals"}`;
 }

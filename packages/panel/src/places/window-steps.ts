@@ -3,8 +3,7 @@
  *
  * A step is a place the window stood on (`Place`): the routed place at an
  * address, and, on a task's own place, the task and what its panes showed
- * (`places/task-step.ts`), or the side panel beside an Inbox item or an
- * agent's page. The window saves each in its router history entry's state
+ * (`places/task-step.ts`), or the side panel beside an Inbox item. The window saves each in its router history entry's state
  * beside its address (`SavedStep`), and reads it back from whatever a
  * browser held there, an older build's shapes among it: Home's and a task's
  * from before each was the router's, and tabs saved before they carried
@@ -86,7 +85,7 @@ export interface Place {
   readonly kind: typeof ROUTED_KIND;
   /** The address the router stood on, which its entry is held at. */
   readonly address: string;
-  /** The side panel beside an Inbox item or an agent's own page standing, as a task's step holds it, saved in the entry's state beside its address; none on any other routed place. */
+  /** The side panel beside an Inbox item standing, as a task's step holds it, saved in the entry's state beside its address; none on any other routed place. */
   readonly side?: SideStep;
   /** What a step on a task's own place holds beside its address; none on any other place. */
   readonly task?: TaskStep | undefined;
@@ -210,7 +209,7 @@ export function samePage(one: Place, other: Place): boolean {
   );
 }
 
-/** What a place shows within its page, which its step holds beside its address: a task's panes, or the side panel beside an Inbox item or an agent's page. */
+/** What a place shows within its page, which its step holds beside its address: a task's panes, or the side panel beside an Inbox item. */
 function shownOf(place: Place): StepShown {
   return place.task ?? { side: place.side };
 }

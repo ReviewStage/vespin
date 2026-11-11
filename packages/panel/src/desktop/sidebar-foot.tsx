@@ -1,6 +1,6 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { VERB } from "@repo/features/words";
+import { BUILD_TOO_OLD_WORDS, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import type { UpdateControl } from "@repo/settings/settings-controls";
@@ -141,8 +141,23 @@ function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Eleme
   const { update } = updates;
   const offered =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.UPDATES) }).data === true;
+  const updateNeeded =
+    useQuery({ ...appStateQuery, select: (state) => state.network.updateNeeded }).data === true;
   const toastStanding = useReadyToastStanding();
-  if (!offered || !updateInSidebar(update)) return null;
+  if (!offered) return null;
+  // The service refused this build as older than it serves: the check fetches the release, and the pill then offers its Restart.
+  if (updateNeeded && update.status === UPDATE_STATUS.IDLE) {
+    return (
+      <UpdatePill
+        word="Update"
+        hint={`${BUILD_TOO_OLD_WORDS}. Check for the update.`}
+        icon={<UpdateIcon />}
+        variant={BUTTON_VARIANT.DANGER_TINT}
+        onClick={() => void updates.onCheck()}
+      />
+    );
+  }
+  if (!updateInSidebar(update)) return null;
   if (update.status === UPDATE_STATUS.READY) {
     // The toast offers the same Restart while it stands; the pill is the way back once it is dismissed.
     if (toastStanding) return null;

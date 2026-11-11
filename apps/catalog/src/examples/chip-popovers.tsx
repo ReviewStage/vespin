@@ -47,7 +47,7 @@ function cloudGlyph(words: string, tone: StatusTone): React.JSX.Element {
 }
 
 const PLACES: readonly MenuRow[] = [
-  { id: "cloud", label: "Cloud", icon: <GLYPH.CLOUD aria-hidden="true" /> },
+  { id: "cloud", label: "Cloud", icon: cloudGlyph("Running", STATUS_TONE.COMPLETE) },
   { id: "studio", label: "MacBook Pro", icon: <GLYPH.DESKTOP aria-hidden="true" /> },
   {
     id: "mini",

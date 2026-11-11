@@ -21,6 +21,7 @@ import {
   type NoteMiss,
   readNotes,
 } from "@repo/features/description-notes";
+import { placeholderLinksIn } from "@repo/features/mention-link";
 import { PICTURE_BOUNDS, type Picture } from "@repo/features/picture-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
@@ -43,6 +44,7 @@ import {
   type DescriptionNoteAuthor,
   saveNotes,
 } from "../../tasks/description-notes.js";
+import { placeholderLinksWords } from "../link-rule.js";
 import { CODER } from "./bounds.js";
 import { type InboxSandboxDoor, readSandboxMedia } from "./inbox-image.js";
 
@@ -55,7 +57,7 @@ import { type InboxSandboxDoor, readSandboxMedia } from "./inbox-image.js";
  * description's one write (`description-notes.ts`), which journals the save under the
  * agent's id, so the developer and the other agents read them and see which
  * agent wrote what. Every call names the task whose description it edits, its own
- * or any other of its workspace, so an agent on no task edits one too; the store writes only a task the
+ * or any other of its workspace; the store writes only a task the
  * member whose turn it is reaches (`agent-doors.ts`). A call's notes
  * may land anywhere in the description, its headings among it, and land together or
  * not at all: one naming what the description does not hold exactly once answers the
@@ -449,6 +451,10 @@ export function recordDescriptionEdit(
   }
   if (takenInTurn + notes.length + pictures.length > DESCRIPTION_EDIT.MAX_NOTES_PER_TURN) {
     return Effect.succeed(descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.TOO_MANY));
+  }
+  const unread = notes.flatMap((note) => placeholderLinksIn(note.text));
+  if (unread.length > 0) {
+    return Effect.succeed(descriptionEditRejected(`Not saved: ${placeholderLinksWords(unread)}`));
   }
   const writer = { actor: DESCRIPTION_ACTOR.AGENT, agentId: author.agentId } as const;
   return Effect.gen(function* () {

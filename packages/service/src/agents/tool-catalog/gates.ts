@@ -3,10 +3,8 @@
  *
  * A tool of the catalog (`catalog.ts`) is offered every agent, or stands
  * behind one gate: the agent's repository, the sandbox of ours it runs in,
- * its workspace's Memory, its workspace's Task descriptions, or a harness
- * with no wakeup of its own. Each gate is
- * declared here once, with how it is read off the agent, its workspace's
- * experiments, and the harness its conversation runs on, and the words a
+ * its workspace's Memory, or its workspace's Task descriptions. Each gate is
+ * declared here once, with how it is read off the agent and the words a
  * call it shuts would be refused with, so the list an agent is offered and
  * a refusal of a call it makes anyway read the same rule. An agent's
  * standing is the gates open to it and its workspace's experiments, which
@@ -21,14 +19,10 @@ import {
   type AgentStoreEffect,
   hasRepository,
   readAgentOfConversation,
-  readAgentRouting,
 } from "@repo/database/models/agent-store";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { CLAUDE_CODE_TOOL } from "@repo/features/agent-tools";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { Effect, Option } from "effect";
 import { CODER_REFUSAL } from "../coder-host/bounds.js";
-import { harnessOf, type NativeRuntime } from "../coder-host/native-runtime.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   EXPERIMENT_OFF_REFUSAL,
@@ -47,21 +41,15 @@ export const TOOL_GATE = {
   MEMORY: "memory",
   /** The agent's workspace has Task descriptions on. */
   DESCRIPTIONS: "descriptions",
-  /** The agent's harness has no wakeup of its own, so ours wakes it (Codex; Claude Code's CLI schedules its own). */
-  WAKEUP: "wakeup",
   /** The agent's workspace has Done and follow-ups on. */
   TURN_END: "turn-end",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
 
-/** One gate: whether it opens to an agent, given its workspace's experiments and the harness it runs on, and the words a call it shuts is refused with. */
+/** One gate: whether it opens to an agent, given its workspace's experiments, and the words a call it shuts is refused with. */
 interface Gate {
-  readonly opens: (
-    agent: Agent,
-    experiments: ExperimentsOn,
-    runtime: NativeRuntime | undefined,
-  ) => boolean;
+  readonly opens: (agent: Agent, experiments: ExperimentsOn) => boolean;
   readonly refusal: string;
 }
 
@@ -69,14 +57,11 @@ interface Gate {
  * Each gate as it is read and refused. Note that `SANDBOX` shuts on a
  * device alone, because a local agent's Mac runs no browser of ours, and it
  * already runs on one of the developer's own machines, where `run_on_mac`
- * would only reach itself, and that `WAKEUP` opens to Codex alone, because
- * Claude Code's CLI schedules its own wakeups and its runner holds the
- * session through the wait, so a second wakeup of ours would fire beside
- * them. The refusals are the words each gate's doors
+ * would only reach itself. The refusals are the words each gate's doors
  * refused with before the catalog refused for them (`catalog.ts`'s
- * `callTool`), but `SANDBOX`'s and `WAKEUP`'s, which no door said, and an
- * experiment's, which names none (`EXPERIMENT_OFF_REFUSAL`); a tool whose
- * door answered otherwise words its own (`CatalogTool`'s `refused`).
+ * `callTool`), but `SANDBOX`'s, which no door said, and an experiment's,
+ * which names none (`EXPERIMENT_OFF_REFUSAL`); a tool whose door answered
+ * otherwise words its own (`CatalogTool`'s `refused`).
  */
 export const GATES: { readonly [G in ToolGate]: Gate } = {
   [TOOL_GATE.REPOSITORY]: {
@@ -96,10 +81,6 @@ export const GATES: { readonly [G in ToolGate]: Gate } = {
     opens: (_agent, experiments) => experiments.descriptionsOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
-  [TOOL_GATE.WAKEUP]: {
-    opens: (_agent, _experiments, runtime) => runtime === CONVERSATION_RUNTIME.CODEX,
-    refusal: `Not booked: your harness schedules its own wakeups with ${CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP}; use that.`,
-  },
   [TOOL_GATE.TURN_END]: {
     opens: (_agent, experiments) => experiments.turnEndOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
@@ -113,14 +94,9 @@ export interface AgentStanding {
   readonly experiments: ExperimentsOn;
 }
 
-/**
- * The standing of an agent's row, its workspace's experiments read once, on
- * the native harness given, none for one whose session has ended for good;
- * or of none, whose every gate is shut and every experiment off.
- */
+/** The standing of an agent's row, its workspace's experiments read once, or of none, whose every gate is shut and every experiment off. */
 export function standingOfAgent(
   agent: Option.Option<Agent>,
-  runtime: NativeRuntime | undefined,
 ): Effect.Effect<AgentStanding, never, DatabaseServices> {
   if (Option.isNone(agent)) {
     return Effect.succeed({ agent, open: new Set(), experiments: NO_EXPERIMENT_ON });
@@ -128,21 +104,14 @@ export function standingOfAgent(
   return Effect.map(experimentsOnIn(agent.value.organizationId), (experiments) => ({
     agent,
     open: new Set(
-      Object.values(TOOL_GATE).filter((gate) =>
-        GATES[gate].opens(agent.value, experiments, runtime),
-      ),
+      Object.values(TOOL_GATE).filter((gate) => GATES[gate].opens(agent.value, experiments)),
     ),
     experiments,
   }));
 }
 
-/** The standing of the agent whose conversation the call was admitted to, on the harness its conversation runs on. */
+/** The standing of the agent whose conversation the call was admitted to. */
 export function standingOf(admitted: AdmittedConversation): AgentStoreEffect<AgentStanding> {
   const { userId, conversationId } = admitted.target;
-  return Effect.gen(function* () {
-    const agent = yield* readAgentOfConversation(userId, conversationId);
-    if (Option.isNone(agent)) return yield* standingOfAgent(agent, undefined);
-    const routing = yield* readAgentRouting(agent.value.userId, agent.value.id);
-    return yield* standingOfAgent(agent, harnessOf(Option.getOrUndefined(routing)?.runtime));
-  });
+  return Effect.flatMap(readAgentOfConversation(userId, conversationId), standingOfAgent);
 }

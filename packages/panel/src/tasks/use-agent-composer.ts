@@ -130,6 +130,8 @@ export interface AgentComposerControl {
   send: () => void;
   /** Asks the Revert that did not go again, or sends the message whose remedy the note offers again under its key. */
   retry: () => void;
+  /** The message the note's remedy is for, as it was sent, whether or not its row is still drawn; none where the note is of no message. */
+  notedLine?: SentLine | undefined;
   /** The lines sent that the transcript has not read back yet, in order. */
   sent: readonly SentLine[];
 }
@@ -146,8 +148,10 @@ interface Held {
   cut: ReadonlySet<string> | undefined;
   /** The newest line not delivered whose refusal is mended elsewhere (`remedyLabel`), which the note under the box offers that remedy for and its Retry sends again; none while none waits. */
   remedied: { readonly lineId: string; readonly note: ComposerNote } | undefined;
-  /** The Revert that did not go, which the note under the box is of and its Retry asks again. */
-  revertFailed: { readonly messageId: string; readonly note: ComposerNote } | undefined;
+  /** The Revert that did not go, which the note under the box is of and its Retry asks again, the files back too where it asked them. */
+  revertFailed:
+    | { readonly messageId: string; readonly restoreFiles: boolean; readonly note: ComposerNote }
+    | undefined;
   closed: string | undefined;
   /** What the box held as it closed, newer than every line sent, which Continue carries after them. */
   behind: Draft;
@@ -290,6 +294,10 @@ export function useAgentComposer(input: {
   shown?: boolean | undefined;
   /** Opens the agent's tab, which that toast offers; none offers nothing. */
   onOpen?: (() => void) | undefined;
+  /** Words a send carries under the box's own, such as the follow-ups ticked in the bar over it, which a send with the box empty still sends; none where nothing is held. */
+  lead?: string | undefined;
+  /** Told once a send has carried the lead, so its holder lets it go. */
+  onLeadSent?: (() => void) | undefined;
 }): HeldComposer {
   const { agentId, messages } = input;
   const kept = useDraft({ kind: DRAFT_PLACE.AGENT, planId: input.taskId, agentId });
@@ -380,6 +388,11 @@ export function useAgentComposer(input: {
       // A rewind that did not go drops nothing, so the messages it would have dropped are drawn again.
       if (rewound !== undefined && "failure" in rewound)
         ours((was) => ({ ...was, cut: undefined }));
+      // A line the agent's first launch holds went into its queue, which draws it, so the box lets it go.
+      if (!("failure" in answer) && answer.queued === true) {
+        ours((was) => ({ ...was, sent: was.sent.filter((each) => each.id !== line.id) }));
+        return;
+      }
       if (!("failure" in answer)) {
         ours((was) => ({
           ...was,
@@ -497,11 +510,15 @@ export function useAgentComposer(input: {
   };
 
   const sendDraft = (clientKey: string = crypto.randomUUID()) => {
-    const text = kept.draft.text.trim();
+    const { lead, onLeadSent } = latest.current;
+    const text = [kept.draft.text.trim(), lead?.trim() ?? ""]
+      .filter((each) => each !== "")
+      .join("\n\n");
     const { attachments } = kept.draft;
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
     update(() => EMPTY_DRAFT);
     sendLine(text, attachments, clientKey);
+    if (lead !== undefined) onLeadSent?.();
   };
 
   /** Sends the words and files in place of the line named, the messages from it on hidden at once; the box is left as it is. */
@@ -564,7 +581,7 @@ export function useAgentComposer(input: {
         ...was,
         cut: undefined,
         reverting: undefined,
-        revertFailed: { messageId, note },
+        revertFailed: { messageId, restoreFiles, note },
       }));
     });
   };
@@ -598,6 +615,11 @@ export function useAgentComposer(input: {
     setHeld((was) => ({ ...was, sent: was.sent.filter((each) => each.id !== id) }));
   };
 
+  /** A line refused by its id, as the box still holds it or, where its row took its place, as it was kept failed. */
+  const notedLineOf = (id: string): SentLine | undefined =>
+    held.sent.find((line) => line.id === id) ??
+    failedLinesOf(failedLines, agentId).find((failed) => failed.line.id === id)?.line;
+
   /** Takes a line not delivered back into the box to be written again, ahead of what the box holds, which is newer. */
   const takeBackLine = (id: string) => {
     const line = takeFailed(id);
@@ -630,9 +652,15 @@ export function useAgentComposer(input: {
     send: () => sendDraft(),
     retry: () => {
       const { revertFailed, remedied } = held;
-      if (revertFailed !== undefined) return revert(revertFailed.messageId);
+      if (revertFailed !== undefined) {
+        return revert(revertFailed.messageId, revertFailed.restoreFiles);
+      }
       if (remedied !== undefined) resend(remedied.lineId);
     },
+    notedLine:
+      held.closed === undefined && held.remedied !== undefined
+        ? notedLineOf(held.remedied.lineId)
+        : undefined,
     retryLine: resend,
     dropLine,
     takeBackLine,

@@ -9,6 +9,7 @@ import {
   liveRead,
   liveRows,
   ORDER,
+  orderedLiveRows,
 } from "./live-read.js";
 import { LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
 import {
@@ -18,6 +19,8 @@ import {
   type ModelChoice,
 } from "./models-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
+import { countedNumber } from "./service-wire.js";
+import { SOUND_CLIP_SLOT, type Sound, type SoundClipSlot } from "./sound-clip-wire.js";
 
 /**
  * account-preferences-live.ts -- the account's preferences row as the host follows it over the service's held poll: the read declared, and the choices every surface draws from it.
@@ -25,7 +28,9 @@ import { HOSTED_SERVICE_PATH } from "./service-paths.js";
  * The service answers one statement, the account's own row as stored, or
  * none for an account that stored nothing: the coding agents' default as
  * its three columns stand, the chapters model, and whether our Slack bot
- * writes the account. Each is read here as the preferences snapshot reads
+ * writes the account; and beside it the sounds the account keeps of its
+ * own, by id, name, and hash, and which of them each of its two sounds
+ * plays. Each is read here as the preferences snapshot reads
  * it (`account-store.ts`'s `snapshotOf` calls `storedAgentChoice`), so the
  * live read and `/api/account/preferences` never disagree. Where the account
  * stored no default, the default a surface draws is worked out from the
@@ -33,8 +38,9 @@ import { HOSTED_SERVICE_PATH } from "./service-paths.js";
  */
 
 /**
- * The account's preferences as the host follows them: one part, the
- * account's own row, none for an account that stored nothing. Note that the
+ * The account's preferences as the host follows them: the account's own
+ * row, none for an account that stored nothing; the sounds it keeps of its
+ * own, never their bytes; and which of them each of its two sounds plays. Note that the
  * context window and the chapters model are read as text, because a value a
  * later build adds or an older one dropped reads as the default rather than
  * failing the row. The row has no id of its own, since it is the account's
@@ -58,6 +64,24 @@ export const ACCOUNT_PREFERENCES_READ = liveRead({
       key: "agentModel",
       order: [["agentModel", ORDER.ASC]],
     }),
+    sounds: liveRows({
+      row: Schema.Struct({
+        id: Schema.String,
+        name: Schema.String,
+        sha256: Schema.String,
+        createdAt: countedNumber,
+      }),
+      key: "id",
+      order: [
+        ["createdAt", ORDER.ASC],
+        ["id", ORDER.ASC],
+      ],
+    }),
+    soundChoices: liveRows({
+      row: Schema.Struct({ slot: Schema.String, soundId: Schema.String }),
+      key: "slot",
+      order: [["slot", ORDER.ASC]],
+    }),
   },
 });
 
@@ -68,6 +92,37 @@ export type AccountPreferencesLiveRow = LiveRowOf<
   typeof ACCOUNT_PREFERENCES_READ.parts.preferences
 >;
 
+/** One of the account's own sounds as the read delivers it: its id, its name, its hash, and when it was added. */
+export type AccountSoundLiveRow = LiveRowOf<typeof ACCOUNT_PREFERENCES_READ.parts.sounds>;
+
+/** Which sound one of the account's two sounds plays, as the read delivers it, the slot read as text. */
+export type AccountSoundChoiceLiveRow = LiveRowOf<
+  typeof ACCOUNT_PREFERENCES_READ.parts.soundChoices
+>;
+
+/** The sounds the account keeps of its own, in the order it added them, and the one each of its two sounds plays, none for a sound that plays none. */
+export interface AccountSounds {
+  readonly list: readonly Sound[];
+  readonly choices: Readonly<Record<SoundClipSlot, string | undefined>>;
+}
+
+/** The account's own sounds as the read delivers them; a choice of a slot no build lists any more is passed over. */
+export function accountSoundsOfLiveRows(
+  sounds: readonly AccountSoundLiveRow[],
+  choices: readonly AccountSoundChoiceLiveRow[],
+): AccountSounds {
+  const of = (slot: SoundClipSlot) => choices.find((row) => row.slot === slot)?.soundId;
+  return {
+    list: orderedLiveRows(ACCOUNT_PREFERENCES_READ.parts.sounds, sounds).map(
+      ({ id, name, sha256 }) => ({ id, name, sha256 }),
+    ),
+    choices: {
+      [SOUND_CLIP_SLOT.FINISH]: of(SOUND_CLIP_SLOT.FINISH),
+      [SOUND_CLIP_SLOT.ASK]: of(SOUND_CLIP_SLOT.ASK),
+    },
+  };
+}
+
 /** The account's choices as the row holds them, each read as the preferences snapshot reads it. */
 export interface AccountPreferencesLive {
   /** The coding agents' default the account stored; none until it chooses, where a surface draws the fallback (`agentDefaultOf`). */
@@ -76,6 +131,8 @@ export interface AccountPreferencesLive {
   readonly chaptersModel: ChaptersPick;
   /** Whether our Slack bot writes the account the threads that wait on it; on until the account chooses. */
   readonly slackNotifications: boolean;
+  /** The sounds the account keeps of its own, each named by the hash of its bytes so a client fetches it again only once it changed, and the one each of its two sounds plays. */
+  readonly sounds: AccountSounds;
 }
 
 /** The models as a read of them stands, as the host holds it: its answer once it answered, and whether it said it could not before it ever had. */
@@ -107,6 +164,7 @@ export function storedAgentChoice(
 /** The account's choices as its row holds them; each choice's default where the account stored no row. */
 export function accountPreferencesOfLiveRows(
   rows: readonly AccountPreferencesLiveRow[],
+  sounds: AccountSounds,
 ): AccountPreferencesLive {
   const [row] = rows;
   return {
@@ -115,6 +173,7 @@ export function accountPreferencesOfLiveRows(
     chaptersModel: chaptersModelFrom(row?.chaptersModel),
     // Note that a switch never chosen reads as on, as the Slack bot reads it (`slackNotificationsOn`).
     slackNotifications: row?.slackNotifications !== false,
+    sounds,
   };
 }
 

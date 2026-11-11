@@ -31,10 +31,12 @@
  * Left out, beside the harness's own shell, files, todos, waiting,
  * subagents, skills, and web reads: the retired runtime's `connection_search` and
  * `connection_execute`, since each integration the agent is handed is an
- * MCP server of its own beside ours (`../workspace-mcp/app.ts`). Waiting is
- * the harness's own only where it has a wakeup: `schedule_wakeup` is served
- * to the harness that has none (`gates.ts`'s `WAKEUP`), and the scheduled
- * sweep delivers it (`../../maintenance/wakeup-sweep.ts`).
+ * MCP server of its own beside ours (`../workspace-mcp/app.ts`). Waiting
+ * is ours on every harness: `schedule_wakeup` books it, and a delayed queue
+ * message delivers it (`../coder-host/agent-wakeups.ts`), so a waiting
+ * agent's sandbox stops as any idle one does; Claude Code's own
+ * `ScheduleWakeup` is denied its CLI (`@repo/agent-runner`'s
+ * `CLAUDE_CODE_TOOLS`).
  *
  * Two things the retired runtime's tool files kept in the session's own state are kept
  * otherwise here, since the server keeps no session: a call's id, which the
@@ -152,6 +154,10 @@ import { SHOW_IMAGE_TOOL } from "../coder-host/show-image.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import { macCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../mac-command.js";
 import {
+  FORGET_MEMORY_TOOL,
+  LIST_MEMORIES_TOOL,
+  runAgentForget,
+  runAgentListMemories,
   runAgentRecall,
   runAgentRemember,
   SAVE_MEMORY_TOOL,
@@ -554,8 +560,10 @@ const CATALOG = [
   agentTool(DELETE_AUTOMATION_TOOL, runDeleteAutomation),
   agentTool(RUN_AUTOMATION_TOOL, runRunAutomation),
   // The workspace's shared memory.
-  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { gate: TOOL_GATE.MEMORY }),
-  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { gate: TOOL_GATE.MEMORY, ...READS }),
+  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gate: TOOL_GATE.MEMORY }),
+  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, ...READS, gate: TOOL_GATE.MEMORY }),
+  agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gate: TOOL_GATE.MEMORY, ...READS }),
+  agentTool(FORGET_MEMORY_TOOL, runAgentForget, { gate: TOOL_GATE.MEMORY }),
   // The description's comments.
   commentTool(READ_COMMENTS_TOOL, READS),
   commentTool(REPLY_TO_COMMENT_TOOL),
@@ -574,8 +582,8 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
-  // A wakeup booked for later, on a harness with no wakeup of its own.
-  agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup, { gate: TOOL_GATE.WAKEUP }),
+  // A wakeup booked for later.
+  agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
   agentTool(END_TURN_TOOL, runEndTurn, { gate: TOOL_GATE.TURN_END }),
 ] as const;

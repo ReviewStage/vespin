@@ -1,4 +1,5 @@
 import {
+  AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
   agentPermissionModeSchema,
 } from "@repo/features/agent-approval-wire";
@@ -153,7 +154,7 @@ import type { ConversationTarget } from "./writer.js";
  * the developer archived is a stamp on its row: every list leaves it out
  * but the task's own where it asks for archived agents, and a read of the
  * agent by its id still finds it, so its transcript and pull request stand.
- * A pin of an agent, on a plan or with none, is the reading member's own
+ * A pin of an agent is the reading member's own
  * (`agent-pin.ts`), as a plan's is, so one member's pin reads pinned for
  * them alone, and is kept apart from the archive, so an agent archived and
  * brought back is pinned again.
@@ -321,6 +322,8 @@ export type NewAgent = AgentPlace & {
   readonly machine?: AgentMachineKind | undefined;
   /** The account's Mac a local agent is pinned to; none for one in a sandbox. */
   readonly deviceId?: string | undefined;
+  /** How its tool calls are answered from its first turn; full access where none is named. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
 };
 
 /** A repository a Start names for the agent beside its own: `owner/name` as reached, and the branch its checkout is cloned at, none for its default branch. */
@@ -687,6 +690,7 @@ const insertAgent = SqlSchema.findOne({
     kind: Schema.Literals(Object.values(AGENT_KIND)),
     machine: Schema.Literals(Object.values(AGENT_MACHINE)),
     deviceId: Schema.NullOr(Schema.String),
+    permissionMode: agentPermissionModeSchema,
     now: Schema.Date,
   }),
   Result: CommittedAgentRowSchema,
@@ -720,6 +724,7 @@ const insertAgent = SqlSchema.findOne({
           kind: write.kind,
           machine: write.machine,
           deviceId: write.deviceId,
+          permissionMode: write.permissionMode,
           idempotencyKey: write.idempotencyKey,
           createdAt: write.now,
         })
@@ -2256,6 +2261,7 @@ export function createAgent(
           kind: AGENT_KIND.CODER,
           machine: started.machine ?? AGENT_MACHINE.VERCEL,
           deviceId: started.deviceId ?? null,
+          permissionMode: started.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS,
           now,
         }).pipe(
           // An insert that returned no row is the database breaking its own contract, not an outcome.
@@ -2426,7 +2432,7 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
 }
 
 /**
- * The workspace's agents, on a task or with none, by any member or only the
+ * The workspace's agents, on any task, by any member or only the
  * account's own where `ownOnly` asks, newest started first, the agents
  * around the one `around` names before the rest, an archived one
  * left out unless `includeArchived` asks, the one `except` names left out,
@@ -2523,7 +2529,7 @@ export function listPublishedAgents(
   );
 }
 
-/** The agents named, by id, on a plan or with none, archived or not, each with what it published, in the order they were started: the read opening an agent's tab makes, so one of a workspace the account is not in names none. None asked, none read. */
+/** The agents named, by id, on any task, archived or not, each with what it published, in the order they were started: the read opening an agent's tab makes, so one of a workspace the account is not in names none. None asked, none read. */
 export function listPublishedAgentsById(
   userId: string,
   agentIds: readonly string[],
@@ -3117,9 +3123,8 @@ export function unarchiveAgentFrom(
  * instant already standing, so pinning twice moves nothing, at the position
  * given where one is; or taken away.
  * Every other member's pin stands as it was. Nothing for an agent the
- * account cannot read, which is neither pinned nor unpinned. An agent on a
- * plan is pinned as one with none is, and stands in the sidebar's Pinned
- * section beside the plans.
+ * account cannot read, which is neither pinned nor unpinned. A pinned agent
+ * stands in the sidebar's Pinned section beside the plans.
  */
 export function pinAgent(
   userId: string,

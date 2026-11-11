@@ -1,6 +1,16 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
-import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
+import {
+  choiceOn,
+  contextWindowsOf,
+  effortFor,
+  effortLabel,
+  effortsOf,
+  FAST_WORD,
+  SPEED_LABEL,
+  SPEED_WORD,
+  windowOf,
+} from "@repo/features/model-effort";
 import {
   type CatalogModel,
   MODEL_SPEED,
@@ -9,6 +19,7 @@ import {
 } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
+import { PERMISSION_MODE_LABEL } from "@repo/settings";
 import {
   ErrorState,
   type FootRow,
@@ -25,11 +36,9 @@ import { HarnessMark } from "../harness-marks.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import {
   type AgentModeControl,
-  MODE_APPLIES,
   MODE_GLYPH,
   MODE_GROUP,
   MODE_QUESTION,
-  MODE_WORDS,
   MODES,
   modeMenuRows,
 } from "./agent-approvals.js";
@@ -37,10 +46,7 @@ import {
   CONTEXT_WORD,
   type ConnectFailure,
   choiceModelId,
-  choiceOn,
   choiceWords,
-  contextWindowsOf,
-  FAST_WORD,
   fastRestingNote,
   longWindowNote,
   MODELS_READ_FAILED,
@@ -50,13 +56,10 @@ import {
   modelLabel,
   offeredModels,
   readModelChoice,
-  SPEED_LABEL,
-  SPEED_WORD,
   speedsOf,
   unrunnableChoice,
   unsearchedModels,
   windowLabel,
-  windowOf,
 } from "./agent-model.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 
@@ -80,13 +83,14 @@ import { useRepositoryRemedy } from "./repository-remedy.js";
  * leaves the menu open, or, for a model with an Ultrafast version, Speed in
  * its place, naming the speed chosen now and opening a submenu of the
  * speeds the model offers, Standard, Fast, and Ultrafast, which closes the
- * menu on a pick as Effort does. Last, on a running Claude Code agent's
- * chip alone, Permissions names the agent's permission mode after its glyph
- * and opens a submenu of the three under the question they answer, each
- * with its hint under its name and a line under them saying a change
- * reaches the agent from its next turn (`agent-approvals.tsx`); it closes
- * the menu on a pick. A model whose provider no subscription or API key
- * of the account's pays for says "Connect Claude" or "Connect Codex" at its
+ * menu on a pick as Effort does. Last, on the chip of an agent whose
+ * harness takes a mode, running or about to start, Permissions names the
+ * agent's permission mode after its glyph and opens a submenu of the three
+ * under the question they answer, each with its hint under its name, and
+ * for a running agent a line under them saying a change reaches it from its
+ * next turn (`agent-approvals.tsx`); it closes the menu on a pick. A
+ * model whose provider no subscription or API key of the account's pays for
+ * says "Connect Claude" or "Connect Codex" at its
  * row's end, and its pick, or Fast's press where it is the choice, closes
  * the menu and lands on that harness's row in Settings › Agents rather
  * than choosing it. On an automation's
@@ -192,7 +196,7 @@ export function ModelMenu(props: {
   lastLine?: MenuLastLine | undefined;
   /** Whether the choice is what a new agent would start on, on the reader's own credentials, so one nothing of theirs pays for says it cannot run: an automation's. */
   startsNew?: boolean | undefined;
-  /** The agent's permission mode and its change, pinned as the last row; none for an agent whose harness takes no mode, and on an automation's menu. */
+  /** The agent's permission mode and its change, pinned as the last row, a running agent's or a new one's; none for an agent whose harness takes no mode, and on an automation's menu. */
   permissions?: AgentModeControl | undefined;
   /** The menu is on its way out (`SearchableMenu`'s). */
   leaving?: boolean | undefined;
@@ -314,13 +318,13 @@ export function ModelMenu(props: {
         id: FOOT_ROW.PERMISSIONS,
         label: MODE_GROUP,
         icon: <Glyph />,
-        detail: MODE_WORDS[control.mode].label,
+        detail: PERMISSION_MODE_LABEL[control.mode],
         submenu: {
           label: MODE_GROUP,
           heading: MODE_QUESTION,
           rows: modeMenuRows(),
           value: control.mode,
-          note: MODE_APPLIES,
+          note: control.applies,
           onPick: (picked) => {
             const mode = MODES.find((each) => each === picked);
             if (mode === undefined) return;

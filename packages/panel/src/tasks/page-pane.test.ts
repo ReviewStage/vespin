@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { MOTION_DELAY_MS } from "@repo/brand";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
@@ -36,9 +37,11 @@ import { HandTabActionsContext, type TabActionGroups } from "../desktop/strip-ta
 import { fakeActPort } from "../testing/app-bridge.js";
 import { fakeAppPlatform } from "../testing/app-platform.js";
 import {
+  composerEditor,
   composerWords,
   editorBundleLanded,
   installEditorLayout,
+  typeInComposer,
   writeInComposer,
 } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -58,7 +61,7 @@ import { PagePane } from "./page-pane.js";
  */
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
-const AGENT = "0c4e2b1d-9f3a-4e6b-8d7c-1a2b3c4d5e6f";
+const _AGENT = "0c4e2b1d-9f3a-4e6b-8d7c-1a2b3c4d5e6f";
 
 const FUNNEL: PageLine = {
   id: "5d1c3f9a-7e2b-4c8d-9f10-2a3b4c5d6e7f",
@@ -279,10 +282,7 @@ test("over the source, View settings offers the settings its lines follow, and t
   assert.deepEqual(handed(), [["Open in browser"], ["Copy source"], ["Reload page"]]);
 });
 
-test.each([
-  { holder: "a task's page", place: { taskId: TASK }, path: `task/${TASK}` },
-  { holder: "a page of an agent on no task", place: { agentId: AGENT }, path: `agent/${AGENT}` },
-])(
+test.each([{ holder: "a task's page", place: { taskId: TASK }, path: `task/${TASK}` }])(
   "Open in browser on $holder opens its own Vespin link, flagged to stay on the web, never the address it is framed from",
   ({ place, path }) => {
     const opened: string[] = [];
@@ -915,4 +915,98 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
     },
     { start: "That's all.", along: [thread.id] },
   ]);
+});
+
+test("words replied to start a comment quoting them in its field, and two held on one element each say and tint the words they quote, told as the pointer is over the element in the page", async () => {
+  const control: DescriptionCommentsControl = {
+    planId: TASK,
+    threads: [],
+    read: true,
+    failed: false,
+    onRetry: () => undefined,
+    notes: new Map(),
+    start: async () => ({ note: "not in this test" }),
+    act: async () => true,
+  };
+  const { container, frame } = mount(
+    FUNNEL,
+    readSource,
+    true,
+    { taskId: TASK },
+    { control, doors: { agents: undefined, me: "u-dean" } },
+  );
+  const posted = framePosts(frame());
+  const path = "body > ol > li:nth-of-type(2)";
+  const box = { left: 10, top: 20, right: 200, bottom: 40 };
+  act(() => {
+    frame().dispatchEvent(new Event("load"));
+  });
+  // Note that the comment's editor reads the platform off the navigator, so the stand-in keeps it.
+  vi.stubGlobal("navigator", {
+    ...navigator,
+    platform: navigator.platform,
+    userAgent: navigator.userAgent,
+    userActivation: { isActive: true },
+  });
+  const replyTo = (quote: string, words: string, hold: string) => {
+    postFrom(frame().contentWindow, {
+      type: PAGE_PICK_TYPE,
+      selected: { path, quote, section: "", box, words: true },
+    });
+    act(() => buttonNamed(document.body, "Reply").click());
+    const field = container.querySelector<HTMLElement>(
+      '.page-comment-float .composer-editor[aria-label="Add a comment"]',
+    );
+    assert.ok(field, "Reply starts a comment by the words");
+    assert.equal(
+      field.querySelector("blockquote")?.textContent,
+      quote,
+      "quoting them in its field",
+    );
+    act(() => {
+      composerEditor(field).editor?.commands.focus("end");
+    });
+    typeInComposer(field, words);
+    // Note that the box's send is a press labeled with its act, where Start a review is one of words beside it.
+    const holding =
+      container.querySelector<HTMLButtonElement>(`button[aria-label="${hold}"]`) ??
+      buttonNamed(container, hold);
+    act(() => holding.click());
+  };
+  replyTo("Turn states on rows.", "Which rows?", "Start a review");
+  replyTo("without opening anything", "Even the Inbox?", "Add to review");
+
+  assert.deepEqual(posted.at(-1), {
+    type: PAGE_PICK_TYPE,
+    act: PAGE_PICK_ACT.MARK,
+    marks: [
+      { path, words: "Turn states on rows." },
+      { path, words: "without opening anything" },
+    ],
+  });
+  postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, marks: [{ path, box }] });
+  // The pointer over the element in the page tells its comments as the pointer over its pin does, each under the words it quotes.
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, over: path });
+    act(() => {
+      vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+  const told = document.querySelector(".ui-hover-card")?.textContent ?? "";
+  assert.match(
+    told,
+    /Turn states on rows\.[\s\S]*Which rows\?[\s\S]*without opening anything[\s\S]*Even the Inbox\?/u,
+  );
+  act(() => buttonLabeled(container, "2 comments in your review").click());
+  const card = document.querySelector<HTMLElement>(
+    ".ui-rect-float:not([data-leaving]) .page-comment-float",
+  );
+  assert.ok(card, "the held pin opens its comments by the element");
+  const said = [...card.querySelectorAll("[data-pending]")].map((each) => each.textContent ?? "");
+  assert.equal(said.length, 2);
+  assert.match(said[0] ?? "", /Turn states on rows\.[\s\S]*Which rows\?/u);
+  assert.match(said[1] ?? "", /without opening anything[\s\S]*Even the Inbox\?/u);
 });

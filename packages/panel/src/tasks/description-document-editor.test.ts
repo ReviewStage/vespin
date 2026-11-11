@@ -501,6 +501,8 @@ test("a press on a video in a section, on its frame, its scrubber, Play, Full sc
     );
     const block = container.querySelector<HTMLElement>(".picture-block[data-video]");
     const video = block?.querySelector("video");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => video?.dispatchEvent(new Event("loadedmetadata")));
     const seek = block?.querySelector<HTMLElement>('[aria-label="Seek"]');
     const named = (label: string) =>
       block?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? undefined;

@@ -201,6 +201,8 @@ export interface DescriptionEditorProps {
    * drawing down. None where the editor draws TipTap's own box.
    */
   readonly drawTaskBox?: TaskBoxDrawer | undefined;
+  /** Draws each code block's header, as the drawn text's code card heads it, its language chosen there; a bare block where it draws none. */
+  readonly drawCodeHeader?: CodeHeaderDrawer | undefined;
   /** What the text's pictures are drawn and taken in with; none where the text takes no pictures, as a template does not. */
   readonly pictures?: DescriptionEditorPictures | undefined;
   /** The open comment threads' words, in offsets of `markdown`, which the editor carries as its words move; none where the text has no comments. */
@@ -295,6 +297,25 @@ export interface EditorTaskBox {
 
 /** Draws a task item's box into its element; answers what takes the drawing down. */
 export type TaskBoxDrawer = (element: HTMLElement, box: EditorTaskBox) => () => void;
+
+/** A code block as the editor asks its header drawn: its language as its fence names it, none as empty; its lines as they stand, which its Copy copies; and the door that sets its language, none as empty. */
+export interface EditorCodeBlock {
+  readonly language: string;
+  readonly code: string;
+  readonly setLanguage: (language: string) => void;
+}
+
+/** A drawing the editor keeps while its subject stands: drawn again as it changes, without being taken down, and taken down at last. */
+export interface EditorDrawing<A> {
+  readonly redraw: (what: A) => void;
+  readonly undraw: () => void;
+}
+
+/** Draws a code block's header into its element, drawn again as the block changes so a menu open in it stays open. */
+export type CodeHeaderDrawer = (
+  element: HTMLElement,
+  block: EditorCodeBlock,
+) => EditorDrawing<EditorCodeBlock>;
 
 /**
  * What the panel may do to a mention it draws: name it anew in place, the
@@ -494,6 +515,8 @@ export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
 /** A chip the composer draws in its words: a skill, written `/name`. */
 export interface ComposerChip {
   readonly name: string;
+  /** Whether the chip is the command the message opens with, rather than a skill named anywhere in it. */
+  readonly command: boolean;
 }
 
 /** What the message box hands its editor as it mounts it. */
@@ -579,6 +602,8 @@ export interface ComposerEditorHandle extends EditorFormatting {
   readonly insertMention: (mention: MentionNode) => void;
   /** The skills a `/name` names: each such word is drawn as a chip from now on. */
   readonly setSkills: (skills: ReadonlySet<string>) => void;
+  /** The box's own commands: the message's first word naming one is drawn as its chip from now on. */
+  readonly setCommands: (commands: ReadonlySet<string>) => void;
   /** The files a marker names: each such marker is drawn as its chip from now on. */
   readonly setFiles: (files: ReadonlySet<string>) => void;
   /** Whether the words take a change: off while a message is held, read-only while a dictation stands, which keeps the caret. */

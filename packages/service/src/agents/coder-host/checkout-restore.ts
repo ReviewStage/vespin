@@ -27,6 +27,12 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import {
+  CHECKOUT_DIFF_EXIT,
+  CHECKOUT_DIFF_SCRIPT,
+  type CheckoutDiffRange,
+  checkoutDiffEnv,
+} from "@repo/features/checkout-diff";
+import {
   CHECKOUT_RESTORE_EXIT,
   CHECKOUT_RESTORE_SCRIPT,
   checkoutRestoreEnv,
@@ -38,10 +44,17 @@ import {
   SANDBOX_STATUS,
   Sandbox,
   type SandboxRunning,
+  type SandboxService,
   UP_STATUSES,
 } from "@repo/sandbox";
 import { Duration, Effect, Option } from "effect";
 import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
+import {
+  CHECKOUT_DIFF_OUTCOME,
+  type CheckoutDiffOutcome,
+  RESTORE_OUTCOME,
+  type RestoreOutcome,
+} from "../machine/agent-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { touchAgentSandbox } from "../sandbox-use.js";
 
@@ -52,19 +65,8 @@ export const CHECKOUT_RESTORE = {
   STDERR_TAIL: 600,
 } as const;
 
-/** What a restore came to: the checkout put back, the snapshot not in the checkout any more, or a failure. */
-export const RESTORE_OUTCOME = {
-  RESTORED: "restored",
-  MISSING: "missing",
-  FAILED: "failed",
-} as const;
-
-export type RestoreOutcome = (typeof RESTORE_OUTCOME)[keyof typeof RESTORE_OUTCOME];
-
 /** What a restore is asked: whose sandbox, by its session, and the snapshot to put the checkout back to. */
 export interface RestoreAsk {
-  /** The account whose agent it is, under which its sandbox is kept. */
-  readonly userId: string;
   /** The session the agent's sandbox is tagged with. */
   readonly sessionId: string;
   readonly snapshot: TurnCheckoutSnapshot;
@@ -85,30 +87,51 @@ function stderrTail(stderr: string): string {
     .slice(-CHECKOUT_RESTORE.STDERR_TAIL);
 }
 
-/** The restore in the agent's sandbox, woken where it stopped. */
-const restoreIn = (ask: RestoreAsk) =>
+/**
+ * One script run in the checkout of the agent's sandbox, woken where it
+ * stopped, with the variables given; none where no sandbox holding the
+ * checkout stands for the session.
+ */
+const ranInCheckout = (
+  sandboxes: SandboxService,
+  sessionId: string,
+  script: string,
+  env: Readonly<Record<string, string>>,
+) =>
   Effect.gen(function* () {
-    const sandboxes = yield* Sandbox;
-    const sandbox = yield* agentSandboxOf(sandboxes, ask.sessionId);
-    if (sandbox === undefined) return RESTORE_OUTCOME.MISSING;
+    const sandbox = yield* agentSandboxOf(sandboxes, sessionId);
+    if (sandbox === undefined) return undefined;
     // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; one not up holds no snapshot a restore reaches.
-    if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(ask.sessionId)) {
-      return RESTORE_OUTCOME.MISSING;
+    if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(sessionId)) {
+      return undefined;
     }
     // A stopped sandbox whose snapshot the provider dropped holds no checkout to put back.
     const running =
       runningOf(sandbox) ??
       (yield* resumedRunning(sandbox.name).pipe(
         Effect.catchTag("SnapshotGone", () => Effect.succeed(undefined)),
+        Effect.provideService(Sandbox, sandboxes),
       ));
-    if (running === undefined) return RESTORE_OUTCOME.MISSING;
-    yield* touchAgentSandbox(sandbox.name);
-    const ran = yield* sandboxes.run(running, {
+    if (running === undefined) return undefined;
+    yield* touchAgentSandbox(sandbox.name).pipe(Effect.provideService(Sandbox, sandboxes));
+    return yield* sandboxes.run(running, {
       command: "sh",
-      args: ["-c", CHECKOUT_RESTORE_SCRIPT],
+      args: ["-c", script],
       cwd: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
-      env: checkoutRestoreEnv(ask.snapshot),
+      env,
     });
+  });
+
+/** The restore in the agent's sandbox, woken where it stopped. */
+const restoreIn = (sandboxes: SandboxService, ask: RestoreAsk) =>
+  Effect.gen(function* () {
+    const ran = yield* ranInCheckout(
+      sandboxes,
+      ask.sessionId,
+      CHECKOUT_RESTORE_SCRIPT,
+      checkoutRestoreEnv(ask.snapshot),
+    );
+    if (ran === undefined) return RESTORE_OUTCOME.MISSING;
     if (ran.exitCode === 0) return RESTORE_OUTCOME.RESTORED;
     if (ran.exitCode === CHECKOUT_RESTORE_EXIT.MISSING) return RESTORE_OUTCOME.MISSING;
     yield* Effect.logWarning(
@@ -117,15 +140,72 @@ const restoreIn = (ask: RestoreAsk) =>
     return RESTORE_OUTCOME.FAILED;
   });
 
+/** What a diff is asked: whose sandbox, by its session, and the two sides the diff stands between. */
+export interface DiffAsk {
+  /** The session the agent's sandbox is tagged with. */
+  readonly sessionId: string;
+  readonly range: CheckoutDiffRange;
+}
+
+/** The diff in the agent's sandbox, woken where it stopped, as the restore runs. */
+const diffIn = (sandboxes: SandboxService, ask: DiffAsk) =>
+  Effect.gen(function* () {
+    const ran = yield* ranInCheckout(
+      sandboxes,
+      ask.sessionId,
+      CHECKOUT_DIFF_SCRIPT,
+      checkoutDiffEnv(ask.range),
+    );
+    const missing: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.MISSING };
+    if (ran === undefined) return missing;
+    if (ran.exitCode === 0) {
+      const diffed: CheckoutDiffOutcome = {
+        outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
+        diff: ran.stdout,
+      };
+      return diffed;
+    }
+    if (ran.exitCode === CHECKOUT_DIFF_EXIT.MISSING) return missing;
+    yield* Effect.logWarning(
+      `the checkout was not diffed: the diff exited ${ran.exitCode}: ${stderrTail(ran.stderr)}`,
+    );
+    const failed: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
+    return failed;
+  });
+
+/**
+ * The diff of the agent's checkout between the two sides, as above, within
+ * the restore's bound; a call that failed or the bound passed is a failure,
+ * logged, and never the caller's own.
+ */
+export const diffCheckout = /* @__PURE__ */ Effect.fn("web/diffCheckout")(function* (
+  sandboxes: SandboxService,
+  ask: DiffAsk,
+): Effect.fn.Return<CheckoutDiffOutcome, never, DatabaseServices> {
+  const outcome = yield* diffIn(sandboxes, ask).pipe(
+    Effect.timeoutOption(CHECKOUT_RESTORE.TIMEOUT),
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`the checkout was not diffed: ${String(failure)}`),
+        Option.some<CheckoutDiffOutcome>({ outcome: CHECKOUT_DIFF_OUTCOME.FAILED }),
+      ),
+    ),
+  );
+  if (Option.isSome(outcome)) return outcome.value;
+  yield* Effect.logWarning("the checkout was not diffed in time");
+  return { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
+});
+
 /**
  * The agent's checkout put back to the snapshot, as above, within the
  * bound; a call that failed or the bound passed is a failure, logged, and
  * never the caller's own.
  */
 export const restoreCheckout = /* @__PURE__ */ Effect.fn("web/restoreCheckout")(function* (
+  sandboxes: SandboxService,
   ask: RestoreAsk,
-): Effect.fn.Return<RestoreOutcome, never, Sandbox | DatabaseServices> {
-  const outcome = yield* restoreIn(ask).pipe(
+): Effect.fn.Return<RestoreOutcome, never, DatabaseServices> {
+  const outcome = yield* restoreIn(sandboxes, ask).pipe(
     Effect.timeoutOption(CHECKOUT_RESTORE.TIMEOUT),
     Effect.catch((failure) =>
       Effect.as(

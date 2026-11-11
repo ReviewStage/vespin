@@ -1,6 +1,6 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
-import { DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
@@ -16,6 +16,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   ANNOUNCE,
+  BUTTON_VARIANT,
+  Button,
   Checkbox,
   CONFIRM_LOSS,
   COPY_FIELD_PROMPT,
@@ -23,6 +25,7 @@ import {
   ConfirmDialog,
   CopyField,
   type DialogConfirm,
+  ExternalIcon,
   OutsideSteps,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
@@ -51,7 +54,7 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { actMutation } from "../act-mutations.js";
+import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
@@ -105,8 +108,9 @@ import { MenuRow } from "./menu-row.js";
  * off removes, after asking, since that takes the host and its agents'
  * folders off this Mac. While on it says the host's standing, and offline
  * until the service lists it. A Mac removed from anywhere else reads off,
- * since nothing enrolls it again unasked. A browser tab has no This Mac, so
- * it draws none.
+ * since nothing enrolls it again unasked. A Mac whose host is another
+ * account's says so where turning it on or off is refused. A browser tab has no This
+ * Mac, so it draws none.
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
  * stands and a while after, so a host joining, leaving, renamed, or moving
@@ -136,7 +140,7 @@ const WORDS = {
   ONLINE: "Online",
   OFFLINE: "Offline",
   SETTING_UP: "Setting up…",
-  UPDATING: "Updating…",
+  FAILED: "Failed",
   INSTALL_LABEL: "Run this on a Mac or Linux server",
   APPROVE: "Open the link it prints, and approve its code",
   LOGGED_IN: "A Mac runs your agents only while its user is logged in.",
@@ -161,6 +165,12 @@ const REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
   reason: "Could not remove this machine. Try again.",
 };
+/** Turning This Mac on or off where its host is another account's, which only that account, or an uninstall on this Mac, removes. */
+const ANOTHER_ACCOUNTS_WORDS = `This Mac's host belongs to another ${PRODUCT_NAME} account. Remove it from that account, or run vespin-host uninstall --keep-agents.`;
+const ANOTHER_ACCOUNTS: ActionResult = {
+  status: ACTION_RESULT_STATUS.REJECTED,
+  reason: ANOTHER_ACCOUNTS_WORDS,
+};
 /** Turning This Mac off, refused by the service, said in the dialog that asked. */
 const TURN_OFF_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
@@ -172,31 +182,31 @@ function machineOf(host: HostLine): ListedMachine {
   return { deviceId: host.id, name: host.name, machineId: host.machineId, model: host.model };
 }
 
+/** What each standing a host's line says leads with, and its tint: online after the finished session's dot, setting up plain, offline and failed tinted. */
+const STANDING_LINE = {
+  [DEVICE_STANDING.ONLINE]: { words: WORDS.ONLINE, state: SETTINGS_ROW_STATE.CONNECTED },
+  [DEVICE_STANDING.OFFLINE]: { words: WORDS.OFFLINE, state: SETTINGS_ROW_STATE.ATTENTION },
+  [DEVICE_STANDING.SETTING_UP]: { words: WORDS.SETTING_UP, state: SETTINGS_ROW_STATE.PLAIN },
+  [DEVICE_STANDING.FAILED]: { words: WORDS.FAILED, state: SETTINGS_ROW_STATE.ATTENTION },
+} as const;
+
 /**
- * What a host's line leads with, and its tint: updating plain while the host
- * says it is, whatever its beat, because it restarts on purpose to update and
- * is quiet meanwhile; online after the finished session's dot; setting up
- * plain for a host that just joined and has not beaten yet; offline tinted;
- * and none while its standing cannot be told.
+ * What a host's line leads with, and its tint, as every surface reads the
+ * host (`presenceStanding`): setting up for a host that just joined and is
+ * not read yet, offline for one the read does not name, though it is the
+ * account's own, and none while its standing cannot be told.
  */
 function standingOf(
   host: HostLine,
   book: PresenceBook,
   joined: boolean,
 ): { readonly words: string; readonly state: SettingsRowState } | undefined {
-  if (host.update === HOST_UPDATE.UPDATING) {
-    return { words: WORDS.UPDATING, state: SETTINGS_ROW_STATE.PLAIN };
-  }
-  const beat = presenceStanding(book, host.id);
-  if (beat === undefined && joined)
-    return { words: WORDS.SETTING_UP, state: SETTINGS_ROW_STATE.PLAIN };
-  // Note that a host the read does not name, though it is the account's own, is gone.
-  const standing = beat ?? DEVICE_STANDING.OFFLINE;
-  if (standing === DEVICE_STANDING.OFFLINE) {
-    return { words: WORDS.OFFLINE, state: SETTINGS_ROW_STATE.ATTENTION };
-  }
-  if (standing !== DEVICE_STANDING.ONLINE) return undefined;
-  return { words: WORDS.ONLINE, state: SETTINGS_ROW_STATE.CONNECTED };
+  const standing =
+    presenceStanding(book, host.id) ??
+    (joined ? DEVICE_STANDING.SETTING_UP : DEVICE_STANDING.OFFLINE);
+  return standing === DEVICE_STANDING.UNKNOWN || standing === DEVICE_STANDING.CHECKING
+    ? undefined
+    : STANDING_LINE[standing];
 }
 
 /**
@@ -245,6 +255,10 @@ const THIS_MAC_WORDS = {
   SWITCH: "Run agents on this Mac",
   OFF: "Run your agents on this Mac instead of the cloud.",
   TURN_ON_FAILED: "Could not turn on this Mac. Try again.",
+  NEEDS_APPROVAL: `macOS won't run agents on this Mac until you allow ${PRODUCT_NAME} in System Settings › General › Login Items.`,
+  OPEN_LOGIN_ITEMS: "Open Login Items",
+  STILL_LISTED: `This Mac is off, but ${PRODUCT_NAME} couldn't remove it from your machines. Remove it from the list below.`,
+  FOLDER_LEFT: "This Mac is off, but an agent's folder couldn't be deleted.",
 } as const;
 
 /** What turning This Mac off asks first: it takes the host off this Mac, and its agents' folders where the member leaves that checked. */
@@ -264,7 +278,7 @@ function deleteFoldersWords(count: number): { readonly label: string; readonly d
 }
 
 /** What Remove says goes, whatever the machine: the host removes itself from the machine as it hears so (`apps/host`'s `removeItself`). */
-const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, its agents' folders included. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
+const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, keeping its agents' folders in ~/.vespin/agents. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
 
 /** What Remove adds for a host that reads offline, which hears it was removed only once it is online again, and the command for one that never is. */
 const REMOVED_OFFLINE =
@@ -314,8 +328,9 @@ function HostRow({
 
 /**
  * This Mac's row in the desktop app: Run agents on this Mac, on while its
- * host stands, what its host says while on, offline until the service lists
- * it, and what it does while off. Note that the row's words are This Mac,
+ * host stands, what its host says while on, setting up until the service
+ * lists it, failed while the app cannot start its host, and what it does
+ * while off. Note that the row's words are This Mac,
  * as every list of machines calls it, and the switch's own name says what
  * it sets.
  */
@@ -323,40 +338,70 @@ function ThisMacRow({
   host,
   book,
   on,
+  needsApproval,
+  setupFailed,
   onChange,
 }: {
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
   book: PresenceBook;
   on: boolean;
+  /** Whether macOS holds its host until the member allows the app in Login Items. */
+  needsApproval: boolean;
+  /** Whether the app could not start its host, and is trying again. */
+  setupFailed: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
+  const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
   const description = !on ? (
     THIS_MAC_WORDS.OFF
+  ) : setupFailed ? (
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>{WORDS.FAILED}</SettingsRowStateLine>
   ) : host === undefined ? (
-    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
-      {WORDS.OFFLINE}
-    </SettingsRowStateLine>
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>{WORDS.SETTING_UP}</SettingsRowStateLine>
   ) : (
-    <StandingLine host={host} book={book} joined={false} />
+    <StandingLine host={host} book={book} joined={true} />
   );
   return (
-    <SettingsRow
-      leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
-      label={THIS_MAC}
-      description={description}
-      labelsControl
-    >
-      {(control) => (
-        <Switch
-          id={control.controlId}
-          checked={on}
-          label={THIS_MAC_WORDS.SWITCH}
-          describedBy={control["aria-describedby"]}
-          onChange={(next) => onChange(next)}
-        />
-      )}
-    </SettingsRow>
+    <>
+      <SettingsRow
+        leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
+        label={THIS_MAC}
+        description={description}
+        labelsControl
+      >
+        {(control) => (
+          <Switch
+            id={control.controlId}
+            checked={on}
+            label={THIS_MAC_WORDS.SWITCH}
+            describedBy={control["aria-describedby"]}
+            onChange={(next) => onChange(next)}
+          />
+        )}
+      </SettingsRow>
+      {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
+      {on && needsApproval ? (
+        <SettingsRow
+          label={null}
+          description={
+            <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+              {THIS_MAC_WORDS.NEEDS_APPROVAL}
+            </SettingsRowStateLine>
+          }
+        >
+          {() => (
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<ExternalIcon />}
+              onClick={() => openLoginItems()}
+            >
+              {THIS_MAC_WORDS.OPEN_LOGIN_ITEMS}
+            </Button>
+          )}
+        </SettingsRow>
+      ) : null}
+    </>
   );
 }
 
@@ -512,8 +557,9 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       .catch(() => undefined)
       .then((answer) => {
         if (answer !== undefined && !("failure" in answer)) return;
+        const anotherAccounts = answer !== undefined && answer.anotherAccount === true;
         showToast({
-          words: THIS_MAC_WORDS.TURN_ON_FAILED,
+          words: anotherAccounts ? ANOTHER_ACCOUNTS_WORDS : THIS_MAC_WORDS.TURN_ON_FAILED,
           replayUnmasked: true,
           tone: STATUS_TONE.DANGER,
           failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
@@ -529,7 +575,28 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         on: false,
         deleteFolders: deleteFolders || agentFolders === 0,
       }),
-    answered: (answer) => ("failure" in answer ? TURN_OFF_REFUSED : ACCEPTED),
+    answered: (answer) => {
+      if ("failure" in answer) {
+        return answer.anotherAccount === true ? ANOTHER_ACCOUNTS : TURN_OFF_REFUSED;
+      }
+      // Note that the host's state is gone either way, so what of its removal did not land is said beside the turn off rather than refusing it.
+      if (answer.stillListed === true) {
+        showToast({
+          words: THIS_MAC_WORDS.STILL_LISTED,
+          replayUnmasked: true,
+          tone: STATUS_TONE.ATTENTION,
+        });
+      }
+      if (answer.folderLeft !== undefined) {
+        showToast({
+          words: THIS_MAC_WORDS.FOLDER_LEFT,
+          detail: answer.folderLeft,
+          tone: STATUS_TONE.DANGER,
+          failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
+        });
+      }
+      return ACCEPTED;
+    },
     failed: () => UNREACHED,
   });
   const turningOff = useConfirmDialog(
@@ -571,7 +638,14 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       ) : loaded ? (
         <>
           {thisMac === undefined ? null : (
-            <ThisMacRow host={listedMac} book={book} on={thisMacOn} onChange={switchThisMac} />
+            <ThisMacRow
+              host={listedMac}
+              book={book}
+              on={thisMacOn}
+              needsApproval={thisMac.needsApproval === true}
+              setupFailed={thisMac.setupFailed === true}
+              onChange={switchThisMac}
+            />
           )}
           {others.map((host) => {
             const label = machineName(machineOf(host), listed, naming);

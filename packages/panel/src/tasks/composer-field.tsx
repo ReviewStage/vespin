@@ -60,6 +60,9 @@ const FIELD_CLASS = "ph-no-capture agent-composer-input";
  * cap (`.agent-composer-field`, tasks.css): the editor stands in it, and so
  * does the placeholder of a box still being read.
  */
+/** No commands, for a box that runs none. */
+const NO_COMMANDS: ReadonlySet<string> = new Set();
+
 export function ComposerFieldRoom({
   ref,
   children,
@@ -141,6 +144,7 @@ export function ComposerField({
   input,
   maxLength,
   skills,
+  commands = NO_COMMANDS,
   aria,
   onKey,
   onEnter,
@@ -170,6 +174,8 @@ export function ComposerField({
   input: ComposerInput;
   maxLength: number;
   skills: ReadonlySet<string>;
+  /** The box's own commands, the message's first word naming one drawn as its chip; none where the box runs none. */
+  commands?: ReadonlySet<string>;
   aria: Readonly<Record<string, string | undefined>>;
   onKey: (event: KeyboardEvent) => boolean;
   onEnter: () => void;
@@ -313,6 +319,7 @@ export function ComposerField({
   }, [draft, editor]);
   useLayoutEffect(() => editor.current?.setInput(input), [input, editor, module]);
   useLayoutEffect(() => editor.current?.setSkills(skills), [skills, editor, module]);
+  useLayoutEffect(() => editor.current?.setCommands(commands), [commands, editor, module]);
   const fileNames = files?.names;
   useLayoutEffect(() => {
     if (fileNames !== undefined) editor.current?.setFiles(fileNames);

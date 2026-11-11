@@ -1,3 +1,5 @@
+import { DENIES_WAITING } from "@repo/features/agent-approval-model";
+import { SERVER_HANDED } from "@repo/features/agent-servers-model";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -11,11 +13,17 @@ import {
 import { FAILURE_REASON, remedyLabel, retriesBesideRemedy } from "@repo/features/failure-remedy";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  isSlashCommand,
+  leadingCommand,
+  SLASH_COMMAND,
+  type SlashCommand,
+} from "@repo/features/slash-command";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
-import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
+import { absurd } from "effect";
 import {
   type ComponentProps,
   type ReactNode,
@@ -30,15 +38,22 @@ import { modEnterSends } from "../enter-sends.js";
 import { failureShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
-import { type AgentModeControl, DENIES_WAITING } from "./agent-approvals.js";
+import type { AgentModeControl } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
-import { noteWhileOffline, paidByOf, planNameOf, providerOf } from "./agent-model.js";
+import {
+  noteWhileOffline,
+  paidByOf,
+  planNameOf,
+  providerOf,
+  type SentLine,
+} from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
 import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
+import type { MoveCarry } from "./move-agent.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { useMentionBox } from "./task-mentions.js";
@@ -169,8 +184,12 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * menu (`plus`).
  *
  * An Inbox thread's reply is this same box too (`inbox-answer-box.tsx`),
- * writing to the thread's agent, its model chip and + menu that agent's: its
- * owner hands what only an answer has (`answer`), an open question's controls
+ * writing to the thread's agent. What the box reads off a started agent,
+ * its status, its model chip and permission mode, its servers, its payer's
+ * owner, and its place and forwarding chips, both owners read through one
+ * hook (`agent-box.tsx`'s `useAgentBox`) and spread onto the box as it is,
+ * so a chip added there stands on both (`[check: anti-slop/agent-box-reads-agent]`).
+ * Its owner hands what only an answer has (`answer`), an open question's controls
  * over the field, the checkbox that starts a new thread under the card, Send
  * lit by a pick as by words and reading Got it or Start thread in words, what
  * an unfinished answer lacks, and why a reply did not go. Its Send never
@@ -276,6 +295,16 @@ export interface ComposerQueueing {
   readonly onCancel: () => void;
 }
 
+/** The continue in the cloud a note of the agent's machine gone offline offers, carrying the message the note is of; none where no move is offered. */
+function continuedInCloud(
+  noted: SentLine | undefined,
+  onContinueInCloud: ((carry: MoveCarry) => void) | undefined,
+): (() => void) | undefined {
+  if (onContinueInCloud === undefined) return undefined;
+  return () =>
+    onContinueInCloud({ words: noted?.text ?? "", attachments: noted?.attachments ?? [] });
+}
+
 export function AgentComposer({
   agentId,
   status,
@@ -316,6 +345,8 @@ export function AgentComposer({
   answer,
   mode,
   approvalsWaiting = 0,
+  onClear,
+  onContinueInCloud,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
@@ -392,6 +423,10 @@ export function AgentComposer({
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
+  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no commands, as New task's and a draft agent's, which have no session yet. */
+  onClear?: (() => Promise<boolean>) | undefined;
+  /** The agent continued in the cloud with the message given, which a note of its machine gone offline offers (`FAILURE_REASON.CONTINUE_IN_CLOUD`); none where no such move is offered. */
+  onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
   // Who pays, as the chip's menu names it, is the context popover's last line too.
@@ -412,6 +447,10 @@ export function AgentComposer({
   // The popover the ⋯ may open in place of its hidden press.
   const [contextOpen, setContextOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
+  // The newest `/model` the box ran, which the model chip acts on.
+  const [modelAsk, setModelAsk] = useState(0);
+  // Whether a `/clear` the box ran waits on its answer, which holds the box.
+  const [clearing, setClearing] = useState(false);
   // Note that a Stop the service took reads Stopping until the agent offers none, because the task
   // list carries the stop a moment after the answer.
   if (stopping && !stoppable) setStopping(false);
@@ -420,7 +459,8 @@ export function AgentComposer({
   const latest = useRef(composer);
   latest.current = composer;
   const closed = composer.closed !== undefined;
-  const held = composer.sending || closed;
+  // Note that a box clearing its session holds, so a message sent at once never reaches the session it ends.
+  const held = composer.sending || closed || clearing;
   const editingQueued = queueing?.editing === true;
   const statuses = useIntegrationStatuses();
   const box = useMessageBox({
@@ -437,6 +477,11 @@ export function AgentComposer({
     pastesTextAsFile: true,
     self: agentId,
     skills,
+    // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
+    commands:
+      onClear === undefined || editingQueued
+        ? undefined
+        : { onRun: (name) => runCommand(name, true) },
     keywords,
     // A server's chip in the box says what a send now does with it: opens a turn, or steers the one running.
     servers: {
@@ -478,11 +523,13 @@ export function AgentComposer({
   const remedy =
     sendNote === undefined
       ? undefined
-      : // Note that a move's retry is the box's as the move lands, and only while the refusal it
-        // was pressed for still stands, so an edit or a later send meanwhile is never sent over.
-        repositoryRemedy(sendNote, () => {
-          if (latest.current.note === sendNote) latest.current.retry();
-        });
+      : sendNote.reason === FAILURE_REASON.CONTINUE_IN_CLOUD
+        ? continuedInCloud(composer.notedLine, onContinueInCloud)
+        : // Note that a move's retry is the box's as the move lands, and only while the refusal it
+          // was pressed for still stands, so an edit or a later send meanwhile is never sent over.
+          repositoryRemedy(sendNote, () => {
+            if (latest.current.note === sendNote) latest.current.retry();
+          });
   // Note that a remedy finished where we cannot watch keeps Retry beside it, since the same send goes once it is done.
   const remedyWords = sendNote === undefined ? undefined : remedyLabel(sendNote);
   /** A note of the box's that is a failure of the app's, which no Retry mends: why the box is closed, or a change of model did not take. */
@@ -589,8 +636,69 @@ export function AgentComposer({
   };
   /** The box's message sent now: into the turn under way, or opening one. */
   const steer = () => sentBy(composer.send);
-  /** Send as it stands: an edit saved, the message queued where a send queues now, or sent. */
+  /**
+   * One of the box's own commands, chosen from the `/` list or typed as the
+   * message's first word: `/model` opens the model chip's menu, its search
+   * focused, `/clear` and `/new` start the
+   * agent's harness on a fresh session, and `/compact` chosen from the list
+   * is written into the words, where the developer may add what to keep
+   * before sending it, the service handing it to the harness as its
+   * compaction (`harness-commands.ts`). Whatever runs empties the box.
+   */
+  const runCommand = (name: SlashCommand, chosen: boolean) => {
+    switch (name) {
+      case SLASH_COMMAND.COMPACT: {
+        const words = leadingCommand(composer.draft)?.words ?? "";
+        if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
+        return;
+      }
+      case SLASH_COMMAND.MODEL:
+        editor.current?.clear();
+        setModelAsk((was) => was + 1);
+        return;
+      case SLASH_COMMAND.CLEAR:
+      case SLASH_COMMAND.NEW:
+        editor.current?.clear();
+        if (onClear === undefined) return;
+        // The box holds until the answer lands, then hands the caret back as a send's does.
+        refocus.current = frame.current?.contains(document.activeElement) === true;
+        setClearing(true);
+        setSends((count) => count + 1);
+        onClear().then(
+          () => setClearing(false),
+          () => setClearing(false),
+        );
+        return;
+      default:
+        return absurd(name);
+    }
+  };
+  /**
+   * The command the box's words run rather than send, typed as their first
+   * word: `/model`, whatever follows it, which is dropped as the menu opens,
+   * since the agent would only read it as a stray line; or `/clear` and
+   * `/new` typed alone.
+   */
+  const typedCommand = (): SlashCommand | undefined => {
+    if (onClear === undefined || editingQueued) return undefined;
+    const typed = leadingCommand(composer.draft);
+    if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
+    switch (typed.name) {
+      case SLASH_COMMAND.MODEL:
+        return typed.name;
+      case SLASH_COMMAND.COMPACT:
+        return undefined;
+      case SLASH_COMMAND.CLEAR:
+      case SLASH_COMMAND.NEW:
+        return typed.words === "" ? typed.name : undefined;
+      default:
+        return absurd(typed.name);
+    }
+  };
+  /** Send as it stands: an edit saved, the message queued where a send queues now, or sent; one of the box's commands typed runs instead. */
   const submit = () => {
+    const command = typedCommand();
+    if (command !== undefined) return runCommand(command, false);
     if (editingQueued) return sentBy(queueing.onSave);
     if (queuesNow) return sentBy(queueing.onQueue);
     steer();
@@ -661,6 +769,7 @@ export function AgentComposer({
                 owner={owner}
                 narrow={box.folds(FOLD_WIDTH.MODEL)}
                 permissions={mode}
+                asked={modelAsk}
               />
             )}
             <AgentContextRing

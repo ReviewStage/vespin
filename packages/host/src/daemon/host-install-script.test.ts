@@ -261,7 +261,10 @@ const box = (
       'case "$1" in',
       '  bootstrap) touch "$FAKE_ROOT/loaded" ;;',
       '  bootout) rm -f "$FAKE_ROOT/loaded" ;;',
-      '  print) case "$2" in */*/*) [ -e "$FAKE_ROOT/loaded" ] ;; esac ;;',
+      '  print) case "$2" in',
+      '    */dev.vespin.host) [ -e "$FAKE_ROOT/app-loaded" ] ;;',
+      '    */*/*) [ -e "$FAKE_ROOT/loaded" ] ;;',
+      "  esac ;;",
       "esac",
     ].join("\n"),
   });
@@ -280,6 +283,7 @@ const box = (
     spawnSync("sh", [...args], { cwd: folder(), env: { ...env, ...extra }, encoding: "utf8" });
   return {
     home,
+    root,
     releases: join(home, ".local/share/vespin-host"),
     link: join(home, ".local/bin/vespin-host"),
     state: join(home, ".local/state/vespin-host"),
@@ -502,6 +506,18 @@ describe("the host's install script", () => {
     );
   });
 
+  it("installs nothing on a Mac where the app's host is loaded, and points to the app", () => {
+    const computer = box(OS.DARWIN);
+    writeFileSync(join(computer.root, "app-loaded"), "");
+
+    const answer = computer.install("0.3.0");
+
+    expect(answer.status, answer.stderr).toBe(0);
+    expect(answer.stdout).toContain("The Vespin app runs this Mac's host.");
+    expect(stands(computer.releases)).toBe(false);
+    expect(stands(computer.service)).toBe(false);
+  });
+
   it("refuses to swap a release for the same version's while its service will not stop, leaving the release it runs as it stands", () => {
     const computer = box(OS.LINUX);
     expect(computer.install("0.3.0").status).toBe(0);
@@ -596,13 +612,14 @@ describe("the host's install script", () => {
   }
 
   it.each([
-    { os: "Linux", stops: true },
-    { os: "Linux", stops: false },
-    { os: "Darwin", stops: true },
-    { os: "Darwin", stops: false },
+    { os: "Linux", stops: true, keepAgents: false },
+    { os: "Linux", stops: false, keepAgents: false },
+    { os: "Darwin", stops: true, keepAgents: false },
+    { os: "Darwin", stops: false, keepAgents: false },
+    { os: "Darwin", stops: true, keepAgents: true },
   ])(
-    "the account install's uninstall, run through ~/.local/bin/vespin-host with no sudo on $os, stops its service through the account's own manager, warns of unpushed work, leaves Vespin, and removes the folders of the agents its daemon made, its state, its releases and its link, in that order, leaving another install's agents, the clones and a Linux account's lingering, said, unless its service will not stop (stops: $stops)",
-    ({ os, stops }) => {
+    "the account install's uninstall, run through ~/.local/bin/vespin-host with no sudo on $os, stops its service through the account's own manager, warns of unpushed work, leaves Vespin, and removes the folders of the agents its daemon made, a Mac's log, its state, its releases and its link, in that order, leaving another install's agents, the clones and a Linux account's lingering, said, unless its service will not stop (stops: $stops), and keeps every agent's folder and the log, warning of nothing, with --keep-agents (keepAgents: $keepAgents)",
+    ({ os, stops, keepAgents }) => {
       const fakes = folder();
       const home = folder();
       const asked = join(folder(), "asked.log");
@@ -648,14 +665,22 @@ describe("the host's install script", () => {
           : join(home, "Library/LaunchAgents/dev.vespin.host.standalone.plist");
       mkdirSync(join(service, ".."), { recursive: true });
       writeFileSync(service, `<string>${releases}/current/bin/vespin-host</string>\n`);
+      const log = join(home, "Library/Logs/Vespin Host");
+      if (os === "Darwin") mkdirSync(log, { recursive: true });
 
-      const answer = spawnSync("sh", [link, "uninstall"], {
-        env: { PATH: `${fakes}:${process.env.PATH}`, HOME: home },
-        encoding: "utf8",
-      });
+      const answer = spawnSync(
+        "sh",
+        [link, "uninstall", ...(keepAgents ? ["--keep-agents"] : [])],
+        {
+          env: { PATH: `${fakes}:${process.env.PATH}`, HOME: home },
+          encoding: "utf8",
+        },
+      );
 
       expect(answer.status).toBe(stops ? 0 : 1);
-      expect(answer.stderr).toContain("Work in them that was not pushed goes with them.");
+      expect(answer.stderr.includes("Work in them that was not pushed goes with them.")).toBe(
+        !keepAgents,
+      );
       expect(answer.stdout.includes("Left lingering on")).toBe(stops && os === "Linux");
       const commands = readFileSync(asked, "utf8").trim().split("\n");
       const uid = spawnSync("id", ["-u"], { encoding: "utf8" }).stdout.trim();
@@ -674,7 +699,8 @@ describe("the host's install script", () => {
       expect(answer.stdout.split("\n").filter((line) => line.startsWith("Removed "))).toEqual(
         stops
           ? [
-              `Removed ${join(home, ".vespin/agents/one")}.`,
+              ...(os === "Darwin" && !keepAgents ? [`Removed ${log}.`] : []),
+              ...(keepAgents ? [] : [`Removed ${join(home, ".vespin/agents/one")}.`]),
               `Removed ${state}.`,
               `Removed ${releases}.`,
               `Removed ${link}.`,
@@ -683,7 +709,8 @@ describe("the host's install script", () => {
       );
       for (const [place, kept] of [
         [service, !stops],
-        [join(home, ".vespin/agents/one"), !stops],
+        [join(home, ".vespin/agents/one"), !stops || keepAgents],
+        [log, os === "Darwin" && (!stops || keepAgents)],
         [state, !stops],
         [releases, !stops],
         [link, !stops],

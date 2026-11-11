@@ -60,6 +60,7 @@ import {
   subject,
   TASK_ID,
   type TranscriptLive,
+  TURN_CHANGES,
   WAITING,
   WORKSPACE_ID,
 } from "./testing/agents-subject.js";
@@ -176,6 +177,10 @@ it.effect("each method asks the service once and answers what it said, whole", (
     });
     assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID }), CHANGES);
     assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID, number: 11 }), CHANGES);
+    assert.deepEqual(
+      yield* acts.AGENTS_TURN_CHANGES({ agentId: AGENT_ID, messageId: "line-1" }),
+      TURN_CHANGES,
+    );
     assert.deepEqual(
       yield* acts.CHAPTERS_GENERATE({
         agentId: AGENT_ID,
@@ -333,6 +338,7 @@ it.effect("each method asks the service once and answers what it said, whole", (
       `page:${AGENT_ID}`,
       `changes:${AGENT_ID}`,
       `changes:${AGENT_ID}#11`,
+      `turn-changes:${AGENT_ID}:line-1`,
       `chapters-generate:${AGENT_ID}#11`,
       `github-image:${AGENT_ID}:https://camo.githubusercontent.com/abc`,
       `pull-request-action:${AGENT_ID}#11:${PULL_REQUEST_ACTION.READY_FOR_REVIEW}`,
@@ -408,6 +414,7 @@ function transcriptRows(live: { readonly transcript: TranscriptLive }, seq: numb
     windowParts: [],
     queueRevision: [],
     launch: [],
+    boot: [],
   });
 }
 
@@ -649,7 +656,7 @@ it.effect(
 );
 
 it.effect(
-  "a held transcript reads its page again when only the agent's queue moves, the page laid with the queue's revision it was read at, or when a line of the developer's lands awaiting its turn, whoever wrote it",
+  "a held transcript reads its page again when only the agent's queue moves, the page laid with the queue's revision it was read at, when only its first launch's boot moves, or when a line of the developer's lands awaiting its turn, whoever wrote it",
   () =>
     Effect.gen(function* () {
       const {
@@ -676,6 +683,12 @@ it.effect(
       yield* nextPoll;
       assert.equal(reads(), beforeQueue + 1, "the queue moving reads the page");
       assert.equal(held().at(-1)?.word?.queueRevision, 1, "its queue is at least that new");
+
+      // A first launch's boot moving on, from Starting to its hand-off, moves nothing else.
+      const beforeBoot = reads();
+      live.transcript.set({ boot: [{ attempt: 1, phase: "handing-off", failure: null }] });
+      yield* nextPoll;
+      assert.equal(reads(), beforeBoot + 1, "the boot moving reads the page");
 
       // A queue's hand-off writes the member's line before its turn is opened; the page says the agent runs.
       const beforeLine = reads();
@@ -1371,7 +1384,6 @@ const PLAN_SCOPE = { kind: "plan", id: TASK_ID } as const;
 /** Steps taken until the host has told `times` inboxes, since a row's digest is the platform's own promise. */
 const toldTimes = (told: () => readonly unknown[], times: number) =>
   Effect.repeat(Effect.yieldNow, { until: () => told().length >= times, times: 10_000 });
-const AGENT_SCOPE = { kind: "agent", id: AGENT_ID } as const;
 
 /** One scope's read as the host last told the held inboxes, as a wire value; none where it holds none of the scope. */
 function heldOf(
@@ -1451,7 +1463,7 @@ it.effect(
 
       // Eight other holders held and let go push the plan out, and its read is let go with its rows.
       const others = Array.from({ length: 8 }, (_, at) => ({
-        kind: INBOX_SCOPE_KIND.AGENT,
+        kind: INBOX_SCOPE_KIND.PLAN,
         id: `0000000${at}-1111-4a6b-9c33-0d1e2f3a4b5c`,
       }));
       for (const scope of others) {
@@ -1507,27 +1519,27 @@ it.effect(
 );
 
 it.effect(
-  "an agent's inbox the account does not reach is told failed, as is one the service answers nothing for, Try again reads it anew telling nothing meanwhile, and behind a closed gate a hold reads nothing until the gate opens",
+  "a plan's inbox the account does not reach is told failed, as is one the service answers nothing for, Try again reads it anew telling nothing meanwhile, and behind a closed gate a hold reads nothing until the gate opens",
   () =>
     Effect.gen(function* () {
       const refused = yield* subject();
       refused.sealScope({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
-      yield* refused.acts.AGENTS_INBOX_FOLLOW.hold(AGENT_SCOPE);
+      yield* refused.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(refused.told, AGENT_SCOPE), { failed: true });
+      assert.deepEqual(heldOf(refused.told, PLAN_SCOPE), { failed: true });
 
       const unsealed = yield* subject();
-      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.hold(AGENT_SCOPE);
+      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(unsealed.told, AGENT_SCOPE), { failed: true });
-      assert.deepEqual(unsealed.asked, [`agent-inbox-live:${AGENT_ID}`]);
+      assert.deepEqual(heldOf(unsealed.told, PLAN_SCOPE), { failed: true });
+      assert.deepEqual(unsealed.asked, [`description-inbox-live:${TASK_ID}`]);
       unsealed.sealScope(LIVE_ANSWERED);
-      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.retry(AGENT_SCOPE);
+      yield* unsealed.acts.AGENTS_INBOX_FOLLOW.retry(PLAN_SCOPE);
       yield* settled;
-      assert.deepEqual(heldOf(unsealed.told, AGENT_SCOPE), {});
+      assert.deepEqual(heldOf(unsealed.told, PLAN_SCOPE), {});
       assert.deepEqual(unsealed.asked, [
-        `agent-inbox-live:${AGENT_ID}`,
-        `agent-inbox-live:${AGENT_ID}`,
+        `description-inbox-live:${TASK_ID}`,
+        `description-inbox-live:${TASK_ID}`,
       ]);
 
       const signedOut = yield* subject({ signedIn: false });
@@ -1586,7 +1598,7 @@ it.effect(
       yield* reset;
       yield* settled;
       assert.equal(live.scope.held(), 0, "a sign-out lets its poll go");
-      assert.deepEqual(told().at(-1), { plan: {}, agent: {} });
+      assert.deepEqual(told().at(-1), { plan: {} });
 
       yield* open;
       yield* settled;

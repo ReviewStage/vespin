@@ -14,8 +14,13 @@ import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
+import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
+import { providerOf } from "@repo/features/model-label";
+import type { ModelChoice, ModelProvider, ModelsAnswer } from "@repo/features/models-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
+import { HOST_LIVE } from "@repo/features/tasks-view";
+import { formatInstant } from "@repo/features/time-format";
 import {
   type AccountExperiment,
   type AccountExperimentChoices,
@@ -192,6 +197,38 @@ export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionRep
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
 
+/** What a window shows may be behind for: this machine offline, the service not answering, or live updates catching up, the machine's own network first, since nothing else can be read without it. */
+export const LIVE_MARK = {
+  MAC_OFFLINE: "mac-offline",
+  SERVICE_OFFLINE: "service-offline",
+  CATCHING_UP: "catching-up",
+} as const;
+
+export type LiveMark = (typeof LIVE_MARK)[keyof typeof LIVE_MARK];
+
+/** Each mark's word and the hint that says why, which the panel's Offline pill and the iOS app's offline notice say alike. */
+export const LIVE_MARK_WORDS = {
+  [LIVE_MARK.MAC_OFFLINE]: { word: "Offline", hint: "You're offline." },
+  [LIVE_MARK.SERVICE_OFFLINE]: {
+    word: "Offline",
+    hint: "Can't connect. Check your internet connection.",
+  },
+  [LIVE_MARK.CATCHING_UP]: {
+    word: "Catching up",
+    hint: "Live updates fell behind. What you see may be out of date.",
+  },
+} as const satisfies Record<LiveMark, { readonly word: string; readonly hint: string }>;
+
+/** What may be behind now, or none, which redraws its readers only as it turns. */
+export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined => {
+  const { network } = state;
+  if (!network.online) return LIVE_MARK.MAC_OFFLINE;
+  const live = state.tasks.live;
+  if (!network.reachable || live === HOST_LIVE.OFFLINE) return LIVE_MARK.SERVICE_OFFLINE;
+  if (live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
+  return undefined;
+};
+
 /** Where the task list's read stands: not yet asked, on its way, read, or refused. */
 export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;
 
@@ -226,6 +263,36 @@ export const selectAdminAccess = (state: AppStateSnapshot): boolean => state.acc
 /** Whether the account's access is still being read, as it is for a moment after a sign-in or a launch. */
 export const selectAdminAccessPending = (state: AppStateSnapshot): boolean =>
   state.access.pending === true;
+
+/** Where the member's grant of support access stands, as Settings' row reads it on every client. */
+export interface SupportAccessStanding {
+  /** Whether a grant stands now, so the row's press revokes it. */
+  readonly granted: boolean;
+  /** Whether a grant may be offered: not while a maintainer is already signed in as the member, since the service refuses one then, nor before the access is read, since a grant standing unread would be extended. */
+  readonly grantable: boolean;
+  /** What the row says beside it: until when a grant stands, or what granting means. */
+  readonly words: string;
+}
+
+/**
+ * The member's grant of support access read at `now`, in epoch
+ * milliseconds: whether it stands and until when, and whether a grant may
+ * be offered. A revoke is always offered where one stands, and ends a
+ * maintainer's sign-in.
+ */
+export function supportAccessStanding(state: AppStateSnapshot, now: number): SupportAccessStanding {
+  const until = state.access.supportAccessUntil;
+  const granted = until !== undefined && until > now;
+  const impersonated =
+    state.account.status === ACCOUNT_STATUS.SIGNED_IN && state.account.impersonated === true;
+  return {
+    granted,
+    grantable: !granted && !impersonated && state.access.pending !== true,
+    words: granted
+      ? `The ${PRODUCT_NAME} team can sign in as you until ${formatInstant(until)}.`
+      : `Let the ${PRODUCT_NAME} team sign in as you to help.`,
+  };
+}
 
 const experimentSelects = new Map<AccountExperiment, (state: AppStateSnapshot) => boolean>();
 
@@ -351,6 +418,18 @@ export const selectAgentTitles = memoizedSelect(
     ),
 );
 
+/** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as the list moves. */
+export const selectAgentHarnesses = memoizedSelect(
+  (state: AppStateSnapshot) => [state.tasks],
+  (tasks): ReadonlyMap<string, ModelProvider> =>
+    new Map(
+      (tasks.taskAgents ?? []).flatMap(({ id, model }) => {
+        const harness = providerOf(model);
+        return harness === undefined ? [] : [[id, harness] as const];
+      }),
+    ),
+);
+
 /** Where the account's feed of Inbox threads stands: still on its first read, refused, or answered. */
 export const INBOX_FEED = {
   READING: "reading",
@@ -443,6 +522,19 @@ export function selectTranscript(
 export function selectModels(state: AppStateSnapshot): AppHostRead<ModelsAnswer> | undefined {
   const accountId = signedInAccountId(state.account);
   return accountId === undefined ? undefined : state[LIVE_READ.MODELS][accountId];
+}
+
+/** Where every one of the signed-in account's integrations stands, as the host holds its read (`ACT_KIND.INTEGRATIONS_FOLLOW`), as a `select`; none before it is read. */
+export function selectIntegrations(
+  state: AppStateSnapshot,
+): AppHostRead<IntegrationStatusesAnswer> | undefined {
+  const accountId = signedInAccountId(state.account);
+  return accountId === undefined ? undefined : state[LIVE_READ.INTEGRATIONS][accountId];
+}
+
+/** Whether the reader pinned the agent, as the task list follows their pins, as a `select`. */
+export function selectAgentPinned(agentId: string): (state: AppStateSnapshot) => boolean {
+  return (state) => (state.tasks.taskAgentPins ?? []).some((pin) => pin.agentId === agentId);
 }
 
 /**

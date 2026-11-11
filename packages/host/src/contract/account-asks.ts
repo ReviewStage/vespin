@@ -16,6 +16,8 @@ import {
   memoriesAnswerViewSchema,
   memoriesFollowParamsSchema,
   memoryForgetParamsSchema,
+  memorySaveAnswerViewSchema,
+  memorySaveParamsSchema,
   providerKeyForAgentsParamsSchema,
   providerKeyRemoveParamsSchema,
   providerKeySaveParamsSchema,
@@ -26,6 +28,14 @@ import {
   pushDeviceNotifyParamsSchema,
   pushDeviceRegisterParamsSchema,
   pushDeviceStatusAnswerViewSchema,
+  soundAddAnswerViewSchema,
+  soundAddParamsSchema,
+  soundChoiceAnswerViewSchema,
+  soundChoiceParamsSchema,
+  soundClipAnswerViewSchema,
+  soundIdParamsSchema,
+  soundRenameParamsSchema,
+  soundStateViewSchema,
   subscriptionLabelParamsSchema,
   subscriptionOrderParamsSchema,
 } from "@repo/features/agent-view";
@@ -41,8 +51,8 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
  * Only a panel draws Settings or records a clip, so every ask is the
  * panel's alone. A kind that carries nothing takes `undefined` alone, so a
  * window calls it with no payload and one sent anything is refused. A save's
- * key and a dictated clip each pass through to the host once and are noted
- * nowhere, and a refusal or a defect of the host's is drawn as the
+ * key, a dictated clip, and a sound of the account's own each pass through to the host once
+ * and are noted nowhere, and a refusal or a defect of the host's is drawn as the
  * coding-agent calls' unanswered failure. A workspace's memories, the account's provider keys, and its
  * GitHub token are live follows, each declared once (`live-follow.ts`).
  */
@@ -138,6 +148,54 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     refusal: "Could not forget that memory on this system.",
     panelOnly: true,
     door: ACT.ROW_WRITE,
+    unanswered: UNANSWERED,
+  }),
+  MEMORIES_SAVE: hostAct({
+    input: memorySaveParamsSchema,
+    output: memorySaveAnswerViewSchema,
+    refusal: "Could not save that memory on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: UNANSWERED,
+  }),
+  SOUND_READ: hostAct({
+    input: soundIdParamsSchema,
+    output: soundClipAnswerViewSchema,
+    refusal: "Could not read your sound on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: UNANSWERED,
+  }),
+  SOUND_ADD: hostAct({
+    input: soundAddParamsSchema,
+    output: soundAddAnswerViewSchema,
+    refusal: "Could not add your sound on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
+  SOUND_RENAME: hostAct({
+    input: soundRenameParamsSchema,
+    output: soundStateViewSchema,
+    refusal: "Could not rename your sound on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
+  SOUND_REMOVE: hostAct({
+    input: soundIdParamsSchema,
+    output: soundStateViewSchema,
+    refusal: "Could not remove your sound on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
+  SOUND_CHOOSE: hostAct({
+    input: soundChoiceParamsSchema,
+    output: soundChoiceAnswerViewSchema,
+    refusal: "Could not choose your sound on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,
   }),
   DICTATION_TRANSCRIBE: hostAct({

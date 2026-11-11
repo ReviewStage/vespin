@@ -2,6 +2,7 @@ import {
   BUTTON_VARIANT,
   ButtonLink,
   LANDING_SCENE,
+  LandingBackedBy,
   LandingPage,
   LandingSection,
   MARK_PROVIDER,
@@ -19,6 +20,9 @@ import {
   WEB_APP_URL,
 } from "./SiteChrome";
 
+/** Our page among Y Combinator's companies, which the hero's backing chip opens. */
+const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
+
 /**
  * The landing: the one line beside the copper ball, then a section for each
  * of the product's features over the app's own screens at work, and the
@@ -30,6 +34,7 @@ export function App(): React.JSX.Element {
     <LandingPage
       bar={<SiteNavigation current={{ page: SITE_PAGE.HOME }} />}
       barCall={<SiteBarDownload />}
+      badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
       title="An inbox for all your coding agents."
       actions={
         <>

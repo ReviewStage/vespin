@@ -1,5 +1,4 @@
 import { descriptionSections } from "@repo/features/description-document";
-import { holderTaskId } from "@repo/features/mention-holder";
 import { sectionAnchors } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
@@ -30,7 +29,7 @@ import { useTaskMentions } from "./task-mentions.js";
  * same card's head with the section's heading or the version under it in
  * the agents' stead; a page's is its tab's, its title, its version, when
  * it last moved, and who showed it over a preview of it (`page-card.tsx`),
- * from the pages its plan or its agent on no task holds, held as the card
+ * from the pages its task holds, held as the card
  * is first hung (`PageChipCard`); a person's is their card (`../actor-ref.tsx`); an Inbox item's is
  * its Inbox row's own card (`inbox-item-chip.tsx`); an
  * automation's is its card, the workspace's automations read as the card is
@@ -96,7 +95,7 @@ export function useSectionHeading(taskId: string | undefined, anchor: string): s
   const text =
     taskId === undefined
       ? undefined
-      : holderTaskId(page?.holder) === taskId
+      : page?.holder?.taskId === taskId
         ? page?.text()
         : held !== undefined && "task" in held
           ? held.task.document.body
@@ -176,7 +175,7 @@ export function VersionChipCard({
 
 /**
  * A page's card, its tab's, previewing it: the page among the pages of the
- * plan the link names it on, or of the agent on no task, held as the card
+ * task the link names it on, held as the card
  * is first hung and never as the chip is drawn (`LIVE_READ.PAGES`), so
  * words full of chips ask nothing until one is looked at, and a page of the
  * open plan, which the window holds already, hangs at once; `reading` while
@@ -189,7 +188,7 @@ export function PageChipCard({
   reading,
   fallback,
 }: {
-  /** The plan the link names the page on, or the agent on no task. */
+  /** The task the link names the page on. */
   place: PagePlace;
   pageId: string;
   reading?: ReactNode;

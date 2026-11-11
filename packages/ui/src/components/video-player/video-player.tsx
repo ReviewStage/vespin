@@ -24,6 +24,7 @@ import { notePictureOrigin } from "../../picture-expand.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
 import { SLIDER_LENGTH, Slider } from "../slider/slider.js";
+import { SPINNER_INK, SPINNER_SIZE, Spinner } from "../spinner/spinner.js";
 import { Tooltip } from "../tooltip/hint.js";
 
 /**
@@ -71,6 +72,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * its size is read it says it as `--ui-video-natural-width` and
  * `--ui-video-natural-height`, plain numbers the place may fit it by.
  *
+ * Until its first frame's size is read, the frame holds the shape it will
+ * take, its known size or a screenshot's (`LOADING_SIZE`), on the veil, the
+ * window's ring turning in its middle once the wait has stood a moment, and
+ * no bar, since a bar of "0:00 / 0:00" over an empty frame plays nothing.
+ *
  * The bytes arrive as a picture's do, as a `data:` URL the window's picture
  * reads hold (`picture-read.ts`, the inbox's own), and play
  * from a `blob:` address made of them here and let go of as the player goes,
@@ -87,6 +93,7 @@ import { Tooltip } from "../tooltip/hint.js";
 const VIDEO_LABEL = {
   VIDEO: "Video",
   PLAYER: "Video player",
+  LOADING: "Loading the video",
   PLAY: "Play",
   PAUSE: "Pause",
   PREVIOUS_FRAME: "Previous frame",
@@ -98,6 +105,14 @@ const VIDEO_LABEL = {
   FULL_SCREEN: "Full screen",
   EXIT_FULL_SCREEN: "Exit full screen",
 } as const;
+
+/**
+ * The size a video whose size is not yet known holds while it loads: a
+ * screenshot's shape, as the viewer guesses it (`attachment-viewer.css`).
+ * Note that it is a size, not a shape alone, because a video with no frame
+ * yet has no size of its own for a shape to stretch.
+ */
+const LOADING_SIZE: VideoSize = { width: 640, height: 400 };
 
 /** The milliseconds in a second, for the player's playhead in the one clock a recording is told in. */
 const MS_PER_SECOND = 1_000;
@@ -564,6 +579,10 @@ const FRAME =
 const VIDEO =
   "ui-video-player-video block h-auto w-auto max-w-full cursor-press group-[:fullscreen]/video-frame:size-full group-[:fullscreen]/video-frame:max-h-none group-[:fullscreen]/video-frame:max-w-none group-[:fullscreen]/video-frame:object-contain";
 
+/** The wait over a frame still loading, its ring centered on the veil; a press goes through it to the video. */
+const LOADING =
+  "ui-video-player-loading pointer-events-none absolute inset-0 flex items-center justify-center";
+
 /** The player as its place holds it: hugging the video at most its column's width, and in the viewer no taller than the card. */
 const PLAYER = "ui-video-player relative block w-fit max-w-full";
 
@@ -669,7 +688,18 @@ export function VideoPlayer({
   const [flash, setFlash] = useState<Flash>();
   // The video's own pixels once its size is read, which the viewer fits it by.
   const [natural, setNatural] = useState<VideoSize>();
+  // The address whose size has been read, so a video walked to waits afresh rather than standing on the last one's.
+  const [readUrl, setReadUrl] = useState<string>();
+  const loaded = url !== undefined && readUrl === url;
   const viewer = place === VIDEO_PLAYER_PLACE.VIEWER;
+  // Note that the wait's size is a style, because the video's own `w-auto` outweighs a `width` attribute; the viewer's width is its place's.
+  const waiting =
+    loaded || size !== undefined
+      ? undefined
+      : {
+          width: viewer ? undefined : LOADING_SIZE.width,
+          aspectRatio: `${String(LOADING_SIZE.width)} / ${String(LOADING_SIZE.height)}`,
+        };
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
   const read = (shown: HTMLVideoElement) => {
@@ -713,58 +743,69 @@ export function VideoPlayer({
         playerKey(event, video.current, frameSeconds, (ask) => setFlash((was) => flashOn(was, ask)))
       }
     >
-      {url === undefined ? null : (
-        // Note that the player carries no captions track, because an agent's recording of its screen has no sound.
-        <video
-          ref={video}
-          className={`${VIDEO} ${viewer ? "w-full" : "max-h-video-player"}`}
-          src={url}
-          width={size?.width}
-          height={size?.height}
-          aria-label={label === "" ? VIDEO_LABEL.VIDEO : `${VIDEO_LABEL.VIDEO}: ${label}`}
-          autoPlay={starts}
-          muted
-          playsInline
-          preload={viewer ? "auto" : "metadata"}
-          onClick={() => {
-            frame.current?.focus({ preventScroll: true });
-            toggleOf(video.current);
-          }}
-          onLoadedMetadata={(event) => {
-            const shown = event.currentTarget;
-            if (viewer) setNatural({ width: shown.videoWidth, height: shown.videoHeight });
-            probeLength(event.currentTarget);
-            read(event.currentTarget);
-          }}
-          onDurationChange={(event) => {
-            const shown = event.currentTarget;
-            // A length read by seeking past the end brings the video back to its start.
-            if (Number.isFinite(shown.duration) && shown.currentTime >= shown.duration) {
-              shown.currentTime = 0;
-            }
-            read(shown);
-          }}
-          onTimeUpdate={(event) => read(event.currentTarget)}
-          onPlay={(event) => read(event.currentTarget)}
-          onPause={(event) => read(event.currentTarget)}
-          onEnded={(event) => read(event.currentTarget)}
-          onRateChange={(event) => read(event.currentTarget)}
-        />
-      )}
-      {flash === undefined ? null : <KeyFlash flash={flash} onGone={() => setFlash(undefined)} />}
-      <VideoBar
-        playback={playback}
-        frame={frameSeconds}
-        full={full}
-        onToggle={() => toggleOf(video.current)}
-        onStep={(by) => {
-          if (video.current !== null) stepFrame(video.current, frameSeconds, by);
+      {/* Note that the player carries no captions track, because an agent's recording of its screen has no sound. */}
+      {/* Note that the video stands before its address is made, so the frame holds its shape from the first paint. */}
+      <video
+        ref={video}
+        className={`${VIDEO} ${viewer ? "w-full" : "max-h-video-player"}`}
+        src={url}
+        width={size?.width}
+        height={size?.height}
+        style={waiting}
+        aria-label={label === "" ? VIDEO_LABEL.VIDEO : `${VIDEO_LABEL.VIDEO}: ${label}`}
+        autoPlay={starts}
+        muted
+        playsInline
+        preload={viewer ? "auto" : "metadata"}
+        onClick={() => {
+          frame.current?.focus({ preventScroll: true });
+          toggleOf(video.current);
         }}
-        onSeek={seek}
-        onSpeed={() => setSpeed(video.current, nextSpeed(playback.speed))}
-        onExpand={expand}
-        onFullScreen={toggleFullScreen}
+        onLoadedMetadata={(event) => {
+          const shown = event.currentTarget;
+          if (viewer) setNatural({ width: shown.videoWidth, height: shown.videoHeight });
+          setReadUrl(url);
+          probeLength(event.currentTarget);
+          read(event.currentTarget);
+        }}
+        onDurationChange={(event) => {
+          const shown = event.currentTarget;
+          // A length read by seeking past the end brings the video back to its start.
+          if (Number.isFinite(shown.duration) && shown.currentTime >= shown.duration) {
+            shown.currentTime = 0;
+          }
+          read(shown);
+        }}
+        onTimeUpdate={(event) => read(event.currentTarget)}
+        onPlay={(event) => read(event.currentTarget)}
+        onPause={(event) => read(event.currentTarget)}
+        onEnded={(event) => read(event.currentTarget)}
+        onRateChange={(event) => read(event.currentTarget)}
       />
+      {flash === undefined ? null : <KeyFlash flash={flash} onGone={() => setFlash(undefined)} />}
+      {loaded ? (
+        <VideoBar
+          playback={playback}
+          frame={frameSeconds}
+          full={full}
+          onToggle={() => toggleOf(video.current)}
+          onStep={(by) => {
+            if (video.current !== null) stepFrame(video.current, frameSeconds, by);
+          }}
+          onSeek={seek}
+          onSpeed={() => setSpeed(video.current, nextSpeed(playback.speed))}
+          onExpand={expand}
+          onFullScreen={toggleFullScreen}
+        />
+      ) : (
+        <span className={LOADING}>
+          <Spinner
+            label={VIDEO_LABEL.LOADING}
+            size={SPINNER_SIZE.REGION}
+            ink={SPINNER_INK.ON_VEIL}
+          />
+        </span>
+      )}
     </span>
   );
   // In the viewer the card around it is the viewer's own.

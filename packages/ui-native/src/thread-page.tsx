@@ -12,6 +12,9 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
+  accessibilityElement,
+  accessibilityLabel,
   font,
   foregroundStyle,
   frame,
@@ -20,15 +23,18 @@ import {
   padding,
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { sinceText } from "@repo/features/time-format";
+import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
+import { useAccessibilitySize } from "./accessibility.js";
+import { useDockRoom } from "./glass-bar.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
-import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
+import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
@@ -71,8 +77,12 @@ export type ThreadMedia =
 /** One message of a thread, as its comment draws it. */
 export type ThreadMessage = {
   readonly id: string;
-  /** Who wrote it: a member by their face, or the agent by its tile. */
-  readonly writer: { readonly name: string; readonly agent: boolean };
+  /** Who wrote it: a member by their face, their picture where one is known, or the agent by its tile. */
+  /** Who wrote it: a member's face, or the agent, whose tile wears its harness's mark where it is known. */
+  readonly writer: Face & {
+    readonly agent: boolean;
+    readonly harness?: ModelProvider | undefined;
+  };
   /** When it was written, in epoch milliseconds. */
   readonly at: number;
   readonly words: string;
@@ -109,8 +119,6 @@ type ThreadPageProps = {
   readonly menu?: BarMenu | undefined;
   /** What stands at the page's foot under its scroll, such as a split view's composer (`ComposerFoot`). */
   readonly foot?: ReactNode | undefined;
-  /** The room left under the last message, so it scrolls clear of a bar docked over the page's foot (`DOCK_ROOM`). */
-  readonly footRoom?: number | undefined;
 };
 
 /** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
@@ -126,6 +134,7 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
         modifiers={[
           font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
           foregroundStyle(colors.TEXT),
+          accessibilityAddTraits(["isHeader"]),
         ]}
       >
         {title}
@@ -176,6 +185,9 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
   );
 }
 
+/** What a sent answer's mark is heard as: it went ahead with what was asked, or held back. */
+const STAMP_HEARD = { AHEAD: "Went ahead", HELD: "Held back" } as const;
+
 /** A sent answer's stamp under its writer's name, where its words start: its mark and its words, 13 pt. */
 function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["stamp"]> }) {
   const colors = useColors();
@@ -188,6 +200,7 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
         systemName={stamp.ahead ? "checkmark" : "arrow.uturn.backward"}
         size={MARK_SIZE.GLYPH - 2}
         color={stamp.ahead ? colors.COMPLETE : colors.TEXT_MUTED}
+        modifiers={[accessibilityLabel(stamp.ahead ? STAMP_HEARD.AHEAD : STAMP_HEARD.HELD)]}
       />
       <Text
         modifiers={[
@@ -210,27 +223,35 @@ function MessageView({
   pictureSource,
   videoAt,
   now,
-}: Omit<
-  ThreadPageProps,
-  "path" | "status" | "title" | "messages" | "ask" | "footRoom" | "menu" | "foot"
-> & {
+}: Omit<ThreadPageProps, "path" | "status" | "title" | "messages" | "ask" | "menu" | "foot"> & {
   readonly message: ThreadMessage;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
   const { writer } = message;
+  const moment = now ?? Date.now();
+  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from message to message.
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
-      <HStack spacing={WRITER_GAP} modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+      <HStack
+        spacing={WRITER_GAP}
+        modifiers={[
+          padding({ horizontal: SPACE.EDGE }),
+          accessibilityElement("ignore"),
+          accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+          accessibilityAddTraits(["isHeader"]),
+        ]}
+      >
         {writer.agent ? (
-          <AgentTile name={writer.name} size={MARK_SIZE.WRITER} />
+          <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
         ) : (
-          <Avatar name={writer.name} size={MARK_SIZE.WRITER} />
+          <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
         )}
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
             foregroundStyle(colors.TEXT),
-            lineLimit(1),
+            lineLimit(large ? 2 : 1),
           ]}
         >
           {writer.name}
@@ -242,7 +263,7 @@ function MessageView({
             foregroundStyle(colors.TEXT_MUTED),
           ]}
         >
-          {sinceText(message.at, now ?? Date.now())}
+          {sinceText(message.at, moment)}
         </Text>
         <Spacer />
       </HStack>
@@ -279,18 +300,9 @@ function MessageView({
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
-  const {
-    path,
-    status,
-    title,
-    messages,
-    ask,
-    footRoom = 0,
-    menu,
-    foot,
-    standing,
-    ...drawing
-  } = props;
+  const { path, status, title, messages, ask, menu, foot, standing, ...drawing } = props;
+  // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
+  const footRoom = useDockRoom();
   return (
     <Toolbar>
       <VStack spacing={0}>
@@ -299,7 +311,9 @@ export function ThreadPage(props: ThreadPageProps) {
             alignment="leading"
             spacing={SPACE.EDGE}
             modifiers={[
-              frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+              // Note that a wide window centers the thread's column at the reading width, as Mail centers a message, rather than running its lines across the screen.
+              frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
+              frame({ maxWidth: Number.POSITIVE_INFINITY }),
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >

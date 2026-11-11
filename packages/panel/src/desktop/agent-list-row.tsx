@@ -57,10 +57,12 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * press away. Its list chooses its rows together as a task list does, by
  * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen
  * among several offers its list's acts on every one chosen instead, under
- * how many (`agents-selection.tsx`).
+ * how many (`agents-selection.tsx`). An archived agent's row stands settled,
+ * its name in the muted ink, as a done task's does, and its menu offers
+ * Unarchive in Archive's place.
  */
 
-/** The cells an agent's row draws, in a task's row's order: where a task's repository stands, a start's row says why it is unavailable (`AgentStartRow`). */
+/** The cells an agent's row draws, in a task's row's order. */
 export const AGENT_ROW_CELLS = [
   TASK_ROW_CELL.STATUS,
   TASK_ROW_CELL.REPOSITORY,
@@ -86,6 +88,7 @@ export function AgentListRow({
   chosen,
   place,
   more,
+  settled = false,
   onPress,
   onOpenPullRequest,
 }: {
@@ -109,6 +112,8 @@ export function AgentListRow({
   place?: VirtualRowPlace | undefined;
   /** Whether it draws its ⋯, as its list does. */
   more?: boolean | undefined;
+  /** Whether it stands settled beside the agents still listed, its name in the muted ink: an archived agent. */
+  settled?: boolean | undefined;
   /** Opens the agent, as its pull request's card offers too. */
   onPress: () => void;
   onOpenPullRequest: () => void;
@@ -189,6 +194,7 @@ export function AgentListRow({
             : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), shown, true)
       }
       more={more}
+      settled={settled}
       hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
       onOpen={onPress}
       pressRef={press}
@@ -199,41 +205,4 @@ export function AgentListRow({
   );
   // Note that the card reaches the row's hint by its options, because the row takes its hint as a component, which must stay one across renders.
   return card === undefined ? row : <RowHintOptions card={card}>{row}</RowHintOptions>;
-}
-
-/**
- * A start a list of agents offers after its agents, as New agent, in the
- * agents' own columns: its glyph where theirs stand and its label where
- * their names do, and, while it is unavailable, why, where an agent's
- * task stands. Its list never chooses it, though it keeps the gutter the
- * agents' boxes stand in, so its glyph lines up with theirs.
- */
-export function AgentStartRow({
-  label,
-  glyph,
-  detail,
-  disabled = false,
-  onStart,
-}: {
-  label: string;
-  glyph: ReactNode;
-  /** Why it is unavailable, where it is. */
-  detail?: string | undefined;
-  disabled?: boolean | undefined;
-  onStart: () => void;
-}): React.JSX.Element {
-  return (
-    <TaskRow
-      taskId={label}
-      name={label}
-      cells={AGENT_ROW_CELLS}
-      content={{
-        [TASK_ROW_CELL.STATUS]: <TaskRowGlyph>{glyph}</TaskRowGlyph>,
-        [TASK_ROW_CELL.REPOSITORY]: detail,
-      }}
-      choosable={false}
-      disabled={disabled}
-      onOpen={onStart}
-    />
-  );
 }

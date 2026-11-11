@@ -1,6 +1,15 @@
-// choice-list.tsx -- a decide ask's options as a compact bordered card: one radio row each, the recommended one tagged, a detail line under its label.
+// choice-list.tsx -- a decide ask's options as a compact bordered card: one radio row each, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
-import { Button, Divider, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  Button,
+  Divider,
+  HStack,
+  Image,
+  RNHostView,
+  Spacer,
+  Text,
+  VStack,
+} from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
   background,
@@ -15,6 +24,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
+import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -24,6 +34,15 @@ export type Choice = {
   readonly label: string;
   /** A line saying what picking it means. */
   readonly detail?: string | undefined;
+  /** The pictures, recordings, pages, and addresses it carries, drawn under its row. */
+  readonly media?: readonly ChoiceMedia[] | undefined;
+};
+
+/** A pick of none of the options, a row after them: its words, whether it stands picked, and what a press on it does. */
+export type NoneChoice = {
+  readonly label: string;
+  readonly picked: boolean;
+  readonly onPress: () => void;
 };
 
 type ChoiceListProps = {
@@ -32,37 +51,36 @@ type ChoiceListProps = {
   readonly recommended?: readonly string[] | undefined;
   /** The labels picked so far. */
   readonly picked: readonly string[];
-  /** Whether a person may pick several, which draws squares rather than circles. */
+  /** Whether a person may pick several, which draws Reminders' round checks once picked; the caller says so in `title`, since an unpicked row reads as a circle either way. */
   readonly multiple?: boolean | undefined;
   /** Called with the labels picked once a row is pressed. */
   readonly onChange: (picked: readonly string[]) => void;
   /** Words over the card, small and muted. */
   readonly title?: string | undefined;
+  /** None of these, offered as a row after the options where their media asks a pick of them; none where it is not offered. */
+  readonly none?: NoneChoice | undefined;
 };
 
 /** How thick the card's and the tag's edges are drawn. */
 const HAIRLINE = 0.5;
 
-/** The share of the accent's ink the Recommended tag's edge stands at. */
-const TAG_EDGE_OPACITY = "73";
-
-/** The mark leading an option, 18 pt: a ring or a square, the ring filled with the accent at its heart once picked. */
+/** The mark leading an option, 18 pt: a ring filled with the accent at its heart once picked, or, where several may be picked, Reminders' round check, since iOS has no square checkbox. */
 function pickMark(picked: boolean, multiple: boolean) {
-  if (multiple) return picked ? "checkmark.square.fill" : "square";
+  if (multiple) return picked ? "checkmark.circle.fill" : "circle";
   return picked ? "smallcircle.filled.circle.fill" : "circle";
 }
 
-/** The small bordered tag after the recommended option's label, in the accent's words, since a recommendation is for you. */
+/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked. */
 function RecommendedTag() {
   const colors = useColors();
   return (
     <Text
       modifiers={[
         font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
-        foregroundStyle(colors.ACCENT_TEXT),
+        foregroundStyle(colors.TEXT_MUTED),
         padding({ horizontal: 5, vertical: 1 }),
         strokeBorder({
-          content: `${colors.ACCENT}${TAG_EDGE_OPACITY}`,
+          content: colors.CHIP_EDGE,
           shape: "roundedRectangle",
           cornerRadius: RADIUS.TAG,
           style: { lineWidth: 1 },
@@ -155,6 +173,15 @@ function ChoiceRow({
   );
 }
 
+/** What an option carries, under its row: every piece as an equal tile, in React Native views SwiftUI hosts. */
+function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] }) {
+  return (
+    <RNHostView matchContents={{ vertical: true }}>
+      <ChoiceMediaTiles media={media} />
+    </RNHostView>
+  );
+}
+
 /**
  * A decide ask's options as a compact card on the surface inside a hairline:
  * a radio row each, pressed to pick it, the recommended one tagged, with a
@@ -162,7 +189,7 @@ function ChoiceRow({
  * an ask is for you.
  */
 export function ChoiceList(props: ChoiceListProps) {
-  const { choices, recommended = [], picked, multiple = false, onChange, title } = props;
+  const { choices, recommended = [], picked, multiple = false, onChange, title, none } = props;
   const colors = useColors();
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
@@ -200,8 +227,23 @@ export function ChoiceList(props: ChoiceListProps) {
               multiple={multiple}
               onPress={() => onChange(nextPicked(picked, choice.label, multiple))}
             />
+            {choice.media === undefined || choice.media.length === 0 ? null : (
+              <ChoiceMediaBlock media={choice.media} />
+            )}
           </Fragment>
         ))}
+        {none === undefined ? null : (
+          <>
+            <Divider />
+            <ChoiceRow
+              choice={{ label: none.label }}
+              picked={none.picked}
+              recommended={false}
+              multiple={multiple}
+              onPress={none.onPress}
+            />
+          </>
+        )}
       </VStack>
     </VStack>
   );

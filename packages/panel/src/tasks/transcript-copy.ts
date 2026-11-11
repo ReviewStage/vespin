@@ -144,6 +144,7 @@ const FENCE_LANGUAGE = {
   [TOOL_BLOCK.PATCH]: "diff",
   [TOOL_BLOCK.JSON]: "json",
   [TOOL_BLOCK.TEXT]: "",
+  [TOOL_BLOCK.MARKDOWN]: "markdown",
 } as const satisfies Record<ToolBlock["kind"], string>;
 
 /** The kinds of block a copy reads a turn into, whichever wire the turn came from. */
@@ -267,22 +268,35 @@ function drawnWords(block: CopiedBlock): readonly string[] {
   ];
 }
 
+/** Which of a message's drawn words a find reads: what was said, or its details, the calls and thoughts its folds hold, which it may leave out. */
+export const DRAWN_WORDS = {
+  SAID: "said",
+  DETAILS: "details",
+} as const;
+
+export type DrawnWords = (typeof DRAWN_WORDS)[keyof typeof DRAWN_WORDS];
+
 /**
  * The words a message's rows draw, each line and body, as a find counts them
  * before the rows are drawn: the parts the rows are drawn from (`agentRows`),
- * each read as both copies read it (`agentBlock`). Note that a part its page
- * carried cut counts none of the words left out, because its fold draws
- * them only once read whole, and its ends are the stored JSON's, not the
- * answer as drawn.
+ * each read as both copies read it (`agentBlock`), of the kind `which`
+ * names. Note that a part its page carried cut counts none of the words
+ * left out, because its fold draws them only once read whole, and its ends
+ * are the stored JSON's, not the answer as drawn.
  */
-export function drawnMessageWords(message: AgentTranscriptMessage): string {
+export function drawnMessageWords(message: AgentTranscriptMessage, which: DrawnWords): string {
   const sent = sentLineWords(message);
-  return sent ?? drawnRowsWords(agentRows(message, false));
+  if (sent !== undefined) return which === DRAWN_WORDS.SAID ? sent : "";
+  return drawnRowsWords(agentRows(message, false), which);
 }
 
-/** The words a turn's rows draw, as `drawnMessageWords` reads a whole turn's: a piece of a long turn's (`turn-pieces.ts`). */
-export function drawnRowsWords(rows: readonly TurnRow<AgentPart>[]): string {
-  return rowBlocks(rows).flatMap(agentBlock).flatMap(drawnWords).join("\n");
+/** The words of the kind `which` names that a turn's rows draw, as `drawnMessageWords` reads a whole turn's: a piece of a long turn's (`turn-pieces.ts`). */
+export function drawnRowsWords(rows: readonly TurnRow<AgentPart>[], which: DrawnWords): string {
+  return rowBlocks(rows)
+    .flatMap(agentBlock)
+    .filter((block) => (block.kind === COPIED_BLOCK.WORDS) === (which === DRAWN_WORDS.SAID))
+    .flatMap(drawnWords)
+    .join("\n");
 }
 
 /**

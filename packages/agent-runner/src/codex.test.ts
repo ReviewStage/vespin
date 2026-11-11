@@ -23,15 +23,10 @@ import type * as HttpClient from "effect/http/HttpClient";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
-import { codexToken } from "./codex-token.js";
-import type { RunnerSelf } from "./launch.js";
-import { CODEX_PIN } from "./pins.js";
 import {
   APPROVAL_BY,
   APPROVAL_DECISION,
   CODEX_EFFORT,
-  CODEX_PLAN_BACKEND,
-  CODEX_TOKEN_COMMAND,
   CONNECTION_LOST_DETAIL,
   type CodexConfig,
   connectionLostFailure,
@@ -75,13 +70,11 @@ it.effect(
       // Note that in a sandbox this is the launch's placeholder, the key itself set at its firewall, which the runner reads alike.
       const apiKey = "openai-api-key-for-tests";
       const service = fakeService("sleep 600");
-      // The launch knows no bundle: on its API key it asks no token.
-      const { spawned, write, run } = yield* launch(
-        [STOPPED],
-        service,
-        { ...ENV, [RUNNER_ENV.OPENAI_API_KEY]: apiKey },
-        {},
-      );
+      // On its API key it asks no token.
+      const { spawned, write, run } = yield* launch([STOPPED], service, {
+        ...SANDBOX_ENV,
+        [RUNNER_ENV.OPENAI_API_KEY]: apiKey,
+      });
       yield* write({ ...CONFIG, model: "gpt-6.1-sol", fast: true });
       yield* write({ type: INPUT_LINE.MODEL, fast: true, ultrafast: true });
       yield* write(message("Run sleep 600.", LINE.FIRST));
@@ -130,12 +123,7 @@ it.effect(
 );
 
 const TOKEN_URL = "https://app.test/api/agents/runner-token";
-const SELF: RunnerSelf = {
-  executable: "/usr/local/bin/node",
-  script: "/opt/agent/agent-runner/agent-runner.mjs",
-};
-
-/** A launch on a host, whose plan's token comes from the runner's token command. */
+/** A launch on a host, which runs Codex on the machine's own login. */
 const ENV = {
   [RUNNER_ENV.BEARER]: BEARER,
   [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST,
@@ -146,9 +134,6 @@ const ENV = {
 /** A launch in the cloud's sandbox, whose bearer is the launch's placeholder and whose plan is signed in on host-supplied tokens. */
 const SANDBOX_ENV = {
   [RUNNER_ENV.BEARER]: BEARER,
-  // Named as a host's launch names them, which a sandbox's runner reads neither of.
-  [RUNNER_ENV.CODEX_PLAN_BACKEND]: CODEX_PLAN_BACKEND.CHATGPT,
-  [RUNNER_ENV.CHATGPT_ACCOUNT_ID]: "chatgpt-workspace-from-env",
   CODEX_HOME: "/home/agent/.codex",
   PATH: "/usr/bin",
 };
@@ -227,10 +212,9 @@ function launch(
   service: ReturnType<typeof makeFakeService>,
   env: Record<string, string> = ENV,
   extra: {
-    readonly self?: RunnerSelf;
     readonly http?: Layer.Layer<HttpClient.HttpClient>;
     readonly probe?: ReturnType<typeof fakeProbe>;
-  } = { self: SELF },
+  } = {},
 ) {
   return Effect.gen(function* () {
     const server = fakeAppServer(scripts);
@@ -242,7 +226,7 @@ function launch(
     });
     const stdin = yield* Queue.unbounded<string, Cause.Done>();
     const write = (line: CodexConfig | InputLine) => Queue.offer(stdin, JSON.stringify(line));
-    const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env, self: extra.self }).pipe(
+    const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env }).pipe(
       Effect.scoped,
       Effect.provide(
         Layer.mergeAll(
@@ -352,7 +336,7 @@ it.effect(
 );
 
 it.effect(
-  "starts app-server with the plan's provider, runs a fast version on the fast tier, steers the running turn, and ends at its completion",
+  "on a host, starts app-server on the machine's own login with none of the cloud image's tool settings, runs a fast version on the fast tier, steers the running turn, and ends at its completion",
   () =>
     Effect.gen(function* () {
       const service = fakeService("ci-watch");
@@ -420,16 +404,6 @@ it.effect(
       const overrides = (process?.args ?? []).filter((_, index, args) => args[index - 1] === "-c");
       assert.deepEqual(process?.args.slice(0, 3), ["app-server", "--listen", "stdio://"]);
       assert.deepEqual(overrides, [
-        'model_provider="openai_chatgpt_plan"',
-        'model_providers.openai_chatgpt_plan.name="ChatGPT plan"',
-        'model_providers.openai_chatgpt_plan.base_url="https://api.openai.com/v1"',
-        `model_providers.openai_chatgpt_plan.auth.command="${SELF.executable}"`,
-        `model_providers.openai_chatgpt_plan.auth.args=["${SELF.script}", "codex-token", "${TOKEN_URL}"]`,
-        "model_providers.openai_chatgpt_plan.auth.timeout_ms=30000",
-        "model_providers.openai_chatgpt_plan.auth.refresh_interval_ms=300000",
-        'model_providers.openai_chatgpt_plan.wire_api="responses"',
-        "model_providers.openai_chatgpt_plan.requires_openai_auth=false",
-        "model_providers.openai_chatgpt_plan.supports_websockets=false",
         "features.fast_mode=true",
         `model_catalog_json=${catalogOverride}`,
         'mcp_servers.workspace.url="https://app.test/runner/mcp"',
@@ -447,7 +421,6 @@ it.effect(
         'shell_environment_policy.inherit="all"',
         "shell_environment_policy.ignore_default_excludes=true",
         'shell_environment_policy.exclude=["APP_RUNNER_TOKEN"]',
-        'shell_environment_policy.set={ PLAYWRIGHT_BROWSERS_PATH = "0" }',
       ]);
       // The bearer reaches app-server in its environment alone, never argv.
       assert.equal(process?.env[RUNNER_ENV.BEARER], BEARER);
@@ -876,6 +849,38 @@ it.effect("ends an idle launch at once on a stop, and on stdin closing, with no 
   }),
 );
 
+it.effect("compacts the thread in a compaction line's place, its words dropped", () =>
+  Effect.gen(function* () {
+    const service = fakeService("turn/completed");
+    const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+    if (started === undefined) throw new Error("the resumed turn has no turn/started");
+    const script: Script = {
+      exchanges: [
+        ...RESUME,
+        {
+          method: "thread/compact/start",
+          reply: [{ id: 3, result: {} }, started, ...RESUMED_TURN_END],
+        },
+      ],
+    };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write({ ...CONFIG, threadId: THREAD });
+    yield* write({
+      type: INPUT_LINE.MESSAGE,
+      uuid: LINE.FIRST,
+      content: [{ type: "text", text: "/compact keep the plan" }],
+      compact: true,
+    });
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "thread/compact/start"), [{ threadId: THREAD }]);
+    assert.deepEqual(received(process, "turn/start"), []);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+  }),
+);
+
 it.effect("starts the next turn for a message Vespin sent just before the turn completed", () =>
   Effect.gen(function* () {
     const service = fakeService("turn/completed");
@@ -920,8 +925,6 @@ it.effect("starts the next turn for a message Vespin sent just before the turn c
   }),
 );
 
-const PROVIDER = "model_providers.openai_chatgpt_plan";
-
 /** The value of the `-c` override `key` a process was started with, where it has one. */
 function override(process: Spawned | undefined, key: string): string | undefined {
   const prefix = `${key}=`;
@@ -943,85 +946,6 @@ function fakeTokenRoute(chatgptAccountId?: string) {
   };
   return { bearers, respond };
 }
-
-/**
- * Codex's provider `auth` as app-server runs it: the command and its args read
- * from the process's argv, run with the process's own environment (here the
- * command's body, the runner's `codexToken`, in place of a child), and
- * its stdout the bearer app-server sends.
- */
-function runTokenCommand(process: Spawned, http: Layer.Layer<HttpClient.HttpClient>) {
-  const command = JSON.parse(override(process, `${PROVIDER}.auth.command`) ?? "null");
-  const args: string[] = JSON.parse(override(process, `${PROVIDER}.auth.args`) ?? "[]");
-  assert.equal(command, SELF.executable);
-  assert.deepEqual(args.slice(0, 2), [SELF.script, CODEX_TOKEN_COMMAND]);
-  return codexToken(args[2] ?? "", process.env).pipe(Effect.provide(http), Effect.orDie);
-}
-
-it.effect(
-  "on the plan, app-server takes its token from the runner's command, which a 401 mid-turn runs again, and the turn goes on to complete",
-  () =>
-    Effect.gen(function* () {
-      const service = fakeService();
-      const route = fakeTokenRoute();
-      const http = fakeHttpClientLayer((url, init) =>
-        url === TOKEN_URL ? route.respond(url, init) : service.respond(url, init),
-      );
-      // What app-server sent OpenAI as its bearer, request by request.
-      const sentToOpenAi: string[] = [];
-      const turn: Exchange = {
-        ...RESUMED_TURN,
-        beforeReply: (process) =>
-          Effect.gen(function* () {
-            // The turn's first request goes out on the command's token.
-            sentToOpenAi.push(yield* runTokenCommand(process, http));
-            // An hour on, OpenAI answers 401: app-server runs the command again and retries.
-            sentToOpenAi.push(yield* runTokenCommand(process, http));
-          }),
-      };
-      const { spawned, write, run, logged } = yield* launch(
-        [{ exchanges: [...RESUME, turn] }],
-        service,
-        ENV,
-        { self: SELF, http },
-      );
-      yield* write({ ...CONFIG, threadId: THREAD });
-      yield* write(message("What exact line did you first write to PROBE.md?"));
-
-      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-      assert.equal(spawned.length, 1);
-      const [process] = spawned;
-      assert.deepEqual(process?.unexpected, []);
-      assert.deepEqual(sentToOpenAi, ["plan-token-1", "plan-token-2"]);
-      assert.deepEqual(route.bearers, [`Bearer ${BEARER}`, `Bearer ${BEARER}`]);
-      assert.deepEqual(kinds(service.applied).slice(-2), ["turn/completed", RUNNER_EVENT.END]);
-      assert.deepEqual(service.applied.at(-1)?.message, {
-        type: RUNNER_EVENT.END,
-        reason: RUNNER_END.TURN_ENDED,
-      });
-
-      // The provider runs the command.
-      assert.equal(override(process, `${PROVIDER}.auth.timeout_ms`), "30000");
-      assert.equal(override(process, `${PROVIDER}.auth.refresh_interval_ms`), "300000");
-      assert.deepEqual(JSON.parse(override(process, `${PROVIDER}.auth.args`) ?? "[]"), [
-        SELF.script,
-        CODEX_TOKEN_COMMAND,
-        TOKEN_URL,
-      ]);
-      // The command inherits the bearer; no command the agent runs does.
-      assert.equal(process?.env[RUNNER_ENV.BEARER], BEARER);
-      assert.equal(override(process, "shell_environment_policy.exclude"), '["APP_RUNNER_TOKEN"]');
-      assert.equal(override(process, "shell_environment_policy.inherit"), '"all"');
-
-      // What the command printed went to app-server alone: never argv, an event, or a log.
-      const posted = service.bodies.join("\n");
-      for (const secret of ["plan-token-1", "plan-token-2", BEARER]) {
-        assert.ok(!posted.includes(secret));
-        assert.ok(!logged.some((line) => line.includes(secret)));
-        assert.ok(!process?.args.some((arg) => arg.includes(secret)));
-      }
-    }),
-);
 
 /** The workspace the fake token route says the plan pays from. */
 const WORKSPACE = "chatgpt-workspace-fixture";
@@ -1101,86 +1025,6 @@ it.effect(
         assert.ok(!process?.args.some((arg) => arg.includes(secret)));
         assert.ok(!Object.values(process?.env ?? {}).some((value) => value?.includes(secret)));
       }
-    }),
-);
-
-it.effect(
-  "the token command says only Vespin's status when Vespin refuses it, never the bearer",
-  () =>
-    Effect.gen(function* () {
-      const http = fakeHttpClientLayer(async () => new Response(null, { status: 409 }));
-      const refused = yield* codexToken(TOKEN_URL, ENV).pipe(Effect.provide(http), Effect.flip);
-      assert.equal(refused.detail, "The service refused the token: 409");
-
-      const unset = yield* codexToken(TOKEN_URL, {}).pipe(Effect.provide(http), Effect.flip);
-      assert.equal(unset.detail, "APP_RUNNER_TOKEN is not set");
-
-      const unreachable = fakeHttpClientLayer(async () => {
-        throw new Error(`connection reset for ${BEARER}`);
-      });
-      const failed = yield* codexToken(TOKEN_URL, ENV).pipe(
-        Effect.provide(unreachable),
-        Effect.flip,
-      );
-      assert.equal(failed.detail, "The service did not answer");
-    }),
-);
-
-it.effect("never starts app-server on the plan when it does not know its own bundle", () =>
-  Effect.gen(function* () {
-    const service = fakeService();
-    const { spawned, write, run } = yield* launch([WORKFLOW], service, ENV, {});
-    yield* write(CONFIG);
-
-    assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
-    assert.deepEqual(spawned, []);
-  }),
-);
-
-it.effect(
-  "on a device-code plan, app-server's provider sends to Codex's ChatGPT backend naming the workspace, its token from the same command; a backend this runner does not know starts nothing",
-  () =>
-    Effect.gen(function* () {
-      const service = fakeService();
-      const device = {
-        ...ENV,
-        [RUNNER_ENV.CODEX_PLAN_BACKEND]: CODEX_PLAN_BACKEND.CHATGPT,
-        [RUNNER_ENV.CHATGPT_ACCOUNT_ID]: "chatgpt-workspace-fixture",
-      };
-      const { spawned, write, run } = yield* launch(
-        [{ exchanges: [...RESUME, RESUMED_TURN] }],
-        service,
-        device,
-      );
-      yield* write({ ...CONFIG, threadId: THREAD });
-      yield* write(message("What exact line did you first write to PROBE.md?"));
-
-      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-      const provider = (spawned[0]?.args ?? []).filter(
-        (arg, index, args) => args[index - 1] === "-c" && arg.startsWith("model_provider"),
-      );
-      assert.deepEqual(provider, [
-        'model_provider="chatgpt_backend_plan"',
-        'model_providers.chatgpt_backend_plan.name="ChatGPT plan"',
-        'model_providers.chatgpt_backend_plan.base_url="https://chatgpt.com/backend-api/codex"',
-        `model_providers.chatgpt_backend_plan.auth.command="${SELF.executable}"`,
-        `model_providers.chatgpt_backend_plan.auth.args=["${SELF.script}", "codex-token", "${TOKEN_URL}"]`,
-        "model_providers.chatgpt_backend_plan.auth.timeout_ms=30000",
-        "model_providers.chatgpt_backend_plan.auth.refresh_interval_ms=300000",
-        // The version is the pinned Codex's, which a bump moves (`scripts/bump-agent-pins.mjs`).
-        `model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "${CODEX_PIN.VERSION}" }`,
-        'model_providers.chatgpt_backend_plan.wire_api="responses"',
-        "model_providers.chatgpt_backend_plan.requires_openai_auth=false",
-        "model_providers.chatgpt_backend_plan.supports_websockets=false",
-      ]);
-
-      const unknown = yield* launch([WORKFLOW], fakeService(), {
-        ...ENV,
-        [RUNNER_ENV.CODEX_PLAN_BACKEND]: "elsewhere",
-      });
-      yield* unknown.write(CONFIG);
-      assert.equal(yield* Fiber.join(unknown.run), RUNNER_END.FAILED);
-      assert.deepEqual(unknown.spawned, []);
     }),
 );
 
@@ -1432,7 +1276,6 @@ it.effect(
       const service = fakeService();
       const script: Script = { exchanges: [...RESUME, lostTurn(null), RESUMED_TURN] };
       const { spawned, write, run, probed } = yield* launch([script], service, ENV, {
-        self: SELF,
         probe: fakeProbe(1),
       });
       yield* write({ ...CONFIG, threadId: THREAD });
@@ -1473,7 +1316,6 @@ it.effect(
       const service = fakeService();
       const script: Script = { exchanges: [...RESUME, lostTurn(null)] };
       const { write, run, probed } = yield* launch([script], service, ENV, {
-        self: SELF,
         probe: fakeProbe(Number.POSITIVE_INFINITY),
       });
       yield* write({ ...CONFIG, threadId: THREAD });
@@ -1514,24 +1356,6 @@ it.effect(
       });
     }),
 );
-
-/** A checkout with its git folder, and a home with none of the package caches yet, each a folder of the test's own. */
-function permissionFolders() {
-  const cwd = mkdtempSync(join(tmpdir(), "vespin-codex-checkout-"));
-  mkdirSync(join(cwd, ".git"));
-  const home = mkdtempSync(join(tmpdir(), "vespin-codex-home-"));
-  const caches = [join(home, ".npm"), join(home, ".cache"), join(home, ".local", "share", "pnpm")];
-  return {
-    cwd,
-    home,
-    writableRoots: [join(cwd, ".git"), ...caches],
-    caches,
-    [Symbol.dispose]: () => {
-      rmSync(cwd, { recursive: true, force: true });
-      rmSync(home, { recursive: true, force: true });
-    },
-  };
-}
 
 /** The sleep turn's command, as app-server asks to run it outside the sandbox. */
 const COMMAND_ASK: RecordedMessage = {
@@ -1579,20 +1403,15 @@ function posted(service: ReturnType<typeof fakeService>, type: string) {
 }
 
 it.effect(
-  "in Ask for approval, runs Codex's workspace sandbox with git and the package caches writable, holds an ask for the member, answers Always allow as acceptForSession, and declines an MCP form",
+  "in Ask for approval, runs Codex's workspace sandbox on its own defaults, holds an ask for the member, answers Always allow as acceptForSession, and declines an MCP form",
   () =>
     Effect.gen(function* () {
-      using folders = permissionFolders();
       const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
       const { spawned, write, run } = yield* launch(
         [sleepTurnAsking(COMMAND_ASK, ELICITATION)],
         service,
-        {
-          ...ENV,
-          HOME: folders.home,
-        },
       );
-      yield* write({ ...CONFIG, cwd: folders.cwd, permissionMode: PERMISSION_MODE.ASK });
+      yield* write({ ...CONFIG, permissionMode: PERMISSION_MODE.ASK });
       yield* write(message("Run sleep 600.", LINE.FIRST));
       yield* service.seen;
       const [process] = spawned;
@@ -1634,24 +1453,20 @@ it.effect(
       assert.equal(override(process, "approval_policy"), '"on-request"');
       assert.equal(override(process, "approvals_reviewer"), '"user"');
       assert.equal(override(process, "sandbox_mode"), '"workspace-write"');
-      assert.equal(
-        override(process, "sandbox_workspace_write.writable_roots"),
-        `[${folders.writableRoots.map((root) => JSON.stringify(root)).join(", ")}]`,
-      );
-      assert.equal(override(process, "sandbox_workspace_write.network_access"), "true");
+      // Codex's own workspace defaults: nothing writable beside the checkout, and the network off.
+      assert.equal(override(process, "sandbox_workspace_write.writable_roots"), undefined);
+      assert.equal(override(process, "sandbox_workspace_write.network_access"), undefined);
       const [thread] = received(process, "thread/start");
       assert.equal(thread?.approvalPolicy, "on-request");
       assert.equal(thread?.approvalsReviewer, "user");
       assert.equal(thread?.sandbox, "workspace-write");
       assert.deepEqual(received(process, "turn/start")[0]?.sandboxPolicy, {
         type: "workspaceWrite",
-        writableRoots: folders.writableRoots,
-        networkAccess: true,
+        writableRoots: [],
+        networkAccess: false,
         excludeTmpdirEnvVar: false,
         excludeSlashTmp: false,
       });
-      // A cache the home did not hold is made, since a sandboxed command cannot make it.
-      assert.ok(folders.caches.every((cache) => existsSync(cache)));
     }),
 );
 
@@ -1704,13 +1519,9 @@ it.effect(
   "in Approve for me, Codex's automatic review answers, a command it denied says why on its row, and an ask still waiting as the launch ends is resolved before its end",
   () =>
     Effect.gen(function* () {
-      using folders = permissionFolders();
       const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
-      const { spawned, write, run } = yield* launch([sleepTurnAsking(...REVIEWED)], service, {
-        ...ENV,
-        HOME: folders.home,
-      });
-      yield* write({ ...CONFIG, cwd: folders.cwd, permissionMode: PERMISSION_MODE.AUTO });
+      const { spawned, write, run } = yield* launch([sleepTurnAsking(...REVIEWED)], service);
+      yield* write({ ...CONFIG, permissionMode: PERMISSION_MODE.AUTO });
       yield* write(message("Run sleep 600.", LINE.FIRST));
       yield* service.seen;
       yield* write({ type: INPUT_LINE.STOP });

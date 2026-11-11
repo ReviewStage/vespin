@@ -2,12 +2,14 @@ import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
   TaskBlockRequest,
   TaskCreateRelationKind,
   TaskStanding,
+  TaskSummary,
 } from "@repo/features/task-wire";
 import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -45,6 +47,7 @@ import {
   sameTab,
   subagentTab,
   TAB_WORDS,
+  turnChangesTab,
 } from "@repo/ui/tab-strip-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
@@ -69,6 +72,7 @@ import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { startCloudDraft, useCloudBrowserTabs } from "../tasks/cloud-browser-tabs.js";
 import {
   DescriptionBody,
+  DescriptionBodySkeleton,
   type DescriptionRoom,
   type SectionLinks,
   type TitleRename,
@@ -94,6 +98,7 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
+import { askTurnFileReveal } from "../tasks/turn-file-reveal.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -109,7 +114,6 @@ import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
-import { ArchivedAgents } from "./agent-archive.js";
 import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
 import {
@@ -123,7 +127,6 @@ import {
 import { DesktopHome } from "./desktop-home.js";
 import {
   AgentPane,
-  agentsRetry,
   DETAILS_WORDS,
   MainTabBars,
   mainTabLabel,
@@ -467,13 +470,13 @@ function DescriptionDocument({
     agents: tasks.agents,
   });
   // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
-  const descriptionsOn = useWorkspaceExperiment(
+  const shownWorkspaceId =
     region.kind === DOCUMENT_REGION.READY
       ? region.task.workspaceId
       : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
-          tasks.workspace?.id),
-    EXPERIMENT.DESCRIPTIONS,
-  );
+        tasks.workspace?.id);
+  const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
+  const turnEndOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.TURN_END);
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
   const comments = useDescriptionComments(
     useMemo(
@@ -512,12 +515,6 @@ function DescriptionDocument({
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
   );
-  const taskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
-  // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
-  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
   // The description is shown while the column is on Overview, with no panel filling the window over it.
   const descriptionShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
   const { onChoose: chooseColumnTab } = tasks.mainTabs;
@@ -526,12 +523,6 @@ function DescriptionDocument({
     if (tasks.sidePanel.fullScreen) tasks.sidePanel.onToggleFullScreen();
     chooseColumnTab(MAIN_TAB.OVERVIEW);
   });
-  // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
-  const beginRename = useSteadyDoor(() => {
-    if (room === SHELL_ROOM.NARROW) rename.begin();
-    else barRename.begin();
-  });
-  useOfferTaskRename(taskId, beginRename);
   // A terminal shown hands the keys to the side panel, where it stands; an
   // agent's tab's Show terminal always opens that agent's own.
   const showSide = () => setFocus(COLUMN.SIDE);
@@ -546,7 +537,28 @@ function DescriptionDocument({
   // The task as the list names it, its owner, agents, and pull requests
   // among it, which its card and its banner read. Held above the states
   // with no document for the same reason.
-  const opened = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  // The task as its description was read, which only the description and what it names draw from.
+  const read = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  // The task the page stands on: as read, or, while its description is read, as the list holds it, so its bars, its
+  // tabs, and its agents draw at once rather than wait on the description.
+  const opened: TaskSummary | undefined =
+    read ??
+    (region.kind === DOCUMENT_REGION.READING
+      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
+      : undefined);
+  // The task renamed is the one the page stands on, so its rename opens while its description is still read.
+  const taskId = opened?.id;
+  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
+  // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
+  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
+  // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
+  const beginRename = useSteadyDoor(() => {
+    if (room === SHELL_ROOM.NARROW) rename.begin();
+    else barRename.begin();
+  });
+  useOfferTaskRename(taskId, beginRename);
   const listedOpen =
     opened === undefined
       ? undefined
@@ -735,6 +747,11 @@ function DescriptionDocument({
   const agentLookDoor = useSteadyDoor(agentLook);
   const pullRequestCardDoor = useSteadyDoor(pullRequestCard);
   const openMentionedFileDoor = useSteadyDoor(openMentionedFile);
+  // A turn's files row opens the turn's Changes tab standing on the file pressed (`turn-file-reveal.ts`).
+  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string, path: string) => {
+    askTurnFileReveal(agentId, messageId, path);
+    onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
+  });
   const { onFork: forkDoor, onContinue: continueDoor } = useAgentDraftDoors(
     agents,
     false,
@@ -796,14 +813,46 @@ function DescriptionDocument({
   }, [threadsAgent, onThreadsShown]);
   // Note that the dock stands, quiet, while the agent's threads are all settled, the one way into them from its card.
   const { open: boardOpen, settled: boardSettled } = inbox.board;
+  // An ask the bar answers from its row's buttons is sent as the Inbox's Send sends it, with the words drafted on its card.
+  const chooseAnswer = useSteadyDoor((item: InboxItem, label: string) =>
+    inbox.onMessage(item, { ...inbox.draftOf(item), choices: [label] }),
+  );
+  const { sending: inboxSending } = inbox;
   const threads = useMemo(() => {
     if (tabAgent === undefined) return undefined;
     const posted = [...boardOpen, ...boardSettled]
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
-    return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
-  }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
+    // Note that with Done and follow-ups on the bar stands with nothing posted, since an agent done with nothing to ask still offers its Archive.
+    const others = (agents.agents ?? []).flatMap((each) => {
+      const count = each.id === tabAgent ? 0 : (waitingOf.get(each.id)?.length ?? 0);
+      return count === 0 ? [] : [{ agentId: each.id, name: agentName(each), waiting: count }];
+    });
+    return posted.length === 0 && !turnEndOn
+      ? undefined
+      : {
+          waiting,
+          posted,
+          onOpen: openWaitingThread,
+          turnEnd: turnEndOn,
+          onChoose: chooseAnswer,
+          sending: inboxSending,
+          others,
+          onOpenAgent: openAgent,
+        };
+  }, [
+    tabAgent,
+    boardOpen,
+    boardSettled,
+    waitingOf,
+    openWaitingThread,
+    turnEndOn,
+    chooseAnswer,
+    inboxSending,
+    agents.agents,
+    openAgent,
+  ]);
   const reader = useMemo(() => ({ readerId: tasks.me }), [tasks.me]);
   const editAgents = useMemo(() => ({ control: agents, onOpen: openAgent }), [agents, openAgent]);
   // The task's own menu, as the task's page holds it keyed by the task
@@ -943,6 +992,7 @@ function DescriptionDocument({
             workspace,
             onOpen: openMention,
             onOpenFile: openMentionedFileDoor,
+            onOpenTurnChanges: openTurnChangesDoor,
             reveal,
             onRevealed: onSectionRevealed,
             agentOf: agentLookDoor,
@@ -952,6 +1002,7 @@ function DescriptionDocument({
       workspace,
       openMention,
       openMentionedFileDoor,
+      openTurnChangesDoor,
       reveal,
       onSectionRevealed,
       agentLookDoor,
@@ -973,13 +1024,10 @@ function DescriptionDocument({
         onOpenPullRequest={openPullRequestDoor}
         // Note that New agent stands on the group's head at every width, as the strip's "+" offers it.
         newAgent={newAgentStarts(mainTabs, agents)[0]}
-        starts={room === SHELL_ROOM.NARROW ? agentsRetry(agents) : []}
         phone={
           room === SHELL_ROOM.NARROW
             ? {
-                archived: (
-                  <ArchivedAgents agents={agents} shown={tasks.shown} onOpen={openAgentColumn} />
-                ),
+                onOpenArchived: openAgent,
                 onOpenInbox: () => {
                   if (openedId !== undefined) tasks.onShowInbox({ taskId: openedId });
                 },
@@ -1014,25 +1062,21 @@ function DescriptionDocument({
   const planPages = useMemo(
     () =>
       openedId === undefined ? null : (
-        <PlanPages pages={pages} place={{ taskId: openedId }} onOpenPage={openPageTab} />
+        <PlanPages
+          pages={pages}
+          place={{ taskId: openedId }}
+          shown={tasks.shown}
+          onOpenPage={openPageTab}
+        />
       ),
-    [openedId, pages, openPageTab],
+    [openedId, pages, tasks.shown, openPageTab],
   );
-  // A task that lists no agent offers New agent under its title, since its Agents group draws none;
-  // note that a phone's group stands for archived agents too, its head offering New agent itself.
-  const agentsGrouped = room === SHELL_ROOM.NARROW && (agents.archived?.length ?? 0) > 0;
-  const firstAgentStart = useMemo(
-    () =>
-      agents.agents?.length === 0 && !agentsGrouped
-        ? newAgentStarts(mainTabs, agents)[0]
-        : undefined,
-    [agents, mainTabs, agentsGrouped],
-  );
-  // The task's starts, sub-tasks, and relations stand over its agents, the head keyed once by the
+  // The task's sub-tasks and relations stand over its agents, the head keyed once by the
   // task, so another task's groups start as they open and no draft of this one's stands there.
   const descriptionHead = useCallback(
     (room: DescriptionRoom) =>
-      opened === undefined ? (
+      // Note that the sub-tasks and relations are the description's to name, so while it is read the agents stand alone.
+      read === undefined ? (
         <Fragment key={openedId}>
           {planAgents}
           {planPages}
@@ -1040,17 +1084,16 @@ function DescriptionDocument({
       ) : (
         <PlanHead
           key={openedId}
-          task={opened}
+          task={read}
           tasks={tasks}
           door={relations}
           room={room}
-          newAgent={firstAgentStart}
           agents={planAgents}
           pages={planPages}
           onOpenTask={openTask}
         />
       ),
-    [openedId, opened, tasks, relations, openTask, firstAgentStart, planAgents, planPages],
+    [openedId, read, tasks, relations, openTask, planAgents, planPages],
   );
   // A row in a transcript that opens a tab hangs that tab's card, read as
   // the tab reads it, so an agent, a subagent, or a file is previewed alike wherever named.
@@ -1100,27 +1143,31 @@ function DescriptionDocument({
     return heldTaskMentions(
       opened,
       workspace,
-      opened.document.body,
+      read?.document.body,
       { pages, agents, readAgents: readMentionAgents },
       {
         onOpenTask: openMention,
         onOpenFile: openMentionedFileDoor,
+        onOpenTurnChanges: openTurnChangesDoor,
         agentOf: agentLookDoor,
         pullRequestOf: pullRequestCardDoor,
       },
     );
   }, [
     opened,
+    read,
     workspace,
     pages,
     agents,
     readMentionAgents,
     openMention,
     openMentionedFileDoor,
+    openTurnChangesDoor,
     agentLookDoor,
     pullRequestCardDoor,
   ]);
-  if (region.kind === DOCUMENT_REGION.READING) {
+  // Note that a task the list does not hold, as a link may open, waits on its description, which alone names it.
+  if (region.kind === DOCUMENT_REGION.READING && opened === undefined) {
     return (
       <TaskPageSkeleton
         drawing={drawing}
@@ -1129,7 +1176,7 @@ function DescriptionDocument({
     );
   }
   if (
-    region.kind !== DOCUMENT_REGION.READY ||
+    opened === undefined ||
     workspace === undefined ||
     cards === undefined ||
     mentions === undefined ||
@@ -1173,11 +1220,8 @@ function DescriptionDocument({
       </>
     );
   }
-  const { task } = region;
+  const task = opened;
   const listed = listedOpen ?? task;
-  // The column has a tab on its way: the agents are still read, or, read, a draft opens in the task's
-  // empty column.
-  const columnComing = agents.agents !== undefined || !agents.listFailed;
   // The panel holds the keys while the focus went into it last, or while it
   // fills the window over this column; shut, it hands them back.
   const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
@@ -1219,24 +1263,28 @@ function DescriptionDocument({
     >
       {/* The way back to the agents stays pinned at the card's top left, over the details as they scroll. */}
       {detailsWide ? <div className="task-details-back">{detailsLead}</div> : null}
-      <DescriptionBody
-        task={task}
-        reader={reader}
-        agents={editAgents}
-        onShowHistory={showHistory}
-        onPreloadHistory={preloadHistory}
-        edit={descriptionEdit}
-        // The title renames as the chip's field does, so a refusal is said beside it.
-        onRename={renameDoor}
-        onDraftName={draftNameDoor}
-        rename={titleRename}
-        looks={looks}
-        sectionLinks={sectionLinks}
-        standing={standing}
-        head={descriptionHead}
-        titleActions={!phone}
-        shown={overviewShown}
-      />
+      {read === undefined ? (
+        <DescriptionBodySkeleton task={task} standing={standing} head={descriptionHead} />
+      ) : (
+        <DescriptionBody
+          task={read}
+          reader={reader}
+          agents={editAgents}
+          onShowHistory={showHistory}
+          onPreloadHistory={preloadHistory}
+          edit={descriptionEdit}
+          // The title renames as the chip's field does, so a refusal is said beside it.
+          onRename={renameDoor}
+          onDraftName={draftNameDoor}
+          rename={titleRename}
+          looks={looks}
+          sectionLinks={sectionLinks}
+          standing={standing}
+          head={descriptionHead}
+          titleActions={!phone}
+          shown={overviewShown}
+        />
+      )}
     </Fill>
   );
   const pane = taskPaneOf({ open: sidePanel.open, column: tab });
@@ -1440,6 +1488,7 @@ function DescriptionDocument({
                             onOpenTerminal={terminalDoors.onOpenTerminal}
                             onOpenLocal={terminalDoors.onOpenLocal}
                             onOpenBrowser={phone ? openBrowser : undefined}
+                            onShowShell={terminalDoors.onShowShell}
                             onShown={phone ? setShownAgentTab : undefined}
                             onOpenAgent={openAgentColumn}
                             waiting={waitingOf}
@@ -1452,7 +1501,7 @@ function DescriptionDocument({
                         {/* The plan's banner is the whole plan's, so it stands over every
             tab of the column, and over the panel's while that fills the window. */}
                         {sidePanel.fullScreen ? null : stranded.banner}
-                        {/* A run's task says what fired the run over every tab of the column too, as its agent's own page does under its bar. */}
+                        {/* A run's task says what fired the run over every tab of the column. */}
                         {runPlace === undefined || runAgent === undefined ? null : (
                           <AutomationRunStrip place={runPlace} status={runAgent.status} />
                         )}
@@ -1466,7 +1515,7 @@ function DescriptionDocument({
                             {tab === undefined || isOverviewTab(tab) ? (
                               // While the agents are read, or a draft opens on a task with none, the
                               // column stands as the tab it will show does before it lands.
-                              tab === undefined && columnComing ? (
+                              tab === undefined ? (
                                 <AgentColumn>
                                   <AgentTabSkeleton />
                                 </AgentColumn>

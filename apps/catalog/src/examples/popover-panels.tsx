@@ -2,11 +2,14 @@ import {
   AnchoredPopover,
   BUTTON_VARIANT,
   Button,
+  COPY_LOOK,
+  CopyButton,
   GAP,
   Inline,
   JUSTIFY,
   POPOVER_ALIGN,
   POPOVER_PANEL_LOOK,
+  PopoverCardHead,
   PopoverPanel,
   type PopoverPanelLook,
   SearchField,
@@ -22,6 +25,8 @@ import { CatalogSection } from "../section";
  * and ×, and a menu whose search field is its head and takes the focus.
  * Each closes on Escape, its ×, a second press of its button, and focus
  * leaving it, fading out as it goes, and hands the focus back to its button.
+ * A card's head stands on its own too, a Copy at its end where a × would be,
+ * as the Resources popover's does.
  */
 
 /** A button and the panel it opens, drawn in `look`. */
@@ -84,14 +89,31 @@ function Hung({ look, label }: { look: PopoverPanelLook; label: string }): React
 
 function PopoverPanelsExample(): React.JSX.Element {
   return (
-    <CatalogSection id="popover-panel-looks" title="A card and a menu">
-      <div className="catalog-popover-stage">
-        <Inline gap={GAP.CONTROL} justify={JUSTIFY.BETWEEN}>
-          <Hung look={POPOVER_PANEL_LOOK.CARD} label="Context usage" />
-          <Hung look={POPOVER_PANEL_LOOK.MENU} label="MCP servers" />
-        </Inline>
-      </div>
-    </CatalogSection>
+    <>
+      <CatalogSection id="popover-panel-looks" title="A card and a menu">
+        <div className="catalog-popover-stage">
+          <Inline gap={GAP.CONTROL} justify={JUSTIFY.BETWEEN}>
+            <Hung look={POPOVER_PANEL_LOOK.CARD} label="Context usage" />
+            <Hung look={POPOVER_PANEL_LOOK.MENU} label="MCP servers" />
+          </Inline>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="popover-card-head" title="A card's head with a control of its own">
+        <div className="catalog-popover">
+          <PopoverCardHead
+            title="Resources"
+            actions={
+              <CopyButton
+                look={COPY_LOOK.ICON}
+                text="CPU 12.0% Memory 1.1 GB"
+                what="processes"
+                copy={async () => undefined}
+              />
+            }
+          />
+        </div>
+      </CatalogSection>
+    </>
   );
 }
 

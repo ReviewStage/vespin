@@ -11,7 +11,14 @@
  * one refused hands its words and pictures back to the field, the refusal
  * said over it in the panel's words, and the phone buzzes as a refusal does.
  * Stop is offered while the agent may still write (`agentStillWriting`),
- * starting or awaiting its turn included, as the panel offers it.
+ * starting or awaiting its turn included, as the panel offers it. A `/`
+ * starting the word the field ends with offers the skills of the agent's
+ * task's repository (`TASKS_SKILLS`), read the first time one is typed and
+ * kept for the task, narrowed as the name is typed (`matchingSkills`); a
+ * press writes the skill's `/name` in the word's place, which the agent
+ * loads before it acts, as the panel's chip reads out. Note that the field
+ * hands no caret, so the word is the one the words end with, which is where
+ * the caret stands as a `/` is typed.
  */
 
 import {
@@ -25,16 +32,16 @@ import {
   STOP_NOTHING_YET,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
+import { type AgentQueueChange, type AgentStatus, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import {
-  AGENT_ATTACHMENT_TYPE,
-  AGENT_BOUNDS,
-  type AgentAttachment,
-  type AgentQueueChange,
-  type AgentStatus,
-  base64Bytes,
-  QUEUE_CHANGE,
-} from "@repo/features/agent-wire";
-import { pictureName } from "@repo/features/file-marker";
+  matchingSkills,
+  mentionAt,
+  SKILL_LIST_NOTE,
+  SKILLS_UNANSWERED,
+  type SkillsRead,
+  skillsReadOf,
+} from "@repo/features/skill-mention";
+import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";
@@ -44,68 +51,56 @@ import {
   selectInboxReader,
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
-import type { AttachedPicture, QueuedLine } from "@repo/ui-native";
+import {
+  type AttachedPicture,
+  BUZZ,
+  buzz,
+  type QueuedLine,
+  type SkillSuggestion,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
-import { launchImageLibraryAsync } from "expo-image-picker";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
-
-/** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
-const PICTURE_QUALITY = 0.7;
+import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
+import { useWrite } from "../use-write.js";
 
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
 
-/** What a picture the service would refuse says, in the panel's words for a file. */
-const PICTURE_REFUSAL = {
-  TOO_LARGE: (name: string) => `${name} is too large to attach.`,
-  FULL: (most: number) => `A message can carry up to ${most} files.`,
-  TOO_MUCH: "These files are too large to send together.",
-  UNREADABLE: (name: string) => `${name} couldn't be read.`,
-} as const;
+/** How long a read of a task's skills stands before a `/` reads them again, as the panel's list reads them again behind. */
+const SKILLS_FRESH_MS = 60_000;
 
-/** A picture attached to the message: the name the message carries it under, and the attachment it sends. */
-interface Attached {
-  readonly id: string;
-  readonly file: AgentAttachment;
+/** The skills a `/` being typed offers, and what stands in their place where none is offered. */
+interface SkillsOffered {
+  readonly skills: readonly SkillSuggestion[];
+  readonly empty: string | undefined;
+  /** Writes the skill's `/name` in the `/` word's place. */
+  readonly pick: (name: string) => void;
+}
+
+/** The skills offered for the `/` word the words end with, from the read as it stands. */
+function offeredSkills(read: SkillsRead | undefined, query: string): Omit<SkillsOffered, "pick"> {
+  if (read === undefined) return { skills: [], empty: SKILL_LIST_NOTE.READING };
+  if ("unread" in read) return { skills: [], empty: read.unread };
+  if (read.skills.length === 0) return { skills: [], empty: SKILL_LIST_NOTE.NONE };
+  const found = matchingSkills(read.skills, query);
+  return {
+    skills: found.map((skill) => ({
+      name: skill.name,
+      word: skillWord(skill.name),
+      detail: skill.description,
+    })),
+    empty: found.length === 0 ? SKILL_LIST_NOTE.NO_MATCH : undefined,
+  };
 }
 
 /** A send out on the act port, not yet answered: what it carries, so a refusal hands it back. */
 interface Sending {
   readonly id: string;
   readonly words: string;
-  readonly pictures: readonly Attached[];
-}
-
-/** Buzzes the phone as the system does for an outcome: a send taken, or one refused. */
-function buzz(type: NotificationFeedbackType): void {
-  notificationAsync(type).catch((error: unknown) => console.error("The buzz did not go.", error));
-}
-
-/** The pictures' attachments, in the order they were attached. */
-function filesOf(pictures: readonly Attached[]): readonly AgentAttachment[] {
-  return pictures.map(({ file }) => file);
-}
-
-/** The next picture's name, numbered past every picture the message holds. */
-function nextName(pictures: readonly Attached[], offset: number): string {
-  return pictureName(pictures.length + offset + 1);
-}
-
-/** Why the pictures picked cannot all go with the message, in the panel's words; none where they can. */
-function pictureRefusal(pictures: readonly Attached[]): string | undefined {
-  if (pictures.length > AGENT_BOUNDS.MAX_ATTACHMENTS) {
-    return PICTURE_REFUSAL.FULL(AGENT_BOUNDS.MAX_ATTACHMENTS);
-  }
-  const tooLarge = pictures.find(
-    ({ file }) => base64Bytes(file.data) > AGENT_BOUNDS.MAX_IMAGE_BYTES,
-  );
-  if (tooLarge !== undefined) return PICTURE_REFUSAL.TOO_LARGE(tooLarge.file.name);
-  const total = pictures.reduce((sum, { file }) => sum + base64Bytes(file.data), 0);
-  return total > AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES ? PICTURE_REFUSAL.TOO_MUCH : undefined;
+  readonly pictures: readonly HeldPicture[];
 }
 
 /** What a queue change the host took back says, with where the message went where the service said it left the queue. */
@@ -122,8 +117,12 @@ export interface AgentComposer {
   /** Whether Send stands lit with no words typed: a picture is attached. */
   readonly sendable: boolean;
   readonly send: () => void;
+  /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
+  readonly sendQueues: boolean;
   readonly attached: readonly AttachedPicture[];
   readonly attach: () => void;
+  /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept. */
+  readonly dropPictures: (uris: readonly string[], unreadable: number) => void;
   readonly detach: (id: string) => void;
   /** Stops the turn under way; none while the agent rests. */
   readonly stop: (() => void) | undefined;
@@ -137,36 +136,55 @@ export interface AgentComposer {
   readonly remove: ((id: string) => void) | undefined;
   /** What the last send, pick, Stop, or queue change that did not go said. */
   readonly note: string | undefined;
+  /** The skills a `/` being typed offers; none while no `/` word ends the words. */
+  readonly skills: SkillsOffered | undefined;
 }
 
 /**
  * The composer of the agent `agentId` names, whose followed row is `agent`
  * and whose transcript the page holds as `transcript`. Only the agent's
  * starter may change its queue, as the service holds, so a teammate's
- * Send never queues and their queue offers no Steer or Delete.
+ * Send never queues and their queue offers no Steer or Delete. `onMessage`
+ * hears each message sent straight to the agent, and whether it was taken.
  */
 export function useAgentComposer(
   agentId: string,
   agent: FollowedAgent | undefined,
   transcript: AppTranscript | undefined,
   status: AgentStatus | undefined,
+  onMessage?: (taken: Promise<boolean>) => void,
 ): AgentComposer {
   const acts = useHostActs();
+  const write = useWrite();
   const { data: enterQueues = false } = useQuery({
     ...appStateQuery,
     select: (state) => selectAppSettingsView(state)?.agentEnter === AGENT_ENTER.QUEUE,
   });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const [words, setWords] = useState("");
-  const [pictures, setPictures] = useState<readonly Attached[]>([]);
   const [sending, setSending] = useState<readonly Sending[]>([]);
   const [note, setNote] = useState<string | undefined>(undefined);
+  const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
   const writing = status !== undefined && agentStillWriting(status);
   // Note that an agent on the retired runtime keeps no queue, and only its starter changes one.
   const starter = agent?.startedBy;
   const controlsQueue =
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
+  // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
+  const sendQueues = writing && enterQueues && controlsQueue;
+  const mention = useMemo(() => mentionAt(words, words.length), [words]);
+  const planId = agent?.planId;
+  const { data: skillsRead } = useQuery({
+    queryKey: ["agent-composer-skills", planId],
+    enabled: mention !== undefined && planId !== undefined,
+    staleTime: SKILLS_FRESH_MS,
+    queryFn: (): Promise<SkillsRead> =>
+      acts[ACT_KIND.TASKS_SKILLS]({ planId: planId ?? "" }).then(skillsReadOf, (error: unknown) => {
+        console.error("The task's skills were not read.", error);
+        return { unread: SKILLS_UNANSWERED };
+      }),
+  });
   // A Stop stands pressed until the agent stops writing.
   useEffect(() => {
     if (!writing) setStopping(false);
@@ -175,115 +193,94 @@ export function useAgentComposer(
   const handBack = (sent: Sending, refusal: string) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
-    setPictures((held) => [...sent.pictures, ...held]);
+    pictures.putBack(sent.pictures);
     setNote(refusal);
-    buzz(NotificationFeedbackType.Error);
   };
   const settled = (sent: Sending) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
-    buzz(NotificationFeedbackType.Success);
   };
   const send = () => {
     const text = words.trim();
-    if (text === "" && pictures.length === 0) return;
-    const refusal = pictureRefusal(pictures);
-    if (refusal !== undefined) {
-      setNote(refusal);
-      buzz(NotificationFeedbackType.Warning);
+    if (text === "" && pictures.files === undefined) return;
+    if (pictures.refusal !== undefined) {
+      setNote(pictures.refusal);
+      buzz(BUZZ.WARNING);
       return;
     }
-    const sent: Sending = { id: randomUUID(), words: text, pictures };
-    const attachments = pictures.length === 0 ? undefined : { attachments: [...filesOf(pictures)] };
+    const attachments =
+      pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
+    const sent: Sending = { id: randomUUID(), words: text, pictures: pictures.take() };
     setSending((out) => [...out, sent]);
     setWords("");
-    setPictures([]);
     setNote(undefined);
-    if (writing && enterQueues && controlsQueue) {
+    // A send refused says why in the composer, where its words go back, rather than in the notice.
+    const saying = {
+      inPlace: (words: string) => handBack(sent, words),
+      went: BUZZ.SUCCESS,
+    } as const;
+    if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
-      acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change })
-        .then((answer) => {
-          if ("failure" in answer) handBack(sent, queueRefusalWords(change.change, answer.failure));
-          else settled(sent);
-        })
-        .catch((error: unknown) => {
-          console.error("The queued message did not go.", error);
-          handBack(sent, queueRefusalWords(change.change, AGENT_CALL_FAILURE.UNANSWERED));
-        });
+      write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change }), {
+        ...saying,
+        refused: (answer) =>
+          "failure" in answer ? queueRefusalWords(change.change, answer.failure) : undefined,
+        unanswered: queueRefusalWords(change.change, AGENT_CALL_FAILURE.UNANSWERED),
+      }).then((went) => {
+        if (went) settled(sent);
+      });
       return;
     }
-    acts[ACT_KIND.AGENTS_MESSAGE]({ agentId, text, clientKey: sent.id, ...attachments })
-      .then((answer) => {
-        if ("failure" in answer) handBack(sent, messageFailureWords(answer.failure));
-        else settled(sent);
-      })
-      .catch((error: unknown) => {
-        console.error("The message did not go.", error);
-        handBack(sent, messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED));
-      });
-  };
-  // Note that the system's photo picker reads only what the member picks, so no permission is asked for first, and that it covers the screen, so the pictures held as it opened are those it adds to.
-  const attach = () => {
-    launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: true,
-      selectionLimit: Math.max(1, AGENT_BOUNDS.MAX_ATTACHMENTS - pictures.length),
-      quality: PICTURE_QUALITY,
-      base64: true,
-    })
-      .then((picked) => {
-        if (picked.canceled) return;
-        const read = picked.assets.map((asset, index): Attached | string => {
-          const name = nextName(pictures, index);
-          if (asset.base64 === null || asset.base64 === undefined) {
-            return PICTURE_REFUSAL.UNREADABLE(name);
-          }
-          return {
-            id: randomUUID(),
-            file: { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: asset.base64 },
-          };
-        });
-        const unread = read.find((each): each is string => typeof each === "string");
-        const next = [
-          ...pictures,
-          ...read.filter((each): each is Attached => typeof each !== "string"),
-        ];
-        setPictures(next);
-        setNote(unread ?? pictureRefusal(next));
-      })
-      .catch((error: unknown) => console.error("The photo picker did not open.", error));
-  };
-  const detach = (id: string) => {
-    setPictures((held) => held.filter((picture) => picture.id !== id));
-    setNote(undefined);
+    const message = acts[ACT_KIND.AGENTS_MESSAGE]({
+      agentId,
+      text,
+      clientKey: sent.id,
+      ...attachments,
+    });
+    onMessage?.(
+      message.then(
+        (answer) => !("failure" in answer),
+        () => false,
+      ),
+    );
+    write(() => message, {
+      ...saying,
+      refused: (answer) => ("failure" in answer ? messageFailureWords(answer.failure) : undefined),
+      unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+    }).then((went) => {
+      if (went) settled(sent);
+    });
   };
   const stop = () => {
     setStopping(true);
     setNote(undefined);
-    acts[ACT_KIND.AGENTS_STOP]({ agentId })
-      .then((answer) => {
-        if ("failure" in answer) throw new Error(`The stop was refused: ${answer.failure}.`);
-        if (agentStillWriting(answer.agent.status)) {
+    // Note that a Stop taken while the agent still writes is no refusal: the agent stops at its next step, and the composer says so.
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_STOP]({ agentId }).then((answer) => {
+          if (!("failure" in answer) && agentStillWriting(answer.agent.status)) {
+            setStopping(false);
+            setNote(STOP_NOTHING_YET);
+          }
+          return answer;
+        }),
+      {
+        refused: (answer) => ("failure" in answer ? STOP_FAILED : undefined),
+        unanswered: STOP_FAILED,
+        inPlace: (words) => {
           setStopping(false);
-          setNote(STOP_NOTHING_YET);
-        }
-      })
-      .catch((error: unknown) => {
-        console.error("The stop did not go.", error);
-        setStopping(false);
-        setNote(STOP_FAILED);
-        buzz(NotificationFeedbackType.Error);
-      });
+          setNote(words);
+        },
+      },
+    );
   };
   const change = (next: AgentQueueChange) => {
     setNote(undefined);
-    acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next })
-      .then((answer) => {
-        if ("failure" in answer) setNote(queueRefusalWords(next.change, answer.failure));
-      })
-      .catch((error: unknown) => {
-        console.error("The queue change did not go.", error);
-        setNote(queueRefusalWords(next.change, AGENT_CALL_FAILURE.UNANSWERED));
-      });
+    write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next }), {
+      refused: (answer) =>
+        "failure" in answer ? queueRefusalWords(next.change, answer.failure) : undefined,
+      unanswered: queueRefusalWords(next.change, AGENT_CALL_FAILURE.UNANSWERED),
+      inPlace: setNote,
+    });
   };
   const queue = transcript?.word?.queue;
   const held = queue?.messages ?? [];
@@ -304,16 +301,18 @@ export function useAgentComposer(
   ];
   return {
     placeholder: PLACEHOLDER,
+    sendQueues,
     words,
     onWords: (typed) => {
       setWords(typed);
       setNote(undefined);
     },
-    sendable: pictures.length > 0,
+    sendable: pictures.files !== undefined,
     send,
-    attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
-    attach,
-    detach,
+    attached: pictures.attached,
+    attach: pictures.attach,
+    dropPictures: pictures.drop,
+    detach: pictures.detach,
     stop: writing ? stop : undefined,
     stopping,
     queued,
@@ -325,5 +324,15 @@ export function useAgentComposer(
       ? (messageId) => change({ change: QUEUE_CHANGE.DELETE, messageId })
       : undefined,
     note,
+    skills:
+      mention === undefined
+        ? undefined
+        : {
+            ...offeredSkills(skillsRead, mention.query),
+            pick: (name) => {
+              setWords(`${words.slice(0, mention.start)}${skillWord(name)} `);
+              buzz(BUZZ.SELECTION);
+            },
+          },
   };
 }

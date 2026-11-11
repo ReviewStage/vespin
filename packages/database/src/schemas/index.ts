@@ -1,8 +1,10 @@
 // Better Auth owns its generated schema; our own tables can join this
 // aggregate from their own schema modules without being overwritten by it.
 export * from "./account-provider-key.js";
+export * from "./account-sound.js";
 export * from "./agent.js";
 export * from "./agent-approval.js";
+export * from "./agent-boot.js";
 export * from "./agent-browser-tab.js";
 export * from "./agent-pin.js";
 export * from "./agent-pull-request.js";
@@ -63,5 +65,6 @@ export * from "./workspace-environment-variable.js";
 export * from "./workspace-experiment.js";
 export * from "./workspace-former-slug.js";
 export * from "./workspace-sandbox-script.js";
+export * from "./workspace-sandbox-script-run.js";
 export * from "./workspace-token-repository.js";
 export * from "./write-receipt.js";

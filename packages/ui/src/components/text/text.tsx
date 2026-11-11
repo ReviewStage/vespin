@@ -50,10 +50,11 @@ export { TEXT_VARIANT, type TextVariant } from "./text-role.js";
  * included.
  */
 
-/** The ink words are drawn in: the text's own, or a step quieter. */
+/** The ink words are drawn in: the text's own, a step quieter, or the danger ink for words saying something failed. */
 export const TEXT_TONE = {
   DEFAULT: "default",
   MUTED: "muted",
+  DANGER: "danger",
 } as const;
 
 export type TextTone = (typeof TEXT_TONE)[keyof typeof TEXT_TONE];
@@ -90,7 +91,7 @@ export type TextElement = (typeof TEXT_ELEMENT)[keyof typeof TEXT_ELEMENT];
 
 /** What every role is drawn with: no margin, words broken anywhere at the box's edge, and a tone or a face asked on the element over the role's own. */
 const TEXT_BASE =
-  "ui-text m-0 wrap-anywhere data-[tone=muted]:text-muted-foreground data-[font=mono]:font-mono";
+  "ui-text m-0 wrap-anywhere data-[tone=muted]:text-muted-foreground data-[tone=danger]:text-destructive data-[font=mono]:font-mono";
 
 /** A role's own type, face, and ink; `inherit` takes all three from around it, and a group's heading is a tone below the words it heads. */
 function roleClass(variant: TextVariant): string {

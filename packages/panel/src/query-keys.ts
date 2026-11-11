@@ -11,8 +11,7 @@
  * the ids that answers `queryOptions({ queryKey, queryFn, ... })`, which
  * `useQuery`, `setQueryData`, and `invalidateQueries` all take, so a key and
  * the data under it are typed together and never spelled twice. A `queryFn`
- * runs an Effect only through an edge `tools/anti-slop/effect-edges.json`
- * lists.
+ * runs an Effect only through a runtime edge.
  */
 
 import type { QueryClient } from "@tanstack/react-query";
@@ -51,9 +50,14 @@ export const QUERY_ROOT = {
   AGENT_MESSAGES: "agent-messages",
   REPOSITORY_SKILLS: "repository-skills",
   AGENT_CHANGES: "agent-changes",
+  AGENT_TURN_CHANGES: "agent-turn-changes",
   /** A cloud agent's listening ports and its shared link, as a host that forwards none asks the service for them (`tasks/agent-forward.tsx`). */
   AGENT_PORTS: "agent-ports",
   AGENT_SHARED_PORT: "agent-shared-port",
+  /** A cloud agent's shells and where its sandbox stands, as its Run button reads which run actions run (`tasks/run-actions-button.tsx`). */
+  AGENT_SHELLS: "agent-shells",
+  /** What this Mac spends on the app, read every few seconds while the Resources popover stands open (`desktop/mac-resources.tsx`). */
+  MAC_RESOURCES: "mac-resources",
   /** One version of a plan, as its version history draws it (`tasks/use-description-history.ts`). */
   TASK_REVISION: "task-revision",
   /** A picture the window reads (`picture-query.ts`'s `pictureQuery`), by what it belongs to and its id there. */

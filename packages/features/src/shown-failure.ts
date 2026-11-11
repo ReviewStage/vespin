@@ -58,6 +58,7 @@ export const FAILURE_SURFACE = {
   AGENT_APPROVAL: "agent.approval",
   AGENT_ARCHIVE: "agent.archive",
   AGENT_CHANGES_READ: "agent_changes.read",
+  AGENT_TURN_CHANGES_READ: "agent_turn_changes.read",
   AGENT_CHANGES_REFRESH: "agent_changes.refresh",
   AGENT_CHAPTERS_GENERATE: "agent_chapters.generate",
   AGENT_CHAPTERS_READ: "agent_chapters.read",
@@ -75,6 +76,8 @@ export const FAILURE_SURFACE = {
   AGENT_QUEUE_DELETE: "agent_queue.delete",
   AGENT_RENAME: "agent.rename",
   AGENT_REWIND: "agent.rewind",
+  /** A `/clear` the service did not take: the agent's harness was not started on a fresh session. */
+  AGENT_CLEAR: "agent.clear",
   AGENT_SEND: "agent.send",
   AGENT_SERVERS: "agent.servers",
   AGENT_START: "agent.start",
@@ -134,6 +137,7 @@ export const FAILURE_SURFACE = {
   MEMBERS_READ: "members.read",
   MEMORIES_READ: "memories.read",
   MEMORY_FORGET: "memory.forget",
+  MEMORY_SAVE: "memory.save",
   MENTIONS_READ: "mentions.read",
   MESSAGE_EDIT: "message.edit",
   MESSAGE_REVEAL: "message.reveal",
@@ -180,6 +184,8 @@ export const FAILURE_SURFACE = {
   SKILL_PREVIEW: "skill.preview",
   SKILL_READ: "skill.read",
   SKILL_REMOVE: "skill.remove",
+  /** The account's own sound clip kept or removed, from Settings (`sound-clip-row.tsx`). */
+  SOUND_CLIP_WRITE: "sound_clip.write",
   TASKS_READ: "tasks.read",
   TASKS_REFRESH: "tasks.refresh",
   TASK_BLOCK: "task.block",

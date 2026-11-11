@@ -1,33 +1,34 @@
-// button.tsx -- the app's buttons, chips, and pills: the system's own buttons in the brand's accent, and the small capsules a person picks among or reads a task's fields on.
+// button.tsx -- the app's buttons, chips, and pills: the system's own buttons, a filled one in the brand's accent and the rest in the ink, and the small capsules a person picks among or reads a task's fields on.
 
-import {
-  HStack,
-  Image,
-  ScrollView,
-  Button as SwiftUIButton,
-  Text,
-  VStack,
-} from "@expo/ui/swift-ui";
+import { HStack, Image, Picker, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
+  accessibilityElement,
+  accessibilityHint,
+  accessibilityLabel,
   background,
+  buttonBorderShape,
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
-  fixedSize,
   font,
   foregroundStyle,
+  frame,
+  labelsHidden,
   monospacedDigit,
   padding,
+  pickerStyle,
   shapes,
   strokeBorder,
+  tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import type { Glyph } from "./glyph.js";
-import { Avatar, TaskStatusMark, ToneGlyph } from "./marks.js";
+import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -69,10 +70,25 @@ type ButtonProps = {
   readonly onPress: () => void;
 };
 
-/** A button, filled in the accent unless it says otherwise: a primary act is one of the few things drawn in copper. */
+/** The looks the system fills with the tint, whose words then stand on the accent. */
+const FILLED_LOOKS: ReadonlySet<ButtonLook> = new Set([
+  BUTTON_LOOK.PROMINENT,
+  BUTTON_LOOK.GLASS_PROMINENT,
+]);
+
+/**
+ * A button, filled in the accent unless it says otherwise: a primary act is
+ * one of the few things drawn in copper, so a bordered or plain one stands
+ * in the ink, as the panel's quiet buttons do. Note that a filled button's words
+ * stand in the brand's ink on the accent rather than the system's white,
+ * since white on the dark theme's lighter copper reads at under 3:1, where
+ * the brand's dark ink holds WCAG's 4.5:1.
+ */
 export function Button(props: ButtonProps) {
   const { label, symbol, look = BUTTON_LOOK.PROMINENT, size = BUTTON_SIZE.REGULAR } = props;
   const colors = useColors();
+  const accent = props.destructive !== true;
+  const filled = accent && FILLED_LOOKS.has(look);
   return (
     <SwiftUIButton
       label={label}
@@ -82,7 +98,8 @@ export function Button(props: ButtonProps) {
       modifiers={[
         buttonStyle(look),
         controlSize(size),
-        ...(props.destructive === true ? [] : [tint(colors.ACCENT)]),
+        ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
+        ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
       ]}
     />
@@ -151,42 +168,41 @@ type ChipProps = {
   readonly count?: number | undefined;
   /** Whether the chip stands chosen, which fills it with the ink. */
   readonly selected?: boolean | undefined;
+  /** What a press does, heard after the chip's words where they leave it unsaid, such as a picture's × taking it off a message. */
+  readonly hint?: string | undefined;
   readonly onPress: () => void;
 };
 
 /**
- * A small capsule a person picks among others, such as a scope or a model:
- * filled with the ink once chosen, as a selection reads without the accent,
- * and on the surface inside a hairline otherwise. VoiceOver hears the chosen
- * one as selected, since its fill alone says so on screen.
+ * A small act or choice as the system's own small capsule button, as Mail
+ * and the App Store stand an act under a card: bordered in the ink, and
+ * filled with the ink once chosen, as a selection reads without the accent.
+ * The system draws its press, its dimming, Button Shapes and Increase
+ * Contrast. VoiceOver hears the chosen one as selected, since its fill
+ * alone says so on screen.
  */
-export function Chip({ label, symbol, count, selected = false, onPress }: ChipProps) {
+export function Chip({ label, symbol, count, selected = false, hint, onPress }: ChipProps) {
   const colors = useColors();
-  const ink = selected ? colors.GROUND : colors.TEXT_BODY;
   return (
     <SwiftUIButton
+      label={count === undefined ? label : `${label} ${count}`}
+      {...(symbol === undefined ? {} : { systemImage: symbol })}
       onPress={onPress}
       modifiers={[
-        buttonStyle("plain"),
+        buttonStyle(selected ? "borderedProminent" : "bordered"),
+        buttonBorderShape("capsule"),
+        controlSize("small"),
+        tint(colors.TEXT),
+        ...(selected ? [foregroundStyle(colors.GROUND)] : []),
+        hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
+        ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
-    >
-      <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, selected)}>
-        {symbol === undefined ? null : (
-          <Image systemName={symbol} size={MARK_SIZE.GLYPH - 2} color={ink} />
-        )}
-        <CapsuleWords
-          label={label}
-          count={count}
-          ink={ink}
-          countInk={selected ? colors.GROUND : colors.TEXT_MUTED}
-        />
-      </HStack>
-    </SwiftUIButton>
+    />
   );
 }
 
-/** One scope a `ScopePills` row offers. */
+/** One scope a `ScopePicker` offers. */
 export type Scope = {
   readonly label: string;
   /** How many it lists, where the count is worth reading. */
@@ -195,44 +211,64 @@ export type Scope = {
   readonly onPress: () => void;
 };
 
+/** How a `ScopePicker` stands: as segments across a screen, or as one menu button where a column is too narrow for segments. */
+export const SCOPE_LOOK = {
+  SEGMENTED: "segmented",
+  MENU: "menu",
+} as const;
+
+export type ScopeLook = (typeof SCOPE_LOOK)[keyof typeof SCOPE_LOOK];
+
+/** A scope as its segment names it: its label, and its count after it where it has one. */
+function segmentWords(scope: Scope): string {
+  return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
+}
+
 /**
- * A list's scopes as a row of small capsules under the screen's title, the
- * chosen one filled with the ink, scrolling sideways where they outrun the
- * screen, over the list they scope. They stand over it rather than in it,
- * so they stay when the scope chosen lists nothing.
+ * A list's scopes as the system's segmented control under the screen's
+ * title, as Mail and the App Store switch between a list's views, over the
+ * list they scope. It stands over the list rather than in it, so it stays
+ * when the scope chosen lists nothing. Note that the system draws it, in
+ * its own glass and its own selection, so it reads as iOS's rather than a
+ * row of capsules of our own. In a split view's list column, whose 320 pt
+ * cut the segments' words short, it stands as the system's menu picker
+ * instead: one button naming the scope chosen, opening the others.
  */
-export function ScopePills({
+export function ScopePicker({
+  label,
   scopes,
+  look = SCOPE_LOOK.SEGMENTED,
   children,
 }: {
+  /** What the control chooses, heard by VoiceOver before the scope chosen and kept off screen, such as "Filter". */
+  readonly label: string;
   readonly scopes: readonly Scope[];
-  /** The list the pills scope, or what stands in its place while it lists nothing. */
+  readonly look?: ScopeLook | undefined;
+  /** The list the control scopes, or what stands in its place while it lists nothing. */
   readonly children: ReactNode;
 }) {
+  const chosen = scopes.find((scope) => scope.selected);
   return (
     <VStack spacing={0}>
-      <ScrollView
-        axes="horizontal"
-        showsIndicators={false}
-        modifiers={[fixedSize({ horizontal: false, vertical: true })]}
+      <Picker<string>
+        label={label}
+        selection={chosen?.label ?? ""}
+        onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
+        modifiers={[
+          pickerStyle(look),
+          labelsHidden(),
+          ...(look === SCOPE_LOOK.MENU
+            ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]
+            : []),
+          padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
+        ]}
       >
-        <HStack
-          spacing={SPACE.TIGHT + 2}
-          modifiers={[
-            padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
-          ]}
-        >
-          {scopes.map((scope) => (
-            <Chip
-              key={scope.label}
-              label={scope.label}
-              count={scope.count}
-              selected={scope.selected}
-              onPress={scope.onPress}
-            />
-          ))}
-        </HStack>
-      </ScrollView>
+        {scopes.map((scope) => (
+          <Text key={scope.label} modifiers={[tag(scope.label)]}>
+            {segmentWords(scope)}
+          </Text>
+        ))}
+      </Picker>
       {children}
     </VStack>
   );
@@ -243,8 +279,8 @@ type FieldChipProps = {
   readonly label: string;
   /** A task's status, whose ring leads the chip. */
   readonly status?: TaskStatus | undefined;
-  /** A person, whose face leads the chip. */
-  readonly face?: string | undefined;
+  /** A person, whose face leads the chip, their picture where one is known. */
+  readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
   readonly symbol?: SfSymbol | undefined;
   /** A mark leading the chip in its tone where none of the above does, such as a pull request's state. */
@@ -254,7 +290,9 @@ type FieldChipProps = {
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
 function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
-  if (props.face !== undefined) return <Avatar name={props.face} size={MARK_SIZE.FACE} />;
+  if (props.face !== undefined) {
+    return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
+  }
   if (props.symbol !== undefined) {
     return <Image systemName={props.symbol} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />;
   }
@@ -266,11 +304,18 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   return null;
 }
 
-/** A task's field read as a small capsule, such as its status, priority, or assignee: on the surface inside a hairline, never pressed. */
+/** A task's field read as a small capsule, such as its status, priority, or assignee: on the surface inside a hairline, never pressed, and heard as its words once, its mark saying the same. */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
   return (
-    <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
+    <HStack
+      spacing={SPACE.TIGHT + 2}
+      modifiers={[
+        ...capsuleModifiers(colors, false),
+        accessibilityElement("ignore"),
+        accessibilityLabel(props.label),
+      ]}
+    >
       {fieldMark(props, colors)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>

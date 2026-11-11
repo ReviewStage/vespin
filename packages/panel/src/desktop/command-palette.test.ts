@@ -48,7 +48,7 @@ import {
   useAppCommand,
   useMenuCommands,
 } from "../app-commands.js";
-import { PageWorkspaceProvider, useCopyLink, usePageWorkspace } from "../links-at-hand.js";
+import { useCopyLink } from "../links-at-hand.js";
 import { installPanelSpanRecorder, PANEL_SPAN, type PanelSpan } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
@@ -112,27 +112,15 @@ afterEach(() => {
   document.head.innerHTML = "";
 });
 
-/** An agent's page, as far as it tells the window the workspace it read its agent into. */
-function AgentPageTelling(props: { agentId: string; workspaceId: string }): null {
-  usePageWorkspace(props.agentId, props.workspaceId);
-  return null;
-}
-
 /** The palette's props as the window hands them, beside an agent's page where one tells its workspace, and the routed place it stands on. */
 type WindowPaletteProps = Omit<Parameters<typeof CommandPalette>[0], "links"> & {
-  page?: { agentId: string; workspaceId: string } | undefined;
   place?: RoutedPlace | undefined;
 };
 
 /** The palette offering the links at hand through the window's own Copy link. */
-function LinkedPalette({ page, place, ...props }: WindowPaletteProps): React.JSX.Element {
+function LinkedPalette({ place, ...props }: WindowPaletteProps): React.JSX.Element {
   const links = useCopyLink(props.tasks, undefined, true, SHELL_ROOM.WIDE, undefined, place);
-  return createElement(
-    PageWorkspaceProvider,
-    { value: links.onPageWorkspace },
-    createElement(CommandPalette, { ...props, links }),
-    page === undefined ? null : createElement(AgentPageTelling, page),
-  );
+  return createElement(CommandPalette, { ...props, links });
 }
 
 /** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read, an Inbox item there standing where `held` says. */
@@ -160,7 +148,6 @@ function openPalette(
   tasks: TasksControl = tasksControl(),
   readFiles: (taskId: string) => Promise<TasksTreeAnswer> = () =>
     Promise.reject(new Error("no repository is open")),
-  page?: { agentId: string; workspaceId: string },
   capabilities: readonly HostCapability[] = DESKTOP_CAPABILITIES,
   tab: PanelTab = PANEL_TAB.TASKS,
   /** The routed place the window stands on, which offers its own links. */
@@ -189,7 +176,6 @@ function openPalette(
       capabilities,
       onViewChange: (view) => sent.views.push(view),
     },
-    page,
     place,
     at,
     held,
@@ -212,8 +198,11 @@ function Looker({ looked }: { looked: typeof DOCUMENT_TASK | undefined }): null 
   return null;
 }
 
-/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer. */
-function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
+/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer, over `tasks` where it is given. */
+function paletteOverTask(): (
+  looked: typeof DOCUMENT_TASK | undefined,
+  over?: TasksControl,
+) => void {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
@@ -221,7 +210,7 @@ function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
     activeTaskId: DOCUMENT_TASK.id,
   });
-  return (looked) =>
+  return (looked, over = tasks) =>
     act(() =>
       root.render(
         withQueryClient(
@@ -233,7 +222,7 @@ function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
               available: true,
               tab: PANEL_TAB.TASKS,
               onTabChange: () => undefined,
-              tasks: tasks,
+              tasks: over,
               settings: {
                 rows: {
                   settings: settingsView(),
@@ -398,7 +387,7 @@ test("the Settings filter lists Memory after Cloud environment only while the li
 test("on a platform without Mac commands, the Settings filter lists no This Mac page, and finds none of its rows", () => {
   const offered = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MAC_COMMANDS);
   const shown = SETTINGS_PAGES.filter((page) => page !== "This Mac");
-  openPalette(undefined, undefined, undefined, offered);
+  openPalette(undefined, undefined, offered);
   chooseFilter("Settings");
 
   assert.deepEqual(rows().slice(0, shown.length), shown);
@@ -551,13 +540,13 @@ function footer(): (string | null)[] {
   );
 }
 
-test("with the field empty, ← and → step through the filters, wrapping at the ends", () => {
+test("with the field empty, ← and → step through the filters, wrapping at the ends, and with no task open never land on This task", () => {
   openPalette();
 
   assert.equal(key(RIGHT), false, "the step is the palette's, not the caret's");
   assert.equal(chosenFilter(), "Tasks");
   key(RIGHT);
-  assert.equal(chosenFilter(), "This task");
+  assert.equal(chosenFilter(), "Inbox", "with no task open, This task is stepped past");
   key(LEFT);
   key(LEFT);
   assert.equal(chosenFilter(), "All");
@@ -565,6 +554,18 @@ test("with the field empty, ← and → step through the filters, wrapping at th
   assert.equal(chosenFilter(), "Settings", "stepping back from All wraps to the last filter");
   key(RIGHT);
   assert.equal(chosenFilter(), "All", "stepping on from the last filter wraps to All");
+});
+
+test("a task closed while ⌘K stands on This task turns the palette back to All", () => {
+  const drawn = paletteOverTask();
+  drawn(undefined);
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
+  });
+  chooseFilter("This task");
+
+  drawn(undefined, tasksControl());
+  assert.equal(chosenFilter(), "All");
 });
 
 test("once anything is typed, ← and → only move the caret, even at the text's ends", () => {
@@ -588,7 +589,7 @@ test("⌘[ and ⌘] step through the filters, wrapping at the ends, whether or n
   assert.equal(chosenFilter(), "Tasks");
   type("invite");
   key(FORWARD);
-  assert.equal(chosenFilter(), "This task");
+  assert.equal(chosenFilter(), "Inbox");
   assert.equal(key(BACK), false, "the window's Back is held off");
   key(BACK);
   key(BACK);
@@ -607,15 +608,15 @@ test("a press on a filter chooses it and leaves the caret in the field, no filte
     [],
     "no filter is a tab stop",
   );
-  const agents = filterOptions().find((each) => each.textContent === "This task");
-  assert.ok(agents);
+  const inbox = filterOptions().find((each) => each.textContent === "Inbox");
+  assert.ok(inbox);
   const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
   act(() => {
-    agents.dispatchEvent(down);
+    inbox.dispatchEvent(down);
   });
   assert.equal(down.defaultPrevented, true, "the press does not move the keyboard");
-  act(() => agents.click());
-  assert.equal(chosenFilter(), "This task");
+  act(() => inbox.click());
+  assert.equal(chosenFilter(), "Inbox");
   assert.equal(document.activeElement, field(), "the caret stays in the field");
   assert.equal(field().value, "invite");
 });
@@ -662,13 +663,13 @@ test("in a row too narrow for every filter, the filter a key chooses is scrolled
   key(FORWARD);
   assert.equal(bar.scrollLeft, 0, "Tasks already stands in view");
   key(FORWARD);
-  assert.equal(chosenFilter(), "This task");
+  assert.equal(chosenFilter(), "Inbox");
   assert.equal(bar.scrollLeft, 50);
   key(BACK);
   key(BACK);
   key(BACK);
   assert.equal(chosenFilter(), "Settings");
-  assert.equal(bar.scrollLeft, 350);
+  assert.equal(bar.scrollLeft, 300);
   key(FORWARD);
   assert.equal(chosenFilter(), "All");
   assert.equal(bar.scrollLeft, 0);
@@ -728,8 +729,8 @@ test("the field asks to search Vespin under All, and the kind under its filter",
   openPalette();
   assert.equal(field().placeholder, "Search Vespin");
 
-  chooseFilter("This task");
-  assert.equal(field().placeholder, "Search this task");
+  chooseFilter("Inbox");
+  assert.equal(field().placeholder, "Search inbox");
   chooseFilter("Commands");
   assert.equal(field().placeholder, "Search commands");
 });
@@ -1164,7 +1165,6 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
           truncated: false,
         },
       }),
-    undefined,
     DESKTOP_CAPABILITIES,
     PANEL_TAB.TASKS,
     inbox === undefined ? undefined : ROUTED_PLACE.INBOX,
@@ -1362,7 +1362,6 @@ test("an agent pressed on a task's card in ⌘K over Settings leaves the palette
       ],
       onShowAgent: (taskId, agentId) => shown.push([taskId, agentId]),
     }),
-    undefined,
     undefined,
     DESKTOP_CAPABILITIES,
     PANEL_TAB.SETTINGS,
@@ -1739,7 +1738,7 @@ test("a task's command wears the same chord in ⌘K as in the open task's Plan t
   );
   // The document arrives a few microtasks after the window first draws.
   await settle();
-  openPalette(tasks, undefined, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
+  openPalette(tasks, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
   type("permanently delete");
   const deleteKeys = rowChord("Permanently delete");
   type("mark done");
@@ -1882,7 +1881,7 @@ test("⇧⌘C copies the link of what is open, the most specific first: the Inbo
     [tasksControl(listed), ROUTED_PLACE.AUTOMATIONS, `/acme/automation/${automationId}`],
   ] as const) {
     const held = place === ROUTED_PLACE.INBOX ? { agentId: LINKED_AGENT, itemId } : undefined;
-    openPalette(tasks, undefined, undefined, undefined, undefined, place, at, held);
+    openPalette(tasks, undefined, undefined, undefined, place, at, held);
     act(() => {
       runAppCommand(APP_COMMAND.COMMAND_PALETTE);
       runAppCommand(APP_COMMAND.COPY_LINK);
@@ -1900,37 +1899,6 @@ test("⇧⌘C copies the link of what is open, the most specific first: the Inbo
   ]);
 });
 
-test("on an agent's page with a page it showed open in the panel, ⇧⌘C copies the page's link under the agent's while the panel fills the window, and the agent's own otherwise", async () => {
-  const copied = installClipboard();
-  const pageId = "4c5d6e7f-8a9b-4c0d-9e1f-2a3b4c5d6e7f";
-  const listed = { workspaces: ON_AGENT_TAB.workspaces, workspace: ON_AGENT_TAB.workspaces[0] };
-  const onPage = (fullScreen: boolean) => {
-    const base = tasksControl(listed);
-    return tasksControl({
-      ...listed,
-      agentView: { ...base.agentView, agentId: LINKED_AGENT },
-      sidePanel: { ...base.sidePanel, open: true, fullScreen, tab: pageTab(pageId) },
-    });
-  };
-  for (const tasks of [onPage(true), onPage(false)]) {
-    // The agent's page is the router's, which offers the page's links (`places/routed-places.ts`).
-    openPalette(tasks, undefined, undefined, undefined, undefined, ROUTED_PLACE.AGENT);
-    act(() => {
-      runAppCommand(APP_COMMAND.COMMAND_PALETTE);
-      runAppCommand(APP_COMMAND.COPY_LINK);
-    });
-    await act(async () => undefined);
-    act(() => {
-      for (const root of roots.splice(0)) root.unmount();
-    });
-  }
-
-  assert.deepEqual(copied, [
-    `https://vespin.dev/acme/agent/${LINKED_AGENT}/page/${pageId}`,
-    `https://vespin.dev/acme/agent/${LINKED_AGENT}`,
-  ]);
-});
-
 test("on a person's page ⌘K offers Copy link to profile and ⇧⌘C copies their page's link in the workspace it opened in", async () => {
   const copied = installClipboard();
   const [acme] = ON_AGENT_TAB.workspaces;
@@ -1939,7 +1907,6 @@ test("on a person's page ⌘K offers Copy link to profile and ⇧⌘C copies the
       workspaces: ON_AGENT_TAB.workspaces,
       workspace: acme,
     }),
-    undefined,
     undefined,
     undefined,
     undefined,
@@ -2013,37 +1980,6 @@ test("⌘K pressed with the keyboard in the side panel offers its tab's link fir
   assert.equal(chord, "⇧⌘C");
 });
 
-test("on an agent's page in another workspace than the one listed, ⇧⌘C names the agent's workspace, which the page read", async () => {
-  const copied = installClipboard();
-  openPalette(
-    tasksControl({
-      workspaces: [
-        ...ON_AGENT_TAB.workspaces,
-        {
-          id: "workspace-beta",
-          name: "Beta",
-          slug: "beta",
-          role: WORKSPACE_ROLE.MEMBER,
-          github: null,
-        },
-      ],
-      workspace: ON_AGENT_TAB.workspaces[0],
-      agentView: { ...tasksControl().agentView, agentId: LINKED_AGENT },
-    }),
-    undefined,
-    { agentId: LINKED_AGENT, workspaceId: "workspace-beta" },
-    undefined,
-    undefined,
-    ROUTED_PLACE.AGENT,
-  );
-  act(() => {
-    runAppCommand(APP_COMMAND.COPY_LINK);
-  });
-  await act(async () => undefined);
-
-  assert.deepEqual(copied, [`https://vespin.dev/beta/agent/${LINKED_AGENT}`]);
-});
-
 test("People lists the listed workspace's members as every people menu does, the reader first as You and the rest by name with their email, found by email too, each hanging their card, and a choice opens their page", async () => {
   const members = [
     {
@@ -2074,7 +2010,6 @@ test("People lists the listed workspace's members as every people menu does, the
       workspace: { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null },
       onOpenPerson: (userId) => opened.push(userId),
     }),
-    undefined,
     undefined,
     undefined,
     undefined,
@@ -2150,7 +2085,6 @@ test("under All, a query nothing else matches says the repository's files are st
       new Promise((resolve) => {
         answer = resolve;
       }),
-    undefined,
     DESKTOP_CAPABILITIES,
     PANEL_TAB.TASKS,
   );
@@ -2206,7 +2140,6 @@ test("Files says a failed read with a Retry that reads the repository's files ag
         answers.push(resolve);
         failures.push(reject);
       }),
-    undefined,
     DESKTOP_CAPABILITIES,
     PANEL_TAB.TASKS,
   );
@@ -2255,13 +2188,7 @@ test("People says the members are being read until they answer, and a refused re
     },
   });
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
-  openPalette(
-    tasksControl({ me: "user-dean", workspace: ACME }),
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-  );
+  openPalette(tasksControl({ me: "user-dean", workspace: ACME }), undefined, undefined, undefined);
   chooseFilter("People");
   await settle();
   assert.equal(emptyLine(), "Reading the workspace's members");
@@ -2724,24 +2651,14 @@ test("⌘K's \"This task\" offers the task's Inbox while an item waits on it and
   assert.equal(endWordsOf(listed), "2 need you");
 });
 
-test("⌘K draws no Issues filter, with every experiment on, since Vespin keeps no issues of its own", async () => {
+test("with no task open, ⌘K draws no This task filter, which would list nothing, and no Issues filter, with every experiment on, since Vespin keeps no issues of its own", async () => {
   handState(experimentsOn(...Object.values(EXPERIMENT)));
   await paletteUnderState(tasksControl({ workspace: ACME }));
   await settle();
 
   assert.deepEqual(
     filterOptions().map((option) => option.textContent),
-    [
-      "All",
-      "Tasks",
-      "This task",
-      "Inbox",
-      "People",
-      "Automations",
-      "Files",
-      "Commands",
-      "Settings",
-    ],
+    ["All", "Tasks", "Inbox", "People", "Automations", "Files", "Commands", "Settings"],
   );
 });
 
@@ -2868,7 +2785,7 @@ function paletteOverInbox(inbox: FedInbox, changed = 9_000) {
   const { deliverItems: deliver } = handHostReads({ items: fedOf(inbox), inbox: held });
   const tasks = tasksControl({ tasks: [ROTATION], workspace: ROTATION_HOME });
   writeExperiments({}, { inbox: held });
-  openPalette(tasks, undefined, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
+  openPalette(tasks, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
   const window = windows.at(-1);
   assert.ok(window, "the palette stands under a window's router");
   return {

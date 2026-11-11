@@ -1,3 +1,5 @@
+import type { AutomationPresetName } from "@repo/features/automation-presets";
+
 /**
  * automations-place.ts -- the window's Automations pages by kind: the list, the runs, a new automation, and one automation's page.
  */
@@ -18,7 +20,11 @@ export type AutomationsPlace =
       readonly deleted?: string;
     }
   | { readonly kind: typeof AUTOMATIONS_PAGE.RUNS }
-  | { readonly kind: typeof AUTOMATIONS_PAGE.NEW }
+  | {
+      readonly kind: typeof AUTOMATIONS_PAGE.NEW;
+      /** The suggestion on the list it was opened from, whose preset fills its draft in, as its address's `preset` names it; none for a blank one. */
+      readonly preset?: AutomationPresetName;
+    }
   | {
       readonly kind: typeof AUTOMATIONS_PAGE.EDIT;
       readonly automationId: string;

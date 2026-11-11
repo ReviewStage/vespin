@@ -7,9 +7,6 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { INBOX_MESSAGE_AUTHOR, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { pageFrameUrl } from "@repo/features/page-frame";
-import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -54,7 +51,6 @@ import {
   ROW_TITLE,
   readTitle,
   rowNamed,
-  saying,
   settle,
   showScope,
   standKeymap,
@@ -63,7 +59,6 @@ import {
   wayBack,
   world,
 } from "../testing/desktop-inbox.js";
-import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { tasksControl } from "../testing/tasks-control.js";
 
@@ -260,19 +255,19 @@ test("one column wide, the item's bar says where it stands in the list, and its 
   layOut(page, 800);
   assert.deepEqual([readTitle(page), pagerOf(page)], ["Alert at 80%?", "3 of 3"]);
   assert.equal(
-    arrowNamed(page, "Next item").getAttribute("aria-disabled"),
+    arrowNamed(page, "Next inbox item").getAttribute("aria-disabled"),
     "true",
     "nothing below the last, the arrow keeping the keyboard",
   );
   pressKey("j");
   assert.equal(readTitle(page), "Alert at 80%?");
 
-  act(() => arrowNamed(page, "Previous item").click());
+  act(() => arrowNamed(page, "Previous inbox item").click());
   assert.deepEqual([readTitle(page), pagerOf(page)], ["Expire after 7 days?", "2 of 3"]);
   pressKey("k");
   assert.deepEqual([readTitle(page), pagerOf(page)], ["How is a failed email retried?", "1 of 3"]);
   assert.equal(
-    arrowNamed(page, "Previous item").getAttribute("aria-disabled"),
+    arrowNamed(page, "Previous inbox item").getAttribute("aria-disabled"),
     "true",
     "nothing above the first, the arrow keeping the keyboard",
   );
@@ -315,67 +310,6 @@ test("a chosen item whose plan leaves the account's list, deleted on another Mac
   );
 });
 
-test("a link alone on its line to a page an agent showed on itself, as an older link names it, stands as the page's row, hanging the card a plan's page hangs, its title, version and the agent that showed it, read as it is first hung; one of an agent the reader cannot reach says it can't be read", async () => {
-  const ledger: PageLine = {
-    id: "4a5b6c7d-8e9f-4a0b-8c1d-2e3f4a5b6c7d",
-    title: "Flake ledger",
-    version: 3,
-    at: 1_000,
-    shownBy: { kind: PAGE_SHOWER.AGENT, agentId: AGENT.id },
-  };
-  const unreachable = "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d";
-  world.agentPages = new Map([[AGENT.id, [ledger]]]);
-  const shown = linkOf(
-    { kind: LINK_DESTINATION.PAGE, agentId: AGENT.id, pageId: ledger.id },
-    "acme",
-  );
-  const hidden = linkOf(
-    { kind: LINK_DESTINATION.PAGE, agentId: unreachable, pageId: ledger.id },
-    "acme",
-  );
-  const words = [shown, `[@Their ledger](${hidden})`].join("\n\n");
-  world.inboxes.set(BILLING.id, [saying(THRESHOLD, words), RETRY]);
-  const { page } = mount();
-  await settle();
-  act(() => rowNamed(page, THRESHOLD.title).click());
-  await settle();
-
-  const rows = [...page.querySelectorAll('[data-inbox-message-text] [data-lone-link="page"]')];
-  assert.equal(rows.length, 2, "each link alone on its line stands as a page's row");
-  const [mine, theirs] = rows.map((row) => row.querySelector("button.ui-list-row-main"));
-  assert.ok(mine && theirs);
-  restOn(mine);
-  await settle();
-  const card = document.querySelector(".ui-tooltip-card [data-page-card]");
-  assert.ok(card, "the agent's page hangs the page's own card");
-  assert.equal(card.querySelector(".ui-hover-card-name")?.textContent, "Flake ledger");
-  assert.deepEqual(
-    [
-      card.querySelector(".ui-hover-card-sub")?.textContent,
-      card.querySelector(".ui-hover-card-row")?.textContent,
-    ],
-    ["Version 3", `Shown by ${AGENT.title}`],
-  );
-  assert.equal(
-    card.querySelector(".ui-page-thumb-frame")?.getAttribute("src"),
-    pageFrameUrl({ agentId: AGENT.id, pageId: ledger.id, version: 3 }),
-  );
-  act(() => {
-    mine.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
-  });
-
-  restOn(theirs);
-  await settle();
-  const refused = document.querySelector(".ui-tooltip-card [data-page-card]");
-  assert.deepEqual(
-    [
-      refused?.querySelector(".ui-hover-card-name")?.textContent,
-      refused?.querySelector(".ui-hover-card-note")?.textContent,
-    ],
-    ["Their ledger", "Can't read this page."],
-  );
-});
-
 test("an item chosen by a notification's click, in an Inbox showing its list alone, is shown itself, and Back stands on the list again, the notification's ask taken once", async () => {
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
@@ -397,6 +331,28 @@ test("an item chosen by a notification's click, in an Inbox showing its list alo
     "list",
     "Back stands on the list, the notification's ask taken once",
   );
+});
+
+test("an item opened at its address alone, as a reloaded window opens it, gives way to a row pressed after it", async () => {
+  const previous = fakeActsAnswer();
+  fakeActs({
+    ...appBridge(),
+    act: (request: AnyAct): Promise<FakeActAnswer> =>
+      request.kind === ACT_KIND.AGENTS_INBOX_ITEM_HOME
+        ? Promise.resolve({
+            status: FAKE_ANSWER.DONE,
+            value: { planId: BILLING.id, agentId: AGENT.id, workspaceId: ACME.id },
+          })
+        : previous(request),
+  });
+  const { page } = mount({ chosen: ON_THRESHOLD, byAddress: true });
+  await settle();
+  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, THRESHOLD.title);
+
+  act(() => rowNamed(page, EXPIRY.title).click());
+  await settle();
+
+  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, EXPIRY.title);
 });
 
 test("an item's row offers Copy link on a right-click, copying the item's link by its id alone, whichever agent posted it and task holds it", async () => {

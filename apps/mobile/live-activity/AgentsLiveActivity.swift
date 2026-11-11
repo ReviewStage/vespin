@@ -1,12 +1,12 @@
-// AgentsLiveActivity.swift -- the widget extension: the member's running agents in the Dynamic Island, on the Lock Screen, and on an Apple Watch or in CarPlay.
+// AgentsLiveActivity.swift -- the widget extension: the member's running agents in the Dynamic Island, on the Lock Screen, and on an Apple Watch or in CarPlay, beside the Inbox widget (`InboxWidget.swift`).
 //
 // One activity stands for every running agent of the member's
 // (`AgentsActivityAttributes`). The compact and minimal presentations say
 // how many are working. The expanded one and the Lock Screen list up to
-// three, each with its title, step line, a timer from its turn's start, and
-// Stop (`StopAgentIntent`). Where an ask waits on the member, the count is
-// drawn in the brand's copper (`Attention`) and a tap opens the Inbox, else
-// a tap opens the newest running agent. The colors are the brand's, written
+// three, each with its title, a timer from its turn's start, and Stop
+// (`StopAgentIntent`). Where an ask waits on the member, the count is drawn
+// in the brand's copper (`Attention`) and a tap opens the Inbox, else a tap
+// opens the newest running agent. The colors are the brand's, written
 // into this target's asset catalog by `app.config.ts`. Every presentation
 // has a preview at the end of the file.
 
@@ -19,6 +19,7 @@ import WidgetKit
 struct AgentsWidgets: WidgetBundle {
   var body: some Widget {
     AgentsLiveActivity()
+    InboxWidget()
   }
 }
 
@@ -131,7 +132,7 @@ struct AgentList: View {
   }
 }
 
-/// One running agent: its title over its step line and the time its turn has run, opening its page, and Stop.
+/// One running agent: its title and the time its turn has run, opening its page, and Stop.
 struct AgentRow: View {
   let agent: AgentsActivityAttributes.Agent
 
@@ -140,12 +141,7 @@ struct AgentRow: View {
       // Note that the row opens its agent's page everywhere but on Stop, which a link around it would swallow.
       Link(destination: AgentsActivityAttributes.ContentState.route(agent: agent.id)) {
         HStack(spacing: 4) {
-          VStack(alignment: .leading, spacing: 1) {
-            Text(agent.title).font(.subheadline.weight(.medium)).lineLimit(1)
-            if let step = agent.step {
-              Text(step).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-          }
+          Text(agent.title).font(.subheadline.weight(.medium)).lineLimit(1)
           Spacer(minLength: 4)
           Text(agent.turnStart, style: .timer)
             .font(.caption)
@@ -227,13 +223,13 @@ extension AgentsActivityAttributes.ContentState {
     running: 3, waiting: 0,
     agents: [
       .init(
-        id: "a1", title: "Fix the token refresh", step: "Editing session-store.ts",
+        id: "a1", title: "Fix the token refresh",
         startedAt: Date.now.addingTimeInterval(-94).timeIntervalSince1970 * 1000),
       .init(
-        id: "a2", title: "Add Live Activities", step: "Running the tests",
+        id: "a2", title: "Add Live Activities",
         startedAt: Date.now.addingTimeInterval(-612).timeIntervalSince1970 * 1000),
       .init(
-        id: "a3", title: "Resend expired invites", step: nil,
+        id: "a3", title: "Resend expired invites",
         startedAt: Date.now.addingTimeInterval(-8).timeIntervalSince1970 * 1000),
     ])
   fileprivate static let waitingOnYou = Self(running: 2, waiting: 1, agents: Array(working.agents.prefix(2)))

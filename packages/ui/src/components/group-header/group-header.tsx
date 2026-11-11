@@ -54,7 +54,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * pointer or the keyboard, in the glyph's place or in an empty glyph cell
  * where the group has no glyph of its own, which keeps its label over the
  * rows' names. Its caller counts a folded group at rest, so a fold still
- * reads as folded while no chevron stands.
+ * reads as folded while no chevron stands. A section's head on a page
+ * (`GROUP_LOOK.SECTION`) is a row's height, its chevron standing at rest
+ * whether the group is open or folded, in place of any glyph, and keeps the
+ * glyph's cell where it folds nothing, so every section's label stands on
+ * one edge.
  *
  * Note that the head is a heading holding a button, beside the group's
  * actions, rather than a `details` summary holding them, because a summary
@@ -115,10 +119,17 @@ export const GROUP_HEADING = {
 } as const;
 export type GroupHeading = (typeof GROUP_HEADING)[keyof typeof GROUP_HEADING];
 
-/** How a head reads: as a row among the rows, or as a heading set apart over them, the sidebar's, its chevron only brought. */
+/**
+ * How a head reads: as a row among the rows; as a heading set apart over
+ * them, the sidebar's, its chevron only brought; or as a section's head on a
+ * page, a task's Overview's, a row's height with its chevron standing at rest
+ * open or folded, its glyph's cell kept even empty so its label stands where
+ * every other section's does whether or not it folds.
+ */
 export const GROUP_LOOK = {
   ROW: "row",
   HEADING: "heading",
+  SECTION: "section",
 } as const;
 export type GroupLook = (typeof GROUP_LOOK)[keyof typeof GROUP_LOOK];
 
@@ -197,6 +208,7 @@ const PART = {
 const LEAD_HEIGHT = {
   [GROUP_LOOK.ROW]: "h-control",
   [GROUP_LOOK.HEADING]: "h-control-compact",
+  [GROUP_LOOK.SECTION]: "h-control",
 } as const satisfies Record<GroupLook, string>;
 
 /** An editing head's lead, laid out as a head's lead with nothing to press, and its field, bare in the group role's type in the label's place. */
@@ -274,15 +286,17 @@ function Lead({
   count: NavCount | undefined;
 }): React.JSX.Element {
   const heading = look === GROUP_LOOK.HEADING;
-  // Note that with a glyph the chevron waits unseen in its cell, and without one it stands at rest, so a fold always says it folds, except over a heading's, whose chevron is only ever brought.
-  const swaps = said(glyph) && folds;
+  const section = look === GROUP_LOOK.SECTION;
+  // Note that with a glyph the chevron waits unseen in its cell, and without one it stands at rest, so a fold always says it folds, except over a heading's, whose chevron is only ever brought, and a section's, whose chevron stands at rest over its glyph.
+  const swaps = said(glyph) && folds && !section;
   const brought = swaps || (heading && folds);
-  // Note that a heading keeps its glyph's cell even empty, so its label stands over the rows' names whether or not it folds.
+  // Note that a heading and a section keep their glyph's cell even empty, so the label stands where every other's does whether or not it folds.
+  const keepsCell = heading || section;
   return (
     <>
-      {said(glyph) || folds || heading ? (
+      {said(glyph) || folds || keepsCell ? (
         <span className={PART.GLYPH} aria-hidden="true">
-          {said(glyph) ? (
+          {said(glyph) && !(section && folds) ? (
             <span className={`${PART.ICON} ${swaps ? GIVES_WAY : ""}`}>{glyph}</span>
           ) : null}
           {folds ? (

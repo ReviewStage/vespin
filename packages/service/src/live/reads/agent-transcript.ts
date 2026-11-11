@@ -5,12 +5,14 @@ import { type MessageCursor, messageStandingNow } from "@repo/database/models/me
 import { agentVisibleTo } from "@repo/database/models/workspace-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { agentDelegationTable, agentTable } from "@repo/database/schemas/agent";
+import { agentBootTable } from "@repo/database/schemas/agent-boot";
 import { agentQueue } from "@repo/database/schemas/agent-queue";
 import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { conversations, messages, standingLine, turns } from "@repo/database/schemas/storage";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import {
+  agentBootSync,
   agentDelegationSync,
   agentQueueSync,
   agentSync,
@@ -509,6 +511,32 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           .limit(1),
       ),
   );
+  // The agent's first launch while its boot record stands, read on its own transcript alone.
+  const boot = liveRowsStatement(
+    AGENT_TRANSCRIPT_READ.parts.boot,
+    {
+      ordered: false,
+      columns: {
+        attempt: agentBootTable.attempt,
+        phase: agentBootTable.phase,
+        failure: agentBootTable.failure,
+      },
+    },
+    (selection) =>
+      ownOrder(
+        queryBuilder
+          .select(selection)
+          .from(agentBootTable)
+          .innerJoin(agentTable, eq(agentTable.id, agentBootTable.agentId))
+          .where(
+            and(
+              eq(agentTable.conversationId, conversationId),
+              eq(agentTable.userId, userId),
+              reached,
+            ),
+          ),
+      ),
+  );
   return {
     messages: written,
     turns: run,
@@ -517,6 +545,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
     workers,
     queueRevision,
     launch,
+    boot,
     window: windowOf(target, reached, past),
     windowParts: windowPartsOf(target, reached, past),
   };
@@ -578,6 +607,7 @@ export const agentTranscriptRead = bindLiveRead(AGENT_TRANSCRIPT_READ, {
     githubRepositoryReadSync,
     agentQueueSync,
     deviceAgentLineSync,
+    agentBootSync,
   ],
   topics: ({ conversationId, parentConversationId, agentId, userId }) => {
     const parent: readonly SyncTopic[] =

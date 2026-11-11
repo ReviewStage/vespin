@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { settleEndedSessionTurn } from "@repo/database/models/abandoned-turns";
+import { QUEUE_OUTCOME, queueWhileBooting } from "@repo/database/models/agent-queue-store";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -157,6 +159,8 @@ export interface SteerLine {
   readonly metadata?: AwaitingLineMetadata | undefined;
   /** The words the servers handed to the next turn are read from where they are not all of `text`: an automation's own prompt, never a webhook body or a GitHub event's words beside it; `text` otherwise. */
   readonly serverWords?: string | undefined;
+  /** The words what the line mentions is read from where they are not all of `text`: a Start's own prompt, never a source agent's replay beside it, and none at all for a Start handed only the description; `text` otherwise. */
+  readonly mentionWords?: string | undefined;
 }
 
 /** Another coding agent as the row of a line it sends keeps it: by its name, id, and model. */
@@ -169,11 +173,26 @@ export function agentLineSender(agent: Agent): LineSender {
   };
 }
 
-/** What a steer came to: the line sent and written, or found already sent under its key. */
+/** What a steer came to: the line sent and written, found already sent under its key, or queued while the agent's machine boots its first launch. */
 export const STEER_OUTCOME = {
   SENT: "sent",
   REPEATED: "repeated",
+  QUEUED: "queued",
 } as const;
+
+/**
+ * How a steer reaches the agent: held in its queue while its first launch
+ * boots (`@repo/features/agent-boot`'s `bootHold`), as every line is, or
+ * handed on at once, which only the queue's own hand-off and a carry-on of
+ * a turn the queue already stood aside for are, since either is a line the
+ * queue has already let go.
+ */
+export const STEER_DELIVERY = {
+  HELD_WHILE_BOOTING: "held-while-booting",
+  NOW: "now",
+} as const;
+
+export type SteerDelivery = (typeof STEER_DELIVERY)[keyof typeof STEER_DELIVERY];
 
 type SteerOutcome = (typeof STEER_OUTCOME)[keyof typeof STEER_OUTCOME];
 
@@ -381,6 +400,37 @@ export interface SteerWritten {
   readonly sent?: { readonly runtime: ConversationRuntime; readonly turnRunning: boolean };
 }
 
+/**
+ * The line queued instead of sent where the agent's first launch still
+ * boots, answered as queued; none where no boot holds its lines. Note that
+ * what the line mentions and whether GitHub reaches the agent are read as
+ * the queue hands it on, since the line goes then, as any queued message.
+ */
+const heldWhileBooting = Effect.fnUntraced(function* (
+  userId: string,
+  agent: Agent,
+  line: SteerLine,
+) {
+  const queued = yield* hostedStoreOrUnavailable(
+    queueWhileBooting(agent.id, userId, {
+      id: randomUUID(),
+      sendKey: line.clientKey,
+      text: line.text,
+      attachments: line.attachments,
+      line: {
+        sender: line.sender,
+        ...(line.metadata === undefined ? undefined : { metadata: line.metadata }),
+        ...(line.serverWords === undefined ? undefined : { serverWords: line.serverWords }),
+        ...(line.mentionWords === undefined ? undefined : { mentionWords: line.mentionWords }),
+      },
+    }),
+  );
+  if (Option.isNone(queued)) return undefined;
+  if (queued.value === QUEUE_OUTCOME.FULL)
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  return { outcome: STEER_OUTCOME.QUEUED } satisfies SteerWritten;
+});
+
 /** Hands the line to an agent of the account's workspace, as above; every refusal is the hosted vocabulary's, which the route answers as it is. */
 export const steerAgent = (
   agentSessions: AgentSessions<TypedTurn>,
@@ -394,13 +444,20 @@ export const steerAgent = (
     (written) => written.outcome,
   );
 
-/** As `steerAgent`, with the transaction that wrote the line beside what it came to. */
+/**
+ * As `steerAgent`, with the transaction that wrote the line beside what it
+ * came to. While the agent's first launch boots its machine, the line, once
+ * admitted, waits in the agent's queue as it was sent, its sender, key, and
+ * what carried it kept, and goes once the machine is up
+ * (`queueWhileBooting`), unless `delivery` hands it on now.
+ */
 export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(function* (
   agentSessions: AgentSessions<TypedTurn>,
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   agent: Agent,
   line: SteerLine,
+  delivery: SteerDelivery = STEER_DELIVERY.HELD_WHILE_BOOTING,
 ): Effect.fn.Return<
   SteerWritten,
   HostedRefusal,
@@ -437,26 +494,32 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const runtime = yield* admittedRuntime(userId, agent, yield* Effect.fromResult(read.routing));
   if (yield* Effect.fromResult(read.repeated)) return { outcome: STEER_OUTCOME.REPEATED };
   const held = yield* Effect.fromResult(read.task);
-  if (held !== undefined && Option.isNone(held))
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  const task = held === undefined ? undefined : Option.getOrUndefined(held);
+  if (Option.isNone(held)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  const task = held.value;
   // An archived agent names nothing.
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const workspace = yield* Effect.fromResult(read.workspace);
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  if (delivery === STEER_DELIVERY.HELD_WHILE_BOOTING) {
+    const queued = yield* heldWhileBooting(userId, agent, line);
+    if (queued !== undefined) return queued;
+  }
   // What the words mention goes with them: of the task this send read as its sender, and of the agent's workspace.
   // Note that GitHub's line carries a reviewer's words, which mention nothing on the developer's behalf, so it hands no note of what they mention;
   // and another agent's message links its sender to name who said it, so only what else it mentions is noted.
   const reviewers = line.sender.kind === MESSAGE_SENDER.GITHUB;
   const pointed =
-    line.metadata?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE
+    line.mentionWords ??
+    (line.metadata?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE
       ? withoutMemberLinks(line.text)
-      : line.text;
-  // GitHub is asked beside the mentions' read, each judged in turn as above.
+      : line.text);
+  // GitHub is asked beside the mentions' read, each judged in turn as above. Note that a Start's own first line is
+  // never asked of GitHub again as its queue hands it on, since its Start reached the repository as it made the agent.
+  const started = line.metadata?.channel === MESSAGE_CHANNEL.START;
   const reached = yield* Effect.all(
     {
       repository: Effect.result(
-        agent.repository === null
+        agent.repository === null || started
           ? Effect.void
           : workspaceRepository(
               workspace.value,
@@ -471,7 +534,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
           : hostedStoreOrUnavailable(
               readMentioned(userId, pointed, {
                 task,
-                agentId: agent.id,
                 workspaceId: agent.organizationId,
               }),
             ),
@@ -501,7 +563,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
         pointed,
         task,
         reads,
-        agent.id,
         yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
       );
   const running = yield* Effect.fromResult(read.running);

@@ -1,6 +1,5 @@
+import { namedServers } from "@repo/features/agent-servers-model";
 import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
-import { holderTaskId } from "@repo/features/mention-holder";
-import { namedServers } from "@repo/ui/agent-servers-model";
 import type { ReactNode, RefObject } from "react";
 import type {
   ComposerChip,
@@ -13,7 +12,7 @@ import { MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, useMentionPicker } from "./mention-picker.js";
 import { MentionedServers, type MentionedServersPlace } from "./server-card.js";
 import { useSkillOpener } from "./skill-chip.js";
-import { type SkillSource, useSkillPicker } from "./skill-picker.js";
+import { type ComposerCommands, type SkillSource, useSkillPicker } from "./skill-picker.js";
 import { useTaskMentions } from "./task-mentions.js";
 import { DICTATION_PHASE, type DictationControl, useDictation } from "./use-dictation.js";
 import { useKnownNames } from "./use-known-names.js";
@@ -39,6 +38,7 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
 /** The field's props the pickers own, laid onto `ComposerField` as they are. */
 interface PickedField {
   readonly skills: ReadonlySet<string>;
+  readonly commands: ReadonlySet<string>;
   readonly aria: Readonly<Record<string, string | undefined>>;
   readonly onKey: (event: KeyboardEvent) => boolean;
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
@@ -62,6 +62,7 @@ export function useComposerPickers({
   placeholder,
   self,
   skills,
+  commands,
   keywords,
   servers,
   onNote,
@@ -79,6 +80,8 @@ export function useComposerPickers({
   self?: string | undefined;
   /** Where the repository's skills are read from; nothing where the box offers none. */
   skills?: SkillSource | undefined;
+  /** The box's own commands, which a `/` opening the message offers ahead of the skills; none where it runs none. */
+  commands?: ComposerCommands | undefined;
   /** The words a dictation is likely to say (`dictation-keywords.ts`). */
   keywords: readonly string[];
   /** Where the account's servers stand, which the `@` list offers, and what a send does with one the words name; none where the words go to no agent, as a comment's. */
@@ -102,6 +105,7 @@ export function useComposerPickers({
     draft,
     source: skills,
     onOpen: openSkill,
+    commands,
     side,
   });
   // An `@` picks a mention of the page the box stands on, where it stands on one that hands them.
@@ -152,6 +156,7 @@ export function useComposerPickers({
     dictating: dictation.phase !== DICTATION_PHASE.IDLE,
     field: {
       skills: skillPicker.names,
+      commands: skillPicker.commands,
       // Note that one list stands at a time, so the field names whichever of the two stands.
       aria: {
         ...(mentionPicker.aria["aria-expanded"] === "true" ? mentionPicker.aria : skillPicker.aria),
@@ -186,7 +191,7 @@ export function useComposerPickers({
                   : pastedMentionNode(words, taskMentions.doors.place, {
                       known,
                       taskIdOf,
-                      taskId: holderTaskId(taskMentions.holder),
+                      taskId: taskMentions.holder?.taskId,
                       text: taskMentions.text,
                     }),
             },

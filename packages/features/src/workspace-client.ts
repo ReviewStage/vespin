@@ -13,7 +13,7 @@ import type { WorkspaceTokenRepository } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
-import { type ImageBody, imageBodyOf } from "./image-body.js";
+import { type ImageBody, imageBodyOf, imageBodyUnread } from "./image-body.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import {
   type WorkspaceSentry,
@@ -49,9 +49,11 @@ import {
 } from "./workspace-invitation-wire.js";
 import {
   type RepositoryScriptKind,
+  type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
   workspaceRepositorySetupPutRequestSchema,
+  workspaceRunActionsPutRequestSchema,
 } from "./workspace-sandbox-setup-wire.js";
 import {
   type Workspace,
@@ -401,7 +403,9 @@ export class HostedWorkspaceClient {
       if (!callAnswered(answer)) return UNANSWERED;
       if (!answer.response.ok) return refusedAs(unparsedWire(yield* jsonOf(answer.response)));
       const image = yield* imageBodyOf(answer.response, workspacePhotoTypeSchema);
-      return image === undefined ? UNANSWERED : { ok: true, answer: image };
+      return image === undefined || imageBodyUnread(image)
+        ? UNANSWERED
+        : { ok: true, answer: image };
     });
   }
 
@@ -516,6 +520,22 @@ export class HostedWorkspaceClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
       hostedCall(this.#hosted.workspaceSandboxSetup.putRepository, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** A repository's run actions saved by an owner or admin, the whole list in its order, an empty list removing it, answering the setup as it then stands; a list the service would refuse by shape never travels. */
+  putRunActions(
+    workspaceId: string,
+    repository: string,
+    actions: readonly RunActionPut[],
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSetupAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceRunActionsPutRequestSchema)({ workspaceId, repository, actions }),
+    );
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSetup.putRunActions, admitted),
       (answer) => answer,
     );
   }

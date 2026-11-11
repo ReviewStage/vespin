@@ -209,6 +209,7 @@ import {
 import { threadPreview } from "./changes-model.js";
 import { CHAPTERS_SHOWN, chapterPaths, chaptersShown, chapterViewed } from "./chapters-model.js";
 import { type ChaptersRead, useChaptersRead } from "./chapters-read.js";
+import { CommentTools } from "./comment-menu.js";
 import {
   type ConversationFilters,
   type ConversationFiltersControl,
@@ -1120,11 +1121,6 @@ function useThreadJump(
     : () => jumps.jump(thread, view);
 }
 
-/** A thread's Resolve and ⋯ at its head's end, standing under the pointer or the keyboard as a description thread's tools do. */
-function ThreadTools({ children }: { children: ReactNode }): React.JSX.Element {
-  return <span className="comment-tools items-center">{children}</span>;
-}
-
 /**
  * A thread's ⋯ at the end of its head: Copy link, the thread's app link in
  * the view it is drawn in (`LINK_DESTINATION.PULL_REQUEST_THREAD`), then, in Files
@@ -1368,7 +1364,7 @@ function ThreadCard({
         landing={landed}
         where={<ThreadWhere path={thread.path} lines={lineSpan(thread)} onPress={toFiles} />}
         menu={
-          <ThreadTools>
+          <CommentTools>
             <ThreadResolve
               controls={controls}
               resolved={thread.resolved}
@@ -1383,7 +1379,7 @@ function ThreadCard({
                 there={PULL_REQUEST_THREAD_VIEW.FILES}
               />
             )}
-          </ThreadTools>
+          </CommentTools>
         }
         lead={
           preview === undefined ? undefined : (
@@ -1444,13 +1440,8 @@ function ThreadComment({
         nameRef: <ActorRef actor={writer} nameOnly />,
         at: comment.at,
         now,
-        trailing:
-          draft === undefined ? undefined : (
-            <>
-              <PendingWords />
-              {acts.menu}
-            </>
-          ),
+        status: draft === undefined ? undefined : <PendingWords />,
+        trailing: draft === undefined ? undefined : <CommentTools>{acts.menu}</CommentTools>,
       };
   return (
     <AnnotationComment reply={reply} className="pull-request-thread-comment">
@@ -1591,7 +1582,7 @@ function InlineThread({
         )
       }
       menu={
-        <ThreadTools>
+        <CommentTools>
           <ThreadResolve
             controls={controls}
             resolved={thread.resolved}
@@ -1606,7 +1597,7 @@ function InlineThread({
               there={PULL_REQUEST_THREAD_VIEW.CONVERSATION}
             />
           )}
-        </ThreadTools>
+        </CommentTools>
       }
       footer={<ThreadReply controls={controls} />}
     >
@@ -3763,3 +3754,6 @@ function PullRequestTabBody({
   // The member's own pending comments, told apart wherever a comment is drawn (`pending-comments.tsx`).
   return <PendingCommentsProvider value={pendingComments}>{page}</PendingCommentsProvider>;
 }
+
+// The turn's Changes tab rides this chunk, which the side panel reads it from (`desktop/pages-on-demand.ts`).
+export { TurnChangesPane } from "./agent-changes-tab.js";

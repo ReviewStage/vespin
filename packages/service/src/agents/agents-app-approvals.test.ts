@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { APPROVAL_DECISION, INPUT_LINE } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { listPendingApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations } from "@repo/database/schemas/storage";
@@ -25,9 +27,11 @@ import {
   AGENT,
   fakeAgentSessions,
   messagedAgent,
+  openTask,
   readAnswer,
   refusal,
   request,
+  startAs,
 } from "../testing/agents-app-support.js";
 import { RUNNER_ANSWER, type RunnerAnswer } from "./coder-host/runtime-sessions.js";
 
@@ -36,7 +40,9 @@ import { RUNNER_ANSWER, type RunnerAnswer } from "./coder-host/runtime-sessions.
  * router: a mode is set by a member who controls a Claude Code agent and
  * reaches it from its next turn; an answer is written to the agent's runner
  * and settles its ask, by a member who controls the agent alone; and an ask
- * that no longer waits is refused with how it stands, writing nothing.
+ * that no longer waits is refused with how it stands, writing nothing. A
+ * new Claude Code agent starts on the mode its Start names, else on its
+ * starter's Default permissions.
  * Synthetic accounts, agents, and calls throughout; the store is PGlite.
  */
 
@@ -97,7 +103,11 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
             .set({ runtime: CONVERSATION_RUNTIME.CODEX })
             .where(eq(conversations.id, started.target.conversationId)),
         );
-        const onCodex = yield* changed(owner, AGENT_PERMISSION_MODE.AUTO);
+        const onCodex = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* changed(owner, AGENT_PERMISSION_MODE.AUTO),
+        );
         const backToFull = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -110,12 +120,38 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
           teammate,
           refusal(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
         );
-        assert.deepEqual(
-          onCodex,
-          refusal(HOSTED_HTTP_STATUS.CONFLICT, HOSTED_API_ERROR.PERMISSION_MODE_REFUSED),
-        );
+        // Codex asks in its own terms, so it takes a mode that asks too.
+        assert.equal(onCodex.agent.permissionMode, AGENT_PERMISSION_MODE.AUTO);
         // Full access is any harness's, and is said by saying nothing.
         assert.equal(backToFull.agent.permissionMode, undefined);
+      }),
+  );
+
+  it.effect(
+    "a new Claude Code agent starts on the mode its Start names, else on its member's Default permissions",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* openTask({ agentSessions: fakeAgentSessions() });
+        const start = (body: { readonly permissionMode?: string } = {}) =>
+          opened.ask(
+            startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID(), ...body }),
+          );
+        const before = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
+        yield* writeAccountPreferences(opened.owner, {
+          agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
+        });
+        const after = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
+        const named = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* start({ permissionMode: AGENT_PERMISSION_MODE.AUTO }),
+        );
+
+        // Full access is the default, and is said by saying nothing.
+        assert.equal(before.agent.permissionMode, undefined);
+        assert.equal(after.agent.permissionMode, AGENT_PERMISSION_MODE.ASK);
+        // A mode the Start names wins over the default, which it leaves as it was.
+        assert.equal(named.agent.permissionMode, AGENT_PERMISSION_MODE.AUTO);
       }),
   );
 

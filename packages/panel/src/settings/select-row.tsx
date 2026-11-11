@@ -1,5 +1,5 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { ChipWidth, SettingsRowDensity } from "@repo/ui";
+import type { ChipWidth, FootRow, RowActions, SettingsRowDensity } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { refusalShown } from "../failure-report.js";
 import { PickerRow } from "./picker-row.js";
@@ -30,6 +30,8 @@ export function SelectRow<Value extends string | number>({
   width,
   error,
   action,
+  foot,
+  pickOther,
   write,
   onChange,
 }: RowChange<Value> & {
@@ -38,12 +40,20 @@ export function SelectRow<Value extends string | number>({
   labelReplayUnmasked?: boolean | undefined;
   detail?: string | undefined;
   value: Value;
-  /** Each option's token and words, the faces it shows where it has some, and why it cannot be picked now where it cannot. */
+  /** Each option's token and words, the faces or glyph it shows where it has some, what it does under its name where that is said, and why it cannot be picked now where it cannot. */
   options: readonly {
     value: Value;
     label: string;
     faces?: React.ReactNode;
+    icon?: React.ReactNode;
+    hint?: string | undefined;
     disabled?: string | undefined;
+    /** The heading the option is listed under in the menu; none lists it under no heading. */
+    section?: string | undefined;
+    /** Whether its words are a person's own, as a sound they named, kept masked in a screen recording. */
+    masked?: boolean | undefined;
+    /** Acts on the option's own thing, which its ⋯ opens in the menu, as a sound's Rename and Remove. */
+    actions?: RowActions | undefined;
   }[];
   parse: (raw: string) => Value | undefined;
   /** The empty search field's words, for a set long enough that its menu searches; none reads it whole. */
@@ -63,6 +73,10 @@ export function SelectRow<Value extends string | number>({
   error?: ShownError | undefined;
   /** A control of the row's own beside the pop-up, as a Play beside a sound; none where the pop-up stands alone. */
   action?: React.ReactNode;
+  /** Rows pinned under the menu's list that act rather than pick, as a sound's Upload; none where the menu only picks. */
+  foot?: readonly FootRow[] | undefined;
+  /** Answers a pick of an option its owner handles itself rather than as the value, true where it did, as a sound of the account's own is chosen. */
+  pickOther?: ((id: string) => boolean) | undefined;
 }): React.JSX.Element {
   const run = write === undefined ? onChange : write.run;
   const chosen = options.find((option) => option.value === value);
@@ -78,13 +92,20 @@ export function SelectRow<Value extends string | number>({
       action={action}
       value={String(value)}
       valueLabel={chosen?.label ?? String(value)}
-      valueIcon={chosen?.faces}
+      valueReplayMasked={chosen?.masked === true}
+      valueIcon={chosen?.faces ?? chosen?.icon}
       rows={options.map((option) => ({
         id: String(option.value),
         label: option.label,
         ...(option.faces === undefined ? undefined : { faces: option.faces }),
+        ...(option.icon === undefined ? undefined : { icon: option.icon }),
+        ...(option.hint === undefined ? undefined : { detail: option.hint, detailUnder: true }),
         disabled: option.disabled,
+        section: option.section,
+        replayMasked: option.masked,
+        actions: option.actions,
       }))}
+      foot={foot}
       placeholder={placeholder}
       noMatch={NO_MATCH}
       // Note that a select's options are a fixed set, the app's own words.
@@ -92,6 +113,7 @@ export function SelectRow<Value extends string | number>({
       anchor={anchor}
       disabled={write?.busy === true || Boolean(restBusy)}
       onPick={(id) => {
+        if (pickOther?.(id) === true) return;
         const next = parse(id);
         if (next !== undefined) run(next);
       }}

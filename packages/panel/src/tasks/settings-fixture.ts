@@ -35,6 +35,7 @@ import {
   adminMetricsScope,
   adminMetricsWindow,
 } from "@repo/features/admin-wire";
+import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
@@ -61,6 +62,7 @@ import type { WorkspaceVariable } from "@repo/features/workspace-environment-wir
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
+  type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
@@ -222,6 +224,10 @@ export function settingsTasksView(profile: string, list: TasksView): TasksView |
   if (!SETTINGS_LINKS.has(profile)) return undefined;
   return {
     ...list,
+    // Note that Memory's page names the agents that kept its memories, so the list carries them, as it carries every task's agents.
+    ...(profile === RUN_PROFILE.SETTINGS_MEMORY
+      ? { taskAgents: [...(list.taskAgents ?? []), ...MEMORY_AGENTS] }
+      : undefined),
     workspaces: list.workspaces.map((workspace) => ({
       ...workspace,
       memberCount: MEMBERS.get(workspace.id)?.length ?? 1,
@@ -426,19 +432,93 @@ function memory(
     forgettable: true,
     createdAt: NOW - agoDays * DAY,
     updatedAt: NOW - agoDays * DAY,
+    source: null,
+    recalls30d: 0,
+    lastRecalledAt: null,
     ...patch,
   };
 }
 
 const { ADA, MAYA, THEO } = FIXTURE_PERSON;
 
-/** The workspace's memories, the most recently kept first. */
+/** The Acme task the agents that kept some of the memories work on (`tasks-fixture.ts`). */
+const USAGE_ALERTS = { taskId: "2b8c4e6a-0d3f-4a51-9c79-3e4f5a6b7c82", taskName: "Usage alerts" };
+
+/** The agents that kept some of the memories, by id. */
+const MEMORY_AGENT = {
+  CLAUDE: "5d9f3b7c-2e4a-4f6b-8c0d-3e5f7a9b1c2d",
+  CODEX: "6e0b4c8d-3f5a-4a7c-9d1e-4f6b8a0c2d3e",
+} as const;
+
+/** An agent on the Usage alerts task, as the task list carries it, which names the memories it kept. */
+function memoryAgent(id: string, title: string, model: string, agoDays: number): ListedAgent {
+  return {
+    id,
+    planId: USAGE_ALERTS.taskId,
+    model,
+    effort: "high",
+    title,
+    createdAt: NOW - agoDays * DAY,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+    workspaceId: WORKSPACE.ACME,
+    repository: "acme/relay",
+    settledAt: NOW - agoDays * DAY + HOUR,
+  };
+}
+
+/** The agents Memory's page names: one on Claude, one on Codex, so each wears its harness's mark. */
+const MEMORY_AGENTS: readonly ListedAgent[] = [
+  memoryAgent(
+    MEMORY_AGENT.CLAUDE,
+    "feat(service): usage alerts at 80%",
+    "anthropic/claude-opus-5.5",
+    2,
+  ),
+  memoryAgent(
+    MEMORY_AGENT.CODEX,
+    "fix(billing): retry the nightly export",
+    "openai/gpt-6.1-sol",
+    10,
+  ),
+];
+
+/**
+ * The workspace's memories, the most recently kept first, as the service
+ * lists them: some used by agents often, two kept in the last week, and two
+ * no agent has been handed in thirty days, so the page draws each of its
+ * lines.
+ */
 const MEMORIES: readonly MemorySummary[] = [
-  memory(1, "Migrations are generated with `pnpm db:generate`, never written by hand.", MAYA, 1),
+  memory(1, "Migrations are generated with `pnpm db:generate`, never written by hand.", MAYA, 1, {
+    source: {
+      ...USAGE_ALERTS,
+      agentId: MEMORY_AGENT.CLAUDE,
+      messageId: "6e0a4c8d-3f5b-4a7c-9d1e-4f6a8b0c2d3e",
+    },
+    recalls30d: 31,
+    lastRecalledAt: NOW - 2 * HOUR,
+  }),
   memory(2, "Invite links expire after 7 days; an accepted one is never reused.", ADA, 2),
-  memory(3, "Pull requests are reviewed in the morning; one asked after noon waits a day.", ADA, 4),
-  memory(4, "The billing export runs nightly at 02:00 UTC and must finish by 04:00.", THEO, 9),
-  memory(5, "Feature flags live in `src/flags.ts`, one constant per flag.", null, 30),
+  memory(
+    3,
+    "Pull requests are reviewed in the morning; one asked after noon waits a day.",
+    ADA,
+    4,
+    {
+      recalls30d: 6,
+      lastRecalledAt: NOW - DAY,
+    },
+  ),
+  memory(4, "The billing export runs nightly at 02:00 UTC and must finish by 04:00.", THEO, 9, {
+    source: { ...USAGE_ALERTS, agentId: MEMORY_AGENT.CODEX, messageId: null },
+    recalls30d: 12,
+    lastRecalledAt: NOW - 3 * DAY,
+  }),
+  memory(5, "Staging deploys pause on Fridays after 3 PM Pacific.", ADA, 40, {
+    lastRecalledAt: NOW - 36 * DAY,
+  }),
+  memory(6, "Feature flags live in `src/flags.ts`, one constant per flag.", null, 45),
 ];
 
 /* ----- Admin ----- */
@@ -643,7 +723,27 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
 
 /* ----- Settings › Cloud environment's scripts ----- */
 
-/** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, and an archive script for one. */
+/** The agents whose sandboxes Acme's scripts last ran in, as Settings › Cloud setup names them. */
+const SETUP_RUN_AGENT = {
+  LOGIN: {
+    id: "8f0c5a1e-3b7d-4c2a-9e61-5d4f2b8a7c10",
+    taskId: "1d2e3f40-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    name: "Fix the login redirect",
+  },
+  RELAY: {
+    id: "2b9e7d4c-6a1f-4e3b-8c5d-7f0a9e2b1c64",
+    taskId: "6f7e8d9c-0b1a-4c2d-9e3f-4a5b6c7d8e9f",
+    name: "Retry the relay's webhooks",
+  },
+} as const;
+
+/**
+ * Acme's sandbox setup, as a save leaves it: an install script, setup
+ * scripts for two of its repositories, an archive script for one, and run
+ * actions for one, each script with how it last ran: the install script
+ * and the archive script cleanly, `acme/api`'s setup script failing, and
+ * `acme/relay`'s saved since its run.
+ */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
     script: [
@@ -652,23 +752,71 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       "curl -fsSL https://bun.sh/install | bash",
     ].join("\n"),
     updatedAt: NOW - 4 * DAY,
+    lastRun: { ranAt: NOW - 2 * HOUR, exitCode: 0, agent: SETUP_RUN_AGENT.LOGIN },
   },
   setups: [
-    { repository: "acme/api", script: "uv sync\ndocker compose pull", updatedAt: NOW - DAY },
+    {
+      repository: "acme/api",
+      script: "uv sync\ndocker compose pull",
+      updatedAt: NOW - DAY,
+      lastRun: { ranAt: NOW - 2 * HOUR, exitCode: 1, agent: SETUP_RUN_AGENT.LOGIN },
+    },
     {
       repository: "acme/relay",
       script: "pnpm install\ncp .env.example .env\ndocker compose up -d --wait",
       updatedAt: NOW - 2 * HOUR,
+      lastRun: { ranAt: NOW - 3 * DAY, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
     },
   ],
   archives: [
     {
       repository: "acme/relay",
       script: "docker compose down --volumes\n./scripts/drop-preview-database.sh",
+      updatedAt: NOW - DAY,
+      lastRun: { ranAt: NOW - HOUR, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
+    },
+  ],
+  runActions: [
+    {
+      repository: "acme/relay",
+      actions: [
+        { id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01", label: "Dev server", command: "pnpm dev" },
+        {
+          id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a02",
+          label: "Storybook",
+          command: "cd packages/ui && pnpm storybook",
+        },
+      ],
       updatedAt: NOW - HOUR,
     },
   ],
 };
+
+/** The setup a run actions save leaves, an empty list removing the repository's, an action keeping its id only where it is already the repository's and only once, as the service keeps them. */
+function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) {
+  const others = (acmeSandboxSetup.runActions ?? []).filter(
+    (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
+  );
+  const keepable = new Set(
+    (acmeSandboxSetup.runActions ?? [])
+      .filter((each) => each.repository.toLowerCase() === repository.toLowerCase())
+      .flatMap((each) => each.actions.map((action) => action.id)),
+  );
+  const named = actions.map(({ id, label, command }) => ({
+    id: id !== undefined && keepable.delete(id) ? id : crypto.randomUUID(),
+    label,
+    command,
+  }));
+  const lists =
+    named.length === 0 ? others : [...others, { repository, actions: named, updatedAt: NOW }];
+  acmeSandboxSetup = {
+    ...acmeSandboxSetup,
+    runActions: lists.sort((one, other) =>
+      one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
+    ),
+  };
+  return acmeSandboxSetup;
+}
 
 /** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
 function sandboxSetupAnswer(
@@ -680,15 +828,23 @@ function sandboxSetupAnswer(
   if (repository === undefined) {
     acmeSandboxSetup = {
       ...acmeSandboxSetup,
-      install: removes ? null : { script, updatedAt: NOW },
+      install: removes ? null : { ...acmeSandboxSetup.install, script, updatedAt: NOW },
     };
     return acmeSandboxSetup;
   }
   const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
-  const others = acmeSandboxSetup[list].filter(
-    (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
-  );
-  const scripts = removes ? others : [...others, { repository, script, updatedAt: NOW }];
+  const named = (each: { readonly repository: string }) =>
+    each.repository.toLowerCase() === repository.toLowerCase();
+  const others = acmeSandboxSetup[list].filter((each) => !named(each));
+  // A save keeps the script's last run, which ran before it.
+  const lastRun = acmeSandboxSetup[list].find(named)?.lastRun;
+  const saved = {
+    repository,
+    script,
+    updatedAt: NOW,
+    ...(lastRun === undefined ? undefined : { lastRun }),
+  };
+  const scripts = removes ? others : [...others, saved];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
     [list]: scripts.sort((one, other) =>
@@ -749,6 +905,8 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script, kind }) =>
     sandboxSetupAnswer(repository, script, kind),
+  [ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: ({ repository, actions }) =>
+    runActionsAnswer(repository, actions),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>
     skillContent(id) ?? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND },
   // The command-line tool installed on this Mac, as Settings' MCP page's Install asks, without running the install script: a fixture run reaches no network and installs nothing.
@@ -848,6 +1006,7 @@ const STAGED_PREFERENCES: AppAccountPreferences = {
       agent: { model: "anthropic/claude-opus-5.5", effort: "high" },
       chaptersModel: CHAPTERS_MODEL.SONNET,
       slackNotifications: true,
+      sounds: { list: [], choices: { finish: undefined, ask: undefined } },
     },
   },
 };

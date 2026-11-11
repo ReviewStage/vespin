@@ -13,10 +13,13 @@
  * over a code line's colored tokens is, but never from one line or
  * paragraph into the next: text in another block is set apart by a line
  * break, which a query, typed in a one-line field, never holds. What is
- * `hidden` is not searched, nor what wears `FIND_SKIP_ATTRIBUTE`. A closed
- * `<details>` is searched, since what it folds is still the tab's to find,
- * and opened when its match is brought into view, as Chromium's own find
- * opens one; so is what is `hidden="until-found"`, the rest of a cut code
+ * `hidden` is not searched, nor what wears `FIND_SKIP_ATTRIBUTE`, nor a
+ * transcript's call or thought (`FIND_DETAIL_ATTRIBUTE`) where the find
+ * leaves them out. A closed `<details>` is searched, since what it folds is
+ * still the tab's to find, and opened when its match is brought into view,
+ * as Chromium's own find opens one, and closed again as the find moves to
+ * a match outside it, so only the fold holding the match the find is at
+ * stands open for it; so is what is `hidden="until-found"`, the rest of a cut code
  * card's lines (`CodeCard`), told of the match (`beforematch`) and shown
  * as Chromium's own find shows it.
  *
@@ -86,6 +89,16 @@ const UNREAD_TAGS = new Set(["SCRIPT", "STYLE", "TEMPLATE", "NOSCRIPT"]);
  * the words, as a gutter of numbers is, or nothing.
  */
 export const FIND_SHADOW_ATTRIBUTE = "data-find-shadow";
+
+/**
+ * The attribute worn by a transcript's detail: a call, a thought, or a run
+ * of them folded under one line, which a find leaves out unless asked to
+ * search them (`FIND_DETAILS_LEFT_OUT`).
+ */
+export const FIND_DETAIL_ATTRIBUTE = "data-find-detail";
+
+/** What a find over a transcript leaves out of its words while it searches the conversation alone. */
+export const FIND_DETAILS_LEFT_OUT = `[${FIND_DETAIL_ATTRIBUTE}]`;
 
 /** What a find watches of the tab's text and of each shadow root searched. */
 const WATCHED: MutationObserverInit = { childList: true, subtree: true, characterData: true };
@@ -206,10 +219,10 @@ function readNodes(
   }
 }
 
-/** Reads every searched text node under `root`, in document order, into one string. */
-function readText(root: Element): ReadText {
+/** Reads every searched text node under `root`, in document order, into one string, less what `leftOut` names. */
+function readText(root: Element, leftOut: string | undefined): ReadText {
   const into: Reading = { text: "", runs: [], block: undefined };
-  readUnder(root, root, undefined, into);
+  readUnder(root, root, leftOut, into);
   return { text: into.text, runs: into.runs };
 }
 
@@ -321,13 +334,55 @@ function scrollToRange(range: Range, root: Element): void {
   }
 }
 
+/** What lets go of a fold a find opened, kept by the fold: the listener that hears the reader press its line. */
+const heldFolds = new WeakMap<HTMLDetailsElement, () => void>();
+
+/** Lets go of a fold a find opened, which it then never closes. */
+function letGo(folds: Set<HTMLDetailsElement>, fold: HTMLDetailsElement): void {
+  heldFolds.get(fold)?.();
+  heldFolds.delete(fold);
+  folds.delete(fold);
+}
+
+/**
+ * Holds a fold the find just opened, to close again as it moves off it.
+ * Note that a press on its line, the reader's own, lets go of it, because a
+ * fold the reader closed or opened again since is theirs, and the find's
+ * own toggle is no press.
+ */
+function holdFold(folds: Set<HTMLDetailsElement>, fold: HTMLDetailsElement): void {
+  const press = (event: Event) => {
+    const line = event.target instanceof Element ? event.target.closest("summary") : null;
+    if (line?.parentElement === fold) letGo(folds, fold);
+  };
+  fold.addEventListener("click", press);
+  heldFolds.set(fold, () => fold.removeEventListener("click", press));
+  folds.add(fold);
+}
+
+/** Closes each fold a find opened that does not stand around the match it is at now (`around`), and lets go of it. */
+function closeFolds(folds: Set<HTMLDetailsElement>, around: ReadonlySet<Element>): void {
+  for (const fold of folds) {
+    if (around.has(fold)) continue;
+    letGo(folds, fold);
+    // Note that a fold whose row was let go is left as it is.
+    if (fold.isConnected && fold.open) fold.open = false;
+  }
+}
+
+/** Closes every fold a find opened and still holds, as a query that matches nothing leaves none to show. */
+export function releaseFolds(folds: Set<HTMLDetailsElement>): void {
+  closeFolds(folds, new Set());
+}
+
 /**
  * Every match of `query` in the text under `root`, in document order,
- * without regard to case; none for an empty query.
+ * without regard to case, less what the selector `leftOut` names; none for
+ * an empty query.
  */
-export function findRanges(root: Element, query: string): Range[] {
+export function findRanges(root: Element, query: string, leftOut?: string): Range[] {
   if (query.length === 0) return [];
-  const read = readText(root);
+  const read = readText(root, leftOut);
   const pattern = new RegExp(query.replace(PATTERN_SYNTAX, "\\$&"), "giu");
   const ranges: Range[] = [];
   for (const match of read.text.matchAll(pattern)) {
@@ -396,15 +451,25 @@ export function repaint(previous: FindPainting, next: FindPainting): void {
  * Brings a match into view: every closed `<details>` around it opened, and
  * every element `hidden="until-found"` told (`beforematch`) and shown, as
  * Chromium's own find does both, and every scroller up to `root` moved
- * until it stands in the middle.
+ * until it stands in the middle. Where it is handed the folds a find
+ * opened for its earlier matches (`folds`), each that does not hold this
+ * match is closed again, and each it opens for this one is added.
  */
-export function reveal(range: Range, root: Element): void {
+export function reveal(range: Range, root: Element, folds?: Set<HTMLDetailsElement>): void {
+  const around = new Set<Element>();
   for (
     let element = parentAcross(range.startContainer);
     element !== null && element !== root;
     element = parentAcross(element)
   ) {
-    if (element instanceof HTMLDetailsElement && !element.open) element.open = true;
+    around.add(element);
+  }
+  if (folds !== undefined) closeFolds(folds, around);
+  for (const element of around) {
+    if (element instanceof HTMLDetailsElement && !element.open) {
+      element.open = true;
+      if (folds !== undefined) holdFold(folds, element);
+    }
     if (hiddenUntilFound(element)) {
       element.dispatchEvent(new Event(BEFORE_MATCH, { bubbles: true }));
       element.removeAttribute("hidden");

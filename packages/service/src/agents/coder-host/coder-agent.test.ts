@@ -68,17 +68,6 @@ test("a Claude Code agent is told of Claude Code's own tools and never of Vespin
         }
       }
     }
-    const watching = coderInstructions(
-      "Acme/Relay",
-      brief,
-      TASK_ADDRESS,
-      standingFor("Acme/Relay"),
-      undefined,
-      null,
-      false,
-      CODER_HARNESS.CLAUDE_CODE,
-    );
-    assert.ok(watching.includes("wait with ScheduleWakeup"), brief);
   }
 });
 
@@ -110,11 +99,10 @@ test("a Claude Code or Codex agent is told of its browser, which Vespin's MCP se
   }
 });
 
-test("a local agent is told its folders on its machine, and no browser", () => {
+test("a local agent is told its folders on its machine, and no browser and no skills of the app's", () => {
   const MAC = {
     local: true,
     checkoutPath: "/Users/dev/.vespin/agents/a1/repository",
-    installedSkills: "/Users/dev/.vespin/agents/a1/installed-skills",
     sharedFiles: "/Users/dev/.vespin/agents/a1/tmp",
   };
   for (const repository of ["Acme/Relay", null]) {
@@ -132,29 +120,17 @@ test("a local agent is told its folders on its machine, and no browser", () => {
       );
       const label = `${harness} ${repository ?? "no repository"}`;
       assert.ok(!words.includes("## Your browser"), label);
+      // Note that its harness finds whatever skills the machine's own home holds, so it is told of none.
+      assert.ok(!words.includes("A word like `/name`"), label);
       if (repository !== null) assert.ok(words.includes(`\`${MAC.checkoutPath}\``), label);
     }
   }
-  const codex = coderInstructions(
-    "Acme/Relay",
-    AGENT_BRIEF.PROMPT,
-    TASK_ADDRESS,
-    standingFor("Acme/Relay", { local: MAC.local }),
-    undefined,
-    null,
-    false,
-    CODER_HARNESS.CODEX,
-    MAC,
-  );
-  // Codex is pointed at the skills its member installed where the Mac keeps them.
-  assert.ok(codex.includes(`\`${MAC.installedSkills}/`));
 });
 
 test("a local agent is told it runs straight on its machine with full access to it, how to work a branch its machine's clone holds, and to save pages where its machine reads them", () => {
   const HOST = {
     local: true,
     checkoutPath: "/home/vespin-host/.vespin/agents/a1/repository",
-    installedSkills: "/home/vespin-host/.vespin/agents/a1/installed-skills",
     sharedFiles: "/home/vespin-host/.vespin/agents/a1/tmp",
   };
   const told = ["straight on one of the developer's own machines", "full access"];
@@ -204,15 +180,7 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
     "`delegate`",
     "task_wait",
   ];
-  const CLAUDE_CODES = [
-    "TaskCreate",
-    "WebSearch",
-    "WebFetch",
-    "Skill tool",
-    "Agent tool",
-    "Bash",
-    "ScheduleWakeup",
-  ];
+  const CLAUDE_CODES = ["TaskCreate", "WebSearch", "WebFetch", "Skill tool", "Agent tool", "Bash"];
   const CODEXES = [
     "`apply_patch`",
     "`update_plan`",
@@ -255,26 +223,30 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
         }
       }
     }
-    // A Codex agent waits on its checks with our wakeup, since Codex has none of its own, and never on a watch.
-    for (const memberToken of [false, true]) {
-      const waiting = coderInstructions(
-        "Acme/Relay",
-        brief,
-        TASK_ADDRESS,
-        standingFor("Acme/Relay", { wakeup: true }),
-        undefined,
-        null,
-        memberToken,
-        CODER_HARNESS.CODEX,
-      );
-      assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), brief);
-      // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
-      assert.equal(
-        waiting.includes(`call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``),
-        !memberToken,
-        brief,
-      );
-      assert.ok(!waiting.includes("--watch --fail-fast"), brief);
+    // An agent on either harness waits on its checks with our wakeup, never the CLI's, which its launch denies, nor a watch.
+    for (const harness of Object.values(CODER_HARNESS)) {
+      for (const memberToken of [false, true]) {
+        const waiting = coderInstructions(
+          "Acme/Relay",
+          brief,
+          TASK_ADDRESS,
+          standingFor("Acme/Relay"),
+          undefined,
+          null,
+          memberToken,
+          harness,
+        );
+        const label = `${brief} ${harness} ${memberToken ? "token" : "app"}`;
+        assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), label);
+        // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
+        assert.equal(
+          waiting.includes(`call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``),
+          !memberToken,
+          label,
+        );
+        assert.ok(!waiting.includes("ScheduleWakeup"), label);
+        assert.ok(!waiting.includes("--watch --fail-fast"), label);
+      }
     }
   }
 });

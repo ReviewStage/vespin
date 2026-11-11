@@ -9,6 +9,7 @@
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
 
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
@@ -23,9 +24,12 @@ import {
   MINE,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
+import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
+import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
@@ -38,7 +42,9 @@ import {
   selectTaskListStatus,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
 import { cachedVideo } from "../cached-media.js";
@@ -46,7 +52,8 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { dismissThreadNotifications } from "../notification-task.js";
-import { useSendsDrawn } from "./use-thread-answer.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
+import { NOT_RESOLVED, refusedWords, useSendsDrawn } from "./use-thread-answer.js";
 
 /** What a thread's videos are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
@@ -60,16 +67,27 @@ const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 /**
  * Every holder of Inbox items in the workspace chosen in Settings, as the
  * panel's Inbox lists the chosen workspace's alone, heard anew as another is
- * chosen; every workspace's before the account's workspaces are read.
+ * chosen; every workspace's before the account's workspaces are read. With
+ * them, the workspace chosen and how many the account has, which the Inbox
+ * widget names (`inbox-widget/`).
  */
-function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
+export function useChosenInbox(): {
+  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
+  readonly chosen: Workspace | undefined;
+  readonly workspaces: number;
+} {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
   const { data: groups = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(chosen?.id),
   });
-  return useSendsDrawn(groups);
+  return { groups: useSendsDrawn(groups), chosen, workspaces: workspaces.length };
+}
+
+/** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`). */
+function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
+  return useChosenInbox().groups;
 }
 
 /** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
@@ -203,31 +221,80 @@ function refused(what: string): (error: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
-/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
+/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, its reminder set or cleared, an open one resolved from its row, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
 export function useInboxActs(): {
   readonly mark: (itemId: string, unread: boolean) => void;
+  /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
+  readonly remind: (itemId: string, until: number | null) => void;
+  /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused. */
+  readonly resolve: (item: InboxItem) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshTasks: () => Promise<void>;
 } {
   const acts = useHostActs();
+  const write = useWrite();
   return useMemo(
     () => ({
       mark: (itemId, unread) => {
-        acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }).catch(refused("The mark"));
+        write(() => acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }), {
+          refused: (answer) => ("failure" in answer ? markedNote(unread, 0, 1) : undefined),
+          retry: true,
+          subject: { kind: WRITE_SUBJECT.THREAD_READ, id: itemId },
+        });
+      },
+      remind: (itemId, until) => {
+        write(() => acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until }), {
+          refused: (answer) =>
+            "failure" in answer
+              ? until === null
+                ? REMIND_REFUSED.CLEAR
+                : REMIND_REFUSED.SET
+              : undefined,
+          retry: true,
+          subject: { kind: WRITE_SUBJECT.THREAD_REMINDER, id: itemId },
+          went: BUZZ.SUCCESS,
+        });
+      },
+      resolve: (item) => {
+        // Note that one key stands for the press, so Try again resolves the thread once.
+        const clientKey = randomUUID();
+        write(
+          () =>
+            acts[ACT_KIND.AGENTS_INBOX_CLOSE]({
+              itemId: item.id,
+              revision: item.revision,
+              clientKey,
+            }),
+          {
+            refused: (answer) =>
+              "failure" in answer
+                ? refusedWords(answer.failure)
+                : answer.taken
+                  ? undefined
+                  : NOT_RESOLVED[answer.item.status],
+            unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+            // Note that a thread answered or resolved already offers no Try again, which could never take.
+            retry: (answer) => "failure" in answer,
+            went: BUZZ.SUCCESS,
+          },
+        );
       },
       markAll: (itemIds) => {
         if (itemIds.length === 0) return;
-        acts[ACT_KIND.AGENTS_INBOX_READ_ALL]({ itemIds: [...itemIds] }).catch(
-          refused("Mark all as read"),
-        );
+        write(() => acts[ACT_KIND.AGENTS_INBOX_READ_ALL]({ itemIds: [...itemIds] }), {
+          refused: (answer) =>
+            "failure" in answer ? markedNote(false, 0, itemIds.length) : undefined,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
       },
       refresh: () =>
         acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again")),
       refreshTasks: () =>
         acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again")),
     }),
-    [acts],
+    [acts, write],
   );
 }
 
@@ -238,13 +305,17 @@ export function useInboxActs(): {
  * not, since the thread is on screen.
  */
 export function useReadOnOpen(listed: InboxListed | undefined): void {
-  const { mark } = useInboxActs();
+  const acts = useHostActs();
   const id = listed?.item.id;
   const unread = listed !== undefined && isUnread(listed.item);
   // Note that the mark is sent as a thread opens, never again as it is read, so only the thread's id moves it.
   useEffect(() => {
     if (id === undefined) return;
-    if (unread) mark(id, false);
+    // Note that the mark goes quietly, whatever comes back, since no person pressed for it.
+    if (unread)
+      acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId: id, unread: false }).catch(
+        refused("The mark"),
+      );
     dismissThreadNotifications(id).catch((error: unknown) =>
       console.error("The thread's notifications were not removed.", error),
     );

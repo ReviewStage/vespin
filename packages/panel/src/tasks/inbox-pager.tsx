@@ -66,19 +66,19 @@ export function useInboxPager(
   };
 }
 
-/** The pager at the end of an item's bar: "2 of 8" where the item has a row, then the arrows up and down the list, each naming its key, stepped back where there is nowhere to go. */
+/** The pager at the end of an item's bar: "2 of 8" where the item has a row, then the arrows up and down the list, each named and keyed as its command is everywhere else, stepped back where there is nowhere to go. */
 export function InboxPagerControls({ pager }: { pager: InboxPager }): React.JSX.Element {
   return (
     <Pager
       axis={PAGER_AXIS.VERTICAL}
       place={pager.count}
       previous={{
-        label: "Previous item",
+        label: APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].label,
         chord: APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].chord,
         onStep: pager.onPrevious,
       }}
       next={{
-        label: "Next item",
+        label: APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].label,
         chord: APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].chord,
         onStep: pager.onNext,
       }}

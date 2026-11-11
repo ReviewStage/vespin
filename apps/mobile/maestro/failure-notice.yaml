@@ -1,0 +1,48 @@
+# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice sliding down with the refusal's words and Try again, Try again refused once more, and the notice swiped away.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture with `-refuseWrites true`, so the
+# fixture refuses a task's status and its pin as the service would
+# (`src/host/fixture-host.ts`), and no server is reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      refuseWrites: true
+- tapOn: "Tasks"
+- assertVisible: "Weekly digest email"
+- waitForAnimationToEnd
+# Unpin from the row's long press menu is refused: the row stays pinned and
+# the notice says why, with Try again.
+- longPressOn: "Weekly digest email"
+- tapOn: "Unpin"
+- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible:
+    id: "failure-notice-retry"
+- takeScreenshot: failure-notice
+# Try again sends the unpin once more, which is refused again, so the
+# notice comes back in the same words.
+- tapOn:
+    id: "failure-notice-retry"
+- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "Pinned"
+# A swipe up puts the notice away before its time is up.
+- swipe:
+    from:
+      id: "failure-notice"
+    direction: UP
+- waitForAnimationToEnd
+- assertNotVisible: "The task could not be unpinned. Try again."
+# Mark done from the same menu asks first in the system's alert, since the
+# task's agent is at work and only the person can decide to stop it; once
+# confirmed, it is refused too: the task stays in the list and the notice
+# says it could not be marked done.
+- longPressOn: "Weekly digest email"
+- tapOn: "Mark done"
+- tapOn: "Stop agents"
+- assertVisible: "The task could not be marked done. Try again."
+- assertVisible: "Weekly digest email"
+- takeScreenshot: failure-notice-mark-done

@@ -17,8 +17,16 @@ import {
   type Updater,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { PRESS_PULSE, pulseOnPress, pulsePress } from "../../press-pulse.js";
+import {
+  type MouseEvent,
+  type ReactNode,
+  type Ref,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import {
   Table,
   TableBody,
@@ -31,9 +39,11 @@ import { SORT_DIRECTION } from "../../sort-direction.js";
 import { CARD_PADDING, Card } from "../card/card.js";
 import { Inline, JUSTIFY } from "../layout/layout.js";
 import { usePageScroll } from "../page-frame/page-scroll.js";
+import { type ListRowMenu, useRowMenu } from "../row-menu/row-menu.js";
 import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { sizeWhileShown } from "../virtual-rows/virtual-rows.js";
+import { SortHeading } from "./sort-heading.js";
 
 /**
  * data-table.tsx -- rows of records under headings that line up their columns, sorted by TanStack Table, in a flush Card that scrolls sideways on its own.
@@ -52,7 +62,13 @@ import { sizeWhileShown } from "../virtual-rows/virtual-rows.js";
  *
  * Every cell keeps to one line, and the frame scrolls sideways rather than
  * crushing a column: a narrow table would otherwise split a count or an email
- * mid-word. A row may open something: the pointer presses it anywhere but on
+ * mid-word. A column of prose, a note or a description, is the one that
+ * wraps (`DATA_TABLE_COLUMN_KIND.PROSE`): it takes the room the one-line
+ * columns leave, down to a reading width before the frame scrolls. A row
+ * may offer its thing's acts as a `ListRow` does (`rowMenu`): a ⋯ in a
+ * column of its own at the row's end, always drawn, and a right-click
+ * anywhere on the row or the menu key on a control in it opening the same
+ * menu. A row may open something: the pointer presses it anywhere but on
  * a control of its own cells (a link, a button), which answer for
  * themselves, so a press on a row's link is never also a press on the row.
  * A keyboard opens a row through such a link in its cells, since a table row
@@ -77,9 +93,11 @@ import { sizeWhileShown } from "../virtual-rows/virtual-rows.js";
 
 export type { RowData, SortingState } from "@tanstack/react-table";
 
-/** What a column holds: words, figures aligned on their end, or a row's leading mark (a star, a check). */
+/** What a column holds: words, words that wrap, figures aligned on their end, or a row's leading mark (a star, a check). */
 export const DATA_TABLE_COLUMN_KIND = {
   TEXT: "text",
+  /** Words read as prose, a note or a description, wrapping at the column's width, which takes the room the other columns leave. */
+  PROSE: "prose",
   NUMERIC: "numeric",
   MARK: "mark",
 } as const;
@@ -135,7 +153,13 @@ export type DataTableColumns<Row extends RowData> = TableOptions<DataTableFeatur
 
 /** A cell's utilities by what its column holds: a figure's end-aligned in figures of one width, and a mark's as narrow as its mark, standing against the next column's words. */
 const CELL_KIND =
-  "data-[kind=numeric]:text-end data-[kind=numeric]:tabular-nums data-[kind=mark]:w-0 data-[kind=mark]:pe-0";
+  "data-[kind=numeric]:text-end data-[kind=numeric]:tabular-nums data-[kind=mark]:w-0 data-[kind=mark]:pe-0 data-[kind=prose]:w-full data-[kind=prose]:min-w-data-table-prose data-[kind=prose]:whitespace-normal data-[kind=prose]:wrap-break-word";
+
+/** The ⋯'s cell at a row's end, as narrow as its button, standing in the cell's own block padding against the card's edge. */
+const MENU_CELL = "w-0 ps-0 pe-ui-8";
+
+/** What the ⋯'s column is called, read by a reader moving through the headings and never drawn. */
+const MENU_HEADING = "Actions";
 
 /** The widths past which more columns crush instead of shrinking. */
 const TABLE_MIN_WIDTH =
@@ -146,10 +170,6 @@ const ROW = "transition-[background-color] duration-(--ui-duration-hover) ease-p
 
 /** A row that opens something: lit under the pointer, and pressed with the web's pointing hand but a Mac list's arrow on the desktop. */
 const PRESSABLE_ROW = "cursor-press hover:bg-muted";
-
-/** A sortable heading's press: its words alone, in the heading's own type and ink, its ring a little off them. */
-const SORT_BUTTON =
-  "m-0 inline-flex items-baseline border-0 bg-transparent p-0 text-inherit [font:inherit] cursor-press outline-offset-2";
 
 /** The elements a press inside a row answers for itself. */
 const OWN_CONTROL = "a, button, input, select, textarea, label, [role='button']";
@@ -224,22 +244,9 @@ function DataTableHeading<Row extends RowData>({
   }
   return (
     <TableHead className={CELL_KIND} data-kind={kind} aria-sort={direction}>
-      <button
-        type="button"
-        className={SORT_BUTTON}
-        onClick={pulseOnPress(header.column.getToggleSortingHandler())}
-      >
-        <Text
-          as={TEXT_ELEMENT.SPAN}
-          variant={TEXT_VARIANT.LABEL}
-          tone={direction === undefined ? TEXT_TONE.MUTED : TEXT_TONE.DEFAULT}
-        >
-          <FlexRender header={header} />
-          {direction ? (
-            <span aria-hidden="true">{direction === SORT_DIRECTION.ASCENDING ? " ▲" : " ▼"}</span>
-          ) : null}
-        </Text>
-      </button>
+      <SortHeading direction={direction} onPress={header.column.getToggleSortingHandler()}>
+        <FlexRender header={header} />
+      </SortHeading>
     </TableHead>
   );
 }
@@ -254,11 +261,14 @@ function DataTableFrame<Row extends RowData>({
   label,
   minWidth,
   rowCount,
+  menus,
   children,
 }: {
   table: ReactTable<DataTableFeatures, Row>;
   label: string;
   minWidth: DataTableMinWidth;
+  /** Whether each row offers its menu, which keeps a column for its ⋯. */
+  menus: boolean;
   /** How many rows the table holds, its headings' among them, where it draws only some. */
   rowCount?: number | undefined;
   /** The table's body. */
@@ -281,6 +291,11 @@ function DataTableFrame<Row extends RowData>({
               {group.headers.map((header) => (
                 <DataTableHeading key={header.id} header={header} />
               ))}
+              {menus ? (
+                <TableHead className={MENU_CELL}>
+                  <span className="ui-visually-hidden">{MENU_HEADING}</span>
+                </TableHead>
+              ) : null}
             </TableRow>
           ))}
         </TableHeader>
@@ -329,6 +344,7 @@ export function DataTable<Row extends RowData>({
   onSortingChange,
   onRowPress,
   rowPressable,
+  rowMenu,
 }: {
   /** What the table holds, for a reader moving between tables. */
   label: string;
@@ -348,6 +364,8 @@ export function DataTable<Row extends RowData>({
   onRowPress?: ((row: Row) => void) | undefined;
   /** Whether a row takes `onRowPress`, where some rows have nothing to open; every row does where left out. */
   rowPressable?: ((row: Row) => boolean) | undefined;
+  /** A row's menu of its thing's acts, opened by its ⋯, a right-click, and the menu key; none for a row that offers none now. */
+  rowMenu?: ((row: Row) => ListRowMenu | undefined) | undefined;
 }): React.JSX.Element {
   const [chosen, setChosen] = useState<SortingState>(initialSorting);
   const sorting = useMemo(() => [...leadingSorting, ...chosen], [leadingSorting, chosen]);
@@ -382,12 +400,14 @@ export function DataTable<Row extends RowData>({
       label={label}
       minWidth={minWidth}
       rowCount={HEADER_ROWS + drawn.length}
+      menus={rowMenu !== undefined}
     >
       <DataTableBody
         table={table}
         rows={drawn}
         onRowPress={onRowPress}
         rowPressable={rowPressable}
+        rowMenu={rowMenu}
       />
     </DataTableFrame>
   );
@@ -414,11 +434,13 @@ function DataTableBody<Row extends RowData>({
   rows,
   onRowPress,
   rowPressable,
+  rowMenu,
 }: {
   table: ReactTable<DataTableFeatures, Row>;
   rows: readonly TableRowModel<DataTableFeatures, Row>[];
   onRowPress: ((row: Row) => void) | undefined;
   rowPressable: ((row: Row) => boolean) | undefined;
+  rowMenu: ((row: Row) => ListRowMenu | undefined) | undefined;
 }): React.JSX.Element {
   const { scroller, shiftedBy } = usePageScroll();
   const body = useRef<HTMLTableSectionElement>(null);
@@ -462,7 +484,7 @@ function DataTableBody<Row extends RowData>({
   const items = virtualizer.getVirtualItems();
   const first = items[0];
   const last = items.at(-1);
-  const columns = table.getAllLeafColumns().length;
+  const columns = table.getAllLeafColumns().length + (rowMenu === undefined ? 0 : 1);
   const above = first === undefined ? 0 : first.start - margin;
   const below = last === undefined ? 0 : virtualizer.getTotalSize() - (last.end - margin);
   return (
@@ -473,34 +495,76 @@ function DataTableBody<Row extends RowData>({
         if (row === undefined) return null;
         const press = onRowPress && (rowPressable?.(row.original) ?? true) ? onRowPress : undefined;
         return (
-          <TableRow
+          <DataTableRow
             key={row.id}
-            ref={virtualizer.measureElement}
-            data-index={item.index}
-            aria-rowindex={HEADER_ROWS + item.index + 1}
-            className={press ? `${ROW} ${PRESSABLE_ROW}` : ROW}
-            data-pressable={press ? "true" : undefined}
-            onClick={
-              press
-                ? (event) => {
-                    if (onOwnControl(event)) return;
-                    // Note that a row runs the card's width, so its press leaves its fill and rule standing.
-                    pulsePress(event.currentTarget, PRESS_PULSE.FLUSH);
-                    press(row.original);
-                  }
-                : undefined
-            }
-          >
-            {row.getAllCells().map((cell) => (
-              <DataTableCell key={cell.id} kind={columnKind(cell.column)}>
-                <table.FlexRender cell={cell} />
-              </DataTableCell>
-            ))}
-          </TableRow>
+            table={table}
+            row={row}
+            index={item.index}
+            measure={virtualizer.measureElement}
+            press={press}
+            menu={rowMenu === undefined ? undefined : { of: rowMenu(row.original) }}
+          />
         );
       })}
       <DataTableSpacer height={below} columns={columns} />
     </TableBody>
+  );
+}
+
+/**
+ * One body row: its cells, pressed anywhere but on a control of its own
+ * where it opens something, and its menu's doors and ⋯ where the table
+ * offers rows' menus (`menu`), the ⋯'s cell empty on a row offering none now.
+ */
+function DataTableRow<Row extends RowData>({
+  table,
+  row,
+  index,
+  measure,
+  press,
+  menu,
+}: {
+  table: ReactTable<DataTableFeatures, Row>;
+  row: TableRowModel<DataTableFeatures, Row>;
+  /** Where the row stands among all the table's rows, drawn or not. */
+  index: number;
+  measure: Ref<HTMLTableRowElement>;
+  press: ((row: Row) => void) | undefined;
+  /** The row's menu where the table offers rows' menus, none inside where this row offers none now. */
+  menu: { readonly of: ListRowMenu | undefined } | undefined;
+}): React.JSX.Element {
+  const doors = useRowMenu(menu?.of);
+  return (
+    <TableRow
+      ref={measure}
+      data-index={index}
+      aria-rowindex={HEADER_ROWS + index + 1}
+      className={press ? `${ROW} ${PRESSABLE_ROW}` : ROW}
+      data-pressable={press ? "true" : undefined}
+      {...(menu === undefined ? undefined : doors.props)}
+      onClick={
+        press
+          ? (event) => {
+              if (onOwnControl(event)) return;
+              // Note that a row runs the card's width, so its press leaves its fill and rule standing.
+              pulsePress(event.currentTarget, PRESS_PULSE.FLUSH);
+              press(row.original);
+            }
+          : undefined
+      }
+    >
+      {row.getAllCells().map((cell) => (
+        <DataTableCell key={cell.id} kind={columnKind(cell.column)}>
+          <table.FlexRender cell={cell} />
+        </DataTableCell>
+      ))}
+      {menu === undefined ? null : (
+        <TableCell className={MENU_CELL}>
+          {doors.button()}
+          {doors.popup}
+        </TableCell>
+      )}
+    </TableRow>
   );
 }
 
@@ -534,16 +598,19 @@ export function DataTableSkeleton<Row extends RowData>({
   rows,
   minWidth,
   cells = {},
+  menus = false,
 }: {
   label: string;
   columns: DataTableColumns<Row>;
   rows: number;
   minWidth: DataTableMinWidth;
   cells?: Readonly<Record<string, ReactNode>>;
+  /** Whether the loaded table offers each row's menu (`rowMenu`), which keeps the ⋯'s column. */
+  menus?: boolean;
 }): React.JSX.Element {
   const table = useAppTable({ columns, data: NO_ROWS, enableSorting: false });
   return (
-    <DataTableFrame table={table} label={label} minWidth={minWidth}>
+    <DataTableFrame table={table} label={label} minWidth={minWidth} menus={menus}>
       <TableBody>
         {Array.from({ length: rows }, (_, row) => (
           <TableRow key={row} className={ROW}>
@@ -552,6 +619,7 @@ export function DataTableSkeleton<Row extends RowData>({
                 {cells[column.id] ?? <DataTableCellSkeleton kind={columnKind(column)} />}
               </DataTableCell>
             ))}
+            {menus ? <TableCell className={MENU_CELL} /> : null}
           </TableRow>
         ))}
       </TableBody>

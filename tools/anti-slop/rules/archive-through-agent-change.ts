@@ -9,7 +9,7 @@ import {
   isTestFile,
   WRITE_METHODS,
 } from "../shared/archive-write-guard.ts";
-import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/effect-edges.ts";
+import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/repository-path.ts";
 
 /**
  * Every archive of an agent, and every bring-back, goes through

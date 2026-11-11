@@ -1,30 +1,101 @@
-// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
+// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
 
-import { Button, HStack, Image, TextField, useNativeState, VStack } from "@expo/ui/swift-ui";
+import {
+  Button,
+  Divider,
+  HStack,
+  Image,
+  Menu,
+  ProgressView,
+  TextField,
+  Toggle,
+  useNativeState,
+  VStack,
+} from "@expo/ui/swift-ui";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
-  background,
+  buttonBorderShape,
   buttonStyle,
+  contentShape,
   disabled,
   font,
+  foregroundStyle,
   frame,
   glassEffect,
   lineLimit,
   padding,
   shapes,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { BAR_RADIUS, GlassBar } from "./glass-bar.js";
+import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
+import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import type { SfSymbol } from "./sf-symbol.js";
+import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
 
+/**
+ * A press's frame in the composer's row: Apple's least target, its mark
+ * centered in it, the whole frame taking the press. The bar's edge is thin
+ * (`BAR_EDGE`) by as much as the frame stands past its mark, so the bar
+ * draws as it did with its marks alone.
+ */
+const PRESS_FRAME = [
+  frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+  contentShape(shapes.rectangle()),
+];
+
+/** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
+const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
+
+/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
+function roundModifiers(colors: ReturnType<typeof useColors>) {
+  return [
+    buttonStyle("borderedProminent"),
+    buttonBorderShape("circle"),
+    tint(colors.TEXT),
+    foregroundStyle(colors.GROUND),
+    ...PRESS_FRAME,
+    hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+  ];
+}
+
+/** How far the field's words stand from the bar's edge above and below, its own room inside the thin edge. */
+const FIELD_INSET = SPACE.TIGHT * 2 - BAR_EDGE;
+
+/** How far the field stands in from the bar's leading edge where no + leads it. */
+const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
+
+/** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
+const FIELD_TRAILING = SPACE.TIGHT;
+
 /** The most lines the field grows to before it scrolls its words. */
 const FIELD_LINES = 6;
+
+/** What the + is named by, whether it opens one act or a menu. */
+const ADD_LABEL = "Add";
+
+/**
+ * What the + offers where it opens a menu rather than one act, in the
+ * menu's order from the +: its acts, such as Photos and Options, then the
+ * choices within it, such as Permissions, each a menu of its own with the
+ * one on checked, then its switches, such as Fast.
+ */
+export type ComposerMenu = {
+  readonly actions: readonly {
+    readonly label: string;
+    readonly symbol: SfSymbol;
+    readonly onPress: () => void;
+  }[];
+  readonly submenus?: readonly BarMenu[] | undefined;
+  readonly switches?: BarMenu["choices"] | undefined;
+};
 
 type ComposerProps = {
   /** What the field says before anything is typed: "Reply", "Add a note". */
@@ -37,19 +108,28 @@ type ComposerProps = {
   readonly sendable?: boolean | undefined;
   /** Called with the words typed once Send is pressed; Send stands disabled where none is given. */
   readonly onSend?: ((words: string) => void) | undefined;
-  /** Opens what the + adds, such as a picture; the + is not drawn where none is given. */
+  /** Opens what the + adds, such as a picture; the + is not drawn where neither this nor `addMenu` is given. */
   readonly onAdd?: (() => void) | undefined;
+  /** What the + opens as a menu in place of `onAdd`'s one act, such as an agent's Photos, Permissions, and Fast. */
+  readonly addMenu?: ComposerMenu | undefined;
   /** Starts dictation, drawn as a mic in Send's place while the field is empty. */
   readonly onDictate?: (() => void) | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
   readonly onStop?: (() => void) | undefined;
-  /** Whether a Stop is out, which stands pressed and dimmed until the agent stops. */
+  /** Whether a Stop is out, which stands as the system's spinner in Stop's place until the agent stops. */
   readonly stopping?: boolean | undefined;
   /** What stands over the field inside the same glass: the messages queued behind the turn, the pictures attached, and what a send that did not go said. */
   readonly head?: ReactNode;
+  /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
+  readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
 };
 
-/** The round button at the field's end: Send, filled with the ink, or, while nothing is typed, Stop while a turn runs, else the mic. */
+/**
+ * The round button at the field's end, the system's own prominent circle as
+ * Messages draws Send: Send in the ink once there is something to send and
+ * the system's dimmed circle until then, or, while nothing is typed, Stop
+ * while a turn runs, the system's spinner once it is pressed, else the mic.
+ */
 function SendButton({
   empty,
   onSend,
@@ -64,31 +144,36 @@ function SendButton({
   readonly stopping: boolean;
 }) {
   const colors = useColors();
+  if (empty && onStop !== undefined && stopping) {
+    return (
+      <ProgressView
+        modifiers={[
+          frame({ width: SEND_SIZE, height: SEND_SIZE }),
+          ...PRESS_FRAME,
+          tint(colors.TEXT_MUTED),
+          accessibilityLabel("Stopping"),
+        ]}
+      />
+    );
+  }
   if (empty && onStop !== undefined) {
     return (
-      <Button
-        onPress={onStop}
-        modifiers={[
-          buttonStyle("plain"),
-          disabled(stopping),
-          accessibilityLabel(stopping ? "Stopping" : "Stop"),
-        ]}
-      >
-        <Image
-          systemName="stop.fill"
-          size={MARK_SIZE.GLYPH - 2}
-          color={colors.GROUND}
-          modifiers={[
-            frame({ width: SEND_SIZE, height: SEND_SIZE }),
-            background(stopping ? colors.TEXT_MUTED : colors.TEXT, shapes.circle()),
-          ]}
-        />
+      <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
+        <Image systemName="stop.fill" size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
       </Button>
     );
   }
   if (empty && onDictate !== undefined) {
     return (
-      <Button onPress={onDictate} modifiers={[buttonStyle("plain"), accessibilityLabel("Dictate")]}>
+      <Button
+        onPress={onDictate}
+        modifiers={[
+          buttonStyle("plain"),
+          ...PRESS_FRAME,
+          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+          accessibilityLabel("Dictate"),
+        ]}
+      >
         <Image systemName="mic" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
       </Button>
     );
@@ -97,21 +182,51 @@ function SendButton({
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        buttonStyle("plain"),
+        ...roundModifiers(colors),
         disabled(empty || onSend === undefined),
         accessibilityLabel("Send"),
       ]}
     >
-      <Image
-        systemName="arrow.up"
-        size={MARK_SIZE.GLYPH + 2}
-        color={colors.GROUND}
-        modifiers={[
-          frame({ width: SEND_SIZE, height: SEND_SIZE }),
-          background(empty ? colors.TEXT_MUTED : colors.TEXT, shapes.circle()),
-        ]}
-      />
+      <Image systemName="arrow.up" size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
     </Button>
+  );
+}
+
+/** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
+function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
+  const colors = useColors();
+  const submenus = menu.submenus ?? [];
+  const switches = menu.switches ?? [];
+  return (
+    <Menu
+      label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
+      modifiers={[
+        ...PRESS_FRAME,
+        accessibilityLabel(ADD_LABEL),
+        accessibilityIdentifier("composer-add"),
+      ]}
+    >
+      {menu.actions.map((action) => (
+        <Button
+          key={action.label}
+          label={action.label}
+          systemImage={action.symbol}
+          onPress={action.onPress}
+        />
+      ))}
+      {submenus.length === 0 && switches.length === 0 ? null : <Divider />}
+      {submenus.map((submenu) => (
+        <BarMenuButton key={submenu.label} menu={submenu} />
+      ))}
+      {switches.map((each) => (
+        <Toggle
+          key={each.label}
+          label={each.label}
+          isOn={each.on}
+          onIsOnChange={() => each.onPress()}
+        />
+      ))}
+    </Menu>
   );
 }
 
@@ -124,6 +239,7 @@ function ComposerPieces(props: ComposerProps) {
     sendable = false,
     onSend,
     onAdd,
+    addMenu,
     onDictate,
     onStop,
     stopping = false,
@@ -156,8 +272,18 @@ function ComposerPieces(props: ComposerProps) {
         };
   return (
     <>
-      {onAdd === undefined ? null : (
-        <Button onPress={onAdd} modifiers={[buttonStyle("plain"), accessibilityLabel("Add")]}>
+      {addMenu !== undefined ? (
+        <AddMenu menu={addMenu} />
+      ) : onAdd === undefined ? null : (
+        <Button
+          onPress={onAdd}
+          modifiers={[
+            buttonStyle("plain"),
+            ...PRESS_FRAME,
+            hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+            accessibilityLabel(ADD_LABEL),
+          ]}
+        >
           <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
         </Button>
       )}
@@ -169,6 +295,11 @@ function ComposerPieces(props: ComposerProps) {
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           lineLimit(FIELD_LINES),
+          padding({
+            vertical: FIELD_INSET,
+            trailing: FIELD_TRAILING,
+            ...(addMenu === undefined && onAdd === undefined ? { leading: FIELD_LEADING } : {}),
+          }),
           accessibilityIdentifier("composer-field"),
         ]}
       />
@@ -189,12 +320,17 @@ function ComposerPieces(props: ComposerProps) {
  * words, and Send filled with the ink, or the mic while the field is empty
  * where dictation is offered. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
- * it empties on Send. It stands in a React Native bar (`GlassBar`), docked
- * over a compact window's screen (`GlassDock`).
+ * it empties on Send. Pictures dropped on it, on an iPad, go to its
+ * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),
+ * docked over a compact window's screen (`GlassDock`).
  */
 export function Composer(props: ComposerProps) {
+  const { onDropPictures } = props;
   return (
-    <GlassBar head={props.head}>
+    <GlassBar
+      head={props.head}
+      modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
+    >
       <ComposerPieces {...props} />
     </GlassBar>
   );
@@ -207,7 +343,7 @@ export function Composer(props: ComposerProps) {
  */
 export function ComposerFoot(props: ComposerProps) {
   const glass = [
-    padding({ leading: SPACE.ROW + 4, trailing: SPACE.TIGHT * 2, vertical: SPACE.TIGHT * 2 }),
+    padding({ all: BAR_EDGE }),
     glassEffect({
       glass: { variant: "regular", interactive: true },
       shape: "roundedRectangle",
@@ -217,15 +353,15 @@ export function ComposerFoot(props: ComposerProps) {
   ];
   if (props.head === undefined) {
     return (
-      <HStack spacing={SPACE.ROW} modifiers={glass}>
+      <HStack spacing={BAR_ROW_SPACING} modifiers={glass}>
         <ComposerPieces {...props} />
       </HStack>
     );
   }
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
-      {props.head}
-      <HStack spacing={SPACE.ROW}>
+      <BarHead>{props.head}</BarHead>
+      <HStack spacing={BAR_ROW_SPACING}>
         <ComposerPieces {...props} />
       </HStack>
     </VStack>

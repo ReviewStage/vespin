@@ -9,6 +9,7 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppWorkspaceIntegrations } from "@repo/host/app-state";
 import { SETTINGS_ACT_KIND } from "@repo/host/contract";
+import { SOUND_WHEN } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -16,6 +17,7 @@ import { appSettingsWire, settingsView } from "@repo/settings/testing";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { appSettingsView } from "@repo/settings/wire";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -49,7 +51,10 @@ function neverChosen() {
 }
 
 /** Settings on the Preferences page for the account given, every press but a setting's write ignored. */
-function settingsOn(account: AccountSnapshot): SettingsPanelProps {
+function settingsOn(
+  account: AccountSnapshot,
+  settings: SettingsPanelProps["settings"] = neverChosen(),
+): SettingsPanelProps {
   return {
     account,
     onSignOut: () => Promise.resolve(),
@@ -79,7 +84,7 @@ function settingsOn(account: AccountSnapshot): SettingsPanelProps {
       onMoveToApplications: ignore,
       onOpenLatest: ignore,
     },
-    settings: neverChosen(),
+    settings,
   };
 }
 
@@ -122,7 +127,10 @@ function integrationsWith(connected: readonly string[]): AppWorkspaceIntegration
 }
 
 /** Draws Settings on the Preferences page, over the reader's workspaces, and answers the container. */
-function draw(account: AccountSnapshot): HTMLElement {
+function draw(
+  account: AccountSnapshot,
+  settings: SettingsPanelProps["settings"] = neverChosen(),
+): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -136,7 +144,9 @@ function draw(account: AccountSnapshot): HTMLElement {
   };
   act(() =>
     root.render(
-      withQueryClient(createElement(SettingsPanel, { ...settingsOn(account), workspace })),
+      withQueryClient(
+        createElement(SettingsPanel, { ...settingsOn(account, settings), workspace }),
+      ),
     ),
   );
   return container;
@@ -171,7 +181,12 @@ beforeEach(() => {
   });
   reads = handHostReads({
     preferences: {
-      rows: { agent: undefined, chaptersModel: CHAPTERS_MODEL.HAIKU, slackNotifications: true },
+      rows: {
+        agent: undefined,
+        chaptersModel: CHAPTERS_MODEL.HAIKU,
+        slackNotifications: true,
+        sounds: { list: [], choices: { finish: undefined, ask: undefined } },
+      },
     },
   });
 });
@@ -220,4 +235,63 @@ test("Slack notifications stand under Notifications only once a workspace has th
   await act(async () => undefined);
 
   assert.deepEqual(written, [{ workspaceId: ACME.id, notifications: false }]);
+});
+
+/** The words the menu `chip` opens holds, its picks and its pinned presses alike. */
+/** The words of the acts the ⋯ of the account's own sound opens in the `chip` pop-up. */
+function actsOf(page: HTMLElement, chip: string): string {
+  const opener =
+    page.querySelector<HTMLButtonElement>(`button[aria-label="${chip}"]`) ??
+    assert.fail(`the ${chip} pop-up is drawn`);
+  act(() => opener.click());
+  const menu = document.getElementById(opener.getAttribute("aria-controls") ?? "");
+  const more =
+    menu?.querySelector<HTMLButtonElement>('[role="option"] button[aria-label="Sound actions"]') ??
+    assert.fail("a sound of the account's own draws its ⋯");
+  act(() => more.click());
+  const words = menu?.querySelector('[aria-label="Sound actions"][role="listbox"]')?.textContent;
+  act(() => opener.click());
+  return words ?? assert.fail("its acts open");
+}
+
+function menuOf(page: HTMLElement, chip: string): string {
+  const opener =
+    page.querySelector<HTMLButtonElement>(`button[aria-label="${chip}"]`) ??
+    assert.fail(`the ${chip} pop-up is drawn`);
+  act(() => opener.click());
+  const words = document.getElementById(opener.getAttribute("aria-controls") ?? "")?.textContent;
+  act(() => opener.click());
+  return words ?? assert.fail(`the ${chip} menu opens`);
+}
+
+test("each sound lists the account's own sounds by name, the one it plays chosen, and Your sounds lists them", async () => {
+  const page = draw(
+    SIGNED_IN,
+    appSettingsView(
+      appSettingsWire(
+        settingsView({ soundWhen: SOUND_WHEN.ALWAYS, completionSound: COMPLETION_SOUND.CUSTOM }),
+      ),
+    ),
+  );
+  act(() =>
+    reads.deliverPreferences({
+      rows: {
+        agent: undefined,
+        chaptersModel: CHAPTERS_MODEL.HAIKU,
+        slackNotifications: true,
+        sounds: {
+          list: [{ id: "sound-glass", name: "Glass", sha256: "a-hash" }],
+          choices: { finish: "sound-glass", ask: undefined },
+        },
+      },
+    }),
+  );
+
+  // The finish plays the account's own Glass, so its pop-up names it.
+  await vi.waitFor(() => menuOf(page, "When an agent finishes: Glass"));
+  const ask = menuOf(page, "When something needs you: Knock");
+  assert.ok(ask.includes("Glass"), "either sound may pick any of the account's own");
+  assert.ok(ask.includes("Add a sound…"));
+  assert.equal(actsOf(page, "When an agent finishes: Glass"), "Rename…Remove…");
+  assert.ok(page.textContent?.includes("Your sounds"));
 });

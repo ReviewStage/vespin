@@ -7,6 +7,8 @@ import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
+  type AccessibilityActionEvent,
+  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -114,8 +116,8 @@ const MARKER_WIDTH = 1.4;
 
 const styles = StyleSheet.create({
   flow: { gap: SPACE.ROW },
-  item: { flexDirection: "row", gap: SPACE.TIGHT },
-  itemBody: { flex: 1, gap: SPACE.TIGHT },
+  itemBody: { gap: SPACE.TIGHT },
+  marker: { position: "absolute", left: 0, top: 0 },
   quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW, gap: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
@@ -131,6 +133,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   picture: { width: "100%", borderRadius: 8 },
+  pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
 });
@@ -146,6 +149,8 @@ interface Drawing {
   readonly pictureSource: (written: string) => string | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
+  readonly headings: boolean;
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -272,7 +277,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         <Text
           onPress={onPress}
           accessibilityRole={onPress === undefined ? "text" : "link"}
-          style={{ color: colors.ACCENT_TEXT, textDecorationLine: "underline" }}
+          style={{ color: colors.TEXT_BODY, textDecorationLine: "underline" }}
         >
           <Runs runs={run.runs} drawing={drawing} />
         </Text>
@@ -285,25 +290,111 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
   }
 }
 
+/** What opens from a line of words: each chip and link that goes anywhere, by the words it is heard as. */
+type LineOpening = { readonly name: string; readonly label: string; readonly onOpen: () => void };
+
+/** What a line's custom action says before what it opens. */
+const OPEN_WORD = "Open";
+
+/**
+ * Each chip and link in a line that opens somewhere, in the order they
+ * stand. Note that iOS lists only a paragraph's words to VoiceOver, never a
+ * view standing in it, so a chip is never its own element; it is offered as
+ * one of the line's actions instead, named by what it opens.
+ */
+function lineOpenings(runs: readonly MarkdownRun[], drawing: Drawing): readonly LineOpening[] {
+  const openings: LineOpening[] = [];
+  collectOpenings(runs, drawing, openings);
+  return openings;
+}
+
+/** Adds each chip and link in `runs` that opens somewhere to `openings`, a link's own first and then any its words hold. */
+function collectOpenings(
+  runs: readonly MarkdownRun[],
+  drawing: Drawing,
+  openings: LineOpening[],
+): void {
+  for (const run of runs) {
+    if (run.kind === MARKDOWN_RUN.CHIP) {
+      const onOpen = open(run.chip.target, drawing);
+      if (onOpen !== undefined) {
+        openings.push({
+          name: `open-${openings.length}`,
+          label: `${OPEN_WORD} ${run.chip.heard}`,
+          onOpen,
+        });
+      }
+    } else if (run.kind === MARKDOWN_RUN.LINK) {
+      const onOpen = open(run.target, drawing);
+      const words = heardLine(run.runs) ?? runsText(run.runs);
+      if (onOpen !== undefined && words !== "") {
+        openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
+      }
+      collectOpenings(run.runs, drawing, openings);
+    }
+  }
+}
+
+/** A run's plain words, as a link's text is heard. */
+function runText(run: MarkdownRun): string {
+  switch (run.kind) {
+    case MARKDOWN_RUN.WORDS:
+    case MARKDOWN_RUN.CODE:
+      return run.text;
+    case MARKDOWN_RUN.LINK:
+      return runsText(run.runs);
+    case MARKDOWN_RUN.CHIP:
+      return run.chip.heard;
+    case MARKDOWN_RUN.BREAK:
+      return " ";
+    default: {
+      const unknown: never = run;
+      throw new Error(`A run of no kind a line draws: ${JSON.stringify(unknown)}`);
+    }
+  }
+}
+
+/** Runs' plain words, joined. */
+function runsText(runs: readonly MarkdownRun[]): string {
+  return runs.map(runText).join("");
+}
+
 /** A line of words: a paragraph's, a heading's, or a table cell's. */
 function Line({
   runs,
   drawing,
   style,
+  heading,
 }: {
   readonly runs: readonly MarkdownRun[];
   readonly drawing: Drawing;
   readonly style?: TextStyle | undefined;
+  /** Whether the line is heard as a heading. */
+  readonly heading?: boolean | undefined;
 }) {
+  const openings = lineOpenings(runs, drawing);
+  const actions =
+    openings.length === 0
+      ? {}
+      : {
+          accessibilityActions: openings.map(({ name, label }) => ({ name, label })),
+          onAccessibilityAction: (event: AccessibilityActionEvent) =>
+            openings.find((opening) => opening.name === event.nativeEvent.actionName)?.onOpen(),
+        };
   return (
     <Text
       accessibilityLabel={heardLine(runs)}
+      {...(heading === true ? { accessibilityRole: "header" as const } : {})}
+      {...actions}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
     >
       <Runs runs={runs} drawing={drawing} />
     </Text>
   );
 }
+
+/** What a task box in a list is heard as, ticked or not. */
+const TASK_BOX_HEARD = { DONE: "Done", OPEN: "Not done" } as const;
 
 /** A list item's marker: its task box, its number, or its bullet. */
 function Marker({
@@ -323,6 +414,7 @@ function Marker({
         style={{ width, paddingTop: 2 * fontScale }}
         accessible
         accessibilityRole="checkbox"
+        accessibilityLabel={checked ? TASK_BOX_HEARD.DONE : TASK_BOX_HEARD.OPEN}
         accessibilityState={{ checked }}
       >
         <SymbolView
@@ -333,16 +425,25 @@ function Marker({
       </View>
     );
   }
+  // Note that a bullet is never heard, while an ordered list's number is, since its order is part of what it says.
   return (
     <Text
       style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}
-      accessibilityElementsHidden
+      accessibilityElementsHidden={number === undefined}
     >
       {number === undefined ? "•" : `${number}.`}
     </Text>
   );
 }
 
+/**
+ * A list's items, each its marker in the margin beside its blocks. Note that
+ * an item is a column indented by the marker's width, the marker standing in
+ * that margin, rather than a row of the marker and a growing body, because
+ * a hosted page (`RNHostView`) measures a row's growing child at its
+ * unwrapped width, so a long item ran past the edge rather than wrapping,
+ * as a quote, a column with padding, never did.
+ */
 function ListView({
   block,
   drawing,
@@ -350,18 +451,20 @@ function ListView({
   readonly block: Extract<MarkdownBlock, { kind: typeof MARKDOWN_BLOCK.LIST }>;
   readonly drawing: Drawing;
 }) {
+  const indent = PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT;
   return (
     <View style={styles.flow}>
       {block.items.map((item, at) => (
-        <View key={at} style={styles.item}>
-          <Marker
-            checked={item.checked}
-            number={block.start === undefined ? undefined : block.start + at}
-            drawing={drawing}
-          />
-          <View style={styles.itemBody}>
-            <Blocks blocks={item.blocks} drawing={drawing} />
+        <View key={at} style={[styles.itemBody, { paddingLeft: indent }]}>
+          {/* Note that an empty item's marker stands in the flow, pulled back into the margin, since an item with no words would otherwise take no height and the next item would draw over its marker. */}
+          <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
+            <Marker
+              checked={item.checked}
+              number={block.start === undefined ? undefined : block.start + at}
+              drawing={drawing}
+            />
           </View>
+          <Blocks blocks={item.blocks} drawing={drawing} />
         </View>
       ))}
     </View>
@@ -459,6 +562,8 @@ type PictureProps = {
   readonly source: string | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
+  /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
+  readonly shape?: number | undefined;
 };
 
 /**
@@ -468,18 +573,26 @@ type PictureProps = {
  * what the system draws at the trailing corner: the clock of the folded
  * iPhone Duo's outer display, beside its rail. Note that a picture
  * still on its way stands as its well at the shape a picture most often
- * is, so the words under it do not jump twice.
+ * is, the system's spinner in it as Photos stands one, so the words under
+ * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt }: PictureProps) {
+export function Picture({ source, alt, shape }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
-  const well = [styles.picture, { aspectRatio: aspect ?? 16 / 9, backgroundColor: colors.WELL }];
+  const well = [
+    styles.picture,
+    { aspectRatio: shape ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+  ];
   if (source === undefined) {
-    return <View style={well} accessible accessibilityLabel={heard} />;
+    return (
+      <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
+        <ActivityIndicator color={colors.TEXT_MUTED} />
+      </View>
+    );
   }
   return (
     <>
@@ -552,7 +665,11 @@ function PictureBlock({
   const video = drawing.videoAt(source);
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
   return (
-    <Video source={video.source} label={video.label} onOpenElsewhere={video.onOpenElsewhere} />
+    <Video
+      source={video.source}
+      label={alt.trim() === "" ? video.label : alt}
+      onOpenElsewhere={video.onOpenElsewhere}
+    />
   );
 }
 
@@ -566,12 +683,13 @@ function BlockView({
   const { colors } = drawing;
   switch (block.kind) {
     case MARKDOWN_BLOCK.HEADING:
-      // Note that a heading is styled, never announced as one, as the panel's are: a reader walking the screen's headings meets the screen's, not a message's.
+      // Note that a message's heading is styled, never announced as one, as the panel's are: a reader walking the screen's headings meets the screen's, not a message's. A page of words alone, such as a task's description opened whole, announces its own.
       return (
         <Line
           runs={block.runs}
           drawing={drawing}
           style={{ ...HEADING_LOOK[block.level], color: colors.TEXT }}
+          heading={drawing.headings}
         />
       );
     case MARKDOWN_BLOCK.PARAGRAPH:
@@ -620,6 +738,8 @@ type MarkdownProps = {
   readonly pictureSource?: ((written: string) => string | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
+  readonly headings?: boolean | undefined;
 };
 
 /** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
@@ -653,6 +773,7 @@ export function Markdown({
   typed,
   pictureSource = namedSource,
   videoAt = noVideo,
+  headings = false,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -667,6 +788,7 @@ export function Markdown({
     openLink: onOpenLink,
     pictureSource,
     videoAt,
+    headings,
   };
   return (
     <View style={styles.flow}>

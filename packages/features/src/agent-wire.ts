@@ -2,6 +2,7 @@ import {
   keepIdentity,
   LEGACY_APP_WORD,
   literalsReadingLegacy,
+  literalsReadingUnknown,
   MESSAGE_ROLE,
   TURN_ORIGIN,
   TURN_STATUS,
@@ -15,6 +16,7 @@ import {
   agentPermissionModeSchema,
   permissionModeAppliesSchema,
 } from "./agent-approval-wire.js";
+import { agentBootSchema } from "./agent-boot.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
@@ -192,7 +194,7 @@ export const AGENT_PAYER = {
   CHATGPT_SUBSCRIPTION: "chatgpt_plan",
   API_KEY: "api_key",
   APP: "app",
-  /** A local agent's own Mac, by its harness's login there, as an agent started before every host launched on the account's saved credential records it; such an agent now launches on that saved credential. */
+  /** A local agent's own machine, by its harness's login there, which every local agent runs on and no credential of the account's pays for. */
   MAC_SIGN_IN: "mac_sign_in",
 } as const;
 
@@ -286,7 +288,7 @@ export const LOCAL_AGENT_REFUSAL = {
   SETUP_FAILED: "setup-failed",
   /** The device is another member's, and only its owner starts agents on it; the refusal carries the device and its owner (`refusedDeviceSchema`) where the service named them. */
   NOT_OWNER: "not-owner",
-  /** The repository is reached on the starter's own GitHub token, and the device's host is a build from before it runs such an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
+  /** The agent works in a repository, and the device's host is a build from before it runs every such agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   GITHUB_SIGN_IN: "github-sign-in",
   /** The agent's mode asks before it acts, and the device's host is a build from before it runs an agent in a mode (`DEVICE_CAPABILITY.PERMISSION_MODES`), which would run it with full access. */
   PERMISSION_MODES: "permission-modes",
@@ -393,6 +395,10 @@ export const DEVICE_STANDING = {
   UNKNOWN: "unknown",
   /** The first read of the beats is still out. */
   CHECKING: "checking",
+  /** Joined, connecting, fetching its agents' tools, or updating: it takes no agent yet. */
+  SETTING_UP: "setting_up",
+  /** Its setup failed, or it never called in after joining: it takes no agent. */
+  FAILED: "failed",
 } as const;
 
 export type DeviceStanding = (typeof DEVICE_STANDING)[keyof typeof DEVICE_STANDING];
@@ -448,6 +454,12 @@ export const AGENT_STATUS = {
 
 export type AgentStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS];
 
+/** An agent's status as a reader decodes it: one this build does not know is a state a newer service writes of an agent not yet ended, since every ending is already a word here, so it reads as running. */
+export const agentStatusSchema = literalsReadingUnknown(
+  Object.values(AGENT_STATUS),
+  AGENT_STATUS.RUNNING,
+);
+
 /**
  * Why a turn ended failed, as one fixed word: the service maps the turn's
  * own record to these, so nothing a provider or the runtime said travels
@@ -464,6 +476,8 @@ export const AGENT_FAILURE = {
   ABANDONED: "abandoned",
   /** The account's own API key for the model's provider was refused, out of quota, or can no longer be read; it is replaced in Settings. */
   PROVIDER_KEY: "provider_key",
+  /** A local agent's machine is not signed in to the agent's harness, Claude Code or Codex, or its sign-in was refused; it is signed in on that machine. */
+  MACHINE_SIGN_IN: "machine_sign_in",
   /** The agent's session never started, so no turn ran; a new agent is the way on. */
   NOT_STARTED: "not_started",
   /** The agent ran a fast version on the account's own key while we ran Fast on our own key alone; no agent fails this way now, and one that did still reads as this. */
@@ -491,47 +505,10 @@ export const AGENT_FAILURE = {
 
 export type AgentFailure = (typeof AGENT_FAILURE)[keyof typeof AGENT_FAILURE];
 
-/**
- * A word of a fixed vocabulary as a reader decodes it, read by `read`, which
- * takes a word this build does not know as one it does rather than refusing
- * the whole answer, so a service that writes one more word than a desktop
- * knows still answers that desktop. Note that its encoded side is typed as
- * the vocabulary alone, because a write never names a word outside it, so an
- * answer's encoded type stays the one its callers hold; its guard lets any
- * word in only for the decode to read it.
- */
-function wordReadingUnknown<const Values extends ReadonlyArray<string>>(
-  values: Values,
-  read: (word: string) => Values[number],
-) {
-  return EffectSchema.declare(
-    (input: unknown): input is Values[number] => typeof input === "string",
-  ).pipe(
-    EffectSchema.decodeTo(
-      EffectSchema.Literals(values),
-      SchemaTransformation.transform({
-        decode: read,
-        encode: (word): Values[number] => word,
-      }),
-    ),
-  );
-}
-
-const FAILURE_WORDS: ReadonlySet<string> = new Set(Object.values(AGENT_FAILURE));
-
-function isAgentFailure(word: string): word is AgentFailure {
-  return FAILURE_WORDS.has(word);
-}
-
-/** A failure word as a reader takes it: one this build does not know reads as `other`, a failure it has no words for. */
-function agentFailureOfWord(word: string): AgentFailure {
-  return isAgentFailure(word) ? word : AGENT_FAILURE.OTHER;
-}
-
-/** A failure word as a reader decodes it (`agentFailureOfWord`). */
-export const agentFailureSchema = wordReadingUnknown(
+/** A failure word as a reader decodes it: one this build does not know reads as `other`, a failure it has no words for. */
+export const agentFailureSchema = literalsReadingUnknown(
   Object.values(AGENT_FAILURE),
-  agentFailureOfWord,
+  AGENT_FAILURE.OTHER,
 );
 
 const TURN_STATUS_WORDS: ReadonlySet<string> = new Set(Object.values(TURN_STATUS));
@@ -562,7 +539,7 @@ export function turnStatusOfWord(word: string): TurnStatus {
 const agentTurnSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   queuedAt: countedNumber,
-  status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
+  status: literalsReadingUnknown(Object.values(TURN_STATUS), TURN_STATUS.RUNNING),
   stopAsked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   failure: EffectSchema.optionalKey(agentFailureSchema),
   waitsUntil: EffectSchema.optionalKey(countedNumber),
@@ -827,7 +804,11 @@ const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema
  * and refused beside `from`, since an agent started from another is cloned
  * at that agent's branch. Its `title` is the agent's from the start, which no
  * generated title covers; one from another agent takes it in place of
- * `<title> (continued)`.
+ * `<title> (continued)`. Its `permissionMode` is the mode the agent's first
+ * launch already runs in and its row keeps, as the new-agent menus pick it;
+ * one naming none starts on the starter's Default permissions, a harness
+ * that takes no mode that asks starts on Full access, and an automation's
+ * run on Full access whatever it names.
  */
 export const agentStartRequestFields = {
   idempotencyKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
@@ -845,6 +826,7 @@ export const agentStartRequestFields = {
   alsoRepositories: EffectSchema.optionalKey(agentAlsoRepositoriesSchema),
   branch: EffectSchema.optionalKey(startBranchSchema),
   title: EffectSchema.optionalKey(trimmedText(AGENT_BOUNDS.MAX_TITLE_CHARS)),
+  permissionMode: EffectSchema.optionalKey(agentPermissionModeSchema),
 };
 
 /** Whether `words` carry the files, as a prompt or a note does: no files without them, and words, files, or both with them. */
@@ -1257,7 +1239,7 @@ export const agentSummarySchema = EffectSchema.Struct({
   ),
   /** Epoch milliseconds the agent was started. */
   createdAt: countedNumber,
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   /**
    * The newest turn the status is read from, by the service's own id for
    * it; nothing before the first turn. A message that opens a new turn moves
@@ -1427,6 +1409,13 @@ export const agentAnswerSchema = EffectSchema.Struct({
 export const agentMessageAnswerSchema = EffectSchema.Struct({
   agent: agentSummarySchema,
   txid: EffectSchema.optionalKey(EffectSchema.String),
+  /**
+   * The agent's queue with the message in it, where the agent's machine was
+   * still booting its first launch and the message waits there to go once it
+   * is up (`agent-boot.ts`), in place of a line written; absent where the
+   * message was sent, and from a service older than it.
+   */
+  queued: EffectSchema.optionalKey(agentQueueSchema),
 });
 
 /**
@@ -1482,13 +1471,12 @@ const agentOriginSchema = EffectSchema.Struct({
 export type AgentOrigin = typeof agentOriginSchema.Type;
 
 /**
- * One agent as its own page reads it, which is how an agent an automation
- * started with no task is read, having no task's tab to stand in: the
- * summary the tabs draw, the automation whose run started it or none, the
+ * One agent as a read of it by its id answers it, as a link to it or a row
+ * naming it alone reads it: the summary the tabs draw, the automation whose run started it or none, the
  * run that did where one did, the workspace it belongs to, and the
  * repository it works in, null for one with none, and the branch its
  * checkout stood on as its last turn ended, as the member MCP server's
- * `read_agent` answers it. An agent on a plan reads so too, by the same id.
+ * `read_agent` answers it.
  */
 const agentPageSchema = EffectSchema.Struct({
   ...agentSummarySchema.fields,
@@ -1503,7 +1491,7 @@ const agentPageSchema = EffectSchema.Struct({
 
 export type AgentPage = typeof agentPageSchema.Type;
 
-/** One agent read by its id (GET), on a task or with none. */
+/** One agent read by its id (GET). */
 export const agentPageAnswerSchema = EffectSchema.Struct({ agent: agentPageSchema });
 
 /** The task's agents (GET), in the order they were started. */
@@ -1590,7 +1578,7 @@ export const agentPullRequestAnswerSchema = EffectSchema.Struct({
 export type AgentPullRequestAnswer = typeof agentPullRequestAnswerSchema.Type;
 
 /**
- * One agent as the task list carries it, on a plan or with none: the agent
+ * One agent as the task list carries it: the agent
  * as the tabs draw it, with the workspace it belongs to and the repository
  * it works in, its own, which its plan's no longer names once the plan's
  * repository moved, so its page reads its files and skills where it works.
@@ -1623,6 +1611,8 @@ export type ChangedFileStatus = (typeof CHANGED_FILE_STATUS)[keyof typeof CHANGE
 export const PATCH_OMITTED = {
   BINARY: "binary",
   TOO_LARGE: "too-large",
+  /** A secret file's (`isSecretFile`), whose lines no read carries, as a turn's diff reads its checkout (`checkout-diff.ts`). */
+  SECRET: "secret",
 } as const;
 
 export const CHANGES_BOUNDS = {
@@ -1752,6 +1742,22 @@ export const agentChangesAnswerSchema = EffectSchema.Struct({
 });
 
 type AgentChanges = NonNullable<(typeof agentChangesAnswerSchema.Type)["pullRequest"]>;
+
+/**
+ * The files one of an agent's turns changed, as git tells them apart
+ * between the checkout its runner recorded before the turn and the next one
+ * recorded, or the checkout as it stands (`checkout-diff.ts`), each as a
+ * pull request's file is carried; cut short where the diff ran past its
+ * bounds, which `truncated` says.
+ */
+export const agentTurnChangesAnswerSchema = EffectSchema.Struct({
+  files: EffectSchema.Array(changedFileSchema).check(
+    EffectSchema.isMaxLength(CHANGES_BOUNDS.MAX_FILES),
+  ),
+  truncated: EffectSchema.Boolean,
+});
+
+export type AgentTurnChangesAnswer = typeof agentTurnChangesAnswerSchema.Type;
 
 /** Who an agent's pull request names, as its changes carry them; every key absent from a service before them, or where they could not be read. */
 export type AgentChangesPeople = Pick<
@@ -2681,7 +2687,7 @@ export type AgentDelegationStart = typeof agentDelegationStartSchema.Type;
  */
 const agentSubagentStandingSchema = EffectSchema.Struct({
   callId: agentCallIdSchema,
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   model: EffectSchema.String,
   effort: EffectSchema.String,
   startedAt: countedNumber,
@@ -2730,13 +2736,21 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
   /** The messages queued behind the agent's turn, and whether the queue stands paused, on its own transcript; absent while none is queued, on a worker's page, and from a service older than it. */
   queue: EffectSchema.optionalKey(agentQueueSchema),
   /**
+   * The agent's first launch while it stands (`agent-boot.ts`): its machine
+   * booting, its first message going, or the boot
+   * failed, on its own transcript until its first turn settles; absent on a
+   * worker's page, for an agent whose first launch is over or never booted
+   * this way, and from a service older than it.
+   */
+  boot: EffectSchema.optionalKey(agentBootSchema),
+  /**
    * The turn the page before the oldest message here is read before, on a
    * task conversation's page read from its newest turns or before one;
    * absent where no older turn stands, on a coding agent's page, and from a
    * service older than it.
    */
   earlier: EffectSchema.optionalKey(EffectSchema.String),
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   /** When the run that status is read from began, as the agent's summary says it, so a tab following the transcript counts the run a new turn opened. */
   runStartedAt: EffectSchema.optionalKey(countedNumber),
   /**

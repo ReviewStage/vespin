@@ -22,6 +22,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
 | `xcrun simctl launch booted dev.vespin.ios -authServer stub` | Launch it signed out against the stubbed account service, as `maestro/sign-in.yaml` does |
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -agent 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5` | Launch it on the Inbox fixture, opened on its invitations agent's page, as `maestro/agent.yaml` does |
+| `xcrun simctl launch booted dev.vespin.ios -fixture inbox -refuseWrites true` | Launch it on the Inbox fixture with a task's status and pin refused, as `maestro/failure-notice.yaml` does, to see the failure notice |
 | `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
@@ -127,7 +128,8 @@ stands the host on the desktop's synthetic data instead of the service, the
 Inbox profile's threads and the tasks holding them among it
 (`@repo/host/fixture-inbox`), the acts the profile stages, such as a mark,
 a thread's file read, a reply or a resolve, an agent's message, queue
-change, or Stop, or a New agent or New task start, answered by the fixture,
+change, Stop, change of model, permission mode, or MCP servers, rename, pin,
+or archive, its task's skills, or a New agent or New task start, answered by the fixture,
 the models and repositories those sheets pick among staged, the
 migration's approval refused so a flow sees a refused answer taken back
 (`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
@@ -162,6 +164,76 @@ hands the app's JavaScript the tokens, an activity's end, and each Stop
 (`src/live-activity/`). Xcode's canvas draws the previews; on a simulator,
 `-liveActivity true` beside `-fixture inbox` starts an activity of the
 fixture's own, which `maestro/live-activity.yaml` shoots.
+
+## The Inbox widget
+
+The same widget extension draws the Inbox widget (`live-activity/InboxWidget.swift`)
+on the Home Screen (small, medium) and the Lock Screen (circular,
+rectangular, inline): how many threads wait on the member in the chosen
+workspace, and the newest three. It has no account and no network, so it
+draws a snapshot the app keeps in the App Group (`APP_GROUP` in
+`app.config.ts`, read through `src/app-group.ts`): what goes into it is
+`@repo/features/inbox-widget-model`'s, the app writes it as its Inbox moves
+and removes it on a sign-out (`src/inbox-widget/`), and asks WidgetKit to draw
+again through the Live Activity module's `reloadInboxWidget`. While the app
+is closed, the Notification Service Extension moves it by each alert, and
+the background task by each settled thread's push; a push's badge counts the
+whole account, so it is taken as the count only where the account has one
+workspace. Xcode's canvas draws each size's preview; on a simulator, add the
+widget by hand from the Home Screen's edit mode.
+
+## Handoff and Spotlight
+
+Each thread, task, agent, and pull request screen advertises an
+`NSUserActivity` of the app's own type (`dev.vespin.viewing`, declared in
+`app.config.ts`'s `NSUserActivityTypes`) while it is the one in front, with
+its title and its vespin.dev page, so Handoff offers it on the member's other
+devices (`useScreenActivity`, `src/system-activity/`). While an account is
+signed in, the chosen workspace's tasks and Inbox threads stand in the app's
+own Core Spotlight index, each named by its vespin.dev link, emptied on
+sign-out. What is built from the document, the activities, the items, and the
+route a continued activity or a tapped item opens, is
+`@repo/features/ios-system-activity`; the app's native module, autolinked
+from `modules/system-activity/`, sets the activity, writes the index, and
+hands a continued activity or a tapped item to JavaScript, which opens it
+through the routing a link takes. `maestro/spotlight.yaml` finds a task from
+the Home Screen's search; Handoff shows only between real devices.
+
+## The native interactions module
+
+What `@expo/ui` has no modifier for, an iPad pointer's hover effect and drag
+and drop, is the app's own native module, autolinked from
+`modules/native-interactions/`: its Swift registers each modifier with
+`@expo/ui`'s registry (`ViewModifierRegistry`) as the module is made, and
+`@repo/ui-native` hands them to its views (`src/interactions.ts`), so no
+screen names one. A row drags out as its vespin.dev link, a task's onto a
+group's header, in the Tasks list or the iPad's sidebar, moves it there, and pictures dropped on
+an agent's composer or a sheet that starts work are kept as JPEGs and
+attached. A view handed a modifier the build does not register draws as it
+would without it. No Maestro flow can drag or hover, so these are checked by
+hand on an iPad with a trackpad.
+
+## The share extension
+
+Vespin stands in the system's share sheet for text and a web link: a share
+extension `app.config.ts` adds beside the other two, whose Swift is under
+`share-extension/`. An extension runs with no React Native and no host, so
+its sheet is plain SwiftUI, drawn from a snapshot the app keeps in their
+App Group (`src/share-sheet.ts`, `@repo/features/ios-share-wire`): the
+workspace the phone works in, each workspace, and the repositories each
+reaches, and where Start is sent. Start sends the task as New task does
+(`share-extension/ShareStart.swift`), under the account's current access
+token, which the app keeps in one Keychain item it and the extension alone
+share (`modules/share-token/`, written through `@repo/host`'s `issued-token-account-source.ts`
+on every sign-in and renewal and deleted on sign-out; the Keychain group is
+each target's `VespinShareKeychainGroup`). The refresh token never leaves the
+app, since it rotates on every use. With no token, a stale one, or no answer,
+Start keeps the words and picks as a draft in the group instead, and the app
+opens New task on it, prefilled, the next time it comes forward, since no
+public API lets an extension bring its app forward. Every file the app
+and its extensions share goes through `src/app-group.ts`, flat JSON at the
+group's root, and each Swift target reads the group from its Info.plist's
+`VespinAppGroup`.
 
 ## Tests
 
@@ -198,11 +270,26 @@ pull request with UI shows its screenshots to the developer in a thread.
   `metro.config.js` reads it as the `.ts` beside it, as it reads a workspace
   package's `exports`.
 - **Layout follows the window, never the device.** `useWindowSizeClass` reads
-  the window's width into a compact or regular size class; a regular window
-  stands list and detail side by side in `NavigationSplitView`, whether it is
-  an iPad's, the unfolded iPhone Duo's, or a Split View pane.
+  the window's width into a compact or regular size class. A compact window
+  keeps the system's tab bar with stack navigation. A regular one, whether
+  it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
+  list and detail side by side in `NavigationSplitView`; where it is wide
+  enough for three columns, an iPad's in landscape, it hides the tab bar and
+  stands the app sidebar first (`src/screens/app-sidebar.tsx`: the places,
+  Pinned and the member's sections, the workspace switcher, and Settings),
+  as Mail does. Whether the first column stands is one answer every tab
+  shares (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
+- **Every write goes through `useWrite`** (`src/use-write.ts`). What went
+  is silent but for its buzz, as iOS's own apps are, and what did not says
+  why: in place where the screen holds the words it came from (a send, an
+  answer, a start, a pull request's change), and otherwise in `@repo/ui-native`'s
+  one failure notice, with Try again, in the panel's own words for the
+  refusal. While the service cannot be reached, a write that got no answer
+  says so once for the stretch rather than once each. An alert stands only
+  where the person must decide, such as Mark done stopping a working agent
+  (`ConfirmAsk`). A read on open or a follow nobody pressed for goes quietly.
 - **React 19.3** comes through the `mobile` pnpm catalog, since React Native
   0.88 is compiled against it, while the web and desktop apps stand on the
   default catalog's 19.2. A React module from `@repo/panel` or `@repo/ui`

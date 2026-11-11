@@ -21,6 +21,7 @@
  * this module's.
  */
 
+import { PUSH_NOTIFY_REFUSED } from "@repo/features/push-device-model";
 import {
   PUSH_ENVIRONMENT,
   PUSH_NOTIFY,
@@ -41,6 +42,7 @@ import {
   type NotificationStanding,
   useNotificationPermission,
 } from "./notification-permission.js";
+import { useWrite } from "./use-write.js";
 
 /**
  * The gateway this build's tokens belong to. Note that the entitlement
@@ -208,12 +210,24 @@ export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Pro
   return done;
 }
 
+/**
+ * The phone registered again under the account still signed in, where a
+ * sign-out unregistered it and then did not go, so its pushes come back at
+ * once rather than at the next launch. It names the phone by the token this
+ * launch read, as the unregister did; nothing where none was read.
+ */
+export function reregisterPushDevice(acts: ActPortClient, fixture: boolean): Promise<void> {
+  const key = fixture ? FIXTURE_KEY : keyRead;
+  return key === undefined ? Promise.resolve() : registeredPushDevice(acts, key);
+}
+
 /** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
 export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
   readonly standing: PushDeviceStatusAnswer | undefined;
   readonly choose: (notify: PushNotify) => void;
 } {
   const acts = useHostActs();
+  const write = useWrite();
   const [standing, setStanding] = useState<PushDeviceStatusAnswer | undefined>(undefined);
   // Which choice was made last, so an earlier one's refusal never puts back what a later one drew.
   const picks = useRef(0);
@@ -250,12 +264,15 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
           setStanding((drawn) => drawn && { ...drawn, notify: held });
         }
       };
-      acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }).then((answer) => {
-        if ("failure" in answer) putBack();
-        else confirmed.current = notify;
-      }, putBack);
+      write(() => acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }), {
+        // Note that a pick offers no Try again, which could replay an older choice over a newer one; picking again is the retry.
+        refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
+      }).then((went) => {
+        if (went) confirmed.current = notify;
+        else putBack();
+      });
     },
-    [acts, key, standing],
+    [acts, write, key, standing],
   );
   // A phone iOS no longer lets notify draws no standing, whatever was read before.
   return { standing: key === undefined ? undefined : standing, choose };

@@ -136,29 +136,21 @@ agent pushed. Nothing is read from your machine, and a continue only stops the
 agent there. To tell your machines apart, each sends us a keyed hash of its
 hardware or machine id, never the id itself, and a Mac sends its model name.
 
-When such an agent starts, we send that machine a copy of the Anthropic or
-OpenAI credential it runs on, sealed until the machine picks it up, when we
-erase that copy; your saved credential stays saved. For an agent on your
-ChatGPT plan, the machine instead fetches an access token from us while the
-agent runs. For a Claude agent, the credential sits in the agent's environment
-for that run, so any command the agent runs can read it. A Codex agent keeps it
-out of the commands it runs, but its commands still have full access to that
-machine's account. We take exact copies of a credential sent with the launch
-out of what the agent sends back to us, so a command that prints it does not
-put it in the transcript. A ChatGPT plan's access token is not taken out this
-way.
+When such an agent starts, it runs on the Claude Code or Codex login already
+set up on that machine, never on a credential you saved in Vespin: we send that
+machine none of your Anthropic or OpenAI credentials, and its work counts
+against that login's plan or key. If the machine has no such login, the agent's
+turn fails and says to sign in on that machine. The agent and every command it
+runs have full access to that machine's account, that login included.
 
-For a repository the Vespin GitHub App reaches, an agent on your machine gets
-a GitHub token from us that lasts an hour and works only for that repository.
-For a repository reached only on your own GitHub token, we never send that
-token to your Mac. Instead, the agent uses the GitHub sign-in already set up on
-that Mac for its account: your `gh` login, your Git credential helper and
-settings, and your SSH keys and SSH agent. **Such an agent acts as whoever is
-signed in on that Mac, with every repository and permission that sign-in has,
-not just the task's repository.** Such an agent runs only on a Mac, never on
-another machine you add. Before it starts, it checks that the
-sign-in reaches the repository. If it doesn't, the agent doesn't start, and its
-transcript says to sign in with `gh auth login` or set up SSH.
+An agent on your machine also uses the GitHub sign-in already set up on that
+machine for its account: your `gh` login, your Git credential helper and
+settings, and your SSH keys and SSH agent. We never send that machine a GitHub
+token. **Such an agent acts as whoever is signed in on that machine, with every
+repository and permission that sign-in has, not just the task's repository.**
+Before it starts, it checks that the sign-in reaches the repository. If it
+doesn't, the agent doesn't start, and its transcript says to sign in with
+`gh auth login` or set up SSH.
 
 ### Usage data and screen recordings
 
@@ -224,7 +216,7 @@ unless you untick it, your name and email.
 
 ### Notifications
 
-If you turn on Show a notification in Settings › Account › Sounds, the Mac
+If you turn on Show a notification in Settings › Preferences › Notifications, the Mac
 app, or the web app where your browser allows it, asks your system to show a
 notification while Vespin is in the background when an agent you started
 finishes, or when an Inbox item asks you something, including one on a task
@@ -235,6 +227,16 @@ on) shows it and may keep it in its notification history under its own
 settings, outside Vespin. Showing one sends nothing to us or anyone else. It is off until you
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
+
+If you add your own sounds in Settings › Preferences › Notifications, to play when an
+agent finishes or something needs you, we keep **each sound's audio and the
+name you give it** with your account: its bytes, its audio type, a
+fingerprint of them (SHA-256) that tells your other signed-in apps when it
+changed, so they fetch it again, and which sound each of yours plays. We
+never keep the file's own name, which the app only offers as the name to
+start from, and a sound is sent only to apps signed in to your account.
+You can rename or remove each one in the same place, and all of them are
+deleted with your account.
 
 If you sign in to the Vespin iOS app and allow notifications, the app
 registers your iPhone's Apple push token with the Service, with which of
@@ -257,9 +259,45 @@ agents: one that lets the Service start the activity, and one for the
 activity while it stands on the phone. We keep them with your phone's row,
 beside when the Service last pushed the activity and what that push showed,
 and the Service sends Apple a token with each push to the activity: **your
-agents' titles and their current steps**, how many of them run, and how many
-threads wait on you. We forget the activity's token once it ends, or Apple
+running agents' titles** and when each began, how many of them run, and how
+many threads wait on you. We forget the activity's token once it ends, or Apple
 says it is gone, and both tokens leave with the phone's row or your account.
+
+If you add the app's Inbox widget to your Home Screen or Lock Screen, the
+app keeps a small file for it on your iPhone, in storage it shares only with
+its own widget and notification extensions: the name of the workspace you
+chose, how many threads wait on you there, and **the titles of up to three
+of them and their tasks' names**, with the ids a tap opens. It holds no
+message's words, no sign-in token, and nothing the widget sends anywhere:
+the widget has no network of its own. The app rewrites the file as your
+Inbox changes, the notification extension updates it as a notification
+arrives, and the app deletes it when you sign out. The widget marks the
+titles as private, so iOS hides them on a locked iPhone if your settings
+say to.
+
+While you are signed in to the Vespin iOS app, it keeps a small file on your
+phone, in a folder only the app and its own extensions can read, for
+Vespin's share sheet: **your account's id, your workspaces' ids and names,
+and the names of the repositories each reaches**, with the Service's address
+and the app's version. The app also keeps **your account's current sign-in
+token** (the short-lived access token, never the refresh token that renews
+it) in one Keychain item that only the app and its share sheet can read. That
+item stays on this iPhone, never syncs to iCloud or moves to another device,
+holds the time the token stops being sent, a little under an hour after it
+was issued, is rewritten each time the token is renewed, and is deleted when
+you sign out. When you share text or a link to Vespin from another app and press
+Start, the share sheet sends **the words you shared and edited**, with the
+workspace and repository you picked, to the Service under that token, exactly
+as the app's New task does, and the task starts there. Where the task
+doesn't start, because the token has expired, the Service refuses it, or the
+Service doesn't answer, the share sheet keeps those words and picks as a
+draft in the same folder instead, which the app opens New task on the next
+time you open the app, then deletes. Signing out deletes the files and the
+Keychain item. Deleting the app deletes the files at once, but iOS keeps an
+app's Keychain items after the app is deleted, so the item stays on the
+iPhone until the app is installed and opened again, which deletes it; by
+then the token in it has expired, within an hour of being issued, and the
+share sheet never sends a token past its expiry.
 
 So your phone stays quiet while you're at your desk, the Service notes when
 a desktop or web client of yours was last active: while you use one, it
@@ -286,6 +324,22 @@ and changes you made offline in one file, `entities.sealed`, encrypted under a
 key in the macOS Keychain and deleted when you sign out. Your sign-in
 tokens are kept encrypted the same way. Transcripts and pictures you
 open are held in memory only.
+
+### Spotlight and Handoff on your iPhone
+
+While you are signed in to the Vespin iOS app, it adds the tasks and Inbox
+threads of the workspace you work in to your iPhone's or iPad's Spotlight
+index, so a search on your device finds them: each task's name, status, and
+workspace, each thread's title and its latest words as the Inbox shows them,
+and each one's vespin.dev link. The index stays on your device, where it is
+readable only while the device is unlocked, and the app sends none of it to
+us. It changes as your lists do, the app takes a workspace's items out when
+you choose another, and it empties the index when you sign out.
+
+While you look at a thread, task, agent, or pull request, the app tells iOS
+its title and its vespin.dev link, so Handoff can offer it on your other
+devices signed in to the same Apple Account. iOS hands them to those devices
+directly, and the app does not offer them to Siri suggestions or to search.
 
 ## 3\. Legal basis for processing
 
@@ -393,9 +447,9 @@ repository snapshot made before default-branch drives expires thirty days after
 its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, integration records, your phones' push tokens, when you were
-  last active at a client, and the notifications held for you) is deleted
-  at once.
+  preferences, your sounds, integration records, your phones' push
+  tokens, when you were last active at a client, and the notifications held
+  for you) is deleted at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
   but for the tasks in workspaces with other members (below), and we ask
   Vercel to delete your agents' sandboxes and the drives holding their
@@ -422,6 +476,11 @@ its last use. When you delete your account:
   ends, since Sentry offers no way to erase one account's reports.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your
   agents already did at those services stays there.
+- **Google and GitHub sign-in:** we ask Google and GitHub to revoke the tokens
+  your sign-in left with us, so our GitHub App can no longer act as you; if
+  one cannot be reached in a few seconds, your account is deleted anyway and
+  that token stays valid until it expires (about eight hours for GitHub's, an
+  hour for Google's).
 
 ## 8\. Your rights and choices
 

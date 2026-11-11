@@ -1,11 +1,12 @@
 import type { FileChip } from "@repo/features/attachment-model";
 import { inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
 import { cssCustomProperties, joinRefs, useNearView } from "@repo/ui";
-import { PICTURE_STATE, usePicture } from "@repo/ui/picture-read";
+import { PICTURE_STATE, type PictureState, usePicture } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
 import {
   createContext,
   type ReactNode,
+  type RefCallback,
   type RefObject,
   useCallback,
   useContext,
@@ -158,6 +159,44 @@ export function InboxPicture({
       caption={caption}
     />
   );
+}
+
+/** One of an item's pictures drawn small, as an option's card holds it: where its read stands, the element it stands in, and what opens the viewer at it; nothing outside `InboxPictures`. */
+export interface InboxPictureThumb {
+  readonly state: PictureState;
+  readonly anchor: RefCallback<HTMLElement>;
+  readonly open: () => void;
+}
+
+/**
+ * One of an item's pictures as a thumbnail draws it, a picture or a
+ * recording an option carries: read through the Inbox's reads as soon as it
+ * is drawn, since a card's thumbnails stand on the screen with the ask, and
+ * counted among the item's pictures where its element stands, so a press
+ * opens the one viewer over them all at it and the arrow keys walk on to the
+ * next option's.
+ */
+export function useInboxPictureThumb(
+  attachmentId: string,
+  alt: string,
+): InboxPictureThumb | undefined {
+  const door = useContext(InboxPicturesContext);
+  const key = useId();
+  const anchor = useRef<HTMLElement | null>(null);
+  const register = door?.register;
+  const state = usePicture(
+    { ...pictureQuery(door?.itemId ?? "", attachmentId, door?.read), enabled: door !== undefined },
+    pictureUnread,
+  );
+  useLayoutEffect(
+    () => register?.(key, { attachmentId, alt, name: undefined, anchor }),
+    [register, key, attachmentId, alt],
+  );
+  const place = useCallback((element: HTMLElement | null) => {
+    anchor.current = element;
+  }, []);
+  if (door === undefined) return undefined;
+  return { state, anchor: place, open: () => door.open(key) };
 }
 
 /** The picture the viewer shows: the item's, the copy it was opened or walked to by its key, and the picture itself by its attachment. */

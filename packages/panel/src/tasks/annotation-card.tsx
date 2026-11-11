@@ -218,6 +218,8 @@ export interface AnnotationReply {
   readonly nameRef: ReactNode;
   readonly at: number;
   readonly now: number;
+  /** The state the reply stands in, said right after its name: Pending. */
+  readonly status?: ReactNode;
   readonly trailing?: ReactNode;
 }
 
@@ -257,6 +259,7 @@ export function AnnotationComment({
         nameRef={reply.nameRef}
         at={reply.at}
         now={reply.now}
+        status={reply.status}
         trailing={reply.trailing}
       >
         {words}

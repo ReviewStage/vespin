@@ -1,0 +1,432 @@
+import { CONNECTION_HEALTH, type ConnectionHealth } from "./integration-health.js";
+import type { IntegrationStatusesAnswer } from "./integration-live.js";
+import { integrationFound } from "./integration-search.js";
+import { SIGN_IN, type SignIn, signInLine } from "./integration-sign-in.js";
+import {
+  INTEGRATION_NAME,
+  INTEGRATION_PROVIDER_LIST,
+  INTEGRATION_STATUS,
+  type IntegrationAccount,
+  type IntegrationProvider,
+  type IntegrationStatus,
+  integrationAccountNames,
+  integrationConnectionOf,
+} from "./integration-wire.js";
+import { searchTokens } from "./search-tokens.js";
+import { MCP_SERVER_LABEL, readFailedWords, VERB } from "./words.js";
+
+/**
+ * agent-servers-model.ts -- what the MCP servers popover at an agent's composer says of each server: whether this agent has it on, or how to connect it; which section it stands under; and what a search of it finds.
+ *
+ * Every MCP server the service hands a coding agent is one account at an
+ * integration, so the popover has one row per account the signed-in account
+ * holds at each provider the deployment offers it, and one for a provider
+ * where it holds none, in the provider list's order. A provider with more
+ * than one account names each row by its label ("Notion · Acme"), and one
+ * with a single account by the provider alone, as it always has. A connected server carries a
+ * switch, on unless the agent switched it off, which is all the agent's row
+ * keeps: a server connected later is on for every agent. A server not
+ * connected offers to connect it, there and then; one whose sign-in expired,
+ * or connected but whose server refused it or answered an error of its own
+ * (`@repo/features/integration-health`), offers to reconnect, the latter with the
+ * server's reason beside its name; one whose server could not be reached
+ * keeps its switch, with that said beside its name; one whose sign-in the
+ * window waits on offers to reopen or cancel it, and one whose sign-in
+ * failed or never finished says so and offers to try again, as Settings
+ * does (`@repo/features/integration-sign-in`); one this
+ * deployment does not offer the account is not drawn at all, as the agent is never
+ * handed it. No other row says where it stands in words: the switch and the
+ * buttons are what say it. A read of the connections that
+ * failed is the one error, offered as a way to read again. The rows stand
+ * under Connected, a lapsed connection among them, and Not connected, a
+ * sign-in under way or one that did not finish among the latter; one whose
+ * standing is unread stands first under no heading. A search finds servers
+ * by name, account, or what they are for, as Settings › Integrations' filter
+ * does (`integration-search.ts`).
+ */
+
+/** The kinds of row the popover draws. */
+export const SERVER_ROW = {
+  /** Connected: a switch for this agent. */
+  SWITCH: "switch",
+  /** Not connected, or a sign-in under way: connect it from here. */
+  CONNECT: "connect",
+  /** Its sign-in expired, or its server will not list its tools: connect it again from here. */
+  RECONNECT: "reconnect",
+  /** A sign-in the window waits on: reopen it in the browser, or cancel it. */
+  SIGNING_IN: "signing-in",
+  /** A sign-in that failed or never finished: begin it again from here. */
+  TRY_AGAIN: "try-again",
+  /** Nothing to do from here yet: the read has not answered. */
+  QUIET: "quiet",
+  /** The read of the connections failed: read again. */
+  RETRY: "retry",
+} as const;
+
+type ServerRowKind = (typeof SERVER_ROW)[keyof typeof SERVER_ROW];
+
+/** What a row offers at its end where it offers a press but no switch. */
+export const SERVER_ACTION = {
+  CONNECT: "Connect",
+  RECONNECT: VERB.RECONNECT,
+  RETRY: "Retry",
+} as const;
+
+/** What the popover and its button are called. */
+export const SERVERS_LABEL = MCP_SERVER_LABEL.many;
+
+/** One server's row. */
+export interface ServerRow {
+  readonly provider: IntegrationProvider;
+  /** The server's name: its account's connection name, or the provider's where it holds none. */
+  readonly connection: string;
+  /** The account the row stands for, where the signed-in account holds one at the provider. */
+  readonly account?: IntegrationAccount;
+  /** How many accounts the signed-in account holds at the provider. */
+  readonly accounts: number;
+  /** The provider's name and the account's together, as a sentence or a card names the server. */
+  readonly name: string;
+  /** The account's name the row draws beside its provider's, where it shows one (`serverAccountName`). */
+  readonly accountName?: string;
+  readonly kind: ServerRowKind;
+  /** Whether the agent has it on; a row with no switch has it on only by default, which is never drawn. */
+  readonly on: boolean;
+  /** Why a connected server lists no tools, where it answered why, or why its sign-in failed. */
+  readonly problem?: string;
+  /** The server's or the sign-in's own words behind `problem`, quoted and naming who said them, where they said any. */
+  readonly said?: string;
+  /** Where a sign-in stands that is no problem: waiting on the browser, or never finished. */
+  readonly note?: string;
+}
+
+/**
+ * What a row is, from where its connection stands, how its server answered,
+ * and the sign-in the window waits on or last waited on; nothing is a read
+ * that has not answered.
+ */
+function kindOf(
+  status: IntegrationStatus | undefined,
+  health: ConnectionHealth,
+  signIn: SignIn | undefined,
+  readFailed: boolean,
+): ServerRowKind {
+  if (status === undefined) return readFailed ? SERVER_ROW.RETRY : SERVER_ROW.QUIET;
+  if (status !== INTEGRATION_STATUS.CONNECTED && signIn !== undefined) {
+    return signIn.kind === SIGN_IN.WAITING ? SERVER_ROW.SIGNING_IN : SERVER_ROW.TRY_AGAIN;
+  }
+  switch (status) {
+    case INTEGRATION_STATUS.CONNECTED:
+      return health.kind === CONNECTION_HEALTH.BROKEN && health.reconnect
+        ? SERVER_ROW.RECONNECT
+        : SERVER_ROW.SWITCH;
+    case INTEGRATION_STATUS.PENDING:
+    case INTEGRATION_STATUS.DISCONNECTED:
+      return SERVER_ROW.CONNECT;
+    case INTEGRATION_STATUS.EXPIRED:
+      return SERVER_ROW.RECONNECT;
+    // Never drawn: `serverRows` leaves a server the deployment does not offer out.
+    case INTEGRATION_STATUS.UNAVAILABLE:
+      return SERVER_ROW.QUIET;
+  }
+}
+
+/** Someone else's words behind a row's problem, where there are any. */
+function saidOf(said: string | undefined): Pick<ServerRow, "said"> {
+  return said === undefined ? {} : { said };
+}
+
+/** What a row says of where it stands in words: a connected server's problem, or its sign-in's line. */
+function wordsOf(
+  provider: IntegrationProvider,
+  status: IntegrationStatus | undefined,
+  health: ConnectionHealth,
+  signIn: SignIn | undefined,
+): Pick<ServerRow, "problem" | "said" | "note"> | undefined {
+  if (status === INTEGRATION_STATUS.CONNECTED) {
+    if (health.kind === CONNECTION_HEALTH.BROKEN) {
+      return { problem: health.problem, ...saidOf(health.said) };
+    }
+    // Note that a read our own service could not answer is said, never drawn as a server that works.
+    return health.kind === CONNECTION_HEALTH.FAILED
+      ? { problem: readFailedWords("the tools") }
+      : undefined;
+  }
+  if (signIn === undefined) return undefined;
+  const { text, problem, said } = signInLine(provider, signIn);
+  return problem ? { problem: text, ...saidOf(said) } : { note: text };
+}
+
+/**
+ * The account's name a server's row says beside its provider's: shown where
+ * the provider holds more than one account, or where its one account
+ * carries a label (a name the provider gave it, its email, or the
+ * developer's own), never "Account 1" for an account alone.
+ */
+function serverAccountName(
+  connection: string,
+  accounts: readonly IntegrationAccount[],
+): string | undefined {
+  const named = integrationAccountNames(accounts).get(connection);
+  const labeled = accounts.some(
+    (account) => account.connection === connection && (account.label ?? "").trim() !== "",
+  );
+  return named !== undefined && (accounts.length > 1 || labeled) ? named : undefined;
+}
+
+/** A server's name as its card and a call's row say it: its provider's, and the account's name after it where `serverAccountName` shows one. */
+export function serverName(
+  provider: IntegrationProvider,
+  connection: string,
+  accounts: readonly IntegrationAccount[],
+): string {
+  const accountName = serverAccountName(connection, accounts);
+  return accountName === undefined
+    ? INTEGRATION_NAME[provider]
+    : `${INTEGRATION_NAME[provider]} · ${accountName}`;
+}
+
+/**
+ * Every offered server's row, from where each connection stands, how each
+ * connected server answered, the sign-ins the window waits on or last
+ * waited on, and the servers the agent switched off. A
+ * status read before is kept over a read that failed since, so a passing
+ * failure does not take a server's switch away; a server whose status has
+ * not been read is drawn until it is.
+ */
+export function serverRows(input: {
+  statusOf: (server: string) => IntegrationStatus | undefined;
+  healthOf: (server: string) => ConnectionHealth;
+  signInOf: (server: string) => SignIn | undefined;
+  /** The accounts held at a provider; a surface that draws none hands none. */
+  accountsOf?: (provider: IntegrationProvider) => readonly IntegrationAccount[];
+  readFailed: boolean;
+  disabled: readonly string[];
+}): readonly ServerRow[] {
+  const offered = INTEGRATION_PROVIDER_LIST.filter(
+    (provider) => input.statusOf(provider) !== INTEGRATION_STATUS.UNAVAILABLE,
+  );
+  return offered.flatMap((provider) => {
+    const accounts = input.accountsOf?.(provider) ?? [];
+    const servers = accounts.length > 0 ? accounts : [undefined];
+    return servers.map((account): ServerRow => {
+      const connection = account?.connection ?? provider;
+      const status = input.statusOf(connection);
+      const health = input.healthOf(connection);
+      const signIn = input.signInOf(connection);
+      const accountName = serverAccountName(connection, accounts);
+      return {
+        provider,
+        connection,
+        ...(account !== undefined ? { account } : undefined),
+        accounts: accounts.length,
+        name: serverName(provider, connection, accounts),
+        ...(accountName !== undefined ? { accountName } : undefined),
+        kind: kindOf(status, health, signIn, input.readFailed),
+        on: !input.disabled.includes(connection),
+        ...wordsOf(provider, status, health, signIn),
+      };
+    });
+  });
+}
+
+/** The headings the popover's servers stand under: those connected, then those to connect. */
+export const SERVER_SECTION = {
+  CONNECTED: "Connected",
+  NOT_CONNECTED: "Not connected",
+} as const;
+
+type ServerSection = (typeof SERVER_SECTION)[keyof typeof SERVER_SECTION];
+
+/** A run of rows under one heading, or under none. */
+export interface ServerGroup {
+  readonly heading: ServerSection | undefined;
+  readonly rows: readonly ServerRow[];
+}
+
+/** Which heading a row stands under: none while where it stands is unread. */
+function sectionOf(row: ServerRow): ServerSection | undefined {
+  switch (row.kind) {
+    case SERVER_ROW.SWITCH:
+    case SERVER_ROW.RECONNECT:
+      return SERVER_SECTION.CONNECTED;
+    case SERVER_ROW.CONNECT:
+    case SERVER_ROW.SIGNING_IN:
+    case SERVER_ROW.TRY_AGAIN:
+      return SERVER_SECTION.NOT_CONNECTED;
+    case SERVER_ROW.QUIET:
+    case SERVER_ROW.RETRY:
+      return undefined;
+  }
+}
+
+/**
+ * The rows in their sections, each in the provider list's order: any whose
+ * standing is unread first under no heading, then Connected, then Not
+ * connected, a section with no row left out.
+ */
+export function serverGroups(rows: readonly ServerRow[]): readonly ServerGroup[] {
+  const order = [undefined, SERVER_SECTION.CONNECTED, SERVER_SECTION.NOT_CONNECTED] as const;
+  return order
+    .map((heading) => ({ heading, rows: rows.filter((row) => sectionOf(row) === heading) }))
+    .filter((group) => group.rows.length > 0);
+}
+
+/** What the Connected heading counts: how many of its servers this agent has on, of how many ("2 of 3 on"). */
+export function serversOnWords(rows: readonly ServerRow[]): string {
+  return `${rows.filter((row) => row.on).length} of ${rows.length} on`;
+}
+
+/**
+ * The servers a query finds, by name or what they are for
+ * (`integration-search.ts`), or by an account's label, so "personal" finds
+ * Notion · Personal; a blank query finds every one.
+ */
+export function searchServers(rows: readonly ServerRow[], query: string): readonly ServerRow[] {
+  const tokens = searchTokens(query);
+  return rows.filter(
+    (row) =>
+      integrationFound(row.provider, tokens) ||
+      (row.account !== undefined &&
+        tokens.every((token) => row.name.toLowerCase().includes(token))),
+  );
+}
+
+/** One server as a surface names it: its provider, its connection, and what it is called beside its provider's others. */
+export interface NamedServer {
+  readonly provider: IntegrationProvider;
+  readonly connection: string;
+  readonly name: string;
+}
+
+/**
+ * Every server the signed-in account holds, standing as `status` says, in the
+ * provider list's order: each account at a provider, named as `serverName`
+ * names it, and a provider with none by itself.
+ */
+export function namedServers(input: {
+  statusOf: (server: string) => IntegrationStatus | undefined;
+  accountsOf: (provider: IntegrationProvider) => readonly IntegrationAccount[];
+  standing: (status: IntegrationStatus | undefined) => boolean;
+}): readonly NamedServer[] {
+  return INTEGRATION_PROVIDER_LIST.flatMap((provider) => {
+    const accounts = input.accountsOf(provider);
+    const servers: readonly NamedServer[] =
+      accounts.length === 0
+        ? [{ provider, connection: provider, name: INTEGRATION_NAME[provider] }]
+        : accounts.map((account) => ({
+            provider,
+            connection: account.connection,
+            name: serverName(provider, account.connection, accounts),
+          }));
+    return servers.filter((server) => input.standing(input.statusOf(server.connection)));
+  });
+}
+
+/** Where every server stands as a read of the account's integrations holds it: each provider's word, then each account's over it, by the server's name. */
+export function serverStandings(
+  answer: IntegrationStatusesAnswer,
+): ReadonlyMap<string, IntegrationStatus> {
+  return new Map([
+    ...INTEGRATION_PROVIDER_LIST.map(
+      (provider) => [provider, answer.integrations[provider]] as const,
+    ),
+    ...(answer.accounts ?? []).map((account) => [account.connection, account.status] as const),
+  ]);
+}
+
+/** A connected server an agent is handed, and whether this agent has it on. */
+export interface HandedServer extends NamedServer {
+  readonly on: boolean;
+}
+
+/**
+ * The connected servers of a read of the account's integrations, in the
+ * provider list's order, each account at a provider named as `serverName`
+ * names it, with whether the agent, which switched `disabled` off, has it
+ * on: what a surface that offers no sign-in lists, such as the phone's,
+ * where a server is connected in Settings.
+ */
+export function handedServers(
+  answer: IntegrationStatusesAnswer,
+  disabled: readonly string[],
+): readonly HandedServer[] {
+  const standing = serverStandings(answer);
+  const accounts = answer.accounts ?? [];
+  return namedServers({
+    statusOf: (server) => standing.get(server),
+    accountsOf: (provider) =>
+      accounts
+        .filter((account) => account.provider === provider)
+        .toSorted(
+          (a, b) =>
+            (integrationConnectionOf(a.connection)?.place ?? 0) -
+            (integrationConnectionOf(b.connection)?.place ?? 0),
+        ),
+    standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
+  }).map((server) => ({ ...server, on: !disabled.includes(server.connection) }));
+}
+
+/**
+ * The servers off once one is switched, each once: the connection switched
+ * off where it is now off, and every other one already off kept, an account
+ * this window draws no row of among them.
+ */
+export function switchedServers(
+  disabled: readonly string[],
+  connection: string,
+  on: boolean,
+): readonly string[] {
+  const others = disabled.filter((each) => each !== connection);
+  return on ? others : [...others, connection];
+}
+
+/** How the developer's words reach the agent they are written to: they open its turn, or reach one already under way. */
+export const SERVER_HANDED = {
+  OPENS: "opens",
+  STEERS: "steers",
+} as const;
+
+export type ServerHanded = (typeof SERVER_HANDED)[keyof typeof SERVER_HANDED];
+
+/** What a server's card says of what a mention of it does, where its corner's On or Off does not already say it all. */
+export const SERVER_MENTION_NOTE = {
+  OFF_OPENS: "This message hands it to the turn it opens alone; the switch stays off.",
+  OFF_STEERS:
+    "Sent into a turn under way, this message hands it to the next turn alone; the switch stays off.",
+  NOT_CONNECTED: "Not connected, so no agent is handed it.",
+  EXPIRED: "Sign-in expired. A call to it asks you to reconnect it first.",
+} as const;
+
+/**
+ * What a server's card says of a mention of it, from its row and the agent
+ * the words are written to, if any, and how they reach it: an agent with
+ * it off is handed it by the developer's words for one turn, the one the
+ * words open or, where they reached a turn under way, the next, its switch
+ * untouched (the service's `mentionedServers`); a server not connected is
+ * handed to no agent, and one whose sign-in expired is handed all the same,
+ * its calls asking for it to be reconnected. Nothing where the card already
+ * says it: an agent with the server on, which has it anyway, or the agent's
+ * own words, where the corner's On or Off is the whole of it; a problem of
+ * its server's or a sign-in under way; or nothing read yet.
+ */
+export function serverMentionNote(
+  row: ServerRow,
+  agent: { readonly handed: ServerHanded | undefined } | undefined,
+): string | undefined {
+  switch (row.kind) {
+    case SERVER_ROW.CONNECT:
+    case SERVER_ROW.TRY_AGAIN:
+      return SERVER_MENTION_NOTE.NOT_CONNECTED;
+    case SERVER_ROW.RECONNECT:
+      return row.problem === undefined ? SERVER_MENTION_NOTE.EXPIRED : undefined;
+    case SERVER_ROW.SIGNING_IN:
+    case SERVER_ROW.QUIET:
+    case SERVER_ROW.RETRY:
+      return undefined;
+    case SERVER_ROW.SWITCH:
+      if (agent?.handed === undefined || row.on) return undefined;
+      return agent.handed === SERVER_HANDED.STEERS
+        ? SERVER_MENTION_NOTE.OFF_STEERS
+        : SERVER_MENTION_NOTE.OFF_OPENS;
+  }
+}

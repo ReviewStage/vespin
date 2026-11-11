@@ -11,6 +11,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { agentBootOf } from "@repo/database/models/agent-boot-store";
 import {
   claimQueuedMessage,
   editQueuedMessage,
@@ -25,6 +26,7 @@ import {
   takeQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import type { Agent } from "@repo/database/models/agent-store";
+import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueueChange, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { DateTime, Effect, Option } from "effect";
 import { afterResponse } from "../../http/after-response.js";
@@ -86,6 +88,11 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
       }
       return;
     case QUEUE_CHANGE.STEER: {
+      // Note that nothing is steered while the agent's first launch boots: its machine takes no line until it is up.
+      const boot = yield* hostedStoreOrUnavailable(agentBootOf(agent.id));
+      if (bootHolds(Option.getOrUndefined(boot)?.phase)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+      }
       // Steered, the message is claimed first, with an edit's words and files where it steers one, so no hand-off
       // sends it beside this send, and goes now, into the turn under way or as the next; a refusal lets it go back.
       const claimed = yield* found(

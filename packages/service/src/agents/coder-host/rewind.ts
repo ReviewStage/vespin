@@ -10,18 +10,22 @@ import {
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option, Result } from "effect";
+import type * as HttpClient from "effect/http/HttpClient";
 import {
+  HOST_REMOVED_REFUSAL,
   HOSTED_REFUSAL,
   type HostedRefusal,
   hostedStoreOrUnavailable,
+  localAgentRefused,
 } from "../../http/http-effect.js";
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
+import { LaunchRefused, RESTORE_OUTCOME } from "../machine/agent-machine.js";
+import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { experimentOnIn } from "../workspace-experiment-on.js";
-import { RESTORE_OUTCOME, restoreCheckout } from "./checkout-restore.js";
 import { harnessOf } from "./native-runtime.js";
 import { runnerHalted } from "./runtime-sessions.js";
 
@@ -38,11 +42,12 @@ import { runnerHalted } from "./runtime-sessions.js";
  * first, so it stops nothing. The agent's checkout is left as it stands
  * unless the rewind asks for the files back too: then, once the runner is
  * ended and before the cut, the checkout is put back to the snapshot its
- * runner took before the turn the line opened (`checkout-restore.ts`),
- * read first so a point with no snapshot is refused before anything stops,
- * and a restore that fails refuses the whole rewind, so the conversation is
- * never cut with the files half done. A Mac agent's files are not put back
- * yet: its host runs no restore, so the window offers it none.
+ * runner took before the turn the line opened, by the machine the agent
+ * runs on (`../machine/agent-machine.ts`'s `restoreCheckout`: a sandbox's
+ * woken and run in, a Mac's host handed a restore line), read first so a
+ * point with no snapshot is refused before anything stops, and a restore
+ * that fails refuses the whole rewind, so the conversation is never cut
+ * with the files half done.
  */
 
 /** Why a cut the store refused is refused to its caller. */
@@ -70,30 +75,43 @@ const stoppedForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   }
 });
 
-/** The snapshot a rewind that restores the files puts the checkout back to: refused where none stands for the line, or the agent runs on a Mac. */
+/** The snapshot a rewind that restores the files puts the checkout back to: refused where none stands for the line. */
 const restorePointOf = /* @__PURE__ */ Effect.fnUntraced(function* (
-  agent: Agent,
   target: ConversationTarget,
   messageId: string,
 ): Effect.fn.Return<TurnCheckoutSnapshot, HostedRefusal, DatabaseServices> {
-  if (agent.machine === AGENT_MACHINE.DEVICE)
-    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const snapshot = yield* hostedStoreOrUnavailable(readRewindSnapshot(target, messageId));
   if (Option.isNone(snapshot)) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
   return snapshot.value;
 });
 
-/** The checkout put back to the snapshot, in the agent's sandbox: refused where the snapshot is no longer there, or unavailable where the restore failed. */
+/** How a call the machine refused is refused to the caller, a restore's or a diff's: a Mac away or removed by name, anything else as unavailable. */
+export function refusedByMachine(failure: unknown): HostedRefusal {
+  if (failure instanceof LaunchRefused && failure.deviceRemoved === true)
+    return HOST_REMOVED_REFUSAL;
+  if (failure instanceof LaunchRefused && failure.deviceAway === true) {
+    return localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY);
+  }
+  return HOSTED_REFUSAL.UNAVAILABLE;
+}
+
+/** The checkout put back to the snapshot on the agent's machine: refused where the snapshot is no longer there, or the machine restores none, and unavailable where the restore failed. */
 const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
-  agent: Agent,
   target: ConversationTarget,
   snapshot: TurnCheckoutSnapshot,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | Sandbox> {
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
-  const outcome = yield* restoreCheckout({ userId: agent.userId, sessionId, snapshot });
+  const machines = yield* deploymentLifecycle;
+  const outcome = yield* machines
+    .restoreCheckout(sessionId, snapshot)
+    .pipe(Effect.mapError(refusedByMachine));
   if (outcome === RESTORE_OUTCOME.MISSING) {
     return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
+  }
+  // A Mac whose host predates the line records no snapshot either, so the window offers it none; the request alone reaches here.
+  if (outcome === RESTORE_OUTCOME.UNSUPPORTED) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
   if (outcome === RESTORE_OUTCOME.FAILED) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
 });
@@ -110,7 +128,7 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   agent: Agent,
   messageId: string,
   restoreFiles = false,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | Sandbox> {
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   // An agent on its starter's own GitHub token takes words from its starter alone, and so is rewound by them alone.
   if (!controlsAgent(account, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(account, agent);
@@ -125,10 +143,10 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   if (Result.isFailure(rewindable)) {
     return yield* Effect.fail(REFUSAL_OF_REWIND[rewindable.failure]);
   }
-  const snapshot = restoreFiles ? yield* restorePointOf(agent, target, messageId) : undefined;
+  const snapshot = restoreFiles ? yield* restorePointOf(target, messageId) : undefined;
   yield* stoppedForRewind(agent);
   // The files go back before the cut, so a restore that fails leaves the conversation whole.
-  if (snapshot !== undefined) yield* restoredForRewind(agent, target, snapshot);
+  if (snapshot !== undefined) yield* restoredForRewind(target, snapshot);
   const cut = yield* hostedStoreOrUnavailable(rewindConversation(target, messageId));
   if (Result.isFailure(cut)) return yield* Effect.fail(REFUSAL_OF_REWIND[cut.failure]);
   // Note that a message sent between the stop and the cut may have started the agent again on

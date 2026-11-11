@@ -55,6 +55,9 @@ import {
   type AgentPullRequestWriteAnswerView,
   type AgentQueueAnswerView,
   type AgentReviewOptionsAnswerView,
+  type AgentRunActionAnswerView,
+  type AgentRunActionStopAnswerView,
+  type AgentTurnChangesAnswerView,
   type AgentWarmAnswerView,
   type AgentWorkspaceListParams,
   type AgentWorkspaceToolsAnswerView,
@@ -77,6 +80,8 @@ import {
   type LiveActivityTokenParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
+  type MemorySaveAnswerView,
+  type MemorySaveParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
   type ProviderKeySaveParams,
@@ -87,6 +92,14 @@ import {
   type PushDeviceNotifyParams,
   type PushDeviceRegisterParams,
   type PushDeviceStatusAnswerView,
+  type SoundAddAnswerView,
+  type SoundAddParams,
+  type SoundChoiceAnswerView,
+  type SoundChoiceParams,
+  type SoundClipAnswerView,
+  type SoundIdParams,
+  type SoundRenameParams,
+  type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
 } from "./agent-view.js";
@@ -142,7 +155,12 @@ import {
   hostedClient,
   hostedFailureFacts,
 } from "./hosted-link.js";
-import { imageBodyOf } from "./image-body.js";
+import {
+  type ImageBody,
+  type ImageBodyUnread,
+  imageBodyOf,
+  imageBodyUnread,
+} from "./image-body.js";
 import {
   INBOX_FILE_TYPE,
   type InboxAcknowledgeRequest,
@@ -201,6 +219,11 @@ import {
   hostedErrorSchema,
   readServiceAnswer,
 } from "./service-wire.js";
+import {
+  SOUND_CLIP_QUERY,
+  soundAddRequestSchema,
+  soundRenameRequestSchema,
+} from "./sound-clip-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
 import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
 
@@ -322,6 +345,14 @@ function unansweredCall(answer: Exclude<CallAnswer, { readonly response: Respons
   return { ...UNANSWERED, cause: hostedFailureFacts(unanswered) };
 }
 
+/** An image's read as the window hears it: its bytes, a body the network cut as a call that never reached the service, or else unanswered. */
+function imageAnswerOf<Type extends string>(
+  read: ImageBody<Type> | ImageBodyUnread | undefined,
+): ImageBody<Type> | Failed {
+  if (read === undefined) return UNANSWERED;
+  return imageBodyUnread(read) ? unansweredCall(read) : read;
+}
+
 /** The idempotency key a write taken once under it is asked under, where one is given. */
 function keyed(key: string | undefined) {
   return key === undefined ? undefined : { idempotencyKey: key };
@@ -384,7 +415,7 @@ function playableHeaders(playable: PlayableVideoType): Record<string, string> | 
 
 /** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds; unanswered under any other type. */
 function readInboxFile(response: Response): Effect.Effect<AgentInboxAttachmentView> {
-  return Effect.map(imageBodyOf(response, inboxFileTypeSchema), (file) => file ?? UNANSWERED);
+  return Effect.map(imageBodyOf(response, inboxFileTypeSchema), imageAnswerOf);
 }
 
 /** A transcript page read at once, or unanswered where the service said nothing of whether it would hold, as one too old to read at once does. */
@@ -548,6 +579,52 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.account.forgetMemory, {
       query: { [MEMORY_QUERY.WORKSPACE_ID]: params.workspaceId, [MEMORY_QUERY.ID]: params.id },
     });
+  }
+
+  /** A memory kept in the member's own words, or corrected in place where it names the memory it replaces, answering what the keep came to. */
+  saveMemory(
+    params: MemorySaveParams,
+  ): Effect.Effect<MemorySaveAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.saveMemory, params);
+  }
+
+  /** One of the account's own sounds' clips, its bytes in base64, or null where it keeps no such sound. */
+  readSound(
+    params: SoundIdParams,
+  ): Effect.Effect<SoundClipAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.sound, { [SOUND_CLIP_QUERY.ID]: params.id });
+  }
+
+  /** A sound added to the account's own under its name; a clip the service would refuse by shape never travels. */
+  addSound(
+    params: SoundAddParams,
+  ): Effect.Effect<SoundAddAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(soundAddRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.addSound, admitted);
+  }
+
+  /** One of the account's sounds renamed; a name the service would refuse by shape never travels. */
+  renameSound(
+    params: SoundRenameParams,
+  ): Effect.Effect<SoundStateView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(soundRenameRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.renameSound, admitted);
+  }
+
+  /** One of the account's sounds removed, with every choice of it; the sound rides in the query, since a DELETE carries no body. */
+  removeSound(params: SoundIdParams): Effect.Effect<SoundStateView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.removeSound, {
+      query: { [SOUND_CLIP_QUERY.ID]: params.id },
+    });
+  }
+
+  /** Which of the account's sounds one of its two sounds plays, or none. */
+  chooseSound(
+    params: SoundChoiceParams,
+  ): Effect.Effect<SoundChoiceAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.chooseSound, params);
   }
 
   /** The account's own provider keys, as hints and statuses. */
@@ -1107,6 +1184,38 @@ export class HostedAgentClient {
     );
   }
 
+  /** Runs one of the agent's repository's run actions in its running sandbox, answering the shell that runs it. */
+  runAction(
+    agentId: string,
+    actionId: string,
+  ): Effect.Effect<AgentRunActionAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.runAction, { id: agentId, action: actionId });
+  }
+
+  /** Interrupts what a run action's shell runs, answering the agent's shells as they then stand. */
+  stopRunAction(
+    agentId: string,
+    actionId: string,
+  ): Effect.Effect<AgentRunActionStopAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.stopRunAction, { id: agentId, action: actionId });
+  }
+
+  /** Starts one agent's harness on a fresh session in the same agent, answering it as it then stands. */
+  clear(agentId: string): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.agents.clear, { id: agentId }, { as: AGENT_NOT_FOUND_RENAMES }),
+      unansweredBare,
+    );
+  }
+
+  /** Boots one agent's failed first launch again (`coder-host/boot.ts`). */
+  boot(agentId: string): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.agents.boot, { id: agentId }, { as: AGENT_NOT_FOUND_RENAMES }),
+      unansweredBare,
+    );
+  }
+
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
@@ -1124,7 +1233,11 @@ export class HostedAgentClient {
         params: { id: agentId },
         body: { messageId, ...(restoreFiles ? { restoreFiles: true } : undefined) },
       },
-      { as: AGENT_NOT_FOUND_RENAMES, deadline: HOSTED_DEADLINE.STEER },
+      {
+        as: AGENT_NOT_FOUND_RENAMES,
+        // A rewind that puts the files back waits on the restore, two minutes on a Mac, past the steer's bound.
+        deadline: restoreFiles ? HOSTED_DEADLINE.REWIND_FILES : HOSTED_DEADLINE.STEER,
+      },
     );
   }
 
@@ -1158,6 +1271,19 @@ export class HostedAgentClient {
         { as: AGENT_NOT_FOUND_RENAMES },
       ),
       unansweredBare,
+    );
+  }
+
+  /** The files one of the agent's turns changed, the turn the developer's line named opened, as git tells them apart on the agent's machine. */
+  turnChanges(
+    agentId: string,
+    messageId: string,
+  ): Effect.Effect<AgentTurnChangesAnswerView, never, HttpClient.HttpClient> {
+    // The diff runs on the agent's machine, a sandbox woken where it stopped, past the usual read's bound.
+    return hostedCall(
+      this.#hosted.agents.turnChanges,
+      { id: agentId, messageId },
+      { deadline: HOSTED_DEADLINE.TURN_CHANGES },
     );
   }
 
@@ -1330,10 +1456,7 @@ export class HostedAgentClient {
         if (!answer.response.ok) {
           return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
         }
-        return Effect.map(
-          imageBodyOf(answer.response, githubImageTypeSchema),
-          (image) => image ?? UNANSWERED,
-        );
+        return Effect.map(imageBodyOf(answer.response, githubImageTypeSchema), imageAnswerOf);
       },
     );
   }

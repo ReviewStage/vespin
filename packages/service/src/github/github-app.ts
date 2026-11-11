@@ -68,7 +68,8 @@
  * the developer who started it (`agents/coder-host/checkout.ts`,
  * `agents/coder-host/pull-request.ts`), and for a member's change to a pull
  * request (`agents/pull-request-write.ts`). No read of what a workspace
- * reaches takes it.
+ * reaches takes it. An account's deletion reads it once more and revokes it
+ * at GitHub once the row is gone (`auth/sign-in-revocation.ts`).
  *
  * Nothing here holds a client: the GitHub reads run on the ambient
  * `HttpClient` and the rows are read on the ambient `SqlClient`, so a test
@@ -774,6 +775,15 @@ export interface GitHubAppService {
     GitHubUserReadFailure,
     HttpClient.HttpClient | DatabaseServices
   >;
+  /**
+   * A user access token of the App revoked at GitHub under the App's client
+   * credentials (`DELETE /applications/{client_id}/token`), as a connect
+   * revokes an installer's token it does not keep: what an account's
+   * deletion asks of its GitHub sign-in (`auth/sign-in-revocation.ts`).
+   */
+  readonly revokeUserToken: (
+    token: Redacted.Redacted,
+  ) => Effect.Effect<void, GitHubReadFailure, HttpClient.HttpClient>;
   /**
    * The user's own GitHub account, with their token, where that token may
    * push to the repository: read on the token (`GET /user`, then `GET
@@ -2231,6 +2241,7 @@ function githubAppService(
           return userOf(yield* readBody(response, UserSchema));
         }).pipe(Effect.scoped),
       userToken,
+      revokeUserToken: (token) => Effect.flatMap(ready, (app) => revokeToken(app, token)),
     };
     return service;
   });

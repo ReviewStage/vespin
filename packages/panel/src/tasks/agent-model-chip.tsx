@@ -1,6 +1,7 @@
 import { runtimeModelRule, runtimeModels } from "@repo/features/agent-runtime-models";
 import type { AgentPayer, AgentUsage } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { PERMISSION_MODE_LABEL } from "@repo/settings";
 import {
   CHIP_LOOK,
   Chip,
@@ -12,9 +13,9 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { HarnessMark } from "../harness-marks.js";
-import { type AgentModeControl, MODE_GLYPH, MODE_WORDS, modeShown } from "./agent-approvals.js";
+import { type AgentModeControl, MODE_GLYPH, modeShown } from "./agent-approvals.js";
 import { choiceLabel, paidByOf, providerOf } from "./agent-model.js";
 import { payerLastLine, usePayerPlan } from "./agent-payer.js";
 import { ModelLabel } from "./model-label.js";
@@ -52,8 +53,9 @@ import type { AgentModelControl } from "./use-agent-model.js";
  * Who pays is read once, the page's payer before the settled turns', and
  * the plan the agent's harness runs on only where neither names one
  * (`paidByOf`), so a Codex agent says its plan before its first turn
- * settles. A Claude Code agent's chip hands its menu the agent's permission
- * mode too, its last pinned row (`agent-approvals.tsx`), and off Full
+ * settles. The chip of an agent whose harness takes a mode, running or
+ * about to start, hands its menu the agent's permission mode too, its last
+ * pinned row (`agent-approvals.tsx`), and off Full
  * access wears the mode's glyph before the model's name, in the harness
  * mark's place where the composer is narrow, its label naming the mode
  * after the model. The reader's own plan is named where their keys hold the one the
@@ -75,6 +77,7 @@ export function AgentModelChip({
   narrow = false,
   startsNew = false,
   permissions,
+  asked,
 }: {
   model: AgentModelControl;
   /** The catalog as the host holds it for the account; nothing before it is first read. */
@@ -101,6 +104,8 @@ export function AgentModelChip({
   startsNew?: boolean;
   /** The agent's permission mode and its change, offered in the menu; none for an agent whose harness takes no mode. */
   permissions?: AgentModeControl | undefined;
+  /** How many times the box ran `/model`, each run opening the menu, its search focused; none where the box runs none. */
+  asked?: number | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const drawn = useDisclosure(open);
@@ -118,12 +123,18 @@ export function AgentModelChip({
   const shown = modeShown(permissions);
   const ModeGlyph = shown === undefined ? undefined : MODE_GLYPH[shown];
   const modelWords = choiceLabel(model.choice, models ?? []).trim();
-  const label = shown === undefined ? modelWords : `${modelWords} · ${MODE_WORDS[shown].label}`;
+  const label =
+    shown === undefined ? modelWords : `${modelWords} · ${PERMISSION_MODE_LABEL[shown]}`;
   // Note that who pays decides Fast on Codex, which runs a fast version on an OpenAI API key alone.
   const paidBy = payer ?? usage?.payer;
   const paying = paidByOf(payer, usage, model.runtime);
   const offered = models === undefined ? undefined : runtimeModels(models, model.runtime, paidBy);
   const plan = usePayerPlan(paying, payerSubscriptionId, paidBy === undefined, owner);
+
+  // Each `/model` the box runs opens the menu, as a press on the chip does.
+  useEffect(() => {
+    if (asked !== undefined && asked > 0) setOpen(true);
+  }, [asked]);
 
   return (
     <div className="agent-model-chip relative flex min-w-0" ref={root}>

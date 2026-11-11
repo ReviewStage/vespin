@@ -64,6 +64,8 @@ export const CALL_SYMBOL = {
   [CALL_KIND.LIST_TASKS]: "checklist",
   [CALL_KIND.REMEMBER]: "brain",
   [CALL_KIND.RECALL]: "brain",
+  [CALL_KIND.LIST_MEMORIES]: "brain",
+  [CALL_KIND.FORGET_MEMORY]: "brain",
   [CALL_KIND.READ_COMMENTS]: "text.bubble",
   [CALL_KIND.REPLY_TO_COMMENT]: "text.bubble",
   [CALL_KIND.RESOLVE_THREAD]: "checkmark.bubble",

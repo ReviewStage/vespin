@@ -539,8 +539,7 @@ Vercel keeps a warm instance's module registry between invocations, so the
 first invocation of a cold start builds the layer and every later one on that
 instance reuses the services it built; a runtime built where the work lives
 would be a second copy of every service a `Context.Service` was supposed to
-identify. Root AGENTS.md's "Effect idioms" section names this edge with the
-process's others.
+identify.
 
 The layer carries what a Vercel function's own platform already offers: an
 `HttpClient` over `fetch`, and the `SqlClient` of `packages/service/src/db/sql-client.ts` over
@@ -676,7 +675,7 @@ contract in `@repo/features/contract`); `/api/models` is the first. It meets
 the cookie origin guard, reads the web runtime's services through `runWeb`
 once per instance as `routeFromHttpRouter` does, and hands each request to
 `OpenAPIHandler` with them as its `effect/context`, so it is a runtime edge
-of its own (`tools/anti-slop/effect-edges.json`). The router matches the
+of its own. The router matches the
 public path itself: every `/api/` path no rule ahead of it takes reaches the
 route through the one fallback rewrite of `server/function-rewrites.ts`,
 which carries the whole path in `route-path` for the dispatcher to restore,

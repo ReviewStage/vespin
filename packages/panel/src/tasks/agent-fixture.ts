@@ -30,6 +30,7 @@ import {
   type AgentPullRequestAnswerView,
   type AgentPullRequestViewedAnswerView,
   type AgentReviewOptionsAnswerView,
+  type AgentTurnChangesAnswerView,
 } from "@repo/features/agent-view";
 import {
   AGENT_AUTHOR,
@@ -46,6 +47,7 @@ import {
   DEPLOYMENT_STATE,
   DIFF_SIDE,
   type GitHubPerson,
+  LOCAL_AGENT_REFUSAL,
   MERGE_STATE,
   PULL_REQUEST_STATE,
   REVIEW_DECISION,
@@ -329,7 +331,10 @@ const WORK: AgentTranscriptMessage = {
     toolPart(
       "apply_patch",
       "fixture-patch",
-      { patchText: "*** Begin Patch\n*** Add File: src/members/invite.ts\n*** End Patch" },
+      {
+        patchText:
+          "*** Begin Patch\n*** Add File: src/members/invite.ts\n+export const INVITE_TTL_DAYS = 7;\n+export function inviteByEmail(email: string) {\n+  return pending(email, INVITE_TTL_DAYS);\n+}\n*** End Patch",
+      },
       { output: "Done." },
     ),
     toolPart(
@@ -472,7 +477,7 @@ const LONG_MESSAGES: readonly AgentTranscriptMessage[] = [
         "fixture-pending-patch",
         {
           patchText:
-            "*** Begin Patch\n*** Update File: src/members/list.ts\n*** Update File: src/workspaces/access.ts\n*** End Patch",
+            '*** Begin Patch\n*** Update File: src/members/list.ts\n@@\n-  return rows;\n+  return rows.filter((row) => row.state !== "pending");\n*** Update File: src/workspaces/access.ts\n@@\n-  if (membership === undefined) return false;\n+  if (membership === undefined || membership.state === "pending") return false;\n*** End Patch',
         },
         { output: "Done." },
       ),
@@ -510,7 +515,10 @@ const LONG_MESSAGES: readonly AgentTranscriptMessage[] = [
       toolPart(
         "apply_patch",
         "fixture-race-patch",
-        { patchText: "*** Begin Patch\n*** Update File: src/members/invite.ts\n*** End Patch" },
+        {
+          patchText:
+            "*** Begin Patch\n*** Update File: src/members/invite.ts\n@@\n-  return pending(email, INVITE_TTL_DAYS);\n+  const link = pending(email, INVITE_TTL_DAYS);\n+  return { ...link, acceptedAt: null };\n*** End Patch",
+        },
         { output: "Done." },
       ),
       toolPart(
@@ -549,7 +557,10 @@ const LONG_MESSAGES: readonly AgentTranscriptMessage[] = [
       toolPart(
         "apply_patch",
         "fixture-label-patch",
-        { patchText: "*** Begin Patch\n*** Update File: src/pages/invite.tsx\n*** End Patch" },
+        {
+          patchText:
+            "*** Begin Patch\n*** Update File: src/pages/invite.tsx\n@@\n-  return pending(email, INVITE_TTL_DAYS);\n+  const link = pending(email, INVITE_TTL_DAYS);\n+  return { ...link, acceptedAt: null };\n*** End Patch",
+        },
         { output: "Done." },
       ),
       toolPart(
@@ -750,6 +761,23 @@ const CHANGES = {
     author: ADA,
     writtenAs: AGENT_AUTHOR.DEVELOPER,
     reviewers: OVERVIEW_CONVERSATION.pullRequest.reviewers,
+  },
+};
+
+/** The file the first turn added, which its files row names, as the turn's Changes tab reads it. */
+const INVITE_CHANGES = CHANGED_FILES.filter((file) => file.path === "src/members/invite.ts");
+
+/**
+ * What each turn's Changes tab reads, by the line that opened the turn: a
+ * turn whose snapshot the machine no longer holds, one on a Mac away, and
+ * the invite for every other.
+ */
+const TURN_CHANGES: Readonly<Record<string, AgentTurnChangesAnswerView>> = {
+  "fixture-agent-pending-ask": { failure: AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING },
+  "fixture-agent-race-ask": {
+    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+    refusedDevice: { name: "Studio" },
   },
 };
 
@@ -1009,6 +1037,8 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   }),
   [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
+  [ACT_KIND.AGENTS_TURN_CHANGES]: ({ messageId }) =>
+    TURN_CHANGES[messageId] ?? { files: INVITE_CHANGES, truncated: false },
   [ACT_KIND.AGENTS_PORTS]: () => ({ running: true, ports: [3000, 5173] }),
   [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: STAGED_SHARE.shared }),
   [ACT_KIND.AGENTS_PORT_SHARE]: ({ port }) => {

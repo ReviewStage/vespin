@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   AGENT_PART,
   agentParts,
+  agentRows,
   delegates,
   messageWords,
   placedMessages,
@@ -24,7 +25,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
-import { effortFor } from "@repo/features/model-effort";
+import { choiceOn, effortFor } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
@@ -35,6 +36,7 @@ import {
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
+import { TURN_ROW } from "@repo/features/turn-rows";
 import { MESSAGE_ROLE, TURN_STATUS, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { test } from "vitest";
@@ -44,15 +46,15 @@ import {
   checkoutCommand,
   choiceLabel,
   choiceModelId,
-  choiceOn,
   continueFailureNote,
   dockedPullRequests,
+  finishedReplyLead,
+  lastTurnEnding,
   messageFailureNote,
   modelLabel,
   noteWhileOffline,
   offeredModels,
   offersStop,
-  openingLineOf,
   payerPlanName,
   planPayerOf,
   pullRequestPillLabel,
@@ -64,7 +66,6 @@ import {
   type TabSends,
   tabTurnOf,
   transcriptRowKey,
-  unreadOpeningLine,
   unreadSentLines,
   wakeupDelayOf,
   workingLineWords,
@@ -145,6 +146,72 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
     { kind: AGENT_PART.OTHER },
     { kind: AGENT_PART.OTHER },
   ]);
+});
+
+test("a finished turn that ended with end_turn replies in its summary, folding the words it wrote on the way with its work, while a turn still moving keeps its words", () => {
+  const summary = "- Fixed the failing check.\n- Pushed to #214.";
+  const turn: AgentTranscriptMessage = {
+    id: "t",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "text", text: "Reading the check's log." },
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: { summary, followUps: ["Show pending invitations on the Members page"] },
+        output: { status: "accepted" },
+      },
+      { type: "text", text: "It's all in the summary above." },
+    ],
+  };
+  const words = (moving: boolean) =>
+    agentRows(turn, moving).flatMap((row) =>
+      row.kind === TURN_ROW.BLOCK && row.block.kind === AGENT_PART.TEXT ? [row.block.text] : [],
+    );
+
+  assert.deepEqual(words(false), [summary]);
+  assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
+  assert.equal(messageWords(turn), summary);
+  assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
+  // A follow-up offered twice is one to tick.
+  const twice: AgentTranscriptMessage = {
+    ...turn,
+    parts: [
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: { summary, followUps: ["Add a Members page", " Add a Members page", "Resend"] },
+        output: { status: "accepted" },
+      },
+    ],
+  };
+  assert.deepEqual(lastTurnEnding([twice])?.followUps, ["Add a Members page", "Resend"]);
+  // A line the turn took in under way stands after its journal yet waits on no turn; one no turn took does.
+  const line = (taken: boolean): AgentTranscriptMessage => ({
+    id: taken ? "steer" : "next",
+    role: MESSAGE_ROLE.USER,
+    parts: [{ type: "text", text: "Keep the link valid for a week." }],
+    ...(taken ? { arrivedIn: { journalId: twice.id, afterStep: 1 } } : {}),
+  });
+  assert.equal(lastTurnEnding([twice, line(true)])?.messageId, twice.id);
+  assert.equal(lastTurnEnding([twice, line(false)]), undefined);
+  // A later call refused stands for the turn, which then replies in its own words.
+  const refused: AgentTranscriptMessage = {
+    ...turn,
+    parts: [
+      ...turn.parts,
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_again",
+        state: "output-available",
+        input: { summary: "" },
+        output: { status: "rejected", reason: "A summary is required." },
+      },
+    ],
+  };
+  assert.equal(messageWords(refused), "Reading the check's log.\n\nIt's all in the summary above.");
 });
 
 test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {
@@ -269,23 +336,6 @@ test("a sent line is read back by the row written under its key alone, so two li
   const both = [...secondLanded, writtenFor("m-1", "key-1", "Go on.")];
   assert.deepEqual(unreadSentLines([first, second], both), []);
   assert.equal(messageWords(both[2] ?? description), "Go on.");
-});
-
-test("the line an agent was started on stands until the transcript reads back the developer's first row, whatever key that row was written under", () => {
-  const opening = openingLineOf({
-    key: "key-start",
-    prompt: " Fix the sidebar.\n",
-    attachments: [],
-  });
-  assert.equal(
-    messageWords(agentLines([], [opening])[0] ?? developer("none", "")),
-    "Fix the sidebar.",
-  );
-  const reply: AgentTranscriptMessage = { id: "m-0", role: MESSAGE_ROLE.ASSISTANT, parts: [] };
-  assert.equal(unreadOpeningLine(opening, [reply]), opening, "no row of the developer's yet");
-  // An agent from before the native harnesses wrote the first row under no key of the start's.
-  assert.equal(unreadOpeningLine(opening, [developer("m-1", "Fix the sidebar.")]), undefined);
-  assert.equal(unreadOpeningLine(undefined, []), undefined);
 });
 
 test("a line refused for now is let go once its row lands, and one refused for good stands", () => {
@@ -795,22 +845,24 @@ test("a Start refused for a missing credential says in one sentence which harnes
   );
 });
 
-test("a message to an agent whose device is away says it is offline, in the words a Start on it gets, under the composer and in the Inbox alike", () => {
-  const away =
-    "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.";
+test("a message to an agent whose device is away offers to continue it in the cloud under the composer, and says it in a Start's words in the Inbox, which offers no move", () => {
+  const refused = {
+    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+    refusedDevice: { name: "Studio" },
+  };
+  const note = messageFailureNote(refused, null);
 
   assert.deepEqual(
+    [note, remedyLabel(note), messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED)],
     [
-      messageFailureNote(
-        {
-          failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
-          localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        },
-        null,
-      ).text,
-      messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED),
+      {
+        reason: FAILURE_REASON.CONTINUE_IN_CLOUD,
+        text: "Studio is offline. Unpushed changes stay on it.",
+      },
+      "Continue in the cloud",
+      "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.",
     ],
-    [away, away],
   );
 });
 

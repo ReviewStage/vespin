@@ -67,6 +67,8 @@ import {
   hostKernelLayer,
   hostStandingLayer,
   IdSource,
+  issuedTokenAccountSourceLayer,
+  type KeepIssuedToken,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
   RunMode,
@@ -87,11 +89,18 @@ import { fixtureActs, stageFixture } from "./fixture-host.js";
 import { inProcessChannel } from "./in-process-channel.js";
 
 /**
+ * How long the share sheet sends a token after it is issued: ten minutes
+ * short of the hour the service's access tokens last (`accessTokenExpiresIn`
+ * in `packages/service/src/auth/auth.ts`), so one nearly lapsed is not sent.
+ */
+const SHARE_TOKEN_LIFETIME_MS = 50 * 60 * 1000;
+
+/**
  * The service the app talks to: production's, or the Preview a build names
  * in `EXPO_PUBLIC_SERVICE_ORIGIN`, which Expo writes into the bundle as it
  * is built, so a production build carries only the origin itself.
  */
-const SERVICE_ORIGIN = process.env.EXPO_PUBLIC_SERVICE_ORIGIN ?? LINK_ORIGIN;
+export const SERVICE_ORIGIN = process.env.EXPO_PUBLIC_SERVICE_ORIGIN ?? LINK_ORIGIN;
 
 /** The one place every act is from: the app's screens, which stand as the host's one panel. */
 const APP_SCREENS = Symbol("app screens");
@@ -124,6 +133,8 @@ export interface DeviceSeams {
   readonly cipher: SecretCipherSeam;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
+  /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-module.ts`). */
+  readonly keepShareToken: KeepIssuedToken;
 }
 
 /** What the app hands the composition. */
@@ -134,6 +145,10 @@ export interface MobileHostOptions {
   readonly fork: (effect: Effect.Effect<void>) => void;
   /** The profile a fixture run stands on, which the launch argument names; none for a live run. */
   readonly fixture: RunProfile | undefined;
+  /** Whether a fixture run stands as the service's refusal of an old build leaves the document, which `-updateNeeded true` asks; never in a live run. */
+  readonly fixtureUpdateNeeded?: boolean | undefined;
+  /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
+  readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files: the app's own folder, or a temporary one in a test. */
@@ -279,11 +294,15 @@ const servedActPort = (dependencies: ActPortDependencies, services: Context.Cont
  * otherwise. The store drops a patch that says nothing new, so laying the
  * same data twice settles rather than loops.
  */
-const stagedFixture = (state: AppStateStore) =>
+const stagedFixture = (state: AppStateStore, updateNeeded: boolean) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state);
-      yield* publishAppStateChanges(state, () => Effect.sync(() => stageFixture(state)), report);
+      stageFixture(state, updateNeeded);
+      yield* publishAppStateChanges(
+        state,
+        () => Effect.sync(() => stageFixture(state, updateNeeded)),
+        report,
+      );
     }),
   );
 
@@ -386,7 +405,13 @@ export function composeMobile(
       device.fileSystem,
       Path.layer,
       httpClient,
-      Layer.provide(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), accountSeams(device)),
+      Layer.provide(
+        issuedTokenAccountSourceLayer(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), {
+          keep: device.keepShareToken,
+          lifetimeMs: SHARE_TOKEN_LIFETIME_MS,
+        }),
+        accountSeams(device),
+      ),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
   const launched = Layer.unwrap(
@@ -397,11 +422,19 @@ export function composeMobile(
           acts:
             options.fixture === undefined
               ? mobile.acts
-              : fixtureActs(mobile.acts, options.fixture, mobile.state),
+              : fixtureActs(
+                  mobile.acts,
+                  options.fixture,
+                  mobile.state,
+                  options.fixtureRefusesWrites === true,
+                ),
         }),
         effectServiceLayer(mobile.operator, report),
       ).pipe(Layer.provideMerge(hostStandingLayer));
-      const staged = options.fixture === undefined ? Layer.empty : stagedFixture(mobile.state);
+      const staged =
+        options.fixture === undefined
+          ? Layer.empty
+          : stagedFixture(mobile.state, options.fixtureUpdateNeeded === true);
       return Layer.provideMerge(staged, standing);
     }),
   );

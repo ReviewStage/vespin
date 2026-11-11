@@ -14,7 +14,14 @@ import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
 } from "@repo/features/workspace-invitation-wire";
-import { managesWorkspace } from "@repo/features/workspace-role";
+import { managesWorkspace, memberActs } from "@repo/features/workspace-role";
+import {
+  INVITATION_WORDS,
+  LEAVE_WORDS,
+  MEMBER_WORDS,
+  WORKSPACE_READ_FAILED,
+} from "@repo/features/workspace-settings-words";
+import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import {
   WORKSPACE_BOUNDS,
   WORKSPACE_ROLE,
@@ -96,7 +103,6 @@ import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { useFormDialog } from "../desktop/use-form-dialog.js";
-import { sharedWords } from "../desktop/workspace-ref.js";
 import { TILE_SIZE, useWorkspaceTileUrl, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import {
@@ -153,48 +159,7 @@ const PHOTO_WORDS = {
   REMOVE_BODY: "The photo is deleted, and the workspace is marked by its first letter instead.",
 } as const;
 
-/** The member's removal, which the menu item and its confirm both say. */
-const REMOVE_MEMBER = "Remove from workspace";
-
 const INVITE_LINK_COPIED = "Invite link copied";
-
-/** What a list's line says where its read did not land, in `ErrorState`'s words. */
-const READ_FAILED = {
-  MEMBERS: "The members could not be read.",
-  INVITATIONS: "The invitations could not be read.",
-  SENTRY: "The workspace's Sentry could not be read.",
-  SLACK_BOT: "The workspace's Slack bot could not be read.",
-} as const;
-
-/**
- * What the leave says: the row's line, and the dialog's body and what it
- * names as staying and stopping. Tasks and agents are the workspace's; an
- * agent's every step runs as its starter, read through their membership, so
- * one still working when its starter leaves stops at its next step, and a
- * run of an automation starts as its creator, so one whose creator left
- * fails as `creator-left`.
- */
-const LEAVE_WORDS = {
-  RUNNING: "Leaving",
-  /** The toast once the leave has landed, the workspace's name in it, so it stays masked in a recording. */
-  LEFT: (name: string) => `You left ${name}`,
-  LINE: "You lose its tasks, agents, and inbox until someone invites you again.",
-  TASKS: (name: string) => `Tasks you wrote stay in ${name}.`,
-  AGENTS: "Agents you started that are still working stop.",
-  AUTOMATIONS: "Automations you created stop running.",
-  INVITATIONS: "Invitations you sent stay valid.",
-  AUTOMATIONS_NAMED: (names: readonly string[]) =>
-    names.length === 1
-      ? `An automation you created stops running: ${names[0]}.`
-      : `${names.length} automations you created stop running: ${names.join(", ")}.`,
-  OWNER: "You're its owner. Make an admin the owner first, then you can leave.",
-  OWNER_NO_ADMIN:
-    "You're its owner. Make a member an admin, then make them the owner, and you can leave.",
-  OWN: (name: string | undefined) =>
-    name === undefined
-      ? "Your own workspace isn't affected."
-      : `Your own workspace, ${name}, isn't affected.`,
-} as const;
 
 /** What the owner's delete says: its press, its running verb, its row's line, and what goes for everyone and what stays installed. */
 export const DELETE_WORDS = {
@@ -208,13 +173,6 @@ export const DELETE_WORDS = {
   AGENTS: "Agents still working in it stop.",
   INSTALLED:
     "The GitHub App, the Slack bot, and the Sentry integration stay installed on GitHub, Slack, and Sentry. Remove them there if you no longer need them.",
-} as const;
-
-/** The role changes in a member's ⋯, the owner's alone. */
-const ROLE_ACT = {
-  MAKE_ADMIN: "Make admin",
-  MAKE_MEMBER: "Make member",
-  MAKE_OWNER: "Make owner",
 } as const;
 
 /** What the handover says: its press, its question's body, and its running verb. The old owner becomes an admin, one way. */
@@ -356,30 +314,6 @@ const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonShape[] = [
 type ListRead<Item> = { readonly items: readonly Item[] } | { readonly failed: string } | undefined;
 
 /**
- * What the reader may do to another member, by both their roles, as the
- * service holds it: the owner makes a member an admin, an admin a member or
- * the owner, though never in the account's own first workspace, which is
- * named for its creator, and removes anyone but itself; an admin removes
- * members alone. Nobody acts on themselves, whose way out is Leave.
- */
-function memberActs(workspace: Workspace, member: WorkspaceMember, self: boolean) {
-  const owner = workspace.role === WORKSPACE_ROLE.OWNER && !self;
-  const admin = member.role === WORKSPACE_ROLE.ADMIN;
-  return {
-    promote: owner && member.role === WORKSPACE_ROLE.MEMBER,
-    demote: owner && admin,
-    transfer: owner && admin && workspace.personal !== true,
-    remove: !self && removes(workspace.role, member.role),
-  };
-}
-
-/** Whether the reader's role removes a member of `role`, as the service holds it. */
-function removes(reader: Workspace["role"], role: WorkspaceMember["role"]): boolean {
-  if (reader === WORKSPACE_ROLE.OWNER) return role !== WORKSPACE_ROLE.OWNER;
-  return reader === WORKSPACE_ROLE.ADMIN && role === WORKSPACE_ROLE.MEMBER;
-}
-
-/**
  * The workspace's members as the host holds them while the page stands
  * (`LIVE_READ.WORKSPACE_MEMBERS`): whatever moves them, here or elsewhere,
  * is drawn there, a write of the page's own from its answer on. Retry reads
@@ -392,7 +326,7 @@ function useMembersRead(workspace: Workspace) {
     members.data !== undefined
       ? { items: members.data.members }
       : members.isError
-        ? { failed: READ_FAILED.MEMBERS }
+        ? { failed: WORKSPACE_READ_FAILED.MEMBERS }
         : undefined;
   return { read, retry: () => mutate({ workspaceId: workspace.id }) };
 }
@@ -470,7 +404,7 @@ function MemberRow({
     ...(may.promote
       ? [
           {
-            label: ROLE_ACT.MAKE_ADMIN,
+            label: MEMBER_WORDS.MAKE_ADMIN,
             icon: <ShieldIcon />,
             onSelect: () => giveRole(INVITATION_ROLE.ADMIN),
           },
@@ -479,20 +413,20 @@ function MemberRow({
     ...(may.demote
       ? [
           {
-            label: ROLE_ACT.MAKE_MEMBER,
+            label: MEMBER_WORDS.MAKE_MEMBER,
             icon: <UserIcon />,
             onSelect: () => giveRole(INVITATION_ROLE.MEMBER),
           },
         ]
       : []),
     ...(may.transfer
-      ? [{ label: ROLE_ACT.MAKE_OWNER, icon: <CrownIcon />, onSelect: makeOwner.ask }]
+      ? [{ label: MEMBER_WORDS.MAKE_OWNER, icon: <CrownIcon />, onSelect: makeOwner.ask }]
       : []),
   ];
   const removeActs = may.remove
     ? [
         {
-          label: REMOVE_MEMBER,
+          label: MEMBER_WORDS.REMOVE,
           icon: <GLYPH.REMOVE />,
           danger: true,
           onSelect: remove.ask,
@@ -532,10 +466,10 @@ function MemberRow({
         open
         confirm={remove}
         question={{
-          title: `Remove ${member.name} from this workspace?`,
-          body: "They lose its tasks, agents, and inbox until they are invited again.",
-          verb: "Remove member",
-          running: "Removing",
+          title: MEMBER_WORDS.REMOVE_QUESTION(member.name),
+          body: MEMBER_WORDS.REMOVE_BODY,
+          verb: MEMBER_WORDS.REMOVE_VERB,
+          running: MEMBER_WORDS.REMOVE_RUNNING,
           loss: CONFIRM_LOSS.AFFECTS_OTHERS,
           replayUnmasked: true,
           titleReplayMasked: true,
@@ -627,9 +561,9 @@ function MemberLeave({
         open
         confirm={leave}
         question={{
-          title: `Leave ${workspace.name}?`,
+          title: LEAVE_WORDS.QUESTION(workspace.name),
           body: LEAVE_WORDS.LINE,
-          verb: `Leave ${workspace.name}`,
+          verb: LEAVE_WORDS.VERB(workspace.name),
           running: LEAVE_WORDS.RUNNING,
           loss: CONFIRM_LOSS.IRREVERSIBLE,
         }}
@@ -1037,7 +971,7 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
     <>
       {invitations.isError ? (
         <ReadFailed
-          line={READ_FAILED.INVITATIONS}
+          line={WORKSPACE_READ_FAILED.INVITATIONS}
           surface={FAILURE_SURFACE.WORKSPACE_INVITATIONS_READ}
           onRetry={() => retry.mutate({ workspaceId })}
         />
@@ -1054,7 +988,7 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
           alone
           actions={[
             {
-              label: "Cancel invitation",
+              label: INVITATION_WORDS.CANCEL,
               icon: <XIcon />,
               danger: true,
               onSelect: () => {
@@ -1072,7 +1006,7 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
             ),
             description: (
               <>
-                Invited as {ROLE_WORDS[one.role]} · Expires{" "}
+                {INVITATION_WORDS.INVITED_AS(ROLE_WORDS[one.role])} · Expires{" "}
                 <ReplayMask>{dayAndTimeText(Date.parse(one.expiresAt))}</ReplayMask>
               </>
             ),
@@ -1092,10 +1026,10 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
         open
         confirm={cancellation}
         question={{
-          title: "Cancel invitation?",
-          body: `The link sent to ${canceling?.email ?? ""} stops working. Inviting the address again sends a new one.`,
-          verb: "Cancel invitation",
-          running: "Canceling",
+          title: INVITATION_WORDS.CANCEL_QUESTION,
+          body: INVITATION_WORDS.CANCEL_BODY(canceling?.email ?? ""),
+          verb: INVITATION_WORDS.CANCEL,
+          running: INVITATION_WORDS.CANCEL_RUNNING,
           loss: CONFIRM_LOSS.AFFECTS_OTHERS,
           replayUnmasked: true,
           bodyReplayMasked: true,
@@ -1377,7 +1311,7 @@ function WorkspaceSentryRow({ workspace }: { workspace: Workspace }): React.JSX.
   if (read.data === undefined) {
     return read.isError ? (
       <ReadFailed
-        line={READ_FAILED.SENTRY}
+        line={WORKSPACE_READ_FAILED.SENTRY}
         surface={FAILURE_SURFACE.WORKSPACE_SENTRY_READ}
         onRetry={() => retry.mutate({ workspaceId: workspace.id })}
       />
@@ -1579,7 +1513,7 @@ function WorkspaceSlackBotRow({ workspace }: { workspace: Workspace }): React.JS
   if (read.data === undefined) {
     return read.isError ? (
       <ReadFailed
-        line={READ_FAILED.SLACK_BOT}
+        line={WORKSPACE_READ_FAILED.SLACK_BOT}
         surface={FAILURE_SURFACE.WORKSPACE_SLACK_BOT_READ}
         onRetry={() => retry.mutate({ workspaceId: workspace.id })}
       />
@@ -1816,7 +1750,7 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
               />
             </ReplayMask>
           ),
-          description: sharedWords(workspace.memberCount, workspace.personal === true),
+          description: workspaceSharedWords(workspace.memberCount, workspace.personal === true),
           // Note that a rename's refusal is the rename's own, so a photo picked meanwhile does not erase it.
           error: replayMaskedError(
             refusedShown(

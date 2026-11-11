@@ -35,17 +35,11 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
-  INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { AGENT_ARCHIVER, type AgentSummary, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_SOURCE, githubImageOf } from "@repo/features/github-image";
-import {
-  ACCOUNT_INBOX_READ,
-  AGENT_INBOX_READ,
-  INBOX_ITEMS_READ,
-  TASK_INBOX_READ,
-} from "@repo/features/inbox-live";
+import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   acknowledgedNow,
@@ -240,11 +234,16 @@ export type AgentClient = Pick<
   | "pin"
   | "stop"
   | "rewind"
+  | "clear"
   | "warm"
+  | "runAction"
+  | "stopRunAction"
+  | "boot"
   | "delete"
   | "agent"
   | "pullRequest"
   | "changes"
+  | "turnChanges"
   | "overviewPullRequest"
   | "reviewOptions"
   | "workspaceTools"
@@ -313,7 +312,7 @@ export interface AgentsComposer extends Composer {
   readonly modelsMoved: Effect.Effect<void>;
   /** The session's account reads opened for the account signed in, as the gate opening opens them. */
   readonly open: Effect.Effect<void>;
-  /** Every transcript's, every plan's and agent's inbox's, the account inbox's, and the account's items' subscription let go, as a sign-out lets them go. */
+  /** Every transcript's, every plan's inbox's, the account inbox's, and the account's items' subscription let go, as a sign-out lets them go. */
   readonly reset: Effect.Effect<void>;
   /** The row writes this composer declares that may wait for the service, which a queue kept on disk is laid back by. */
   readonly queueable: readonly AnyWrite[];
@@ -428,17 +427,7 @@ export function composeAgents(
     const inboxes = yield* scopeInboxes({
       seal: (scope, poll, userId, after) =>
         asked(
-          scope.kind === INBOX_SCOPE_KIND.PLAN
-            ? client.liveRead(
-                TASK_INBOX_READ,
-                { id: scope.id, userId },
-                poll ? { after } : undefined,
-              )
-            : client.liveRead(
-                AGENT_INBOX_READ,
-                { id: scope.id, userId },
-                poll ? { after } : undefined,
-              ),
+          client.liveRead(TASK_INBOX_READ, { id: scope.id, userId }, poll ? { after } : undefined),
         ),
       accountId: dependencies.accountId,
       pool: dependencies.pool,
@@ -805,7 +794,7 @@ function composed(
     change: () => () => ({}),
     send: ({ taskId, ...request }) =>
       Effect.map(
-        // A Start from another agent that names no task goes where that agent is, its task or its workspace.
+        // A Start from another agent that names no task goes on that agent's task.
         asked(taskId === undefined ? client.startFrom(request) : client.start(taskId, request)),
         (answered) => {
           if ("agent" in answered) return { answer: answered, txid: answered.txid };
@@ -1031,7 +1020,10 @@ function composed(
         // Note that a send answers at once rather than once its row reaches the followed transcript,
         // because the window draws the line under the row's id until that row lands, so no page from
         // before the write can take it away, and the next send waits on this answer.
-        "agent" in answer ? { agent: answer.agent } : answer,
+        // A message the agent's first launch holds waits in its queue, which its next page carries.
+        "agent" in answer
+          ? { agent: answer.agent, ...(answer.queued === undefined ? undefined : { queued: true }) }
+          : answer,
       ),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
@@ -1052,15 +1044,21 @@ function composed(
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
     AGENTS_REWIND: ({ agentId, messageId, restoreFiles }) =>
       asked(client.rewind(agentId, messageId, restoreFiles === true)),
+    AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
+    AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),
     AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),
     AGENTS_PORT_SHARE: ({ agentId, port }) => asked(dependencies.ports.share(agentId, port)),
     AGENTS_PORT_UNSHARE: ({ agentId }) => asked(dependencies.ports.unshare(agentId)),
+    AGENTS_RUN_ACTION: ({ agentId, actionId }) => asked(client.runAction(agentId, actionId)),
+    AGENTS_RUN_ACTION_STOP: ({ agentId, actionId }) =>
+      asked(client.stopRunAction(agentId, actionId)),
     AGENTS_DELETE: declaredWrite(dependencies.pool, deleted),
     AGENTS_PAGE: ({ agentId }) => asked(client.agent(agentId)),
     AGENTS_CHANGES: ({ agentId, number }) => asked(client.changes(agentId, number)),
+    AGENTS_TURN_CHANGES: ({ agentId, messageId }) => asked(client.turnChanges(agentId, messageId)),
     AGENTS_PULL_REQUEST_ACTION: ({ agentId, number, request }) =>
       asked(client.pullRequestAction(agentId, request, number)),
     AGENTS_GITHUB_IMAGE: ({ agentId, src }) => {
@@ -1129,7 +1127,7 @@ function composed(
       hold: ({ agentId }) => tools.hold(agentId),
       retry: ({ agentId }) => tools.retry(agentId),
     },
-    // A task's or an agent's inbox is held for the windows while the Inbox shows it.
+    // A task's inbox is held for the windows while the Inbox shows it.
     AGENTS_INBOX_FOLLOW: {
       hold: (scope) => holders.hold(new InboxScopeKey({ kind: scope.kind, id: scope.id })),
       retry: (scope) => holders.retry(new InboxScopeKey({ kind: scope.kind, id: scope.id })),

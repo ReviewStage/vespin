@@ -2,8 +2,11 @@ import { PULL_REQUEST_WRITE_BOUNDS } from "@repo/features/pull-request-write-wir
 import {
   ANNOUNCE,
   BLOCK_MENU_GROUP,
-  COMPOSER_LOOK,
+  BUTTON_SIZE,
+  ComposerFoot,
   ComposerFrame,
+  type ComposerNote,
+  type ComposerSend,
   IconButton,
   Tooltip,
 } from "@repo/ui";
@@ -20,6 +23,7 @@ import {
 import { enterSends } from "../enter-sends.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import type { OwnBlock } from "./block-picker.js";
+import { REPLY_LOOK, type ReplyVariant } from "./comment-variant.js";
 import { MarkdownEditor } from "./markdown-editor.js";
 import { fencedBlock } from "./markdown-fence.js";
 
@@ -39,6 +43,14 @@ import { fencedBlock } from "./markdown-fence.js";
  * GitHub's ```suggestion block holding those lines as they read now, drawn
  * as a suggested change. GitHub takes no more than its bound for a comment,
  * so words past it say by how much, and the owner sends none.
+ *
+ * The box stands as every comment's field does (`comment-variant.ts`): a
+ * reply in a card of its own, a thread's first comment and an edit bare on
+ * the card around them, the shared foot (`ComposerFoot`) inside its frame
+ * under the words, holding the suggestion's press where the + stands in a
+ * message box, how near GitHub's bound the words stand, the owner's
+ * presses, and the round send. It takes no files, since GitHub's comments
+ * hold none we could send.
  */
 
 /** The box's own words. */
@@ -100,13 +112,14 @@ function useOpened(value: string): { opened: Opened; said: (markdown: string) =>
 }
 
 /**
- * The words, named `label` to a reader, on the description's editor in a text
- * field's frame; Enter is `onSubmit` and Esc `onCancel` where given,
- * `suggestion`, the lines a comment is on as they read at the head, offers
- * a suggestion where given, and `foot` stands under the words inside the
- * frame, as a reply's Cancel and send do (`reply-form.tsx`).
+ * The words, named `label` to a reader, on the description's editor in the
+ * comment field's frame `variant` names; Enter is `onSubmit` and Esc
+ * `onCancel` where given, `suggestion`, the lines a comment is on as they
+ * read at the head, offers a suggestion where given, and the foot holds
+ * `actions` before the round `send`, and `note` under them.
  */
 export function CommentEditor({
+  variant,
   label,
   placeholder,
   value,
@@ -117,8 +130,12 @@ export function CommentEditor({
   onCancel,
   suggestion,
   fieldRef,
-  foot,
+  actions,
+  send,
+  note,
 }: {
+  /** How the field stands: a reply's, a thread's first comment's, or an edit's. */
+  variant: ReplyVariant;
   label: string;
   placeholder: string;
   value: string;
@@ -135,8 +152,11 @@ export function CommentEditor({
   suggestion?: string | undefined;
   /** Where the words' own element is kept once the editor stands, for an owner that hands it the focus as it opens. */
   fieldRef?: RefObject<HTMLElement | null> | undefined;
-  /** What stands under the words inside the frame, the box's own foot. */
-  foot?: ReactNode;
+  /** The owner's presses in the foot before the send: an edit's Cancel, a line comment's Start a review. */
+  actions?: ReactNode;
+  send: ComposerSend;
+  /** What the owner says under the foot's bar: why the head could not be read. */
+  note?: ComposerNote | undefined;
 }): React.JSX.Element {
   const { opened, said } = useOpened(value);
   const handle = useRef<DescriptionEditorHandle | undefined>(undefined);
@@ -175,8 +195,9 @@ export function CommentEditor({
   return (
     <div className="flex min-w-0 flex-col gap-item-gap">
       <ComposerFrame
-        look={COMPOSER_LOOK.INPUT}
-        className="comment-editor-frame relative box-border min-h-comment-editor px-control-inset py-item-gap"
+        look={REPLY_LOOK[variant]}
+        className="comment-field comment-editor-frame"
+        data-variant={variant}
         aria-busy={busy}
         onKeyDown={(event) => {
           const finishing = event.key === "Escape" || enterSends(event);
@@ -189,19 +210,6 @@ export function CommentEditor({
           event.stopPropagation();
         }}
       >
-        {block === undefined ? null : (
-          <div className="comment-editor-head absolute top-ui-2 right-ui-2">
-            <Tooltip label={COMMENT_EDITOR_WORDS.ADD_SUGGESTION}>
-              <IconButton
-                icon={block.row.icon}
-                label={COMMENT_EDITOR_WORDS.ADD_SUGGESTION}
-                disabled={busy}
-                keepFocus
-                onClick={() => handle.current?.insertBlock({ markdown: block.markdown })}
-              />
-            </Tooltip>
-          </div>
-        )}
         <MarkdownEditor
           key={opened.key}
           markdown={opened.markdown}
@@ -223,7 +231,26 @@ export function CommentEditor({
           sendsOnEnter={onSubmit !== undefined}
           ownBlocks={block === undefined ? undefined : [block]}
         />
-        {foot}
+        <ComposerFoot
+          tools={
+            block === undefined ? undefined : (
+              <Tooltip label={COMMENT_EDITOR_WORDS.ADD_SUGGESTION}>
+                <IconButton
+                  size={BUTTON_SIZE.COMPACT}
+                  icon={block.row.icon}
+                  label={COMMENT_EDITOR_WORDS.ADD_SUGGESTION}
+                  disabled={busy}
+                  keepFocus
+                  onClick={() => handle.current?.insertBlock({ markdown: block.markdown })}
+                />
+              </Tooltip>
+            )
+          }
+          counter={{ length: value.length, limit: PULL_REQUEST_WRITE_BOUNDS.MAX_BODY_CHARS }}
+          actions={actions}
+          send={send}
+          note={note}
+        />
       </ComposerFrame>
       {over > 0 ? (
         <p className="comment-editor-note m-0 text-caption-inline text-destructive">

@@ -37,6 +37,7 @@ import {
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import type { ReactNode } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
+import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { Fold, type FoldProps } from "./fold.js";
 
@@ -67,7 +68,11 @@ import { Fold, type FoldProps } from "./fold.js";
  * one cut at 40 lines, so a long answer shows its first lines over "Show
  * all", and Copy copies the whole of it either way; a command is one
  * "Terminal" card instead, its prompt line over what it printed, as a shell
- * shows them. JSON reads as words (`readableBlock`), an answer that only
+ * shows them. A Markdown block, as a memory's words, is no card but the
+ * words drawn as the agent's reply is, by the drawing its caller hands
+ * (`TranscriptWords`, so its links, chips, and pictures keep the reply's
+ * rules), at the transcript's body size so its code spans match its prose. JSON reads as
+ * words (`readableBlock`), an answer that only
  * acknowledges is left out, and an empty one says "No output". What the
  * words say is the caller's decision (`tasks/tool-call-model.ts`); how a
  * block of each kind is drawn is this file's. Its look is `.tool`'s
@@ -105,11 +110,14 @@ const TOOL_BODY_CLASS = "tool-body my-tight-gap mr-0 ml-transcript-gutter";
 
 export type ToolProps = Omit<FoldProps, "className">;
 
+/** One call, folded under its line: a detail of the transcript, which a find may leave out (`FIND_DETAIL`). */
 export function Tool({ children, ...props }: ToolProps): ReactNode {
   return (
-    <Fold className="tool text-caption-inline" {...props}>
-      {children}
-    </Fold>
+    <FindDetailFolds>
+      <Fold className="tool text-caption-inline" {...FIND_DETAIL} {...props}>
+        {children}
+      </Fold>
+    </FindDetailFolds>
   );
 }
 
@@ -310,16 +318,28 @@ export function ToolContent({
   );
 }
 
-/** A block as the card draws it: what its lines are, what Copy copies, and what each line does where it is a patch. */
+/** How a Markdown block's words are drawn: as the transcript draws a reply's, which the caller hands, so this file keeps no Markdown rules of its own. */
+export type ToolMarkdown = (text: string) => ReactNode;
+
+/** A block as the card draws it: what its lines are, what Copy copies, and what each line does where it is a patch; Markdown as a reply's words instead, with no card. */
 function BlockCard({
   block,
   title,
   data,
+  markdown,
 }: {
   block: ToolBlock;
   title: string;
   data: `data-${string}`;
+  markdown: ToolMarkdown;
 }): ReactNode {
+  if (block.kind === TOOL_BLOCK.MARKDOWN) {
+    return (
+      <div className="tool-markdown min-w-0 text-body" {...{ [data]: "" }}>
+        {markdown(block.text)}
+      </div>
+    );
+  }
   const isCommand = block.kind === TOOL_BLOCK.COMMAND;
   return (
     <CodeCard
@@ -336,16 +356,41 @@ function BlockCard({
 }
 
 /** What the call was given, read as words; nothing where it was given nothing. */
-export function ToolInput({ block }: { block: ToolBlock }): ReactNode {
+export function ToolInput({
+  block,
+  markdown,
+}: {
+  block: ToolBlock;
+  markdown: ToolMarkdown;
+}): ReactNode {
   const readable = readableBlock(block);
   if (readable.text === "") return null;
-  return <BlockCard block={readable} title={BLOCK_TITLE.INPUT} data="data-tool-input" />;
+  return (
+    <BlockCard
+      block={readable}
+      title={BLOCK_TITLE.INPUT}
+      data="data-tool-input"
+      markdown={markdown}
+    />
+  );
 }
 
 export interface ToolOutputProps {
   /** Nothing while the call has not answered. */
   block: ToolBlock | undefined;
   errorText: string | undefined;
+  markdown: ToolMarkdown;
+}
+
+/** The error a call ended in, under its body. */
+function ToolFailure({ errorText }: { errorText: string }): ReactNode {
+  return (
+    <div data-tool-output="">
+      <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
+        {errorText}
+      </FailureNote>
+    </div>
+  );
 }
 
 /**
@@ -353,16 +398,8 @@ export interface ToolOutputProps {
  * the error it ended in, or a muted line where it answered nothing; nothing
  * while it has answered neither, or where it only acknowledged the call.
  */
-export function ToolOutput({ block, errorText }: ToolOutputProps): ReactNode {
-  if (errorText !== undefined) {
-    return (
-      <div data-tool-output="">
-        <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
-          {errorText}
-        </FailureNote>
-      </div>
-    );
-  }
+export function ToolOutput({ block, errorText, markdown }: ToolOutputProps): ReactNode {
+  if (errorText !== undefined) return <ToolFailure errorText={errorText} />;
   const readable = block === undefined ? undefined : shownOutput(block);
   if (readable === undefined) return null;
   if (readable.text.trim() === "") {
@@ -372,10 +409,17 @@ export function ToolOutput({ block, errorText }: ToolOutputProps): ReactNode {
       </div>
     );
   }
-  return <BlockCard block={readable} title={BLOCK_TITLE.OUTPUT} data="data-tool-output" />;
+  return (
+    <BlockCard
+      block={readable}
+      title={BLOCK_TITLE.OUTPUT}
+      data="data-tool-output"
+      markdown={markdown}
+    />
+  );
 }
 
-export interface ToolTerminalProps extends ToolOutputProps {
+export interface ToolTerminalProps extends Omit<ToolOutputProps, "markdown"> {
   /** The command, a `TOOL_BLOCK.COMMAND` block. */
   input: ToolBlock;
 }
@@ -398,7 +442,7 @@ export function ToolTerminal({ input, block, errorText }: ToolTerminalProps): Re
         data={{ "data-tool-terminal": "" }}
         copy={copyThroughShell}
       />
-      <ToolOutput block={undefined} errorText={errorText} />
+      {errorText === undefined ? null : <ToolFailure errorText={errorText} />}
     </>
   );
 }

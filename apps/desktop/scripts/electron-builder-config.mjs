@@ -5,6 +5,7 @@ import { DMG_WINDOW } from "@repo/brand/dmg-window";
 import {
   finalizeElectronBuilderArtifacts,
   notarizeElectronBuilderApp,
+  signElectronBuilderApp,
 } from "./electron-builder-hooks.mjs";
 import { packageAssetPaths } from "./package-assets.mjs";
 import {
@@ -19,6 +20,7 @@ import {
   SIGNING_MODE,
 } from "./package-config.mjs";
 import {
+  BUNDLED_HOST,
   LIQUID_GLASS_ADDON,
   NATIVE_HELPERS,
   NODE_PTY,
@@ -100,6 +102,15 @@ export function createElectronBuilderConfig(env = process.env) {
         from: packageAssets.noticePath,
         to: path.basename(packageAssets.noticePath),
       },
+      { from: packageAssets.host.lib, to: BUNDLED_HOST.libPath },
+    ],
+    // Note that these land under `Contents`, where the host's executables
+    // and its agent's plist go, rather than `Contents/Resources`, which holds
+    // no code (`package-layout.mjs`'s `BUNDLED_HOST`).
+    extraFiles: [
+      { from: packageAssets.host.launcher, to: BUNDLED_HOST.launcherPath },
+      { from: packageAssets.host.node, to: BUNDLED_HOST.nodePath },
+      { from: packageAssets.host.plist, to: BUNDLED_HOST.plistPath },
     ],
     afterSign: notarizeElectronBuilderApp,
     afterAllArtifactBuild: finalizeElectronBuilderArtifacts,
@@ -121,7 +132,13 @@ export function createElectronBuilderConfig(env = process.env) {
         ...NODE_PTY.binaries.map((binary) =>
           path.join("Contents", "Resources", NODE_PTY.folder, NODE_PTY.prebuilds, binary),
         ),
+        ...[BUNDLED_HOST.launcherPath, BUNDLED_HOST.nodePath].map((binary) =>
+          path.join("Contents", binary),
+        ),
       ],
+      // The host's two executables are signed with entitlements of their own
+      // rather than the app's (`signElectronBuilderApp`).
+      sign: signElectronBuilderApp,
       // The app's own scheme, which an app link's page that opens it in the app hands
       // the plan to (`src/main/services/window-service.ts`): written into the
       // bundle's CFBundleURLTypes, which macOS registers the app for.

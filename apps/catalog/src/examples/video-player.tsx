@@ -2,7 +2,7 @@
  * video-player.tsx -- a recording played in place of a picture under our
  * own bar, with its Expand, and as the file viewer plays it, both on a
  * short WebM the page records from a canvas as it opens, since the catalog
- * fetches nothing. While it records it says so, and where the browser can
+ * fetches nothing, and waiting on one whose size it never reads. While it records it says so, and where the browser can
  * record no WebM, as a test's window cannot, it says that instead.
  */
 
@@ -33,6 +33,9 @@ const STAND_IN_WORDS = {
   [STAND_IN.UNSUPPORTED]:
     "This browser cannot record a WebM, so there is no stand-in video to play.",
 } as const satisfies Record<(typeof STAND_IN)[keyof typeof STAND_IN], string>;
+
+/** A WebM whose header is cut off before its size, so the player stays on its wait as one still arriving does. */
+const UNREAD_URL = "data:video/webm;base64,GkXfow==";
 
 /** The stand-in's colors, a page with a button sliding across it. */
 const INK = { PAGE: "#f5f5f7", ROW: "#e3e3e8", BUTTON: "#3d5ac8" } as const;
@@ -134,6 +137,9 @@ function VideoPlayers(): React.JSX.Element {
           label="A button sliding across a page"
           place={VIDEO_PLAYER_PLACE.VIEWER}
         />
+      </CatalogSection>
+      <CatalogSection id="video-player-loading" title="Still loading">
+        <VideoPlayer dataUrl={UNREAD_URL} label="A recording still arriving" />
       </CatalogSection>
     </>
   );

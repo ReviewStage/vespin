@@ -51,6 +51,7 @@ import {
   type InstallationFixture,
   openGithubUser,
 } from "../testing/github-app-fake.js";
+import { bootedAtOnce } from "../testing/native-harness-fake.js";
 import {
   AGENT_WAKE,
   type AgentWake,
@@ -176,6 +177,7 @@ function turn(settledAt: number | undefined): AgentLatestTurn {
 function fakeAgentSessions() {
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
   const sessions: AgentSessions = {
+    boot: bootedAtOnce,
     open: () =>
       Effect.succeed({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` }),
     send: (sessionId, message) =>

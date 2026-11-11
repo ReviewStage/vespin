@@ -2,8 +2,7 @@
  * workspace-invitations-procedures.ts -- a workspace's invitations as an owner or an admin lists, makes, and cancels them from the Mac, and one as its recipient is offered it on the accept page.
  *
  * The list, the make, and the cancel take the account's OAuth token, so the
- * desktop, the web app, the command-line tool, and the member MCP server
- * reach each the same way: `GET /api/workspaces/invitations` answers the
+ * desktop, the web app, and the command-line tool reach each the same way: `GET /api/workspaces/invitations` answers the
  * pending invitations, each with its accept link, `POST` makes one, the
  * owner alone inviting an admin, and emails its link to the invited address
  * where the deployment names a sender, and `POST

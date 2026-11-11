@@ -115,8 +115,12 @@ export const CALL_KIND = {
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
   REMEMBER: "remember",
-  /** The workspace's shared memory searched (`search_memory`, or `recall` in an older transcript), its row naming the query where there was one. */
+  /** The workspace's shared memory searched (`search_memory`, or `recall` in an older transcript), its row naming how many memories it answered and the query, or the query alone before it answers. */
   RECALL: "recall",
+  /** The memories kept or corrected since a time listed (`list_memories`). */
+  LIST_MEMORIES: "list-memories",
+  /** One memory of the workspace forgotten (`forget_memory`). */
+  FORGET_MEMORY: "forget-memory",
   /** The description's comment threads read (`read_comments`). */
   READ_COMMENTS: "read-comments",
   /** An answer written in one of the description's comment threads (`reply_to_comment`), its row saying it. */
@@ -196,7 +200,9 @@ export const CALL_WORDS = {
   [CALL_KIND.END_TURN]: { verb: "Ended the turn", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
-  [CALL_KIND.RECALL]: { verb: "Searched memory", code: false },
+  [CALL_KIND.RECALL]: { verb: "Recalled", code: false },
+  [CALL_KIND.LIST_MEMORIES]: { verb: "Listed the memories", code: false },
+  [CALL_KIND.FORGET_MEMORY]: { verb: "Forgot a memory", code: false },
   [CALL_KIND.READ_COMMENTS]: { verb: "Read the comments", code: false },
   [CALL_KIND.REPLY_TO_COMMENT]: { verb: "Replied to a comment:", code: false },
   [CALL_KIND.RESOLVE_THREAD]: { verb: "Resolved a thread", code: false },

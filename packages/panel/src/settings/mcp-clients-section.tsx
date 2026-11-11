@@ -9,7 +9,7 @@ import {
 } from "@repo/features/mcp-connect";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
-import { oauthRedirectDestination } from "@repo/features/oauth-consent";
+import { ON_THIS_COMPUTER, oauthRedirectDestination } from "@repo/features/oauth-consent";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
@@ -118,6 +118,7 @@ const PAGE_LINE = {
   SERVER: "Server URL",
   DISCONNECT: "Disconnect",
   REVOKED: `Disconnected. Its access ends within ${MCP_ACCESS_TOKEN_MINUTES} minutes.`,
+  THIS_COMPUTER: "This computer",
 } as const;
 
 /** The agents Connect an agent knows, in the order it offers them, any other last. */
@@ -252,16 +253,23 @@ function clientName(client: McpClient): string {
   return client.name ?? PAGE_LINE.UNNAMED;
 }
 
-/** Where an agent's sign-in returns to, as the consent page named it: each place once. */
+/**
+ * Where an agent's sign-in returns to, each place once: the host the consent
+ * page named, or This computer where it named an app on this computer, since
+ * the row's line opens on it as a bare fact.
+ */
 function destinations(client: McpClient): string {
-  return [...new Set(client.redirectUris.map(oauthRedirectDestination))].join(", ");
+  const places = new Set(client.redirectUris.map(oauthRedirectDestination));
+  return [...places]
+    .map((place) => (place === ON_THIS_COMPUTER ? PAGE_LINE.THIS_COMPUTER : place))
+    .join(", ");
 }
 
 /** An agent's line: where it returns to, when it was allowed, and when it last refreshed its access, where it has. */
 function ClientLine({ client }: { client: McpClient }): React.JSX.Element {
   return (
     <>
-      Goes to <ReplayMask>{destinations(client)}</ReplayMask>
+      <ReplayMask>{destinations(client)}</ReplayMask>
       {client.allowedAt === null ? null : (
         <>
           {" · Allowed "}

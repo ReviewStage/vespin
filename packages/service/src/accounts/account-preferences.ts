@@ -167,19 +167,10 @@ export const readOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * Writes each part the write carries — `preferences`, a validated
- * settings snapshot that replaces the stored one whole, `linkOpen`,
- * where the account's links open, `pullRequestOpen`, where its pull
- * requests open, `agentEnter`, what Enter does in an
- * agent's box while it works, `commitAuthor`, who authors an agent's
- * commits, `setupFinished`, whether the account
- * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
- * `completionSound`, when and which sound plays as an agent finishes,
- * `turnNotifications`, whether a notification is posted then,
- * `onboardingSurvey`, what it answered in setup's survey, `agent`, a choice the catalog
- * accepts, moved only to a model the account pays for, `chaptersModel`, one of the chapters' fixed set, and `experiments`, each experiment's on or off merged over
- * what stood — and answers the snapshot as it then stands. A write
- * carrying none of them asks for nothing and is refused.
+ * Writes each part the write carries and answers the snapshot as it then
+ * stands. `preferences` replaces the stored settings whole, while
+ * `experiments` are merged over what stood. A write carrying no part asks
+ * for nothing and is refused.
  */
 export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
   seams: AccountPreferenceSeams,
@@ -194,10 +185,12 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.pullRequestOpen === undefined &&
     body.agentEnter === undefined &&
     body.commitAuthor === undefined &&
+    body.agentPermissionMode === undefined &&
     body.setupFinished === undefined &&
     body.setupPlace === undefined &&
     body.soundWhen === undefined &&
     body.completionSound === undefined &&
+    body.askSound === undefined &&
     body.turnNotifications === undefined &&
     body.onboardingSurvey === undefined &&
     body.agent === undefined &&
@@ -235,6 +228,16 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     if (commitAuthor === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.commitAuthor = commitAuthor;
   }
+  if (body.agentPermissionMode !== undefined) {
+    const agentPermissionMode = ownPreferenceFromWire(
+      "agentPermissionMode",
+      body.agentPermissionMode,
+    );
+    if (agentPermissionMode === undefined) {
+      return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    }
+    write.agentPermissionMode = agentPermissionMode;
+  }
   if (body.setupFinished !== undefined) {
     const setupFinished = ownPreferenceFromWire("setupFinished", body.setupFinished);
     if (setupFinished === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
@@ -256,6 +259,11 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
     write.completionSound = completionSound;
+  }
+  if (body.askSound !== undefined) {
+    const askSound = ownPreferenceFromWire("askSound", body.askSound);
+    if (askSound === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.askSound = askSound;
   }
   if (body.turnNotifications !== undefined) {
     const turnNotifications = ownPreferenceFromWire("turnNotifications", body.turnNotifications);

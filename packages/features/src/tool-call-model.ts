@@ -35,7 +35,7 @@ import {
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
-import { holderTaskId, type MentionHolder } from "./mention-holder.js";
+import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
 import { skillWord } from "./skill-word.js";
@@ -116,20 +116,42 @@ const PATCH_FILE_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$/u;
 /** The header that moves the file the header before it names, as `apply_patch` spells it. */
 const PATCH_MOVE_HEADER = /^\*\*\* Move to: (.+)$/u;
 
+/** One file a patch touches: its path, and the lines the patch adds to it and removes from it. */
+export interface PatchFile {
+  readonly path: string;
+  readonly added: number;
+  readonly removed: number;
+}
+
 /**
- * The files a patch touches, in the order its headers name them. Note that
- * a file it moves is named where it moved to, in its old path's place,
- * because the old path names nothing once the patch is applied.
+ * The files a patch touches, in the order its headers name them, each with
+ * the lines added and removed under its header. Note that a file it moves is
+ * named where it moved to, in its old path's place, because the old path
+ * names nothing once the patch is applied; and that a header line is no
+ * added line, though it opens with its own marks.
  */
-function patchPaths(patchText: string): readonly string[] {
-  const paths: string[] = [];
-  for (const line of patchText.split("\n")) {
-    const moved = PATCH_MOVE_HEADER.exec(line.trimEnd())?.[1];
-    if (moved !== undefined && paths.length > 0) paths[paths.length - 1] = moved;
-    const named = PATCH_FILE_HEADER.exec(line.trimEnd())?.[1];
-    if (named !== undefined) paths.push(named);
+export function patchFiles(patchText: string): readonly PatchFile[] {
+  const files: { path: string; added: number; removed: number }[] = [];
+  for (const raw of patchText.split("\n")) {
+    const line = raw.trimEnd();
+    const moved = PATCH_MOVE_HEADER.exec(line)?.[1];
+    const last = files.at(-1);
+    if (moved !== undefined && last !== undefined) last.path = moved;
+    const named = PATCH_FILE_HEADER.exec(line)?.[1];
+    if (named !== undefined) {
+      files.push({ path: named, added: 0, removed: 0 });
+      continue;
+    }
+    if (last === undefined || line.startsWith("***")) continue;
+    if (line.startsWith("+")) last.added += 1;
+    else if (line.startsWith("-")) last.removed += 1;
   }
-  return paths;
+  return files;
+}
+
+/** The files a patch touches, in the order its headers name them (`patchFiles`). */
+function patchPaths(patchText: string): readonly string[] {
+  return patchFiles(patchText).map((file) => file.path);
 }
 
 /** Where a value is drawn as JSON, how it reads: pretty-printed, a string as it is. */
@@ -910,15 +932,79 @@ const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
 
 const READ_INBOX_CALL: ToolReader = ({ tool, input, output }) => inboxToolView(tool, input, output);
 
-/** A memory kept, named by its words, under `save_memory` or the `remember` it was named before. */
-const SAVE_MEMORY_CALL: ToolReader = ({ input, output }) => ({
-  ...namedCall(CALL_KIND.REMEMBER, input, output, undefined),
-  subject: cardTitle(stringAt(input, "text") ?? ""),
-});
+/** A memory tool's refusal, which answers `rejected` with its reason. */
+const MEMORY_REJECTED = "rejected";
 
-/** The memory searched, named by its query, under `search_memory` or the `recall` it was named before. */
-const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) =>
-  namedCall(CALL_KIND.RECALL, input, output, "query");
+function markdownBlock(text: string): ToolBlock {
+  return { kind: TOOL_BLOCK.MARKDOWN, text };
+}
+
+/** Why a memory call was refused, where its answer refused it. */
+function memoryRefusal(output: WireValue | undefined): string | undefined {
+  return stringAt(output, "status") === MEMORY_REJECTED ? stringAt(output, "reason") : undefined;
+}
+
+/** The words of each memory a search answered, in its order; nothing where it answered no list, as before it answers or once refused. */
+function recalledMemories(output: WireValue | undefined): readonly string[] | undefined {
+  const memories = isRecord(output) ? output.memories : undefined;
+  if (memories === undefined || !isWireArray(memories)) return undefined;
+  return memories.flatMap((memory) => stringAt(memory, "text") ?? []);
+}
+
+/** One memory as an item of a Markdown list, its later lines set in under the first so they stay in the item. */
+function memoryItem(memory: string): string {
+  return `- ${memory.replaceAll("\n", "\n  ")}`;
+}
+
+/** How many memories a search answered and what it asked: "3 memories about “invitations”", or the count alone for a search with no query. */
+function recalledSubject(count: number, query: string): string {
+  const memories = `${count} ${count === 1 ? "memory" : "memories"}`;
+  return query === "" ? memories : `${memories} about “${query}”`;
+}
+
+/**
+ * A memory kept, under `save_memory` or the `remember` it was named
+ * before: named by its words, which its body draws as Markdown, as a reply
+ * is, in the input card's place; a refusal's reason as its answer, and
+ * nothing for a keep, whose answer only repeats the memory.
+ */
+const SAVE_MEMORY_CALL: ToolReader = ({ input, output }) => {
+  const text = stringAt(input, "text") ?? "";
+  const refused = memoryRefusal(output);
+  return {
+    kind: CALL_KIND.REMEMBER,
+    subject: cardTitle(text),
+    input: markdownBlock(text),
+    output: refused === undefined ? undefined : textBlock(refused),
+  };
+};
+
+/**
+ * The memory searched, under `search_memory` or the `recall` it was named
+ * before: named by how many memories it answered and its query, or its
+ * query alone before it answers, so its body shows no input; the memories
+ * a Markdown list, as a reply would list them, a search that found none
+ * saying "No output", and a refusal its reason.
+ */
+const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
+  const query = stringAt(input, "query") ?? "";
+  const memories = recalledMemories(output);
+  const refused = memoryRefusal(output);
+  const answer =
+    memories !== undefined
+      ? markdownBlock(memories.map(memoryItem).join("\n"))
+      : refused !== undefined
+        ? textBlock(refused)
+        : output === undefined
+          ? undefined
+          : jsonBlock(output);
+  return {
+    kind: CALL_KIND.RECALL,
+    subject: memories === undefined ? query : recalledSubject(memories.length, query),
+    input: textBlock(""),
+    output: answer,
+  };
+};
 
 /**
  * How each tool an agent is offered reads on its row, which is the one place
@@ -977,6 +1063,10 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.LIST_MODELS, input, output, undefined),
   [AGENT_TOOL.SAVE_MEMORY]: SAVE_MEMORY_CALL,
   [AGENT_TOOL.SEARCH_MEMORY]: SEARCH_MEMORY_CALL,
+  [AGENT_TOOL.LIST_MEMORIES]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_MEMORIES, input, output, undefined),
+  [AGENT_TOOL.FORGET_MEMORY]: ({ input, output }) =>
+    namedCall(CALL_KIND.FORGET_MEMORY, input, output, undefined),
   [AGENT_TOOL.WEB_SEARCH]: READ_WEB_SEARCH,
   [AGENT_TOOL.READ_WEB_PAGE]: ({ input, output }) => ({
     kind: CALL_KIND.WEB_PAGE,
@@ -1408,7 +1498,7 @@ export function shownPageVersion(
   return page === undefined || typeof version !== "number" ? undefined : { page, version };
 }
 
-/** The page a read answered, which opens its tab where it is on the call's own task, or the calling agent's own on no task; one of another task or agent opens nothing here. */
+/** The page a read answered, which opens its tab where it is on the call's own task; one of another task opens nothing here. Note that `isYours` is read too, because a transcript from before keeps the answer it was given then. */
 function readPage(call: TargetedCall): ToolTarget | undefined {
   const answer = isRecord(call.output) ? call.output.page : undefined;
   const own = isRecord(answer) && (answer.isYourTask === true || answer.isYours === true);
@@ -1494,7 +1584,7 @@ export function toolTarget(call: TargetedCall): ToolTarget | undefined {
 export interface TargetPlace {
   /** The workspace's slug; empty where the place names none. */
   readonly workspace: string;
-  /** The task whose page draws the transcript, or the agent on no task whose own page does, which the description and the pages stand on; none where the place holds neither. */
+  /** The task whose page draws the transcript, which the description and the pages stand on; none where no task holds the place. */
   readonly holder: MentionHolder | undefined;
   /** The agent whose transcript is drawn, whose threads a post names. */
   readonly agentId: string | undefined;
@@ -1516,17 +1606,16 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
     case TOOL_TARGET.TASK:
       return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
-      const taskId = holderTaskId(place.holder);
+      const taskId = place.holder?.taskId;
       return taskId === undefined
         ? undefined
         : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
     }
     case TOOL_TARGET.PAGE: {
-      const holder = place.holder;
-      if (holder === undefined) return undefined;
-      return "taskId" in holder
-        ? linked({ kind: LINK_DESTINATION.PAGE, planId: holder.taskId, pageId: target.page })
-        : linked({ kind: LINK_DESTINATION.PAGE, agentId: holder.agentId, pageId: target.page });
+      const taskId = place.holder?.taskId;
+      return taskId === undefined
+        ? undefined
+        : linked({ kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: target.page });
     }
     case TOOL_TARGET.INBOX:
       return target.item === undefined || place.agentId === undefined

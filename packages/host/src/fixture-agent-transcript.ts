@@ -18,12 +18,18 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import type { AppTranscript } from "./app-state.js";
-import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
+import {
+  FIXTURE_PICTURE_PNG,
+  FIXTURE_VIDEO_MP4,
+  FIXTURE_VIDEO_WEBM,
+} from "./fixture-inbox-media.js";
 import { FIXTURE_PAGE } from "./fixture-stage.js";
 
 const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
 
 /** The pictures and the recording the agent showed, by the ids the service kept them under. */
 const KEPT = {
@@ -269,6 +275,45 @@ function transcriptMessages(
   ];
 }
 
+/**
+ * The page older than the transcript's first, as a read below it answers:
+ * the account's ask that came before the run, a day earlier, and the agent's
+ * answer, which settled what an invite is before the work began.
+ */
+export function fixtureAgentOlderMessages(
+  startedAt: number,
+  reader: { readonly userId: string; readonly name: string },
+): readonly AgentTranscriptMessage[] {
+  const asking = startedAt - DAY;
+  return [
+    asked(
+      "fixture-invites-plan-ask",
+      asking,
+      "Before you build anything: what does the description already settle about invites?",
+      reader,
+    ),
+    {
+      id: "fixture-invites-plan",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        toolPart(
+          AGENT_TOOL.READ_FILE,
+          "fixture-invites-plan-read",
+          { filePath: "docs/invites.md" },
+          { content: "# Invites\n\nA member invites a teammate by email…" },
+        ),
+        {
+          type: "text",
+          text: "It settles three things: an invite is a **pending membership**, its link expires after seven days, and only an owner may invite.",
+        },
+      ],
+      startedAt: asking,
+      finishedAt: asking + 2 * MINUTE,
+    },
+  ];
+}
+
 /** The transcript as the host holds it once read, every turn caught up, the last still running. */
 export function fixtureAgentTranscript(
   startedAt: number,
@@ -283,13 +328,18 @@ export function fixtureAgentTranscript(
   };
 }
 
-/** A picture or the recording the transcript names, by its id, as the host answers one read; that it is not found for any other. */
-export function fixtureAgentPicture(pictureId: string): AgentInboxAttachmentView {
+/** A picture or the recording the transcript names, by its id, as the host answers one read, the recording as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of; that it is not found for any other. */
+export function fixtureAgentPicture(
+  pictureId: string,
+  playable: string | undefined,
+): AgentInboxAttachmentView {
   if (pictureId === KEPT.DIALOG || pictureId === KEPT.EMAIL) {
     return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
   }
   if (pictureId === KEPT.RECORDING) {
-    return { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+    return playable === MP4_TYPE
+      ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+      : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
   }
   return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 }

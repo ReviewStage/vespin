@@ -25,13 +25,17 @@ import type { ConversationTarget } from "@repo/database/models/writer";
 import { EXPERIMENT } from "@repo/settings";
 import type { WireValue } from "@repo/wire";
 import { Effect, Option, Result, Schema } from "effect";
+import { matchWorkspaceMemories } from "../../accounts/workspace-memories.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { standingContext } from "../agent-runtime/standing-context.js";
+import { recallSource } from "../memory-provenance.js";
+import { recordMemoryRecalls } from "../memory-tools.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import type { SessionTurn } from "../sessions/agent-sessions.js";
-import { experimentOnSinceIn } from "../workspace-experiment-on.js";
+import { experimentOnIn, experimentOnSinceIn } from "../workspace-experiment-on.js";
 import {
   handedAfterCompaction,
+  memoriesWithLead,
   savedByAnotherSince,
   type TurnHanded,
   TurnHandedSchema,
@@ -41,10 +45,11 @@ import {
   turnKindWords,
 } from "./turn-context.js";
 
-/** The turn opening: its kind, as its request named it, and its store id. */
+/** The turn opening: its kind, as its request named it, its store id, and the words of the line it opens on, where it carries any. */
 export interface CoderTurn {
   readonly kind: SessionTurn | undefined;
   readonly turnId: string | undefined;
+  readonly words?: string;
 }
 
 /** A turn's own message, where there is one to hand, and what the session has handed once it is. */
@@ -86,8 +91,10 @@ const previousTurnStart = (target: ConversationTarget, turnId: string | undefine
  * last handed; never on a first turn, whose first message the description, or the
  * prompt beside it, already is. Where the agent's workspace has Task descriptions off, no
  * save of the description hands it, and it is handed without the description
- * (`standingContext`). A read that fails is logged and
- * hands nothing.
+ * (`standingContext`). Beside it, whether this is the agent's first turn,
+ * and the words its memories are found by (`memoriesOf`): the task's name,
+ * the line's words, the brief, and the description where it is handed. A read
+ * that fails is logged and hands nothing.
  */
 const taskOf = (
   admitted: AdmittedConversation,
@@ -115,9 +122,16 @@ const taskOf = (
       { concurrency: "unbounded" },
     );
     if (Option.isNone(stored)) return undefined;
+    const opening = since === undefined;
+    // Note that the line's words go ahead of the description, since a search matches only its first words, and the description only where it is handed.
+    const words = [
+      stored.value.task.name,
+      turn.words ?? "",
+      stored.value.brief ?? "",
+      descriptionsOn ? stored.value.text : "",
+    ].join("\n");
     const threads = Option.getOrElse(comments, () => []);
     const key = taskKey(stored.value, threads, descriptionsOn);
-    const opening = since === undefined;
     const saved =
       descriptionsOn &&
       since !== undefined &&
@@ -130,7 +144,7 @@ const taskOf = (
     const unchanged =
       key === handed.task || (!descriptionsOn && taskKey(stored.value, threads) === handed.task);
     if (!saved && (opening || unchanged)) {
-      return { key: opening ? handed.task : key, text: undefined };
+      return { key: opening ? handed.task : key, text: undefined, opening, words };
     }
     const clock = { now, timeZone: admitted.timeZone };
     const text = taskWithLead(
@@ -142,7 +156,33 @@ const taskOf = (
         Option.getOrUndefined(descriptionsSince),
       ),
     );
-    return { key, text };
+    return { key, text, opening, words };
+  }).pipe(
+    Effect.tapError(logStoreFailure),
+    Effect.catch(() => Effect.succeed(undefined)),
+  );
+
+/**
+ * The memories of the agent's workspace that the words given find
+ * (`matchWorkspaceMemories`), as the turn's message hands them, where its
+ * workspace has Memory on; nothing where it is off or none match. They are
+ * found as the member who started the agent, so only a workspace they are a
+ * member of is searched, and each is logged as recalled by the agent and its
+ * turn's line (`recordMemoryRecalls`), as a search's are. A store that fails
+ * is logged and hands nothing, as `search_memory` carries on without memory;
+ * a recall that cannot be logged hands the memories all the same.
+ */
+const memoriesOf = (agent: Agent, words: string) =>
+  Effect.gen(function* () {
+    if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.MEMORY))) return undefined;
+    const found = yield* matchWorkspaceMemories(agent.userId, agent.organizationId, words);
+    if (found.length === 0) return undefined;
+    yield* recordMemoryRecalls(
+      { workspaceId: agent.organizationId, userId: agent.userId },
+      found.map((memory) => memory.id),
+      yield* recallSource(agent),
+    );
+    return memoriesWithLead(found);
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(undefined)),
@@ -152,8 +192,13 @@ const taskOf = (
  * The message the agent's turn opens with after the history, and what the
  * session has handed once it is: after a spoken turn, the line saying the
  * call's words no longer hold (`turnKindWords`); the developer's time on
- * every turn; and the task where `taskOf` hands it. A read that fails is logged and
- * leaves its part out, so the turn still opens.
+ * every turn; the task where `taskOf` hands it; and on the agent's first
+ * turn alone, the memories its task's name, brief, and description and the
+ * line's words find (`memoriesOf`). Note that a later turn is handed none,
+ * because the first turn's still stand in its history, a follow-up on the
+ * same task would mostly find them again, and the agent searches itself as
+ * it reaches an area they leave out. A read that fails is logged and leaves
+ * its part out, so the turn still opens.
  */
 export function coderTurnMessage(
   admitted: AdmittedConversation,
@@ -164,6 +209,7 @@ export function coderTurnMessage(
 ): Effect.Effect<CoderTurnMessage, never, DatabaseServices> {
   return Effect.gen(function* () {
     const task = yield* taskOf(admitted, agent, turn, handed, now);
+    const memories = task?.opening === true ? yield* memoriesOf(agent, task.words) : undefined;
     const clock = { now, timeZone: admitted.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
     const kind = turnKindWords(handed);
@@ -171,7 +217,7 @@ export function coderTurnMessage(
     const next: TurnHanded = {
       ...(taskHanded === undefined ? undefined : { task: taskHanded }),
     };
-    const parts = [...(kind === undefined ? [] : [kind]), standing];
+    const parts = [kind, standing, memories].filter((part) => part !== undefined);
     return { text: parts.join("\n\n"), handed: next };
   });
 }

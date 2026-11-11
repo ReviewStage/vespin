@@ -150,7 +150,7 @@ export function SettingsPanel({
         />
       ) : null}
 
-      {view === SETTINGS_VIEW.AGENTS ? <AgentsPage signedIn={signedIn} /> : null}
+      {view === SETTINGS_VIEW.AGENTS ? <AgentsPage signedIn={signedIn} view={panelView} /> : null}
 
       {view === SETTINGS_VIEW.HOSTS ? <HostsSection signedIn={signedIn} /> : null}
 

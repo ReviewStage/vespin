@@ -42,6 +42,7 @@ export const TAB_WORDS = {
   NEW_AGENT: "New agent",
   AGENT: "Agent",
   PULL_REQUEST: "Pull request",
+  TURN_CHANGES: "Turn changes",
   BROWSER: "Browser",
 } as const;
 
@@ -128,6 +129,8 @@ export interface ChangesStripTab {
   readonly kind: typeof STRIP_TAB_KIND.CHANGES;
   readonly changes: string;
   readonly number?: number;
+  /** The developer's line that opened the turn whose changes the tab shows, where it shows one turn's rather than the pull request's. */
+  readonly turn?: string;
 }
 
 /**
@@ -232,6 +235,11 @@ export function changesTab(changes: string, number?: number): ChangesStripTab {
     : { kind: STRIP_TAB_KIND.CHANGES, changes, number };
 }
 
+/** The changes of one of an agent's turns, the one the developer's line given opened, a tab of its own beside the agent's Pull request tab. */
+export function turnChangesTab(changes: string, turn: string): ChangesStripTab {
+  return { kind: STRIP_TAB_KIND.CHANGES, changes, turn };
+}
+
 /** One terminal in an agent's cloud sandbox, by the agent, the id its terminal was minted under, and its name. */
 export function terminalTab(terminal: string, shell: string, title: string): TerminalStripTab {
   return { kind: STRIP_TAB_KIND.TERMINAL, terminal, shell, title };
@@ -332,6 +340,19 @@ function numberedKey(agentId: string, number: number): string {
   return made;
 }
 
+/** The key each turn's Changes tab is drawn under, by agent and then by the line that opened the turn, made the first time it is asked for, as a numbered tab's is. */
+const turnKeys = new Map<string, Map<string, string>>();
+
+function turnKey(agentId: string, turn: string): string {
+  const ofAgent = turnKeys.get(agentId) ?? new Map<string, string>();
+  turnKeys.set(agentId, ofAgent);
+  const held = ofAgent.get(turn);
+  if (held !== undefined) return held;
+  const made = crypto.randomUUID();
+  ofAgent.set(turn, made);
+  return made;
+}
+
 /** What a kind declares of its tab's identity: when two of its tabs are one, the key a list draws its tab under, and the coding agent the tab is one of the agent's own. */
 interface TabIdentity<T extends StripTab> {
   readonly same: (a: T, b: T) => boolean;
@@ -384,8 +405,13 @@ const TAB_IDENTITY = {
     agent: NO_AGENT,
   },
   [STRIP_TAB_KIND.CHANGES]: {
-    same: (a, b) => a.changes === b.changes && a.number === b.number,
-    key: (tab) => (tab.number === undefined ? tab.changes : numberedKey(tab.changes, tab.number)),
+    same: (a, b) => a.changes === b.changes && a.number === b.number && a.turn === b.turn,
+    key: (tab) =>
+      tab.turn !== undefined
+        ? turnKey(tab.changes, tab.turn)
+        : tab.number === undefined
+          ? tab.changes
+          : numberedKey(tab.changes, tab.number),
     agent: (tab) => tab.changes,
   },
   [STRIP_TAB_KIND.TERMINAL]: {

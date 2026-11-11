@@ -251,8 +251,7 @@ export type SourceCopyServices = DatabaseServices | HttpClient.HttpClient | GitH
  * never opened a sandbox. The token the push goes through is the one a
  * coding agent's checkout is minted, through the installation of the
  * source's workspace as the account reaches it. `repository` is the one the
- * new agent clones: its task's as it stands now, or the workspace place's
- * own for an agent with no task; none where the task names none.
+ * new agent clones: its task's as it stands now; none where the task names none.
  */
 export const copySourceWork = /* @__PURE__ */ Effect.fn("web/copySourceWork")(function* (
   userId: string,

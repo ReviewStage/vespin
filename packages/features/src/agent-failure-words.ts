@@ -36,6 +36,8 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.GITHUB]: "GitHub refused or could not be reached",
   [AGENT_FAILURE.ABANDONED]: "it ran out of time",
   [AGENT_FAILURE.PROVIDER_KEY]: "your API key was refused or cannot be read",
+  [AGENT_FAILURE.MACHINE_SIGN_IN]:
+    "the machine isn't signed in to Claude Code or Codex; sign in to it on that machine, then send a message",
   [AGENT_FAILURE.NOT_STARTED]: "the agent never started",
   [AGENT_FAILURE.FAST_ON_OWN_KEY]:
     "Fast isn't available on your own API key; choose the model with Fast off",
@@ -70,11 +72,11 @@ const MENDED_BY_NEW_AGENT: ReadonlySet<AgentFailure> = new Set([
 
 /**
  * Why an agent whose host stopped beating while its turn ran failed, said
- * whole in place of a failure's words: the host by its name, and that a
- * message carries the agent on once the host is back.
+ * whole in place of a failure's words: the host by its name, and that what
+ * it did not push stays there, which its row's Continue in the cloud leaves behind.
  */
 export function hostLostWords(host: string): string {
-  return `${host} went offline during this turn. Send a message to carry on once it's back.`;
+  return `${host} went offline. Unpushed changes stay on it.`;
 }
 
 /** What a host's launch was doing as it stopped, by the step it last reported, as "it failed while" goes on. */

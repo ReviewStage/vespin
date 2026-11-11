@@ -51,9 +51,10 @@ import { agentSandboxOf } from "../agent-sandbox-open.js";
 import { macCheckoutsOf } from "../machine/device-machine.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
-import type { AccountKeyRows, AgentRuntimeChoice } from "./agent-runtime-choice.js";
+import type { AccountKeyRows } from "./agent-runtime-choice.js";
 import { CODER } from "./bounds.js";
 import { contextWindowOf } from "./context.js";
+import type { NativeRuntime } from "./native-runtime.js";
 import { agentPublished } from "./published.js";
 import {
   type FittedReplay,
@@ -84,8 +85,7 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 /**
  * takeover.ts -- what a Start does because it starts from another agent: the continue-versus-fork rules, the read of the source it inherits from, and the source's stop around the new agent's open.
  *
- * A Start from another agent of the task, or of the workspace where the
- * source has no task, to continue it or to fork it at one of its messages,
+ * A Start from another agent, to continue it or to fork it at one of its messages,
  * hands the new agent that agent's brief with its transcript replayed after
  * it (`replay.ts`) and its work, what it had not pushed included, in a
  * snapshot of its stopped sandbox or copied to a branch of its own
@@ -725,7 +725,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   userId: string,
   ask: Pick<TakeoverAsk, "runsOn">,
   from: StartFrom,
-  runtime: Effect.Effect<AgentRuntimeChoice, HostedRefusal, DatabaseServices>,
+  runtime: Effect.Effect<NativeRuntime>,
 ) {
   const { source } = from;
   const sourceMachine = source.machine ?? AGENT_MACHINE.VERCEL;
@@ -738,7 +738,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(source.userId, source.id));
   const read = Option.getOrUndefined(routing);
   if (read?.nativeSession == null) return undefined;
-  if ((yield* runtime).runtime !== read.runtime) return undefined;
+  if ((yield* runtime) !== read.runtime) return undefined;
   const held = yield* hostedStoreOrUnavailable(
     holdsSession(source.userId, source.conversationId, read.nativeSession),
   );
@@ -816,10 +816,7 @@ export const landedInheriting = <
   ask: TakeoverAsk,
   inherited: Inherited,
   accepted: Effect.Effect<A, E1, R1>,
-  runtimeOf: (
-    model: string,
-    keys: AccountKeyRows,
-  ) => Effect.Effect<AgentRuntimeChoice, HostedRefusal, DatabaseServices>,
+  runtimeOf: (model: string) => Effect.Effect<NativeRuntime>,
   land: (
     fitter: ReplayFitter | undefined,
     noteFiles: NoteFiles | undefined,
@@ -844,12 +841,7 @@ export const landedInheriting = <
   return Effect.gen(function* () {
     if (rules.checksPlanWriter) yield* admitsPlanWriter(userId, from.source);
     const read = yield* accepted;
-    const session = yield* carriedSessionOf(
-      userId,
-      ask,
-      from,
-      runtimeOf(read.choice.model, read.keys),
-    );
+    const session = yield* carriedSessionOf(userId, ask, from, runtimeOf(read.choice.model));
     const handedFrom = session === undefined ? from : carryingTranscript(from, session);
     const fitter = yield* replayFitterOf(
       userId,

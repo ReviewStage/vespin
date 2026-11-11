@@ -6,9 +6,8 @@
  * effect behind a tool is run here, on the services the request's own
  * fiber handed over with the admitted member provided, never on a runtime of
  * this file's own: the store and the clock a test provides are the ones the
- * tool runs under. This is the one promise door of the server, listed as a
- * permanent adaptor in `tools/anti-slop/effect-edges.json` and root
- * AGENTS.md; what would end it is an Effect-native MCP server that serves
+ * tool runs under. This is the one promise door of the server; what would
+ * end it is an Effect-native MCP server that serves
  * the 2026-07-28 revision without a session.
  *
  * A tool's result is answered as its JSON text, which is what an agent

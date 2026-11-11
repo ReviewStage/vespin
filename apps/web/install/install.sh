@@ -84,6 +84,8 @@ PRODUCT="Vespin host"
 UNIT="vespin-host.service"
 # A Mac's LaunchAgent, by its label.
 MAC_LABEL="dev.vespin.host.standalone"
+# The LaunchAgent of the Vespin app, which runs the host itself where it is loaded.
+APP_LABEL="dev.vespin.host"
 # The oldest macOS it installs on: the release's Node (24) needs macOS 13.5,
 # the command's as the host's.
 MAC_MIN_VERSION="13.5"
@@ -155,6 +157,13 @@ require_supported_os() {
       fail "Vespin host needs WSL2, and this is WSL1, which has no Linux kernel. Upgrade it with: wsl --set-version <distro> 2"
       ;;
   esac
+}
+
+# Answers whether the Vespin app's LaunchAgent is loaded for the user whose
+# uid is $1. Note that an agent still awaiting approval in System Settings is
+# not loaded, so a Mac in that state installs as before.
+app_runs_host() {
+  launchctl print "gui/$1/$APP_LABEL" >/dev/null 2>&1
 }
 
 # Refuses a macOS older than MAC_MIN_VERSION, $1 as `sw_vers -productVersion`
@@ -457,12 +466,25 @@ load_mac_agent() {
 
 # Restarts the LaunchAgent on the release just installed, once the box is
 # connected, in this user's login session where they are logged in, and says
-# it runs only while they are.
+# it runs only while they are, and where macOS keeps a Mac nobody sits at
+# from sleeping: the host holds it awake only while its agents work. Note
+# that a laptop, which has a battery, keeps the option under Battery, and
+# that the command opening the pane is printed rather than run, since the
+# script often runs over SSH, where it would open on the Mac's own screen.
 restart_mac_agent() {
   uid="$(id -u)"
   stop_launch_agent "$uid"
   start_launch_agent "$uid" "$PLIST" || true
   printf 'It runs while %s is logged in, so on a Mac nobody sits at, turn on automatic login for %s.\n' "$(id -un)" "$(id -un)"
+  # Note that the Energy pane's id is unconfirmed; the Battery pane's opened on a MacBook Pro on macOS 27.
+  energy="Energy › Prevent automatic sleeping when the display is off"
+  pane="com.apple.Energy-Settings.extension"
+  if pmset -g batt 2>/dev/null | grep -q InternalBattery; then
+    energy="Battery › Options › Prevent automatic sleeping on power adapter when the display is off"
+    pane="com.apple.Battery-Settings.extension"
+  fi
+  printf 'It keeps the Mac awake while agents work. To keep it reachable between them, turn on System Settings › %s.\n' "$energy"
+  printf 'To open it on this Mac: open "x-apple.systempreferences:%s"\n' "$pane"
 }
 
 # The release's tarball for this computer, by its name, address and SHA-256,
@@ -631,6 +653,10 @@ main() {
   require_supported_os "$kernel" "$(hardware_machine)" "$(cat /proc/version 2>/dev/null || true)"
   if [ "$kernel" = "Darwin" ]; then
     require_macos_version "$(sw_vers -productVersion 2>/dev/null || true)"
+  fi
+  if [ "$kernel" = "Darwin" ] && app_runs_host "$(id -u)"; then
+    printf 'The Vespin app runs this Mac'"'"'s host. Manage it in Vespin › Settings › Machines.\n'
+    return 0
   fi
   require_own_account
   account_paths

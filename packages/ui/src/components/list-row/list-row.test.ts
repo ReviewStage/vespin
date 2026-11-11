@@ -932,3 +932,52 @@ test("a row a run draws stands where the run places it, at the top level and nes
   // Note that jsdom lays nothing out, so each row is as tall as the run takes one to be (`estimate`), one under another.
   expect(rows.map((row) => row.style.top)).toEqual(["0px", "40px", "80px"]);
 });
+
+test("a row that ticks a box is read as a checkbox, checked as its owner holds it, and its press turns it", () => {
+  function Ticks() {
+    const [ticked, setTicked] = useState(false);
+    return createElement(
+      List,
+      { label: "Follow-ups" },
+      createElement(ListRow, {
+        title: "Show pending invitations",
+        checked: ticked,
+        onPress: () => setTicked((was) => !was),
+      }),
+    );
+  }
+  const container = draw(createElement(Ticks));
+  const row = button(container, "Show pending invitations");
+  expect(row.getAttribute("role")).toBe("checkbox");
+  expect(row.getAttribute("aria-checked")).toBe("false");
+  press(row);
+  expect(row.getAttribute("aria-checked")).toBe("true");
+});
+
+test("a row taken away with the pointer on its press is heard as the pointer leaving it, as a row left is", () => {
+  const heard: boolean[] = [];
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const list = (rows: readonly string[]) =>
+    createElement(
+      List,
+      { label: "Members" },
+      rows.map((name) =>
+        createElement(ListRow, {
+          key: name,
+          title: name,
+          onPress: ignore,
+          onPoint: (over: boolean) => heard.push(over),
+        }),
+      ),
+    );
+  act(() => root.render(list(["ada", "grace"])));
+  // Note that React hears the pointer come onto an element from the `pointerover` it bubbles.
+  act(() => {
+    button(container, "ada").dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+  });
+  act(() => root.render(list(["grace"])));
+  expect(heard).toEqual([true, false]);
+  act(() => root.unmount());
+});

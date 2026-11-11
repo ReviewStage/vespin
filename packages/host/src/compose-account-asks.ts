@@ -1,5 +1,5 @@
 /**
- * compose-account-asks.ts -- the account's own asks of the service on the window's behalf: its provider keys, a ChatGPT login by device code, its GitHub token, a workspace's memories, its hosts and a host's pairing, when its devices last beat, and a clip dictated into a box heard as words.
+ * compose-account-asks.ts -- the account's own asks of the service on the window's behalf: its provider keys, a ChatGPT login by device code, its GitHub token, a workspace's memories, its hosts and a host's pairing, when its devices last beat, its own sounds, and a clip dictated into a box heard as words.
  *
  * Nothing is held here but the reads the host fetches for the windows that
  * hold them (`held-fetch.ts`): the account's provider keys, its GitHub
@@ -53,7 +53,7 @@ import { type HostActTable, liveTold } from "./host-acts.js";
 import type { HostKernel } from "./host-kernel.js";
 import { heldHosts, hostRemove } from "./hosts-follow.js";
 import type { HeldSlice } from "./live-collection.js";
-import { heldMemories, memoryForget } from "./memory-follow.js";
+import { heldMemories, memoryForget, memorySave } from "./memory-follow.js";
 import type { WindowFocus } from "./window-focus.js";
 
 /** The service's side of the account's asks, as this concern asks it. */
@@ -78,6 +78,12 @@ export type AccountAsksClient = Pick<
   | "saveGitHubToken"
   | "removeGitHubToken"
   | "forgetMemory"
+  | "saveMemory"
+  | "readSound"
+  | "addSound"
+  | "renameSound"
+  | "removeSound"
+  | "chooseSound"
   | "transcribeDictation"
   | "markActive"
   | "registerPushDevice"
@@ -390,6 +396,17 @@ function actsOf(
       pool,
       memoryForget((forget) => asked(client.forgetMemory(forget))),
     ),
+    // A correction's words are drawn over its memory the moment it is asked; a new memory draws as the read carries it.
+    MEMORIES_SAVE: declaredWrite(
+      pool,
+      memorySave((save) => asked(client.saveMemory(save))),
+    ),
+    // Note that a sound's bytes and name pass through once, to the window that asked or on to the service, and are noted nowhere, as the service keeps them alone.
+    SOUND_READ: (read) => asked(client.readSound(read)),
+    SOUND_ADD: (add) => asked(client.addSound(add)),
+    SOUND_RENAME: (rename) => asked(client.renameSound(rename)),
+    SOUND_REMOVE: (removal) => asked(client.removeSound(removal)),
+    SOUND_CHOOSE: (choice) => asked(client.chooseSound(choice)),
     // Note that the clip passes through once and is noted nowhere, because its words are the developer's voice.
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
     // Note that the beat carries nothing and its answer is read by no one, so a signed-out window's is dropped at the gate.

@@ -5,7 +5,9 @@ import {
   isUnread,
   settledOnRead,
 } from "@repo/features/inbox-list-model";
+import { remindWords } from "@repo/features/inbox-remind-times";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -18,8 +20,8 @@ import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
 import { useToast } from "../toast.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
-import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
-import { markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
+import type { InboxReminder, RemindSaying } from "./inbox-remind.js";
+import { useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 
 /**
@@ -177,7 +179,7 @@ export function useInboxReadMarks({
         .catch(unreached)
         .then((answer) => {
           if ("failure" in answer) {
-            refused(until === null ? REMIND_REFUSED.CANCEL : REMIND_REFUSED.SET, answer, {
+            refused(until === null ? REMIND_REFUSED.CLEAR : REMIND_REFUSED.SET, answer, {
               inboxItemId: item.id,
               workspaceId,
             });

@@ -6,13 +6,9 @@ import {
 } from "@repo/credentials/snapshot";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { andList, IRREVERSIBLE_WORDS, VERB } from "@repo/features/words";
-import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import {
-  ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL,
-  ACCOUNT_DELETE_UNCONFIRMED_REFUSAL,
-  ACT_KIND,
-} from "@repo/host/acts";
+import { IRREVERSIBLE_WORDS, VERB } from "@repo/features/words";
+import type { Workspace } from "@repo/features/workspace-wire";
+import { ACT_KIND, accountDeleteRefusalWords, accountDeleteWorkspacesWords } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW, searchAnchorProps } from "@repo/settings/settings-anchors";
 import {
   BUTTON_VARIANT,
@@ -155,59 +151,10 @@ const ACCOUNT_DELETE_MUTATION = mutationOptions({
       () => ({ status: ACTION_RESULT_STATUS.ACCEPTED }),
       (error: unknown) => ({
         status: ACTION_RESULT_STATUS.REJECTED,
-        reason: deleteRefusalWords(error),
+        reason: accountDeleteRefusalWords(error),
       }),
     ),
 });
-
-/**
- * What a refused delete tells the person to do. Note that Better Auth
- * deletes an account only within a day of its sign-in, and the host refuses
- * a delete past that in its own sentence
- * (`ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL`), which a retry alone never gets
- * past, so only that refusal says to sign in again. A deletion the Mac could
- * not confirm (`ACCOUNT_DELETE_UNCONFIRMED_REFUSAL`) may already have
- * happened, so it says so in the host's words rather than that it failed;
- * anything else, such as a service that did not answer, says to try again.
- */
-function deleteRefusalWords(error: unknown): string {
-  const said = error instanceof Error ? error.message : undefined;
-  if (said === ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL) {
-    return "The account could not be deleted. Sign out and back in, then delete it again.";
-  }
-  if (said === ACCOUNT_DELETE_UNCONFIRMED_REFUSAL) return ACCOUNT_DELETE_UNCONFIRMED_REFUSAL;
-  return "The account could not be deleted. Try again.";
-}
-
-/**
- * The workspaces deleting the account deletes with it, as the list it was
- * handed reads them: the ones the account owns and is the only member of,
- * as Better Auth deletes them (`auth-policy.ts`'s `accountDeletion`). Note
- * that a list from a service before member counts names none.
- */
-function deletedWorkspaces(workspaces: readonly Workspace[]): readonly string[] {
-  return workspaces
-    .filter(({ role, memberCount }) => role === WORKSPACE_ROLE.OWNER && memberCount === 1)
-    .map(({ name }) => name);
-}
-
-/**
- * What the question adds after its warning about the workspaces that go
- * with the account: their names where the list is read whole, and nothing
- * where it names none; while it is unread, or its read failed, the rule
- * itself, since a question saying nothing then would read as though
- * nothing else goes.
- */
-function deletedWorkspacesWords(
-  workspaces: readonly Workspace[] | undefined,
-  listKnown: boolean,
-): string | undefined {
-  if (workspaces === undefined || !listKnown) {
-    return "Workspaces you own and are the only member of are also deleted, with everything in them.";
-  }
-  const names = deletedWorkspaces(workspaces);
-  return names.length > 0 ? `Also deleted, with everything in them: ${andList(names)}.` : undefined;
-}
 
 /**
  * Who is signed in, the member's own GitHub personal access token, and the
@@ -240,7 +187,7 @@ export function AccountSection({
   children?: React.ReactNode;
 }): React.JSX.Element {
   const listKnown = workspacesRead && !listFailed;
-  const goneWith = deletedWorkspacesWords(workspaces, listKnown);
+  const goneWith = accountDeleteWorkspacesWords(workspaces, listKnown);
   const signOut = useAsyncAction(rejectionWords);
   // Note that the section is only drawn while its page is, so the page
   // leaving takes the question with it.
@@ -313,7 +260,7 @@ export function AccountSection({
                 disabled={signOut.running}
                 onClick={deletion.ask}
               >
-                Delete account
+                Delete
               </Button>
             )}
           </SettingsRow>

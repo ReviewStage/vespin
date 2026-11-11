@@ -185,7 +185,7 @@ export class SignInConsent extends Context.Service<SignInConsent, SignInConsentS
  */
 export interface LocalAgentRunner {
   readonly agentId: string;
-  /** The agent's own folder (`deviceAgentLayout`), which holds its worktree and its temp folder. */
+  /** The agent's own folder (`deviceAgentLayoutIn`), which holds its worktree. */
   readonly folder: string;
   readonly checkout: string;
   readonly node: string;
@@ -251,6 +251,8 @@ export interface LocalAgentPlatformSeam {
   readonly tools: { readonly node: string; readonly claude: string; readonly codex: string };
   readonly runnerBundle: string;
   readonly runnerEnv: Readonly<Record<string, string>>;
+  /** The machine's own temp folder as the daemon's user sees it (`os.tmpdir()`), under which its agents' shared files stand (`deviceAgentTempFolder`). */
+  readonly tempFolder: string;
   readonly deviceName: string;
   /** Which machine the device runs on, as it registers (`DeviceMachine`), each part absent where it could not be read. */
   readonly deviceMachine: DeviceMachine;
@@ -287,19 +289,38 @@ export class LocalAgentPlatform extends Context.Service<
   LocalAgentPlatformSeam
 >()("@repo/host/LocalAgentPlatform") {}
 
+/** Where macOS stands on the host's agent, as `SMAppService`'s `status` reads it. */
+export const THIS_MAC_AGENT_STATUS = {
+  NOT_REGISTERED: "not-registered",
+  ENABLED: "enabled",
+  /** Registered, but held until the member allows it in System Settings › Login Items. */
+  REQUIRES_APPROVAL: "requires-approval",
+  /** The bundle carries no such agent, as a development run's does not. */
+  NOT_FOUND: "not-found",
+} as const;
+
+export type ThisMacAgentStatus = (typeof THIS_MAC_AGENT_STATUS)[keyof typeof THIS_MAC_AGENT_STATUS];
+
 /**
  * This Mac's host as the desktop keeps it (`compose-this-mac-host.ts`): the
- * account install the install command puts on a Mac, under the member's own
- * home, whose LaunchAgent launchd runs at login, which every build of the
- * app reads and controls alike. Each act answers, never fails: what it
+ * host daemon the app carries in its bundle, run by the bundle's LaunchAgent,
+ * which `SMAppService` registers, unregisters, and reads, or, in a build not
+ * signed for release, the account install the install script puts under the
+ * home. Its state stays under the member's own home. Each act answers, never fails: what it
  * answered, or the words it could not with. Only the This Mac host concern
  * asks for it.
  */
 export interface ThisMacHostSeam {
-  /** The install's state folder, `~/.local/state/vespin-host`, holding the record its host runs on. */
+  /** The host's state folder, `~/.local/state/vespin-host`, holding the record its host runs on. */
   readonly stateRoot: string;
-  /** Whether this Mac can run the host: Apple silicon, on the oldest macOS the install script takes or later. */
+  /** The home the host runs with, under which its agents' folders stand. */
+  readonly home: string;
+  /** The launcher inside this app (`Contents/MacOS/vespin-host`), by its absolute path, which `~/.local/bin/vespin-host` is linked to once the agent is registered. */
+  readonly launcher: string;
+  /** Whether this Mac can run the host: Apple silicon. */
   readonly runsHost: boolean;
+  /** Whether this build registers and unregisters the agent: a build signed for release alone. Any other leaves the agent as it stands and keeps the account install instead (`loaded`, `install`, `uninstall`). */
+  readonly registers: boolean;
   /** The Mac as its host registers it, which its enroll names so the service creates the device where it never saw this Mac, and which machine it is where it was read. */
   readonly machine: Effect.Effect<
     {
@@ -308,24 +329,32 @@ export interface ThisMacHostSeam {
       readonly arch: DeviceArch;
     } & DeviceMachine
   >;
-  /** Whether launchd holds the host's LaunchAgent now. */
+  /** Where macOS stands on the agent now. */
+  readonly status: Effect.Effect<ThisMacAgentStatus>;
+  /** Whether this app's own version registered the agent; another's leaves it running the bundle an update replaced until it is registered again. */
+  readonly registeredHere: Effect.Effect<boolean>;
+  /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run. */
+  readonly register: Effect.Effect<
+    Result.Result<void, string>,
+    never,
+    ChildProcessSpawner.ChildProcessSpawner
+  >;
+  /** The agent unregistered, which stops the host and keeps it from starting at the next login, its files kept; answered once its daemon has exited. */
+  readonly unregister: Effect.Effect<
+    Result.Result<void, string>,
+    never,
+    ChildProcessSpawner.ChildProcessSpawner
+  >;
+  /** Whether launchd holds the account install's job, `dev.vespin.host.standalone`, which a build that does not register keeps running instead of the agent. */
   readonly loaded: Effect.Effect<boolean, never, ChildProcessSpawner.ChildProcessSpawner>;
-  /** The install script given run with `/bin/sh`, the LaunchAgent let start first: the release installed or upgraded, and the host started. */
+  /** The install script given run, its job enabled first: the release installed or upgraded and the account install's host started. */
   readonly install: (
     script: string,
   ) => Effect.Effect<Result.Result<void, string>, never, ChildProcessSpawner.ChildProcessSpawner>;
-  /** The host stopped and kept from starting at the next login, its files kept. */
-  readonly stop: Effect.Effect<
-    Result.Result<void, string>,
-    never,
-    ChildProcessSpawner.ChildProcessSpawner
-  >;
-  /** The install's own `vespin-host uninstall` run: the host leaves the account and is removed from this Mac, its LaunchAgent, agents' folders, state and releases with it. */
-  readonly uninstall: Effect.Effect<
-    Result.Result<void, string>,
-    never,
-    ChildProcessSpawner.ChildProcessSpawner
-  >;
+  /** The account install's own `vespin-host uninstall` run, with `--keep-agents` where its agents' folders are kept: the host taken out of the account and off this Mac. Nothing where its command stands nowhere. */
+  readonly uninstall: (
+    keepAgents: boolean,
+  ) => Effect.Effect<Result.Result<void, string>, never, ChildProcessSpawner.ChildProcessSpawner>;
 }
 
 export class ThisMacHost extends Context.Service<ThisMacHost, ThisMacHostSeam>()(

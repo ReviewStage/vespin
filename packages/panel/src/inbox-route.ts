@@ -22,6 +22,7 @@ import type { InboxItemHome } from "@repo/features/inbox-wire";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
+import { useMemo } from "react";
 import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
 import { inboxItemHomeQueryOptions } from "./tasks/agent-reads.js";
@@ -108,22 +109,30 @@ function beingFound(choice: InboxChoice): boolean {
   return !("taskId" in choice) && choice.opened !== true;
 }
 
-/** The item `itemId` where the service says it stands: under its task, or by its id alone, missing, where the service names none, as no item of an agent on no task stands now. */
+/** The item `itemId` under the task the service says it stands on. */
 function choiceAt(itemId: string, home: InboxItemHome): InboxChoice {
-  return home.planId === null
-    ? { itemId, opened: true }
-    : { taskId: home.planId, itemAgentId: home.agentId, itemId, opened: true };
+  return { taskId: home.planId, itemAgentId: home.agentId, itemId, opened: true };
 }
 
-/** The item `itemId` where nothing the window chose holds it: where the service says it stands, or missing where it says nothing, waiting on it meanwhile. */
+/**
+ * The item `itemId` where nothing the window chose holds it: where the
+ * service says it stands, or missing where it says nothing, waiting on it
+ * meanwhile. Note that it is the same choice on every draw while what was
+ * found stands, because the Inbox knows the window's choice by its identity
+ * (`use-inbox-listing.ts`'s `useChoiceFirst`): a new one each draw reads as
+ * the window choosing again, and drops every row's press made over it.
+ */
 function useFoundChoice(itemId: string | undefined, held: boolean): InboxChoice | undefined {
   const asked = itemId !== undefined && !held;
   const home = useQuery({ ...inboxItemHomeQueryOptions(itemId ?? ""), enabled: asked });
-  if (!asked) return undefined;
-  // Note that an item still being found is chosen without being opened, so its pane waits rather than saying it is missing.
-  if (home.isPending) return { itemId };
-  const found = home.data === undefined || "failure" in home.data ? undefined : home.data;
-  return found === undefined ? { itemId, opened: true } : choiceAt(itemId, found);
+  const { isPending, data } = home;
+  return useMemo(() => {
+    if (!asked) return undefined;
+    // Note that an item still being found is chosen without being opened, so its pane waits rather than saying it is missing.
+    if (isPending) return { itemId };
+    const found = data === undefined || "failure" in data ? undefined : data;
+    return found === undefined ? { itemId, opened: true } : choiceAt(itemId, found);
+  }, [asked, itemId, isPending, data]);
 }
 
 /** The Inbox as the router stands it, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for the place standing (`places/routed-exits.ts`). */

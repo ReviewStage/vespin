@@ -2,27 +2,40 @@
 
 import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
+  accessibilityElement,
+  accessibilityHint,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   contentShape,
   font,
   foregroundStyle,
   frame,
+  listSectionMargins,
   listStyle,
   monospacedDigit,
-  navigationBarTitleDisplayMode,
-  navigationTitle,
+  onGeometryChange,
   refreshable,
   scrollContentBackground,
+  scrollDismissesKeyboard,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
+import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
+import { RowOpenContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+
+/** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
+const FOLD_HEARD = { OPEN: "Expanded", SHUT: "Collapsed" } as const;
+
+/** What a press on a foldable section's header is heard to do. */
+const FOLD_HINT = "Shows or hides the rows it holds";
 
 /** The fold chevron's size, a little under the header's words. */
 const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
@@ -44,8 +57,6 @@ type RowListProps = {
   readonly selected?: string | undefined;
   /** Called with the id of the row a person picked. */
   readonly onSelect?: ((id: string) => void) | undefined;
-  /** The title a split view's sidebar heads its column with, small and inline as every screen's title stands. */
-  readonly title?: string | undefined;
   /** What a pull down the list reads again, its spinner standing until it settles; none where a pull reads nothing. */
   readonly onRefresh?: (() => Promise<void>) | undefined;
   readonly children: ReactNode;
@@ -65,10 +76,15 @@ function listGround(colors: BrandColors, look: ListLook): string {
 /**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
- * the row should not stand selected on the way back.
+ * the row should not stand selected on the way back. A plain list wider than
+ * the reading width, such as a pull request's page across an iPad, centers
+ * its sections in it, as iOS's readable content guide does, while the list
+ * still scrolls from either edge.
  */
-export function RowList({ look, selected, onSelect, title, onRefresh, children }: RowListProps) {
+export function RowList({ look, selected, onSelect, onRefresh, children }: RowListProps) {
   const colors = useColors();
+  const [width, setWidth] = useState(0);
+  const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
   return (
     <List
       selection={selected === undefined ? [] : [selected]}
@@ -80,13 +96,14 @@ export function RowList({ look, selected, onSelect, title, onRefresh, children }
         listStyle(look),
         scrollContentBackground("hidden"),
         background(listGround(colors, look)),
-        ...(title === undefined
-          ? []
-          : [navigationTitle(title), navigationBarTitleDisplayMode("inline")]),
+        onGeometryChange(({ width: next }) => setWidth(next)),
+        ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
+        // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
+        scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
-      {children}
+      <RowOpenContext value={onSelect}>{children}</RowOpenContext>
     </List>
   );
 }
@@ -102,6 +119,8 @@ type ListSectionProps = {
   readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
+  /** Called with the link a row dragged onto the header carries (`RowFrame`'s `link`), such as a task's to move it into the section; the header takes no drop where none is given. */
+  readonly onDropLink?: ((url: string) => void) | undefined;
   readonly children: ReactNode;
 };
 
@@ -119,8 +138,16 @@ function GroupHeader({
 }) {
   const colors = useColors();
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
+  // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
-    <HStack spacing={SPACE.TIGHT + 2} modifiers={[contentShape(shapes.rectangle())]}>
+    <HStack
+      spacing={SPACE.TIGHT + 2}
+      modifiers={[
+        contentShape(shapes.rectangle()),
+        accessibilityElement("combine"),
+        accessibilityAddTraits(["isHeader"]),
+      ]}
+    >
       {folded === undefined ? null : (
         <Image
           systemName={folded ? "chevron.right" : "chevron.down"}
@@ -160,7 +187,8 @@ function GroupHeader({
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
  * caption. A foldable section folds in place on a press of its header, its
- * chevron turning to say so; it opens unfolded.
+ * chevron turning to say so; it opens unfolded. A header given `onDropLink`
+ * takes a row dragged onto it, on an iPad, and hands on the row's link.
  */
 export function ListSection({
   title,
@@ -168,6 +196,7 @@ export function ListSection({
   mark,
   foldable = false,
   footer,
+  onDropLink,
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
@@ -175,7 +204,7 @@ export function ListSection({
     title === undefined ? undefined : (
       <GroupHeader title={title} count={count} mark={mark} folded={foldable ? folded : undefined} />
     );
-  const header =
+  const pressable =
     label === undefined || !foldable ? (
       label
     ) : (
@@ -183,13 +212,21 @@ export function ListSection({
         onPress={() => setFolded((was) => !was)}
         modifiers={[
           buttonStyle("plain"),
-          accessibilityLabel(
-            `${title}${count === undefined ? "" : `, ${count}`}, ${folded ? "folded" : "unfolded"}`,
-          ),
+          accessibilityAddTraits(["isHeader"]),
+          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+          accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
+          accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
+          accessibilityHint(FOLD_HINT),
         ]}
       >
         {label}
       </Button>
+    );
+  const header =
+    pressable === undefined || onDropLink === undefined ? (
+      pressable
+    ) : (
+      <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
     );
   return (
     <Section

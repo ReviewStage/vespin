@@ -86,7 +86,7 @@ import {
   type InstallationFixture,
   openGithubUser,
 } from "../testing/github-app-fake.js";
-import { harnessFor, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
+import { harnessFor, openedOnBoot, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
 import { automationsProcedures } from "./automations-procedures.js";
 
 /** An automation's "Run now" (POST). */
@@ -152,17 +152,18 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     const opened: string[] = [];
     /** Who opened each session, in order: the request's bearer, or the deployment acting for an account. */
     const openedAs: string[] = [];
-    const sessionsAs = (caller: string): AgentSessions => ({
-      open: (message) =>
-        Effect.sync(() => {
-          opened.push(message.conversationId);
-          openedAs.push(caller);
-          return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
-        }),
-      send: () => Effect.succeed({ outcome: SESSION_SEND_OUTCOME.FAILED, status: 500 }),
-      cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
-      reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
-    });
+    const sessionsAs = (caller: string): AgentSessions =>
+      openedOnBoot({
+        open: (message) =>
+          Effect.sync(() => {
+            opened.push(message.conversationId);
+            openedAs.push(caller);
+            return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
+          }),
+        send: () => Effect.succeed({ outcome: SESSION_SEND_OUTCOME.FAILED, status: 500 }),
+        cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
+        reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
+      });
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.
     const sessions = new Map(
       [...bearers.values()].map((userId) => [sessionCookieOf(userId), userId]),

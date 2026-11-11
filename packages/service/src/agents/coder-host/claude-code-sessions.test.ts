@@ -57,6 +57,7 @@ import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { setWorkspaceVariable } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
+import { listScriptRuns } from "@repo/database/models/workspace-sandbox-script-run-store";
 import {
   setInstallScript,
   setRepositorySetup,
@@ -82,7 +83,10 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
-import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  CLOUD_SETUP_SCRIPT,
+  REPOSITORY_SCRIPT_KIND,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -896,6 +900,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "delete_automation",
             "run_automation",
             "save_memory",
+            "forget_memory",
             "reply_to_comment",
             "update_comment",
             "run_on_mac",
@@ -1170,7 +1175,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a local agent recorded on its Mac's sign-in launches on the plan's refusal with none saved in Vespin, and on the account's key where its subscription is at its limit",
+    "a local agent launches on its machine's own Claude Code login with nothing saved in Vespin, its CLI handed no credential of the account's",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -1197,54 +1202,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(Option.isSome(started));
         const agent = started.value.agent;
 
-        const signedOut = runnerSandboxApi();
-        const without = yield* sessionsFor(userId, { next: 0 }).pipe(
-          Effect.provide(services(signedOut)),
-        );
-        const refused = yield* deliveredOpen(without, yield* writtenLine(agent, "Go."));
-        assert.equal(refused.outcome, SESSION_SEND_OUTCOME.FAILED);
-        assert.equal("planRefusal" in refused && refused.planRefusal, PLAN_REFUSAL.SIGNED_OUT);
-        assert.deepEqual(signedOut.commands, []);
-
-        // A subscription at its limit stands aside for the account's own key until it resets.
-        yield* savePlan(userId);
-        const now = yield* DateTime.nowAsDate;
-        yield* setPlanStatus(
-          userId,
-          PROVIDER_KEY_PROVIDER.ANTHROPIC,
-          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-          PROVIDER_KEY_STATUS.LIMIT_REACHED,
-          new Date(now.getTime() + 30 * 60_000),
-          now,
-          now,
-        );
-        const ring = parseKeyRing(Redacted.make(RING));
-        assert.ok(Result.isSuccess(ring));
-        const keyOwner = {
-          userId,
-          provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-          kind: PROVIDER_KEY_KIND.API_KEY,
-        };
-        yield* saveProviderKey(
-          userId,
-          keyOwner.provider,
-          keyOwner.kind,
-          sealProviderKey(ring.success, keyOwner, Redacted.make(API_KEY)),
-          "sk-ant-api…-key",
-          null,
-          new Date(0),
-        );
-        const onKey = runnerSandboxApi();
+        const onMac = runnerSandboxApi();
         const machines = agentMachinesLayer({
           run: () => assert.fail("a Mac's launch runs no sandbox checkout"),
-        }).pipe(Layer.provide(onKey.layer));
+        }).pipe(Layer.provide(onMac.layer));
         // Note that the machines are provided innermost, so the Mac's machine answers rather than the fake sandbox's.
-        const keyed = yield* sessionsFor(userId, { next: 0 }).pipe(
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(machines),
-          Effect.provide(services(onKey)),
+          Effect.provide(services(onMac)),
         );
         assert.equal(
-          (yield* deliveredOpen(keyed, yield* writtenLine(agent, "Go."))).outcome,
+          (yield* deliveredOpen(sessions, yield* writtenLine(agent, "Go."))).outcome,
           SESSION_SEND_OUTCOME.ACCEPTED,
         );
         const [launch] = yield* deviceAgentLinesWaiting(userId, deviceId);
@@ -1256,13 +1224,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
         assert.ok("secrets" in claimed);
         const { env } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(claimed.secrets);
-        // A Mac has no firewall of ours, so its CLI is handed the key itself, and no swap is set.
-        assert.equal(env[RUNNER_ENV.API_KEY], API_KEY);
+        assert.equal(env[RUNNER_ENV.API_KEY], undefined);
         assert.equal(env[RUNNER_ENV.CLAUDE_TOKEN], undefined);
-        assert.deepEqual(onKey.policies, []);
-        // Its fingerprint reads the key in its variable, as warm runners launched before were recorded: the first
-        // 32 hex characters of the SHA-256 of {"env":[["ANTHROPIC_API_KEY",API_KEY]],"names":["linear"]}.
-        assert.equal(launch.payload.fingerprint, "586cbee90aa20b9bb788adc7a378466c");
+        assert.deepEqual(onMac.policies, []);
+        // Its fingerprint reads no credential: the first 32 hex characters of the SHA-256 of
+        // {"env":[],"names":["linear"]}, worked by hand.
+        assert.equal(launch.payload.fingerprint, "bd55028e0351bd98a7a597177af52640");
 
         // A mode that asks is refused by name on a Mac whose runner reads no mode, rather than run with full access,
         // and queues no launch; once the Mac says its runner reads one, the launch is handed it.
@@ -1271,7 +1238,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           Effect.flatMap(
             sessionsFor(userId, { next: 0 }).pipe(
               Effect.provide(machines),
-              Effect.provide(services(onKey)),
+              Effect.provide(services(onMac)),
             ),
             (sessions) =>
               Effect.flatMap(writtenLine(agent, "Go on."), (line) => deliveredOpen(sessions, line)),
@@ -1782,6 +1749,38 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       // The stop names the launch running the turn, by its first event number.
       assert.deepEqual(stop, { type: INPUT_LINE.STOP, launch: 0 });
     }),
+  );
+
+  it.effect(
+    "a message opening with a command the CLI runs goes bare, and one that would change the agent's row goes behind words",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+        yield* sessions.send(opened.sessionId, message(agent, "/compact keep the plan"));
+        yield* sessions.send(opened.sessionId, message(agent, "/effort low"));
+
+        const [compact, effort] = (yield* launchLines(api.commands[0]))
+          .filter(
+            (line): line is Extract<InputLine, { type: "message" }> =>
+              (line as InputLine).type === INPUT_LINE.MESSAGE,
+          )
+          .slice(1);
+        assert.deepEqual(compact?.content, [{ type: "text", text: "/compact keep the plan" }]);
+        // The CLI runs a command from the last text block alone, so the turn's words after it leave it words.
+        assert.deepEqual(effort?.content[0], { type: "text", text: "/effort low" });
+        assert.equal(effort?.content.length, 2);
+      }),
   );
 
   it.effect(
@@ -3448,6 +3447,51 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message sent while another call holds the lease waits on it where the warm runner was launched in another mode, and goes to a launch in the agent's mode",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 1 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        sequence.next = 2;
+        // The member asks for approvals while another instance's call holds the lease.
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const elsewhere = randomUUID();
+        const heldUntil = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
+        assert.equal(yield* claimAgentRunnerLease(agent.id, elsewhere, now, heldUntil), true);
+
+        const sending = yield* Effect.forkChild(
+          sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails."),
+        );
+        yield* turnsPass;
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+        yield* turnsPass;
+        // Nothing is queued for the runner launched with full access while the lease stands.
+        const [first] = api.commands;
+        assert.ok(first !== undefined);
+        assert.ok(!JSON.stringify(yield* handedLines(userId, first)).includes("Now the emails."));
+        yield* releaseAgentRunnerLease(agent.id, elsewhere);
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+
+        assert.equal((yield* Fiber.join(sending)).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const second = api.commands[1];
+        assert.ok(second !== undefined);
+        const [config] = (yield* launchLines(second)) as [ClaudeCodeConfig];
+        assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
+        assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Now the emails."));
+      }),
+  );
+
+  it.effect(
     "reset deletes the sandbox and retires the runner's bearer; a session gone answers retired",
     () =>
       Effect.gen(function* () {
@@ -3866,7 +3910,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a repository agent's new sandbox runs its workspace's cloud setup after its checkout, the scripts written to files and the setup script given the workspace's variables, and none of the runner's credentials",
+    "a repository agent's new sandbox starts its workspace's cloud setup after its checkout without waiting on it, the scripts written to files and the setup script given the workspace's variables, and none of the runner's credentials, and records how each script exited once the run ends past the answer",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3894,9 +3938,43 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           new Date(0),
         );
 
-        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
+        // Note that the setup never exits here, so a launch that waited on it would never start the runner.
+        let runsBeforeSetup: number | undefined;
+        api.hooks.onStart = async (command) => {
+          if (command.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG)) {
+            runsBeforeSetup = api.runs.length;
+          }
+        };
+
+        const kept = keptAfterResponse();
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the relay."),
+        ).pipe(Effect.provide(kept.layer));
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.deepEqual(
+          yield* listScriptRuns(workspace),
+          [],
+          "nothing is recorded while the run goes on",
+        );
+        // The run ends past the answer, its stderr saying how each script exited, which is kept as each one's last run.
+        const ended = api.commands.find((each) =>
+          each.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
+        );
+        assert.ok(ended !== undefined);
+        ended.stderr = `vespin-setup-exit ${CLOUD_SETUP_SCRIPT.INSTALL} 0\nvespin-setup-exit ${CLOUD_SETUP_SCRIPT.SETUP} 0\n`;
+        ended.exitCode = 0;
+        yield* kept.run;
+        assert.deepEqual(
+          (yield* listScriptRuns(workspace))
+            .map((run) => [run.script, run.repository, run.exitCode, run.agent.id])
+            .sort(),
+          [
+            [CLOUD_SETUP_SCRIPT.INSTALL, null, 0, agent.id],
+            [CLOUD_SETUP_SCRIPT.SETUP, agent.repository?.toLowerCase(), 0, agent.id],
+          ],
+        );
         const own = sandboxOfAgent(api, agent);
         const uploaded = new Map(api.uploads.flatMap((upload) => [...upload]));
         assert.equal(
@@ -3904,19 +3982,24 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           "apt-get install -y redis-tools",
         );
         assert.equal(uploaded.get("/tmp/vespin-setup/setup.sh"), "pnpm install");
-        const runs = api.runs.filter((run) => run.session === own?.currentSessionId);
-        const clone = runs.findIndex(isClone);
-        const setup = runs.findIndex((run) =>
-          run.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
+        const clone = api.runs.findIndex(
+          (run) => run.session === own?.currentSessionId && isClone(run),
         );
-        assert.ok(clone !== -1 && setup > clone);
-        assert.equal(runs[setup]?.env.DATABASE_URL, "postgres://fixture");
+        const setup = api.commands.find(
+          (each) =>
+            each.sandboxSessionId === own?.currentSessionId &&
+            each.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
+        );
+        assert.ok(setup !== undefined && clone !== -1 && runsBeforeSetup !== undefined);
+        assert.ok(runsBeforeSetup > clone, "the setup starts after the checkout");
+        assert.equal(setup.user, undefined);
+        assert.equal(setup.env.DATABASE_URL, "postgres://fixture");
         // The runner's own credentials stay in the runner's environment alone.
         const runner = api.commands.find((each) => each.user === "agent");
         assert.ok(runner !== undefined);
         for (const secret of [runner.env[RUNNER_ENV.CLAUDE_TOKEN], runner.env[RUNNER_ENV.BEARER]]) {
           assert.ok(secret !== undefined);
-          assert.equal(JSON.stringify(runs[setup]?.env).includes(secret), false);
+          assert.equal(JSON.stringify(setup.env).includes(secret), false);
         }
       }),
   );
@@ -4226,7 +4309,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it",
+    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it, and once cleared opens a fresh one of its own",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4265,6 +4348,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [config.resume, config.fork, config.rewindBefore],
           [CLI_SESSION, true, "source-line"],
         );
+
+        // A clear marks the transcript and lets the session go; the next place made anew starts afresh.
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* writer.markSessionCleared({ userId, conversationId: continued.conversationId });
+        yield* recordAgentNativeSession(userId, continued.id, null);
+        const fresh = runnerSandboxApi();
+        const reopened = yield* deliveredOpen(
+          yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(fresh))),
+          yield* writtenLine(continued, "Start over."),
+        );
+        assert.ok(reopened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const [freshConfig] = (yield* launchLines(fresh.commands[0])) as [
+          ClaudeCodeConfig,
+          InputLine,
+        ];
+        assert.deepEqual([freshConfig.resume, freshConfig.fork], [undefined, undefined]);
       }),
   );
 

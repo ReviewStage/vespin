@@ -1,5 +1,6 @@
 import {
   AGENT_MACHINE,
+  type AgentAttachment,
   type AgentRunsOnRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
@@ -75,10 +76,11 @@ type MoveDoors = Pick<
 >;
 
 /** Whether the agent offers a move at all, on the terms the header says, the continue that carries it aside. */
-function useMoveOffered(agent: MovedAgent, agents: MoveDoors): boolean {
+function useMoveOffered(agent: MovedAgent | undefined, agents: MoveDoors): boolean {
   return (
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST) })
       .data === true &&
+    agent !== undefined &&
     agents.onUnarchive === undefined &&
     agents.agents?.some((each) => each.id === agent.id) === true &&
     agent.archivedAt === undefined
@@ -92,6 +94,12 @@ function placeDetail(agent: MovedAgent): string | undefined {
   return pushedOnly ? MOVE_WORDS.STOPS_FIRST_PUSHED_ONLY : MOVE_WORDS.STOPS_FIRST;
 }
 
+/** A message a move carries on as the continued agent's first: one its own machine did not take. */
+export interface MoveCarry {
+  readonly words: string;
+  readonly attachments: readonly AgentAttachment[];
+}
+
 /** The agent continued at a place, stopped first where it still writes, and left as it was where the Stop did not take, which says why in its toast, or where a move of it is already out (`MOVING`). */
 function movedBy(
   agent: MovedAgent,
@@ -99,14 +107,14 @@ function movedBy(
     continueAgent,
     onStop,
   }: Pick<MoveDoors, "onStop"> & { continueAgent: NonNullable<MoveDoors["continueAgent"]> },
-): (runsOn: AgentRunsOnRequest) => Promise<void> {
+): (runsOn: AgentRunsOnRequest, carry?: MoveCarry) => Promise<void> {
   const writing = agentStillWriting(agent.status);
-  return async (runsOn) => {
+  return async (runsOn, carry) => {
     if (MOVING.has(agent.id)) return;
     MOVING.add(agent.id);
     try {
       if (writing && !(await onStop(agent.id))) return;
-      await continueAgent(agent.id, undefined, [], runsOn);
+      await continueAgent(agent.id, carry?.words, carry?.attachments ?? [], runsOn);
     } finally {
       MOVING.delete(agent.id);
     }
@@ -115,17 +123,21 @@ function movedBy(
 
 /**
  * The agent moved to the cloud, as Move to's Cloud does, for a surface that
- * offers that move alone, such as a launch its Mac could not start; none
- * where Move to would not offer the cloud: no move offered, or an agent
- * already in the cloud.
+ * offers that move alone, such as a launch its Mac could not start, or its
+ * Mac gone offline, the message the Mac did not take carried on where one
+ * is handed; none where Move to would not offer the cloud: no move offered,
+ * or an agent already in the cloud.
  */
-export function useMoveToCloud(agent: MovedAgent, agents: MoveDoors): (() => void) | undefined {
+export function useMoveToCloud(
+  agent: MovedAgent,
+  agents: MoveDoors,
+): ((carry?: MoveCarry) => void) | undefined {
   const offered = useMoveOffered(agent, agents);
   const { continueAgent } = agents;
   if (!offered || continueAgent === undefined || agent.machine !== AGENT_MACHINE.DEVICE)
     return undefined;
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
-  return () => void move(TO_THE_CLOUD);
+  return (carry) => void move(TO_THE_CLOUD, carry);
 }
 
 /** What an agent's place chip moves it by: the member's devices, the move to a place, and what each other place says under its name. */
@@ -141,14 +153,18 @@ export interface PlaceMove {
 /**
  * The move an agent's place chip offers, on the terms Move to › offers one
  * (`useMoveOffered`): the member's devices and the continue that carries
- * the agent to a place picked, or none where no move is offered. Note that
- * it stands though the member has no device, since the chip then says where
- * one is added, rather than taking no press.
+ * the agent to a place picked, or none where no move is offered or the
+ * agent is not read yet. Note that it stands though the member has no
+ * device, since the chip then says where one is added, rather than taking
+ * no press.
  */
-export function useMovePlace(agent: MovedAgent, agents: MoveDoors): PlaceMove | undefined {
+export function useMovePlace(
+  agent: MovedAgent | undefined,
+  agents: MoveDoors,
+): PlaceMove | undefined {
   const { continueAgent } = agents;
   const offered = useMoveOffered(agent, agents);
-  if (!offered || continueAgent === undefined) return undefined;
+  if (agent === undefined || !offered || continueAgent === undefined) return undefined;
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
   return {
     devices: agents.macs ?? NO_DEVICES,

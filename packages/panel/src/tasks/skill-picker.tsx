@@ -1,4 +1,11 @@
-import { noMatchWords, TERM } from "@repo/features/words";
+import {
+  holdsSlashWord,
+  matchingSkills,
+  SKILL_LIST_NOTE,
+  type SkillOption,
+  type SkillsRead,
+} from "@repo/features/skill-mention";
+import { isSlashCommand, type SlashCommand } from "@repo/features/slash-command";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
   ALIGN,
@@ -17,7 +24,6 @@ import {
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
-import { holdsSlashWord, matchingSkills, type SkillOption } from "@repo/ui/skill-mention";
 import {
   type ReactNode,
   type RefObject,
@@ -33,6 +39,7 @@ import type {
   ComposerTrigger,
 } from "../description-editor/contract.js";
 import { SettingsPageLink } from "../open-settings.js";
+import { COMMAND_NAMES, CommandRef, commandOption, matchingCommands } from "./command-ref.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, wordBox } from "./mention-picker.js";
 import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-ref.js";
 
@@ -62,29 +69,54 @@ import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-re
  * so the message sent is the words it always was; the editor draws each
  * through the box (`chip`), as the one pill a sent message's chip is (`skill-ref.tsx`), a press on which opens the skill's
  * `SKILL.md` in a File tab (`skill-chip.tsx`).
+ *
+ * Where the box runs commands (`ComposerCommands`), a `/` that opens the
+ * message lists the box's own commands first, under Commands, then the
+ * skills under Skills: `/model`, which opens the model chip's menu,
+ * `/compact`, written into the words for any the harness should keep, and
+ * `/clear` (or `/new`), which starts the agent's harness on a fresh
+ * session. A command chosen runs, or for `/compact` is written, in place of
+ * the `/` word, a command the message opens with drawn as its chip
+ * (`command-ref.tsx`) as a skill's is; a skill named like one of them is left out there, since the
+ * command is what its name runs as the message's first word. A `/` later in
+ * the message lists the skills alone, as before.
  */
-
-/** The skills the composer offers, the repository's and the installed ones, as it reads them: the skills, or why they were not read. */
-export type SkillsRead = { readonly skills: readonly SkillOption[] } | { readonly unread: string };
 
 /** Reads the task's repository's skills; asked the first time a `/` is typed. */
 export type SkillSource = () => Promise<SkillsRead>;
 
+/** The box's own commands, where it runs them: what choosing one from the list does. */
+export interface ComposerCommands {
+  readonly onRun: (name: SlashCommand) => void;
+}
+
+/** The groups' headings, where commands stand beside skills. */
+const GROUP_LABEL = { COMMANDS: "Commands", SKILLS: "Skills" } as const;
+
+/** What a row of the list is. */
+const ENTRY_KIND = { COMMAND: "command", SKILL: "skill" } as const;
+
+/** One row of the list: a command, or a skill. */
+type Entry =
+  | { readonly kind: typeof ENTRY_KIND.COMMAND; readonly name: SlashCommand }
+  | { readonly kind: typeof ENTRY_KIND.SKILL; readonly skill: SkillOption };
+
 /** What the list says where it has no row to offer. */
 const SKILL_MENU_NOTE = {
-  READING: "Reading skills…",
-  NONE: "No skills yet",
+  READING: SKILL_LIST_NOTE.READING,
+  NONE: SKILL_LIST_NOTE.NONE,
   /** Where a skill comes from, naming the page one is installed on by its link. */
   noneHint: (page: ReactNode) => (
     <>
       Install one in {page} settings, or add one at {".agents/skills/<name>/SKILL.md"}
     </>
   ),
-  NO_MATCH: noMatchWords(TERM.SKILL),
+  NO_MATCH: SKILL_LIST_NOTE.NO_MATCH,
 } as const;
 
-/** The list's own name, which its listbox is read by. */
+/** The list's own name, which its listbox is read by: its skills, or its commands and skills. */
 const SKILL_MENU_LABEL = "Skills";
+const COMMAND_MENU_LABEL = "Commands and skills";
 
 /** No skill is known, before the read lands or where it did not. */
 const NO_NAMES: ReadonlySet<string> = new Set();
@@ -104,6 +136,8 @@ export interface SkillPicker {
   readonly aria: Readonly<Record<string, string | undefined>>;
   /** The skills a `/name` names, which the editor draws as chips. */
   readonly names: ReadonlySet<string>;
+  /** The box's own commands, which the editor draws as chips where one is the message's first word; none where the box runs none. */
+  readonly commands: ReadonlySet<string>;
   /** Hears the `/` word the caret ends, as the editor reports it. */
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
   /** Takes a key the list answers, and says whether it did. */
@@ -141,36 +175,49 @@ function MenuNote({ read }: { read: SkillsRead | undefined }): React.ReactNode {
   );
 }
 
-/** The list itself: a row per skill offered, the highlighted one washed, or the line saying why there is none. */
+/** The list itself: a row per command and skill offered, the highlighted one washed, or the line saying why there is none. */
 function SkillMenu({
   id,
-  rows,
+  entries,
   at,
   read,
   onHover,
   onChoose,
 }: {
   id: string;
-  rows: readonly SkillOption[];
+  entries: readonly Entry[];
   at: number;
   read: SkillsRead | undefined;
   onHover: (index: number) => void;
-  onChoose: (skill: SkillOption) => void;
+  onChoose: (entry: Entry) => void;
 }): React.JSX.Element {
-  const options = rows.map(skillOption);
+  const commands = entries.flatMap((entry) =>
+    entry.kind === ENTRY_KIND.COMMAND ? [commandOption(entry.name)] : [],
+  );
+  const skills = entries.flatMap((entry) =>
+    entry.kind === ENTRY_KIND.SKILL ? [skillOption(entry.skill)] : [],
+  );
+  // Note that the skills stand under a heading only where commands stand over them.
+  const groups =
+    commands.length === 0
+      ? [{ options: skills }]
+      : [
+          { label: GROUP_LABEL.COMMANDS, replayUnmasked: true, options: commands },
+          ...(skills.length === 0 ? [] : [{ label: GROUP_LABEL.SKILLS, options: skills }]),
+        ];
   return (
     <MenuSurface className="skill-menu" inset={MENU_SURFACE_INSET.NONE}>
       <ComboboxList
         id={id}
-        label={SKILL_MENU_LABEL}
-        groups={[{ options }]}
+        label={commands.length === 0 ? SKILL_MENU_LABEL : COMMAND_MENU_LABEL}
+        groups={groups}
         active={at}
         onActiveChange={onHover}
         onChoose={(index) => {
-          const skill = rows[index];
-          if (skill !== undefined) onChoose(skill);
+          const entry = entries[index];
+          if (entry !== undefined) onChoose(entry);
         }}
-        note={rows.length === 0 ? <MenuNote read={read} /> : undefined}
+        note={entries.length === 0 ? <MenuNote read={read} /> : undefined}
       />
     </MenuSurface>
   );
@@ -209,6 +256,7 @@ export function useSkillPicker({
   draft,
   source,
   onOpen,
+  commands,
   side = MENTION_MENU_SIDE.ABOVE,
 }: {
   /** The box's editor, which a chosen skill is written into; nothing until it has mounted. */
@@ -221,6 +269,8 @@ export function useSkillPicker({
   source: SkillSource | undefined;
   /** Opens a chosen skill's `SKILL.md`; nothing where the box stands on no task's page. */
   onOpen: ((skill: SkillWithFile) => void) | undefined;
+  /** What choosing one of the box's own commands does; none where the box runs none. */
+  commands?: ComposerCommands | undefined;
   /** Which side of the slash's line the list stands: over it, as at the foot of an agent's tab, or under it, as on Home. */
   side?: MentionMenuSide;
 }): SkillPicker {
@@ -236,9 +286,21 @@ export function useSkillPicker({
   const ask = useCallback(() => setAsked((count) => count + 1), []);
 
   const skills = source !== undefined && read?.source === source ? read.read : undefined;
-  const mention = source === undefined ? undefined : trigger;
+  // Note that the box's commands are offered for the message's first word alone, which is where they run.
+  const leads =
+    commands !== undefined && trigger !== undefined && draft.slice(0, trigger.start).trim() === "";
+  const leading = leads ? matchingCommands(trigger.query) : [];
+  // Note that a box with no skills to offer opens the list only on a command the word finds.
+  const mention = source === undefined && leading.length === 0 ? undefined : trigger;
   const open = mention !== undefined && closedAt !== mention.start;
-  const rows = open ? offered(skills, mention) : [];
+  const offeredCommands = open ? leading : [];
+  const rows: readonly Entry[] = [
+    ...offeredCommands.map((name) => ({ kind: ENTRY_KIND.COMMAND, name })),
+    ...(open ? offered(skills, mention) : [])
+      // A skill named as a command is left out where the command is what its name runs.
+      .filter((skill) => !(leads && isSlashCommand(skill.name)))
+      .map((skill) => ({ kind: ENTRY_KIND.SKILL, skill })),
+  ];
   const held =
     highlight !== undefined &&
     mention !== undefined &&
@@ -289,7 +351,14 @@ export function useSkillPicker({
   }, [source, open, wantsSkills, settled, start, asked]);
 
   // Note that a name the message has no room left for is not written, as a key typed past the bound is not.
-  const choose = (skill: SkillOption) => editor.current?.chooseSkill(skill.name);
+  const choose = (entry: Entry) => {
+    if (entry.kind === ENTRY_KIND.SKILL) {
+      editor.current?.chooseSkill(entry.skill.name);
+      return;
+    }
+    if (mention !== undefined) setClosedAt(mention.start);
+    commands?.onRun(entry.name);
+  };
 
   const onKey = (event: KeyboardEvent): boolean => {
     if (!open) return false;
@@ -327,7 +396,7 @@ export function useSkillPicker({
       {!open ? null : (
         <SkillMenu
           id={listId}
-          rows={rows}
+          entries={rows}
           at={at}
           read={skills}
           onHover={(index) =>
@@ -349,13 +418,19 @@ export function useSkillPicker({
         !open || rows.length === 0 ? undefined : comboboxOptionId(listId, at),
     },
     names,
+    commands: commands === undefined ? NO_NAMES : COMMAND_NAMES,
     onTrigger: setTrigger,
     onKey,
     known,
     unread,
     ask,
-    chip: ({ name }) => (
-      <BoxChip name={name} skill={known?.find((each) => each.name === name)} onOpen={onOpen} />
-    ),
+    chip: ({ name, command }) =>
+      command && isSlashCommand(name) ? (
+        <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
+          <CommandRef name={name} />
+        </InlineRefFitScope>
+      ) : (
+        <BoxChip name={name} skill={known?.find((each) => each.name === name)} onOpen={onOpen} />
+      ),
   };
 }

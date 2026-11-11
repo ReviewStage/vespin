@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-liveActivity true`, which starts a fixture run's Live Activity, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-liveActivity true`, which starts a fixture run's Live Activity, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -19,6 +19,8 @@ const LAUNCH_ARGUMENT = {
   AGENT: "agent",
   PULL_REQUEST: "pullRequest",
   LIVE_ACTIVITY: "liveActivity",
+  UPDATE_NEEDED: "updateNeeded",
+  REFUSE_WRITES: "refuseWrites",
   SENTRY_TEST: "sentryTest",
 } as const;
 
@@ -61,11 +63,26 @@ export function launchPullRequest(): number | undefined {
   return Number.isInteger(number) && number > 0 ? number : undefined;
 }
 
+/** Whether the launch argument `key` says true, as iOS registers `-key true`: a string, a boolean, or a number by how it was passed. */
+function launchSaysTrue(key: string): boolean {
+  if (Platform.OS !== "ios") return false;
+  const named: unknown = Settings.get(key);
+  return named === true || named === "true" || named === 1;
+}
+
 /** Whether this launch starts a fixture run's own Live Activity, as `-liveActivity true` asks (`maestro/live-activity.yaml`); never on any other platform. */
 export function launchLiveActivity(): boolean {
-  if (Platform.OS !== "ios") return false;
-  const named: unknown = Settings.get(LAUNCH_ARGUMENT.LIVE_ACTIVITY);
-  return named === true || named === "true" || named === 1;
+  return launchSaysTrue(LAUNCH_ARGUMENT.LIVE_ACTIVITY);
+}
+
+/** Whether this launch stands a fixture run as the service's refusal of an old build leaves it, as `-updateNeeded true` asks (`maestro/update-needed.yaml`); never on any other platform. */
+export function launchUpdateNeeded(): boolean {
+  return launchSaysTrue(LAUNCH_ARGUMENT.UPDATE_NEEDED);
+}
+
+/** Whether this launch's fixture run refuses the writes a flow presses, as `-refuseWrites true` asks, so a flow shoots the failure notice (`maestro/failure-notice.yaml`); never on any other platform. */
+export function launchRefusesWrites(): boolean {
+  return launchSaysTrue(LAUNCH_ARGUMENT.REFUSE_WRITES);
 }
 
 /** The test report this launch asks Sentry for, as `-sentryTest <js|native>` names it (`crash-reports.ts`); none on any other platform, and none for a word that is no test. */

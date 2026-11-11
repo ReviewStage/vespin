@@ -619,6 +619,8 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
     const inline = container.querySelector("video");
     assert.ok(inline, "the video plays where it stands");
     assert.equal(inline.getAttribute("src"), "blob:video-1");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => inline.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(inline.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),
@@ -644,6 +646,8 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
     );
     const player = document.querySelector('[role="dialog"] video');
     assert.ok(player, "its Expand opens the viewer, which plays the video");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => player.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(player.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),
@@ -708,12 +712,17 @@ test("a call that shows a recording between two pictures draws it first, and the
         ),
     );
 
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => container.querySelector("video")?.dispatchEvent(new Event("loadedmetadata")));
     act(() =>
       container
         .querySelector("video")
         ?.closest(".picture-block")
         ?.querySelector<HTMLButtonElement>('button[aria-label="Expand"]')
         ?.click(),
+    );
+    act(() =>
+      document.querySelector('[role="dialog"] video')?.dispatchEvent(new Event("loadedmetadata")),
     );
     const shownNow = () => [
       document.querySelector('[role="dialog"] .attachment-viewer-title')?.textContent,
@@ -798,6 +807,8 @@ test("a recording a finished browser call kept plays under its row, out of the t
     const inline = container.querySelector("video");
     assert.ok(inline, "the recording plays though the work before it folded");
     assert.equal(inline.getAttribute("src"), "blob:recording-1");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => inline.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(inline.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),
@@ -821,6 +832,8 @@ test("a recording a finished browser call kept plays under its row, out of the t
     );
     const player = document.querySelector('[role="dialog"] video');
     assert.ok(player, "its Expand opens the viewer, which plays the recording");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => player.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(player.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),

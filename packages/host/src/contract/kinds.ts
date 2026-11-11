@@ -76,12 +76,29 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * window while it holds the stream open, and one forgotten for good. The
    * hold's stream carries nothing: what it holds reaches the panel on app
    * state (`LIVE_READ.MEMORIES`), and a forget is drawn there the moment it
-   * is asked, answering the memories as the service then keeps them.
+   * is asked, answering the memories as the service then keeps them. A
+   * save keeps one in the reader's own words, or corrects one in place
+   * where it names the memory it replaces, drawn there at once too.
    */
   MEMORIES_FOLLOW: "memories.follow",
   /** A workspace's held memories, which the panel reads on app state, asked again at once, as Try again asks. */
   MEMORIES_RETRY: "memories.retry",
   MEMORIES_FORGET: "memories.forget",
+  MEMORIES_SAVE: "memories.save",
+  /**
+   * Settings › Preferences › Notifications: the sounds the account keeps of
+   * its own, one's clip read so the window's player can play it, one added
+   * under a name from a file picked there, renamed, or removed, and which
+   * of them one of its two sounds plays. An add's payload is the clip as a
+   * `data:` URL and the name given, never its file's name; nothing on the
+   * way keeps it, and a read's bytes reach the window that asked alone,
+   * never app state.
+   */
+  SOUND_READ: "sound.read",
+  SOUND_ADD: "sound.add",
+  SOUND_RENAME: "sound.rename",
+  SOUND_REMOVE: "sound.remove",
+  SOUND_CHOOSE: "sound.choose",
   /**
    * A clip dictated into a message box, carried once from the panel that
    * recorded it to the service and answered with its words. Nothing on the
@@ -223,6 +240,10 @@ export const AGENT_ACT_KIND = {
   AGENTS_QUEUE: "agents.queue",
   AGENTS_STOP: "agents.stop",
   AGENTS_REWIND: "agents.rewind",
+  /** One agent's harness started on a fresh session in the same agent, its transcript kept (`/clear`, `coder-host/clear.ts`). */
+  AGENTS_CLEAR: "agents.clear",
+  /** An agent's failed first launch booted again, from its Retry (`coder-host/boot.ts`). */
+  AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
@@ -231,6 +252,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_PORT_SHARED: "agents.portShared",
   AGENTS_PORT_SHARE: "agents.portShare",
   AGENTS_PORT_UNSHARE: "agents.portUnshare",
+  AGENTS_RUN_ACTION: "agents.runAction",
+  AGENTS_RUN_ACTION_STOP: "agents.runActionStop",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
   AGENTS_DELETE: "agents.delete",
@@ -266,6 +289,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_PULL_REQUEST_PART_RETRY: "agents.pullRequestPartRetry",
   /** One agent's changes, its pull request's files with their patches, which its Changes tab draws. */
   AGENTS_CHANGES: "agents.changes",
+  /** The files one of an agent's turns changed, read on its machine between the checkouts its runner recorded, which the turn's Changes tab draws. */
+  AGENTS_TURN_CHANGES: "agents.turnChanges",
   /**
    * Our own tools one agent is offered, held for the window while it holds
    * the stream open and a while after among those let go lately, asked again
@@ -292,13 +317,13 @@ export const AGENT_ACT_KIND = {
  */
 export const AGENT_INBOX_ACT_KIND = {
   /**
-   * A task's inbox, or one agent's, held followed while the window holds
+   * A task's inbox, held followed while the window holds
    * the stream open, and a while after among those let go lately: what it
    * holds reaches the panel on app state (`LIVE_READ.HOLDER_INBOX`), so the
    * stream carries nothing.
    */
   AGENTS_INBOX_FOLLOW: "agents.inboxFollow",
-  /** A held task's or agent's inbox, which the panel reads on app state, read again at once, as Try again asks. */
+  /** A held task's inbox, which the panel reads on app state, read again at once, as Try again asks. */
   AGENTS_INBOX_RETRY: "agents.inboxRetry",
   /** Every inbox item the account reaches, which the panel reads on app state, read again at once, as Try again asks. */
   AGENTS_INBOX_ITEMS_RETRY: "agents.inboxItemsRetry",
@@ -594,6 +619,15 @@ export const MAC_TERMINAL_ACT_KIND = {
 } as const;
 
 /**
+ * What this Mac spends on the app (`mac-resources.ts`): each of its
+ * processes' CPU and memory now, read from the process table by the
+ * desktop's main, which a panel asks every few seconds while it shows them.
+ */
+export const MAC_RESOURCES_ACT_KIND = {
+  MAC_RESOURCES_READ: "macResources.read",
+} as const;
+
+/**
  * A shell on this Mac (`mac-shells.ts`): the developer's login shell opened
  * in a folder for the asking panel, attached, and closed, answered by the
  * desktop's main, which holds it. What it prints travels on the port an
@@ -759,12 +793,13 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
+  WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
 } as const;
 
 /**
  * What a window asks of the system it is drawn on: the microphone asked for
- * and its route read afresh, the microphone's and the notifications' settings
- * opened, a new mail to the people who make the app, the panel focused, words
+ * and its route read afresh, the microphone's, the notifications', and the
+ * login items' settings opened, a new mail to the people who make the app, the panel focused, words
  * copied, a file saved, a build's label shown or hidden, and feedback sent.
  */
 export const WINDOW_SURFACE_ACT_KIND = {
@@ -778,6 +813,8 @@ export const WINDOW_SURFACE_ACT_KIND = {
   MICROPHONE_ROUTE: "microphone.route",
   MICROPHONE_OPEN_SETTINGS: "microphone.openSettings",
   NOTIFICATIONS_OPEN_SETTINGS: "notifications.openSettings",
+  /** System Settings opened at Login Items, where the member allows the host's agent macOS holds for them. */
+  LOGIN_ITEMS_OPEN_SETTINGS: "loginItems.openSettings",
   /** A new message to the people who make the app, in the system's mail app, to the address main holds. */
   CONTACT_EMAIL: "contact.email",
   WINDOW_FOCUS_PANEL: "window.focusPanel",
@@ -820,6 +857,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_COMMAND_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...PORT_FORWARD_ACT_KIND,
@@ -891,6 +929,12 @@ export const PORT_ACT_USE = {
   MEMORIES_FOLLOW: ACT_USE.READ,
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,
+  MEMORIES_SAVE: ACT_USE.WRITE,
+  SOUND_READ: ACT_USE.FETCH,
+  SOUND_ADD: ACT_USE.WRITE,
+  SOUND_RENAME: ACT_USE.WRITE,
+  SOUND_REMOVE: ACT_USE.WRITE,
+  SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
   PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
@@ -933,11 +977,15 @@ export const PORT_ACT_USE = {
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,
+  AGENTS_CLEAR: ACT_USE.WRITE,
+  AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
   AGENTS_PORT_SHARE: ACT_USE.WRITE,
   AGENTS_PORT_UNSHARE: ACT_USE.WRITE,
+  AGENTS_RUN_ACTION: ACT_USE.WRITE,
+  AGENTS_RUN_ACTION_STOP: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
   AGENTS_DELETE: ACT_USE.WRITE,
@@ -949,6 +997,7 @@ export const PORT_ACT_USE = {
   AGENTS_PULL_REQUEST_PART_FOLLOW: ACT_USE.READ,
   AGENTS_PULL_REQUEST_PART_RETRY: ACT_USE.READ,
   AGENTS_CHANGES: ACT_USE.FETCH,
+  AGENTS_TURN_CHANGES: ACT_USE.FETCH,
   AGENTS_WORKSPACE_TOOLS_FOLLOW: ACT_USE.READ,
   AGENTS_WORKSPACE_TOOLS_RETRY: ACT_USE.READ,
   AGENTS_GITHUB_IMAGE: ACT_USE.FETCH,
@@ -1006,6 +1055,8 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+
+  MAC_RESOURCES_READ: ACT_USE.FETCH,
 
   MAC_SHELL_MIRROR: ACT_USE.WRITE,
   MAC_SHELL_OPEN: ACT_USE.WRITE,
@@ -1091,6 +1142,7 @@ export const PORT_ACT_USE = {
   MICROPHONE_ROUTE: ACT_USE.FETCH,
   MICROPHONE_OPEN_SETTINGS: ACT_USE.WRITE,
   NOTIFICATIONS_OPEN_SETTINGS: ACT_USE.WRITE,
+  LOGIN_ITEMS_OPEN_SETTINGS: ACT_USE.WRITE,
   CONTACT_EMAIL: ACT_USE.WRITE,
   WINDOW_FOCUS_PANEL: ACT_USE.WRITE,
   WINDOW_COPY_TEXT: ACT_USE.WRITE,
@@ -1140,6 +1192,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_SANDBOX_SETUP_READ: ACT_USE.FETCH,
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
+  WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**
@@ -1150,6 +1203,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...TERMINAL_ACT_KIND,

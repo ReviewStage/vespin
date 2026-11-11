@@ -1484,7 +1484,14 @@ it.effect(
       for (const tool of ["Glob", "Grep", "TaskCreate", "TaskUpdate"]) {
         assert.ok(options.allowedTools?.includes(tool), tool);
       }
-      for (const tool of ["ListAgents", "CronCreate", "PushNotification", "AskUserQuestion"]) {
+      // The CLI's own wakeup among them, since it holds the sandbox up for the whole wait.
+      for (const tool of [
+        "ListAgents",
+        "CronCreate",
+        "PushNotification",
+        "AskUserQuestion",
+        "ScheduleWakeup",
+      ]) {
         assert.ok(options.disallowedTools?.includes(tool), tool);
       }
       const worker = options.agents?.worker;
@@ -1553,7 +1560,7 @@ function launchedAs(options: Options | undefined) {
 }
 
 it.effect(
-  "starts the CLI on a host exactly as in the cloud's sandbox, with the same permission mode and tools, and no command sandbox in either",
+  "starts the CLI on a host as in the cloud's sandbox, with the same permission mode and tools and no command sandbox in either, but on the machine's own login and without the image's tool settings",
   () =>
     Effect.gen(function* () {
       const optionsIn = (env: Record<string, string>) =>
@@ -1567,7 +1574,14 @@ it.effect(
       const sandbox = yield* optionsIn(ENV);
       const host = yield* optionsIn({ ...ENV, [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST });
 
-      assert.deepEqual(launchedAs(host), launchedAs(sandbox));
+      const {
+        [RUNNER_ENV.CLAUDE_TOKEN]: token,
+        PLAYWRIGHT_BROWSERS_PATH: browsers,
+        ...shared
+      } = launchedAs(sandbox).environment;
+      assert.deepEqual(launchedAs(host), { ...launchedAs(sandbox), environment: shared });
+      assert.equal(token, CLAUDE_TOKEN);
+      assert.equal(browsers, "0");
       assert.equal(sandbox?.sandbox?.enabled, false);
     }),
 );

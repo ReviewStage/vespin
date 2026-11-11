@@ -371,7 +371,12 @@ test("a chip handed the agent's permission mode names it off Full access, and it
           modelsFailed: false,
           readModels: () => undefined,
           usage: undefined,
-          permissions: { mode: "ask", note: undefined, choose: (mode) => chosen.push(mode) },
+          permissions: {
+            mode: "ask",
+            applies: undefined,
+            note: undefined,
+            choose: (mode) => chosen.push(mode),
+          },
         }),
       ),
     ),
@@ -418,7 +423,12 @@ test("the menu offers Permissions while the catalog could not be read, the one p
           modelsFailed: true,
           readModels: () => undefined,
           usage: undefined,
-          permissions: { mode: "full_access", note: undefined, choose: () => undefined },
+          permissions: {
+            mode: "full_access",
+            applies: undefined,
+            note: undefined,
+            choose: () => undefined,
+          },
         }),
       ),
     ),
@@ -432,4 +442,40 @@ test("the menu offers Permissions while the catalog could not be read, the one p
       row.textContent?.startsWith("Permissions"),
     ),
   );
+});
+
+test("a /model the box runs opens the model menu with its search focused, choosing nothing itself", () => {
+  const view = document.createElement("div");
+  document.body.append(view);
+  const root = createRoot(view);
+  roots.push(root);
+  const chosen: ModelChoice[] = [];
+  const render = (asked: number) =>
+    act(() =>
+      root.render(
+        withQueryClient(
+          createElement(AgentModelChip, {
+            model: {
+              choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
+              note: undefined,
+              choose: (next) => chosen.push(next),
+              runtime: AGENT_RUNTIME.CLAUDE_CODE,
+            },
+            models: RUNTIME_MODELS,
+            modelsFailed: false,
+            readModels: () => undefined,
+            usage: undefined,
+            asked,
+          }),
+        ),
+      ),
+    );
+
+  render(0);
+  assert.equal(view.querySelector('[role="dialog"]'), null);
+  render(1);
+  const menu = view.querySelector('[role="dialog"]');
+  assert.ok(menu, "the menu is open");
+  assert.equal(document.activeElement, menu.querySelector("input"));
+  assert.deepEqual(chosen, []);
 });

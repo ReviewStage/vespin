@@ -446,6 +446,36 @@ export function useOpenTerminalTab(
 }
 
 /**
+ * Shows a shell the service already started for an agent, as a run action's
+ * shell is, in a cloud Terminal tab: the tab that already holds it where
+ * the window holds one, or a new tab held on that shell, which attaches to
+ * it rather than starting another, handing the panel the keys (`onShown`).
+ */
+export function useShowShellTab(
+  sidePanel: Pick<SidePanelControl, "onChoose">,
+  onShown: () => void,
+): (agentId: string, terminal: { readonly id: string; readonly title: string }) => void {
+  const { held: kept } = useContext(TerminalsContext);
+  const account = useWindowAccount();
+  const { onChoose } = sidePanel;
+  return useCallback(
+    (agentId, terminal) => {
+      const shells = kept.of(account, TERMINAL_KIND.CLOUD, agentId);
+      const found = shells.find((each) => each.terminal === terminal.id);
+      const entry = found ?? {
+        shell: crypto.randomUUID(),
+        title: terminal.title,
+        terminal: terminal.id,
+      };
+      if (found === undefined) kept.set(account, TERMINAL_KIND.CLOUD, agentId, [...shells, entry]);
+      onChoose(tabOf(TERMINAL_KIND.CLOUD, agentId, entry));
+      onShown();
+    },
+    [kept, account, onChoose, onShown],
+  );
+}
+
+/**
  * Ends a terminal tab's shell as its tab closes: out of the window's list,
  * and its session, screen, and shell let go, which nothing brings back.
  */

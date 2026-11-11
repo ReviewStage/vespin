@@ -230,6 +230,8 @@ export const RUNS_ON_WORDS = {
   OFFLINE: "Offline",
   UNKNOWN: "Can't check status",
   CHECKING: "Checking",
+  SETTING_UP: "Setting up",
+  FAILED: "Failed",
   REMOVED: "Removed device",
   NO_MATCH: "No devices match",
 } as const;

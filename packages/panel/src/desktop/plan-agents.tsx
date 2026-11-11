@@ -1,5 +1,4 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
-import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
@@ -8,6 +7,7 @@ import {
   BUTTON_SIZE,
   GROUP_ACTIONS,
   GROUP_HEADING,
+  GROUP_LOOK,
   GroupAction,
   GroupHeader,
   IconButton,
@@ -20,16 +20,18 @@ import {
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
+import { Schema } from "effect";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useMemberDirectory } from "../member-directory.js";
-import { agentSubject } from "../tasks/agent-ref.js";
+import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
+import { keptKey, useKept } from "../use-kept.js";
 import type { MenuAction } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
-import { AGENT_ROW_CELLS, AgentListRow, AgentStartRow } from "./agent-list-row.js";
+import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
+import { type CountNoun, foldedCount } from "./sidebar-fold.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 import type { ChosenRows } from "./tasks-selection.js";
 
@@ -41,8 +43,8 @@ import type { ChosenRows } from "./tasks-selection.js";
  * the head takes, a `GroupHeader` over their rows. Each row is the
  * task's agent as its "+" row draws it (`agentEntries`),
  * drawn as a person's page draws its agents too (`agent-list-row.tsx`), in
- * the columns a task's row stands in (`TaskRows`), New agent among them
- * (`AgentStartRow`), so every glyph and name of the group lines up: its
+ * the columns a task's row stands in (`TaskRows`), so every glyph and name
+ * of the group lines up: its
  * tab's glyph, which gives way to the working mark while it works, its
  * tab's name, its pull request, where it opened one, as a chip of GitHub's
  * mark in GitHub's color for where it stands and its number
@@ -71,23 +73,27 @@ import type { ChosenRows } from "./tasks-selection.js";
  * archived agent is not listed. New agent stands on the group's head at
  * every width, a + at rest as Sub-tasks' is, the strip's "+" by another
  * place (`newAgentStarts`), so it stands while the group is folded too. A
- * task with no agent listed draws no group: its New agent stands under the
- * task's title instead (`plan-head.tsx`), as Linear offers a first
- * sub-issue under an issue's description.
+ * task with no agent listed, once its agents are read, still draws the
+ * group's head alone, its + the start, as Sub-tasks stands empty, so the
+ * head looks the same before its first agent as after it, and that agent
+ * lands under it rather than a group arriving to push the description down.
  *
  * On a phone, Overview is the task's one page, with no strip, summary, or
  * Inbox tab beside it (`task-pane-switcher.tsx`), so the group holds the rest
  * of what those offer: the agents' read again where it never landed, the
- * archived agents folded under them as the summary folds them
- * (`ArchivedAgents`), and, after the group, the task's Inbox counting what
+ * archived agents folded under them behind Archived, each the same row as a
+ * listed agent's, settled, chosen together as the listed agents are, and
+ * offering Unarchive in Archive's place, starting folded and then standing
+ * as the reader left it, kept on this device, and, after the group, the
+ * task's Inbox counting what
  * waits on the developer that no listed agent's row marks already, such as
  * an archived agent's thread, only while something does.
  */
 
 /** A phone's additions to the group; see the module's head. */
 interface PlanAgentsPhone {
-  /** The archived agents' fold (`ArchivedAgents`), which draws nothing while none is archived. */
-  readonly archived: React.ReactNode;
+  /** Opens an archived agent's tab, where its transcript is read and it is brought back. */
+  readonly onOpenArchived: (agentId: string) => void;
   /** Opens the window's Inbox narrowed to the task. */
   readonly onOpenInbox: () => void;
 }
@@ -97,6 +103,17 @@ const AGENTS_LIST = "Agents";
 
 /** What the group's count counts, said to a reader beside the figure. */
 const AGENTS_NOUN = { one: "agent", many: "agents" } as const;
+
+/** What the archived agents' fold says, and its list for a reader moving between lists. */
+const ARCHIVED = { LABEL: "Archived", LIST: "Archived agents" } as const;
+
+/** What the archived fold's count is read as while folded. */
+const ARCHIVED_NOUN: CountNoun = { one: "archived agent", many: "archived agents" };
+
+/** Whether the reader left Archived open, one choice for every task's Overview, kept on this device. */
+const KEPT = {
+  UNFOLDED: keptKey("app.taskArchivedUnfolded", Schema.fromJsonString(Schema.Boolean)),
+} as const;
 
 /** New agent as the group's +, standing at rest on its head, its chord in its tooltip as the strip's "+" says it, and why it is unavailable where it is. */
 function NewAgentAction({ start }: { start: MenuAction }): React.JSX.Element {
@@ -165,11 +182,76 @@ function PlanAgentRow({
   );
 }
 
+/** The task's archived agents, folded under Archived at the foot of a phone's agents, each a listed agent's row, settled; nothing while none is archived. */
+function PlanArchivedAgents({
+  agents,
+  shown,
+  more,
+  onOpen,
+  onOpenPullRequest,
+}: {
+  agents: AgentsControl;
+  /** Whether the task's page is on screen, which each row's menu asks on. */
+  shown: boolean;
+  /** Whether its rows draw their ⋯. */
+  more: boolean;
+  onOpen: (agentId: string) => void;
+  onOpenPullRequest: (agentId: string) => void;
+}): React.JSX.Element | null {
+  const [unfolded, setUnfolded] = useKept(KEPT.UNFOLDED, false);
+  const archived = agents.archived ?? [];
+  const selection = useAgentsSelection(agents, archived, shown);
+  if (archived.length === 0) return null;
+  return (
+    <div className="plan-agents-archived mt-list-gap">
+      <GroupHeader
+        heading={GROUP_HEADING.NONE}
+        look={GROUP_LOOK.SECTION}
+        label={ARCHIVED.LABEL}
+        fold={{ open: unfolded, onOpenChange: setUnfolded }}
+        count={foldedCount(!unfolded, archived.length, ARCHIVED_NOUN)}
+      >
+        <TaskRows
+          id={selection.regionId}
+          label={ARCHIVED.LIST}
+          cells={AGENT_ROW_CELLS}
+          more={more}
+          selection={{ selected: selection.selected, onChange: selection.onChange }}
+          moves
+        >
+          {archived.map((agent) => {
+            const subject = agentSubject(agents, agent.id, NOTHING_HELD, false);
+            return (
+              <AgentListRow
+                key={agent.id}
+                agent={agent}
+                agents={agents}
+                shown={shown}
+                subject={subject}
+                at={agentLastMovedAt(agent)}
+                card={<AgentCard subject={subject} models={agents.models} />}
+                pullRequest={agents.pullRequests.get(agent.id)}
+                more={more}
+                chosen={selection.chosenOf(agent.id)}
+                settled
+                onPress={() => onOpen(agent.id)}
+                onOpenPullRequest={() => onOpenPullRequest(agent.id)}
+              />
+            );
+          })}
+        </TaskRows>
+      </GroupHeader>
+      {selection.dialog}
+    </div>
+  );
+}
+
 /**
  * The task's agents at the head of its description, under their group's head,
  * those waiting on the developer first, then those at work, then the
- * newest, and what `starts` offers after them; nothing for a task with
- * neither. A row's press is handed to `onOpenAgent` by its agent's id, and
+ * newest, or its head alone where it lists none and offers New agent;
+ * nothing where it offers neither.
+ * A row's press is handed to `onOpenAgent` by its agent's id, and
  * `onOpenPullRequest` opens an agent's pull request as its own chip does.
  */
 export function PlanAgents({
@@ -182,7 +264,6 @@ export function PlanAgents({
   onOpenAgent,
   onOpenPullRequest,
   newAgent,
-  starts,
   phone,
 }: {
   agents: AgentsControl;
@@ -200,8 +281,6 @@ export function PlanAgents({
   onOpenPullRequest: (agentId: string) => void;
   /** New agent, the + standing at rest on the group's head as the strip's "+" offers it (`newAgentStarts`); none on a task that starts no agent. */
   newAgent: MenuAction | undefined;
-  /** What the group offers after its agents: on a phone, the agents' read again where it never landed (`agentsRetry`). */
-  starts: readonly MenuAction[];
   /** A phone's additions; none elsewhere. */
   phone?: PlanAgentsPhone | undefined;
 }): React.JSX.Element | null {
@@ -222,7 +301,11 @@ export function PlanAgents({
   );
   // Note that a phone's group stands for its archived agents too, on a task whose every agent is archived, which starts none.
   const archived = phone === undefined ? 0 : (agents.archived?.length ?? 0);
-  const grouped = entries.length > 0 || starts.length > 0 || archived > 0;
+  // Note that an empty group stands only once the agents are read, so a task loading its agents does not offer New agent.
+  const empty = agents.agents?.length === 0 && newAgent !== undefined;
+  // Note that a group over nothing folds nothing, since a fold over no rows would hide nothing.
+  const holds = entries.length > 0 || archived > 0;
+  const grouped = holds || empty;
   // Note that a phone's Inbox row counts only what no listed agent's row marks already.
   const listed = new Set(entries.map((entry) => entry.row.id));
   let unmarked = 0;
@@ -246,9 +329,11 @@ export function PlanAgents({
       {grouped ? (
         <ReplayUnmask>
           <GroupHeader
+            // Note that the head is drawn anew as it empties or fills, so a fold closed over agents now gone does not hide the next one, as the group used to leave and come back open.
+            key={holds ? "holds" : "empty"}
             heading={GROUP_HEADING.NONE}
             label={AGENTS_LIST}
-            glyph={<EntityGlyph kind={ENTITY_KIND.AGENT} />}
+            look={GROUP_LOOK.SECTION}
             actions={newAgent === undefined ? undefined : <NewAgentAction start={newAgent} />}
             actionsShown={GROUP_ACTIONS.AT_REST}
             // Note that a group over no agent, standing for its read again or its archived agents, counts none.
@@ -260,9 +345,9 @@ export function PlanAgents({
                     noun: entries.length === 1 ? AGENTS_NOUN.one : AGENTS_NOUN.many,
                   }
             }
-            fold={{ defaultOpen: !folded }}
+            fold={holds ? { defaultOpen: !folded } : undefined}
           >
-            {entries.length + starts.length === 0 ? null : (
+            {entries.length === 0 ? null : (
               <TaskRows
                 id={selection.regionId}
                 label={AGENTS_LIST}
@@ -286,19 +371,17 @@ export function PlanAgents({
                     onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
                   />
                 ))}
-                {starts.map((start) => (
-                  <AgentStartRow
-                    key={start.label}
-                    label={start.label}
-                    glyph={start.icon ?? <GLYPH.ADD />}
-                    detail={start.detail}
-                    disabled={start.disabled}
-                    onStart={start.onSelect}
-                  />
-                ))}
               </TaskRows>
             )}
-            {phone?.archived}
+            {phone === undefined ? null : (
+              <PlanArchivedAgents
+                agents={agents}
+                shown={shown}
+                more={more}
+                onOpen={phone.onOpenArchived}
+                onOpenPullRequest={onOpenPullRequest}
+              />
+            )}
           </GroupHeader>
         </ReplayUnmask>
       ) : null}

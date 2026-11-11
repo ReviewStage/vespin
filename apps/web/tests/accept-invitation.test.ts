@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { HOSTED_SERVICE_PATH } from "@repo/features";
-import { PANEL_PATH } from "@repo/features/link-home";
 import {
   INVITATION_OFFER_REFUSAL,
   type InvitationOfferAnswer,
@@ -138,7 +137,7 @@ test("a valid invitation names its workspace and inviter and is accepted from it
     ]),
   );
   await titled(page, "Join Atlas");
-  expect(page.textContent).toContain("Grace invited you to work in Atlas on Vespin, as a member.");
+  expect(page.textContent).toContain("Grace invited you to work in Atlas on Vespin.");
   expect(buttonNames(page)).toEqual(["Accept invitation"]);
 
   vi.mocked(globalThis.fetch).mockImplementationOnce(
@@ -158,19 +157,15 @@ test("a valid invitation names its workspace and inviter and is accepted from it
   await act(async () => settleAccept({ status: 200, body: { invitation: {}, member: {} } }));
   await act(async () => vi.advanceTimersByTimeAsync(SESSION_REREAD_DELAY_MS));
   await titled(page, "You joined Atlas");
-  expect(page.textContent).toContain("Atlas is in your sidebar in Vespin. You can close this tab.");
   expect(buttonNames(page)).toEqual([]);
-  const open = page.querySelector("a");
-  expect(open?.textContent).toBe("Open Vespin on the web");
-  expect(open?.getAttribute("href")).toBe(PANEL_PATH);
+  expect(page.querySelector("a")).toBeNull();
 });
 
-test("a reader already in the workspace is told so and offered the way in, not a spent link", async () => {
+test("a reader already in the workspace is told so rather than that the link is spent", async () => {
   const page = await openPage(signedInReading(offerRead({ member: { workspaceName: "Atlas" } })));
 
   await titled(page, "You're already in Atlas");
   expect(buttonNames(page)).toEqual([]);
-  expect(page.querySelector("a")?.getAttribute("href")).toBe(PANEL_PATH);
 });
 
 test("a spent invitation says so and offers nothing to press", async () => {
@@ -179,7 +174,7 @@ test("a spent invitation says so and offers nothing to press", async () => {
   );
 
   await titled(page, "This invitation is no longer valid");
-  expect(page.textContent).toContain("Ask whoever invited you for a new link.");
+  expect(page.textContent).toContain("It has expired, already been used, or been canceled.");
   expect(buttonNames(page)).toEqual([]);
 });
 

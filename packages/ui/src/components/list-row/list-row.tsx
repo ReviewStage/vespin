@@ -21,6 +21,7 @@ import { middleOpensTab } from "../../middle-press.js";
 import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
+import { Checkbox as ShadcnCheckbox } from "../../shadcn/checkbox.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { motionKey, motionRows } from "../list-motion/list-motion.js";
@@ -623,6 +624,7 @@ export function ListRow({
   actions,
   actionsAt = LIST_ROW_ACTIONS.ALWAYS,
   onPress,
+  onPoint,
   onOpenInTab,
   linkHref,
   current,
@@ -635,6 +637,7 @@ export function ListRow({
   currentLook = LIST_ROW_CURRENT_LOOK.SHEET,
   menuOpen = false,
   chevron = false,
+  checked,
   keepFocus = false,
   disabled = false,
   tabbable,
@@ -683,6 +686,8 @@ export function ListRow({
   actionsAt?: ListRowActions;
   /** What pressing the row does, handed the press, whose modifiers it may read; a row without one is not a control. */
   onPress?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
+  /** Hears the pointer arrive on the row's press (`true`) and leave it (`false`), as a read ahead of a press the pointer says is coming does; none where nothing is read ahead. */
+  onPoint?: ((over: boolean) => void) | undefined;
   /** Opens what the row opens in a tab of its own, which a middle-click on its press does, as on a link, choosing nothing; none where the window opens no tab. */
   onOpenInTab?: (() => void) | undefined;
   /** The address its press opens, where it opens one, which a right-click offers as a link's (`useLinkAddress`). */
@@ -711,6 +716,8 @@ export function ListRow({
   menuOpen?: boolean | undefined;
   /** Whether a chevron at its end says the press goes somewhere deeper. */
   chevron?: boolean | undefined;
+  /** Whether the row ticks a box: drawn before its words, ticked while true, its press turning it, and read as a checkbox; none for a row that ticks nothing. */
+  checked?: boolean | undefined;
   /** Whether a pointer's press leaves the focus where it is, as on a field beside the list that holds the keys. */
   keepFocus?: boolean | undefined;
   /** Whether its press is unavailable: refused and out of the tab order. */
@@ -753,6 +760,20 @@ export function ListRow({
   const pressElement = useRef<HTMLButtonElement | null>(null);
   // Note that the row a hint hangs its card beside is the press's parent, the item.
   const rowElement = useRef<HTMLElement | null>(null);
+  // Whether the pointer stands on the press, so a press taken away under it is heard leaving, which no `pointerleave` says.
+  const pointed = useRef(false);
+  const steadyPoint = useRef(onPoint);
+  steadyPoint.current = onPoint;
+  const point = (over: boolean) => {
+    pointed.current = over;
+    onPoint?.(over);
+  };
+  useEffect(
+    () => () => {
+      if (pointed.current) steadyPoint.current?.(false);
+    },
+    [],
+  );
   const pressRef = useCallback(
     (element: HTMLButtonElement | null) => {
       pressElement.current = element;
@@ -876,11 +897,23 @@ export function ListRow({
         ]
           .filter((each) => each !== undefined)
           .join(" ");
+  // Note that a row that ticks a box draws it where its mark would stand, the press around it doing the ticking, so the box takes no press or focus of its own.
+  const mark =
+    checked === undefined ? (
+      leading
+    ) : (
+      <ShadcnCheckbox
+        checked={checked}
+        tabIndex={-1}
+        aria-hidden="true"
+        onMouseDown={(event) => event.preventDefault()}
+      />
+    );
   const face = (
     <>
-      {said(leading) ? (
+      {said(mark) ? (
         <span className={LEADING_CLASS} aria-hidden="true">
-          {leading}
+          {mark}
         </span>
       ) : null}
       <span className="ui-list-row-text col-[text] min-w-0">
@@ -924,11 +957,14 @@ export function ListRow({
       ref={pressRef}
       type="button"
       className={MAIN_BUTTON_CLASS}
+      {...(checked === undefined ? {} : { role: "checkbox", "aria-checked": checked })}
       aria-current={current}
       aria-labelledby={namedBy}
       aria-describedby={describedAs === undefined ? undefined : describedId}
       aria-description={chosen && describedAs === undefined ? SELECTION_WORDS.SELECTED : undefined}
       disabled={disabled}
+      onPointerEnter={onPoint === undefined ? undefined : () => point(true)}
+      onPointerLeave={onPoint === undefined ? undefined : () => point(false)}
       tabIndex={tabbable === false ? -1 : undefined}
       {...(tabbable === undefined ? rovingItem() : {})}
       {...(choosable ? selectableRow(selectKey) : {})}

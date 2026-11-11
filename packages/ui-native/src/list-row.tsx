@@ -5,13 +5,18 @@ import {
   ContextMenu,
   HStack,
   Image,
+  Menu,
   Spacer,
   SwipeActions,
   Text,
+  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityElement,
+  accessibilityHidden,
   accessibilityLabel,
+  accessibilityValue,
   alignmentGuide,
   buttonStyle,
   font,
@@ -26,15 +31,21 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { InboxLineKind } from "@repo/features/inbox-list-model";
+import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
+import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
+import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { sinceText } from "@repo/features/time-format";
-import { type ReactElement, type ReactNode, useState } from "react";
-import { useWindowDimensions } from "react-native";
+import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
+import { VERB } from "@repo/features/words";
+import { type ReactElement, type ReactNode, useContext, useState } from "react";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import {
   Avatar,
+  type Face,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -42,10 +53,11 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
+import { RowOpenContext } from "./row-open.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
-import { ACCESSIBILITY_SCALE, TYPE_ROLE } from "./tokens/type.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How many lines a row's title and its line take: one each at the standard sizes, and more at an accessibility size, so they still read. */
 const ROW_LINES = {
@@ -55,16 +67,43 @@ const ROW_LINES = {
 
 /** The lines a row's words take at the reader's text size. */
 function useRowLines(): (typeof ROW_LINES)[keyof typeof ROW_LINES] {
-  const { fontScale } = useWindowDimensions();
-  return fontScale > ACCESSIBILITY_SCALE ? ROW_LINES.ACCESSIBILITY : ROW_LINES.STANDARD;
+  return useAccessibilitySize() ? ROW_LINES.ACCESSIBILITY : ROW_LINES.STANDARD;
+}
+
+/** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
+const HEARD_PART = ", ";
+
+/**
+ * What VoiceOver hears of a row, read as one element: its label, the words
+ * a person picks it by (its title, so Voice Control and a flow find it by
+ * the words on screen), and its value, where it stands in words: unread,
+ * what waits on you, its status, its time, each mark said rather than drawn.
+ */
+type RowHeard = {
+  readonly label: string;
+  readonly value: readonly (string | undefined | false)[];
+};
+
+/** A row's heard value, the pieces that say something joined. */
+function heardValue(value: RowHeard["value"]): string {
+  return value
+    .filter((part): part is string => typeof part === "string" && part !== "")
+    .join(HEARD_PART);
 }
 
 /** What parts a row's line from the task it names. */
 const LINE_PART = " · ";
 
-/** How a row's action reads: the accent, a plain gray, or a destructive red. */
+/** The words VoiceOver hears for a row's marks, each said where the mark is drawn. */
+const UNREAD_WORDS = "Unread";
+const FAILED_HEARD = "Failed";
+const WORKING_HEARD = "Working";
+const PULL_REQUEST_HEARD = "Pull request";
+const SUB_TASKS_SHOWN = "Sub-tasks shown";
+const SUB_TASKS_HIDDEN = "Sub-tasks hidden";
+
+/** How a row's action reads: a plain gray, or a destructive red. Copper is kept for what wants the reader, so no act is drawn in it. */
 export const ROW_ACTION_TONE = {
-  ACCENT: "accent",
   NEUTRAL: "neutral",
   DESTRUCTIVE: "destructive",
 } as const;
@@ -79,12 +118,41 @@ export type RowAction = {
   readonly onPress: () => void;
 };
 
-/** The acts a row carries: a swipe from either edge, and the same acts in its long press menu. */
+/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them. */
+export type RowSubmenu = {
+  readonly label: string;
+  readonly symbol: SfSymbol;
+  readonly choices: readonly {
+    readonly label: string;
+    readonly on: boolean;
+    readonly onPress: () => void;
+  }[];
+};
+
+/** What a swipe reveals: an act, or a menu of choices, such as a task's Status, which opens where the act would run. */
+export type RowSwipe = RowAction | RowSubmenu;
+
+/** Whether a swipe's piece is a menu of choices rather than one act. */
+function isSubmenu(swipe: RowSwipe): swipe is RowSubmenu {
+  return "choices" in swipe;
+}
+
+/** The acts a row carries: a swipe from either edge, the same acts in its long press menu, what that menu holds alone, and the preview it lifts. */
 type RowActs = {
-  /** The acts a swipe from the trailing edge reveals, the first of them on a full swipe. */
-  readonly trailingActions?: readonly RowAction[] | undefined;
-  /** The acts a swipe from the leading edge reveals. */
-  readonly leadingActions?: readonly RowAction[] | undefined;
+  /** What VoiceOver hears of the row as one element; its pieces apart where none is given, as a row holding a button of its own stands. */
+  readonly heard?: RowHeard | undefined;
+  /** What a swipe from the trailing edge reveals, the first of it on a full swipe, as the system's own rows take one. */
+  readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** What a swipe from the leading edge reveals, the first of it on a full swipe. */
+  readonly leadingActions?: readonly RowSwipe[] | undefined;
+  /** Menus the long press menu holds after the swipes' acts, such as a task's Status. */
+  readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
+  /** Acts the long press menu alone holds, last, such as Pin or Open in browser. */
+  readonly menuActions?: readonly RowAction[] | undefined;
+  /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
+  readonly preview?: ReactElement | undefined;
+  /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
+  readonly link?: string | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -103,11 +171,13 @@ type ListRowProps = RowActs & {
   /** Whether the thread is done, which mutes its words. */
   readonly done?: boolean | undefined;
   /** The teammate a thread of someone else's waits on, whose face stands before the time. */
-  readonly face?: string | undefined;
+  readonly face?: Face | undefined;
   /** When it last changed, in epoch milliseconds, said as the panel's rows say it: "now", "5m", "3h". */
   readonly at?: number | undefined;
   /** What `at` counts from; now where none is given. */
   readonly now?: number | undefined;
+  /** When a reminder the reader set on the thread comes back, in epoch milliseconds, said in the time's place as the panel's row says it: "3:04 PM", "Mon 9:00 AM". */
+  readonly due?: number | undefined;
 };
 
 type TaskRowProps = RowActs & {
@@ -132,7 +202,6 @@ type TaskRowProps = RowActs & {
 
 function actionButton(action: RowAction, colors: BrandColors) {
   const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
-  const ink = action.tone === ROW_ACTION_TONE.ACCENT ? colors.ACCENT : colors.TEXT_MUTED;
   return (
     <Button
       key={action.label}
@@ -140,8 +209,29 @@ function actionButton(action: RowAction, colors: BrandColors) {
       systemImage={action.symbol}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
-      modifiers={destructive ? [] : [tint(ink)]}
+      modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
     />
+  );
+}
+
+/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks. */
+function rowSubmenu(submenu: RowSubmenu, ink?: string) {
+  return (
+    <Menu
+      key={submenu.label}
+      label={submenu.label}
+      systemImage={submenu.symbol}
+      modifiers={ink === undefined ? [] : [tint(ink)]}
+    >
+      {submenu.choices.map((choice) => (
+        <Toggle
+          key={choice.label}
+          label={choice.label}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+    </Menu>
   );
 }
 
@@ -161,6 +251,32 @@ export function RowTime({ at, now }: { readonly at: number; readonly now: number
   );
 }
 
+/** When a reminder comes back, in the time's place: the clock in the accent ink and its time as a row says a moment to come, heard as a reminder. */
+function RowDue({ due, now }: { readonly due: number; readonly now: number | undefined }) {
+  const colors = useColors();
+  const words = dueText(due, now ?? Date.now());
+  return (
+    <HStack spacing={SPACE.TIGHT}>
+      <Image
+        systemName="clock"
+        size={MARK_SIZE.GLYPH - 4}
+        color={colors.ACCENT_TEXT}
+        modifiers={[accessibilityHidden(true)]}
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.TIME }),
+          monospacedDigit(),
+          foregroundStyle(colors.ACCENT_TEXT),
+          accessibilityLabel(`${REMIND_WORDS.DUE} ${words}`),
+        ]}
+      >
+        {words}
+      </Text>
+    </HStack>
+  );
+}
+
 /** Where a row stands in its list: on the list's own ground, inset so the unread dot stands in the margin, its hairline starting under the words. */
 export function rowPlacement(colors: BrandColors) {
   return [
@@ -176,43 +292,102 @@ export function rowPlacement(colors: BrandColors) {
   ];
 }
 
+/** Whether a full swipe from an edge runs its first act: never where that act is destructive, such as Archive, which then waits for its button's tap, nor where it is a menu. */
+function fullSwipes(swipes: readonly RowSwipe[]): boolean {
+  const first = swipes[0];
+  return first !== undefined && !isSubmenu(first) && first.tone !== ROW_ACTION_TONE.DESTRUCTIVE;
+}
+
+/** A swipe's piece as SwiftUI draws it behind the row: an act's button, or a menu's, in the muted ink. */
+function swipeButton(swipe: RowSwipe, colors: BrandColors) {
+  return isSubmenu(swipe) ? rowSubmenu(swipe, colors.TEXT_MUTED) : actionButton(swipe, colors);
+}
+
 /**
  * A row's frame in its list: the id its list picks it by, the list's own
  * ground behind it rather than a card's, its insets, which stand the unread
  * dot in the margin, and its hairline, which starts under the words rather
  * than the mark. Its acts stand twice, as the system's own rows carry them:
- * behind a swipe from either edge, and in the menu a long press opens, the
- * trailing ones first, so a person who never swipes still finds them.
+ * behind a swipe from either edge, a full swipe running the first unless it
+ * is destructive, and in
+ * the menu a long press opens, the trailing ones first, so a person who
+ * never swipes still finds them; that menu then holds its submenus and the
+ * acts only it offers. A row with a link is dragged out as it, on an iPad
+ * into another app or onto a section. A row with a preview lifts it over the menu, which
+ * then leads with Open. Note that SwiftUI's preview takes no tap of its own,
+ * a tap on it closing the menu, so Open is what opens the row from there. A
+ * row given what it is heard as reads to VoiceOver as one element, its title
+ * then where it stands, rather than each mark and word apart.
  */
 export function RowFrame({
   id,
   row,
+  heard,
   trailingActions = [],
   leadingActions = [],
+  menuSubmenus = [],
+  menuActions = [],
+  preview,
+  link,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
 }) {
   const colors = useColors();
-  const actions = [...trailingActions, ...leadingActions];
-  const frameModifiers = [tag(id), ...rowPlacement(colors)];
-  if (actions.length === 0) return <HStack modifiers={frameModifiers}>{row}</HStack>;
+  const open = useContext(RowOpenContext);
+  const swiped = [...trailingActions, ...leadingActions];
+  // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
+  const frameModifiers = [
+    tag(id),
+    ...rowPlacement(colors),
+    ...(heard === undefined
+      ? []
+      : [
+          accessibilityElement("combine"),
+          accessibilityLabel(heard.label),
+          accessibilityValue(heardValue(heard.value)),
+        ]),
+    ...(link === undefined ? [] : [dragLink(link)]),
+  ];
+  if (swiped.length + menuSubmenus.length + menuActions.length === 0 && preview === undefined) {
+    return <HStack modifiers={frameModifiers}>{row}</HStack>;
+  }
+  const opening: readonly RowAction[] =
+    preview === undefined || open === undefined
+      ? []
+      : [
+          {
+            label: VERB.OPEN,
+            symbol: "arrow.up.forward.app",
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => open(id),
+          },
+        ];
+  const menu = (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {opening.map((action) => actionButton(action, colors))}
+        {swiped.map((swipe) => swipeButton(swipe, colors))}
+        {menuSubmenus.map((submenu) => rowSubmenu(submenu))}
+        {menuActions.map((action) => actionButton(action, colors))}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
+      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
+    </ContextMenu>
+  );
+  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
+  if (swiped.length === 0) return <HStack modifiers={frameModifiers}>{menu}</HStack>;
   return (
     <SwipeActions modifiers={frameModifiers}>
-      <ContextMenu>
-        <ContextMenu.Items>
-          {actions.map((action) => actionButton(action, colors))}
-        </ContextMenu.Items>
-        <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
-      </ContextMenu>
+      {menu}
       {trailingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="trailing">
-          {trailingActions.map((action) => actionButton(action, colors))}
+        <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
+          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="leading">
-          {leadingActions.map((action) => actionButton(action, colors))}
+        <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
+          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>
@@ -222,7 +397,9 @@ export function RowFrame({
 /**
  * A row's first line: the unread dot in the margin, the leading mark in its
  * column, the title, and what ends the line. The line centers its pieces,
- * so the mark stands on the title at any Dynamic Type size.
+ * so the mark stands on the title at any Dynamic Type size, and at an
+ * accessibility size stacks its end under the title, the mark's column
+ * growing with the words.
  */
 export function RowHead({
   unread,
@@ -240,22 +417,35 @@ export function RowHead({
   readonly end: ReactNode;
 }) {
   const lines = useRowLines();
+  const stacked = useAccessibilitySize();
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
+  const words = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "medium" : "regular" }),
+        foregroundStyle(ink),
+        lineLimit(lines.title),
+      ]}
+    >
+      {title}
+    </Text>
+  );
+  // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line.
   return (
     <HStack spacing={SPACE.TIGHT} alignment="center">
       <UnreadDot unread={unread} faded={faded} />
-      <HStack spacing={SPACE.ROW} alignment="center">
-        <HStack modifiers={[frame({ width: MARK_SIZE.LEAD })]}>{lead}</HStack>
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "medium" : "regular" }),
-            foregroundStyle(ink),
-            lineLimit(lines.title),
-          ]}
-        >
-          {title}
-        </Text>
+      <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {stacked ? (
+          <VStack alignment="leading" spacing={2}>
+            {words}
+            {end}
+          </VStack>
+        ) : (
+          words
+        )}
         <Spacer />
-        {end}
+        {stacked ? null : end}
       </HStack>
     </HStack>
   );
@@ -276,16 +466,14 @@ function LineGlyph({ line }: { readonly line: InboxLineKind | undefined }) {
 
 /**
  * An Inbox row's second line, under the title: an ask's glyph, where the
- * row's lead is the task's ring rather than it, the thread's last words, in
- * the accent where they are an ask waiting on you, and the task's name after
- * them, all 13 pt in the muted ink.
+ * row's lead is the task's ring rather than it, the thread's last words, and
+ * the task's name after them, all 13 pt in the muted ink, as the panel's row
+ * reads: only the ask's glyph stands in the attention ink.
  */
 function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
   const { line, summary, task, glyph } = props;
   const colors = useColors();
   const lines = useRowLines();
-  const look = line === undefined ? undefined : INBOX_LINE_LOOK[line];
-  const asks = look?.tone === STATUS_TONE.ATTENTION;
   const words = summary?.trim() === "" ? undefined : summary;
   if (words === undefined && task === undefined) return null;
   return (
@@ -302,11 +490,7 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
           lineLimit(lines.line),
         ]}
       >
-        {words === undefined ? null : (
-          <Text modifiers={[foregroundStyle(asks ? colors.ACCENT_TEXT : colors.TEXT_MUTED)]}>
-            {words}
-          </Text>
-        )}
+        {words === undefined ? null : <Text>{words}</Text>}
         {task === undefined ? null : (
           <Text>{words === undefined ? task.name : `${LINE_PART}${task.name}`}</Text>
         )}
@@ -322,10 +506,11 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
  * what it asks), its title in 15 pt with the time at the line's end, and
  * under it the glyph and words of what it asks, then the task's name, in a
  * 13 pt muted line. A teammate's face stands before the time on a thread
- * that waits on them.
+ * that waits on them, and a thread put away until a reminder says when it
+ * comes back in its time's place, as the panel's row does.
  */
 export function ListRow(props: ListRowProps) {
-  const { id, title, task, line, unread = false, done = false, face, at, now } = props;
+  const { id, title, task, line, unread = false, done = false, face, at, now, due } = props;
   const colors = useColors();
   const ring = task?.status === undefined ? undefined : <TaskStatusMark status={task.status} />;
   const row: ReactElement = (
@@ -338,15 +523,81 @@ export function ListRow(props: ListRowProps) {
         ink={titleInk(colors, unread, done)}
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
-            {face === undefined ? null : <Avatar name={face} size={MARK_SIZE.FACE} />}
-            {at === undefined ? null : <RowTime at={at} now={now} />}
+            {face === undefined ? null : (
+              <Avatar name={face.name} picture={face.picture} size={MARK_SIZE.FACE} />
+            )}
+            {due !== undefined ? (
+              <RowDue due={due} now={now} />
+            ) : at === undefined ? null : (
+              <RowTime at={at} now={now} />
+            )}
           </HStack>
         }
       />
       <ThreadLine {...props} glyph={ring !== undefined} />
     </VStack>
   );
-  return <RowFrame {...props} id={id} row={row} />;
+  return <RowFrame {...props} id={id} row={row} heard={props.heard ?? threadHeard(props)} />;
+}
+
+/** What VoiceOver hears of an Inbox row: its title, then unread, what waits on you, its last words, its task and the task's status, whom it waits on, and when. */
+function threadHeard(props: ListRowProps): RowHeard {
+  const { title, task, line, summary, unread = false, face, at, now, due } = props;
+  const asks = line !== undefined && INBOX_LINE_LOOK[line]?.tone === STATUS_TONE.ATTENTION;
+  const moment = now ?? Date.now();
+  return {
+    label: title,
+    value: [
+      unread && UNREAD_WORDS,
+      asks && NEEDS_YOU.LABEL,
+      summary?.trim(),
+      task?.name,
+      task?.status === undefined ? undefined : TASK_STATUS_WORDS[task.status],
+      face?.name,
+      due !== undefined
+        ? `${REMIND_WORDS.DUE} ${dueText(due, moment)}`
+        : at === undefined
+          ? undefined
+          : sinceHeard(at, moment),
+    ],
+  };
+}
+
+/** What VoiceOver hears of a task row's end: a thread that needs the reader, then its agents. */
+function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
+  switch (agents?.kind) {
+    case TASK_AGENTS_STATUS.FAILED:
+      return FAILED_HEARD;
+    case TASK_AGENTS_STATUS.WORKING:
+      return WORKING_HEARD;
+    case TASK_AGENTS_STATUS.PULL_REQUEST:
+      return `${PULL_REQUEST_HEARD} ${PULL_REQUEST_STATE_LABEL[agents.pullRequest.state]}`;
+    case TASK_AGENTS_STATUS.NONE:
+    case undefined:
+      return undefined;
+    default: {
+      const unhandled: never = agents;
+      throw new Error(
+        `A task's agents stand in no status a row says: ${JSON.stringify(unhandled)}`,
+      );
+    }
+  }
+}
+
+/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
+function taskHeard(props: TaskRowProps, open: boolean): RowHeard {
+  const { name, status, unread = false, needsYou = false, agents, taskKey, subRows } = props;
+  return {
+    label: name,
+    value: [
+      unread && UNREAD_WORDS,
+      TASK_STATUS_WORDS[status],
+      needsYou && NEEDS_YOU.LABEL,
+      agentsHeard(agents),
+      taskKey,
+      subRows !== undefined && (open ? SUB_TASKS_SHOWN : SUB_TASKS_HIDDEN),
+    ],
+  };
 }
 
 /** What a task row's end says first: a thread that needs the reader, then a failed agent, one at work, or its pull request's state. */
@@ -388,6 +639,7 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       onPress={onPress}
       modifiers={[
         buttonStyle("borderless"),
+        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
       ]}
     >
@@ -446,7 +698,27 @@ export function TaskRow(props: TaskRowProps) {
       />
     </HStack>
   );
-  const framed = <RowFrame {...props} id={id} row={row} />;
+  // Note that the fold stands in the row's menu too, so a person who reaches the row as one element, through VoiceOver or Voice Control, still opens its sub-tasks.
+  const fold: readonly RowAction[] =
+    subRows === undefined
+      ? []
+      : [
+          {
+            label: open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
+            symbol: open ? "chevron.down" : "chevron.right",
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => setOpen(!open),
+          },
+        ];
+  const framed = (
+    <RowFrame
+      {...props}
+      id={id}
+      row={row}
+      menuActions={[...fold, ...(props.menuActions ?? [])]}
+      heard={props.heard ?? taskHeard(props, open)}
+    />
+  );
   if (subRows === undefined || !open) return framed;
   return (
     <>

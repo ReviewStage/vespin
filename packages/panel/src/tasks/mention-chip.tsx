@@ -1,3 +1,4 @@
+import { checkoutRelativePath } from "@repo/features/checkout-path";
 import {
   type DateSpan,
   dateChipText,
@@ -29,7 +30,7 @@ import {
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
-import { holderTaskId, type MentionHolder } from "@repo/features/mention-holder";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   type DescriptionMention,
   decodeMention,
@@ -134,7 +135,7 @@ import { useWordsDates } from "./words-dates.js";
  * running on (`useKnownNames`), or, for one the window lists not, an
  * archived agent say, the harness read for it (`mentioned-agent-card.tsx`); either
  * opens its tab through the window's opener for an app link, as a link
- * copied to it does, and an agent hangs its tab's own card where the place
+ * copied to it does, or where its place opens it (`onOpenAgent`), and an agent hangs its tab's own card where the place
  * has one, and otherwise the same card read as it is hung, on any task of
  * the workspace or on none (`mentioned-agent-card.tsx`). A person wears
  * their picture and hangs their card, their email and role, or grayed as
@@ -201,15 +202,21 @@ type MentionState = (typeof MENTION_STATE)[keyof typeof MENTION_STATE];
 /** The lines a file's tab opens on: a mention's, at the commit it pins them to, or lines a path in words names with no commit, read where the tab reads the file. */
 export type OpenFileLines = Omit<MentionLines, "commit"> & { readonly commit?: string | undefined };
 
-/** What a place drawing mentions knows and does: the task or the agent on no task whose words it draws, where its mentions are written, its description's sections' anchors, and what opening a mention does. */
+/** What a place drawing mentions knows and does: the task whose words it draws, where its mentions are written, its description's sections' anchors, and what opening a mention does. */
 export interface MentionDoors {
-  /** The task, or the agent on no task, whose words the place draws; none where neither holds them, so a section of any description is drawn as found. */
+  /** The task whose words the place draws; none where no task holds them, so a section of any description is drawn as found. */
   readonly holder: MentionHolder | undefined;
   readonly place: MentionPlace;
   readonly anchors: ReadonlySet<string>;
   readonly onOpenTask: (mention: DescriptionMention) => void;
   /** Shows a file's tab, at its lines where a mention names them; none where no file can be opened from here. */
   readonly onOpenFile: ((path: string, lines: OpenFileLines | undefined) => void) | undefined;
+  /** Shows the changes of one of an agent's turns, the turn the developer's line opened, standing on the file; none where no such tab opens from here. */
+  readonly onOpenTurnChanges?:
+    | ((agentId: string, messageId: string, path: string) => void)
+    | undefined;
+  /** Opens an agent's chip somewhere other than its tab's top, as a memory's opens its transcript at the line that kept it; none opens its tab as its link does. */
+  readonly onOpenAgent?: ((agentId: string) => void) | undefined;
   /** One of the plan's agents as its chip wears it, none for an agent not of the plan; the door is none where the place knows the plan's agents not. */
   readonly agentOf?: ((agentId: string) => MentionedAgentLook | undefined) | undefined;
   /** The card a pull request one of the plan's agents opened hangs on its Pull request tab, by any link to it; none for any other, or where the place knows the plan's agents not. */
@@ -262,7 +269,7 @@ const GONE_WORDS = "No longer in the description";
 
 /** Whether what the mention names is there to open: a section of this description is there while a heading of the description spells its anchor. */
 function mentionState(mention: Mention, doors: MentionDoors): MentionState {
-  if (mention.kind !== MENTION_KIND.SECTION || mention.taskId !== holderTaskId(doors.holder)) {
+  if (mention.kind !== MENTION_KIND.SECTION || mention.taskId !== doors.holder?.taskId) {
     return MENTION_STATE.FOUND;
   }
   return doors.anchors.has(mention.anchor) ? MENTION_STATE.FOUND : MENTION_STATE.GONE;
@@ -304,9 +311,14 @@ function pressOf(
             ? mention
             : { kind: MENTION_KIND.TASK, taskId: mention.taskId },
         );
-    // A page, an agent, or a person opens as its app link does, through the window's opener, under the workspace it was written in.
+    case MENTION_KIND.AGENT: {
+      const { onOpenAgent } = doors;
+      return onOpenAgent === undefined
+        ? () => openLink(target)
+        : () => onOpenAgent(mention.agentId);
+    }
+    // A page or a person opens as its app link does, through the window's opener, under the workspace it was written in.
     case MENTION_KIND.PAGE:
-    case MENTION_KIND.AGENT:
     case MENTION_KIND.PERSON:
       return () => openLink(target);
     // The app has no tab of its own on a task, so its chip opens the task it thinks about.
@@ -393,7 +405,7 @@ function MentionCard({
   standing: LinkStanding | undefined;
 }): ReactNode {
   const workspaceId = useWordsWorkspaceId({
-    taskId: holderTaskId(doors.holder),
+    taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
   const repository = doors.place.repository ?? undefined;
@@ -546,6 +558,7 @@ function MentionChip({
   name: written,
   doors,
   bare = false,
+  state: told,
 }: {
   mention: Mention;
   /** Its link's target as written, which names it. */
@@ -555,11 +568,13 @@ function MentionChip({
   doors: MentionDoors;
   /** Whether it was written as its bare address, so a provider's page is called by the key and title its provider answered. */
   bare?: boolean;
+  /** What stands after its name in its standing's place, where the caller knows more of it than its link does: a file's lines changed. */
+  state?: ReactNode;
 }): React.JSX.Element {
   const openLink = useOpenLink();
   const known = useKnownNames();
   const standing = useLinkStanding(mention, {
-    taskId: holderTaskId(doors.holder),
+    taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
   const section = mention.kind === MENTION_KIND.SECTION ? mention : undefined;
@@ -619,7 +634,7 @@ function MentionChip({
       kind={entityWordHeard(entityOfMention(mention).kind, label)}
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
-      state={standing?.state}
+      state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={
         press === undefined
@@ -942,6 +957,35 @@ export function linkChip(
   // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
   return chip === undefined ? undefined : (
     <WrittenAs markdown={markdownLink(label, href)}>{chip}</WrittenAs>
+  );
+}
+
+/**
+ * A file of the task's repository as its mention chip, as a call's row
+ * names one it read or wrote and a turn's files-changed row names each
+ * (`turn-files.tsx`), with `state` after its name where given. An absolute
+ * path is read into the agent's checkout, since Claude Code's file tools
+ * name every file so (`checkoutRelativePath`). None where the place knows no
+ * repository, or the path is no file of it, as an absolute one outside the
+ * checkout or one that climbs out is not.
+ */
+export function fileChip(written: string, doors: MentionDoors, state?: ReactNode): ReactNode {
+  const repository = doors.place.repository;
+  const path = checkoutRelativePath(written);
+  if (repository === null || path === undefined) return undefined;
+  const target = encodeMention({ kind: MENTION_KIND.FILE, path }, doors.place);
+  const found = linkMention(target, target, repository);
+  // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
+  if (found?.mention.kind !== MENTION_KIND.FILE) return undefined;
+  return (
+    <MentionChip
+      mention={found.mention}
+      target={target}
+      name={found.name}
+      doors={pageDoors(doors, target)}
+      bare
+      state={state}
+    />
   );
 }
 

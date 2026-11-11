@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { agentQueueNow } from "@repo/database/models/agent-queue-store";
 import {
   readAgentRepositories,
   recordAgentRepositoryHead,
@@ -10,15 +11,12 @@ import { readAgent, readAgentByKey } from "@repo/database/models/agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
-import {
-  type QueuedAgentTurn,
-  QueuedTurnListener,
-  storeWriter,
-} from "@repo/database/models/writer";
+import { storeWriter } from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
 import { AGENT_KIND, AGENT_MACHINE, EXTRA_REPOSITORY_REFUSAL } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -29,6 +27,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { MESSAGE_ROLE, RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
+import { keptAfterResponse } from "../../http/after-response.js";
 import { extraRepositoryRefused, HOSTED_REFUSAL } from "../../http/http-effect.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
@@ -45,6 +44,8 @@ import {
 } from "../../testing/github-app-fake.js";
 import {
   type AgentSessions,
+  MACHINE_UP,
+  type MachineUp,
   PLAN_REFUSAL,
   RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
@@ -52,7 +53,6 @@ import {
   SESSION_SEND_OUTCOME,
   type SessionFailed,
   type SessionMessage,
-  type SessionOpened,
 } from "../sessions/agent-sessions.js";
 import { type StartAsk, startAgent } from "./start.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
@@ -61,12 +61,11 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
- * coder-start.test.ts -- an agent started in a workspace with no task, as an automation's run starts one, and one started on a task.
+ * coder-start.test.ts -- an agent started on a task, by hand or as an automation's run starts one.
  *
- * The Start opens one agent on no task, in the workspace named, on the
- * repository named, handed the task, and a retry under its key is that
- * agent and opens nothing again; a member who did not make the workspace
- * starts one as well, an account outside it starts nothing, and a
+ * The Start opens one agent on the task, on its repository, handed the
+ * prompt, and a retry under its key is that agent and opens nothing again;
+ * a member who did not make the task starts one as well, an account outside it starts nothing, and a
  * repository the workspace's installation does not reach is refused before
  * the harness is asked, and a Start whose session never opened leaves no agent. An agent started on a task moves it into progress from the
  * backlog or to do, and on a task stored in pilot mode it is a coder. The
@@ -92,16 +91,28 @@ const TASK = "Find the flakiest test in CI this week and fix it.";
 function fakeAgentSessions() {
   const opened: SessionMessage[] = [];
   const sessions: AgentSessions = {
+    // Note that the machine is up at once, so the first message the Start queued goes as its boot answers.
+    boot: () =>
+      Effect.succeed({
+        outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+        sessionId: `wrun_${randomUUID()}`,
+        up: Effect.succeed(MACHINE_UP.READY),
+      }),
     open: (message) =>
       Effect.sync(() => {
         opened.push(message);
         return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
       }),
-    send: () => Effect.succeed({ outcome: SESSION_SEND_OUTCOME.FAILED, status: 500 }),
+    send: (sessionId, message) =>
+      Effect.sync(() => {
+        opened.push(message);
+        return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
+      }),
     cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
     reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
   };
-  return { opened, sessions, agentSessions: Effect.succeed(sessions) };
+  const agentSessions = Effect.succeed(sessions);
+  return { opened, sessions, agentSessions };
 }
 
 /** The catalog every Start is checked against. */
@@ -248,46 +259,54 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
   );
 
   it.effect(
-    "a Start's turn is handed on for its runner only once its open took the first line, and not at all where the open refused it",
+    "a Start's first message waits in the agent's queue until its machine is up, and goes nowhere where the machine never came up",
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
-        const queued: QueuedAgentTurn[] = [];
-        const listening = Layer.succeed(QueuedTurnListener, {
-          heard: (turn) => Effect.sync(() => void queued.push(turn)),
-        });
-        const heardAtOpen: number[] = [];
-        const opening = (outcome: SessionOpened) =>
-          Effect.succeed<AgentSessions>({
-            ...fakeAgentSessions().sessions,
-            open: () =>
-              Effect.sync(() => {
-                heardAtOpen.push(queued.length);
-                return outcome;
+        const booting = (up: Effect.Effect<BootFailure | MachineUp>) =>
+          Effect.gen(function* () {
+            const { opened, agentSessions } = fakeAgentSessions();
+            const sessions = yield* agentSessions;
+            const after = keptAfterResponse();
+            const { agent } = yield* startAgent(
+              Effect.succeed<AgentSessions>({
+                ...sessions,
+                boot: (conversationId) =>
+                  Effect.map(sessions.boot(conversationId), (booted) =>
+                    booted.outcome === SESSION_SEND_OUTCOME.ACCEPTED ? { ...booted, up } : booted,
+                  ),
               }),
+              owner,
+              yield* promptAsk(owner, workspaceId),
+            ).pipe(Effect.provide(Layer.merge(services, after.layer)));
+            const queuedWhileBooting = (yield* agentQueueNow(agent.id)).messages.map(
+              (message) => message.text,
+            );
+            const sentWhileBooting = opened.length;
+            yield* after.run;
+            return {
+              queuedWhileBooting,
+              sentWhileBooting,
+              sentOnceUp: opened.length,
+              queuedOnceUp: (yield* agentQueueNow(agent.id)).messages.length,
+            };
           });
 
-        const started = yield* startAgent(
-          opening({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: "claude-session" }),
-          owner,
-          yield* promptAsk(owner, workspaceId),
-        ).pipe(Effect.provide(Layer.merge(services, listening)));
-        const heardOnce = [...queued];
-        const refused = yield* Effect.result(
-          startAgent(
-            opening({ outcome: SESSION_SEND_OUTCOME.FAILED, status: 503 }),
-            owner,
-            yield* promptAsk(owner, workspaceId),
-          ).pipe(Effect.provide(Layer.merge(services, listening))),
-        );
+        const cameUp = yield* booting(Effect.succeed(MACHINE_UP.READY));
+        const neverCameUp = yield* booting(Effect.succeed(BOOT_FAILURE.MACHINE_UNAVAILABLE));
 
-        assert.deepEqual(heardAtOpen, [0, 1]);
-        assert.deepEqual(
-          heardOnce.map((turn) => turn.conversationId),
-          [started.agent.conversationId],
-        );
-        assert.ok(Result.isFailure(refused));
-        assert.equal(queued.length, 1, "a refused open hands no turn on");
+        assert.deepEqual(cameUp, {
+          queuedWhileBooting: [TASK],
+          sentWhileBooting: 0,
+          sentOnceUp: 1,
+          queuedOnceUp: 0,
+        });
+        assert.deepEqual(neverCameUp, {
+          queuedWhileBooting: [TASK],
+          sentWhileBooting: 0,
+          sentOnceUp: 0,
+          queuedOnceUp: 1,
+        });
       }),
   );
 
@@ -350,7 +369,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         const whileAsking = yield* cutAt((reached) =>
           Effect.succeed({
             ...fakeAgentSessions().sessions,
-            open: () => Effect.andThen(Deferred.succeed(reached, undefined), Effect.never),
+            boot: () => Effect.andThen(Deferred.succeed(reached, undefined), Effect.never),
           }),
         );
 
@@ -376,7 +395,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         const refusing = (failed: SessionFailed) =>
           Effect.succeed<AgentSessions>({
             ...fakeAgentSessions().sessions,
-            open: () => Effect.succeed(failed),
+            boot: () => Effect.succeed(failed),
           });
         const started = (failed: SessionFailed) =>
           Effect.flatMap(promptAsk(owner, workspaceId), (ask) =>

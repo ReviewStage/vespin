@@ -299,6 +299,8 @@ export interface NativeProjectionContext {
   readonly model: string | undefined;
   /** Whether the starter's own API key pays for the agent, so a refusal of it is theirs to replace in Settings. */
   readonly ownKey: boolean;
+  /** Whether the agent runs on its machine's own login to its harness (`AGENT_PAYER.MAC_SIGN_IN`), so a refusal of it is mended by signing in on that machine. */
+  readonly machineLogin?: boolean | undefined;
   /** Where another payer has room for a turn the plan's limit cuts short, the payers it moves between, which it then waits for a launch on rather than failing (`NATIVE_WRITE.RETRY`) and names in its notice. */
   readonly movedAfterLimit?: UsageLimitMove | undefined;
   /** Where no other payer has room, when the soonest limit among the starter's other subscriptions resets, which a turn the plan's limit cuts short may wait for rather than fail (`NATIVE_WRITE.WAIT`). */
@@ -612,11 +614,18 @@ class Fold {
         : refusal
           ? TURN_FAILURE.REFUSAL
           : TURN_FAILURE.MODEL;
-    // Note that a refusal of the starter's own key leads with the coder's word for it, so the window reads the failure as a key to replace rather than a model call failed.
-    const ownKeyRefused =
-      turn.refused === true && this.#context.ownKey ? CODER_REFUSAL.ACCOUNT_KEY_REFUSED : undefined;
+    // Note that a refusal of the starter's own key, or of a local agent's machine's own login, leads with the coder's word for it,
+    // so the window reads the failure as a key to replace, or a machine to sign in on, rather than a model call failed.
+    const credentialRefused =
+      turn.refused !== true
+        ? undefined
+        : this.#context.ownKey
+          ? CODER_REFUSAL.ACCOUNT_KEY_REFUSED
+          : this.#context.machineLogin === true
+            ? CODER_REFUSAL.MACHINE_SIGNED_OUT
+            : undefined;
     const detail = [
-      ownKeyRefused,
+      credentialRefused,
       moment.detail,
       turn.compactionFailed,
       turn.refusing,
@@ -859,6 +868,11 @@ class Fold {
       }
       case NATIVE_MOMENT.COMPACTED:
         this.writes.push({ kind: NATIVE_WRITE.COMPACTED });
+        if (moment.notice !== undefined) {
+          this.#setTurn(
+            this.#tell(this.turn(), { kind: RUN_EVENT.COMPACTED, notice: moment.notice }),
+          );
+        }
         return;
       case NATIVE_MOMENT.COMPACTION_FAILED: {
         this.#context.report(moment.detail);

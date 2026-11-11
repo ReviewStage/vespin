@@ -9,7 +9,7 @@
  * last.
  */
 
-import { countWords } from "@repo/features/words";
+import { offlineRefusedWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { STATUS_TONE } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -33,7 +33,7 @@ export function useOfflineRefusedToast(): void {
     withdraw(OFFLINE_REFUSED_SUBJECT);
     if (count === 0) return;
     toast({
-      words: `Couldn't save ${countWords(count, { one: "change", many: "changes" })} you made offline.`,
+      words: offlineRefusedWords(count),
       tone: STATUS_TONE.ATTENTION,
       subject: OFFLINE_REFUSED_SUBJECT,
       persists: true,

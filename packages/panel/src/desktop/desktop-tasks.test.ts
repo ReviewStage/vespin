@@ -45,7 +45,7 @@ import {
   UNREAD,
 } from "@repo/host/app-state";
 import { TASKS_ACT_KIND } from "@repo/host/contract";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, type ExperimentChoices } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { agentTab, changesTab, draftTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
@@ -67,6 +67,7 @@ import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { relayout } from "../testing/resize-observer.js";
 import { ToastHost } from "../toast.js";
 import "../file-tree/index.js";
+import { useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import {
   handHostReads,
   handMembers,
@@ -251,6 +252,82 @@ function markupOf(element: ReactElement): string {
   return markup;
 }
 
+test("a listed task draws its name, its status, and the column's tab from its row while its description is still read, which alone waits, renames from it, and stands nowhere with Descriptions off", () => {
+  const listed = { ...TASK, status: TASK_STATUS.IN_PROGRESS, priority: TASK_PRIORITY.HIGH };
+  /** The rename door the page offers ⌘K, as it stood at the last draw. */
+  let renameOffer: ReturnType<typeof useTaskRenameOffer>;
+  function RenameOfferProbe(): null {
+    renameOffer = useTaskRenameOffer();
+    return null;
+  }
+  const page = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(page);
+  const draw = (experiments: ExperimentChoices) => {
+    act(() =>
+      root.render(
+        windowRouter().provide(
+          withExperiments(
+            experiments,
+            createElement(
+              Fragment,
+              null,
+              createElement(RenameOfferProbe),
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                tasks: tasksControl({
+                  page: TASKS_PAGE.DOCUMENT,
+                  tasks: [listed],
+                  activeTaskId: TASK.id,
+                  region: { kind: DOCUMENT_REGION.READING },
+                  workspaces: [
+                    {
+                      id: TASK.workspaceId,
+                      name: "Personal",
+                      role: WORKSPACE_ROLE.OWNER,
+                      github: null,
+                    },
+                  ],
+                }),
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+    return [...page.querySelectorAll('[role="status"]')].map((each) => each.textContent);
+  };
+  const reading = draw(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+  assert.ok(
+    [...page.querySelectorAll("h1, h2")].some((each) => each.textContent === TASK.name),
+    "the task's title is drawn from its row",
+  );
+  assert.ok(page.textContent?.includes("In progress"), "its status chip is drawn from its row");
+  assert.ok(page.querySelector('[role="tablist"]'), "the column's tabs stand");
+  assert.deepEqual(
+    reading.filter((words) => words?.includes("task")),
+    [],
+    "the page does not wait on the task as a whole",
+  );
+  assert.ok(
+    reading.some((words) => words?.includes("description")),
+    "the description alone says it is read",
+  );
+  assert.ok(renameOffer, "the page offers its rename");
+  act(() => renameOffer?.begin());
+  assert.equal(
+    page.querySelector<HTMLInputElement>('input[aria-label="Task name"]')?.value,
+    TASK.name,
+    "the rename opens over the listed name",
+  );
+  assert.deepEqual(
+    draw({}).filter((words) => words?.includes("description")),
+    [],
+    "with Descriptions off no description is said to be read",
+  );
+  act(() => root.unmount());
+  page.remove();
+});
+
 test("a task with no agent tab draws a new agent's draft", () => {
   const DRAFT_ID = "draft-1";
   const drawn = () => {
@@ -336,7 +413,7 @@ test("a run's task leads its bar with the path to the automation whose run made 
   );
 });
 
-test("a wide task's details with no agent offer New agent under its title, which opens a draft as the way back to the agents does", async () => {
+test("a wide task's details with no agent offer New agent on its Agents group's head, which opens a draft as the way back to the agents does", async () => {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
   fakeActPort({});
@@ -367,9 +444,8 @@ test("a wide task's details with no agent offer New agent under its title, which
     ),
   );
   const newAgent =
-    [...container.querySelectorAll<HTMLButtonElement>(".plan-starts button")].find((each) =>
-      each.textContent?.startsWith("New agent"),
-    ) ?? assert.fail("New agent is offered");
+    container.querySelector<HTMLElement>(".plan-agents button[aria-label='New agent']") ??
+    assert.fail("New agent is offered");
 
   act(() => newAgent.click());
   const back =
@@ -494,7 +570,6 @@ async function _narrowTaskInbox(
   // again what `later` says once it settles; one that fails after it answered keeps its rows, as the host keeps them.
   const heldOf = (read: AppHolderInbox): AppHolderInboxes => ({
     [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: read },
-    [INBOX_SCOPE_KIND.AGENT]: {},
   });
   let standing: AppHolderInbox = first === undefined ? { rows: items } : UNREAD;
   // Note that the window is a fresh one, so nothing a test before handed it stands.

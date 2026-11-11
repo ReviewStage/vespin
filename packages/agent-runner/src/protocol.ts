@@ -10,12 +10,12 @@
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
  * through `codex app-server` (P20). Secrets never travel in argv or on
- * stdin: the runner's bearer and the harness's credential are in its
- * environment. Codex's ChatGPT access token is never handed in at all: the
- * runner asks the service for each over HTTPS (`codex-token.ts`), on a host
- * through its token command and in the cloud's sandbox as it signs
- * app-server in, so no line carries one, on a Mac's queue
- * (`@repo/features/device-agent-wire`) or anywhere else.
+ * stdin: the runner's bearer and, in the cloud, the harness's credential are
+ * in its environment; on a host the harnesses run on the machine's own
+ * logins. Codex's ChatGPT access token is never handed in at all: in the
+ * cloud's sandbox the runner asks the service for each over HTTPS
+ * (`codex-token.ts`) as it signs app-server in, so no line carries one, on a
+ * Mac's queue (`@repo/features/device-agent-wire`) or anywhere else.
  */
 
 import type {
@@ -37,11 +37,12 @@ import type { ServerNotification } from "./codex-protocol/index.js";
  * stands in its place for an agent the account's key pays for. In a sandbox
  * either is a placeholder minted for the launch, which the sandbox's firewall
  * swaps for the real one on Anthropic's API, so neither enters the sandbox;
- * on a host it is the credential itself. Codex's token is never in it: the
- * runner asks the service for it, on a host through its token command and in
- * the cloud's sandbox as it signs app-server in (`codex-token.ts`). An OpenAI
- * API key in the sandbox is a placeholder, swapped for the real one at the
- * sandbox's firewall, as Anthropic's are.
+ * on a host the runner hands its harnesses none of them, whatever it was
+ * started with, since they run on the machine's own logins
+ * (`launch.ts`'s `harnessEnvOf`). Codex's token is never in it: the runner
+ * asks the service for it in the cloud's sandbox as it signs app-server in
+ * (`codex-token.ts`). An OpenAI API key in the sandbox is a placeholder,
+ * swapped for the real one at the sandbox's firewall, as Anthropic's are.
  */
 export const RUNNER_ENV = {
   BEARER: "APP_RUNNER_TOKEN",
@@ -60,38 +61,12 @@ export const RUNNER_ENV = {
    */
   OPENAI_API_KEY: "OPENAI_API_KEY",
   /**
-   * Which backend a host's Codex launch on the plan sends its requests to
-   * (`CODEX_PLAN_BACKEND`): set where the plan was connected through Codex's
-   * own device-code login, whose token only Codex's ChatGPT backend accepts,
-   * and unset for OpenAI's API, where a third-party sign-in's token goes.
-   */
-  CODEX_PLAN_BACKEND: "APP_CODEX_PLAN_BACKEND",
-  /**
-   * The ChatGPT workspace a host's device-code plan pays from, which Codex's
-   * ChatGPT backend reads from the account header of each request; unset
-   * where the plan's ID token named none. A workspace id is no secret.
-   */
-  CHATGPT_ACCOUNT_ID: "APP_CHATGPT_ACCOUNT_ID",
-  /**
    * Where the runner runs, where its starter says (`RUNNER_PLACE`): set by a
    * host's daemon alone, on a Linux box and a Mac alike, This Mac's among
    * them, and unset in the cloud's sandbox.
    */
   PLACE: "APP_RUNNER_PLACE",
 } as const;
-
-/**
- * The backends a host's Codex launch on the plan sends its requests to, as its
- * starter names one in `RUNNER_ENV.CODEX_PLAN_BACKEND`: OpenAI's API, for a
- * token a third-party sign-in was issued, or Codex's ChatGPT backend, for
- * one Codex's own device-code login was issued.
- */
-export const CODEX_PLAN_BACKEND = {
-  OPENAI_API: "openai_api",
-  CHATGPT: "chatgpt",
-} as const;
-
-export type CodexPlanBackend = (typeof CODEX_PLAN_BACKEND)[keyof typeof CODEX_PLAN_BACKEND];
 
 /** The places a runner's starter names in `RUNNER_ENV.PLACE`. */
 export const RUNNER_PLACE = {
@@ -132,8 +107,10 @@ export const INSTALLED_SKILLS = {
  * to-do tool (TaskCreate and its siblings replaced TodoWrite), so each is
  * listed to be offered; and that a tool beside one of our own, or one no
  * headless agent can use, is denied, so the agent has one way to do each
- * thing. SendMessage stays, because the Agent tool continues a subagent
- * with it.
+ * thing: `ScheduleWakeup` among them, because our `schedule_wakeup` ends
+ * the turn and lets the sandbox stop while the agent waits, where the CLI's
+ * holds the CLI, and so its sandbox, up for the whole wait. SendMessage
+ * stays, because the Agent tool continues a subagent with it.
  */
 export const CLAUDE_CODE_TOOLS = {
   ADDED: ["Glob", "Grep", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"],
@@ -145,6 +122,7 @@ export const CLAUDE_CODE_TOOLS = {
     "RemoteTrigger",
     "PushNotification",
     "AskUserQuestion",
+    "ScheduleWakeup",
   ],
 } as const;
 
@@ -176,8 +154,8 @@ const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
 /**
  * The built-in tools a launch whose mode asks runs unasked, by the names the
  * CLI gives them: those that only read, the checkout or the web, load a
- * skill's instructions or a deferred tool, or keep the agent's own to-do list
- * and wakeups. Every MCP server the launch hands the CLI, ours and each
+ * skill's instructions or a deferred tool, or keep the agent's own to-do
+ * list. Every MCP server the launch hands the CLI, ours and each
  * integration's, runs unasked beside them by its `mcp__<server>` rule, so
  * what asks is a file edit, a shell command, and a server the checkout adds.
  */
@@ -193,7 +171,6 @@ export const CLAUDE_CODE_UNASKED_TOOLS = [
   "TaskUpdate",
   "TaskList",
   "TaskGet",
-  "ScheduleWakeup",
 ] as const;
 
 /** The harness a launch runs, spelled as `conversations.runtime` spells it. */
@@ -296,13 +273,6 @@ export const APPROVAL_INPUT = {
   TEXT_MAX: 2_000,
   ITEMS_MAX: 50,
 } as const;
-
-/**
- * The argument that starts the runner's bundle as a host's Codex token command
- * rather than as a launch: `node <bundle> codex-token <tokenUrl>`, which prints
- * the plan's access token the service answers, and nothing else, on stdout.
- */
-export const CODEX_TOKEN_COMMAND = "codex-token";
 
 /**
  * What the service's token route answers a runner: the plan's access token,
@@ -645,11 +615,11 @@ export const CodexConfigSchema = Schema.Struct({
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
   /**
    * Where the runner asks the service for the plan's access token, under its bearer
-   * (`/api/agents/runner-token`). App-server takes its token from the
-   * runner's `codex-token` command (Codex's provider `auth`), which Codex runs
-   * again as its cached token ages and after a 401, so a turn outlives any
-   * one token. Not asked where the launch's environment holds
-   * `OPENAI_API_KEY`: the account's API key pays, and app-server reads it.
+   * (`/api/agents/runner-token`), in the cloud's sandbox, as it signs
+   * app-server in and again after a 401, so a turn outlives any one token.
+   * Not asked where the launch's environment holds `OPENAI_API_KEY`, the
+   * account's API key paying, nor on a host, whose app-server runs on the
+   * machine's own login.
    */
   tokenUrl: Schema.String,
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), whose `skills/` is set as an extra skills root where it is there. */
@@ -695,12 +665,18 @@ const UuidSchema = Schema.String.check(
  * is on the next payer: Claude Code drops a resumed session's prompt under
  * a uuid the session holds, answering nothing, so the runner hands the SDK
  * the prompt under a uuid of its own, and ACCEPTED still names the service's.
+ * `compact` asks for the session's compaction in the message's place: Codex
+ * compacts its thread (`thread/compact/start`), which takes no words, once no
+ * turn of its own runs, and Claude Code, whose CLI runs the message's bare
+ * `/compact` as its own command, needs no mark. A runner from before the mark
+ * hands the message on as words.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
   uuid: Schema.optionalKey(UuidSchema),
   content: Schema.Array(ContentBlockSchema),
   resent: Schema.optionalKey(Schema.Boolean),
+  compact: Schema.optionalKey(Schema.Boolean),
 });
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its

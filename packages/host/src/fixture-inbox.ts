@@ -12,7 +12,7 @@
  * agents, which its own page lists, filled out as the Tasks list stands one:
  * a task pinned, one in a section of the account's, a sub-task, two
  * repositories, and the reference journey's task with its agent's pull
- * request, its pages, its description, and a task it waits on. The items
+ * request, a call the agent holds for the account's answer, its pages, its description, and a task it waits on. The items
  * are an ask of each kind (a decision, an approval, steps to do, an answer
  * in words, and a form), a notice whose message carries code, a long
  * thread, one answered, and one closed. Every
@@ -23,7 +23,18 @@
  */
 
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
-import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPendingApproval,
+  type AgentPermissionMode,
+  APPROVAL_STATUS_OF_ANSWER,
+} from "@repo/features/agent-approval-wire";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentTranscriptOlderAnswer,
+  type AgentTranscriptOlderParams,
+  INBOX_SCOPE_KIND,
+} from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_RUNTIME,
@@ -33,6 +44,14 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import {
+  DESCRIPTION_COMMENT_ACTION,
+  DESCRIPTION_COMMENT_ACTOR,
+  DESCRIPTION_COMMENT_ENTRY,
+  DESCRIPTION_COMMENT_SCOPE,
+  DESCRIPTION_COMMENT_STATUS,
+  type DescriptionCommentThread,
+} from "@repo/features/description-comment-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
@@ -41,6 +60,7 @@ import {
   INBOX_ASK_STATUS,
   INBOX_FIELD,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
   INBOX_WIRE_VERSION,
@@ -48,16 +68,45 @@ import {
   type InboxMessage,
 } from "@repo/features/inbox-wire";
 import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
+import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
+import {
+  INTEGRATION_PROVIDER,
+  INTEGRATION_PROVIDER_LIST,
+  INTEGRATION_STATUS,
+} from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { MODEL_PROVIDER, type ModelsAnswer } from "@repo/features/models-wire";
+import {
+  MODEL_PROVIDER,
+  MODEL_SPEED,
+  MODEL_SPEED_SUFFIX,
+  type ModelsAnswer,
+} from "@repo/features/models-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
-import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import {
+  TASK_PRIORITY,
+  TASK_SKILL_SOURCE,
+  TASK_STATUS,
+  type Task,
+  type TaskSummary,
+} from "@repo/features/task-wire";
+import {
+  COMMENT_SUBJECT,
+  DESCRIPTION_COMMENT_CALL_FAILURE,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import {
+  INVITATION_ROLE,
+  type WorkspaceInvitation,
+} from "@repo/features/workspace-invitation-wire";
+import {
+  WORKSPACE_ROLE,
+  type Workspace,
+  type WorkspaceMembersAnswer,
+} from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
@@ -70,7 +119,11 @@ import {
   RUN_PROFILE,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
-import { fixtureAgentPicture, fixtureAgentTranscript } from "./fixture-agent-transcript.js";
+import {
+  fixtureAgentOlderMessages,
+  fixtureAgentPicture,
+  fixtureAgentTranscript,
+} from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
   FIXTURE_VIDEO_MP4,
@@ -106,11 +159,23 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
 
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
 const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
+
+/**
+ * The sign-in pictures the fixture's people stand in with: organizations'
+ * logos on GitHub's avatar host, which the apps may load pictures from,
+ * rather than anyone's face; Alan Turing is left with none, so his letters
+ * stand in, as anyone's do without one.
+ */
+const PICTURE = {
+  ADA: "https://avatars.githubusercontent.com/u/9919?v=4",
+  GRACE: "https://avatars.githubusercontent.com/u/1342004?v=4",
+} as const;
 const ACCOUNT: AccountSnapshot = {
   status: ACCOUNT_STATUS.SIGNED_IN,
   id: ADA.userId,
   email: "ada@example.com",
   name: ADA.name,
+  pictureUrl: PICTURE.ADA,
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
@@ -137,6 +202,9 @@ const AGENT = {
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
+
+/** The model the digest's agent runs on, Codex's, from the fixture's catalog. */
+const CODEX_MODEL = "openai/gpt-6.1-sol";
 
 /** The fixture's workspace by the name its addresses spell it with, as the panel's tasks fixture names it. */
 const FIXTURE_WORKSPACE_SLUG = "personal";
@@ -216,6 +284,68 @@ const RECORDED = {
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
 } as const;
 
+/** The turn-end thread's option files, by the attachment each is read by: a still of the card, one of the dock, and a recording of it. */
+const TURN_END = {
+  ITEM: fixtureId(6),
+  CARD: "b4a5d758-90c1-4dea-85a2-3c4d5e6f7081",
+  DOCK: "d6c7f97a-b2e3-4f0c-a7c4-5e6f708192a3",
+  RECORDING: "e7d80a8b-c3f4-401d-b8d5-6f708192a3b4",
+} as const;
+
+/** One of the turn-end thread's option files as its option names it. */
+function turnEndMedia(attachmentId: string, caption: string, recording = false) {
+  const mediaType = recording ? CONVERSATION_MEDIA_TYPE.WEBM : AGENT_ATTACHMENT_TYPE.PNG;
+  return { type: INBOX_OPTION_MEDIA.FILE, attachmentId, mediaType, caption } as const;
+}
+
+/** The turn-end thread's options: a card with its still and a page, the dock with a still, a recording, and a link, and one with none. */
+const TURN_END_OPTIONS = [
+  {
+    label: "A done card",
+    detail: "Archive, plus the follow-ups the agent mentioned.",
+    media: [
+      turnEndMedia(TURN_END.CARD, "On a desktop"),
+      {
+        type: INBOX_OPTION_MEDIA.PAGE,
+        pageId: FIXTURE_PAGE.id,
+        version: FIXTURE_PAGE.version,
+        title: FIXTURE_PAGE.title,
+        place: { taskId: TASK.INVITES },
+      },
+    ],
+  },
+  {
+    label: "Two states of the dock",
+    detail: "Needs you, then Done.",
+    media: [
+      turnEndMedia(TURN_END.DOCK, "The dock at rest"),
+      turnEndMedia(TURN_END.RECORDING, "Ticking two follow-ups", true),
+      {
+        type: INBOX_OPTION_MEDIA.LINK,
+        url: "https://preview.example.com/dock",
+        label: "The dock on the preview",
+      },
+    ],
+  },
+  { label: "Leave it as it is", detail: "The transcript ends on Worked for." },
+] as const;
+
+/** A turn-end option's file as the service answers it: each still the fixture's picture, and the recording its video, as an MP4 to a reader that plays one. */
+function turnEndFile(
+  attachmentId: string,
+  playable: string | undefined,
+): PortActResult<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT> {
+  if (attachmentId === TURN_END.RECORDING) {
+    return playable === MP4_TYPE
+      ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+      : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+  }
+  const stills: readonly string[] = [TURN_END.CARD, TURN_END.DOCK];
+  return stills.includes(attachmentId)
+    ? { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG }
+    : { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+}
+
 /**
  * The thread whose answer the fixture refuses, as a send no answer came back
  * for: the migration's approval, so a flow sees an answer drawn at once and
@@ -274,6 +404,36 @@ const INVITES_ITEMS: readonly InboxItem[] = [
         ...OPEN,
       },
     ),
+  ]),
+  item(6, AGENT.INVITES, "turn-end", "How should a finished turn end?", [
+    {
+      ...agentSaid(
+        116,
+        90 * MINUTE,
+        "Three directions for what a turn shows once the agent is done. Each card holds its shots; press one to look closer.",
+        {
+          type: INBOX_ASK.DECIDE,
+          options: TURN_END_OPTIONS,
+          multiple: true,
+          recommended: "A done card",
+          ...OPEN,
+        },
+      ),
+      // Note that the options' files are the message's own, as the service keeps them.
+      files: TURN_END_OPTIONS.flatMap((option) =>
+        ("media" in option ? option.media : []).flatMap((media) =>
+          media.type === INBOX_OPTION_MEDIA.FILE
+            ? [
+                {
+                  attachmentId: media.attachmentId,
+                  name: media.caption,
+                  mediaType: media.mediaType,
+                },
+              ]
+            : [],
+        ),
+      ),
+    },
   ]),
   item(3, AGENT.INVITES, "invite-limits", "Invite limits", [
     agentSaid(
@@ -556,20 +716,53 @@ function agentOn(
   };
 }
 
+/** When the invitations agent's run began, which its transcript counts from. */
+const INVITES_STARTED = LANDED - 3 * DAY;
+
+/**
+ * The call the invitations agent holds for the account's answer, as it asks
+ * before a shell command in Ask mode: its last turn's test run, which its
+ * transcript draws still under way.
+ */
+const INVITES_HELD: AgentPendingApproval = {
+  id: fixtureId(94),
+  toolUseId: "fixture-invites-resend-test",
+  toolName: "Bash",
+  title: "Run pnpm test src/members",
+  description: "Run the members tests",
+  input: { command: "pnpm test src/members", description: "Run the members tests" },
+  askedAt: INVITES_STARTED + 72 * MINUTE,
+};
+
 const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
   [
     TASK.INVITES,
-    agentOn(
-      AGENT.INVITES,
-      TASK.INVITES,
-      "Build teammate invitations",
-      AGENT_STATUS.RUNNING,
-      3 * DAY,
-    ),
+    {
+      ...agentOn(
+        AGENT.INVITES,
+        TASK.INVITES,
+        "Build teammate invitations",
+        AGENT_STATUS.RUNNING,
+        3 * DAY,
+      ),
+      permissionMode: AGENT_PERMISSION_MODE.ASK,
+      pendingApprovals: [INVITES_HELD],
+    },
   ],
+  // Note that the digest's agent runs on Codex, so the agents' marks show both harnesses.
   [
     TASK.DIGEST,
-    agentOn(AGENT.DIGEST, TASK.DIGEST, "Send the weekly digest", AGENT_STATUS.RUNNING, 4 * HOUR),
+    {
+      ...agentOn(
+        AGENT.DIGEST,
+        TASK.DIGEST,
+        "Send the weekly digest",
+        AGENT_STATUS.RUNNING,
+        4 * HOUR,
+      ),
+      model: CODEX_MODEL,
+      runtime: AGENT_RUNTIME.CODEX,
+    },
   ],
   [
     TASK.ROUNDING,
@@ -713,6 +906,8 @@ const FIXTURE_WORKSPACE: Workspace = {
   role: WORKSPACE_ROLE.OWNER,
   github: { login: "ada", active: true },
   personal: true,
+  memberCount: 1,
+  pictureUrl: PICTURE.ADA,
   experiments: [
     {
       experiment: EXPERIMENT.DESCRIPTIONS,
@@ -721,6 +916,64 @@ const FIXTURE_WORKSPACE: Workspace = {
       changedAt: LANDED - 30 * DAY,
     },
   ],
+};
+
+/** The fixture workspace's people, as Settings › Workspace lists them: the account, its owner, an admin, and a member. */
+const MEMBERS: WorkspaceMembersAnswer = {
+  members: [
+    {
+      userId: ADA.userId,
+      name: ADA.name,
+      email: "ada@example.com",
+      role: WORKSPACE_ROLE.OWNER,
+      pictureUrl: PICTURE.ADA,
+    },
+    {
+      userId: "user-grace",
+      name: "Grace Hopper",
+      email: "grace@example.com",
+      role: WORKSPACE_ROLE.ADMIN,
+      pictureUrl: PICTURE.GRACE,
+    },
+    {
+      userId: "user-alan",
+      name: "Alan Turing",
+      email: "alan@example.com",
+      role: WORKSPACE_ROLE.MEMBER,
+    },
+  ],
+};
+
+/** The fixture workspace's one pending invitation, a week from running out. */
+const INVITATIONS: readonly WorkspaceInvitation[] = [
+  {
+    id: "invitation-katherine",
+    email: "katherine@example.com",
+    role: INVITATION_ROLE.MEMBER,
+    expiresAt: new Date(LANDED + 7 * DAY).toISOString(),
+    acceptUrl: "https://vespin.dev/accept-invitation/invitation-katherine",
+  },
+];
+
+/** Relay's photo, as the host holds a workspace's photo once fetched: a small teal tile with a band across it, so a drawn photo reads apart from a letter on its hue. */
+const TEAM_PHOTO = {
+  version: "relay-photo-1",
+  url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAA+UlEQVR42s3YawrCMBBG0bsT9+cfl+Dm3IA7UhBE1CaTeXwTSGkeEziUNp2E6/32t5wu55bCEajLNAK1mCYgvWkOEptMIKXJCpKZFkAaE89rKxOv2z4m3rVNTHw2djDx1W438dvVa+Jvb6OJo4EuE4OxFhPjYb2JaYTYhCVIacIYJzNhD9WYWIoWmFidUG3CMafUhO/B1plwv31FJiKfaIWJ4DqWbiK+2OeaSPkjJprIShuyTCTmVikmchPQuIn0LD1oomIrEzFRtN9zm6jbFPtMlJ4cOExUH6+smspBqyYFaMkkAtlNOpDRJAVZTGrQ1NQAGpt6QAPTA4OnmUbTnrGMAAAAAElFTkSuQmCC",
+} as const;
+
+/**
+ * A team the fixture's account is a member of beside its own, where a list
+ * names none, so the iOS app's workspace switcher has another to list and
+ * a flow has one to switch to; it holds no tasks and no threads.
+ */
+const TEAM_WORKSPACE: Workspace = {
+  id: "workspace-relay",
+  name: "Relay",
+  slug: "relay",
+  role: WORKSPACE_ROLE.MEMBER,
+  github: { login: "relay-dev", active: true },
+  memberCount: 6,
+  photoVersion: TEAM_PHOTO.version,
 };
 
 /**
@@ -792,7 +1045,7 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
       ? list.workspaces
-      : [FIXTURE_WORKSPACE, ...list.workspaces],
+      : [FIXTURE_WORKSPACE, TEAM_WORKSPACE, ...list.workspaces],
     taskPullRequests: [
       ...(list.taskPullRequests ?? []).filter((each) => each.taskId !== TASK.INVITES),
       { taskId: TASK.INVITES, pullRequests: [{ ...INVITES_PULL_REQUEST, agentId: AGENT.INVITES }] },
@@ -939,6 +1192,80 @@ function stagedPages(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ
   return laid;
 }
 
+/** The threads on the reference journey's description: one open, Ada's question and its agent's answer, and one resolved, which its page leaves out. */
+const INVITES_THREADS: readonly DescriptionCommentThread[] = [
+  {
+    id: fixtureId(301),
+    scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
+    quote: "Invites expire after seven days",
+    anchor: { from: 0, to: 31 },
+    section: "Goal",
+    status: DESCRIPTION_COMMENT_STATUS.OPEN,
+    entries: [
+      {
+        id: fixtureId(302),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        words: "Should an owner be able to resend an expired invite from this page?",
+        at: LANDED - 3 * HOUR,
+      },
+      {
+        id: fixtureId(303),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.INVITES },
+        words: "Yes: Resend stands beside each expired invite, and it mints a new link.",
+        at: LANDED - 2 * HOUR,
+      },
+    ],
+    createdAt: LANDED - 3 * HOUR,
+    updatedAt: LANDED - 2 * HOUR,
+    revision: 2,
+  },
+  {
+    id: fixtureId(304),
+    scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
+    quote: "Send the invite email from the workspace's own domain",
+    section: "Goal",
+    status: DESCRIPTION_COMMENT_STATUS.RESOLVED,
+    entries: [
+      {
+        id: fixtureId(305),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        words: "Done in the email template.",
+        at: LANDED - 5 * HOUR,
+      },
+    ],
+    createdAt: LANDED - 5 * HOUR,
+    updatedAt: LANDED - 4 * HOUR,
+    revision: 3,
+  },
+];
+
+/** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
+const STAGED_COMMENTS = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS]
+>();
+
+function stagedComments(
+  state: AppStateSnapshot,
+): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS] {
+  const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
+  const staged = STAGED_COMMENTS.get(held);
+  if (staged !== undefined) return staged;
+  const laid = {
+    ...held,
+    [COMMENT_SUBJECT.DESCRIPTION]: {
+      ...held[COMMENT_SUBJECT.DESCRIPTION],
+      [TASK.INVITES]: { rows: INVITES_THREADS },
+    },
+  };
+  STAGED_COMMENTS.set(held, laid);
+  STAGED_COMMENTS.set(laid, laid);
+  return laid;
+}
+
 /* ----- The window's document ----- */
 
 /**
@@ -968,7 +1295,7 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
 
 /** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
 const INVITES_TRANSCRIPT = withQueued(
-  fixtureAgentTranscript(LANDED - 3 * DAY, ADA, "Build teammate invitations"),
+  fixtureAgentTranscript(INVITES_STARTED, ADA, "Build teammate invitations"),
 );
 
 /** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
@@ -1002,26 +1329,142 @@ function stagedTranscripts(
   return staged;
 }
 
+/** Where the page older than the invitations agent's transcript is read below, which a phone's fixture run offers. */
+const INVITES_OLDER_CURSOR = "0:0";
+
+/** The read of the older page that lands it: the first is not heard back, so a run shows Try again before the page. */
+const OLDER_LANDS_ON = 2;
+
+/** The invitations agent's transcript as the older page leaves it: offered, or read and laid before its first. */
+const INVITES_OLDER = {
+  OFFERED: { ...INVITES_TRANSCRIPT, before: INVITES_OLDER_CURSOR },
+  READ: {
+    ...INVITES_TRANSCRIPT,
+    messages: [...fixtureAgentOlderMessages(INVITES_STARTED, ADA), ...INVITES_TRANSCRIPT.messages],
+  },
+} as const satisfies Record<string, AppTranscript>;
+
+/**
+ * The document with the invitations agent's transcript as `asks` reads of
+ * its older page leave it: the page offered below its first message until
+ * a read lands it, then laid before them with nothing older offered. The
+ * same document under any other profile. Note that only the phone's fixture
+ * host lays it, since a desktop's fixture run answers no older read.
+ */
+export function olderPageAppState(state: AppStateSnapshot, asks: number): AppStateSnapshot {
+  if (!STAGED_PROFILES.has(state.run.profile)) return state;
+  const held = state[LIVE_READ.TRANSCRIPT];
+  const rows = asks >= OLDER_LANDS_ON ? INVITES_OLDER.READ : INVITES_OLDER.OFFERED;
+  if (held[AGENT.INVITES]?.[OWN_TRANSCRIPT]?.rows === rows) return state;
+  return {
+    ...state,
+    [LIVE_READ.TRANSCRIPT]: {
+      ...held,
+      [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows } },
+    },
+  };
+}
+
+/** What the `asks`th read of the invitations agent's older page answers: not heard back the first time, and landed after; none for any other transcript or profile. */
+export function olderPageAnswer(
+  profile: string,
+  params: AgentTranscriptOlderParams,
+  asks: number,
+): AgentTranscriptOlderAnswer | undefined {
+  if (!STAGED_PROFILES.has(profile) || params.agentId !== AGENT.INVITES) return undefined;
+  return asks >= OLDER_LANDS_ON ? { landed: true } : { failure: AGENT_CALL_FAILURE.UNANSWERED };
+}
+
 /** The models the account may start an agent on, as the service's catalog lists them, and no device of its own. */
 const MODELS: ModelsAnswer = {
   models: [
     {
       id: MODEL,
-      name: "Anthropic Claude Opus 5.5",
+      name: "Claude Opus 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["low", "medium", "high", "xhigh", "max"],
+    },
+    {
+      id: `${MODEL}${MODEL_SPEED_SUFFIX[MODEL_SPEED.FAST]}`,
+      name: "Claude Opus 5.5 Fast",
       provider: MODEL_PROVIDER.ANTHROPIC,
       efforts: ["low", "medium", "high", "xhigh", "max"],
     },
     {
       id: "anthropic/claude-sonnet-5.5",
-      name: "Anthropic Claude Sonnet 5.5",
+      name: "Claude Sonnet 5.5",
       provider: MODEL_PROVIDER.ANTHROPIC,
       efforts: ["low", "medium", "high"],
     },
     {
-      id: "openai/gpt-6.1-sol",
-      name: "OpenAI GPT-6.1 Sol",
+      id: CODEX_MODEL,
+      name: "GPT-6.1 Sol",
       provider: MODEL_PROVIDER.OPENAI,
       efforts: ["low", "medium", "high", "xhigh"],
+    },
+  ],
+};
+
+/** The account's integrations: GitHub, Linear, and two Notion accounts connected, Sentry's sign-in lapsed, and every other one offered and not connected. */
+const INTEGRATIONS: IntegrationStatusesAnswer = {
+  // SAFETY: every provider is listed, each standing disconnected but the four named after.
+  integrations: {
+    ...Object.fromEntries(
+      INTEGRATION_PROVIDER_LIST.map((provider) => [provider, INTEGRATION_STATUS.DISCONNECTED]),
+    ),
+    [INTEGRATION_PROVIDER.GITHUB]: INTEGRATION_STATUS.CONNECTED,
+    [INTEGRATION_PROVIDER.LINEAR]: INTEGRATION_STATUS.CONNECTED,
+    [INTEGRATION_PROVIDER.NOTION]: INTEGRATION_STATUS.CONNECTED,
+    [INTEGRATION_PROVIDER.SENTRY]: INTEGRATION_STATUS.EXPIRED,
+  } as IntegrationStatusesAnswer["integrations"],
+  accounts: [
+    {
+      provider: INTEGRATION_PROVIDER.LINEAR,
+      connection: "linear",
+      status: INTEGRATION_STATUS.CONNECTED,
+    },
+    {
+      provider: INTEGRATION_PROVIDER.NOTION,
+      connection: "notion",
+      label: "Relay",
+      status: INTEGRATION_STATUS.CONNECTED,
+    },
+    {
+      provider: INTEGRATION_PROVIDER.NOTION,
+      connection: "notion-2",
+      label: "Personal",
+      status: INTEGRATION_STATUS.CONNECTED,
+    },
+    {
+      provider: INTEGRATION_PROVIDER.SENTRY,
+      connection: "sentry",
+      status: INTEGRATION_STATUS.EXPIRED,
+    },
+  ],
+};
+
+/** The skills the invitations task's repository keeps, as the service finds them. */
+const SKILLS = {
+  repository: "ada/relay",
+  branch: "main",
+  skills: [
+    {
+      name: "release-notes",
+      description: "Write the release's notes from the merged pull requests",
+      source: TASK_SKILL_SOURCE.REPOSITORY,
+      path: ".agents/skills/release-notes/SKILL.md",
+    },
+    {
+      name: "migrate",
+      description: "Add a Drizzle migration and its test",
+      source: TASK_SKILL_SOURCE.REPOSITORY,
+      path: ".agents/skills/migrate/SKILL.md",
+    },
+    {
+      name: "review",
+      description: "Review the branch's changes before a pull request",
+      source: TASK_SKILL_SOURCE.REPOSITORY,
+      path: ".agents/skills/review/SKILL.md",
     },
   ],
 };
@@ -1068,13 +1511,170 @@ export function inboxAppState(
     },
     [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
+    [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
+    [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
+    [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.WORKSPACE_PHOTOS]: {
+      ...state[LIVE_READ.WORKSPACE_PHOTOS],
+      [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
+    },
+    [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
     ),
+  };
+}
+
+/** The reminders a fixture run set, by item: an instant, or null where one was cleared. */
+export type InboxReminders = ReadonlyMap<string, number | null>;
+
+/** An item with the reminder set on it, or cleared, as `reminders` holds; the item handed in where they name it not. */
+function remindedItem(item: InboxItem, reminders: InboxReminders): InboxItem {
+  const until = reminders.get(item.id);
+  if (until === undefined) return item;
+  const { remindAt: _held, ...rest } = item;
+  return until === null ? rest : { ...rest, remindAt: until };
+}
+
+/**
+ * The document with the reminders a fixture run set laid over the staged
+ * feed's items, as the host draws one the moment it is asked, so a fixture
+ * run's Inbox puts the item away under Reminders. The very document where
+ * none was set.
+ */
+export function inboxRemindersAppState(
+  state: AppStateSnapshot,
+  reminders: InboxReminders,
+): AppStateSnapshot {
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.PLAN];
+  if (reminders.size === 0 || fed === undefined) return state;
+  const reminded = Object.fromEntries(
+    Object.entries(fed).map(([taskId, items]) => [
+      taskId,
+      items.map((item) => remindedItem(item, reminders)),
+    ]),
+  );
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
+  };
+}
+
+/**
+ * What a fixture run changed of one of its agents: its model and effort, its
+ * permission mode, the servers switched off, its name, and the reader's pin.
+ */
+export interface AgentChange {
+  readonly model?: string;
+  readonly effort?: string;
+  readonly permissionMode?: AgentPermissionMode;
+  readonly disabledServers?: readonly string[];
+  readonly title?: string;
+  readonly pinned?: boolean;
+}
+
+/** What a fixture run changed of its agents, by agent. */
+export type AgentChoices = ReadonlyMap<string, AgentChange>;
+
+/** The change an act a fixture run takes makes to its agent, or none for an act that changes none. */
+export function agentChangeOf(
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): { readonly agentId: string; readonly change: AgentChange } | undefined {
+  // SAFETY: each payload below is the kind's, which its guard names.
+  switch (kind) {
+    case ACT_KIND.AGENTS_CHOOSE: {
+      const { agentId, model, effort } = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHOOSE>;
+      return { agentId, change: { model, effort } };
+    }
+    case ACT_KIND.AGENTS_PERMISSION_MODE: {
+      const { agentId, permissionMode } = payload as PortActPayload<
+        typeof ACT_KIND.AGENTS_PERMISSION_MODE
+      >;
+      return { agentId, change: { permissionMode } };
+    }
+    case ACT_KIND.AGENTS_SERVERS: {
+      const { agentId, disabledServers } = payload as PortActPayload<
+        typeof ACT_KIND.AGENTS_SERVERS
+      >;
+      return { agentId, change: { disabledServers } };
+    }
+    case ACT_KIND.AGENTS_RENAME: {
+      const { agentId, title } = payload as PortActPayload<typeof ACT_KIND.AGENTS_RENAME>;
+      return { agentId, change: { title } };
+    }
+    case ACT_KIND.AGENTS_PIN: {
+      const { agentId, pinned } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PIN>;
+      return { agentId, change: { pinned } };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** One agent with the run's change to it laid over, the pin left to the list's pins. */
+function changedAgent<A extends AgentSummary>(agent: A, change: AgentChange): A {
+  const { pinned: _pinned, ...fields } = change;
+  return { ...agent, ...fields };
+}
+
+/** Whether every field of the change already stands on the agent. */
+function standsOn(agent: AgentSummary, change: AgentChange): boolean {
+  const { pinned: _pinned, ...fields } = change;
+  return Object.entries(fields).every(([key, value]) => {
+    const held: unknown = Reflect.get(agent, key);
+    return Array.isArray(value) && Array.isArray(held)
+      ? value.length === held.length && value.every((each, at) => each === held[at])
+      : held === value;
+  });
+}
+
+/** The reader's pins with each pin the run set or took off laid over, by the agent's task. */
+function pinnedAgents(
+  pins: NonNullable<TasksView["taskAgentPins"]>,
+  agents: NonNullable<TasksView["taskAgents"]>,
+  choices: AgentChoices,
+): NonNullable<TasksView["taskAgentPins"]> {
+  const kept = pins.filter(({ agentId }) => choices.get(agentId)?.pinned !== false);
+  const added = agents
+    .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
+    .map(({ id, planId }) => ({ agentId: id, taskId: planId, pinnedAt: LANDED }));
+  return [...kept, ...added];
+}
+
+/** Whether the reader's pins already stand as the run left them. */
+function pinsStand(pins: NonNullable<TasksView["taskAgentPins"]>, choices: AgentChoices): boolean {
+  return [...choices].every(
+    ([agentId, change]) =>
+      change.pinned === undefined || pins.some((pin) => pin.agentId === agentId) === change.pinned,
+  );
+}
+
+/**
+ * The list with each agent the run changed standing as it changed it, its
+ * model, its mode, its servers, its name, and the reader's pin, as the host
+ * draws a change the moment it is asked; the list handed in where every
+ * agent already stands so, so laying it again changes nothing.
+ */
+export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
+  const agents = list.taskAgents ?? [];
+  const pins = list.taskAgentPins ?? [];
+  const agentsStand = agents.every((agent) => {
+    const change = choices.get(agent.id);
+    return change === undefined || standsOn(agent, change);
+  });
+  if (agentsStand && pinsStand(pins, choices)) return list;
+  return {
+    ...list,
+    taskAgents: agents.map((agent) => {
+      const change = choices.get(agent.id);
+      return change === undefined ? agent : changedAgent(agent, change);
+    }),
+    taskAgentPins: pinnedAgents(pins, agents, choices),
   };
 }
 
@@ -1108,8 +1708,15 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
+  // Note that a reminder is taken as the service takes one, the item's read state echoed; the iOS run lays it over the document itself (`inboxRemindersAppState`).
+  [ACT_KIND.AGENTS_INBOX_REMIND]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { id: itemId, unread: held.unread === true };
+  },
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
+    if (itemId === TURN_END.ITEM) return turnEndFile(attachmentId, playable);
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
@@ -1124,8 +1731,12 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
-  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
+  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+  // Note that an answer to the invitations agent's held call is taken as the service takes one, the call settled as answered, though its row still holds it, so the window draws its own answer.
+  [ACT_KIND.AGENTS_ANSWER_APPROVAL]: ({ approvalId, answer }) => ({
+    approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[answer] },
+  }),
   // Note that a reply and a resolve are taken as the service takes them, answered with the item as it then stands, though nothing here moves, so the window draws its own send; the migration's approval is refused.
   [ACT_KIND.AGENTS_INBOX_MESSAGE]: ({ itemId, clientKey, text, answers }) => {
     const held = stagedItem(itemId);
@@ -1156,16 +1767,84 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
   },
+  // Note that a change of model, of permission mode, of servers, of name, or of pin is taken as the service takes one, answered with the agent as it then stands; the iOS run lays it over the list itself (`chosenTasksView`).
+  [ACT_KIND.AGENTS_CHOOSE]: ({ agentId, model, effort }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, model, effort } };
+  },
+  [ACT_KIND.AGENTS_PERMISSION_MODE]: ({ agentId, permissionMode }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, permissionMode } };
+  },
+  [ACT_KIND.AGENTS_SERVERS]: ({ agentId, disabledServers }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, disabledServers } };
+  },
+  [ACT_KIND.AGENTS_RENAME]: ({ agentId, title }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, title } };
+  },
+  [ACT_KIND.AGENTS_PIN]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: held };
+  },
+  // Note that an archive is taken as the service takes one, though nothing here moves, so the agent stays on its task's list.
+  [ACT_KIND.AGENTS_ARCHIVE]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, archivedAt: LANDED } };
+  },
+  // The invitations task's repository's skills, as the service finds them.
+  [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
+  [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, status: AGENT_STATUS.STARTING } };
+  },
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
     agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),
   }),
-  [ACT_KIND.TASKS_START]: ({ agent }) => ({
-    planId: fixtureId(92),
-    agentStart: {
-      agent: agentOn(fixtureId(93), fixtureId(92), agent?.prompt ?? "", AGENT_STATUS.STARTING, 0),
-    },
-  }),
+  // Note that a start with no agent, File for later's, is answered with the task made alone.
+  [ACT_KIND.TASKS_START]: ({ agent }) =>
+    agent === undefined
+      ? { planId: fixtureId(92) }
+      : {
+          planId: fixtureId(92),
+          agentStart: {
+            agent: agentOn(
+              fixtureId(93),
+              fixtureId(92),
+              agent.prompt ?? "",
+              AGENT_STATUS.STARTING,
+              0,
+            ),
+          },
+        },
+  // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
+  [ACT_KIND.TASKS_RENAME]: () => true,
+  [ACT_KIND.TASKS_DELETE]: () => true,
+  // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
+  [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
+    const thread = INVITES_THREADS.find((each) => each.id === threadId);
+    if (planId !== TASK.INVITES || thread === undefined) {
+      return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+    }
+    if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
+    const reply = {
+      id: fixtureId(306),
+      kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+      writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+      words: action.words,
+      at: Date.now(),
+    };
+    return { thread: { ...thread, entries: [...thread.entries, reply] } };
+  },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

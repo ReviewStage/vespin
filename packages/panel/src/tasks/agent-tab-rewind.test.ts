@@ -28,6 +28,7 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AgentTab } from "./agent-tab.js";
+import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
 
 /**
  * agent-tab-rewind.test.ts -- an edited message sent from an agent's tab asks
@@ -63,6 +64,25 @@ function line(
     ...(role === MESSAGE_ROLE.ASSISTANT ? { startedAt: 2_000, finishedAt: 80_000 } : undefined),
   };
 }
+
+/** The agent's reply that edited a file, as the transcript carries the edit. */
+const EDITED: AgentTranscriptMessage = {
+  ...line("reply-2", MESSAGE_ROLE.ASSISTANT, "Dark variant done."),
+  parts: [
+    { type: "text", text: "Dark variant done." },
+    {
+      type: "tool-apply_patch",
+      toolCallId: "call-edit",
+      state: "output-available",
+      // Note that Claude Code names a file by its absolute path in the checkout.
+      input: {
+        patchText:
+          "*** Update File: /workspace/repository/src/tile.css\n@@\n-light\n+dark\n+darker",
+      },
+      output: "ok",
+    },
+  ],
+};
 
 const MESSAGES: readonly AgentTranscriptMessage[] = [
   line("plan", MESSAGE_ROLE.USER, "# Fix the tile"),
@@ -117,6 +137,27 @@ async function drawnTab(
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
   restoring = false,
 ) {
+  const opened: string[] = [];
+  const turns: [string, string, string][] = [];
+  const page: TaskMentionsValue = {
+    holder: { taskId: TASK },
+    taskName: "Fix the tile",
+    workspace: "acme",
+    repository: "acme/relay",
+    text: () => "",
+    doors: {
+      holder: { taskId: TASK },
+      place: { workspace: "acme", repository: "acme/relay" },
+      anchors: new Set(),
+      onOpenTask: () => undefined,
+      onOpenFile: (path) => {
+        opened.push(path);
+      },
+      onOpenTurnChanges: (agentId, messageId, path) => {
+        turns.push([agentId, messageId, path]);
+      },
+    },
+  };
   if (restoring) {
     handState(
       { [EXPERIMENT.REWIND_FILES]: true },
@@ -170,13 +211,16 @@ async function drawnTab(
   await act(async () =>
     root.render(
       withQueryClient(
-        createElement(AgentTab, {
-          agent: AGENT_SUMMARY,
-          control,
-          shown: true,
-          onOpenSubagent: () => undefined,
-          onOpenTarget: () => undefined,
-          onHeld: () => undefined,
+        createElement(TaskMentions, {
+          value: page,
+          children: createElement(AgentTab, {
+            agent: AGENT_SUMMARY,
+            control,
+            shown: true,
+            onOpenSubagent: () => undefined,
+            onOpenTarget: () => undefined,
+            onHeld: () => undefined,
+          }),
         }),
       ),
     ),
@@ -214,7 +258,7 @@ async function drawnTab(
     pressInComposer(container, "Enter");
     await settle();
   };
-  return { container, calls, message, editAndSend, sendFromFoot, dialog, press };
+  return { container, calls, opened, turns, message, editAndSend, sendFromFoot, dialog, press };
 }
 
 test("sending an edited middle message asks first, and Cancel keeps every later message and sends nothing", async () => {
@@ -303,4 +347,34 @@ test("an edited message whose turn recorded the files offers them back in its bo
     "rewind:middle:files",
     "send:Use the dark variant. and the light one",
   ]);
+});
+
+test("a turn that edited a file says which, with its lines added and removed, over its Worked for line while the workspace has the experiment on, and says nothing of it while it is off", async () => {
+  const edited = MESSAGES.map((each) => (each.id === "reply-2" ? EDITED : each));
+  const off = await drawnTab(false, edited);
+  assert.equal(off.message("reply-2").querySelector("[data-turn-files]"), null);
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  document.body.innerHTML = "";
+
+  const on = await drawnTab(false, edited, true);
+  const row = on.message("reply-2").querySelector<HTMLElement>("[data-turn-files]");
+  assert.ok(row, "the row stands");
+  assert.ok(row.textContent?.includes("1 file changed +2 −1"), row.textContent ?? "");
+  const chip = row.querySelector<HTMLElement>("[data-mention-ref]");
+  assert.ok(chip, "the file is its chip");
+  assert.ok(
+    chip.textContent?.includes("tile.css") && chip.textContent.includes("+2 −1"),
+    chip.textContent ?? "",
+  );
+  await act(async () => chip.click());
+  assert.deepEqual(
+    [on.turns, on.opened],
+    [[[AGENT, "middle", "src/tile.css"]], []],
+    "the chip opens the turn's changes, by the line that opened the turn, standing on the file",
+  );
+  assert.equal(
+    on.message("reply-1").querySelector("[data-turn-files]"),
+    null,
+    "a turn with no edit draws none",
+  );
 });

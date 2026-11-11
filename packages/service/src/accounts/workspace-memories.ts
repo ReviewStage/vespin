@@ -1,20 +1,3 @@
-import {
-  forgetMemory,
-  listMemories,
-  MEMORY_FORGET,
-  MEMORY_OUTCOME,
-  rememberMemory,
-  type StoredMemory,
-} from "@repo/database/models/memory-store";
-import {
-  readAccountNames,
-  type WorkspaceStoreEffect,
-  workspaceOf,
-} from "@repo/database/models/workspace-store";
-import type { MemorySaveAnswer, MemorySummary } from "@repo/features/memory-wire";
-import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import { Effect, Option } from "effect";
-
 /**
  * workspace-memories.ts -- a workspace's shared memories as one member reads and forgets them from Settings.
  *
@@ -33,9 +16,42 @@ import { Effect, Option } from "effect";
  * `search_memory`, and a coding agent's (`../agents/memory-tools.ts`), each
  * answering the outcome in its own words. Words that look like a credential
  * are never kept, and a search ranks the memories by how many of its words
- * each holds (`rankMemories`). Whether the member has Memory on is the
+ * each holds (`rankMemories`); a coding agent's first turn is handed the
+ * ones its task and words find by the same ranking (`matchWorkspaceMemories`).
+ * Whether the member has Memory on is the
  * caller's to check, as each tool and procedure does before it calls here.
+ *
+ * Each memory is answered with where its words came from, the agent and its
+ * task, only where the reader may open that task (`readMemorySources`), and
+ * how often agents were handed it in the last thirty days and when last
+ * (`tallyMemoryRecalls`). A keep is counted, by what it came to and whether
+ * an agent or a member kept it, and never by its words.
  */
+
+import {
+  type MemoryRecallTally,
+  tallyMemoryRecalls,
+} from "@repo/database/models/memory-recall-store";
+import {
+  forgetMemory,
+  listMemories,
+  MEMORY_FORGET,
+  MEMORY_OUTCOME,
+  type MemorySource,
+  type MemorySourceRead,
+  readMemorySources,
+  rememberMemory,
+  type StoredMemory,
+} from "@repo/database/models/memory-store";
+import {
+  readAccountNames,
+  type WorkspaceStoreEffect,
+  workspaceOf,
+} from "@repo/database/models/workspace-store";
+import type { MemorySaveAnswer, MemorySummary } from "@repo/features/memory-wire";
+import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
+import { Effect, Option } from "effect";
+import { recordServerEvent, SERVER_EVENT, SERVER_MEMORY_KEEPER } from "../events/server-events.js";
 
 /** What a member's read or forget came to. */
 export const WORKSPACE_MEMORY = {
@@ -69,6 +85,12 @@ const MEMORY_SEARCH_BOUNDS = {
   RECALL_RESULTS: 8,
   /** The most distinct words of a query matched. */
   QUERY_WORDS: 16,
+  /** The most memories a coding agent's first turn is handed. */
+  TURN_RESULTS: 5,
+  /** The most distinct words of a first turn's task and words matched, which run longer than a search's few. */
+  TURN_QUERY_WORDS: 64,
+  /** The shortest word of a first turn's text matched: a lone letter, as "agent's" leaves, would match every word it begins. */
+  TURN_SHORTEST_WORD: 2,
 } as const;
 
 /** Words too common to tell one memory from another. */
@@ -158,20 +180,23 @@ function wordsOf(text: string): readonly string[] {
   return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
+/** A query's distinct telling words, none of the common ones, at most the number given, each at least as long as the length given. */
+function askedWords(query: string, most: number, shortest = 1): readonly string[] {
+  return [...new Set(wordsOf(query))]
+    .filter((word) => word.length >= shortest && !COMMON_WORDS.has(word))
+    .slice(0, most);
+}
+
 /**
- * The memories a query finds, best first: each scored by how many of the
- * query's distinct words begin one of its own, so "deploy" finds
- * "deployment", ties going to the one kept most recently. A query with no
- * telling word answers the most recent; one that finds nothing answers none.
+ * The memories that hold any of the words asked, best first: each scored by
+ * how many of them begin one of its own, so "deploy" finds "deployment",
+ * ties going to the one kept most recently; at most the number given.
  */
-function rankMemories(
+function matchingMemories(
   memories: readonly StoredMemory[],
-  query: string | undefined,
+  asked: readonly string[],
+  most: number,
 ): readonly StoredMemory[] {
-  const asked = [...new Set(wordsOf(query ?? ""))]
-    .filter((word) => !COMMON_WORDS.has(word))
-    .slice(0, MEMORY_SEARCH_BOUNDS.QUERY_WORDS);
-  if (asked.length === 0) return memories.slice(0, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
   return memories
     .map((memory, recency) => {
       const own = wordsOf(memory.text);
@@ -180,36 +205,78 @@ function rankMemories(
     })
     .filter((scored) => scored.score > 0)
     .sort((a, b) => b.score - a.score || a.recency - b.recency)
-    .slice(0, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS)
+    .slice(0, most)
     .map((scored) => scored.memory);
 }
 
-/** The workspace's memories as the reader sees them: each named by its member, and forgettable where the reader may. */
-function summariesFor(
+/**
+ * The memories a query finds, best first (`matchingMemories`). A query with
+ * no telling word answers the most recent; one that finds nothing answers none.
+ */
+function rankMemories(
+  memories: readonly StoredMemory[],
+  query: string | undefined,
+): readonly StoredMemory[] {
+  const asked = askedWords(query ?? "", MEMORY_SEARCH_BOUNDS.QUERY_WORDS);
+  if (asked.length === 0) return memories.slice(0, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
+  return matchingMemories(memories, asked, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
+}
+
+/** What a reader is told of memories beside their words: their members' names, where they came from as the reader may see it, and their recalls. */
+interface MemoryReadings {
+  readonly names: ReadonlyMap<string, string>;
+  readonly sources: ReadonlyMap<string, MemorySourceRead>;
+  readonly tallies: ReadonlyMap<string, MemoryRecallTally>;
+}
+
+/** What the reader is told beside the workspace's memories named, each read once for them all. */
+function readingsOf(
   userId: string,
-  manages: boolean,
+  workspaceId: string,
   stored: readonly StoredMemory[],
-): WorkspaceStoreEffect<readonly MemorySummary[]> {
+): WorkspaceStoreEffect<MemoryReadings> {
   const members = stored.flatMap((kept) => (kept.userId === null ? [] : [kept.userId]));
-  return Effect.map(readAccountNames(members), (names) =>
-    stored.map((kept) => summaryOf(userId, manages, names, kept)),
+  const ids = stored.map((kept) => kept.id);
+  return Effect.all(
+    {
+      names: readAccountNames(members),
+      sources: readMemorySources(userId, workspaceId, ids),
+      tallies: tallyMemoryRecalls(workspaceId, ids),
+    },
+    { concurrency: "unbounded" },
   );
 }
 
-/** One memory as the reader sees it, its member's name read beside it. */
+/** The workspace's memories as the reader sees them: each named by its member, forgettable where the reader may, with where it came from and its recalls. */
+function summariesFor(
+  userId: string,
+  workspaceId: string,
+  manages: boolean,
+  stored: readonly StoredMemory[],
+): WorkspaceStoreEffect<readonly MemorySummary[]> {
+  return Effect.map(readingsOf(userId, workspaceId, stored), (readings) =>
+    stored.map((kept) => summaryOf(userId, manages, readings, kept)),
+  );
+}
+
+/** One memory as the reader sees it, what is read beside it filled in. */
 function summaryOf(
   userId: string,
   manages: boolean,
-  names: ReadonlyMap<string, string>,
+  readings: MemoryReadings,
   kept: StoredMemory,
 ): MemorySummary {
+  const tally = readings.tallies.get(kept.id);
   return {
     id: kept.id,
     text: kept.text,
-    keptBy: keeperOf(kept.userId, names),
+    keptBy: keeperOf(kept.userId, readings.names),
     forgettable: manages || kept.userId === userId,
     createdAt: kept.createdAt,
     updatedAt: kept.updatedAt,
+    source: readings.sources.get(kept.id) ?? null,
+    recalls30d: tally?.recalls30d ?? 0,
+    lastRecalledAt: tally?.lastRecalledAt ?? null,
   };
 }
 
@@ -222,7 +289,12 @@ export function readWorkspaceMemories(
     const role = yield* roleIn(userId, workspaceId);
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
     const stored = yield* listMemories(workspaceId);
-    const memories = yield* summariesFor(userId, MANAGING_ROLES.has(role.value), stored);
+    const memories = yield* summariesFor(
+      userId,
+      workspaceId,
+      MANAGING_ROLES.has(role.value),
+      stored,
+    );
     return { kind: WORKSPACE_MEMORY.READ, memories } as const;
   });
 }
@@ -245,7 +317,12 @@ export function forgetWorkspaceMemory(
     const forgot = yield* forgetMemory(workspaceId, id, { userId, manages });
     if (forgot.outcome === MEMORY_FORGET.NOT_PERMITTED)
       return { kind: WORKSPACE_MEMORY.NOT_PERMITTED } as const;
-    const memories = yield* summariesFor(userId, manages, yield* listMemories(workspaceId));
+    const memories = yield* summariesFor(
+      userId,
+      workspaceId,
+      manages,
+      yield* listMemories(workspaceId),
+    );
     return {
       kind: WORKSPACE_MEMORY.READ,
       memories,
@@ -277,6 +354,15 @@ export type WorkspaceMemorySaveAnswer =
       >;
     };
 
+export type WorkspaceMemoryPageAnswer =
+  | {
+      readonly kind: typeof WORKSPACE_MEMORY.READ;
+      readonly memories: readonly MemorySummary[];
+      /** How many memories were kept or corrected since the time, across every page. */
+      readonly total: number;
+    }
+  | { readonly kind: typeof WORKSPACE_MEMORY.NOT_MEMBER };
+
 export type WorkspaceMemorySearchAnswer =
   | {
       readonly kind: typeof WORKSPACE_MEMORY.READ;
@@ -289,19 +375,22 @@ export type WorkspaceMemorySearchAnswer =
  * Keeps a memory in the member's words, in a workspace they are a member
  * of, or corrects the one `replaces` names, and answers what that came to
  * with the memory as the member then sees it. Words that look like a
- * credential are refused before the store is reached.
+ * credential are refused before the store is reached. `source` is the
+ * coding agent keeping them and its turn's line; a member's own keep hands
+ * none. Each keep is counted once the request has answered.
  */
 export function saveWorkspaceMemory(
   userId: string,
   workspaceId: string,
   text: string,
   replaces: string | undefined,
+  source?: MemorySource,
 ): WorkspaceStoreEffect<WorkspaceMemorySaveAnswer> {
   return Effect.gen(function* () {
     const role = yield* roleIn(userId, workspaceId);
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY_SAVE.NOT_MEMBER } as const;
     if (looksLikeCredential(text)) return { kind: WORKSPACE_MEMORY_SAVE.CREDENTIAL } as const;
-    const outcome = yield* rememberMemory(workspaceId, userId, text, replaces);
+    const outcome = yield* rememberMemory(workspaceId, userId, text, replaces, source);
     switch (outcome.kind) {
       case MEMORY_OUTCOME.NOT_FOUND:
         return { kind: WORKSPACE_MEMORY_SAVE.NOT_FOUND } as const;
@@ -309,8 +398,16 @@ export function saveWorkspaceMemory(
         return { kind: WORKSPACE_MEMORY_SAVE.FULL } as const;
       default: {
         const kept = outcome.memory;
-        const names = yield* readAccountNames(kept.userId === null ? [] : [kept.userId]);
-        const memory = summaryOf(userId, MANAGING_ROLES.has(role.value), names, kept);
+        const readings = yield* readingsOf(userId, workspaceId, [kept]);
+        const memory = summaryOf(userId, MANAGING_ROLES.has(role.value), readings, kept);
+        yield* recordServerEvent(
+          SERVER_EVENT.MEMORY_SAVE,
+          { userId, workspaceId },
+          {
+            outcome: outcome.kind,
+            by: source === undefined ? SERVER_MEMORY_KEEPER.MEMBER : SERVER_MEMORY_KEEPER.AGENT,
+          },
+        );
         return { kind: WORKSPACE_MEMORY_SAVE.SAVED, outcome: outcome.kind, memory } as const;
       }
     }
@@ -328,7 +425,69 @@ export function searchWorkspaceMemories(
     if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
     const stored = yield* listMemories(workspaceId);
     const found = rankMemories(stored, query);
-    const memories = yield* summariesFor(userId, MANAGING_ROLES.has(role.value), found);
+    const memories = yield* summariesFor(
+      userId,
+      workspaceId,
+      MANAGING_ROLES.has(role.value),
+      found,
+    );
     return { kind: WORKSPACE_MEMORY.READ, memories, total: stored.length } as const;
+  });
+}
+
+/**
+ * The workspace's memories a coding agent's first turn is handed, to a member
+ * of it: the few its task and words find, ranked as a search ranks them
+ * (`matchingMemories`) over more of the text, since a turn's opening runs
+ * longer than a search's few words. Unlike a search, text with no telling
+ * word, or a workspace whose memories hold none of its words, answers none
+ * rather than the most recent, so a turn is handed only what bears on it;
+ * and an account no member of the workspace is answered none.
+ */
+export function matchWorkspaceMemories(
+  userId: string,
+  workspaceId: string,
+  text: string,
+): WorkspaceStoreEffect<readonly StoredMemory[]> {
+  return Effect.gen(function* () {
+    const asked = askedWords(
+      text,
+      MEMORY_SEARCH_BOUNDS.TURN_QUERY_WORDS,
+      MEMORY_SEARCH_BOUNDS.TURN_SHORTEST_WORD,
+    );
+    if (asked.length === 0) return [];
+    if (Option.isNone(yield* roleIn(userId, workspaceId))) return [];
+    return matchingMemories(
+      yield* listMemories(workspaceId),
+      asked,
+      MEMORY_SEARCH_BOUNDS.TURN_RESULTS,
+    );
+  });
+}
+
+/**
+ * One page of the workspace's memories kept or corrected at or after
+ * `since` (epoch milliseconds), most recent first, to a member of it, and
+ * how many there are across every page. Unlike a search, nothing is ranked
+ * or capped past the page, and only the page's memories are read beside
+ * their words.
+ */
+export function listWorkspaceMemoriesSince(
+  userId: string,
+  workspaceId: string,
+  since: number,
+  page: { readonly offset: number; readonly limit: number },
+): WorkspaceStoreEffect<WorkspaceMemoryPageAnswer> {
+  return Effect.gen(function* () {
+    const role = yield* roleIn(userId, workspaceId);
+    if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
+    const recent = (yield* listMemories(workspaceId)).filter((kept) => kept.updatedAt >= since);
+    const memories = yield* summariesFor(
+      userId,
+      workspaceId,
+      MANAGING_ROLES.has(role.value),
+      recent.slice(page.offset, page.offset + page.limit),
+    );
+    return { kind: WORKSPACE_MEMORY.READ, memories, total: recent.length } as const;
   });
 }

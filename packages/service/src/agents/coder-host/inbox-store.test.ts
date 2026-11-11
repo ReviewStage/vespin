@@ -106,8 +106,7 @@ import { accountInboxPast, agentInboxPast, taskInboxPast } from "./inbox-page.js
  * is taken only at the revision it names while the item is open and can be
  * withdrawn under its key, a read keeps every open item however many others
  * changed, every member of the task's workspace reads and answers the items
- * of an agent any of them started, an agent with no task posts to its
- * workspace's members as one on a task does to its task's, a member writes
+ * of an agent any of them started, a member writes
  * on an item's thread whatever its status, which moves the item's last
  * change and nothing else of it, and nothing of a workspace the account is
  * not in is read or written. Over the sync hub, a task's, an agent's, and the account's held reads

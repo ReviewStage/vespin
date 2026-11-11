@@ -6,9 +6,11 @@ import {
   killTerminal,
   listTerminals,
   renameTerminal,
+  startRunAction,
   startTerminal,
   TMUX,
   terminalsOf,
+  typeIntoTerminal,
 } from "./tmux.js";
 
 /**
@@ -61,6 +63,31 @@ test("starting, naming, and ending a shell target its session exactly and carry 
   assert.equal(renamed.args.at(-1), hostile);
   assert.ok(startTerminal(SHELL_A, undefined).args.includes(TMUX.START_DIRECTORY));
   assert.ok(!startTerminal(SHELL_A, undefined).args.includes(TMUX.TITLE_OPTION));
+});
+
+test("a run action's command, label, and variables reach tmux as written where they end in a semicolon, which tmux would read as the end of its command", () => {
+  // Note that tmux 3.6 types `find . -exec rm {} \;` as `find . -exec rm {} ;` and `pnpm dev;` as `pnpm dev`: a backslash before the last `;` hands each back whole.
+  const command = "find . -exec rm {} \\;";
+  const started = startRunAction(SHELL_A, {
+    actionId: SHELL_A,
+    label: "Clean;",
+    command,
+    environment: { MODE: "a;" },
+  });
+  const typed = typeIntoTerminal(SHELL_A, "pnpm dev;");
+
+  assert.ok(started.args.includes("find . -exec rm {} \\\\;"));
+  assert.ok(started.args.includes("Clean\\;"));
+  assert.ok(started.args.includes("MODE=a\\;"));
+  assert.ok(typed.args.includes("pnpm dev\\;"));
+  assert.ok(
+    startRunAction(SHELL_A, {
+      actionId: SHELL_A,
+      label: "Dev",
+      command: "pnpm dev",
+      environment: {},
+    }).args.includes("pnpm dev"),
+  );
 });
 
 test("every command runs on a tmux server of its own, and none installs tmux or reaches for sudo", () => {

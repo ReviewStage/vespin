@@ -7,7 +7,6 @@ import {
 import {
   TASK_PRIORITY_ORDER,
   TASK_STATUS_ORDER,
-  type Task,
   type TaskPriority,
   type TaskStanding,
   type TaskStatus,
@@ -47,7 +46,11 @@ import { Highlighted } from "../search-field.js";
 import { Picker } from "../settings/picker-row.js";
 import { useTaskCard } from "./chip-cards.js";
 import { type RepositoryChooser, useRepositoryMenu } from "./repository-chip.js";
-import { TaskRelationAsked, type TaskRelationsDoor } from "./task-relation-menu.js";
+import {
+  TaskRelationAsked,
+  type TaskRelationSubject,
+  type TaskRelationsDoor,
+} from "./task-relation-menu.js";
 
 /**
  * task-standing.tsx -- a task's head over its description: the path to it, then the chips that say and change where it stands, how much it matters, and who is on it.
@@ -283,7 +286,7 @@ const PATH_LABEL = "Task path";
  * plan's; none for a task at the top, or one whose parent the list does not
  * hold yet.
  */
-function parentOf(task: Task, tasks: readonly TaskSummary[]): TaskSummary | undefined {
+function parentOf(task: TaskSummary, tasks: readonly TaskSummary[]): TaskSummary | undefined {
   const parentId = tasks.find((each) => each.id === task.id)?.parentTaskId ?? task.parentTaskId;
   return parentId === undefined ? undefined : tasks.find((each) => each.id === parentId);
 }
@@ -307,7 +310,7 @@ function useParentCrumb(
 }
 
 /** The key's crumb, where the reader stands, kept whole however narrow the path; none for a task from a service before keys. */
-function keyCrumb(task: Task, workspaceName: string): Crumb | undefined {
+function keyCrumb(task: TaskSummary, workspaceName: string): Crumb | undefined {
   if (task.number === undefined) return undefined;
   return { label: taskKey(workspaceName, task.number), current: true, fixed: true };
 }
@@ -355,7 +358,7 @@ function RepositoryPath({
   door,
   rest,
 }: {
-  task: Task;
+  task: TaskSummary;
   door: TaskRepositoryDoor;
   rest: readonly (Crumb | undefined)[];
 }): React.JSX.Element | null {
@@ -390,7 +393,7 @@ export function TaskPath({
   task,
   door,
 }: {
-  task: Task;
+  task: TaskSummary;
   door: TaskStandingDoor;
 }): React.JSX.Element | null {
   const parent = useParentCrumb(
@@ -461,7 +464,7 @@ export function TaskStandingChips({
   relations,
   inSight = true,
 }: {
-  task: Task;
+  task: TaskRelationSubject;
   /** Where a pick is sent, settling once the service has answered where the page waits on it; without one the chips only say. */
   onSet: ((standing: TaskStanding) => void | Promise<void>) | undefined;
   /** The add menu's door; without it the menu hangs nowhere here. */

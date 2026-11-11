@@ -1,5 +1,5 @@
 /**
- * use-agent.ts -- one agent as its page reads it: the agent as the task list follows it, its transcript held live while the page shows, the pictures and recordings it showed read into what the system draws them from, and a page it showed read whole.
+ * use-agent.ts -- one agent as its page reads it: the agent as the task list follows it, its transcript held live while the page shows, its older pages read as the reader scrolls up to them, the pictures and recordings it showed read into what the system draws them from, and a page it showed read whole.
  *
  * The transcript is held as the panel's tab holds it: its follow
  * (`ACT_KIND.AGENTS_TRANSCRIPT`) kept open on the host while the page is in
@@ -9,9 +9,11 @@
  * transcript the host still holds, as one shown lately, draws at once.
  */
 
+import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
@@ -20,12 +22,14 @@ import {
   selectFollowedAgent,
   selectTranscript,
 } from "@repo/host/app-state-reads";
+import { BUZZ, latestStep, NO_TOGGLES, type OlderPages, transcriptItems } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedVideo } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
 const AGENT_MEDIA_PREFIX = "agent";
@@ -54,6 +58,62 @@ export function useAgentPullRequests(agentId: string): readonly AgentPullRequest
     [agentId],
   );
   return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
+}
+
+/**
+ * The agent's latest step (`latestStep`), read off the transcript the host
+ * still holds for it, as one shown lately, and never followed for it, so a
+ * row's preview reads what the app already has, as the panel's card reads
+ * its step from what a tab holds; none where the host holds none.
+ */
+export function useHeldAgentStep(agentId: string, status: AgentStatus): string | undefined {
+  const select = useMemo(
+    () => selectTranscript({ kind: TRANSCRIPT_KIND.AGENT, agentId }),
+    [agentId],
+  );
+  const messages = useQuery({ ...appStateQuery, select }).data?.rows?.messages;
+  return useMemo(() => {
+    if (messages === undefined) return undefined;
+    // Note that the reader and the pull requests are left out, since a step is never a line sent or a card opened.
+    const items = transcriptItems(messages, {
+      writing: agentStillWriting(status),
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: Date.now(),
+      pullRequests: NO_PULL_REQUESTS,
+    });
+    return latestStep(items);
+  }, [messages, status]);
+}
+
+/** An agent row's acts, as the panel's row menu offers them: Stop while it works, and Archive, once asked, each buzzing as it lands or is refused. */
+export function useAgentRowActs(): {
+  readonly stop: (agentId: string) => void;
+  readonly archive: (agentId: string) => void;
+} {
+  const acts = useHostActs();
+  const write = useWrite();
+  return useMemo(
+    () => ({
+      stop: (agentId) => {
+        write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
+          refused: (answer) => ("failure" in answer ? STOP_FAILED : undefined),
+          unanswered: STOP_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+      archive: (agentId) => {
+        write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }), {
+          refused: (answer) => ("failure" in answer ? ARCHIVE_FAILED : undefined),
+          unanswered: ARCHIVE_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+    }),
+    [acts, write],
+  );
 }
 
 /**
@@ -135,26 +195,21 @@ export function useAgentMedia(
   return sources;
 }
 
-/** Where a page stands: the task it was shown on, or the agent on no task that showed it. */
-export type PagePlace = { readonly taskId: string } | { readonly agentId: string };
-
 /** How a page's read stands: on its way, read with its HTML, or not answered. */
 export type PageRead =
   | { readonly reading: true }
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
-/** One version of a page the agent showed, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac. */
-export function usePageHtml(place: PagePlace, pageId: string, version: number): PageRead {
+/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known. */
+export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageRead {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
-  const taskId = "taskId" in place ? place.taskId : undefined;
-  const agentId = "agentId" in place ? place.agentId : undefined;
   useEffect(() => {
     let current = true;
     setRead({ reading: true });
-    const where = taskId === undefined ? { agentId: agentId ?? "" } : { taskId };
-    acts[ACT_KIND.TASKS_PAGE_HTML]({ ...where, pageId, version }).then(
+    if (taskId === undefined) return;
+    acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, version }).then(
       (answer) => {
         if (!current) return;
         setRead(
@@ -171,6 +226,93 @@ export function usePageHtml(place: PagePlace, pageId: string, version: number): 
     return () => {
       current = false;
     };
-  }, [acts, taskId, agentId, pageId, version]);
+  }, [acts, taskId, pageId, version]);
   return read;
+}
+
+/** The older read asked last: of which agent, below where, and whether it failed. */
+interface OlderAsk {
+  readonly agentId: string;
+  readonly before: string;
+  readonly failed: boolean;
+}
+
+/**
+ * The pages of the agent's transcript older than the oldest message the host
+ * holds, read one at a time as the reader scrolls up to it, as the panel's
+ * tab reads them (`ACT_KIND.AGENTS_TRANSCRIPT_OLDER`): the host lays each
+ * before the messages it holds while they still begin where it was asked,
+ * which moves where the next is read below and ends the read. A read that
+ * did not answer says so until Try again asks it again, which a scroll never
+ * does, even one that lands before the failure is drawn; one the host did not lay,
+ * since newer messages took their place meanwhile, may be asked again at
+ * once, as may one whose cursor comes back after a rewind. None where
+ * nothing older stands.
+ */
+export function useOlderPages(agentId: string, before: string | undefined): OlderPages | undefined {
+  const acts = useHostActs();
+  const [asked, setAsked] = useState<OlderAsk | undefined>(undefined);
+  // Note that the read out is held apart from what is drawn, since the list may ask twice before it draws the first ask.
+  const out = useRef<OlderAsk | undefined>(undefined);
+  const read = useCallback(
+    (again: boolean) => {
+      if (before === undefined) return;
+      const held = out.current;
+      // Note that an ask out is never asked twice, and one that failed is asked again by Try again alone.
+      if (
+        held !== undefined &&
+        held.agentId === agentId &&
+        held.before === before &&
+        (!held.failed || !again)
+      ) {
+        return;
+      }
+      const ask: OlderAsk = { agentId, before, failed: false };
+      out.current = ask;
+      setAsked(ask);
+      // An answer settles the ask it answers alone, never a newer one.
+      const settle = (next: OlderAsk | undefined) => {
+        if (out.current !== ask) return;
+        out.current = next;
+        setAsked(next);
+      };
+      acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ kind: TRANSCRIPT_KIND.AGENT, agentId, before }).then(
+        (answer) => {
+          if ("failure" in answer) settle({ ...ask, failed: true });
+          else if (!answer.landed) settle(undefined);
+        },
+        (error: unknown) => {
+          refused("An older page of the transcript")(error);
+          settle({ ...ask, failed: true });
+        },
+      );
+    },
+    [acts, agentId, before],
+  );
+  // Note that an ask that landed is let go once the cursor moves past it, and only then, so a rewind that brings the cursor back reads it anew while the landing still holds off a second read.
+  useEffect(() => {
+    const held = out.current;
+    if (held === undefined || held.failed) return;
+    if (held.agentId === agentId && held.before === before) return;
+    out.current = undefined;
+    setAsked(undefined);
+  }, [agentId, before]);
+  if (before === undefined) return undefined;
+  const here = asked !== undefined && asked.agentId === agentId && asked.before === before;
+  return {
+    reading: here && !asked.failed,
+    failed: here && asked.failed,
+    onRead: () => read(false),
+    onRetry: () => read(true),
+  };
+}
+
+/** Reads the agent's transcript anew where it could not be read, as the panel's Try again does (`ACT_KIND.AGENTS_TRANSCRIPT_RETRY`). */
+export function useTranscriptRetry(agentId: string): () => void {
+  const acts = useHostActs();
+  return useCallback(() => {
+    acts[ACT_KIND.AGENTS_TRANSCRIPT_RETRY]({ kind: TRANSCRIPT_KIND.AGENT, agentId }).catch(
+      refused("Reading the transcript again"),
+    );
+  }, [acts, agentId]);
 }

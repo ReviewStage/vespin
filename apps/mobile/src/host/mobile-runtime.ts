@@ -1,7 +1,7 @@
 /**
  * mobile-runtime.ts -- the app's one runtime edge: the host composed and started on one runtime, which every act runs on, and drained as that runtime is disposed.
  *
- * This module is a runtime edge (`tools/anti-slop/effect-edges.json`), as
+ * This module is a runtime edge, as
  * the web's `web-root.tsx` is: it builds the app's one runtime over the
  * host's layer (`compose-mobile.ts`) and hands the root what stands.
  * Nothing else in the app runs an Effect.
@@ -23,6 +23,10 @@ import {
 export interface MobileHostStartOptions {
   /** The profile a fixture run stands on; none for a live run. */
   readonly fixture: RunProfile | undefined;
+  /** Whether a fixture run stands as the service's refusal of an old build leaves it; never in a live run. */
+  readonly fixtureUpdateNeeded?: boolean | undefined;
+  /** Whether a fixture run refuses the writes a flow presses; never in a live run. */
+  readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files. */
@@ -68,6 +72,8 @@ export async function startMobileHost(
         httpClient,
         fork,
         fixture: options.fixture,
+        fixtureUpdateNeeded: options.fixtureUpdateNeeded,
+        fixtureRefusesWrites: options.fixtureRefusesWrites,
         appVersion: options.appVersion,
         stateRoot: options.stateRoot,
         device: options.device,

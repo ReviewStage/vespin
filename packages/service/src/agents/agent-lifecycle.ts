@@ -32,6 +32,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
 import { controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { clearedAgent } from "./coder-host/clear.js";
 import { rewoundAgent } from "./coder-host/rewind.js";
 import { runnerWarmed } from "./coder-host/runtime-sessions.js";
 import { startedBlank } from "./coder-host/status.js";
@@ -85,13 +86,28 @@ export const deletedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   return { deleted: true as const, txid: deleted.value.txid };
 });
 
+/** The agent's harness started on a fresh session in the same agent (`coder-host/clear.ts`), answered as it then stands. */
+export const clearedAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
+  writer: Effect.Effect<StoreWriter>,
+  account: string,
+  id: string,
+): Effect.fn.Return<AgentSummary, HostedRefusal, DatabaseServices> {
+  const { userId, agent } = yield* reachedAgentById(account, id);
+  yield* clearedAgent(writer, userId, agent);
+  return yield* summaryOf(userId, agent);
+});
+
 /** The agent taken back to just before the developer's line named (`coder-host/rewind.ts`), answered as it then stands. */
 export const rewoundAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
   account: string,
   id: string,
   messageId: string,
   restoreFiles = false,
-): Effect.fn.Return<AgentSummary, HostedRefusal, DatabaseServices | Sandbox> {
+): Effect.fn.Return<
+  AgentSummary,
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | Sandbox
+> {
   const { userId, agent } = yield* reachedAgentById(account, id);
   yield* rewoundAgent(userId, agent, messageId, restoreFiles);
   return yield* summaryOf(userId, agent);

@@ -26,11 +26,12 @@
         ]
       }
     ],
+    "anti-slop/agent-box-reads-agent": "error",
     "anti-slop/archive-through-agent-change": "error",
+    "anti-slop/ask-beside-screen": "error",
     "anti-slop/async-press-needs-busy": "error",
     "anti-slop/enforce-delete-with-where": "error",
     "anti-slop/enforce-update-with-where": "error",
-    "anti-slop/no-await-drizzle-statement": "error",
     "anti-slop/no-browser-form-validation": "error",
     "anti-slop/no-direct-view-storage": "error",
     "anti-slop/no-document-press-listener": "error",
@@ -44,12 +45,10 @@
     "anti-slop/no-open-page-from-button": "error",
     "anti-slop/no-placeholder-ellipsis": "error",
     "anti-slop/no-product-name": "error",
-    "anti-slop/no-raw-async-primitives": "error",
     "anti-slop/no-raw-heading-outside-ui": "error",
     "anti-slop/no-raw-press-outside-ui": "error",
     "anti-slop/no-raw-press-outside-ui-native": "error",
     "anti-slop/no-reduced-motion-query": "error",
-    "anti-slop/no-run-promise-outside-edges": "error",
     "anti-slop/no-shadcn-focus-ring": "error",
     "anti-slop/no-shortcut-flag": "error",
     "anti-slop/no-source-read-in-test": "error",
@@ -65,6 +64,19 @@
       "files": ["packages/ui/src/icons/icons.ts"],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["apps/mobile/**", "packages/ui-native/**"],
+      "plugins": ["react"],
+      "rules": {
+        "react/refs": "error",
+        "react/immutability": "off",
+        "react/preserve-manual-memoization": "off",
+        "react/purity": "off",
+        "react/set-state-in-effect": "off",
+        "react/use-memo": "off",
+        "react-hooks/exhaustive-deps": "off"
       }
     },
     {

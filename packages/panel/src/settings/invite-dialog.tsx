@@ -3,6 +3,11 @@ import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
 } from "@repo/features/workspace-invitation-wire";
+import {
+  INVITATION_ROLE_DETAIL,
+  INVITATION_ROLES,
+  INVITE_ADMIN_OWNER_ONLY,
+} from "@repo/features/workspace-settings-words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   CHOICE_LOOK,
@@ -45,18 +50,6 @@ import { replayMaskedError } from "./marks.js";
  * rather than hiding the choice.
  */
 
-/** The roles an invitation offers, in the order the list draws them, the default first. */
-const INVITATION_ROLES = [INVITATION_ROLE.MEMBER, INVITATION_ROLE.ADMIN] as const;
-
-/** What each role may do, the line under its name. */
-const ROLE_DETAIL = {
-  [INVITATION_ROLE.MEMBER]: "Works on the workspace's tasks and agents.",
-  [INVITATION_ROLE.ADMIN]: "Also invites people and manages members and integrations.",
-} as const satisfies Record<WorkspaceInvitation["role"], string>;
-
-/** Why Admin is stepped back on a card that is not the owner's. */
-const ADMIN_OWNER_ONLY = "Only the owner can invite an admin.";
-
 /** The role options the card offers its reader, Admin unavailable unless the reader is the `owner`. */
 function roleOptions(owner: boolean): ChoiceOption<WorkspaceInvitation["role"]>[] {
   return INVITATION_ROLES.map((one) => {
@@ -64,7 +57,7 @@ function roleOptions(owner: boolean): ChoiceOption<WorkspaceInvitation["role"]>[
     return {
       value: one,
       label: ROLE_WORDS[one],
-      detail: ownerOnly ? ADMIN_OWNER_ONLY : ROLE_DETAIL[one],
+      detail: ownerOnly ? INVITE_ADMIN_OWNER_ONLY : INVITATION_ROLE_DETAIL[one],
       disabled: ownerOnly,
     };
   });

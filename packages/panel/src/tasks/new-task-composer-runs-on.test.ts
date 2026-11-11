@@ -143,13 +143,20 @@ interface Offered {
  * hands back the list already standing.
  */
 async function mount(offered: Offered = { devices: devicesWith() }, relation?: NewTaskRelation) {
-  // The host holds the devices' beats no later than the lists carry them.
+  // The host holds the devices as the hosts read says them no later than the lists carry them, each one's setup among them.
   handBeats(
     Object.fromEntries(
       (offered.devices ?? []).flatMap((device) =>
         device.seenAt === undefined ? [] : [[device.deviceId, Date.now() - device.seenAt]],
       ),
     ),
+    {
+      hosts: (offered.devices ?? []).flatMap((device) =>
+        device.setup === undefined
+          ? []
+          : [{ id: device.deviceId, name: device.name, setup: device.setup, calledIn: true }],
+      ),
+    },
   );
   const control = tasksControl();
   let reads = offered.reads ?? READS.LAND;
@@ -276,8 +283,8 @@ test("a device online but still getting ready, or that couldn't set up, is liste
       each.querySelector('[role="img"]')?.getAttribute("aria-label"),
     ]),
     [
-      ["true", "Getting ready…"],
-      ["true", "Couldn't set up"],
+      ["true", "Setting up"],
+      ["true", "Failed"],
     ],
   );
 });
@@ -287,7 +294,7 @@ test.each([
   {
     standing: "getting ready",
     studio: { setup: DEVICE_SETUP.PREPARING },
-    chip: "Runs on: Studio · Getting ready…",
+    chip: "Runs on: Studio · Setting up",
   },
 ])(
   "a last pick $standing as the card opens stays picked and says so, and the task starts on it, never in the cloud",

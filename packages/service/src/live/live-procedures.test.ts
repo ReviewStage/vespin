@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { addSound } from "@repo/database/models/account-sounds";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
+import { beginAgentBoot } from "@repo/database/models/agent-boot-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
 import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
 import { createAgent } from "@repo/database/models/agent-store";
@@ -31,7 +33,9 @@ import { createTask, createTaskCommitted, deleteTask } from "@repo/database/mode
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
+import { memoryRecall } from "@repo/database/schemas/memory";
 import { messages, turns } from "@repo/database/schemas/storage";
+import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   fakeWorkspaceSeams,
@@ -44,6 +48,7 @@ import {
 import {
   ACCOUNT_PREFERENCES_READ,
   accountPreferencesOfLiveRows,
+  accountSoundsOfLiveRows,
 } from "@repo/features/account-preferences-live";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { AGENT_ORIGIN_READ, agentOriginOfLive } from "@repo/features/agent-origin-live";
@@ -57,6 +62,7 @@ import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { HOSTS_READ, hostsOfLiveRows } from "@repo/features/host-live";
 import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import { INBOX_ASK } from "@repo/features/inbox-wire";
@@ -85,6 +91,7 @@ import {
   pullRequestChaptersOfLive,
 } from "@repo/features/pull-request-chapters-live";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
+import { SOUND_CLIP_SLOT, SOUND_CLIP_TYPE } from "@repo/features/sound-clip-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
@@ -148,6 +155,7 @@ import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-confi
 import { liveProcedures } from "./live-procedures.js";
 import { pollSealer } from "./poll-sealer.js";
 import { agentOriginRead } from "./reads/agent-origin.js";
+import { agentTranscriptRead } from "./reads/agent-transcript.js";
 
 /**
  * The reads the desktop follows, answered by the procedure the way the
@@ -165,6 +173,12 @@ import { agentOriginRead } from "./reads/agent-origin.js";
 
 const ORIGIN = "https://app.test";
 const LIVE_INBOX = "/api/live/inbox";
+
+/** A sound clip whose bytes open as a WAV's, its last byte a mark that tells two apart. */
+const clipOf = (mark: number) => ({
+  contentType: SOUND_CLIP_TYPE.WAV,
+  bytes: new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, mark]),
+});
 
 /** A live read's address, naming the account it is for where one is named (`LIVE_USER_QUERY`). */
 function readOf(path: string, forUser: string | undefined): URL {
@@ -330,21 +344,34 @@ it.layer(getTestDB())("the account's live reads", (it) => {
           chaptersModel: CHAPTERS_MODEL.OPUS,
         });
 
+        const danaSound = yield* addSound(dana, "Glass", clipOf(1), SOUND_CLIP_SLOT.ASK);
+        yield* addSound(eli, "Knock", clipOf(2), SOUND_CLIP_SLOT.FINISH);
+
         const answered = yield* ask({ bearer: dana, path: "/api/live/account-preferences" });
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.answer)(answered.body);
-        const rows = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.rows)({
+        const {
+          preferences: rows,
+          sounds,
+          soundChoices,
+        } = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.rows)({
           preferences: answer.queries.preferences.rows,
-        }).preferences;
+          sounds: answer.queries.sounds.rows,
+          soundChoices: answer.queries.soundChoices.rows,
+        });
         assert.equal(rows.length, 1, "one row, the account's own");
         assert.deepEqual(
-          accountPreferencesOfLiveRows(rows),
+          accountPreferencesOfLiveRows(rows, accountSoundsOfLiveRows(sounds, soundChoices)),
           {
             agent: { model: "openai/gpt-6.1-sol", effort: "medium" },
             chaptersModel: CHAPTERS_MODEL.SONNET,
             slackNotifications: true,
+            sounds: {
+              list: [danaSound],
+              choices: { [SOUND_CLIP_SLOT.FINISH]: undefined, [SOUND_CLIP_SLOT.ASK]: danaSound.id },
+            },
           },
-          "dana's own row alone",
+          "dana's own row and clip alone",
         );
       }),
   );
@@ -1016,6 +1043,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         assert.equal(answer.url, LIVE_POLL_URL);
         assert.deepEqual(Object.keys(answer.queries).toSorted(), [
           "agent",
+          "boot",
           "conversation",
           "launch",
           "messages",
@@ -1054,6 +1082,49 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
           }),
           { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
         );
+      }),
+  );
+
+  it.effect(
+    "an agent's first launch is delivered on its transcript to a member of its workspace, and to no account outside it",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const stranger = yield* openUser;
+        const task = yield* startTask(owner, { name: "Teammate invitations" });
+        yield* joinWorkspace(task.workspaceId, teammate);
+        const started = yield* createAgent(owner, {
+          taskId: task.id,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: "acme/relay",
+          descriptionSnapshot: "# Teammate invitations\n",
+          prompt: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        });
+        const { agent } = Option.getOrThrow(started);
+        yield* beginAgentBoot(agent.id, new Date(0), undefined);
+        const sql = yield* SqlClient.SqlClient;
+        // The boot's statement as Realtime runs it for `reader`, the agent's own transcript followed.
+        const bootRowsFor = (reader: string) => {
+          const statement = Option.getOrThrow(
+            agentTranscriptRead.statements({
+              userId: reader,
+              id: agent.id,
+              call: "",
+              ownerId: owner,
+              conversationId: agent.conversationId,
+              parentConversationId: agent.conversationId,
+              agentId: agent.id,
+            }),
+          ).boot;
+          return sql.unsafe(statement.sql, [...statement.params]);
+        };
+
+        assert.equal((yield* bootRowsFor(teammate)).length, 1);
+        assert.deepEqual(yield* bootRowsFor(stranger), []);
       }),
   );
 
@@ -1572,6 +1643,73 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
           }),
           { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
         );
+      }),
+  );
+
+  it.effect(
+    "a memory names the agent, line, and task its words came from only to a member who may open that task, and counts its recalls over the last thirty days",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const [keeper, teammate] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+        for (const id of [keeper, teammate]) {
+          yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+        }
+        const workspaceId = yield* openWorkspace(keeper);
+        yield* joinWorkspace(workspaceId, teammate);
+        const { id: taskId } = yield* createTask(keeper, {
+          organizationId: workspaceId,
+          name: "Flaky tests",
+        });
+        const agentId = yield* openTaskAgent(keeper, workspaceId, taskId);
+        const line = randomUUID();
+        const kept = yield* rememberMemory(
+          workspaceId,
+          keeper,
+          "Deployments go out from main.",
+          undefined,
+          { agentId, messageId: line },
+        );
+        assert.ok("memory" in kept);
+        // Two recalls, one now and one past the window, on the clock the read serves its window from, moved on so neither falls before the epoch.
+        yield* TestClock.adjust(Duration.days(60));
+        const now = yield* Clock.currentTimeMillis;
+        yield* db.insert(memoryRecall).values(
+          [now, now - Duration.toMillis(Duration.days(31))].map((at) => ({
+            organizationId: workspaceId,
+            memoryId: kept.memory.id,
+            recalledAt: new Date(at),
+          })),
+        );
+        const read = (bearer: string) =>
+          Effect.gen(function* () {
+            const polled = yield* ask({
+              bearer,
+              path: `/api/live/workspace-memories?workspaceId=${workspaceId}`,
+            });
+            assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
+            const answer = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.answer)(polled.body);
+            const { memories } = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.rows)({
+              memories: answer.queries.memories.rows,
+            });
+            return memoriesOfLiveRows(memories).map((memory) => [
+              memory.source,
+              memory.recalls30d,
+              memory.lastRecalledAt,
+            ]);
+          });
+
+        const shared = yield* read(teammate);
+        // The task moves onto its starter's own GitHub token, which the teammate has none of.
+        yield* db
+          .update(task)
+          .set({ githubAccess: GITHUB_ACCESS.TOKEN })
+          .where(eq(task.id, taskId));
+
+        const source = { agentId, messageId: line, taskId, taskName: "Flaky tests" };
+        assert.deepEqual(shared, [[source, 1, now]]);
+        assert.deepEqual(yield* read(keeper), [[source, 1, now]]);
+        assert.deepEqual(yield* read(teammate), [[null, 1, now]]);
       }),
   );
 });

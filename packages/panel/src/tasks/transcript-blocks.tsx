@@ -8,12 +8,7 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { readLink } from "@repo/features/link-grammar";
-import {
-  decodeMention,
-  encodeMention,
-  MENTION_KIND,
-  mayNameMention,
-} from "@repo/features/mention-link";
+import { mayNameMention } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
@@ -180,6 +175,7 @@ import {
 } from "../ai-elements/tool.js";
 import { useDrawnDark } from "../drawn-dark.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
+import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -191,7 +187,7 @@ import {
   inlineCodeTarget,
 } from "./inline-code-target.js";
 import { LoneLinkCard } from "./lone-link-card.js";
-import { linkChip, type MentionDoors } from "./mention-chip.js";
+import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
@@ -970,6 +966,11 @@ function useElementDraw(element: TranscriptElement | undefined): {
   );
 }
 
+/** A call's Markdown block, as a memory's words, drawn as the turn's own words are, so its links, chips, and pictures keep a reply's rules. */
+function toolMarkdown(text: string): ReactNode {
+  return <TranscriptWords text={text} />;
+}
+
 /**
  * A turn's words as markdown, with an element of the transcript's own
  * written in where one is given. Words still being written are read as
@@ -1166,6 +1167,8 @@ const CALL_ICON = {
   [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
+  [CALL_KIND.LIST_MEMORIES]: () => <GLYPH.MEMORY />,
+  [CALL_KIND.FORGET_MEMORY]: () => <GLYPH.MEMORY />,
   [CALL_KIND.READ_COMMENTS]: () => <GLYPH.COMMENT />,
   [CALL_KIND.REPLY_TO_COMMENT]: () => <GLYPH.COMMENT />,
   [CALL_KIND.RESOLVE_THREAD]: () => <GLYPH.RESOLVED />,
@@ -1264,8 +1267,9 @@ function chippedLine(
  * The chip a call's row names what it read or wrote by: the first file's,
  * of the task's repository, with its hover card, or the website chip of the
  * page it fetched; nothing where it names neither, or the place knows no
- * repository, or the path is no file of it, as an absolute one or one that
- * climbs out is not, and the row says its subject as words.
+ * repository, or the path is no file of it, as an absolute one outside the
+ * checkout or one that climbs out is not, and the row says its subject as
+ * words.
  */
 function calledChip(
   kind: CallKind,
@@ -1279,12 +1283,7 @@ function calledChip(
     );
   }
   const first = calledFile(kind, files);
-  const repository = doors.place.repository;
-  if (first === undefined || repository === null) return undefined;
-  const target = encodeMention({ kind: MENTION_KIND.FILE, path: first }, doors.place);
-  // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
-  if (decodeMention(target, repository)?.kind !== MENTION_KIND.FILE) return undefined;
-  return linkChip(target, target, doors);
+  return first === undefined ? undefined : fileChip(first, doors);
 }
 
 /** Whose Mac a transcript's Mac commands ran on, its agent's starter, the reader's own among them (`macOwnerOf`); none where the window cannot tell, whose ran on the reader's own as far as it knows. */
@@ -1439,14 +1438,15 @@ export function TranscriptTool({
           )
         ) : (
           <>
-            <ToolInput block={input} />
+            <ToolInput block={input} markdown={toolMarkdown} />
             {cut === undefined ? (
-              <ToolOutput block={output} errorText={errorText} />
+              <ToolOutput block={output} errorText={errorText} markdown={toolMarkdown} />
             ) : (
               <CutWords cut={cut} waiting={CUT_WORDS.OUTPUT}>
                 <ToolOutput
                   block={{ kind: TOOL_BLOCK.TEXT, text: cutText(cut) }}
                   errorText={undefined}
+                  markdown={toolMarkdown}
                 />
               </CutWords>
             )}
@@ -1519,7 +1519,7 @@ export function TranscriptOpeningCall({
   const { line, chip } = chippedLine(kind, subject, undefined, agent);
   return (
     <Tooltip label={hint} card={card ?? undefined}>
-      <LineButton data-call-id={callId} data-opens="" onClick={onOpen}>
+      <LineButton data-call-id={callId} data-opens="" {...FIND_DETAIL} onClick={onOpen}>
         <ToolLine
           state={state}
           icon={<Icon aria-hidden="true" />}
@@ -1887,8 +1887,8 @@ export function TranscriptSubagent({
           {line}
         </ToolSummary>
         <ToolContent bare>
-          <ToolInput block={body.input} />
-          <ToolOutput block={body.output} errorText={undefined} />
+          <ToolInput block={body.input} markdown={toolMarkdown} />
+          <ToolOutput block={body.output} errorText={undefined} markdown={toolMarkdown} />
         </ToolContent>
       </Tool>
     ) : onOpen === undefined ? (
@@ -1904,7 +1904,7 @@ export function TranscriptSubagent({
       </Tooltip>
     );
   return (
-    <div className="subagent-row @container/subagent-row text-caption-inline">
+    <div className="subagent-row @container/subagent-row text-caption-inline" {...FIND_DETAIL}>
       {row}
       {errorText === undefined ? null : (
         <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
@@ -1939,12 +1939,14 @@ function TurnFold({
   children: ReactNode;
 }): ReactNode {
   return (
-    <Disclosure defaultOpen={open} data-turn-fold="">
-      <DisclosureSummary>
-        {running ? <Shimmer>{summary}</Shimmer> : <span>{summary}</span>}
-      </DisclosureSummary>
-      <DisclosureBody>{children}</DisclosureBody>
-    </Disclosure>
+    <FindDetailFolds>
+      <Disclosure defaultOpen={open} data-turn-fold="" {...FIND_DETAIL}>
+        <DisclosureSummary>
+          {running ? <Shimmer>{summary}</Shimmer> : <span>{summary}</span>}
+        </DisclosureSummary>
+        <DisclosureBody>{children}</DisclosureBody>
+      </Disclosure>
+    </FindDetailFolds>
   );
 }
 

@@ -49,6 +49,7 @@
     "@repo/settings": "workspace:*",
     "@repo/sync": "workspace:*",
     "@repo/wire": "workspace:*",
+    "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
     "@orpc/experimental-effect": "catalog:",
     "@orpc/publisher": "catalog:",
@@ -61,7 +62,6 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
-    "@orpc/client": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

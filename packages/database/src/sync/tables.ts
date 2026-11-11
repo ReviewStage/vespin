@@ -23,8 +23,10 @@
  * declared logged once for every read that follows it by deltas.
  */
 
+import { accountSound, accountSoundChoice } from "../schemas/account-sound.js";
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
 import { agentApproval } from "../schemas/agent-approval.js";
+import { agentBootTable } from "../schemas/agent-boot.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
@@ -48,7 +50,7 @@ import { installedSkill } from "../schemas/installed-skill.js";
 import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
 import { macCommand } from "../schemas/mac-command.js";
-import { memory } from "../schemas/memory.js";
+import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
 import { pullRequestChapters } from "../schemas/pull-request-chapters.js";
@@ -194,6 +196,23 @@ export const agentSandboxSync = defineSyncTable(agentSandboxTable, {
   log: LOG.EVERY,
 });
 
+/** An agent's first launch, on the agent's topic, its task's, and its workspace's, as its sandbox's row is. */
+export const agentBootSync = defineSyncTable(agentBootTable, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentBootTable.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentBootTable.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
 /** An account's membership of a workspace, on the workspace's topic and the account's. */
 export const memberSync = defineSyncTable(member, {
   topics: [
@@ -228,9 +247,10 @@ export const userSync = defineSyncTable(user, {
 /**
  * A member's device, on its account's topic and, through its memberships,
  * every workspace it is in, so a Mac's new name reaches the task lists that
- * name the local agents on it, and a host's platform, machine, model, and
- * update reach Settings › Hosts (`hostsRead`), as do its enrolling, which
- * writes its version, and its removal. Note that every other column is
+ * name the local agents on it, and a host's platform, machine, model,
+ * update, setup, and first register (its home folder) reach every surface
+ * that reads the hosts (`hostsRead`), as do its enrolling, which writes its
+ * version, and its removal. Note that every other column is
  * ignored, because the device beats and registers again often, rewriting
  * when it was last seen and what it runs, and no view the capture wakes
  * reads them: a window judges a device by its own presence read.
@@ -247,16 +267,15 @@ export const deviceSync = defineSyncTable(device, {
   ],
   ignore: [
     device.arch,
-    device.home,
     device.agentsFolder,
+    device.tempFolder,
+    device.attachmentsFolder,
     device.claudeExecutable,
     device.codexExecutable,
     device.capabilities,
-    device.setup,
     device.setupFailure,
     device.updateFailure,
     device.secretHash,
-    device.createdAt,
     device.lastSeenAt,
   ],
   log: LOG.EVERY,
@@ -397,6 +416,23 @@ export const accountPreferenceSync = defineSyncTable(accountPreference, {
     accountPreference.runsOnDeviceId,
     accountPreference.updatedAt,
   ],
+});
+
+/**
+ * A sound the account keeps of its own, on the account's topic, which the
+ * account's preferences read is woken on, so a sound added, renamed, or
+ * removed on one device is listed on every other. Note that its bytes are
+ * ignored, because they are written only with the row, whose arrival
+ * notifies, and never change after.
+ */
+export const accountSoundSync = defineSyncTable(accountSound, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountSound.userId }],
+  ignore: [accountSound.bytes, accountSound.byteCount],
+});
+
+/** Which sound one of the account's two sounds plays, on the account's topic, which the same read is woken on. */
+export const accountSoundChoiceSync = defineSyncTable(accountSoundChoice, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountSoundChoice.userId }],
 });
 
 /**
@@ -649,6 +685,15 @@ export const memorySync = defineSyncTable(memory, {
 });
 
 /**
+ * One memory handed to a coding agent, on its workspace's memory topic, so
+ * the open memory reads of the workspace count it. No column is ignored:
+ * a row is written once, and moves after only when its agent goes.
+ */
+export const memoryRecallSync = defineSyncTable(memoryRecall, {
+  topics: [{ kind: TOPIC.MEMORY, column: memoryRecall.organizationId }],
+});
+
+/**
  * A workspace's installation of an integration's own app, on the
  * workspace's integrations topic, which only the open integration reads of
  * the workspace are woken on. No column is ignored: Settings reads the
@@ -810,10 +855,13 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskReadSync,
   macCommandSync,
   accountPreferenceSync,
+  accountSoundSync,
+  accountSoundChoiceSync,
   integrationConnectionSync,
   runnerLineSync,
   agentQueueSync,
   agentSandboxSync,
+  agentBootSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,
@@ -829,6 +877,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentBrowserTabSync,
   pullRequestChaptersSync,
   memorySync,
+  memoryRecallSync,
   installedSkillSync,
   integrationInstallationSync,
   slackInstallationSync,

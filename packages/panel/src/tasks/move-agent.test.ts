@@ -15,10 +15,11 @@ import { experimentsOn } from "@repo/settings/testing";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, test } from "vitest";
+import { appBridge } from "../app-bridge.js";
 import type { MenuEntry } from "../desktop/action-menu.js";
 import { agentMenuGroups, useAgentActions } from "../desktop/agent-actions.js";
-import { handState, stateWith } from "../testing/app-state.js";
-import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { handBeats, handState } from "../testing/app-state.js";
+import { settleQueries, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { agentsControl } from "../testing/tasks-control.js";
 import type { AgentsControl } from "./use-agents.js";
 
@@ -93,8 +94,13 @@ async function menuOf(
 ): Promise<MenuEntry[]> {
   const experiments = experimentOn ? experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST) : {};
   handState(experiments);
+  // Note that Attic reads setting up as the hosts read says it, every surface's one source.
+  handBeats(
+    {},
+    { hosts: [{ id: ATTIC, name: "Attic", setup: DEVICE_SETUP.PREPARING, calledIn: true }] },
+  );
   // Note that the menu is read once, so the document is in the client from its first frame.
-  writeAppState(stateWith(experiments, {}));
+  writeAppState(await appBridge().requestAppState());
   let groups: MenuEntry[][] = [];
   function Probe(): null {
     const actions = useAgentActions(agent, control, {
@@ -110,6 +116,8 @@ async function menuOf(
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
+  // Note that the hosts read every surface reads a device's standing from is drawn a notify tick after it lands.
+  await settleQueries();
   act(() => root.unmount());
   return groups.flat();
 }
@@ -128,7 +136,7 @@ test("an agent at rest in the cloud moves to each of the member's devices, one n
     entry.items.map(({ label, detail, disabled }) => ({ label, detail, disabled })),
     [
       { label: "Studio", detail: undefined, disabled: false },
-      { label: "Attic", detail: "Getting ready…", disabled: true },
+      { label: "Attic", detail: "Setting up", disabled: true },
     ],
   );
   entry.items[0]?.onSelect();
@@ -145,7 +153,7 @@ test("an agent on a device moves to the cloud or another device, never its own, 
     entry.items.map(({ label, detail }) => ({ label, detail })),
     [
       { label: "Cloud", detail: "Only pushed work comes along" },
-      { label: "Attic", detail: "Getting ready…" },
+      { label: "Attic", detail: "Setting up" },
     ],
   );
   entry.items[0]?.onSelect();

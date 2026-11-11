@@ -8,6 +8,7 @@
  */
 
 import { formatCount } from "./number-format.js";
+import { PRODUCT_NAME } from "./product-name.js";
 
 /** A noun as a count says it: its one form and its many form. */
 export interface Noun {
@@ -45,6 +46,7 @@ export const VERB = {
   RETRY: "Retry",
   RECONNECT: "Reconnect",
   OPEN: "Open",
+  OPEN_IN_BROWSER: "Open in browser",
   RESET_TO_DEFAULTS: "Reset to defaults",
 } as const;
 
@@ -123,6 +125,9 @@ export function orListParts(
 /** What a page that needs an account says to someone not signed in. One line for every page, so none is worded its own way. */
 export const SIGNED_OUT_WORDS = "Sign in to use this page.";
 
+/** What every client says once the service refused its build as older than it serves (`network.updateNeeded`), beside the act that updates it. */
+export const BUILD_TOO_OLD_WORDS = `This ${PRODUCT_NAME} is older than the one now live`;
+
 /** What a wait is called while something is read: "Reading tasks". A label, so no "…". */
 export function readingWords(things: string): string {
   return `Reading ${things}`;
@@ -160,6 +165,9 @@ export function showMoreWords(count: number): string {
 
 /** What a Terminal tab says beside the agent's name of a shell that ended. */
 export const SHELL_EXITED_WORDS = "exited";
+
+/** What the pane beside the Inbox's list says while none of its items is chosen. */
+export const CHOOSE_AN_ITEM_WORDS = "Choose an item";
 
 /** What the foot of a capped list says once it shows every row, which puts them back. */
 export const SHOW_LESS_WORDS = "Show less";
@@ -205,6 +213,11 @@ export function replyFromWords(agent: string, lead?: string): string {
 
 /** What a refresh that failed says beside the last good read, which stays drawn; Retry stands with it. */
 export const REFRESH_FAILED_WORDS = "Could not refresh";
+
+/** What a client says of the changes made while the service could not be reached that it refused once they were sent again. */
+export function offlineRefusedWords(count: number): string {
+  return `Couldn't save ${countWords(count, { one: "change", many: "changes" })} you made offline.`;
+}
 
 /** What an act that failed on its way to the service says, as the reader's connection, whatever the failure's own text: a person reads this, and the text goes to the log. */
 export const ACT_UNREACHED_WORDS =

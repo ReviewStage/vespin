@@ -6,9 +6,7 @@
  * sidebar starts from (`DEFAULT_TASK_LIST_VIEW`): the reader's own tasks,
  * to do and in progress, grouped by repository, the pinned repositories'
  * groups first. A pin is the reader's own choice and is never filtered, as
- * the sidebar never filters one. Note that the list holds tasks alone: an
- * agent with no task, which the sidebar lists among them, opens a
- * transcript a phone does not draw yet.
+ * the sidebar never filters one.
  */
 
 import { inPinOrder } from "./pin-order.js";
@@ -45,13 +43,13 @@ import { taskKey } from "./workspace-key.js";
 const PINNED_HEAD = "Pinned";
 
 /** What a group of the tree stands for: Pinned, one of the member's sections, or a repository under My tasks. */
-const TASK_TREE_GROUP = {
+export const TASK_TREE_GROUP = {
   PINNED: "pinned",
   SECTION: "section",
   REPOSITORY: "repository",
 } as const;
 
-type TaskTreeGroupKind = (typeof TASK_TREE_GROUP)[keyof typeof TASK_TREE_GROUP];
+export type TaskTreeGroupKind = (typeof TASK_TREE_GROUP)[keyof typeof TASK_TREE_GROUP];
 
 /** One list of the tree: its kind, a key it is told apart by, its heading, and its rows in order, child tasks nested. */
 export interface TaskTreeGroup {

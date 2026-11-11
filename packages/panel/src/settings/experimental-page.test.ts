@@ -136,6 +136,7 @@ test("the workspace's experiments and the account's own stand in two groups, eac
     [
       "Rewind restores files",
       "Done and follow-ups",
+      "Run actions",
       "Task descriptions",
       "Memory",
       "Bring your own machine",
@@ -213,6 +214,7 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
   assert.deepEqual(feedbackAbout, [
     EXPERIMENT.REWIND_FILES,
     EXPERIMENT.TURN_END,
+    EXPERIMENT.RUN_ACTIONS,
     EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.MEMORY,
     EXPERIMENT.BRING_YOUR_OWN_HOST,

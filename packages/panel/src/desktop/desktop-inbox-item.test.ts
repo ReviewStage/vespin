@@ -442,7 +442,7 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
   );
 });
 
-test("a page's link alone on its line, naming its task by the task's number, is the page's row with the page itself drawn under it", async () => {
+test("a page's bare link alone on its line, naming its task by the task's number, is the page's row named by its title, with the page itself drawn under it", async () => {
   const numbered = { ...BILLING, number: 182 };
   handState(
     {},
@@ -463,7 +463,7 @@ test("a page's link alone on its line, naming its task by the task's number, is 
     },
   );
   const link = `https://vespin.dev/stage/task/182/page/${FUNNEL.id}`;
-  world.inboxes.set(BILLING.id, [saying(THRESHOLD, `[@${FUNNEL.title}](${link})`), RETRY]);
+  world.inboxes.set(BILLING.id, [saying(THRESHOLD, link), RETRY]);
   const { page } = mount({ chosen: ON_THRESHOLD, standing: [numbered, INVITES] });
   await settle();
   // Note that the page is drawn once its task's pages reach their query.
@@ -474,6 +474,12 @@ test("a page's link alone on its line, naming its task by the task's number, is 
         ?.getAttribute("src"),
       pageFrameUrl({ taskId: BILLING.id, pageId: FUNNEL.id, version: FUNNEL.version }),
     ),
+  );
+  // The row is named by the page's own title, read with its task's pages, though no task is open.
+  assert.equal(
+    page.querySelector('[data-inbox-message-text] [data-lone-link="page"] .ui-list-row-title')
+      ?.textContent,
+    FUNNEL.title,
   );
   // A task listed anew, as a teammate's or an agent's lands in the window, leaves the page loaded rather than drawing it again.
   const frame = page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`);
@@ -584,6 +590,8 @@ test("a recording an agent's words draw plays where it stands, left out of the r
     const inline = pane.querySelector("video");
     assert.ok(inline, "the recording plays where its words draw it");
     assert.equal(inline.getAttribute("src"), "blob:video-1");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => inline.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(inline.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),
@@ -617,6 +625,8 @@ test("a recording an agent's words draw plays where it stands, left out of the r
     const card = document.querySelector('[role="dialog"]');
     const player = card?.querySelector("video");
     assert.ok(player, "the viewer plays the recording");
+    // The bar stands once the video's size is read, as a browser reads it.
+    act(() => player.dispatchEvent(new Event("loadedmetadata")));
     assert.deepEqual(
       [...(player.closest(".ui-video-player")?.querySelectorAll("button") ?? [])].map((each) =>
         each.getAttribute("aria-label"),
@@ -2311,9 +2321,9 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
     [
       "controls",
       "line: Add a note",
-      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
     ],
-    "under them the note line on its own, and under it the row: +, the microphone, and Send",
+    "under them the note line on its own, and under it the agent box's row: +, where the agent runs, its model, the microphone, and Send",
   );
   assert.equal(footWords(pane), "", "and no line of help");
 });

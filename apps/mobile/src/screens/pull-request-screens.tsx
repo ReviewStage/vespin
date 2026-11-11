@@ -1,4 +1,4 @@
-// pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, and its merge, Remove from queue, and Open on GitHub in the bar.
+// pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue in the bar or, in a regular window, under its checks, and Open on GitHub in the bar.
 
 import {
   type AgentOverviewPullRequest,
@@ -6,6 +6,7 @@ import {
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -44,6 +45,7 @@ import {
   LIST_LOOK,
   ListSection,
   MarkRow,
+  MergeActRow,
   PATH_PART,
   PullRequestHead,
   REVIEW_LOOK,
@@ -54,7 +56,7 @@ import {
   WriteNoteRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent } from "../agents/use-agent.js";
 import { openInSafari } from "../open-link.js";
 import {
@@ -65,6 +67,9 @@ import {
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 /** What the bar's ⋯ menu offers beside the merge. */
 const MENU_WORDS = {
@@ -158,51 +163,76 @@ function mergePressOf(
   }
 }
 
+/** The merge's press as a screen draws it: its words, busy in its own while a change is out, and what a tap does. */
+interface ShownPress {
+  readonly words: string;
+  readonly prominent: boolean;
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+}
+
+/** The press the pull request offers as it stands, wherever the screen draws it; none where it offers nothing. */
+function shownPressOf(
+  pullRequest: AgentOverviewPullRequest | undefined,
+  method: MergeMethod | undefined,
+  writes: PullRequestWrites,
+  onDequeue: () => void,
+): ShownPress | undefined {
+  const live = pullRequest !== undefined && isLivePullRequest(pullRequest);
+  const action = live ? mergeActionFor(pullRequest) : undefined;
+  const press = mergePressOf(action, method, pullRequest?.merging?.headSha ?? "");
+  if (press === undefined) return undefined;
+  const pending = isMergeWrite(writes.pending) ? writes.pending : undefined;
+  const { request } = press;
+  return {
+    words: pending === undefined ? press.words : MERGE_BUSY_WORDS[pending],
+    prominent: press.prominent,
+    disabled: writes.pending !== undefined,
+    onPress: () => {
+      if (request === undefined) onDequeue();
+      else void writes.write(request);
+    },
+  };
+}
+
 /**
- * The bar's acts: the one press the merge offers where it offers one, busy
- * in its own words while its change is out, and the ⋯ menu, which opens the
- * pull request on GitHub, chooses how to merge where the repository allows
- * more than one way, and reads it again.
+ * The bar's acts: the merge's one press where the screen hands it one, and
+ * the ⋯ menu, which opens the pull request on GitHub, chooses how to merge
+ * where the repository allows more than one way, and reads it again.
  */
 function PullRequestToolbar({
   pullRequest,
   url,
-  writes,
+  press,
   method,
   onChoose,
-  onDequeue,
   onRefresh,
 }: {
   readonly pullRequest: AgentOverviewPullRequest | undefined;
   readonly url: string | undefined;
-  readonly writes: PullRequestWrites;
+  readonly press: ShownPress | undefined;
   readonly method: MergeMethod | undefined;
   readonly onChoose: (method: MergeMethod) => void;
-  readonly onDequeue: () => void;
   readonly onRefresh: () => void;
 }) {
   const colors = useColors();
   const live = pullRequest !== undefined && isLivePullRequest(pullRequest);
   const action = live ? mergeActionFor(pullRequest) : undefined;
-  const press = mergePressOf(action, method, pullRequest?.merging?.headSha ?? "");
-  const pending = isMergeWrite(writes.pending) ? writes.pending : undefined;
   const methods = pullRequest?.merging?.methods ?? [];
   const chooses =
     methods.length > 1 &&
     (action === MERGE_ACTION.MERGE || action === MERGE_ACTION.ENABLE_AUTO_MERGE);
+  // Note that these stand in the top bar in every window, never the bottom: expo-router shows a navigation controller's toolbar and never hides it again, so a bottom bar outlived the page. A regular window hands no press, since its top bar folds it into More, and draws it under the checks instead.
   return (
     <Stack.Toolbar placement="right">
       {press === undefined ? null : (
         <Stack.Toolbar.Button
           variant={press.prominent ? "prominent" : "plain"}
-          tintColor={colors.ACCENT}
-          disabled={writes.pending !== undefined}
-          onPress={() => {
-            if (press.request === undefined) onDequeue();
-            else void writes.write(press.request);
-          }}
+          tintColor={press.prominent ? colors.ACCENT : colors.TEXT}
+          disabled={press.disabled}
+          onPress={press.onPress}
         >
-          {pending === undefined ? press.words : MERGE_BUSY_WORDS[pending]}
+          {press.words}
         </Stack.Toolbar.Button>
       )}
       <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
@@ -239,11 +269,13 @@ function PullRequestToolbar({
  * opening its run on GitHub; and its reviewers, where each stands, with
  * how many comments its conversation holds, which opens it on GitHub. Its
  * parts are held live while the screen is in focus, and a pull down reads
- * them again. The bar offers the merge's one press, which acts at once as
- * the panel's merge control does, or arms auto-merge where the repository
- * merges through a queue; Remove from queue, which asks first, as the
- * panel's does; and its ⋯ menu, which opens it on GitHub, where its diff
- * and comments are read.
+ * them again. The merge's one press acts at once as the panel's merge
+ * control does, or arms auto-merge where the repository merges through a
+ * queue, and Remove from queue asks first, as the panel's does; it stands
+ * in the bar in a compact window, and in a regular one under the checks as
+ * a large button, since a regular window's bar folds its acts into More.
+ * The bar's ⋯ menu opens it on GitHub, where its diff and comments are
+ * read.
  */
 export function PullRequestScreen() {
   const { id = "", number = "" } = useLocalSearchParams<{ id: string; number: string }>();
@@ -268,6 +300,32 @@ export function PullRequestScreen() {
   const title = pullRequest?.title ?? listed?.title;
   const state = pullRequest?.state ?? listed?.state;
   const url = pullRequest?.url ?? listed?.url;
+  const press = shownPressOf(pullRequest, method, writes, () => setAsking(true));
+  // Whether the pull request offers Remove from queue as it stands, which its question asks about.
+  const dequeues =
+    pullRequest !== undefined &&
+    isLivePullRequest(pullRequest) &&
+    mergeActionFor(pullRequest) === MERGE_ACTION.DEQUEUE;
+  // Note that the question is dropped as soon as the queue no longer offers it, rather than only when its alert says it went, so it never stands again by itself the next time the pull request is queued.
+  useEffect(() => {
+    if (!dequeues) setAsking(false);
+  }, [dequeues]);
+  // Whether the press stands in the page, under the checks, rather than in the bar.
+  const inPage = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  useScreenActivity((workspaces) =>
+    agent === undefined || title === undefined
+      ? undefined
+      : pullRequestActivity(
+          {
+            agentId: id,
+            workspaceId: agent.workspaceId,
+            taskId: agent.planId,
+            number: key.number,
+            title,
+          },
+          workspaces,
+        ),
+  );
   const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
   const bar = (
     <>
@@ -280,10 +338,9 @@ export function PullRequestScreen() {
       <PullRequestToolbar
         pullRequest={pullRequest}
         url={url}
-        writes={writes}
+        press={inPage ? undefined : press}
         method={method}
         onChoose={setChosen}
-        onDequeue={() => setAsking(true)}
         onRefresh={() => void retry()}
       />
     </>
@@ -297,6 +354,7 @@ export function PullRequestScreen() {
           <EmptyState
             title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
             symbol={failed ? "exclamationmark.triangle" : "arrow.triangle.pull"}
+            loading={!failed}
             action={
               failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined
             }
@@ -394,6 +452,16 @@ export function PullRequestScreen() {
               ))
             )}
           </ListSection>
+          {inPage && press !== undefined ? (
+            <ListSection>
+              <MergeActRow
+                label={press.words}
+                prominent={press.prominent}
+                disabled={press.disabled}
+                onPress={press.onPress}
+              />
+            </ListSection>
+          ) : null}
           <ListSection title="Reviews" count={reviewers.length}>
             {reviewers.map((reviewer) => (
               <MarkRow
@@ -423,7 +491,7 @@ export function PullRequestScreen() {
         title={MERGE_WORDS.DEQUEUE_QUESTION}
         message={QUEUE_WARNING}
         act={MERGE_WORDS.DEQUEUE}
-        presented={asking && queued !== null}
+        presented={asking && dequeues}
         onAct={() => {
           setAsking(false);
           void writes.write({ action: PULL_REQUEST_ACTION.DEQUEUE });
