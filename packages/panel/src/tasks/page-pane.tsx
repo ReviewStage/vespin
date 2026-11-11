@@ -21,6 +21,12 @@ import {
   pagePickAnswerSchema,
 } from "@repo/features/page-pick";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
+import {
+  PAGE_ZOOM_KEY,
+  type PageZoomKey,
+  pageZoomMoves,
+  pageZoomWords,
+} from "@repo/features/page-zoom";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeLines, TasksPageSourceAnswer } from "@repo/features/tasks-view";
 import { readingWords } from "@repo/features/words";
@@ -33,6 +39,7 @@ import {
   FILL_ELEMENT,
   Fill,
   IconButton,
+  MENU_DETAIL,
   PaneBar,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
@@ -49,6 +56,8 @@ import {
   GLYPH,
   MessageSquarePlusIcon,
   RotateCwIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
 } from "@repo/ui/icons";
 import { pageTab } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,6 +111,7 @@ import {
 } from "./description-comments.js";
 import { type PageReviewControl, PageReviewPress, usePageReview } from "./page-review.js";
 import { PAGE_ROOM, usePageTheme } from "./page-theme.js";
+import { usePageZoom } from "./page-zoom.js";
 import { pageSourceQueryOptions, pageSourcesKey } from "./repository-reads.js";
 import { opensAsLink, useOpenLink } from "./use-open-link.js";
 import { useViewSettingsSheet, VIEW_SETTINGS_SCOPE, ViewSettingsButton } from "./view-settings.js";
@@ -138,6 +148,10 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * once a version, through main, which colors it as HTML
  * (`ACT_KIND.TASKS_PAGE_SOURCE`), and is held by the tab until Reload.
  * The tab stays on the source or the page while its versions are stepped.
+ *
+ * The page is drawn at a size the tab holds (`usePageZoom`), stepped by the
+ * ⋯'s Zoom in, Zoom out, and Actual size, by ⌘+, ⌘−, and ⌘0 pressed in the
+ * page, and by a pinch over it, and kept across reloads and versions.
  *
  * ⌘F over the page itself finds in the frame: no find of this window reaches
  * the page's words, so the find bar asks the frame, whose page is served
@@ -614,6 +628,39 @@ function versionStepAction(
 }
 
 /**
+ * The tab's ⋯ items that size the page: Zoom in and Zoom out, which leave
+ * the menu standing so a size is stepped to press by press, and Actual size,
+ * the size shown beside it; each dimmed where it would change nothing. Note
+ * that no item prints ⌘+, ⌘−, or ⌘0, because those size the page only
+ * pressed in it, and the window anywhere else.
+ */
+function zoomActions(zoom: number, press: (key: PageZoomKey) => void): MenuAction[] {
+  return [
+    {
+      label: "Zoom in",
+      icon: <ZoomInIcon aria-hidden="true" />,
+      disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.IN),
+      stays: true,
+      onSelect: () => press(PAGE_ZOOM_KEY.IN),
+    },
+    {
+      label: "Zoom out",
+      icon: <ZoomOutIcon aria-hidden="true" />,
+      disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.OUT),
+      stays: true,
+      onSelect: () => press(PAGE_ZOOM_KEY.OUT),
+    },
+    {
+      label: "Actual size",
+      detail: pageZoomWords(zoom),
+      detailPlace: MENU_DETAIL.BESIDE,
+      disabled: !pageZoomMoves(zoom, PAGE_ZOOM_KEY.ACTUAL),
+      onSelect: () => press(PAGE_ZOOM_KEY.ACTUAL),
+    },
+  ];
+}
+
+/**
  * Where commenting on the page stands: whether its column is open beside
  * it, whether the frame is picking an element, the thread being started,
  * and the threads open. An element picked, or words selected and replied
@@ -786,6 +833,7 @@ export function PagePane({
   );
   const frame = useRef<HTMLIFrameElement>(null);
   const room = useRef<HTMLDivElement>(null);
+  const pageZoom = usePageZoom(frame);
   const threads = comments?.control.threads;
   // The version stepped to, none while the newest is followed.
   const [chosen, setChosen] = useState<number | undefined>(undefined);
@@ -888,6 +936,8 @@ export function PagePane({
           ),
         ];
   const versionWords = `Version ${version} of ${page.version}`;
+  // Note that the zoom sizes the page alone, so it stands nowhere while the source is shown.
+  const zoom = showingSource ? [] : zoomActions(pageZoom.zoom, pageZoom.press);
   useTabActions(
     phone
       ? [
@@ -914,11 +964,12 @@ export function PagePane({
             { label: toggleLabel, icon: <CodeXmlIcon aria-hidden="true" />, onSelect: toggleView },
             reloadAction,
           ],
+          zoom,
           showingSource ? [settings.action, copySource] : [],
           inBrowser,
         ].filter((group) => group.length > 0)
       : // Note that the strip's one ⋯ for the tab offers these after its Copy link, so the bar draws no ⋯ of its own.
-        [inBrowser, showingSource ? [copySource] : [], [reloadAction]].filter(
+        [inBrowser, showingSource ? [copySource] : [], zoom, [reloadAction]].filter(
           (group) => group.length > 0,
         ),
   );
