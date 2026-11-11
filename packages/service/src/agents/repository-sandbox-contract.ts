@@ -38,6 +38,8 @@ export const REPOSITORY_SANDBOX_CONTRACT = {
     REFRESH: "APP_REFRESH",
     /** The folder under the workspace an extra repository's checkout is cloned into; its presence is what makes a run an extra's clone. */
     FOLDER: "APP_CHECKOUT_FOLDER",
+    /** The folders a workspace drive keeps, one `owner/name` a line; its presence is what makes a run the drive's prune. */
+    KEEP: "APP_KEEP_FOLDERS",
   },
 } as const;
 

@@ -28,6 +28,7 @@ import { Effect } from "effect";
 import { baseDriveName } from "../agents/base-drive.js";
 import { discardedWithWorkspace } from "../agents/device-discard.js";
 import { deletedWithWorkspace, deploymentSandboxDeletes } from "../agents/session-sandboxes.js";
+import { workspaceDriveName } from "../agents/workspace-drive.js";
 import { schedulesForgotten } from "../automations/automation-cadence.js";
 
 /** What the deletion read before Better Auth deleted the workspace, which it settles after. */
@@ -64,6 +65,7 @@ export const beforeWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/beforeWork
               : [baseDriveName({ workspaceId: organizationId, fullName: agent.repository })],
           ),
         ),
+        workspaceDriveName(organizationId),
       ],
       devices: agents.flatMap(({ userId, agentId, deviceId }) =>
         deviceId === null ? [] : [{ userId, agentId, deviceId }],

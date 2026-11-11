@@ -174,8 +174,8 @@ function stillFilling(found: ListedSandbox, now: number): boolean {
   );
 }
 
-/** The fill's sandbox found under the base's name as a launch reads it: none, so the drive is free to fork; one filling; or one a fill left. */
-function readOf(found: ListedSandbox | undefined, now: number): BaseDriveRead {
+/** The fill's sandbox found under a drive's name as a launch reads it: none, so the drive is free to fork; one filling; or one a fill left. */
+export function readOf(found: ListedSandbox | undefined, now: number): BaseDriveRead {
   if (found === undefined) return { state: BASE_STATE.READY };
   if (stillFilling(found, now)) return { state: BASE_STATE.FILLING };
   return { state: BASE_STATE.WANTED, reason: BASE_WANTED.UNFINISHED, stale: found };
@@ -202,12 +202,13 @@ export const readBaseDrive = (of: BaseDriveOf) =>
   );
 
 /** The dependencies installed in the checkout the sandbox holds, or the refusal in the installer's own words. */
-const installDependencies = Effect.fn("web/installCheckoutDependencies")(function* (
+export const installDependencies = Effect.fn("web/installCheckoutDependencies")(function* (
   sandbox: RepositorySandbox,
+  folder: string = REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
 ) {
   const installed = yield* runInSandbox(
     sandbox,
-    { command: INSTALL_SCRIPT, workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT },
+    { command: INSTALL_SCRIPT, workingDirectory: folder },
     REPOSITORY_REFUSAL.CHECKOUT_FAILED,
   );
   if (installed.exitCode !== 0) {
@@ -219,14 +220,14 @@ const installDependencies = Effect.fn("web/installCheckoutDependencies")(functio
 });
 
 /** The commit the checkout stands at; none where git could not say, as for a sandbox that holds no checkout. */
-export const checkoutCommit = (sandbox: RepositorySandbox) =>
+export const checkoutCommit = (
+  sandbox: RepositorySandbox,
+  folder: string = REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
+) =>
   Effect.map(
     runInSandbox(
       sandbox,
-      {
-        command: "git rev-parse HEAD",
-        workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
-      },
+      { command: "git rev-parse HEAD", workingDirectory: folder },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     ),
     (ran) => (ran.exitCode === 0 ? ran.stdout.trim() : undefined),
@@ -257,13 +258,17 @@ export const lockfileMoved = (sandbox: RepositorySandbox, since: string) =>
  * so an install made there still matches; a diff git could not make reads
  * as a move.
  */
-const lockfilesUnmoved = (sandbox: RepositorySandbox, since: string) =>
+export const lockfilesUnmoved = (
+  sandbox: RepositorySandbox,
+  since: string,
+  folder: string = REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
+) =>
   Effect.map(
     runInSandbox(
       sandbox,
       {
         command: LOCKFILE_DIFF_SCRIPT,
-        workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
+        workingDirectory: folder,
         env: { [BASE_COMMIT_VARIABLE]: since },
       },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,

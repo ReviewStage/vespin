@@ -1,5 +1,5 @@
 /**
- * base-drive-refresh.ts -- every base drive that stands refilled once a day, so each agent forked from one fetches little of the default branch.
+ * base-drive-refresh.ts -- every base drive that stands refilled once a day, so each agent forked from one fetches little of the default branch, and every workspace's drive filled as its repositories stand.
  *
  * Vercel's cron calls the refresh once a day (the root `vercel.json`;
  * `maintenance/base-drive-refresh-app.ts`). It reads every workspace's
@@ -18,6 +18,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type BaseDriveRepository,
   listBaseDriveRepositories,
+  listBaseDriveWorkspaces,
 } from "@repo/database/models/base-drive-repositories";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { causeKind } from "@repo/runtime/effect";
@@ -32,6 +33,7 @@ import {
   repositorySandboxOver,
   type SandboxRunner,
 } from "./machine/sandbox-machine.js";
+import { fillWorkspaceDrive } from "./workspace-drive.js";
 
 /** What one day's refresh did, in counts alone: no workspace and no repository is named. */
 interface BaseDriveRefresh {
@@ -108,6 +110,16 @@ export const refreshBaseDrives = Effect.fn("web/refreshBaseDrives")(function* (r
     );
     if (outcome === undefined) counts.failed += 1;
     else counts[outcome] += 1;
+  }
+  // Every workspace's drive is filled too, as its repositories stand today (`workspace-drive.ts`).
+  for (const workspace of yield* listBaseDriveWorkspaces()) {
+    yield* fillWorkspaceDrive(run, image, workspace).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.logError(`a workspace drive's refresh failed: ${causeKind(cause)}`),
+      ),
+    );
   }
   const refreshed: BaseDriveRefresh = counts;
   yield* Effect.logInfo(

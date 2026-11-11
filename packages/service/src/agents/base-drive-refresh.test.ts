@@ -1,5 +1,5 @@
 /**
- * base-drive-refresh.test.ts -- the daily base drive refresh, over the test's own database, a GitHub that answers from the test's own installation, and `Sandbox` kept in memory: each base drive that stands refilled, a repository whose drive stands not passed by with no drive filled for it, and a refill that failed logged and passed by while the next is refilled. Synthetic accounts throughout.
+ * base-drive-refresh.test.ts -- the daily base drive refresh, over the test's own database, a GitHub that answers from the test's own installation, and `Sandbox` kept in memory: each base drive that stands refilled, a repository whose drive stands not passed by with no drive filled for it, a refill that failed logged and passed by while the next is refilled, and each connected workspace's drive filled. Synthetic accounts throughout.
  */
 
 import assert from "node:assert/strict";
@@ -20,6 +20,7 @@ import { baseDriveName } from "./base-drive.js";
 import { refreshBaseDrives } from "./base-drive-refresh.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import type { SandboxRunner } from "./machine/sandbox-machine.js";
+import { workspaceDriveName } from "./workspace-drive.js";
 
 const INSTALLATION = {
   id: 7101,
@@ -64,7 +65,7 @@ const startedIn = (userId: string, organizationId: string, repository: string) =
 
 it.layer(getTestDB())("the daily base drive refresh", (it) => {
   it.effect(
-    "refills each base drive that stands, fills none for a repository without one, and goes on past a refill that failed",
+    "refills each base drive that stands, fills none for a repository without one, goes on past a refill that failed, and fills the workspace's drive",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
@@ -92,8 +93,12 @@ it.layer(getTestDB())("the daily base drive refresh", (it) => {
         );
 
         assert.deepEqual(refreshed, { refilled: 1, passed: 1, failed: 1 });
-        assert.deepEqual(memory.state.deleted, [relay]);
-        assert.deepEqual([...memory.state.drives.keys()].toSorted(), [relay, beacon].toSorted());
+        const drive = workspaceDriveName(workspaceId);
+        assert.deepEqual(memory.state.deleted, [relay, drive]);
+        assert.deepEqual(
+          [...memory.state.drives.keys()].toSorted(),
+          [relay, beacon, drive].toSorted(),
+        );
       }),
   );
 });

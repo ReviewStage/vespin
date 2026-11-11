@@ -75,6 +75,10 @@ forked from its repository's default-branch drive or from the drive of the agent
 it was continued from, and in the sandbox otherwise; an agent on your own
 machine keeps its work there. A workspace
 repository's default branch may be kept on a drive cloud agents start from.
+Each workspace also keeps one drive holding the default branch of every
+repository it connects, with its dependencies installed, shared by its cloud
+agents: those its installation grants and those a member added on their own
+token alike, the latter cloned with that member's token.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
 Apart from them, we generally do not keep copies of repository content beyond
 what lands in an agent's transcript, except a pull request's number, title,
@@ -421,7 +425,8 @@ database is hosted by Neon, and agents' checkouts and session files live in
 Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
 checkout on a drive of its own, and a copy of each workspace repository's
 default branch, with its dependencies installed, on a drive its agents start
-from.
+from, and one drive per workspace holding the default branch of every
+repository it connects, member-token ones included, shared by its cloud agents.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -441,8 +446,9 @@ agent deletes its transcript at once. Deleting or archiving an agent asks
 Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
 the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. A repository's default-branch drive is
-kept for the workspace's agents until the workspace is deleted, and a
+seven days after they were last used. A repository's default-branch drive, and
+the workspace's drive of every repository it connects, are kept for the
+workspace's agents until the workspace is deleted, and a
 repository snapshot made before default-branch drives expires thirty days after
 its last use. When you delete your account:
 
