@@ -35,6 +35,12 @@ export {
   QueuedLines,
 } from "./composer-head.js";
 export { EmptyState } from "./empty-state.js";
+export {
+  FailureNoticeProvider,
+  type FailureNotices,
+  useFailureNotices,
+} from "./failure-notice.js";
+export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";

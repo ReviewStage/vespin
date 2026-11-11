@@ -23,6 +23,7 @@ import {
   MINE,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
+import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -38,7 +39,7 @@ import {
   selectTaskListStatus,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { BUZZ, buzz } from "@repo/ui-native";
+import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
@@ -47,6 +48,7 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { dismissThreadNotifications } from "../notification-task.js";
+import { useWrite } from "../use-write.js";
 import { useSendsDrawn } from "./use-thread-answer.js";
 
 /** What a thread's videos are named under among the app's caches. */
@@ -214,32 +216,42 @@ export function useInboxActs(): {
   readonly refreshTasks: () => Promise<void>;
 } {
   const acts = useHostActs();
+  const write = useWrite();
   return useMemo(
     () => ({
       mark: (itemId, unread) => {
-        acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }).catch(refused("The mark"));
+        write(() => acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }), {
+          refused: (answer) => ("failure" in answer ? markedNote(unread, 0, 1) : undefined),
+          retry: true,
+        });
       },
       remind: (itemId, until) => {
-        acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until }).then(
-          (answer) => buzz("failure" in answer ? BUZZ.ERROR : BUZZ.SUCCESS),
-          (error: unknown) => {
-            refused("The reminder")(error);
-            buzz(BUZZ.ERROR);
-          },
-        );
+        write(() => acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until }), {
+          refused: (answer) =>
+            "failure" in answer
+              ? until === null
+                ? REMIND_REFUSED.CANCEL
+                : REMIND_REFUSED.SET
+              : undefined,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
       },
       markAll: (itemIds) => {
         if (itemIds.length === 0) return;
-        acts[ACT_KIND.AGENTS_INBOX_READ_ALL]({ itemIds: [...itemIds] }).catch(
-          refused("Mark all as read"),
-        );
+        write(() => acts[ACT_KIND.AGENTS_INBOX_READ_ALL]({ itemIds: [...itemIds] }), {
+          refused: (answer) =>
+            "failure" in answer ? markedNote(false, 0, itemIds.length) : undefined,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
       },
       refresh: () =>
         acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again")),
       refreshTasks: () =>
         acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again")),
     }),
-    [acts],
+    [acts, write],
   );
 }
 
@@ -250,13 +262,17 @@ export function useInboxActs(): {
  * not, since the thread is on screen.
  */
 export function useReadOnOpen(listed: InboxListed | undefined): void {
-  const { mark } = useInboxActs();
+  const acts = useHostActs();
   const id = listed?.item.id;
   const unread = listed !== undefined && isUnread(listed.item);
   // Note that the mark is sent as a thread opens, never again as it is read, so only the thread's id moves it.
   useEffect(() => {
     if (id === undefined) return;
-    if (unread) mark(id, false);
+    // Note that the mark goes quietly, whatever comes back, since no person pressed for it.
+    if (unread)
+      acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId: id, unread: false }).catch(
+        refused("The mark"),
+      );
     dismissThreadNotifications(id).catch((error: unknown) =>
       console.error("The thread's notifications were not removed.", error),
     );

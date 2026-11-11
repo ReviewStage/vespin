@@ -21,7 +21,12 @@ builds a control of its own.
   for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a sheet that starts work,
-  `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
+  `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
+  write did not go: a banner of Liquid Glass sliding down from the top with
+  the refusal's words and Try again, said aloud by VoiceOver, faded rather
+  than slid where the reader reduces motion, standing in a window of its own
+  over sheets, and said once for a stretch offline, `failure-notice-model.ts`),
+  and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of Liquid

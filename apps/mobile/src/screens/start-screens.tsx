@@ -31,6 +31,7 @@ import {
   useStartTask,
 } from "../tasks/use-start.js";
 import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
+import { useWrite } from "../use-write.js";
 
 /** The panel's words for the sheets, their fields, and their acts. */
 const WORDS = {
@@ -230,6 +231,7 @@ function useSheetStart(
   readonly go: () => void;
 } {
   const router = useRouter();
+  const write = useWrite();
   const [starting, setStarting] = useState(false);
   const go = () => {
     if (starting) return;
@@ -240,14 +242,23 @@ function useSheetStart(
     }
     setStarting(true);
     setNote(undefined);
-    start()
-      .then((answer) => {
-        if ("refused" in answer) {
-          setNote(answer.refused);
-          buzz(BUZZ.ERROR);
-          return;
-        }
-        buzz(BUZZ.SUCCESS);
+    const started: { answer?: StartAnswer } = {};
+    // Note that a start refused says why in the sheet, under its words, rather than in the notice.
+    write(
+      () =>
+        start().then((answer) => {
+          started.answer = answer;
+          return answer;
+        }),
+      {
+        refused: (answer) => ("refused" in answer ? answer.refused : undefined),
+        inPlace: setNote,
+        went: BUZZ.SUCCESS,
+      },
+    )
+      .then((went) => {
+        const answer = started.answer;
+        if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
         router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);

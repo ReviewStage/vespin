@@ -56,6 +56,7 @@ import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 
 /** What the app holds of one thread: the draft on its box, the sends not yet carried by a read, by key, what its last refused send said, and a notification's action not yet sent. */
 interface ThreadHeld {
@@ -111,9 +112,6 @@ function pressedDraft(
     ? withChoice(ask, EMPTY_INBOX_DRAFT, press.option)
     : undefined;
 }
-
-/** A send the act port answered with a refusal, carrying the words it says. */
-class SendRefused extends Error {}
 
 /* ----- The store ----- */
 
@@ -227,6 +225,7 @@ export interface ThreadAnswer {
 /** The box of the thread `listed` stands for: its draft, and its Send and Resolve. */
 export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
   const acts = useHostActs();
+  const write = useWrite();
   const { item } = listed;
   const itemId = item.id;
   const store = useSyncExternalStore(subscribe, heldNow);
@@ -244,7 +243,6 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       const typed = was.draft.note.trim() === "" ? sent : was.draft;
       return { draft: typed, sending, note: words };
     });
-    buzz(BUZZ.ERROR);
   };
   const send = (pressed?: InboxDraft) => {
     const sending = pressed ?? draft;
@@ -277,28 +275,24 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
         at: Date.now(),
       }),
     }));
-    acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
-      itemId,
-      text: sent.text,
-      ...(sent.attachments.length === 0 ? undefined : { attachments: [...sent.attachments] }),
-      ...(sent.answers === undefined ? undefined : { answers: sent.answers }),
-      ...(revision === undefined ? undefined : { revision }),
-      clientKey: key,
-    })
-      .then((answer) => {
-        if ("failure" in answer) throw new SendRefused(refusedWords(answer.failure));
-        buzz(BUZZ.SUCCESS);
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof SendRefused)) console.error("The reply did not go.", error);
-        refuse(
-          key,
-          sending,
-          error instanceof SendRefused
-            ? error.message
-            : refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        );
-      });
+    // A send refused says why on the box, where its words go back, rather than in the notice.
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
+          itemId,
+          text: sent.text,
+          ...(sent.attachments.length === 0 ? undefined : { attachments: [...sent.attachments] }),
+          ...(sent.answers === undefined ? undefined : { answers: sent.answers }),
+          ...(revision === undefined ? undefined : { revision }),
+          clientKey: key,
+        }),
+      {
+        refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
+        unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+        inPlace: (words) => refuse(key, sending, words),
+        went: BUZZ.SUCCESS,
+      },
+    );
   };
   const resolve = () => {
     const key = randomUUID();
@@ -311,22 +305,20 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
         at: Date.now(),
       }),
     }));
-    acts[ACT_KIND.AGENTS_INBOX_CLOSE]({ itemId, revision: item.revision, clientKey: key })
-      .then((answer) => {
-        if ("failure" in answer) throw new SendRefused(refusedWords(answer.failure));
-        if (!answer.taken) throw new SendRefused(NOT_RESOLVED[answer.item.status]);
-        buzz(BUZZ.SUCCESS);
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof SendRefused)) console.error("The resolve did not go.", error);
-        refuse(
-          key,
-          draft,
-          error instanceof SendRefused
-            ? error.message
-            : refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        );
-      });
+    write(
+      () => acts[ACT_KIND.AGENTS_INBOX_CLOSE]({ itemId, revision: item.revision, clientKey: key }),
+      {
+        refused: (answer) =>
+          "failure" in answer
+            ? refusedWords(answer.failure)
+            : answer.taken
+              ? undefined
+              : NOT_RESOLVED[answer.item.status],
+        unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+        inPlace: (words) => refuse(key, draft, words),
+        went: BUZZ.SUCCESS,
+      },
+    );
   };
   // A notification's action held for this thread, taken once and sent as though pressed here.
   const pressed = store.get(itemId)?.pressed;

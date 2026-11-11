@@ -21,6 +21,7 @@
  * this module's.
  */
 
+import { PUSH_NOTIFY_REFUSED } from "@repo/features/push-device-model";
 import {
   PUSH_ENVIRONMENT,
   PUSH_NOTIFY,
@@ -41,6 +42,7 @@ import {
   type NotificationStanding,
   useNotificationPermission,
 } from "./notification-permission.js";
+import { useWrite } from "./use-write.js";
 
 /**
  * The gateway this build's tokens belong to. Note that the entitlement
@@ -214,6 +216,7 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
   readonly choose: (notify: PushNotify) => void;
 } {
   const acts = useHostActs();
+  const write = useWrite();
   const [standing, setStanding] = useState<PushDeviceStatusAnswer | undefined>(undefined);
   // Which choice was made last, so an earlier one's refusal never puts back what a later one drew.
   const picks = useRef(0);
@@ -250,12 +253,15 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
           setStanding((drawn) => drawn && { ...drawn, notify: held });
         }
       };
-      acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }).then((answer) => {
-        if ("failure" in answer) putBack();
-        else confirmed.current = notify;
-      }, putBack);
+      write(() => acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }), {
+        refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
+        retry: true,
+      }).then((went) => {
+        if (went) confirmed.current = notify;
+        else putBack();
+      });
     },
-    [acts, key, standing],
+    [acts, write, key, standing],
   );
   // A phone iOS no longer lets notify draws no standing, whatever was read before.
   return { standing: key === undefined ? undefined : standing, choose };

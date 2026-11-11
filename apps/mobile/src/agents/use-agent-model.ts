@@ -31,6 +31,7 @@ import type { PickOption } from "@repo/ui-native";
 import { useMemo, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { effortOptions, modelOptions, useModelCatalog } from "../tasks/use-start.js";
+import { useWrite } from "../use-write.js";
 import { useFollowedAgent } from "./use-agent.js";
 
 /** No models read yet. */
@@ -60,6 +61,7 @@ function atSpeed(offered: readonly CatalogModel[], model: string, running: strin
 /** The agent's model and effort, and the picks that change them from its next step. */
 export function useAgentModelPick(agentId: string): AgentModelPick {
   const acts = useHostActs();
+  const send = useWrite();
   const agent = useFollowedAgent(agentId);
   const read = useModelCatalog();
   const [note, setNote] = useState<string | undefined>(undefined);
@@ -75,15 +77,14 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
     writes.current += 1;
     const write = writes.current;
     setNote(undefined);
-    acts[ACT_KIND.AGENTS_CHOOSE]({ agentId, ...choice })
-      .catch((error: unknown) => {
-        console.error("The agent's model was not changed.", error);
-        return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
-      })
-      .then((answer) => {
-        if (write !== writes.current) return;
-        setNote("failure" in answer ? chooseFailureNote(answer.failure) : undefined);
-      });
+    // Note that a change refused says why in the sheet, under the picks, and only the latest change's answer is said.
+    send(() => acts[ACT_KIND.AGENTS_CHOOSE]({ agentId, ...choice }), {
+      refused: (answer) => ("failure" in answer ? chooseFailureNote(answer.failure) : undefined),
+      unanswered: chooseFailureNote(AGENT_CALL_FAILURE.UNANSWERED),
+      inPlace: (words) => {
+        if (write === writes.current) setNote(words);
+      },
+    });
   };
 
   return {

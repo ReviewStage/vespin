@@ -15,9 +15,9 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { isUnread } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -26,26 +26,6 @@ import { KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { type PressedRows, pressRows, type RowWrite } from "../undo-stack.js";
 import { appStateIn } from "../use-app-state.js";
-
-/** What one toast says of read marks given to several items: how many the service took, and how many not. */
-export function markedNote(unread: boolean, landed: number, refused: number): string {
-  const state = unread ? "unread" : "read";
-  if (landed === 0) return `Could not mark ${countWords(refused, TERM.INBOX_ITEM)} ${state}`;
-  const kept = `${countWords(landed, TERM.INBOX_ITEM)} marked ${state}`;
-  return refused === 0 ? kept : `${kept}, ${refused} could not be`;
-}
-
-/** What one toast says of a Got it on several notices the service refused some of: how many it took, and how many not. */
-export function acknowledgedNote(landed: number, refused: number): string {
-  if (landed === 0) return `Could not acknowledge ${countWords(refused, TERM.INBOX_ITEM)}`;
-  return `${countWords(landed, TERM.INBOX_ITEM)} acknowledged, ${refused} could not be`;
-}
-
-/** What a toast says of a reminder set, or canceled, that the service did not take. */
-export const REMIND_REFUSED = {
-  SET: "Could not set the reminder",
-  CANCEL: "Could not cancel the reminder",
-} as const;
 
 /** Where an inbox write's items are read: the window's document, holding the account's feed and each holder's own inbox, every write still standing drawn over them. */
 type InboxRows = AppStateSnapshot | undefined;

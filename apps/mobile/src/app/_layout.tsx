@@ -3,6 +3,7 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { FailureNoticeProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -13,6 +14,7 @@ import { HostProvider } from "../host/host-provider.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useOfflineNotice } from "../use-write.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -30,6 +32,8 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * notification opens its thread (`notifications.ts`), a Stop pressed on
  * the Live Activity of its running agents goes through the host
  * (`live-activity/`), and its crash reports name it (`crash-reports.ts`).
+ * Over every screen stands the one notice of a write that did not go
+ * (`use-write.ts`), which lets its offline word go once the service answers.
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -44,6 +48,7 @@ function GuardedScreens() {
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
   useCrashReportAccount();
+  useOfflineNotice();
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={signedIn && !updateNeeded}>
@@ -77,7 +82,9 @@ export default function RootLayout() {
   useEffect(() => hideSplash(), []);
   return (
     <HostProvider>
-      <GuardedScreens />
+      <FailureNoticeProvider>
+        <GuardedScreens />
+      </FailureNoticeProvider>
     </HostProvider>
   );
 }

@@ -34,7 +34,13 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { type StopAgentsWords, settleStopWords } from "@repo/features/tasks-model";
+import {
+  MARK_FAILED_NOTES,
+  type StopAgentsWords,
+  settleFailedNote,
+  settleStopWords,
+  TASK_MARK,
+} from "@repo/features/tasks-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -45,13 +51,14 @@ import {
   selectTasks,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { BUZZ, buzz } from "@repo/ui-native";
+import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useWrite } from "../use-write.js";
 
 /** No task list read yet. */
 const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
@@ -151,6 +158,7 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
   readonly setStatus: SetStatus;
 } {
   const acts = useHostActs();
+  const write = useWrite();
   const held = useSyncExternalStore(watchStatuses, () => heldStatuses);
   // A status the document now holds is its own, and stands without the press's.
   useEffect(() => {
@@ -161,20 +169,22 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
     holdStatuses(new Map([...heldStatuses].filter(([id]) => !drawn.some(([at]) => at === id))));
   }, [tasks, held]);
   const setStatus: SetStatus = (taskId, status, stopAgents) => {
-    holdStatuses(new Map(heldStatuses).set(taskId, status));
     const letGo = () => holdStatuses(new Map([...heldStatuses].filter(([id]) => id !== taskId)));
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
-    acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
-      (landed) => {
-        buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR);
-        if (!landed) letGo();
+    // Note that Try again draws the status again before it sends it, as the first press did.
+    write(
+      () => {
+        holdStatuses(new Map(heldStatuses).set(taskId, status));
+        return acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping });
       },
-      (error: unknown) => {
-        refused("The status")(error);
-        buzz(BUZZ.ERROR);
-        letGo();
+      {
+        refused: (landed) => (landed ? undefined : settleFailedNote(status, 1)),
+        retry: true,
+        went: BUZZ.SUCCESS,
       },
-    );
+    ).then((landed) => {
+      if (!landed) letGo();
+    });
   };
   return { held, setStatus };
 }
@@ -201,6 +211,7 @@ export interface TasksListing {
  */
 export function useTasksListing(search: string): TasksListing {
   const acts = useHostActs();
+  const write = useWrite();
   const workspace = useTasksWorkspace();
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
@@ -227,21 +238,20 @@ export function useTasksListing(search: string): TasksListing {
     // Note that the host draws a mark and a pin on the row the moment they are asked, and puts either back where the service refused it.
     const markRead = (taskId: string, unread: boolean) => {
       const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
-      acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }).catch(refused("The mark"));
+      write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }), { retry: true });
     };
-    // Note that a pin taps as a toggle does, lighter than a status's buzz, and a refused one buzzes as any refusal does.
+    // Note that a pin taps as a toggle does, lighter than a status's buzz.
     const pin = (taskId: string, pinned: boolean) => {
-      acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }).then(
-        (landed) => buzz(landed ? BUZZ.SELECTION : BUZZ.ERROR),
-        (error: unknown) => {
-          refused("The pin")(error);
-          buzz(BUZZ.ERROR);
-        },
-      );
+      write(() => acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }), {
+        refused: (landed) =>
+          landed ? undefined : MARK_FAILED_NOTES[pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN],
+        retry: true,
+        went: BUZZ.SELECTION,
+      });
     };
     const agentsWorking = agentsWorkingIn(view, tasks);
     return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin };
-  }, [acts, listed, held, view, workspace, readerId, waiting, search]);
+  }, [acts, write, listed, held, view, workspace, readerId, waiting, search]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */

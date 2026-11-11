@@ -136,6 +136,8 @@ export interface MobileHostOptions {
   readonly fixture: RunProfile | undefined;
   /** Whether a fixture run stands as the service's refusal of an old build leaves the document, which `-updateNeeded true` asks; never in a live run. */
   readonly fixtureUpdateNeeded?: boolean | undefined;
+  /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
+  readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files: the app's own folder, or a temporary one in a test. */
@@ -403,7 +405,12 @@ export function composeMobile(
           acts:
             options.fixture === undefined
               ? mobile.acts
-              : fixtureActs(mobile.acts, options.fixture, mobile.state),
+              : fixtureActs(
+                  mobile.acts,
+                  options.fixture,
+                  mobile.state,
+                  options.fixtureRefusesWrites === true,
+                ),
         }),
         effectServiceLayer(mobile.operator, report),
       ).pipe(Layer.provideMerge(hostStandingLayer));

@@ -42,6 +42,7 @@ import {
   usePushDeviceStanding,
 } from "../push-device.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useWrite } from "../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -62,6 +63,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const router = useRouter();
   const acts = useHostActs();
+  const write = useWrite();
   useSurfaceOpen(PRODUCT_SURFACE.SETTINGS);
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -82,13 +84,15 @@ export default function SettingsScreen() {
   const signOut = () => {
     if (signingOut.current) return;
     signingOut.current = true;
-    unregisterPushDevice(acts, fixture)
-      .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
-      .then(() => clearAccountNotifications())
-      .catch((error: unknown) => console.error("The sign-out did not finish.", error))
-      .finally(() => {
-        signingOut.current = false;
-      });
+    write(
+      () =>
+        unregisterPushDevice(acts, fixture)
+          .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
+          .then(() => clearAccountNotifications()),
+      { retry: true },
+    ).finally(() => {
+      signingOut.current = false;
+    });
   };
   return (
     <>
