@@ -455,7 +455,9 @@ export function NewTaskScreen({ parent }: { readonly parent?: string | undefined
   const parentIn = listed.find((task) => task.id === parent)?.workspaceId;
   const workspaceId = parent === undefined ? chosen?.id : parentIn;
   const placed = workspaceId !== undefined || parent === undefined;
-  const workspace = workspaces.find((each) => each.id === workspaceId) ?? chosen;
+  // Note that a sub-task's repositories are its parent's workspace's alone, never the chosen one's, so none is offered until that workspace is read.
+  const workspace =
+    parent === undefined ? chosen : workspaces.find((each) => each.id === workspaceId);
   const repository = useRepositoryPick(workspace);
   const relation = useRelationPick(listed, workspaceId, parent);
   const pick = useModelPick();
