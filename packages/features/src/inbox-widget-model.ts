@@ -9,7 +9,9 @@
  * now, a notice among them, in the workspace the phone works in; the rows
  * are the newest of those threads, latest changed first, as the Inbox lists
  * them, each with its title, its task's name, and the kind of ask that waits
- * (`INBOX_LINE`), none for a notice. The widget's Swift decodes the keys
+ * (`INBOX_LINE`), none for a notice; beside them, the ids of every thread
+ * that waits, so a push or a settle can tell a thread of this workspace from
+ * another's even past the rows shown. The widget's Swift decodes the keys
  * here exactly (`InboxWidgetSnapshot.swift`), so a key renamed here is a
  * widget that stops drawing. It holds no credential, no message's words, and
  * no address but the ids a tap opens.
@@ -28,6 +30,8 @@ import { cardTitle } from "./plain-words.js";
 const INBOX_WIDGET_BOUNDS = {
   /** The most rows the snapshot holds: the medium widget's three. */
   MAX_ROWS: 3,
+  /** The most waiting threads' ids it keeps; past them a settle moves the count only by a push's badge. */
+  MAX_IDS: 100,
   /** The most characters of a title or a task's name it keeps, since a widget draws one line of each. */
   MAX_TITLE_CHARS: 80,
 } as const;
@@ -58,12 +62,16 @@ type InboxWidgetRow = typeof inboxWidgetRowSchema.Type;
  * reader in it, whether that is every thread of the account's that waits
  * (`wholeAccount`, the account's only workspace), so the Notification
  * Service Extension may take a push's badge, which counts the whole
- * account, as the count, and the newest rows.
+ * account, as the count, the ids of the threads that wait, and the newest
+ * rows.
  */
 const inboxWidgetSnapshotSchema = EffectSchema.Struct({
   workspace: EffectSchema.String,
   waiting: EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0)),
   wholeAccount: EffectSchema.Boolean,
+  ids: EffectSchema.Array(EffectSchema.NonEmptyString).check(
+    EffectSchema.isMaxLength(INBOX_WIDGET_BOUNDS.MAX_IDS),
+  ),
   rows: EffectSchema.Array(inboxWidgetRowSchema).check(
     EffectSchema.isMaxLength(INBOX_WIDGET_BOUNDS.MAX_ROWS),
   ),
@@ -104,7 +112,8 @@ export function inboxWidgetSnapshot(source: InboxWidgetSource): InboxWidgetSnaps
     task: clipped(holder.task.name),
     ...rowAsk(inboxLineKind(item)),
   }));
-  return { workspace, waiting: waiting.length, wholeAccount: workspaces === 1, rows };
+  const ids = waiting.slice(0, INBOX_WIDGET_BOUNDS.MAX_IDS).map(({ item }) => item.id);
+  return { workspace, waiting: waiting.length, wholeAccount: workspaces === 1, ids, rows };
 }
 
 /**
@@ -112,7 +121,7 @@ export function inboxWidgetSnapshot(source: InboxWidgetSource): InboxWidgetSnaps
  * while the app reads no Inbox of its own: its row gone, and the count less
  * it; or the push's badge as the count where it counts the workspace's
  * threads (`wholeAccount`), since it counts the whole account's. Note that a
- * thread the snapshot holds no row of moves no count but the badge, since
+ * thread the snapshot holds no id of moves no count but the badge, since
  * it may be another workspace's, and the rows left never outnumber the
  * count. The Notification Service Extension moves the snapshot by the
  * alerts the same way (`InboxWidgetSnapshot.swift`'s `taking(news:)`).
@@ -122,15 +131,16 @@ export function inboxWidgetAfterSettle(
   itemId: string,
   badge: number | undefined,
 ): InboxWidgetSnapshot {
-  const held = snapshot.rows.some((row) => row.id === itemId);
+  const held = snapshot.ids.includes(itemId);
   const waiting =
     snapshot.wholeAccount && badge !== undefined
       ? Math.max(0, Math.trunc(badge))
       : held
         ? Math.max(0, snapshot.waiting - 1)
         : snapshot.waiting;
+  const ids = snapshot.ids.filter((id) => id !== itemId);
   const rows = snapshot.rows.filter((row) => row.id !== itemId).slice(0, waiting);
-  return { ...snapshot, waiting, rows };
+  return { ...snapshot, waiting, ids, rows };
 }
 
 /** The snapshot as the JSON the widget's Swift decodes. */

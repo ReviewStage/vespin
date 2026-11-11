@@ -12,8 +12,9 @@
 //
 // An alert's badge is the account's whole count, so it is the snapshot's
 // count only where the chosen workspace is the account's only one
-// (`wholeAccount`); elsewhere a push moves only a row the snapshot already
-// holds, since nothing in the push says which workspace its thread is in.
+// (`wholeAccount`); elsewhere a push moves only a thread whose id the
+// snapshot already holds (`ids`, every thread that waits), since nothing in
+// the push says which workspace its thread is in.
 
 import Foundation
 import WidgetKit
@@ -33,6 +34,8 @@ struct InboxWidgetSnapshot: Codable, Equatable {
   var waiting: Int
   /// Whether the workspace is the account's only one, so a push's badge is its count.
   var wholeAccount: Bool
+  /// The ids of the threads that wait, so a push can tell this workspace's thread past the rows shown.
+  var ids: [String]
   /// The newest of them, at most `maxRows`.
   var rows: [Row]
 
@@ -40,6 +43,9 @@ struct InboxWidgetSnapshot: Codable, Equatable {
   static let kind = "InboxWidget"
   /// The most rows kept: the medium widget's three.
   static let maxRows = 3
+  /// The most ids kept, and the longest title in UTF-16 units, as `@repo/features/inbox-widget-model` bounds them, so the app still reads what a push wrote.
+  static let maxIds = 100
+  static let maxTitleUnits = 80
   /// The file's name in the group container (`APP_GROUP_FILE.INBOX_WIDGET`).
   private static let fileName = "inbox-widget.json"
 
@@ -72,10 +78,22 @@ struct InboxWidgetSnapshot: Codable, Equatable {
     if wholeAccount, let badge { next.waiting = max(0, badge) }
     let known = rows.first { $0.id == id }
     // A thread the snapshot never held may be another workspace's, unless this is the account's only one.
-    guard wholeAccount || known != nil else { return next }
-    let row = Row(id: id, title: title ?? known?.title ?? "", task: known?.task ?? "", ask: ask)
+    guard wholeAccount || ids.contains(id) else { return next }
+    let row = Row(
+      id: id, title: Self.clipped(title ?? known?.title ?? ""), task: known?.task ?? "", ask: ask)
+    next.ids = Array(([id] + ids.filter { $0 != id }).prefix(Self.maxIds))
     next.rows = Array(
       ([row] + rows.filter { $0.id != id }).prefix(min(Self.maxRows, next.waiting)))
     return next
+  }
+
+  /// Words cut to `maxTitleUnits` UTF-16 units, as the app's schema counts them, never splitting a character.
+  private static func clipped(_ words: String) -> String {
+    var units = 0
+    return String(
+      words.prefix { character in
+        units += character.utf16.count
+        return units <= maxTitleUnits
+      })
   }
 }

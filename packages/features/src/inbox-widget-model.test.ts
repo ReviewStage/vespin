@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { type InboxGroup, taskHolder } from "./inbox-list-model.js";
-import { INBOX_WIDGET_ASK, inboxWidgetSnapshot } from "./inbox-widget-model.js";
+import {
+  INBOX_WIDGET_ASK,
+  inboxWidgetAfterSettle,
+  inboxWidgetSnapshot,
+} from "./inbox-widget-model.js";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -118,6 +122,7 @@ describe("inboxWidgetSnapshot", () => {
       workspace: "Acme",
       waiting: 4,
       wholeAccount: true,
+      ids: ["due", "notice", "decide", "do"],
       rows: [
         {
           id: "due",
@@ -133,6 +138,24 @@ describe("inboxWidgetSnapshot", () => {
           ask: INBOX_WIDGET_ASK.DECIDE,
         },
       ],
+    });
+  });
+
+  it("counts down a settled thread of the workspace that is past the rows shown", () => {
+    const row = (id: string) => ({ id, title: id, task: "Fix the token refresh" });
+    const kept = {
+      workspace: "Acme",
+      waiting: 4,
+      wholeAccount: false,
+      ids: ["a", "b", "c", "d"],
+      rows: [row("a"), row("b"), row("c")],
+    };
+
+    // The badge counts every workspace, so with two of them only the ids say "d" was this one's.
+    expect(inboxWidgetAfterSettle(kept, "d", 9)).toEqual({
+      ...kept,
+      waiting: 3,
+      ids: ["a", "b", "c"],
     });
   });
 });

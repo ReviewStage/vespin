@@ -399,9 +399,10 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
 // directory and its colors and symbols written as its asset catalog, and its
 // target added to the project Expo generates, embedded in the app, built for
 // the app's deployment target, and signed as the app is. A project that holds
-// the target already, as a prebuild over an existing `ios/` does, keeps it,
-// and only its build settings are written again, so a setting added since,
-// such as its entitlements, still reaches it.
+// the target already, as a prebuild over an existing `ios/` does, keeps it:
+// its build settings are written again, and a source added since joins it,
+// so a setting or a file added since, such as its entitlements, still
+// reaches it.
 const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConfig => {
   const colors = Object.entries(extension.COLORS ?? {});
   const symbols = LUCIDE_SYMBOL_TEMPLATES.filter(({ name }) =>
@@ -469,6 +470,12 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       project.addBuildPhase(sources, "PBXSourcesBuildPhase", "Sources", target.uuid);
       project.addBuildPhase(resources, "PBXResourcesBuildPhase", "Resources", target.uuid);
       project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
+    } else {
+      // A target made before a source joined it builds that source too, in its group as a new target's are.
+      const target = project.findTargetKey(extension.TARGET);
+      const group = project.findPBXGroupKey({ name: extension.TARGET });
+      for (const source of sources)
+        if (!project.hasFile(source)) project.addSourceFile(source, { target }, group);
     }
     for (const settings of Object.values(
       project.pbxXCBuildConfigurationSection() as Record<string, unknown>,

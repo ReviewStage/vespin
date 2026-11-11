@@ -131,7 +131,7 @@ struct MediumInbox: View {
         }
       }
       if let snapshot {
-        if snapshot.rows.isEmpty {
+        if snapshot.waiting == 0 {
           Spacer(minLength: 0)
           Text("Nothing waiting on you")
             .font(.subheadline)
@@ -310,13 +310,14 @@ extension InboxWidgetSnapshot {
     workspace: "Acme",
     waiting: 3,
     wholeAccount: true,
+    ids: ["s1", "s2", "s3"],
     rows: [
       .init(id: "s1", title: "Ship the flag today?", task: "Fix the token refresh", ask: "decide"),
       .init(id: "s2", title: "Add the Sentry secret", task: "Resend expired invites", ask: "do"),
       .init(id: "s3", title: "Opened the pull request", task: "Add Live Activities", ask: nil),
     ])
   fileprivate static let clear = InboxWidgetSnapshot(
-    workspace: "Acme", waiting: 0, wholeAccount: true, rows: [])
+    workspace: "Acme", waiting: 0, wholeAccount: true, ids: [], rows: [])
 }
 
 #Preview("Small", as: .systemSmall) {
