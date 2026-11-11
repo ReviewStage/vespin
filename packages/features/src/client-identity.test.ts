@@ -31,5 +31,10 @@ it.effect(
         apiVersion: HOSTED_API_VERSION,
       });
       expect(presentedClient(other?.headers ?? new Headers())).toBeUndefined();
+      expect(
+        presentedClient(
+          new Headers({ "vespin-client": `ios/${"9".repeat(65)}`, "vespin-api-version": "1" }),
+        ),
+      ).toBeUndefined();
     }),
 );

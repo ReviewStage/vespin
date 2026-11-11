@@ -45,6 +45,9 @@ export interface ClientIdentity {
 /** What stands between the platform and the version in the client header. */
 const CLIENT_SEPARATOR = "/";
 
+/** A version as a build names it, bounded, since the service writes it into its lines: a release version, a build number, or a development build's word. */
+const VERSION_PATTERN = /^[0-9A-Za-z.+-]{1,64}$/u;
+
 /** The two headers a build sends on every hosted call, as a record a request or a socket's address carries. */
 export function clientHeaders(identity: ClientIdentity): Readonly<Record<string, string>> {
   return {
@@ -89,6 +92,9 @@ export function presentedClient(headers: {
   if (at <= 0) return undefined;
   const platform = readPlatform(named.slice(0, at));
   const apiVersion = readApiVersion(headers.get(CLIENT_HEADER.API_VERSION)?.trim());
-  if (platform._tag === "None" || apiVersion._tag === "None") return undefined;
-  return { platform: platform.value, version: named.slice(at + 1), apiVersion: apiVersion.value };
+  const version = named.slice(at + 1);
+  if (platform._tag === "None" || apiVersion._tag === "None" || !VERSION_PATTERN.test(version)) {
+    return undefined;
+  }
+  return { platform: platform.value, version, apiVersion: apiVersion.value };
 }
