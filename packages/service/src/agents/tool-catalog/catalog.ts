@@ -501,9 +501,14 @@ const CATALOG = [
     LOADED,
   ),
   served(
+    INBOX_TOOLS.LIST,
+    (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.LIST, input }),
+    { ...LOADED, ...READS },
+  ),
+  served(
     INBOX_TOOLS.READ,
     (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
-    { ...LOADED, ...READS },
+    READS,
   ),
   served(
     INBOX_TOOLS.WITHDRAW,

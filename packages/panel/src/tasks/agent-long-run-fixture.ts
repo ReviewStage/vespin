@@ -121,7 +121,7 @@ function call(turn: number, at: number): WireRecord {
         { status: "accepted" },
       );
     case 1:
-      return toolPart("read_threads", id, {}, { status: "accepted", threads: [] });
+      return toolPart("list_threads", id, {}, { status: "accepted", threads: [] });
     case 2:
       return toolPart(
         "post_to_inbox",

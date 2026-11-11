@@ -28,11 +28,14 @@ import {
   type InboxPostOptionMedia,
   type InboxReadAsk,
   type InboxThreadPostInput,
-  inboxReadInputSchema,
+  inboxListInputSchema,
+  inboxReadThreadInputSchema,
   inboxThreadPostInputSchema,
+  inboxWaitsOn,
   inboxWithdrawInputSchema,
   keptInboxAsk,
   NONE_OF_THESE,
+  openAskOf,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
 import {
@@ -56,8 +59,12 @@ import {
   type InboxBodyPicture,
   type InboxPostRefusal,
   type InboxStoreEffect,
+  type InboxThreadPage,
+  inboxThreadPage,
   type PostPicture,
   postInboxThread,
+  readInboxItem,
+  readInboxItemHome,
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
@@ -71,7 +78,7 @@ import {
 } from "./inbox-image.js";
 
 /**
- * inbox.ts -- the coding agent's thread tools: post a message on a thread in the inbox, withdraw a thread's open ask, and read every thread back.
+ * inbox.ts -- the coding agent's thread tools: post a message on a thread in the inbox, withdraw a thread's open ask, list threads, and read one whole.
  *
  * What an agent cannot do or decide alone, a product choice, an approval
  * of a risky step, a question, or something only the developer can do by
@@ -99,11 +106,14 @@ import {
  * thread reaches the agent as one of the developer's messages, and so does
  * an answer it waits on. No call holds the turn, since a coder session
  * takes no input mid-turn.
- * Every call answers with the agent's whole inbox as it stands, each
- * thread's messages in order with their asks and answers, so the model
- * holds its threads whatever its context has lost to compaction. A worker
- * gets none of these tools, because the developer answers the agent it
- * works for.
+ * A post and a withdrawal answer with the thread they changed and one line
+ * for each other thread of the agent's still open, so the model holds what
+ * waits whatever its context has lost to compaction, without the whole
+ * inbox on every post. A list answers one line a thread, the agent's own
+ * or, read only, another agent's or a task's of its workspace, and a read
+ * answers one thread whole, a page of its messages at a time, its pictures
+ * and pages by reference. A worker gets none of these tools, because the
+ * developer answers the agent it works for.
  */
 
 /** The inbox's picture bound in megabytes, as the words the model reads say it. */
@@ -153,7 +163,7 @@ const POST_THREAD_WORDS =
   "It waits until they acknowledge it, which never reaches you unless they write something. " +
   "A thread holds one open ask, and a newer ask replaces it. " +
   "An answer to any ask, decide, do, or answer, always reaches you as a message. " +
-  "The call answers with your threads as they stand.";
+  "The call answers with the thread as it then stands and one line for each other thread of yours still open.";
 
 /** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input. */
 export const INBOX_TOOLS = {
@@ -167,24 +177,35 @@ export const INBOX_TOOLS = {
     description:
       "Withdraw the open ask of one of your threads, by its key, with why: you no longer need it, you found the answer yourself, " +
       "or you checked that the to-do is done. The thread and its messages stay; refused where it holds no open ask, such as one already answered. " +
-      "The call answers with your threads as they stand.",
+      "The call answers with the thread as it then stands and one line for each other thread of yours still open.",
     inputSchema: inboxWithdrawInputSchema,
+  },
+  LIST: {
+    name: INBOX_TOOL.LIST,
+    description:
+      `List threads one line each: every one still open, then the latest ${INBOX_BOUNDS.MAX_SETTLED_TOLD} settled, open first, then answered, then closed, each the latest changed first. ` +
+      `With nothing named it lists your own; name one other agent of your workspace by agentId, or one task of it by taskId, as ${AGENT_TOOL.LIST_AGENTS} and ${AGENT_TOOL.LIST_TASKS} answered them, ` +
+      "to list its threads as the developer may see them, and status to list only those standing there. " +
+      `Each line has the thread's id, which ${INBOX_TOOL.READ} takes, its key, title, and where it stands, the agent it is of by agentId where that is another, ` +
+      "when it last changed, who wrote last (you, agent for another agent, or a member by name), whom an open one waits on, " +
+      "an open ask's type and the opening line of the message that asks it, an answered one's answer, and who closed one or why. " +
+      `You only read another agent's threads: ${INBOX_TOOL.POST} and ${INBOX_TOOL.WITHDRAW} keep to your own, and a member's answer on another agent's thread reaches that agent, never you. ` +
+      "List them to learn what the developer already decided or is still asked on work beside yours, rather than asking again.",
+    inputSchema: inboxListInputSchema,
   },
   READ: {
     name: INBOX_TOOL.READ,
     description:
-      "Read your threads as they stand now: every one still asking, whole, and the latest settled ones by their last messages and their latest ask and answer. " +
-      `Name one other agent of your workspace by agentId, or one task of it by taskId, as ${AGENT_TOOL.LIST_AGENTS} and ${AGENT_TOOL.LIST_TASKS} answered them, to read its threads the same way, ` +
-      "as the developer may see them: another agent's thread names that agent by agentId, and its messages read from agent. You only read those threads: " +
-      `${INBOX_TOOL.POST} and ${INBOX_TOOL.WITHDRAW} keep to your own, and a member's answer on another agent's thread reaches that agent, never you. ` +
-      "Read one to learn what the developer already decided or is still asked on work beside yours, rather than asking again. " +
-      `A thread longer than ${INBOX_BOUNDS.MAX_MESSAGES_READ} messages reads its first, its open ask, and its latest ${INBOX_BOUNDS.MAX_MESSAGES_READ}. ` +
-      "Each message reads in order with who wrote it, you or a member by name and fromUserId, which their link names them by, the ask it ends with and where that stands " +
-      "(open, answered, replaced by a newer ask, or withdrawn, with your reason), and the answer a member's message carries. " +
-      "A member may close a thread without answering, which withdraws its ask with no reason, and closedBy and closedByUserId name them; " +
-      `where it held an ask open, that reaches you as a developer's message whose first line starts "${INBOX_CLOSE_LEAD}" and names the key: ` +
+      `Read one thread whole by its id, as ${INBOX_TOOL.LIST} answered it: your own, or another agent's or a task's of your workspace, as the developer may see it. ` +
+      "It answers where the thread stands, when it was posted, last changed, and settled, whom an open one waits on, who answered it, and who closed it or why, " +
+      `and its latest ${INBOX_BOUNDS.MAX_MESSAGES_READ} messages oldest first, each with when it was written, who wrote it (you, agent for another agent, or a member by name and fromUserId, which their link names them by), ` +
+      "its words in Markdown, its files by name, the ask it ends with whole, settled or not, with where it stands (open, answered, replaced by a newer ask, or withdrawn, with why), " +
+      "and the answer a member's message carries. older, where earlier messages stand, is the before that reads the page before it, and openAsk is the message whose ask stands open where it is older than the page. " +
+      `A picture stands in the words as its alt and caption, and a page as its link or, on an option, its pageId and version, which ${AGENT_TOOL.READ_PAGE} reads. ` +
+      "A member may close a thread without answering, which withdraws its ask with no reason; " +
+      `where it held an ask open of yours, that reaches you as a developer's message whose first line starts "${INBOX_CLOSE_LEAD}" and names the key: ` +
       "take it as their not wanting what the ask asked.",
-    inputSchema: inboxReadInputSchema,
+    inputSchema: inboxReadThreadInputSchema,
   },
 } as const;
 
@@ -234,17 +255,89 @@ export interface ThreadPoster extends InboxAgent {
   readonly organizationId: string;
 }
 
-/** What a call answers, as the model reads it: the agent's inbox as it stands, or why the call did nothing beside it. */
-export type InboxToolResult =
+/** One thread as a list names it, one line: what to read it by, where it stands, and what waits on it or came of it. */
+interface AgentThreadRow {
+  readonly id: string;
+  readonly key: string;
+  /** The agent whose thread it is, on one another agent posted. */
+  readonly agentId?: string;
+  readonly title: string;
+  readonly status: InboxItem["status"];
+  /** When it last changed, as an ISO instant. */
+  readonly updatedAt: string;
+  /** Who wrote its latest message, as its messages name their writers. */
+  readonly lastFrom?: string;
+  /** The member an open thread waits on, by name, and the account their link names them by. */
+  readonly waitsOn?: string;
+  readonly waitsOnUserId?: string;
+  /** An open ask's type, and the opening line of the message that asks it. */
+  readonly ask?: { readonly type: string; readonly text: string };
+  /** An answered thread's answer: how the member answered, what they picked, and the opening line of their words. */
+  readonly answer?: Omit<InboxAnswers, "ask"> & { readonly text?: string };
+  readonly closedBy?: string;
+  readonly closedReason?: string;
+}
+
+/** One message of a thread as a read of it answers: its line, when it was written, and its ask whole, settled or not. */
+type AgentThreadMessage = Omit<AgentThreadLine, "ask"> & {
+  readonly at: string;
+  readonly ask?: InboxReadAsk;
+};
+
+/** One thread as a read of it answers: where it stands and who settled it, and a page of its messages. */
+interface AgentThreadRead {
+  readonly id: string;
+  readonly key: string;
+  readonly agentId?: string;
+  readonly title: string;
+  readonly status: InboxItem["status"];
+  readonly postedAt: string;
+  readonly updatedAt: string;
+  readonly settledAt?: string;
+  readonly waitsOn?: string;
+  readonly waitsOnUserId?: string;
+  readonly answeredBy?: string;
+  readonly answeredByUserId?: string;
+  readonly closedBy?: string;
+  readonly closedByUserId?: string;
+  readonly closedReason?: string;
+  /** The message whose ask stands open, where it is older than the page. */
+  readonly openAsk?: AgentThreadMessage;
+  readonly messages: readonly AgentThreadMessage[];
+  /** Where earlier messages stand, the before that reads the page before this one. */
+  readonly older?: string;
+}
+
+/** What a call refused answers: why it did nothing. */
+interface InboxRefused {
+  readonly status: typeof ACTION_RESULT_STATUS.REJECTED;
+  readonly reason: string;
+}
+
+/** What a post or a withdrawal answers: the thread it changed, and one line for each other thread of the agent's still open; or why it did nothing. */
+export type InboxWriteResult =
   | {
       readonly status: typeof ACTION_RESULT_STATUS.ACCEPTED;
-      readonly inbox: readonly AgentInboxLine[];
+      readonly thread: AgentInboxLine;
+      readonly open: readonly AgentThreadRow[];
     }
+  | InboxRefused;
+
+/** What a list answers: one line a thread; or why it did nothing. */
+export type InboxListResult =
   | {
-      readonly status: typeof ACTION_RESULT_STATUS.REJECTED;
-      readonly reason: string;
-      readonly inbox?: readonly AgentInboxLine[];
-    };
+      readonly status: typeof ACTION_RESULT_STATUS.ACCEPTED;
+      readonly threads: readonly AgentThreadRow[];
+    }
+  | InboxRefused;
+
+/** What a read of one thread answers: the thread and a page of its messages; or why it did nothing. */
+export type InboxReadResult =
+  | { readonly status: typeof ACTION_RESULT_STATUS.ACCEPTED; readonly thread: AgentThreadRead }
+  | InboxRefused;
+
+/** What any of the thread tools answers, as the model reads it. */
+export type InboxToolResult = InboxWriteResult | InboxListResult | InboxReadResult;
 
 /** Why a call did nothing, in the words the model reads. */
 export const INBOX_REFUSAL = {
@@ -270,9 +363,13 @@ export const INBOX_REFUSAL = {
   SELECT_RECOMMENDATION:
     "Not posted: a select field's recommended names one of its options, and no other field recommends one.",
   UNREADABLE_WITHDRAW: "Not withdrawn: name the thread's key and why you withdraw its ask.",
+  UNREADABLE_LIST:
+    "Not listed: name nothing for your own threads, or one agent of your workspace by agentId, or one task of it by taskId, each by its id, and status as open, answered, or closed.",
+  BOTH_NAMED: "Not listed: name agentId or taskId, not both.",
   UNREADABLE_READ:
-    "Not read: name nothing for your own threads, or one agent of your workspace by agentId, or one task of it by taskId, each by its id.",
-  BOTH_NAMED: "Not read: name agentId or taskId, not both.",
+    "Not read: name the thread by threadId as list_threads answered it, and before only as a page's older answered it.",
+  NO_THREAD:
+    "Not read: no thread of your workspace that the developer may see has that id; list_threads lists them.",
   NO_OPEN_ASK: "Not withdrawn: you have no thread under that key with an open ask.",
   NO_MEMBER:
     "Not posted: to names no member; write a member of your workspace by their mention link, [@Name](link), as a person's chip is written.",
@@ -288,8 +385,9 @@ const SETTLED_MESSAGES_TOLD = 3;
 
 const readPost = readEither(inboxThreadPostInputSchema, { excess: EXCESS_KEYS.DROP });
 const readWithdraw = readEither(inboxWithdrawInputSchema, { excess: EXCESS_KEYS.DROP });
-// Note that a read refuses a key it did not name, because a misspelled agentId dropped would answer the agent's own threads as though they were the other's.
-const readRead = readEither(inboxReadInputSchema);
+// Note that a list refuses a key it did not name, because a misspelled agentId dropped would answer the agent's own threads as though they were the other's.
+const readList = readEither(inboxListInputSchema);
+const readThreadAsked = readEither(inboxReadThreadInputSchema);
 
 /** Why a post's picture was not read from the sandbox, in a post's own words; each is followed by the path. */
 const PICTURE_REFUSALS: SandboxImageRefusals = {
@@ -417,40 +515,134 @@ function lineOf(item: InboxItem, readerId: string): AgentInboxLine {
   };
 }
 
+/** How many characters a line's opening words keep: what says what a message is about at a glance. */
+const OPENING_CHARS = 160;
+
+/** A message's opening line, cut at `OPENING_CHARS`; empty where it carried files alone. */
+function openingOf(text: string): string {
+  const [first = ""] = text.trim().split("\n");
+  return first.length <= OPENING_CHARS ? first : `${first.slice(0, OPENING_CHARS - 1)}…`;
+}
+
+/** An instant in epoch milliseconds as an answer spells it. */
+function isoOf(at: number): string {
+  return new Date(at).toISOString();
+}
+
+/** Whom an open thread waits on, as a line or a read names them; nothing on a settled one. */
+function waiterOf(item: InboxItem): Pick<AgentThreadRow, "waitsOn" | "waitsOnUserId"> {
+  if (item.status !== INBOX_STATUS.OPEN) return {};
+  const waits = inboxWaitsOn(item);
+  return waits === undefined ? {} : { waitsOn: waits.name, waitsOnUserId: waits.userId };
+}
+
+/** What an answered thread's answer says in a line: how, what was picked, and the opening of the member's words. */
+function answerOf(messages: readonly InboxMessage[]): Pick<AgentThreadRow, "answer"> {
+  const answered = messages.findLast((message) => message.answers !== undefined);
+  if (answered?.answers === undefined) return {};
+  const text = openingOf(answered.text);
+  return {
+    answer: { ...answersLineOf(answered.answers), ...(text === "" ? undefined : { text }) },
+  };
+}
+
+/** One thread as a list names it, one line, written for the agent `readerId` names. */
+function rowOf(item: InboxItem, readerId: string): AgentThreadRow {
+  const messages = item.thread ?? [];
+  const own = item.agentId === readerId;
+  const last = messages.at(-1);
+  const asking = item.status === INBOX_STATUS.OPEN ? openAskOf(messages) : undefined;
+  const closed = closerOf(item);
+  return {
+    id: item.id,
+    key: item.key,
+    ...(own ? undefined : { agentId: item.agentId }),
+    title: item.title,
+    status: item.status,
+    updatedAt: isoOf(item.updatedAt),
+    ...(last === undefined ? undefined : { lastFrom: writerOf(last, own) }),
+    ...waiterOf(item),
+    ...(asking === undefined
+      ? undefined
+      : { ask: { type: asking.ask.type, text: openingOf(asking.message.text) } }),
+    ...(item.status === INBOX_STATUS.ANSWERED ? answerOf(messages) : undefined),
+    ...(closed.closedBy === undefined ? undefined : { closedBy: closed.closedBy }),
+    ...(item.status === INBOX_STATUS.CLOSED && item.closedReason !== undefined
+      ? { closedReason: item.closedReason }
+      : undefined),
+  };
+}
+
 /**
- * The agent's inbox as it reads it: what is open first, then what was
+ * Threads as a list names them: what is open first, then what was
  * answered, then what was closed, each the latest changed first. Note that
- * closed threads are read last, because they are settled without an answer
- * and the open and answered ones are what it acts on.
+ * closed threads come last, because they are settled without an answer and
+ * the open and answered ones are what an agent acts on.
  */
-function inboxOf(items: readonly InboxItem[], readerId: string): readonly AgentInboxLine[] {
+function rowsOf(items: readonly InboxItem[], readerId: string): readonly AgentThreadRow[] {
   const order = [INBOX_STATUS.OPEN, INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED];
   return order.flatMap((status) =>
-    items.filter((item) => item.status === status).map((item) => lineOf(item, readerId)),
+    items.filter((item) => item.status === status).map((item) => rowOf(item, readerId)),
   );
 }
 
-/** The threads a read names, as the call answers them; a store failure is the tool's own refusal. */
-function acceptedItems(
-  items: InboxStoreEffect<readonly InboxItem[]>,
+/** What a post or a withdrawal answers once it is taken: the thread it changed, and one line for each other thread of the agent's still open. */
+function written(agent: InboxAgent, item: InboxItem): InboxStoreEffect<InboxWriteResult> {
+  return Effect.map(agentInboxItems(agent), (items) => ({
+    status: ACTION_RESULT_STATUS.ACCEPTED,
+    thread: lineOf(item, agent.agentId),
+    open: rowsOf(
+      items.filter((each) => each.status === INBOX_STATUS.OPEN && each.id !== item.id),
+      agent.agentId,
+    ),
+  }));
+}
+
+/** One message as a read of its thread answers it: its line, when it was written, and its ask whole. */
+function readMessageOf(message: InboxMessage, own: boolean): AgentThreadMessage {
+  const { ask: _folded, ...line } = threadLineOf(message, writerOf(message, own));
+  return {
+    ...line,
+    at: isoOf(message.createdAt),
+    ...(message.ask === undefined ? undefined : { ask: message.ask }),
+  };
+}
+
+/** One thread as a read of it answers, its page of messages, and the open ask where the page leaves it out, written for the agent `readerId` names. */
+function threadReadOf(
+  item: InboxItem,
+  page: InboxThreadPage,
   readerId: string,
-): Effect.Effect<InboxToolResult, never, DatabaseServices> {
-  return items.pipe(
-    Effect.map((read) => ({
-      status: ACTION_RESULT_STATUS.ACCEPTED,
-      inbox: inboxOf(read, readerId),
-    })),
-    Effect.tapError(logStoreFailure),
-    Effect.catch(() => Effect.succeed(inboxRejected(INBOX_REFUSAL.UNAVAILABLE))),
-  );
+  first: boolean,
+): AgentThreadRead {
+  const own = item.agentId === readerId;
+  const asking = item.status === INBOX_STATUS.OPEN ? openAskOf(item.thread ?? []) : undefined;
+  const paged = page.messages.some((message) => message.id === asking?.message.id);
+  const oldest = page.messages[0];
+  return {
+    id: item.id,
+    key: item.key,
+    ...(own ? undefined : { agentId: item.agentId }),
+    title: item.title,
+    status: item.status,
+    postedAt: isoOf(item.postedAt),
+    updatedAt: isoOf(item.updatedAt),
+    ...(item.settledAt === undefined ? undefined : { settledAt: isoOf(item.settledAt) }),
+    ...waiterOf(item),
+    ...(item.answeredBy === undefined
+      ? undefined
+      : { answeredBy: item.answeredBy.name, answeredByUserId: item.answeredBy.userId }),
+    ...closerOf(item),
+    ...(item.closedReason === undefined ? undefined : { closedReason: item.closedReason }),
+    ...(first && asking !== undefined && !paged
+      ? { openAsk: readMessageOf(asking.message, own) }
+      : undefined),
+    messages: page.messages.map((message) => readMessageOf(message, own)),
+    ...(page.older && oldest !== undefined ? { older: oldest.id } : undefined),
+  };
 }
 
-/** The agent's inbox as the call answers it. */
-function accepted(agent: InboxAgent): Effect.Effect<InboxToolResult, never, DatabaseServices> {
-  return acceptedItems(agentInboxItems(agent), agent.agentId);
-}
-
-export function inboxRejected(reason: string): InboxToolResult {
+export function inboxRejected(reason: string): InboxRefused {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
 }
 
@@ -707,7 +899,7 @@ export function postToInbox(
   agent: ThreadPoster,
   input: UnparsedWireValue,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<InboxToolResult, never, DatabaseServices> {
+): Effect.Effect<InboxWriteResult, never, DatabaseServices> {
   const read = readPost(input);
   if (Result.isFailure(read)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_POST));
   const post = read.success;
@@ -745,7 +937,7 @@ export function postToInbox(
       "a thread's push",
       pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId: agent.taskId }),
     );
-    return yield* accepted(agent);
+    return yield* written(agent, posted.success);
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(inboxRejected(INBOX_REFUSAL.UNAVAILABLE))),
@@ -756,7 +948,7 @@ export function postToInbox(
 export function withdrawAsk(
   agent: InboxAgent,
   input: UnparsedWireValue,
-): Effect.Effect<InboxToolResult, never, DatabaseServices> {
+): Effect.Effect<InboxWriteResult, never, DatabaseServices> {
   const read = readWithdraw(input);
   if (Result.isFailure(read)) {
     return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_WITHDRAW));
@@ -767,32 +959,83 @@ export function withdrawAsk(
     if (Option.isNone(withdrawn)) return inboxRejected(INBOX_REFUSAL.NO_OPEN_ASK);
     yield* afterResponse("a withdrawn thread's Slack DM", settleThreadDms(withdrawn.value.id));
     yield* afterResponse("a withdrawn thread's push", pushThreadSettled(withdrawn.value.id));
-    return yield* accepted(agent);
+    return yield* written(agent, withdrawn.value);
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(inboxRejected(INBOX_REFUSAL.UNAVAILABLE))),
   );
 }
 
+/** A list's or a read's store failure as the tool's own refusal. */
+function orUnavailable<A>(
+  read: InboxStoreEffect<A | InboxRefused>,
+): Effect.Effect<A | InboxRefused, never, DatabaseServices> {
+  return read.pipe(
+    Effect.tapError(logStoreFailure),
+    Effect.catch(() => Effect.succeed(inboxRejected(INBOX_REFUSAL.UNAVAILABLE))),
+  );
+}
+
 /**
- * Reads threads as the agent: its own, as each of its thread tools
- * answers, or one other agent's or one task's of its own workspace, as
- * the member it acts for may read them, which it may read and never write.
+ * Lists threads as the agent, one line each: its own, or one other agent's
+ * or one task's of its own workspace, as the member it acts for may read
+ * them, which it may read and never write; only those standing where
+ * status names, where it names one.
  */
-export function readThreads(
+export function listThreads(
   agent: ThreadPoster,
   input: UnparsedWireValue,
-): Effect.Effect<InboxToolResult, never, DatabaseServices> {
-  const asked = readRead(input);
-  if (Result.isFailure(asked)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_READ));
-  const { agentId, taskId } = asked.success;
+): Effect.Effect<InboxListResult, never, DatabaseServices> {
+  const asked = readList(input);
+  if (Result.isFailure(asked)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_LIST));
+  const { agentId, taskId, status } = asked.success;
   if (agentId !== undefined && taskId !== undefined) {
     return Effect.succeed(inboxRejected(INBOX_REFUSAL.BOTH_NAMED));
   }
   const reader = { userId: agent.userId, workspaceId: agent.organizationId };
-  if (taskId !== undefined) {
-    return acceptedItems(agentReachedInboxItems(reader, { taskId }), agent.agentId);
-  }
-  if (agentId === undefined || agentId === agent.agentId) return accepted(agent);
-  return acceptedItems(agentReachedInboxItems(reader, { agentId }), agent.agentId);
+  const items =
+    taskId !== undefined
+      ? agentReachedInboxItems(reader, { taskId }, status)
+      : agentId === undefined || agentId === agent.agentId
+        ? agentInboxItems(agent, status)
+        : agentReachedInboxItems(reader, { agentId }, status);
+  return orUnavailable(
+    Effect.map(items, (read) => ({
+      status: ACTION_RESULT_STATUS.ACCEPTED,
+      threads: rowsOf(read, agent.agentId),
+    })),
+  );
+}
+
+/**
+ * Reads one thread as the agent, whole: its own, or another agent's or a
+ * task's of its own workspace, as the member it acts for may read it, a
+ * page of its messages at a time, the latest first; refused for a thread of
+ * another workspace, as for one that does not exist.
+ */
+export function readThread(
+  agent: ThreadPoster,
+  input: UnparsedWireValue,
+): Effect.Effect<InboxReadResult, never, DatabaseServices> {
+  const asked = readThreadAsked(input);
+  if (Result.isFailure(asked)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_READ));
+  const { threadId, before } = asked.success;
+  return orUnavailable(
+    Effect.gen(function* () {
+      const home = yield* readInboxItemHome(agent.userId, threadId);
+      if (Option.isNone(home) || home.value.workspaceId !== agent.organizationId) {
+        return inboxRejected(INBOX_REFUSAL.NO_THREAD);
+      }
+      const [stored, page] = yield* Effect.all(
+        [readInboxItem(agent.userId, threadId), inboxThreadPage(agent.userId, threadId, before)],
+        { concurrency: 2 },
+      );
+      if (Option.isNone(stored) || Option.isNone(page))
+        return inboxRejected(INBOX_REFUSAL.NO_THREAD);
+      return {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        thread: threadReadOf(stored.value.item, page.value, agent.agentId, before === undefined),
+      };
+    }),
+  );
 }

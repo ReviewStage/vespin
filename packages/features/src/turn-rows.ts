@@ -42,6 +42,8 @@ export const CALL_KIND = {
   INBOX_POST: "inbox-post",
   INBOX_CLOSE: "inbox-close",
   INBOX_READ: "inbox-read",
+  /** One thread read whole (`read_thread`), its row naming the thread's title. */
+  INBOX_THREAD_READ: "inbox-thread-read",
   INBOX_REPLY: "inbox-reply",
   /** An ask on one of the agent's inbox threads taken back with why (`withdraw_ask`), its row naming the thread's key. */
   INBOX_WITHDRAW: "inbox-withdraw",
@@ -155,7 +157,8 @@ export const CALL_WORDS = {
   [CALL_KIND.TODOS]: { verb: "Updated the to-dos:", code: false },
   [CALL_KIND.INBOX_POST]: { verb: "Posted a thread:", code: false },
   [CALL_KIND.INBOX_CLOSE]: { verb: "Closed a thread:", code: false },
-  [CALL_KIND.INBOX_READ]: { verb: "Read your threads", code: false },
+  [CALL_KIND.INBOX_READ]: { verb: "Read threads", code: false },
+  [CALL_KIND.INBOX_THREAD_READ]: { verb: "Read a thread:", code: false },
   [CALL_KIND.INBOX_REPLY]: { verb: "Replied in a thread:", code: false },
   [CALL_KIND.INBOX_WITHDRAW]: { verb: "Withdrew an ask:", code: false },
   [CALL_KIND.WORKER]: { verb: "Asked the worker", code: false },

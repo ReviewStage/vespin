@@ -1122,6 +1122,7 @@ const CALL_ICON = {
   [CALL_KIND.INBOX_POST]: InboxIcon,
   [CALL_KIND.INBOX_CLOSE]: InboxIcon,
   [CALL_KIND.INBOX_READ]: InboxIcon,
+  [CALL_KIND.INBOX_THREAD_READ]: InboxIcon,
   [CALL_KIND.INBOX_REPLY]: InboxIcon,
   [CALL_KIND.INBOX_WITHDRAW]: InboxIcon,
   [CALL_KIND.WORKER]: () => <EntityGlyph kind={ENTITY_KIND.WORKER} />,
