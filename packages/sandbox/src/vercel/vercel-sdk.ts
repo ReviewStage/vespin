@@ -911,9 +911,15 @@ function vercelSandbox(
       said(
         Effect.map(
           asked(SANDBOX_CALL.CREATE, (signal, under) =>
-            openedWithDrive(ask, under, signal, (mounted) =>
-              SdkSandbox.create({ ...under, ...createParams(ask, mounted), signal }),
-            ),
+            openedWithDrive(ask, under, signal, async (mounted) => {
+              const created = await SdkSandbox.create({
+                ...under,
+                ...createParams(ask, mounted),
+                signal,
+              });
+              if (ask.user !== undefined) await madeUser(created, ask.user, signal);
+              return created;
+            }),
           ),
           openedOf,
         ),

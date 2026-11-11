@@ -46,6 +46,7 @@ import {
   type SandboxRoute,
   type SandboxRunning,
   type SandboxTarget,
+  type SandboxUser,
   UP_STATUSES,
 } from "./vocabulary.js";
 
@@ -295,6 +296,8 @@ export interface DriveFill {
   readonly at: string;
   readonly image: string;
   readonly vcpus?: number;
+  /** The user made in the fill's sandbox, so what the steps hand it is that user's on every fork. */
+  readonly user?: SandboxUser;
 }
 
 /**
@@ -325,6 +328,7 @@ export const filledDrive = <E, R>(
         drive: { fill: ask.drive, at: ask.at },
         tags: {},
         ...(ask.vcpus === undefined ? undefined : { vcpus: ask.vcpus }),
+        ...(ask.user === undefined ? undefined : { user: ask.user }),
         env: {},
       })
       .pipe(

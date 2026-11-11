@@ -38,6 +38,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { AGENT_USER } from "@repo/agent-runner/pins";
 import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import {
   deletedFilledDrive,
@@ -84,19 +85,46 @@ const BASE_COMMIT_VARIABLE = "APP_BASE_COMMIT";
 /** The lockfile diff's exit where the lockfiles differ, as `git diff --quiet` exits. */
 const DIFFERS_EXIT = 1;
 
+/** Where pnpm keeps its store for a checkout on the drive, as the fill installs: the drive's root, the first folder up from the checkout it may write on that drive. */
+export const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
+
+/** The checkout's files but its `.git`, and pnpm's store on the drive, whose files `node_modules` links: what an install writes. */
+const INSTALLED = `find ${REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT} -mindepth 1 -maxdepth 1 ! -name .git`;
+
+/**
+ * The dependencies installed in the checkout handed to `agent`, root's,
+ * where the checkout's `node_modules` is not `agent`'s already, so a walk
+ * that was done once walks nothing. Note that this is because an install
+ * chmods what it installed on every run (pnpm a package's bins, a `prepare`
+ * script the hooks it copies), which only a file's owner may, so `agent`'s
+ * own install failed on what the default user installed. Their group and
+ * its writes are left as they stand, so the default user still writes them.
+ * The fill hands them over once (`fillBaseDrive`), so every fork starts with
+ * them `agent`'s; a launch asks it too (`machine/sandbox-machine.ts`'s
+ * readying), which walks only a drive filled before the fill did.
+ */
+export const HAND_INSTALL_TO_AGENT = `if [ -d ${REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT}/node_modules ] && [ "$(stat -c %U ${REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT}/node_modules)" != ${AGENT_USER} ]; then ${INSTALLED} -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
+
+/**
+ * What an earlier fill handed to `agent` taken back by the default user
+ * before it installs again, as the default user's own `sudo`, since its
+ * install chmods what it installed, which only a file's owner may.
+ */
+const TAKE_INSTALL_BACK = `if [ -d node_modules ] && [ "$(stat -c %U node_modules)" != "$(id -un)" ]; then sudo -n ${INSTALLED} -exec chown -R "$(id -un)" {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then sudo -n chown -R "$(id -un)" ${DRIVE_PNPM_STORE}; fi; fi`;
+
 /**
  * The dependencies installed in the checkout: with pnpm where its lockfile
  * is pnpm's, with npm where it has a `package.json` and no such lockfile,
  * and nothing in a repository that has neither, which has none to install;
- * written group-writable, as the clone is (`GROUP_WRITES`). Note that it is
- * the default user's, pnpm's store at the drive's root among it, which each
- * agent's launch hands to its `agent` user (`machine/sandbox-machine.ts`'s
- * readying), because an install chmods what it installed and only a file's
- * owner may.
+ * written group-writable, as the clone is (`GROUP_WRITES`), by the default
+ * user, who first takes back what an earlier fill handed to `agent`
+ * (`TAKE_INSTALL_BACK`); the fill hands it all to `agent` once it is done
+ * (`HAND_INSTALL_TO_AGENT`).
  */
 const INSTALL_SCRIPT = [
   "set -e",
   GROUP_WRITES,
+  TAKE_INSTALL_BACK,
   "if [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi",
 ].join("\n");
 
@@ -218,6 +246,21 @@ const installDependencies = Effect.fn("web/installCheckoutDependencies")(functio
   }
 });
 
+/** The checkout's dependencies handed to `agent` (`HAND_INSTALL_TO_AGENT`), or the refusal in the shell's own words. */
+const handedToAgent = Effect.fn("web/handInstallToAgent")(function* (sandbox: RepositorySandbox) {
+  const handed = yield* runInSandbox(
+    sandbox,
+    { command: `sudo -n bash -c '${HAND_INSTALL_TO_AGENT}'` },
+    REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+  );
+  if (handed.exitCode !== 0) {
+    return yield* new RepositoryRefusal({
+      reason: REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+      detail: handed.stderr.trim().slice(-INSTALL_ERROR_TAIL_CHARS),
+    });
+  }
+});
+
 /** The commit the checkout stands at; none where git could not say, as for a sandbox that holds no checkout. */
 export const checkoutCommit = (sandbox: RepositorySandbox) =>
   Effect.map(
@@ -311,6 +354,8 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
       at: BASE_DRIVE.MOUNT,
       image,
       vcpus: SANDBOX_SIZE.VCPUS,
+      // Note that the fill makes `agent` as every agent's sandbox does, so what it hands `agent` is its on every fork.
+      user: { name: AGENT_USER, homeFolders: [] },
     },
     (running) =>
       Effect.gen(function* () {
@@ -339,6 +384,7 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
           before !== undefined &&
           (yield* Effect.orElseSucceed(lockfilesUnmoved(sandbox, before), () => false));
         if (!stillMatches) yield* installDependencies(sandbox);
+        yield* handedToAgent(sandbox);
       }),
   );
   if (filled) yield* Effect.logInfo(`the base drive ${name} is filled`);
