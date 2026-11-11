@@ -11,7 +11,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
@@ -256,12 +256,18 @@ const firstLinesOf = (spawned: ScriptedSpawner["spawned"]) =>
  * the steps the launch reported in the order the service had them, and what
  * waits for the launch's settle and its report that the runner starts.
  */
-const launching = (workStands: boolean, repositoryHangs = false) =>
+const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = false) =>
   Effect.gen(function* () {
     const root = yield* temporaryDirectoryScoped("agent-launch-");
     const home = path.join(root, "home");
     const layout = layoutUnder(root);
     if (workStands) mkdirSync(path.join(layout.checkoutPath, ".git"), { recursive: true });
+    // Note that a planted root is a link to a folder someone else chose, as another user could leave on a temp folder every user shares.
+    if (tempPlanted) {
+      mkdirSync(path.join(root, "planted"));
+      mkdirSync(path.join(root, "tmp"));
+      symlinkSync(path.join(root, "planted"), path.dirname(layout.sharedFiles));
+    }
     const launchSettled = Deferred.makeUnsafe<void>();
     const starting = Deferred.makeUnsafe<void>();
     const hung = Deferred.makeUnsafe<void>();
@@ -401,6 +407,23 @@ it.effect(
           false,
         );
         assert.ok(reported.some((message) => message.includes("not made within 25 minutes")));
+      }),
+    ).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
+it.effect(
+  "a launch whose shared files root is a link planted in the machine's temp folder is settled as not started, its runner never spawned, reporting why",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { spawned, reported, settled } = yield* launching(true, false, true);
+        yield* settled;
+
+        assert.equal(
+          spawned.some((each) => each.program === RUNNER),
+          false,
+        );
+        assert.ok(reported.some((message) => message.includes("shared files folder")));
       }),
     ).pipe(Effect.provide(NodeFileSystem.layer)),
 );
