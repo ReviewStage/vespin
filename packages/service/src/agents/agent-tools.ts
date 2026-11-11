@@ -1,4 +1,5 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { agentBootsOf } from "@repo/database/models/agent-boot-store";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -485,7 +486,7 @@ const LOCAL_AGENT_REFUSAL_WORDS = {
   [LOCAL_AGENT_REFUSAL.NO_HARNESS]: `Not started: the device it would run on cannot run this model. Start on another model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.PREPARING]: `Not started: the device it would run on is still getting ready for local agents, downloading Claude Code, Codex, and GitHub's CLI. Try again in a few minutes, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. Ask the member to turn Bring your own machine off and on in Settings › Machines on that Mac, or to restart vespin-host on that Linux server, to try again, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
-  [LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN]: `Not started: the repository is reached on the member's own GitHub token, and the device it would run on has a vespin-host too old to work in such a repository on its own GitHub sign-in. Ask the member to update that host, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+  [LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN]: `Not started: the device it would run on has a vespin-host too old to work in a repository on its own GitHub sign-in. Ask the member to update that host, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.PERMISSION_MODES]: `Not started: the agent's permission mode asks before it acts, and the device it would run on has a vespin-host too old to ask, which would run it with full access. Ask the member to update ${PRODUCT_NAME} on that machine, or to switch the agent to Full access.`,
 } as const satisfies Record<
   Exclude<LocalAgentRefusal, typeof LOCAL_AGENT_REFUSAL.NOT_OWNER>,
@@ -1491,11 +1492,12 @@ interface AgentReading {
   readonly activity: string | null;
 }
 
-/** The agents' standings, read once for the lot: each one's newest turn. The agents were read through their workspace's gate, so their conversations are read by id. */
+/** The agents' standings, read once for the lot: each one's newest turn and first launch's boot. The agents were read through their workspace's gate, so their conversations are read by id. */
 const standingsOf = (agents: readonly Agent[]) =>
   Effect.gen(function* () {
     const ids = agents.map((agent) => agent.conversationId);
     const turns = yield* latestTurnsOfReached(ids);
+    const boots = yield* agentBootsOf(agents.map((agent) => agent.id));
     const now = yield* Clock.currentTimeMillis;
     return (agent: Agent) => {
       const turn = turns.get(agent.conversationId);
@@ -1503,6 +1505,7 @@ const standingsOf = (agents: readonly Agent[]) =>
         createdAt: agent.createdAt,
         now,
         blank: startedBlank(agent),
+        boot: boots.get(agent.id)?.phase,
       });
       // Why the newest turn failed is said only while the agent reads as failed.
       return {
@@ -2800,11 +2803,12 @@ const stopOf = (call: AgentCall, agent: Agent) =>
           key,
           ...(by === undefined ? undefined : { by }),
         });
-    const after = (yield* turnStandingsOf([agent.conversationId]))(agent.conversationId);
+    const after = (yield* turnStandingsOf([agent.conversationId], [agent]))(agent.conversationId);
     const status = agentStatusOf(after.turn, {
       createdAt: agent.createdAt,
       now: yield* Clock.currentTimeMillis,
       blank: startedBlank(agent),
+      boot: after.boot,
     });
     const standing = stopStands(before.turn) && after.turn?.id === before.turn?.id;
     return { stopped: earlier || canceled || standing, status };

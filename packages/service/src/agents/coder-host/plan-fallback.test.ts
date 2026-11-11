@@ -561,20 +561,29 @@ const writtenLine = (agent: Agent, text: string) =>
     };
   });
 
-/** Each harness on each machine, past each fallback, and who its relaunch must run on. */
-const CASES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX].flatMap((harness) =>
-  [false, true].flatMap((onMac) =>
-    Object.values(FALLBACK).map((fallback) => ({
-      name: `${harness} ${onMac ? "on a Mac" : "in the cloud"}, ${fallback}`,
-      harness,
-      onMac,
-      fallback,
-      payer: (fallback === FALLBACK.API_KEY || fallback === FALLBACK.NEXT_KEY
-        ? AGENT_PAYER.API_KEY
-        : HARNESS[harness].planPayer) as AgentPayer,
-    })),
-  ),
-);
+/**
+ * Each harness on each machine, past each fallback, and who its relaunch
+ * must run on: in the cloud, past each fallback; on a Mac, which runs on
+ * its own login whatever the account saved, only at the reset.
+ */
+const CASES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX].flatMap((harness) => [
+  ...Object.values(FALLBACK).map((fallback) => ({
+    name: `${harness} in the cloud, ${fallback}`,
+    harness,
+    onMac: false,
+    fallback,
+    payer: (fallback === FALLBACK.API_KEY || fallback === FALLBACK.NEXT_KEY
+      ? AGENT_PAYER.API_KEY
+      : HARNESS[harness].planPayer) as AgentPayer,
+  })),
+  {
+    name: `${harness} on a Mac, ${FALLBACK.NONE}`,
+    harness,
+    onMac: true,
+    fallback: FALLBACK.NONE,
+    payer: AGENT_PAYER.MAC_SIGN_IN as AgentPayer,
+  },
+]);
 
 afterEach(() => {
   vi.unstubAllEnvs();

@@ -29,9 +29,8 @@ appId: dev.vespin.ios
 # lowers the keyboard because the sheet's form lowers it on a drag
 # (`SettingsForm`); the words field's return key types a new line.
 - hideKeyboard
-# The model's menu offers the catalog, each model once, by the catalog's own
-# name, which the fixture's catalog leads with its maker ("Anthropic Claude
-# Sonnet 5.5"); a pick keeps the effort it lists nearest the one shown.
+# The model's menu offers the catalog, each model once, by the panel's name
+# for it ("Sonnet 5.5"); a pick keeps the effort it lists nearest the one shown.
 - tapOn: "Model.*"
 - assertVisible: ".*Sonnet 5.5"
 - waitForAnimationToEnd

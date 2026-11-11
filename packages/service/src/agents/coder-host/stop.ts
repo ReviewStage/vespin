@@ -1,4 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { agentBootsOf } from "@repo/database/models/agent-boot-store";
 import { pauseAgentQueue } from "@repo/database/models/agent-queue-store";
 import {
   type Agent,
@@ -68,6 +69,7 @@ import {
 /** Where each of the agents' conversations named stands now, read by id since the agents passed the task's gate: its newest turn, and whether its sandbox stands open. */
 export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   conversationIds: readonly string[],
+  booting: readonly { readonly id: string; readonly conversationId: string }[] = [],
 ): Effect.fn.Return<
   (conversationId: string) => AgentTurnStanding,
   HostedRefusal,
@@ -76,10 +78,18 @@ export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const turns = yield* hostedStoreOrUnavailable(latestTurnsOfReached(conversationIds));
   const runtimes = yield* hostedStoreOrUnavailable(nativeRuntimesOfReached(conversationIds));
   const sandboxes = yield* hostedStoreOrUnavailable(openSandboxesOfReached(conversationIds));
+  const boots = yield* hostedStoreOrUnavailable(agentBootsOf(booting.map((agent) => agent.id)));
+  const bootOf = new Map(
+    booting.flatMap((agent) => {
+      const boot = boots.get(agent.id);
+      return boot === undefined ? [] : [[agent.conversationId, boot.phase] as const];
+    }),
+  );
   return (conversationId) => ({
     turn: turns.get(conversationId),
     runtime: runtimes.get(conversationId),
     sandboxOpen: sandboxes.has(conversationId),
+    boot: bootOf.get(conversationId),
   });
 });
 
@@ -101,7 +111,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   agent: Agent,
 ): Effect.fn.Return<AgentSummary, HostedRefusal, DatabaseServices> {
-  const standing = yield* standingsOf([agent.conversationId]);
+  const standing = yield* standingsOf([agent.conversationId], [agent]);
   const names = yield* hostedStoreOrUnavailable(readAccountNames(summaryAccounts(agent)));
   const continuedBy = yield* continuedByOf(userId, [agent.id]);
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
@@ -119,11 +129,14 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 export const statusOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Agent,
 ): Effect.fn.Return<AgentSummary["status"], HostedRefusal, DatabaseServices> {
-  const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
+  const { turn, boot } = (yield* standingsOf([agent.conversationId], [agent]))(
+    agent.conversationId,
+  );
   return agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
     blank: startedBlank(agent),
+    boot,
   });
 });
 
@@ -364,11 +377,14 @@ export const everyStopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
  * every one first, so a refusal cancels nobody's work.
  */
 const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) {
-  const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
+  const { turn, boot } = (yield* standingsOf([agent.conversationId], [agent]))(
+    agent.conversationId,
+  );
   const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
     blank: startedBlank(agent),
+    boot,
   });
   if (status === AGENT_STATUS.STARTING) return false;
   return status !== AGENT_STATUS.RUNNING || stoppable(turn);
@@ -387,10 +403,16 @@ const standingTurns = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const conversationIds = agents.map(({ conversationId }) => conversationId);
   const turns = yield* latestTurnsOfReached(conversationIds);
+  const boots = yield* agentBootsOf(agents.map(({ id }) => id));
   const now = yield* Clock.currentTimeMillis;
   return agents.map((agent) => {
     const turn = turns.get(agent.conversationId);
-    const status = agentStatusOf(turn, { createdAt: agent.createdAt, now, blank: agent.blank });
+    const status = agentStatusOf(turn, {
+      createdAt: agent.createdAt,
+      now,
+      blank: agent.blank,
+      boot: boots.get(agent.id)?.phase,
+    });
     return { agent, turn, status };
   });
 });

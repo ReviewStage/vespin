@@ -10,6 +10,7 @@ import {
 import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
+import type { BootPhase } from "@repo/features/agent-boot";
 import { originSubjectsOf } from "@repo/features/agent-origin-live";
 import {
   agentStatusAt,
@@ -74,6 +75,8 @@ export interface AgentStanding {
   readonly now: number;
   /** Whether the agent was started blank, handed neither the description nor a prompt, so no first turn is on its way; unsaid reads as not. */
   readonly blank?: boolean | undefined;
+  /** Where the agent's first launch stands while its boot record does (`@repo/features/agent-boot`); unsaid reads as none. */
+  readonly boot?: BootPhase | undefined;
 }
 
 /** Whether an agent was started blank, as a full read or a list line says it. */
@@ -95,6 +98,7 @@ function statusStandingOf(standing: AgentStanding) {
     createdAt: standing.createdAt.getTime(),
     now: standing.now,
     blank: standing.blank === true,
+    boot: standing.boot,
   };
 }
 
@@ -203,6 +207,7 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     ],
   ],
+  [AGENT_FAILURE.MACHINE_SIGN_IN, [CODER_REFUSAL.MACHINE_SIGNED_OUT]],
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
   [AGENT_FAILURE.CONNECTION_LOST, Object.values(CONNECTION_LOST_DETAIL)],
 ];
@@ -324,6 +329,8 @@ export interface AgentTurnStanding {
   readonly runtime?: NativeAgentRuntime | undefined;
   /** Whether its sandbox stands open (`openSandboxesOfReached`); none where the read named none. */
   readonly sandboxOpen?: boolean | undefined;
+  /** Where its first launch stands while its boot record does (`agentBootsOf`); none where it has none or the read named none. */
+  readonly boot?: BootPhase | undefined;
 }
 
 /** When the run the status is read from began: the newest turn's start, or its queueing before a runner takes it, and the agent's own before any turn. */
@@ -428,6 +435,7 @@ function summaryFields(
       createdAt: agent.createdAt,
       now,
       blank: startedBlank(agent),
+      boot: standing.boot,
     }),
     turnId: standing.turn?.id ?? null,
     ...(turn === undefined ? undefined : { turn }),

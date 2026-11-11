@@ -1,5 +1,5 @@
 /**
- * workspace-invitation-operations.ts -- a workspace's pending invitations read, one made, and one canceled by an owner or an admin, as the hosted procedures make them and the member MCP tools will.
+ * workspace-invitation-operations.ts -- a workspace's pending invitations read, one made, and one canceled by an owner or an admin, as the hosted procedures make them.
  *
  * Each is the one operation its doors run: `workspaceInvitations.list`,
  * `invite`, and `cancel` (`workspace-invitations-procedures.ts`) for the
@@ -117,7 +117,7 @@ const pendingOf = Effect.fn("web/workspacePendingInvitations")(function* (
 /**
  * The invitation made, emailed to its address from the deployment's sender
  * (`invitation-mail.ts`), naming the inviter by their name, or their address
- * where their account has none, as stage did. A runtime without a sender
+ * where their account has none. A runtime without a sender
  * emails nothing, and an inviter whose row cannot be read is "A teammate",
  * since the invitation already stands.
  *
@@ -170,9 +170,7 @@ export const workspaceInvitationsRead = Effect.fn("web/workspaceInvitationsRead"
 /**
  * An owner's or an admin's invitation of an address to the workspace, the
  * owner alone inviting an admin, answered with the invitation and its
- * accept link on `origin`, and emailed to the address. Note that the
- * address is lowercased and checked as the plugin checks it, because the
- * plugin no longer stands behind this write.
+ * accept link on `origin`, and emailed to the address.
  */
 export const workspaceInvite = Effect.fn("web/workspaceInvite")(function* (
   userId: string,

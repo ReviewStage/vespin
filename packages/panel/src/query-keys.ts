@@ -51,6 +51,7 @@ export const QUERY_ROOT = {
   AGENT_MESSAGES: "agent-messages",
   REPOSITORY_SKILLS: "repository-skills",
   AGENT_CHANGES: "agent-changes",
+  AGENT_TURN_CHANGES: "agent-turn-changes",
   /** A cloud agent's listening ports and its shared link, as a host that forwards none asks the service for them (`tasks/agent-forward.tsx`). */
   AGENT_PORTS: "agent-ports",
   AGENT_SHARED_PORT: "agent-shared-port",

@@ -1,5 +1,5 @@
 import { inboxCommentFiles } from "@repo/features/inbox-list-model";
-import { INBOX_MESSAGE_AUTHOR, type InboxMessage } from "@repo/features/inbox-wire";
+import { INBOX_MESSAGE_AUTHOR, type InboxMessage, optionFileIds } from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type CommentAuthor, ErrorState } from "@repo/ui";
@@ -192,7 +192,12 @@ export function MessageWords({
   images: InboxImageReads;
 }): React.JSX.Element {
   const fromAgent = message.author === INBOX_MESSAGE_AUTHOR.AGENT;
-  const files = message.files ?? NO_FILES;
+  // Note that the files its ask's options carry stand on their cards, so the message draws them nowhere else.
+  const files = useMemo(() => {
+    const carried = optionFileIds(message.ask);
+    const all = message.files ?? NO_FILES;
+    return carried.size === 0 ? all : all.filter((file) => !carried.has(file.attachmentId));
+  }, [message.files, message.ask]);
   // Note that each file is read once, as it is first drawn, and kept as the window's pictures are.
   const queries = useQueries({
     queries: files.map((file) => pictureQuery(itemId, file.attachmentId, images.read)),

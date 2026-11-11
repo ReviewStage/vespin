@@ -1,8 +1,10 @@
-// form-rows.tsx -- the rows a composing sheet's Form holds: the words to send, and a choice among many in the system's menu picker.
+// form-rows.tsx -- the rows a composing sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker.
 
-import { Picker, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, Picker, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
 import {
   accessibilityIdentifier,
+  accessibilityLabel,
+  buttonStyle,
   font,
   lineLimit,
   listRowBackground,
@@ -10,8 +12,10 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
 import type { PickOption } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
@@ -51,6 +55,39 @@ export function WordsField({ placeholder, onWords, autoFocus = false, testId }: 
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
     />
+  );
+}
+
+type AttachRowProps = {
+  readonly pictures: readonly AttachedPicture[];
+  /** Opens what the + adds: the system's photo picker. */
+  readonly onAdd: () => void;
+  readonly onDetach: (id: string) => void;
+  /** The name a flow finds the + by. */
+  readonly testId?: string | undefined;
+};
+
+/**
+ * The pictures a sheet sends with its words, as a row under them: the +, as
+ * a composer's field leads with it, then each picture attached as the
+ * composer's head draws it, a capsule taken off on a press.
+ */
+export function AttachRow({ pictures, onAdd, onDetach, testId }: AttachRowProps) {
+  const colors = useColors();
+  return (
+    <HStack spacing={SPACE.TIGHT * 2} modifiers={[listRowBackground(colors.SURFACE)]}>
+      <Button
+        onPress={onAdd}
+        modifiers={[
+          buttonStyle("plain"),
+          accessibilityLabel("Add picture"),
+          ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+        ]}
+      >
+        <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      </Button>
+      <AttachedPictures pictures={pictures} onDetach={onDetach} />
+    </HStack>
   );
 }
 

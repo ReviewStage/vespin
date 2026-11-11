@@ -1,7 +1,9 @@
-// start-screens.tsx -- the two sheets that start work, each a SwiftUI Form: New agent on a task, its words, model, and effort; and New task, Home's composer: the task described, its repository, its model and effort, and where its agent runs.
+// start-screens.tsx -- the two sheets that start work, each a SwiftUI Form: New agent on a task, its words and pictures, model, and effort; and New task, Home's composer: the task described and its pictures, its repository, its model and effort, and where its agent runs.
 
+import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  AttachRow,
   BAR_TITLE,
   BUZZ,
   buzz,
@@ -28,6 +30,7 @@ import {
   useStartAgent,
   useStartTask,
 } from "../tasks/use-start.js";
+import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
 
 /** The panel's words for the sheets, their fields, and their acts. */
 const WORDS = {
@@ -47,28 +50,36 @@ const WORDS = {
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
 } as const;
 
-/** What keeps a sheet's typed words: whether it asks before they go, and its answers. */
+/** The names each sheet's flow finds its words and its + by. */
+const TEST_IDS = {
+  NEW_AGENT: { WORDS: "new-agent-words", ATTACH: "new-agent-attach" },
+  NEW_TASK: { WORDS: "new-task-words", ATTACH: "new-task-attach" },
+} as const;
+
+type SheetTestIds = (typeof TEST_IDS)[keyof typeof TEST_IDS];
+
+/** What keeps a sheet's draft, its words typed and pictures attached: whether it asks before they go, and its answers. */
 interface KeptWords {
   /** Whether the sheet asks whether to discard its draft, after a Cancel or a swipe down. */
   readonly asking: boolean;
-  /** Lets the sheet go, its words with it, as the ask's Discard draft does. */
+  /** Lets the sheet go, its draft with it, as the ask's Discard draft does. */
   readonly discard: () => void;
-  /** Keeps the sheet and its words, as the ask's Cancel does. */
+  /** Keeps the sheet and its draft, as the ask's Cancel does. */
   readonly stay: () => void;
   /** Lets the sheet go without asking, as a start taken does. */
   readonly release: () => void;
 }
 
 /**
- * Keeps a sheet's words while any are typed, as Mail keeps a draft: the
- * swipe down is held, and Cancel or a swipe asks first whether to discard
- * them. Note that a swipe the system held comes back as a removal the stack
- * prevented, so one ask answers both.
+ * Keeps a sheet's draft while it holds one, words typed or a picture
+ * attached, as Mail keeps a draft: the swipe down is held, and Cancel or a
+ * swipe asks first whether to discard it. Note that a swipe the system held
+ * comes back as a removal the stack prevented, so one ask answers both.
  */
-function useKeptWords(typed: boolean): KeptWords {
+function useKeptWords(drafted: boolean): KeptWords {
   const [letGo, setLetGo] = useState(false);
   const [leave, setLeave] = useState<(() => void) | undefined>(undefined);
-  const disable = usePreventRemove(typed && !letGo, ({ repeat }) => setLeave(() => repeat));
+  const disable = usePreventRemove(drafted && !letGo, ({ repeat }) => setLeave(() => repeat));
   return {
     asking: leave !== undefined,
     discard: () => {
@@ -84,7 +95,7 @@ function useKeptWords(typed: boolean): KeptWords {
   };
 }
 
-/** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words to send and while no start is out; and the ask a Cancel or a swipe down raises while words are typed. */
+/** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words or pictures to send and while no start is out; and the ask a Cancel or a swipe down raises while the sheet holds a draft. */
 function SheetBar({
   title,
   ready,
@@ -174,25 +185,59 @@ function AgentSection({
   );
 }
 
+/** The sheet's words and, under them, the + and the pictures attached, with what a start, the picker, or a bound said under both. */
+function DraftSection({
+  placeholder,
+  onWords,
+  pictures,
+  note,
+  testIds,
+}: {
+  readonly placeholder: string;
+  readonly onWords: (words: string) => void;
+  readonly pictures: AttachedPictures;
+  readonly note: string | undefined;
+  /** The names a flow finds the field and the + by. */
+  readonly testIds: SheetTestIds;
+}) {
+  return (
+    <ListSection footer={note}>
+      <WordsField placeholder={placeholder} onWords={onWords} autoFocus testId={testIds.WORDS} />
+      <AttachRow
+        pictures={pictures.attached}
+        onAdd={pictures.attach}
+        onDetach={pictures.detach}
+        testId={testIds.ATTACH}
+      />
+    </ListSection>
+  );
+}
+
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
  * gives way to its page; on a task made whose agent was refused, to the
- * task's page; on a refusal, the sheet stays with its words, the refusal
- * said under them.
+ * task's page; on a refusal, the sheet stays with its words and pictures,
+ * the refusal said under them. Pictures the service would refuse hold the
+ * start, saying why, as the agent's composer holds a send.
  */
 function useSheetStart(
   start: () => Promise<StartAnswer>,
   kept: KeptWords,
+  refusal: string | undefined,
+  setNote: (note: string | undefined) => void,
 ): {
   readonly starting: boolean;
-  readonly note: string | undefined;
   readonly go: () => void;
 } {
   const router = useRouter();
   const [starting, setStarting] = useState(false);
-  const [note, setNote] = useState<string | undefined>(undefined);
   const go = () => {
     if (starting) return;
+    if (refusal !== undefined) {
+      setNote(refusal);
+      buzz(BUZZ.WARNING);
+      return;
+    }
     setStarting(true);
     setNote(undefined);
     start()
@@ -212,42 +257,47 @@ function useSheetStart(
       })
       .finally(() => setStarting(false));
   };
-  return { starting, note, go };
+  return { starting, go };
 }
 
 /**
  * New agent on a task, as the panel's draft tab starts one: what to ask of
- * it, the model and effort it runs on, the account's default until another
- * is picked, and where it runs.
+ * it and the pictures that go with it, the model and effort it runs on, the
+ * account's default until another is picked, and where it runs.
  */
 export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   const [prompt, setPrompt] = useState("");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const pick = useModelPick();
   const startAgent = useStartAgent(taskId);
-  const kept = useKeptWords(prompt.trim() !== "");
-  const { starting, note, go } = useSheetStart(
-    () => startAgent({ prompt: prompt.trim(), picked: pick.picked, runsOn }),
+  const [note, setNote] = useState<string | undefined>(undefined);
+  const pictures = useAttachedPictures(setNote);
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
+  const kept = useKeptWords(drafted);
+  const { starting, go } = useSheetStart(
+    () =>
+      startAgent({
+        prompt: prompt.trim(),
+        attachments: pictures.files,
+        picked: pick.picked,
+        runsOn,
+      }),
     kept,
+    pictures.refusal,
+    setNote,
   );
   return (
     <>
-      <SheetBar
-        title={WORDS.NEW_AGENT}
-        ready={prompt.trim() !== "" && !starting}
-        onStart={go}
-        kept={kept}
-      />
+      <SheetBar title={WORDS.NEW_AGENT} ready={drafted && !starting} onStart={go} kept={kept} />
       <Screen>
         <SettingsForm>
-          <ListSection footer={note}>
-            <WordsField
-              placeholder={WORDS.AGENT_PLACEHOLDER}
-              onWords={setPrompt}
-              autoFocus
-              testId="new-agent-words"
-            />
-          </ListSection>
+          <DraftSection
+            placeholder={WORDS.AGENT_PLACEHOLDER}
+            onWords={setPrompt}
+            pictures={pictures}
+            note={note}
+            testIds={TEST_IDS.NEW_AGENT}
+          />
           <AgentSection pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
         </SettingsForm>
       </Screen>
@@ -256,9 +306,10 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
 }
 
 /**
- * New task, Home's composer as a sheet: the task described, the repository
- * it works in, the newest one the account's tasks were about until another
- * is picked, its agent's model and effort, and where its agent runs. Start
+ * New task, Home's composer as a sheet: the task described and the pictures
+ * that go with it, the repository it works in, the newest one the account's
+ * tasks were about until another is picked, its agent's model and effort,
+ * and where its agent runs. Start
  * makes the task and starts its agent in one act, as Home does, in the
  * workspace the app works in.
  */
@@ -270,35 +321,35 @@ export function NewTaskScreen() {
   const repository = useRepositoryPick(workspace);
   const pick = useModelPick();
   const startTask = useStartTask(workspace?.id);
-  const kept = useKeptWords(prompt.trim() !== "");
-  const { starting, note, go } = useSheetStart(
+  const [note, setNote] = useState<string | undefined>(undefined);
+  const pictures = useAttachedPictures(setNote);
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
+  const kept = useKeptWords(drafted);
+  const { starting, go } = useSheetStart(
     () =>
       startTask({
         prompt: prompt.trim(),
+        attachments: pictures.files,
         picked: pick.picked,
         runsOn,
         repository: repository.picked,
       }),
     kept,
+    pictures.refusal,
+    setNote,
   );
   return (
     <>
-      <SheetBar
-        title={WORDS.NEW_TASK}
-        ready={prompt.trim() !== "" && !starting}
-        onStart={go}
-        kept={kept}
-      />
+      <SheetBar title={WORDS.NEW_TASK} ready={drafted && !starting} onStart={go} kept={kept} />
       <Screen>
         <SettingsForm>
-          <ListSection footer={note}>
-            <WordsField
-              placeholder={WORDS.TASK_PLACEHOLDER}
-              onWords={setPrompt}
-              autoFocus
-              testId="new-task-words"
-            />
-          </ListSection>
+          <DraftSection
+            placeholder={WORDS.TASK_PLACEHOLDER}
+            onWords={setPrompt}
+            pictures={pictures}
+            note={note}
+            testIds={TEST_IDS.NEW_TASK}
+          />
           <ListSection
             title={WORDS.REPOSITORY}
             footer={repository.options.length === 0 ? WORDS.NO_REPOSITORIES : undefined}

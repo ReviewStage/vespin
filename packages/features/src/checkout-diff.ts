@@ -13,9 +13,11 @@
  * and the two can never diff differently. It prints git's own unified diff,
  * renames found, bounded in bytes, which `checkoutDiffFiles` reads into the
  * files the Changes view draws (`agent-wire.ts`'s `AgentChangedFile`), as it
- * draws a pull request's files read off GitHub. A snapshot the checkout no
- * longer holds, as after its sandbox was made anew, ends the script with
- * `CHECKOUT_DIFF_EXIT.MISSING` before it diffs anything.
+ * draws a pull request's files read off GitHub; a secret file's patch is
+ * left out by name (`isSecretFile`), as no read carries its lines, since the
+ * working tree a turn is diffed against holds the checkout's own `.env`. A
+ * snapshot the checkout no longer holds, as after its sandbox was made anew,
+ * ends the script with `CHECKOUT_DIFF_EXIT.MISSING` before it diffs anything.
  */
 
 import {
@@ -25,6 +27,7 @@ import {
   type ChangedFileStatus,
   PATCH_OMITTED,
 } from "./agent-wire.js";
+import { isSecretFile } from "./task-wire.js";
 
 /** The variables the script reads the two sides from: the commit before the turn, and the commit after it, empty for the working tree as it stands. */
 export const CHECKOUT_DIFF_VARIABLE = {
@@ -134,11 +137,14 @@ function fileOf(lines: readonly string[]): AgentChangedFile {
   }
   path ??= samePathOf(header);
   const patch = hunks.join("\n");
-  const omitted = binary
-    ? PATCH_OMITTED.BINARY
-    : patch.length > CHANGES_BOUNDS.MAX_PATCH_CHARS
-      ? PATCH_OMITTED.TOO_LARGE
-      : null;
+  const secret = isSecretFile(path) || (previousPath !== null && isSecretFile(previousPath));
+  const omitted = secret
+    ? PATCH_OMITTED.SECRET
+    : binary
+      ? PATCH_OMITTED.BINARY
+      : patch.length > CHANGES_BOUNDS.MAX_PATCH_CHARS
+        ? PATCH_OMITTED.TOO_LARGE
+        : null;
   return {
     path,
     previousPath,
@@ -154,8 +160,8 @@ function fileOf(lines: readonly string[]): AgentChangedFile {
  * The files the script's output names, each as the Changes view draws one:
  * its path and the one it was moved from, whether it was added, deleted,
  * renamed, or changed in place, its lines added and removed, and its hunks
- * as its patch, left out as binary where git printed none, or as too large
- * past the Changes view's bound. The last file of an output cut at the
+ * as its patch, left out as a secret file's, as binary where git printed
+ * none, or as too large past the Changes view's bound. The last file of an output cut at the
  * script's bound is left out, since it may be cut mid-hunk, and the files
  * past the view's bound are too, either said as cut short.
  */

@@ -25,13 +25,8 @@
  * though never the account's own first workspace, which goes only with the
  * account, and, where it is asked `ifAlone`, never one anyone else is a
  * member of or that holds an agent, as setup's Just me asks of the team's
- * workspace it made without asking (its pending invitations go with it). Every turn under way among the
- * workspace's agents not archived, any member's, one the owner cannot see
- * among them, is stopped first under
- * the account that started it (`everyTurnStoppedByStarter`), which nothing
- * past a Stop's own loses should the delete then be refused; the plugin
- * then deletes the workspace and every row of it, and its hooks delete the
- * agents' conversations and sandboxes (`workspace-deletion.ts`).
+ * workspace it made without asking. How it stops the workspace's agents and
+ * deletes what outlives its rows is `workspace-delete.ts`'s.
  * `POST /api/workspaces/rename` lets an owner or admin rename a workspace,
  * answering it under its new name and its old slug; an account's first
  * workspace is refused, since it is named by its owner's account name.

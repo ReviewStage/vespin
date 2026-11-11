@@ -1,8 +1,8 @@
+import { chooseFailureNote } from "@repo/features/agent-refusal-words";
 import type { AgentRuntime, AgentSummary } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
-import { chooseFailureNote } from "./agent-model.js";
 
 /**
  * use-agent-model.ts -- the model chip under an agent's transcript as one control: the choice the chip shows, a change on its way, and why the last one did not take.

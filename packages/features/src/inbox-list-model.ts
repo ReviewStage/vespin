@@ -39,6 +39,7 @@ import {
   inboxAgentsTurn,
   inboxWaitsOn,
   openAskOf,
+  optionsCarryMedia,
   recommendedLabels,
   threadNeedsReader,
 } from "./inbox-wire.js";
@@ -109,6 +110,7 @@ const BUTTON_OPTION_CHARS = 24;
 export function decideButtons(ask: Pick<InboxDecideAsk, "options" | "multiple">): boolean {
   return (
     ask.multiple !== true &&
+    !optionsCarryMedia(ask) &&
     ask.options.length === 2 &&
     ask.options.every(
       (option) => option.detail === undefined && option.label.length <= BUTTON_OPTION_CHARS,

@@ -1,5 +1,5 @@
 /**
- * workspace-delete.ts -- a workspace deleted by its owner, as the hosted procedure makes it and the command-line tool will.
+ * workspace-delete.ts -- a workspace deleted by its owner, as the hosted procedure makes it.
  *
  * The one operation `workspaces.delete` (`workspaces-procedures.ts`) runs.
  * The owner alone deletes a workspace, though never the account's own first

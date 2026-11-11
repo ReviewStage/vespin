@@ -45,16 +45,20 @@
  * `staleWarm`).
  *
  * Where the agent runs is chosen beside it (`agentMachineChoice`): a Vercel
- * Sandbox, or, where the Start names one of the starter's Macs, that Mac, on
- * the same runtime and payer a cloud agent would run on. Its Macs are offered
- * (`macOffers`) each that beat within `THIS_MAC.FRESH`, and the agent is
- * pinned to the one the Start named, once it is checked to be among them. A local agent runs
- * Claude Code, or Codex on a Mac that registered a Codex it checked; one on
- * Codex on a Mac with none, or on no harness at all, is refused by name.
+ * Sandbox, or, where the Start names one of the starter's machines, that
+ * machine. Its machines are offered (`macOffers`) each that beat within
+ * `THIS_MAC.FRESH`, and the agent is pinned to the one the Start named, once
+ * it is checked to be among them. A local agent runs Claude Code, or Codex on
+ * a machine that registered a Codex it checked; one on Codex on a machine with
+ * none, or on no harness at all, is refused by name. A local agent runs on
+ * the machine's own login to its harness (`AGENT_PAYER.MAC_SIGN_IN`), never on
+ * a credential the account saved in the app, so a Start on a machine needs
+ * none (`localAgentRuntimeChoice`), and each of its launches records that
+ * payer rather than choosing one (`launchPayerOf`).
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { recordAgentPayer } from "@repo/database/models/agent-store";
+import { type Agent, recordAgentPayer } from "@repo/database/models/agent-store";
 import { type Device, deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
 import { openProviderKey, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import {
@@ -77,7 +81,6 @@ import {
   DEVICE_SETUP,
   type DeviceSetup,
 } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import { type MacOffer, MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import {
   apiKeyName,
@@ -149,6 +152,12 @@ const ON_CODEX: AgentRuntimeChoice = {
   runtime: CONVERSATION_RUNTIME.CODEX,
   payer: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
 };
+
+/** The runtime each provider's models run on, whoever pays. */
+const PROVIDER_RUNTIME = {
+  [MODEL_PROVIDER.ANTHROPIC]: CONVERSATION_RUNTIME.CLAUDE_CODE,
+  [MODEL_PROVIDER.OPENAI]: CONVERSATION_RUNTIME.CODEX,
+} as const satisfies Record<ModelProvider, NativeRuntime>;
 
 /** The payer each provider's plan is recorded as. */
 const PLAN_PAYER = {
@@ -317,23 +326,31 @@ export const agentRuntimeChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* providerRuntimeChoice(userId, provider, yield* keyRowsOf(userId, rows));
 });
 
+/**
+ * The runtime a model's agent runs on, Claude Code for a Claude model and
+ * Codex for a GPT model, whoever pays for it: all an agent started from
+ * another reads before its machine is known (`takeover.ts`'s
+ * `landedInheriting`), which a credential never changes.
+ */
+export const modelRuntimeOf = (model: string): Effect.Effect<NativeRuntime> =>
+  Effect.map(providerOfModel(model), (provider) => PROVIDER_RUNTIME[provider]);
+
+/**
+ * The runtime and payer of a new local agent on the model given: the
+ * model's harness, on the login of the machine it runs on, which needs no
+ * credential of the account's.
+ */
+export const localAgentRuntimeChoice = (model: string): Effect.Effect<AgentRuntimeChoice> =>
+  Effect.map(modelRuntimeOf(model), (runtime) => ({ runtime, payer: AGENT_PAYER.MAC_SIGN_IN }));
+
 /** The model providers a Mac may run a Start of: Claude Code's, and Codex's on a Mac that checked a Codex (`runsCodex`). */
 const MAC_PROVIDERS: readonly ModelProvider[] = [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.OPENAI];
 
 /** Whether the Mac runs Codex agents: it registered a Codex it checked against the pin. */
 const runsCodex = (device: Device): boolean => device.codexExecutable !== null;
 
-/**
- * Whether the Mac runs a Start of the provider's models: Claude Code's
- * anywhere, Codex's where it checked a Codex; where the account pays for the
- * harness in the app (`paid`).
- */
-function macRunsProvider(
-  device: Device,
-  provider: ModelProvider,
-  paid: readonly ModelProvider[],
-): boolean {
-  if (!paid.includes(provider)) return false;
+/** Whether the machine runs a Start of the provider's models: Claude Code's anywhere, Codex's where it checked a Codex. */
+function macRunsProvider(device: Device, provider: ModelProvider): boolean {
   return provider === MODEL_PROVIDER.ANTHROPIC || runsCodex(device);
 }
 
@@ -344,28 +361,11 @@ const RUNTIME_PROVIDER = {
 } as const satisfies Record<NativeRuntime, ModelProvider>;
 
 /**
- * The providers a Start on any of the account's Macs runs, as the account
- * can pay for them: each of `MAC_PROVIDERS` a Start of the account's would
- * run, on a plan or a key it keeps in the app, and none it cannot pay for.
- */
-const paidMacProviders = Effect.fnUntraced(function* (
-  userId: string,
-): Effect.fn.Return<readonly ModelProvider[], StoreFailure, DatabaseServices> {
-  const rows = yield* keyRowsOf(userId, undefined);
-  const paid: ModelProvider[] = [];
-  for (const provider of MAC_PROVIDERS) {
-    const choice = yield* Effect.result(providerRuntimeChoice(userId, provider, rows));
-    if (Result.isSuccess(choice)) paid.push(provider);
-  }
-  return paid;
-});
-
-/**
  * The devices a task of the account's may run its agents on, as the menus
  * offer them: each device it registered, the latest beat first, with its
  * kind and last beat, so a device away now is offered but drawn away, and
- * the providers an agent on it runs that the account can pay for
- * (`paidMacProviders`). Only one
+ * the providers an agent on it runs (`macRunsProvider`), whatever the
+ * account saved in the app, since its agents run on its own logins. Only one
  * that beat within `THIS_MAC.FRESH` takes a task's Runs on or an agent
  * (`freshOffer`).
  * Note that every one is offered by name rather than one as This Mac,
@@ -376,12 +376,10 @@ export const macOffers = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
 ): Effect.fn.Return<readonly MacOffer[], StoreFailure, DatabaseServices> {
   const registered = yield* devicesSeenSince(userId, new Date(0));
-  if (registered.length === 0) return [];
-  const paid = yield* paidMacProviders(userId);
   return registered.map((device) => ({
     deviceId: device.id,
     name: device.name,
-    providers: MAC_PROVIDERS.filter((provider) => macRunsProvider(device, provider, paid)),
+    providers: MAC_PROVIDERS.filter((provider) => macRunsProvider(device, provider)),
     // Note that every device runs the host program, so each is offered as a host; the device row keeps no kind.
     kind: DEVICE_KIND.HOST,
     platform: device.platform,
@@ -418,10 +416,9 @@ const freshOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
  * that Mac is one the account is offered and there now (`freshOffer`) and lists the
  * provider the runtime runs; refused by name otherwise: a Mac that is
  * another account's or is not there as away, Codex on a Mac that runs none,
- * and a repository reached on the starter's own token (`githubAccess`) on a
- * host from before it works in one on its own GitHub sign-in
- * (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`), whose launch would ask for a token
- * the service never hands a device.
+ * and an agent in a repository on a host from before it works in every
+ * repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`),
+ * whose launch would ask for a token the service never hands a device.
  */
 export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -430,7 +427,7 @@ export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
     readonly deviceId?: string | undefined;
   },
   runtime: NativeRuntime,
-  githubAccess?: GitHubAccess | undefined,
+  inRepository: boolean,
 ): Effect.fn.Return<AgentMachineChoice, StoreFailure | LocalAgentRefused, DatabaseServices> {
   if (asked.machine !== AGENT_MACHINE.DEVICE) return IN_A_SANDBOX;
   const offer = yield* freshOffer(userId, asked.deviceId);
@@ -444,7 +441,7 @@ export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (!offer.providers.includes(RUNTIME_PROVIDER[runtime])) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.CODEX });
   }
-  if (githubAccess === GITHUB_ACCESS.TOKEN && !(yield* signsInOwnGithub(userId, offer.deviceId))) {
+  if (inRepository && !(yield* signsInOwnGithub(userId, offer.deviceId))) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN });
   }
   return { machine: AGENT_MACHINE.DEVICE, deviceId: offer.deviceId };
@@ -533,6 +530,21 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   }
   yield* recordAgentPayer(userId, agentId, chosen.payer, chosen.subscriptionId ?? null);
   return chosen;
+});
+
+/**
+ * Who pays for the next turn of the account's agent, chosen now and written
+ * on the agent: a local agent's machine's own login, which needs no choice
+ * (`AGENT_PAYER.MAC_SIGN_IN`); any other's as `turnPayerOf` chooses it.
+ */
+export const launchPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agent: Pick<Agent, "id" | "machine">,
+  provider: ModelProvider,
+): Effect.fn.Return<TurnPayer, StoreFailure, DatabaseServices> {
+  if (agent.machine !== AGENT_MACHINE.DEVICE) return yield* turnPayerOf(userId, agent.id, provider);
+  yield* recordAgentPayer(userId, agent.id, AGENT_PAYER.MAC_SIGN_IN, null);
+  return { payer: AGENT_PAYER.MAC_SIGN_IN, subscriptionId: undefined };
 });
 
 /** A plan or API key among `rows` named as Settings names it (`planNamesOf`, `apiKeyName`). */

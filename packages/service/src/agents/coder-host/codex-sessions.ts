@@ -13,22 +13,17 @@
  *   as the events route records it, for `thread/resume`.
  * - The launch's environment carries `CODEX_HOME` where its machine names
  *   one (`MachineLayout`'s `codexHome`): a sandbox's, on its persisted disk
- *   where the image made it, so a thread outlives a stop, and a Mac's
- *   default under the agent's home where its runner mirrors the thread.
+ *   where the image made it, so a thread outlives a stop; none on a device,
+ *   whose Codex keeps its threads at its own default.
  * - On the plan, the runner asks our token route for the token
  *   (`../native-events/runner-token-app.ts`), so the launch declares no
  *   credential of the plan's and no token travels through a launch's
- *   environment or a host's queue. In a sandbox it signs app-server in on
- *   host-supplied ChatGPT tokens, the token and the workspace it pays from,
- *   and asks again whenever app-server asks it for fresh ones after a 401,
- *   so a turn outlives the hour a token lives; the sign-in that renews the
- *   token stays here. On a host app-server takes its bearer from the
- *   runner's token command as it needs one: as its turn's requests go out,
- *   every few minutes, and after a 401, and sends it to Codex's ChatGPT
- *   backend, which the runner is told to send its requests to
- *   (`planBackendEnv`).
- * - Each launch chooses who pays for the agent's turns and records it on
- *   its row (`turnPayerOf`): the first of the account's ChatGPT
+ *   environment. It signs app-server in on host-supplied ChatGPT tokens,
+ *   the token and the workspace it pays from, and asks again whenever
+ *   app-server asks it for fresh ones after a 401, so a turn outlives the
+ *   hour a token lives; the sign-in that renews the token stays here.
+ * - Each launch of a cloud agent chooses who pays for its turns and records
+ *   it on its row (`launchPayerOf`): the first of the account's ChatGPT
  *   subscriptions with room, else its OpenAI API key, else the plan's
  *   refusal. The token is the chosen subscription's, the `chatgpt_oauth` row
  *   recorded as `agent.subscription_id`, which the token route reads too,
@@ -39,24 +34,25 @@
  *   leaves a fresh token to hand on. A sign-in the account does
  *   not hold, one OpenAI signed out, one the deployment cannot open, or
  *   OpenAI not answering fails the call with that refusal.
+ * - A local agent runs on its machine's own Codex login
+ *   (`AGENT_PAYER.MAC_SIGN_IN`): its launch declares no credential and asks
+ *   no plan, and the token route refuses its runner.
  * - A turn its starter's OpenAI API key pays for is launched with
  *   `OPENAI_API_KEY`, which the runner names as app-server's provider
  *   `env_key` in place of the token command, declared as a fixed credential:
- *   on a Mac the key opened, and in a sandbox a placeholder minted for the
- *   launch, the key swapped in for it at the firewall
- *   (`LAUNCH_SWAP.OPENAI_KEY`). It
+ *   a placeholder minted for the launch, the key swapped in for it at the
+ *   sandbox's firewall (`LAUNCH_SWAP.OPENAI_KEY`). It
  *   never asks the plan, and a key gone or unreadable refuses the launch.
  * - A `model` line with the agent's model and effort as they stand goes
  *   ahead of every message, as on Claude Code.
  * - The runner runs the Codex its machine names (`MachineLayout`'s
- *   `codexExecutable`): the image's in a sandbox, and on a Mac the one its
- *   host checked against the pin, `CODEX_HOME` at its default under the
- *   agent's own home there; a Mac that checked none runs no Codex agent.
+ *   `codexExecutable`): the image's in a sandbox, and on a device the one its
+ *   host checked against the pin; a device that checked none runs no Codex
+ *   agent.
  */
 
 import {
   CODEX_EFFORT,
-  CODEX_PLAN_BACKEND,
   type CodexConfig,
   type CodexEffort,
   INPUT_LINE,
@@ -67,15 +63,11 @@ import {
 import { type Agent, readAgentRouting } from "@repo/database/models/agent-store";
 import { PROVIDER_KEY_UNREADABLE, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { AGENT_PAYER } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { Duration, Effect, Option, type Redacted, Result } from "effect";
-import {
-  CHATGPT_ACCESS,
-  type ChatGptPlanIdentity,
-  refreshChatGptAccess,
-} from "../../accounts/chatgpt-credentials.js";
+import { CHATGPT_ACCESS, refreshChatGptAccess } from "../../accounts/chatgpt-credentials.js";
 import { ownApiKeyOf } from "../../accounts/own-api-key.js";
 import { HostedEnvironment } from "../../environment.js";
 import { SERVER_AGENT_HARNESS } from "../../events/server-events.js";
@@ -93,7 +85,7 @@ import {
   type PlanRefusal,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
-import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
+import { launchPayerOf, roomAfterLimit } from "./agent-runtime-choice.js";
 import { codexCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import { launchPermissionMode } from "./permission-mode.js";
@@ -133,23 +125,6 @@ type SwapTarget = Pick<PlaceholderSwap, "domain" | "path">;
 
 /** OpenAI's API as Codex reaches it from a sandbox: the one host it sends an API key to. */
 const OPENAI_API: SwapTarget = { domain: "api.openai.com" };
-
-/**
- * What tells a host's runner which backend the plan's launch sends its
- * requests to: Codex's ChatGPT backend, and the workspace it pays from,
- * where its ID token named one; a sandbox's runner, signed in on
- * host-supplied tokens, reads neither. Note that these sit in the launch's
- * environment, which its fingerprint digests, so a warm runner whose plan
- * was connected again under another workspace is relaunched.
- */
-function planBackendEnv(plan: ChatGptPlanIdentity): Readonly<Record<string, string>> {
-  return {
-    [RUNNER_ENV.CODEX_PLAN_BACKEND]: CODEX_PLAN_BACKEND.CHATGPT,
-    ...(plan.chatgptAccountId === undefined
-      ? undefined
-      : { [RUNNER_ENV.CHATGPT_ACCOUNT_ID]: plan.chatgptAccountId }),
-  };
-}
 
 /** The account's OpenAI API key as a launch declares it: sent to OpenAI's API, fixed for the launch. */
 function apiKeyCredential(key: Redacted.Redacted<string>): RunnerCredential {
@@ -196,12 +171,7 @@ function codexModelOf(agent: Agent): string | undefined {
   return model?.provider === MODEL_PROVIDER.OPENAI ? model.modelId : undefined;
 }
 
-/**
- * Where Codex keeps its threads: the home its machine names, as a sandbox
- * does on its persisted disk; else its default under the agent's own home,
- * as on a Mac (`@repo/host`'s `local-agent-box.ts`), which the launch leaves
- * alone.
- */
+/** Where Codex keeps its threads: the home its machine names, as a sandbox does on its persisted disk; else its own default, which the launch leaves alone. */
 function homeOf(layout: Pick<MachineLayout, "codexHome">): Readonly<Record<string, string>> {
   return layout.codexHome === undefined ? {} : { [CODEX_HOME_ENV]: layout.codexHome };
 }
@@ -282,19 +252,21 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
    * credential of the plan's is declared here.
    */
   const planEnv = (subscriptionId: string | undefined, layout: Pick<MachineLayout, "codexHome">) =>
-    Effect.map(
-      standingPlan(subscriptionId),
-      (plan): HarnessLaunch => ({ env: { ...homeOf(layout), ...planBackendEnv(plan) } }),
-    );
+    Effect.as(standingPlan(subscriptionId), { env: homeOf(layout) } satisfies HarnessLaunch);
 
   /**
-   * The credential a launch starts with, chosen here alone (`turnPayerOf`):
-   * the account's key, which the agent's machine hands over as it decides,
-   * or the chosen subscription's token, asked of our route over HTTPS.
+   * The credential a launch starts with, chosen here alone (`launchPayerOf`):
+   * none on a device, whose Codex runs on the machine's own login; else the
+   * account's key, which the agent's machine hands over as it decides, or
+   * the chosen subscription's token, asked of our route over HTTPS.
    */
   const launch = (agent: Agent, layout: MachineLayout) =>
     Effect.gen(function* () {
-      const turn = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.OPENAI);
+      const turn = yield* launchPayerOf(userId, agent, MODEL_PROVIDER.OPENAI);
+      if (turn.payer === AGENT_PAYER.MAC_SIGN_IN) {
+        const onMachineLogin: HarnessLaunch = { env: homeOf(layout) };
+        return onMachineLogin;
+      }
       return yield* turn.payer === AGENT_PAYER.API_KEY
         ? apiKeyEnv(turn.subscriptionId, layout)
         : planEnv(turn.subscriptionId, layout);
@@ -337,7 +309,9 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
         mcpUrl: options.mcpUrl,
         integrations: yield* options.integrations(agent),
         tokenUrl,
-        installedSkills: layout.installedSkills,
+        ...(layout.installedSkills === undefined
+          ? undefined
+          : { installedSkills: layout.installedSkills }),
         ...mode,
       };
       return written;
@@ -352,9 +326,10 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
       ...(model === undefined ? undefined : { model, ...speedKeysOf(agent) }),
       ...(effort === undefined ? undefined : { effort }),
     };
-    // Note that an agent on its API key has no plan to ask, and its runner holds what it launched with; a plan that refuses
-    // stands aside where another payer has room (`roomAfterLimit`), as the turn's relaunch on that payer chooses it.
+    // Note that an agent on its API key or its machine's own login has no plan to ask, and its runner holds what it launched with;
+    // a plan that refuses stands aside where another payer has room (`roomAfterLimit`), as the turn's relaunch on that payer chooses it.
     const asked = Effect.gen(function* () {
+      if (agent.machine === AGENT_MACHINE.DEVICE) return;
       const recorded = yield* recordedPayer(agent);
       if (recorded.payer === AGENT_PAYER.API_KEY) return;
       yield* standingPlan(recorded.subscriptionId).pipe(

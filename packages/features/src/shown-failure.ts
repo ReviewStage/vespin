@@ -58,6 +58,7 @@ export const FAILURE_SURFACE = {
   AGENT_APPROVAL: "agent.approval",
   AGENT_ARCHIVE: "agent.archive",
   AGENT_CHANGES_READ: "agent_changes.read",
+  AGENT_TURN_CHANGES_READ: "agent_turn_changes.read",
   AGENT_CHANGES_REFRESH: "agent_changes.refresh",
   AGENT_CHAPTERS_GENERATE: "agent_chapters.generate",
   AGENT_CHAPTERS_READ: "agent_chapters.read",

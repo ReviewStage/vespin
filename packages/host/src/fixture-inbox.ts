@@ -51,6 +51,7 @@ import {
   INBOX_ASK_STATUS,
   INBOX_FIELD,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
   INBOX_WIRE_VERSION,
@@ -60,7 +61,7 @@ import {
 import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { MODEL_PROVIDER, type ModelsAnswer } from "@repo/features/models-wire";
+import { MODEL_PROVIDER, type ModelChoice, type ModelsAnswer } from "@repo/features/models-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
@@ -230,6 +231,68 @@ const RECORDED = {
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
 } as const;
 
+/** The turn-end thread's option files, by the attachment each is read by: a still of the card, one of the dock, and a recording of it. */
+const TURN_END = {
+  ITEM: fixtureId(6),
+  CARD: "b4a5d758-90c1-4dea-85a2-3c4d5e6f7081",
+  DOCK: "d6c7f97a-b2e3-4f0c-a7c4-5e6f708192a3",
+  RECORDING: "e7d80a8b-c3f4-401d-b8d5-6f708192a3b4",
+} as const;
+
+/** One of the turn-end thread's option files as its option names it. */
+function turnEndMedia(attachmentId: string, caption: string, recording = false) {
+  const mediaType = recording ? CONVERSATION_MEDIA_TYPE.WEBM : AGENT_ATTACHMENT_TYPE.PNG;
+  return { type: INBOX_OPTION_MEDIA.FILE, attachmentId, mediaType, caption } as const;
+}
+
+/** The turn-end thread's options: a card with its still and a page, the dock with a still, a recording, and a link, and one with none. */
+const TURN_END_OPTIONS = [
+  {
+    label: "A done card",
+    detail: "Archive, plus the follow-ups the agent mentioned.",
+    media: [
+      turnEndMedia(TURN_END.CARD, "On a desktop"),
+      {
+        type: INBOX_OPTION_MEDIA.PAGE,
+        pageId: FIXTURE_PAGE.id,
+        version: FIXTURE_PAGE.version,
+        title: FIXTURE_PAGE.title,
+        place: { taskId: TASK.INVITES },
+      },
+    ],
+  },
+  {
+    label: "Two states of the dock",
+    detail: "Needs you, then Done.",
+    media: [
+      turnEndMedia(TURN_END.DOCK, "The dock at rest"),
+      turnEndMedia(TURN_END.RECORDING, "Ticking two follow-ups", true),
+      {
+        type: INBOX_OPTION_MEDIA.LINK,
+        url: "https://preview.example.com/dock",
+        label: "The dock on the preview",
+      },
+    ],
+  },
+  { label: "Leave it as it is", detail: "The transcript ends on Worked for." },
+] as const;
+
+/** A turn-end option's file as the service answers it: each still the fixture's picture, and the recording its video, as an MP4 to a reader that plays one. */
+function turnEndFile(
+  attachmentId: string,
+  playable: string | undefined,
+): PortActResult<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT> {
+  if (attachmentId === TURN_END.RECORDING) {
+    return playable === MP4_TYPE
+      ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+      : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+  }
+  const stills: readonly string[] = [TURN_END.CARD, TURN_END.DOCK];
+  return stills.includes(attachmentId)
+    ? { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG }
+    : { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+}
+
 /**
  * The thread whose answer the fixture refuses, as a send no answer came back
  * for: the migration's approval, so a flow sees an answer drawn at once and
@@ -288,6 +351,36 @@ const INVITES_ITEMS: readonly InboxItem[] = [
         ...OPEN,
       },
     ),
+  ]),
+  item(6, AGENT.INVITES, "turn-end", "How should a finished turn end?", [
+    {
+      ...agentSaid(
+        116,
+        90 * MINUTE,
+        "Three directions for what a turn shows once the agent is done. Each card holds its shots; press one to look closer.",
+        {
+          type: INBOX_ASK.DECIDE,
+          options: TURN_END_OPTIONS,
+          multiple: true,
+          recommended: "A done card",
+          ...OPEN,
+        },
+      ),
+      // Note that the options' files are the message's own, as the service keeps them.
+      files: TURN_END_OPTIONS.flatMap((option) =>
+        ("media" in option ? option.media : []).flatMap((media) =>
+          media.type === INBOX_OPTION_MEDIA.FILE
+            ? [
+                {
+                  attachmentId: media.attachmentId,
+                  name: media.caption,
+                  mediaType: media.mediaType,
+                },
+              ]
+            : [],
+        ),
+      ),
+    },
   ]),
   item(3, AGENT.INVITES, "invite-limits", "Invite limits", [
     agentSaid(
@@ -1089,19 +1182,19 @@ const MODELS: ModelsAnswer = {
   models: [
     {
       id: MODEL,
-      name: "Anthropic Claude Opus 5.5",
+      name: "Claude Opus 5.5",
       provider: MODEL_PROVIDER.ANTHROPIC,
       efforts: ["low", "medium", "high", "xhigh", "max"],
     },
     {
       id: "anthropic/claude-sonnet-5.5",
-      name: "Anthropic Claude Sonnet 5.5",
+      name: "Claude Sonnet 5.5",
       provider: MODEL_PROVIDER.ANTHROPIC,
       efforts: ["low", "medium", "high"],
     },
     {
       id: "openai/gpt-6.1-sol",
-      name: "OpenAI GPT-6.1 Sol",
+      name: "GPT-6.1 Sol",
       provider: MODEL_PROVIDER.OPENAI,
       efforts: ["low", "medium", "high", "xhigh"],
     },
@@ -1195,6 +1288,37 @@ export function inboxRemindersAppState(
   };
 }
 
+/** The models and efforts a fixture run chose for its agents, by agent. */
+export type AgentChoices = ReadonlyMap<string, ModelChoice>;
+
+/** Whether the agent stands on the choice the run made for it, or the run made none. */
+function onChoice(
+  agent: NonNullable<TasksView["taskAgents"]>[number],
+  choices: AgentChoices,
+): boolean {
+  const choice = choices.get(agent.id);
+  return choice === undefined || (choice.model === agent.model && choice.effort === agent.effort);
+}
+
+/**
+ * The list with each agent the run chose a model for on that choice, as the
+ * host draws a change the moment it is asked; the list handed in where every
+ * agent already stands on its choice, so laying it again changes nothing.
+ */
+export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
+  const agents = list.taskAgents ?? [];
+  if (agents.every((agent) => onChoice(agent, choices))) return list;
+  return {
+    ...list,
+    taskAgents: agents.map((agent) => {
+      const choice = choices.get(agent.id);
+      return choice === undefined
+        ? agent
+        : { ...agent, model: choice.model, effort: choice.effort };
+    }),
+  };
+}
+
 /* ----- The act door ----- */
 
 /** One staged item by its id, in whichever task's inbox holds it. */
@@ -1233,6 +1357,7 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
+    if (itemId === TURN_END.ITEM) return turnEndFile(attachmentId, playable);
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
@@ -1282,6 +1407,12 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     const held = stagedAgent(agentId);
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
+  },
+  // Note that a change of model is taken as the service takes one, answered with the agent on it; the iOS run lays it over the list itself (`chosenTasksView`).
+  [ACT_KIND.AGENTS_CHOOSE]: ({ agentId, model, effort }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, model, effort } };
   },
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({

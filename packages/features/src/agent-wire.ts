@@ -16,6 +16,7 @@ import {
   agentPermissionModeSchema,
   permissionModeAppliesSchema,
 } from "./agent-approval-wire.js";
+import { agentBootSchema } from "./agent-boot.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
@@ -193,7 +194,7 @@ export const AGENT_PAYER = {
   CHATGPT_SUBSCRIPTION: "chatgpt_plan",
   API_KEY: "api_key",
   APP: "app",
-  /** A local agent's own Mac, by its harness's login there, as an agent started before every host launched on the account's saved credential records it; such an agent now launches on that saved credential. */
+  /** A local agent's own machine, by its harness's login there, which every local agent runs on and no credential of the account's pays for. */
   MAC_SIGN_IN: "mac_sign_in",
 } as const;
 
@@ -287,7 +288,7 @@ export const LOCAL_AGENT_REFUSAL = {
   SETUP_FAILED: "setup-failed",
   /** The device is another member's, and only its owner starts agents on it; the refusal carries the device and its owner (`refusedDeviceSchema`) where the service named them. */
   NOT_OWNER: "not-owner",
-  /** The repository is reached on the starter's own GitHub token, and the device's host is a build from before it runs such an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
+  /** The agent works in a repository, and the device's host is a build from before it runs every such agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   GITHUB_SIGN_IN: "github-sign-in",
   /** The agent's mode asks before it acts, and the device's host is a build from before it runs an agent in a mode (`DEVICE_CAPABILITY.PERMISSION_MODES`), which would run it with full access. */
   PERMISSION_MODES: "permission-modes",
@@ -471,6 +472,8 @@ export const AGENT_FAILURE = {
   ABANDONED: "abandoned",
   /** The account's own API key for the model's provider was refused, out of quota, or can no longer be read; it is replaced in Settings. */
   PROVIDER_KEY: "provider_key",
+  /** A local agent's machine is not signed in to the agent's harness, Claude Code or Codex, or its sign-in was refused; it is signed in on that machine. */
+  MACHINE_SIGN_IN: "machine_sign_in",
   /** The agent's session never started, so no turn ran; a new agent is the way on. */
   NOT_STARTED: "not_started",
   /** The agent ran a fast version on the account's own key while we ran Fast on our own key alone; no agent fails this way now, and one that did still reads as this. */
@@ -1592,6 +1595,8 @@ export type ChangedFileStatus = (typeof CHANGED_FILE_STATUS)[keyof typeof CHANGE
 export const PATCH_OMITTED = {
   BINARY: "binary",
   TOO_LARGE: "too-large",
+  /** A secret file's (`isSecretFile`), whose lines no read carries, as a turn's diff reads its checkout (`checkout-diff.ts`). */
+  SECRET: "secret",
 } as const;
 
 export const CHANGES_BOUNDS = {
@@ -2714,6 +2719,14 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
   cursor: agentCursorSchema,
   /** The messages queued behind the agent's turn, and whether the queue stands paused, on its own transcript; absent while none is queued, on a worker's page, and from a service older than it. */
   queue: EffectSchema.optionalKey(agentQueueSchema),
+  /**
+   * The agent's first launch while it stands (`agent-boot.ts`): its machine
+   * booting, its first message going, or the boot
+   * failed, on its own transcript until its first turn settles; absent on a
+   * worker's page, for an agent whose first launch is over or never booted
+   * this way, and from a service older than it.
+   */
+  boot: EffectSchema.optionalKey(agentBootSchema),
   /**
    * The turn the page before the oldest message here is read before, on a
    * task conversation's page read from its newest turns or before one;

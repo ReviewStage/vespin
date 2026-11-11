@@ -1,5 +1,5 @@
 /**
- * agent-refusal-words.ts -- what a refused Start, message, or Stop says, by why the service refused it, worded once for every client that sends one: the panel's agent tabs and New task, and the iOS app's composer, New agent, and New task.
+ * agent-refusal-words.ts -- what a refused Start, message, Stop, or change of model says, by why the service refused it, worded once for every client that sends one: the panel's agent tabs and New task, and the iOS app's composer, New agent, and New task.
  *
  * The words are plain text; what mends a refusal (a press into Settings, a
  * task moved to the workspace whose GitHub reaches it) is each client's own,
@@ -134,7 +134,7 @@ export function localAgentRefusalWords(
     case LOCAL_AGENT_REFUSAL.NOT_OWNER:
       return `This task runs on ${device?.name ?? "another member's device"}. Only ${device?.owner ?? "its owner"} can start agents on it.`;
     case LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN:
-      return `${name} runs an older vespin-host, which can't work in a repository reached on your own GitHub token. Update its host, ${RUN_IN_CLOUD}.`;
+      return `${name} runs an older vespin-host, which can't work in a repository on its own GitHub sign-in. Update its host, ${RUN_IN_CLOUD}.`;
     // Note that the way out is the machine's own update or Full access, since the cloud is not where this agent's mode was the question.
     case LOCAL_AGENT_REFUSAL.PERMISSION_MODES:
       return `${name} runs an older version of ${PRODUCT_NAME}, which would run this agent without asking. Update ${PRODUCT_NAME} on this machine to use Ask for approval, or switch this agent to Full access.`;
@@ -284,6 +284,44 @@ export function startFailureWords(failure: AgentCallFailure): string {
       return localAgentRefusalWords(undefined, undefined);
     case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
       return extraRepositoryRefusalWords(undefined, undefined);
+  }
+}
+
+/** Said under an agent's box when the model or effort its chip chose could not be changed. */
+const MODEL_CHANGE_FAILED = "The model could not be changed. Try again.";
+
+/** What a change of an agent's model that did not take says under its box. */
+export function chooseFailureNote(failure: AgentCallFailure): string {
+  switch (failure) {
+    case AGENT_CALL_FAILURE.NOT_FOUND:
+      return "This agent no longer exists.";
+    case AGENT_CALL_FAILURE.INVALID_CHOICE:
+      return "That model isn't offered any more. Choose another.";
+    case AGENT_CALL_FAILURE.UNANSWERED:
+    case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
+    case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
+    case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
+    case AGENT_CALL_FAILURE.NO_REPOSITORY:
+    case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
+    case AGENT_CALL_FAILURE.GITHUB_UNANSWERED:
+    case AGENT_CALL_FAILURE.MESSAGE_TOO_LONG:
+    case AGENT_CALL_FAILURE.AGENT_NOT_READY:
+    case AGENT_CALL_FAILURE.AGENT_RETIRED:
+    case AGENT_CALL_FAILURE.DEVICE_REMOVED:
+    case AGENT_CALL_FAILURE.NOT_PERMITTED:
+    case AGENT_CALL_FAILURE.NATIVE_AGENT_NOT_HERE:
+    case AGENT_CALL_FAILURE.AGENT_PLAN_SIGNED_OUT:
+    case AGENT_CALL_FAILURE.AGENT_PLAN_UNREACHABLE:
+    case AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED:
+    case AGENT_CALL_FAILURE.AGENT_PLAN_INELIGIBLE:
+    case AGENT_CALL_FAILURE.AGENT_CREDENTIAL_MISSING:
+    case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
+    case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
+    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
+    case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
+    // Note that a model change asks no files back, so never meets a rewind's refusal.
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
+      return MODEL_CHANGE_FAILED;
   }
 }
 

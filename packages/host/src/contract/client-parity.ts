@@ -10,7 +10,8 @@
  * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, and read
  * mark, and a task's description and pages followed; an agent's page: a message sent or
- * queued, its queue steered, and its turn stopped; New agent on a task and
+ * queued, its queue steered, its turn stopped, and its model and effort
+ * changed; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
  * and the phone's own push registration,
  * which no other client has a place for. Nothing else says which share, so
@@ -203,7 +204,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PART]: panel(IOS.TRANSCRIPT_FOLLOW_UP),
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_CHOOSE]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_CHOOSE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_RENAME]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_SERVERS]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_PERMISSION_MODE]: panel(IOS.AGENTS),
@@ -231,6 +232,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHANGES]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.AGENTS_TURN_CHANGES]: panel(IOS.DIFF),
   [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_GITHUB_IMAGE]: panel(IOS.DIFF),

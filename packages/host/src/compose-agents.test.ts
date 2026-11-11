@@ -60,6 +60,7 @@ import {
   subject,
   TASK_ID,
   type TranscriptLive,
+  TURN_CHANGES,
   WAITING,
   WORKSPACE_ID,
 } from "./testing/agents-subject.js";
@@ -176,6 +177,10 @@ it.effect("each method asks the service once and answers what it said, whole", (
     });
     assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID }), CHANGES);
     assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID, number: 11 }), CHANGES);
+    assert.deepEqual(
+      yield* acts.AGENTS_TURN_CHANGES({ agentId: AGENT_ID, messageId: "line-1" }),
+      TURN_CHANGES,
+    );
     assert.deepEqual(
       yield* acts.CHAPTERS_GENERATE({
         agentId: AGENT_ID,
@@ -333,6 +338,7 @@ it.effect("each method asks the service once and answers what it said, whole", (
       `page:${AGENT_ID}`,
       `changes:${AGENT_ID}`,
       `changes:${AGENT_ID}#11`,
+      `turn-changes:${AGENT_ID}:line-1`,
       `chapters-generate:${AGENT_ID}#11`,
       `github-image:${AGENT_ID}:https://camo.githubusercontent.com/abc`,
       `pull-request-action:${AGENT_ID}#11:${PULL_REQUEST_ACTION.READY_FOR_REVIEW}`,

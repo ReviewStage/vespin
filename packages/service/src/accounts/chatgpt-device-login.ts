@@ -122,7 +122,6 @@ function intervalOf(interval: string | number | undefined): number {
   return Math.max(seconds, POLL_INTERVAL_SECONDS.MIN);
 }
 
-/** Whether a status is a success. */
 const succeeded = (status: number) =>
   status >= STATUS_RANGE.OK_MIN && status <= STATUS_RANGE.OK_MAX;
 

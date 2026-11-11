@@ -149,9 +149,12 @@ function answerOf(row: typeof AnswerRowSchema.Type): unknown {
   if (row.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return row;
   const kept = new TextDecoder().decode(row.bytes ?? new Uint8Array());
   const line = kept.indexOf("\n");
+  const head = line === -1 ? kept : kept.slice(0, line);
+  const exit = head === "" ? Number.NaN : Number(head);
   return {
     kind: row.kind,
-    exit: Number(line === -1 ? kept : kept.slice(0, line)),
+    // A row with no exit line, as one answered no bytes, reads as a failed diff, never as exit 0.
+    exit: Number.isInteger(exit) ? exit : 1,
     diff: line === -1 ? "" : kept.slice(line + 1),
   };
 }

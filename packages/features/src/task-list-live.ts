@@ -1,6 +1,7 @@
 import { literalsReadingUnknown } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
+import { BOOT_PHASE } from "./agent-boot.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
@@ -218,6 +219,10 @@ const agentLiveRowSchema = EffectSchema.Struct({
   sandboxState: EffectSchema.optionalKey(EffectSchema.NullOr(agentSandboxSchema.fields.state)),
   sandboxStateAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   sandboxRunsUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
+  /** Where the agent's first launch stands while its boot record does (`agent-boot.ts`), which its status reads before its first turn; null for every other agent, and absent from a statement before it was carried. */
+  bootPhase: EffectSchema.optionalKey(
+    EffectSchema.NullOr(EffectSchema.Literals(Object.values(BOOT_PHASE))),
+  ),
 });
 
 /**
@@ -314,7 +319,12 @@ function agentTurnOf(row: AgentLiveRow): AgentTurn | undefined {
 
 /** Where the agent stands at `now`, as the status rule reads it: its Start, and whether it was started blank. */
 function standingOf(row: AgentLiveRow, now: number) {
-  return { createdAt: row.createdAt, now, blank: row.brief === AGENT_BRIEF.BLANK };
+  return {
+    createdAt: row.createdAt,
+    now,
+    blank: row.brief === AGENT_BRIEF.BLANK,
+    boot: row.bootPhase,
+  };
 }
 
 function statusOf(row: AgentLiveRow, now: number): AgentStatus {

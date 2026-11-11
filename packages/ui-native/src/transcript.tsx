@@ -122,6 +122,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute", alignSelf: "center" },
   jumpFace: {
@@ -556,19 +557,30 @@ type AgentHeadProps = {
   /** The model the agent runs on, as the panel's chip names it. */
   readonly model: string | undefined;
   readonly status: AgentStatus | undefined;
+  /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
+  readonly onModel?: (() => void) | undefined;
 };
+
+/** What a press on the head's model says it does, to VoiceOver. */
+const CHANGE_MODEL = "Change model";
 
 /**
  * The line over the transcript, the agent's title standing in the system's
  * bar over it: where the agent stands and the model it runs on, as the
  * panel's tab and its model chip say them; nothing before either is known.
+ * Where the model may be changed, its name is a press with a chevron after
+ * it, as the panel's chip draws one, opening the picker.
  */
-export function AgentHead({ model, status }: AgentHeadProps) {
+export function AgentHead({ model, status, onModel }: AgentHeadProps) {
   const colors = useColors();
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
-  const said = [words, model].filter((each) => each !== undefined && each !== "").join(" · ");
-  if (said === "") return null;
+  const pressed = onModel !== undefined && model !== undefined && model !== "";
+  const said = [words, pressed ? undefined : model]
+    .filter((each) => each !== undefined && each !== "")
+    .join(" · ");
+  if (said === "" && !pressed) return null;
+  const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
   return (
     <View style={[styles.head, styles.headLine]}>
       {state === GLYPH_STATE.WORKING ? (
@@ -576,7 +588,28 @@ export function AgentHead({ model, status }: AgentHeadProps) {
       ) : state === GLYPH_STATE.FAILED ? (
         <SymbolView name="xmark.circle.fill" size={MARK_SIZE.GLYPH} tintColor={colors.DANGER} />
       ) : null}
-      <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>{said}</Text>
+      {said === "" ? null : (
+        <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
+      )}
+      {pressed ? (
+        <Pressable
+          onPress={onModel}
+          accessibilityRole="button"
+          accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
+          hitSlop={SPACE.TIGHT}
+          testID="agent-model"
+          style={styles.headModel}
+        >
+          <Text style={ink}>{model}</Text>
+          <SymbolView
+            name="chevron.down"
+            size={MARK_SIZE.GLYPH - 4}
+            weight="semibold"
+            tintColor={colors.TEXT_MUTED}
+            accessibilityElementsHidden
+          />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

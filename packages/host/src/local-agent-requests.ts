@@ -36,8 +36,8 @@ import { agentOnBox } from "./local-agent-box.js";
 const decodeReadArgs = Schema.decodeUnknownOption(deviceAgentReadArgsSchema);
 const decodeDiffArgs = Schema.decodeUnknownOption(deviceAgentDiffArgsSchema);
 
-/** The most a diff runs before it is given up on and answered as failed. */
-const DIFF_DEADLINE = Duration.minutes(2);
+/** The most a diff runs before it is given up on and answered as failed: as long as the service waits on it (`DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS`). */
+const DIFF_DEADLINE = Duration.millis(DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS);
 /** How long a diff past its deadline is given to end before it is killed. */
 const DIFF_KILL_GRACE = Duration.seconds(3);
 

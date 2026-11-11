@@ -154,6 +154,12 @@ export const CHANGES = {
   },
 };
 
+/** The files one of the agent's turns changed, as the service answers them: the pull request's first file, as the turn's. */
+export const TURN_CHANGES = {
+  files: CHANGES.pullRequest === null ? [] : CHANGES.pullRequest.files.slice(0, 1),
+  truncated: false,
+} as const;
+
 /** That pull request itself, its checks, and its conversation, as its Pull request tab's overview reads them. */
 /** What the reviewer and label pickers offer, as the service answers it. */
 const REVIEW_OPTIONS = {
@@ -618,6 +624,11 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`changes:${agentId}${number === undefined ? "" : `#${number}`}`);
         return CHANGES;
+      }),
+    turnChanges: (agentId, messageId) =>
+      Effect.sync(() => {
+        asked.push(`turn-changes:${agentId}:${messageId}`);
+        return TURN_CHANGES;
       }),
     generateChapters: (agentId, number) =>
       Effect.sync(() => {
