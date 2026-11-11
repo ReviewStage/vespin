@@ -72,31 +72,41 @@ const AGENT_EDIT_DESCRIPTION_TOOL = EDIT_DESCRIPTION_TOOL.name;
  * another started on its own task leaves it to the starter.
  */
 
+/**
+ * What an agent handed a prompt or started blank is told of a request that
+ * names a goal but not what to make: ask in a thread and make nothing until
+ * the developer answers, rather than guessing a spec and building it. One no
+ * one is waiting on, an automation's or another agent's, goes on and names
+ * its assumption, since no answer would come.
+ */
+function askFirstWords(request: string, kind: string): string {
+  return `Where ${request} names a goal but not what to make, such as "I want to make a launch video together", and nothing else you were handed or can read says it, ask the developer in a thread what they have in mind and end your turn, making nothing until they answer: no code, no write-up, and no page. ${kind} that says what to build, however short, is enough to start on. Where it is unclear only in a smaller way, or no one is there to answer, as in a turn an automation opened or one another agent started, go on under the assumption you name in your final message rather than guessing at a larger job.`;
+}
+
 /** The words the instructions say of what the agent was handed, a description, a prompt, or nothing, for one started blank, whose asks come in the conversation, where they differ. */
 const BRIEF_WORDS = {
   [AGENT_BRIEF.DESCRIPTION]: {
     job: "implement the task's description given as the first message of this conversation",
-    brief: "description",
     reread:
       "Reread the code the description names before you change it. The description was written against the repository as it stood when it was written; the code may have moved since. Where the code no longer fits the description, say so plainly in your final message, decide whether what the description asks still makes sense, and do not publish work that implements a description the code has outgrown.",
+    unclear:
+      "Where the description is unclear, say so plainly in your final message rather than guessing at a larger job.",
     whole: "implements the description whole",
     none: "the description could not be implemented",
     describe: "say in its description what the task's description asked",
   },
   [AGENT_BRIEF.PROMPT]: {
     job: "carry out the prompt the developer gave as the first message of this conversation",
-    brief: "prompt",
-    reread:
-      "Read the code the prompt touches before you change it. Where the prompt is unclear or the code does not fit what it asks, say so plainly in your final message rather than guessing at a larger change.",
+    reread: `Read the code the prompt touches before you change it, and say plainly in your final message where it does not fit what the prompt asks. ${askFirstWords("the prompt", "A prompt")}`,
+    unclear: askFirstWords("the prompt", "A prompt"),
     whole: "does what the prompt asks, whole",
     none: "the prompt could not be carried out",
     describe: "say in its description what the prompt asked",
   },
   [AGENT_BRIEF.BLANK]: {
     job: "do what the developer asks of you in this conversation",
-    brief: "request",
-    reread:
-      "Read the code what the developer asks touches before you change it. Where what they ask is unclear or the code does not fit it, say so plainly rather than guessing at a larger change.",
+    reread: `Read the code what the developer asks touches before you change it, and say plainly where it does not fit what they ask. ${askFirstWords("what the developer asks", "A request")}`,
+    unclear: askFirstWords("what the developer asks", "A request"),
     whole: "does what the developer asked, whole",
     none: "what the developer asked could not be done",
     describe: "say in its description what the developer asked",
@@ -105,8 +115,9 @@ const BRIEF_WORDS = {
   AgentBrief,
   {
     job: string;
-    brief: string;
     reread: string;
+    /** What the agent does where what it was handed is unclear, said alike with a repository or without one. */
+    unclear: string;
     whole: string;
     none: string;
     describe: string;
@@ -784,7 +795,7 @@ ${sandboxSection(tools, machine, standing)}
 
 ${tools.browser}## How to work
 
-Where the ${words.brief} is unclear, say so plainly in your final message rather than guessing at a larger job. Where what you were asked for is a plan, a proposal, a design, or research, ${writeUpPlace(brief, planTask !== null)}.
+${words.unclear} Where what you were asked for is a plan, a proposal, a design, or research, ${writeUpPlace(brief, planTask !== null)}.
 
 `,
     search: `${tools.searchWeb} when a fact lies outside what you were handed, such as a library's documentation. A query leaves for the public web, so never put private names or words into one.
