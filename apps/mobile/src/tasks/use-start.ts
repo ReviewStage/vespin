@@ -27,6 +27,7 @@ import {
   type MacOffer,
   MODEL_SPEED,
   type ModelChoice,
+  type ModelsAnswer,
   modelSpeedOf,
 } from "@repo/features/models-wire";
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
@@ -93,6 +94,32 @@ export interface ModelPick {
   readonly devices: readonly MacOffer[];
 }
 
+/** The models a picker offers, each once at standard speed, its fast versions folded under it as the panel's menu folds them, named as the panel names them (`modelLabel`). */
+export function modelOptions(catalog: readonly CatalogModel[]): readonly PickOption[] {
+  return catalog
+    .filter((model) => modelSpeedOf(model.id) === MODEL_SPEED.STANDARD)
+    .map((model) => ({ id: model.id, label: modelLabel(model.id, catalog) }));
+}
+
+/** The efforts a picker offers for the model, as the catalog lists them; none before a model is known. */
+export function effortOptions(
+  catalog: readonly CatalogModel[],
+  model: string | undefined,
+): readonly PickOption[] {
+  return (model === undefined ? [] : effortsOf(catalog, model)).map((effort) => ({
+    id: effort,
+    label: effortLabel(effort),
+  }));
+}
+
+/** The models the account may start an agent on, followed while the screen that reads them stands, and the read itself: none before it lands. */
+export function useModelCatalog(): ModelsAnswer | undefined {
+  const acts = useHostActs();
+  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  useLiveFollow(signedInAccountId(account), () => acts[ACT_KIND.AGENTS_MODELS_FOLLOW]());
+  return useQuery({ ...appStateQuery, select: selectModels }).data?.rows;
+}
+
 /**
  * The models the account may start an agent on, followed while the sheet
  * stands, and the model and effort picked among them: the account's default
@@ -100,32 +127,19 @@ export interface ModelPick {
  * menu keeps (`effortFor`).
  */
 export function useModelPick(): ModelPick {
-  const acts = useHostActs();
-  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
-  useLiveFollow(signedInAccountId(account), () => acts[ACT_KIND.AGENTS_MODELS_FOLLOW]());
-  const { data: read } = useQuery({ ...appStateQuery, select: selectModels });
+  const read = useModelCatalog();
   const { data: fallback } = useQuery({ ...appStateQuery, select: selectAgentDefault });
   const { data: ownHosts = false } = useQuery({
     ...appStateQuery,
     select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST),
   });
   const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
-  const catalog = read?.rows?.models ?? NO_MODELS;
+  const catalog = read?.models ?? NO_MODELS;
   const shown = picked ?? fallback;
-  const models = useMemo(
-    () =>
-      catalog
-        .filter((model) => modelSpeedOf(model.id) === MODEL_SPEED.STANDARD)
-        .map((model) => ({ id: model.id, label: modelLabel(model.id, catalog) })),
-    [catalog],
-  );
-  const efforts = (shown === undefined ? [] : effortsOf(catalog, shown.model)).map((effort) => ({
-    id: effort,
-    label: effortLabel(effort),
-  }));
+  const models = useMemo(() => modelOptions(catalog), [catalog]);
   return {
     models,
-    efforts,
+    efforts: effortOptions(catalog, shown?.model),
     shown,
     picked,
     pickModel: (model) => {
@@ -137,7 +151,7 @@ export function useModelPick(): ModelPick {
     },
     // Note that a device still setting itself up takes no agent, so it is not offered.
     devices: ownHosts
-      ? (read?.rows?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined)
+      ? (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined)
       : NO_DEVICES,
   };
 }

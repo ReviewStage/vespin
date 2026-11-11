@@ -23,6 +23,8 @@ import type {
   PortActResult,
 } from "@repo/host/contract";
 import {
+  type AgentChoices,
+  chosenTasksView,
   type InboxReminders,
   inboxActAnswer,
   inboxAppState,
@@ -42,10 +44,12 @@ const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
 /** Each task list as staged, so a list staged already is never staged twice, which would list its tasks twice. */
 const stagedLists = new WeakSet<AppStateSnapshot["tasks"]>();
 
-/** The fixture's tasks laid over the list held, or the list held where it is staged already. */
-function stagedTasks(held: AppStateSnapshot): AppStateSnapshot["tasks"] {
-  if (stagedLists.has(held.tasks)) return held.tasks;
-  const staged = inboxTasksView(held.run.profile, held.tasks);
+/** The fixture's tasks laid over the list held, or the list held where it is staged already, its agents on the choices the run made; the list held where nothing moves. */
+function stagedTasks(held: AppStateSnapshot, choices: AgentChoices): AppStateSnapshot["tasks"] {
+  const listed = stagedLists.has(held.tasks)
+    ? held.tasks
+    : inboxTasksView(held.run.profile, held.tasks);
+  const staged = chosenTasksView(listed, choices);
   stagedLists.add(staged);
   return staged;
 }
@@ -64,6 +68,12 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
+
+/** The models and efforts each run chose for the fixture's agents, by the store the run stages, each map replaced whole as one is chosen. */
+const CHOICES = new WeakMap<object, AgentChoices>();
+
+/** No model chosen yet. */
+const NO_CHOICES: AgentChoices = new Map();
 
 /** What the store is handed: whole slices of the document. */
 type StorePatch = Parameters<AppStateStore["update"]>[0];
@@ -107,7 +117,7 @@ export function stageFixture(
   const reminded = inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS);
   const staged = {
     ...reminded,
-    tasks: stagedTasks(held),
+    tasks: stagedTasks(held, CHOICES.get(state) ?? NO_CHOICES),
     network: stagedNetwork(held, updateNeeded),
   };
   state.update(stagedPatch(held, staged));
@@ -123,6 +133,19 @@ function keepReminder(
   // SAFETY: the payload is the kind's, which the guard above names.
   const { itemId, until } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_REMIND>;
   REMINDERS.set(state, new Map(REMINDERS.get(state) ?? NO_REMINDERS).set(itemId, until));
+  stageFixture(state);
+}
+
+/** Keeps a change of an agent's model the fixture took, and lays it over the document at once, as the host draws one; nothing for any other act. */
+function keepChoice(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.AGENTS_CHOOSE) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { agentId, model, effort } = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHOOSE>;
+  CHOICES.set(state, new Map(CHOICES.get(state) ?? NO_CHOICES).set(agentId, { model, effort }));
   stageFixture(state);
 }
 
@@ -172,7 +195,8 @@ function olderRead(
  * fixture's pull requests moves it on the document of `state`, as GitHub
  * would, so a screen draws it merged or out of the queue, and a reminder
  * set or cleared moves its item there, as the host draws one, so the Inbox
- * puts it away under Reminders.
+ * puts it away under Reminders, and a change of an agent's model moves the
+ * agent onto it there, as the host draws one.
  */
 export function fixtureActs(
   acts: ActPortClient,
@@ -199,6 +223,8 @@ export function fixtureActs(
         keepMove(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
         // SAFETY: as above.
         keepReminder(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
+        // SAFETY: as above.
+        keepChoice(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
         return Promise.resolve(staged.answer);
       };
     },
