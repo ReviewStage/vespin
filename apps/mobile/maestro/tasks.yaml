@@ -231,8 +231,8 @@ onFlowComplete:
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
-# Back on the list, a landscape window stands it as a split view: two
-# columns, or on an iPad three, its groups beside the group's tasks.
+# Back on the list, a landscape window stands it as a split view: on an iPad
+# the app sidebar, the list, and the task side by side.
 - tapOn: "Tasks"
 - setOrientation: LANDSCAPE_LEFT
 - waitForAnimationToEnd

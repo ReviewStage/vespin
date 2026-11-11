@@ -38,8 +38,8 @@ export function useSettingsAccount(): BarAccount | undefined {
 /**
  * The photo at the leading edge of a tab's root bar, in a stack's own
  * header: a compact window's, and a regular one's where the tab stands no
- * split view. A split view stands it in its sidebar's bar instead
- * (`SplitView`'s `sidebarAccount`).
+ * split view. A split view stands it in the app sidebar's bar instead
+ * (`screens/app-sidebar.tsx`).
  */
 export function SettingsBarButton() {
   const account = useSettingsAccount();

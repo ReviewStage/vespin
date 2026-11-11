@@ -8,6 +8,7 @@ import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   newWorkspaceAction,
   type SwitcherWorkspace,
+  settingsAction,
   WorkspaceSwitcher,
   workspaceSettingsAction,
 } from "@repo/ui-native";
@@ -16,6 +17,7 @@ import { useRouter } from "expo-router";
 import type { ComponentProps } from "react";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
+import { useOpenSettings } from "./settings-button.js";
 
 /** What the switcher is drawn from. */
 type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;
@@ -57,11 +59,14 @@ function switcherWorkspace(
  * The switcher's workspaces, the chosen one, and its acts: a choice is kept
  * as the phone's (`chosen-workspace.ts`), which the Inbox, its count, Tasks,
  * and New task follow at once; New workspace opens its sheet, and Workspace
- * settings opens Settings, where the workspace is managed. None before the
+ * settings opens Settings, where the workspace is managed, as Settings does
+ * too, so it is found from the workspace's name as well as from the
+ * account's photo. None before the
  * account's workspaces are read.
  */
 export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const router = useRouter();
+  const openSettings = useOpenSettings();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const { chosen, choose } = useChosenWorkspace(workspaces);
@@ -77,6 +82,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     actions: [
       newWorkspaceAction(() => router.push("/new-workspace")),
       workspaceSettingsAction(() => router.push("/settings")),
+      settingsAction(openSettings),
     ],
   };
 }
