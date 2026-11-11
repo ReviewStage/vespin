@@ -187,7 +187,8 @@ interface OlderAsk {
  * did not answer says so until Try again asks it again, which a scroll never
  * does, even one that lands before the failure is drawn; one the host did not lay,
  * since newer messages took their place meanwhile, may be asked again at
- * once. None where nothing older stands.
+ * once, as may one whose cursor comes back after a rewind. None where
+ * nothing older stands.
  */
 export function useOlderPages(agentId: string, before: string | undefined): OlderPages | undefined {
   const acts = useHostActs();
@@ -229,6 +230,14 @@ export function useOlderPages(agentId: string, before: string | undefined): Olde
     },
     [acts, agentId, before],
   );
+  // Note that an ask that landed is let go once the cursor moves past it, and only then, so a rewind that brings the cursor back reads it anew while the landing still holds off a second read.
+  useEffect(() => {
+    const held = out.current;
+    if (held === undefined || held.failed) return;
+    if (held.agentId === agentId && held.before === before) return;
+    out.current = undefined;
+    setAsked(undefined);
+  }, [agentId, before]);
   if (before === undefined) return undefined;
   const here = asked !== undefined && asked.agentId === agentId && asked.before === before;
   return {
