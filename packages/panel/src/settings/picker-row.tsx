@@ -5,6 +5,7 @@ import {
   Chip,
   ChipName,
   type ChipWidth,
+  type FootRow,
   type MenuRow,
   POPOVER_ALIGN,
   POPOVER_WIDTH,
@@ -65,6 +66,8 @@ interface PickerProps {
   /** Whether its menu's words are the app's own, which a screen recording shows as they read, but for a row that is `replayMasked` (`SearchableMenu`'s `replayUnmasked`). */
   replayUnmasked?: boolean | undefined;
   rows: readonly MenuRow[];
+  /** Rows pinned under the list that act rather than pick, such as a sound's Upload; the menu closes as one is pressed. */
+  foot?: readonly FootRow[] | undefined;
   /** Present, the menu opens on a search over the rows; absent, the list is short enough to read whole. */
   placeholder?: string | undefined;
   noMatch: string;
@@ -112,6 +115,7 @@ export function Picker({
   iconOnly = false,
   replayUnmasked,
   rows,
+  foot,
   placeholder,
   noMatch,
   note,
@@ -198,6 +202,18 @@ export function Picker({
           width={menuWidth}
           replayUnmasked={replayUnmasked}
           onSearch={onSearch}
+          foot={foot?.map((pinned) => {
+            const press = pinned.onPress;
+            return press === undefined
+              ? pinned
+              : {
+                  ...pinned,
+                  onPress: () => {
+                    close();
+                    press();
+                  },
+                };
+          })}
           onPick={(id) => {
             close();
             onPick(id);

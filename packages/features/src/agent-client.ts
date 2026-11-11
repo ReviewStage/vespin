@@ -89,6 +89,14 @@ import {
   type PushDeviceNotifyParams,
   type PushDeviceRegisterParams,
   type PushDeviceStatusAnswerView,
+  type SoundAddAnswerView,
+  type SoundAddParams,
+  type SoundChoiceAnswerView,
+  type SoundChoiceParams,
+  type SoundClipAnswerView,
+  type SoundIdParams,
+  type SoundRenameParams,
+  type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
 } from "./agent-view.js";
@@ -203,6 +211,11 @@ import {
   hostedErrorSchema,
   readServiceAnswer,
 } from "./service-wire.js";
+import {
+  SOUND_CLIP_QUERY,
+  soundAddRequestSchema,
+  soundRenameRequestSchema,
+} from "./sound-clip-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
 import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
 
@@ -550,6 +563,45 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.account.forgetMemory, {
       query: { [MEMORY_QUERY.WORKSPACE_ID]: params.workspaceId, [MEMORY_QUERY.ID]: params.id },
     });
+  }
+
+  /** One of the account's own sounds' clips, its bytes in base64, or null where it keeps no such sound. */
+  readSound(
+    params: SoundIdParams,
+  ): Effect.Effect<SoundClipAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.sound, { [SOUND_CLIP_QUERY.ID]: params.id });
+  }
+
+  /** A sound added to the account's own under its name; a clip the service would refuse by shape never travels. */
+  addSound(
+    params: SoundAddParams,
+  ): Effect.Effect<SoundAddAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(soundAddRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.addSound, admitted);
+  }
+
+  /** One of the account's sounds renamed; a name the service would refuse by shape never travels. */
+  renameSound(
+    params: SoundRenameParams,
+  ): Effect.Effect<SoundStateView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(soundRenameRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.renameSound, admitted);
+  }
+
+  /** One of the account's sounds removed, with every choice of it; the sound rides in the query, since a DELETE carries no body. */
+  removeSound(params: SoundIdParams): Effect.Effect<SoundStateView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.removeSound, {
+      query: { [SOUND_CLIP_QUERY.ID]: params.id },
+    });
+  }
+
+  /** Which of the account's sounds one of its two sounds plays, or none. */
+  chooseSound(
+    params: SoundChoiceParams,
+  ): Effect.Effect<SoundChoiceAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.chooseSound, params);
   }
 
   /** The account's own provider keys, as hints and statuses. */

@@ -12,6 +12,9 @@ export {
   COMPLETION_SOUNDS,
   type CompletionSound,
   type CompletionSoundGroup,
+  CUSTOM_COMPLETION_SOUNDS,
+  type CustomCompletionSound,
+  isCustomCompletionSound,
 } from "./completion-sound.js";
 export {
   APP_PANEL_TAB,

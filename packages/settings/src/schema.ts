@@ -7,6 +7,7 @@ import {
   COMPLETION_SOUND_LABEL,
   COMPLETION_SOUNDS,
   isAppSettingId,
+  isCustomCompletionSound,
 } from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import {
@@ -118,6 +119,15 @@ function oneOf<Value extends string>(values: readonly Value[]) {
   const reads = Schema.is(Schema.Literals(values));
   return (value: UnparsedWireValue): value is Value => reads(value);
 }
+
+/** The sounds a recipe plays, every one but the account's own clips. */
+const RECIPE_SOUNDS = COMPLETION_SOUNDS.filter((sound) => !isCustomCompletionSound(sound));
+
+/** The sounds an agent's finish may play: the account's own finish clip first, as its menu lists it under Yours, then every recipe. */
+const FINISH_SOUNDS = [COMPLETION_SOUND.CUSTOM, ...RECIPE_SOUNDS];
+
+/** The sounds something that needs the account may play: its own ask clip first, then every recipe. */
+const ASK_SOUNDS = [COMPLETION_SOUND.CUSTOM_ASK, ...RECIPE_SOUNDS];
 
 const DIFF_LAYOUT_LIST = Object.values(DIFF_LAYOUT);
 const DIFF_INDICATORS_LIST = Object.values(DIFF_INDICATORS);
@@ -417,10 +427,10 @@ export const APP_SETTING_SCHEMA = {
     field: "completionSound",
     id: APP_SETTING_ID.COMPLETION_SOUND,
     label: "When an agent finishes",
-    values: COMPLETION_SOUNDS,
+    values: FINISH_SOUNDS,
     token: (sound) => sound,
     optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
-    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(FINISH_SOUNDS)),
     default: COMPLETION_SOUND.CHIME,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.NOTIFICATIONS,
@@ -435,10 +445,10 @@ export const APP_SETTING_SCHEMA = {
     id: APP_SETTING_ID.ASK_SOUND,
     label: "When something needs you",
     detail: "A question for you, or a command waiting on your Mac",
-    values: COMPLETION_SOUNDS,
+    values: ASK_SOUNDS,
     token: (sound) => sound,
     optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
-    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(ASK_SOUNDS)),
     default: COMPLETION_SOUND.KNOCK,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.NOTIFICATIONS,

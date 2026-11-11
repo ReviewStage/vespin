@@ -26,17 +26,35 @@ export const COMPLETION_SOUND = {
   TRAIN_HORN: "train-horn",
   QUACK: "quack",
   TYPEWRITER: "typewriter",
+  /** The clip the account uploaded for an agent's finish (`@repo/features/sound-clip-wire`), which plays the chime where none is loaded. */
+  CUSTOM: "custom",
+  /** The clip the account uploaded for something that needs it, which plays the chime where none is loaded. */
+  CUSTOM_ASK: "custom-ask",
 } as const;
 
 export type CompletionSound = (typeof COMPLETION_SOUND)[keyof typeof COMPLETION_SOUND];
 
+/** The sounds that are the account's own clips, one for each of its two sounds, rather than a recipe. */
+export const CUSTOM_COMPLETION_SOUNDS = [
+  COMPLETION_SOUND.CUSTOM,
+  COMPLETION_SOUND.CUSTOM_ASK,
+] as const;
+
+export type CustomCompletionSound = (typeof CUSTOM_COMPLETION_SOUNDS)[number];
+
+/** Whether a sound is one of the account's own clips. */
+export function isCustomCompletionSound(sound: CompletionSound): sound is CustomCompletionSound {
+  return (CUSTOM_COMPLETION_SOUNDS as readonly CompletionSound[]).includes(sound);
+}
+
 /** Every sound, in listing order. */
 export const COMPLETION_SOUNDS: readonly CompletionSound[] = Object.values(COMPLETION_SOUND);
 
-/** The two groups Settings lists the sounds under, quiet ones first. */
+/** The groups the sounds are listed under, quiet ones first and the account's own clip last. */
 export const COMPLETION_SOUND_GROUP = {
   SIMPLE: "simple",
   PLAYFUL: "playful",
+  CUSTOM: "custom",
 } as const;
 
 export type CompletionSoundGroup =
@@ -46,6 +64,7 @@ export type CompletionSoundGroup =
 export const COMPLETION_SOUND_GROUP_LABEL = {
   [COMPLETION_SOUND_GROUP.SIMPLE]: "Simple",
   [COMPLETION_SOUND_GROUP.PLAYFUL]: "Playful",
+  [COMPLETION_SOUND_GROUP.CUSTOM]: "Yours",
 } as const satisfies Record<CompletionSoundGroup, string>;
 
 /** The group each sound is listed under. */
@@ -67,6 +86,8 @@ export const COMPLETION_SOUND_GROUP_OF = {
   [COMPLETION_SOUND.TRAIN_HORN]: COMPLETION_SOUND_GROUP.PLAYFUL,
   [COMPLETION_SOUND.QUACK]: COMPLETION_SOUND_GROUP.PLAYFUL,
   [COMPLETION_SOUND.TYPEWRITER]: COMPLETION_SOUND_GROUP.PLAYFUL,
+  [COMPLETION_SOUND.CUSTOM]: COMPLETION_SOUND_GROUP.CUSTOM,
+  [COMPLETION_SOUND.CUSTOM_ASK]: COMPLETION_SOUND_GROUP.CUSTOM,
 } as const satisfies Record<CompletionSound, CompletionSoundGroup>;
 
 /** The name a sound is shown under. */
@@ -88,4 +109,6 @@ export const COMPLETION_SOUND_LABEL = {
   [COMPLETION_SOUND.TRAIN_HORN]: "Train horn",
   [COMPLETION_SOUND.QUACK]: "Quack",
   [COMPLETION_SOUND.TYPEWRITER]: "Typewriter",
+  [COMPLETION_SOUND.CUSTOM]: "Your sound",
+  [COMPLETION_SOUND.CUSTOM_ASK]: "Your sound",
 } as const satisfies Record<CompletionSound, string>;
