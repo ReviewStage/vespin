@@ -29,6 +29,7 @@ it.each([
   },
   { words: "/tmp/scratch.ts", opens: undefined },
   { words: "/tmp/repository/src/tile.css", opens: undefined },
+  { words: "/Users/ana/.vespin/agents/../repository/src/tile.css", opens: undefined },
   { words: "pnpm exec vitest run x.ts", opens: undefined },
 ])("$words opens $opens.kind", ({ words, opens }) => {
   expect(inlineCodeTarget(words)).toEqual(opens);

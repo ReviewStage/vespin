@@ -38,20 +38,26 @@ function inMacCheckout(path: string): string | undefined {
   return agent.slice(slash + 1 + checkout.length);
 }
 
+/** Whether a step of a path is a dot step, which names where it stands or its parent rather than a folder or a file. */
+function isDotStep(step: string): boolean {
+  return step === "." || step === "..";
+}
+
 /**
  * A path as written, read as a path in the checkout: a relative one as it
  * is, past a leading `./`; an absolute one in the cloud's checkout or a Mac
  * agent's; none for an absolute one anywhere else, or one that climbs out
- * or names no file.
+ * or names no file. Note that a dot step anywhere past a leading `./`
+ * refuses the whole path, before a root is matched, because
+ * `…/agents/../repository/` would otherwise read as an agent's checkout.
  */
 export function checkoutRelativePath(written: string): string | undefined {
   const cloud = `${CLOUD_CHECKOUT_PATH}/`;
-  let path: string | undefined = written;
-  if (written.startsWith(cloud)) path = written.slice(cloud.length);
-  else if (written.startsWith("/")) path = inMacCheckout(written);
-  else if (written.startsWith("./")) path = written.slice(2);
-  if (path === undefined) return undefined;
-  const steps = path.split("/");
-  if (steps.some((step) => step === "" || step === "." || step === "..")) return undefined;
+  const plain = written.startsWith("./") ? written.slice(2) : written;
+  if (plain.split("/").some(isDotStep)) return undefined;
+  let path: string | undefined = plain;
+  if (plain.startsWith(cloud)) path = plain.slice(cloud.length);
+  else if (plain.startsWith("/")) path = inMacCheckout(plain);
+  if (path === undefined || path.split("/").includes("")) return undefined;
   return path;
 }
