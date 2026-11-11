@@ -17,6 +17,7 @@ import {
   onGeometryChange,
   refreshable,
   scrollContentBackground,
+  scrollDismissesKeyboard,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
@@ -88,6 +89,8 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         background(listGround(colors, look)),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
+        // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
+        scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >

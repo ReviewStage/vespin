@@ -38,7 +38,14 @@ appId: dev.vespin.ios
     timeout: 5000
 - assertNotVisible:
     id: "ask-note"
-- hideKeyboard
+# The keyboard goes down on a drag from the transcript into it, as Messages
+# lowers it. Note that hideKeyboard is not used, since it drags at the
+# screen's middle, where the composer stands while a call waits, the queue
+# holds a message, and the keyboard is up.
+- swipe:
+    start: "50%, 25%"
+    end: "50%, 92%"
+    duration: 600
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: compose-sent
@@ -92,7 +99,10 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: compose-skill-picked
 - eraseText: 20
-- hideKeyboard
+- swipe:
+    start: "50%, 25%"
+    end: "50%, 92%"
+    duration: 600
 # Stop, with nothing typed, stands as the system's spinner until the agent stops.
 - tapOn: "Stop"
 - assertVisible: "Stopping"

@@ -38,6 +38,9 @@ export const MARK_SIZE = {
   BAR_FACE: 32,
 } as const;
 
+/** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
+export const PRESS_SIZE = 44;
+
 /** How round the bordered pieces stand: a card, such as an ask's or a pull request's, and a tag. */
 export const RADIUS = {
   CARD: 14,

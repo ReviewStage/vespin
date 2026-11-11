@@ -22,7 +22,13 @@ import { useThreeColumns } from "../use-window-size-class.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
-import { StatusQuestionAsk, TaskAgentRow, TaskNodeRow, useSidebarTasks } from "./task-screens.js";
+import {
+  StatusQuestionAsk,
+  TaskAgentRow,
+  TaskNodeRow,
+  useAgentArchiveAsk,
+  useSidebarTasks,
+} from "./task-screens.js";
 
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
@@ -54,6 +60,7 @@ function FoundList({
   listing,
   onOpen,
   onRemind,
+  onArchiveAgent,
 }: {
   readonly found: SearchFound;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
@@ -61,6 +68,8 @@ function FoundList({
   readonly onOpen: (id: string) => void;
   /** Opens Remind me on a thread found, as the Inbox's row does. */
   readonly onRemind: (item: InboxItem) => void;
+  /** Asks to archive an agent found, once it rests, as a task's Agents do. */
+  readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   return (
@@ -98,7 +107,7 @@ function FoundList({
           count={found.agents.length}
         >
           {found.agents.map((line) => (
-            <TaskAgentRow key={line.agent.id} line={line} />
+            <TaskAgentRow key={line.agent.id} line={line} onArchive={onArchiveAgent} />
           ))}
         </ListSection>
       )}
@@ -120,6 +129,7 @@ function useSearchScreen() {
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const { listing, status, deletion } = useListingAsks(found.listing);
   const remind = useRemindSheet();
+  const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
   const open = (id: string) => {
     const route = routes.get(id);
@@ -132,9 +142,15 @@ function useSearchScreen() {
     ) : none ? (
       <EmptyState title={noResultsWords(query)} symbol="magnifyingglass" />
     ) : (
-      <FoundList found={found} listing={listing} onOpen={open} onRemind={remind.open} />
+      <FoundList
+        found={found}
+        listing={listing}
+        onOpen={open}
+        onRemind={remind.open}
+        onArchiveAgent={archiveAsk.archive}
+      />
     );
-  return { query, setQuery, results, status, deletion, remind };
+  return { query, setQuery, results, status, deletion, remind, archiveAsk };
 }
 
 /**
@@ -146,7 +162,7 @@ function useSearchScreen() {
  * its results instead.
  */
 function SearchStackScreen() {
-  const { query, setQuery, results, status, deletion, remind } = useSearchScreen();
+  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen();
   const field = useRef<SearchBarCommands>(null);
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
@@ -172,6 +188,7 @@ function SearchStackScreen() {
       <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
+      {archiveAsk.ask}
       {remind.sheet}
     </>
   );
@@ -183,7 +200,7 @@ function SearchStackScreen() {
  * beside its mailboxes. A row found opens in its own tab, beside its list.
  */
 function SearchSplitScreen() {
-  const { query, setQuery, results, status, deletion, remind } = useSearchScreen();
+  const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen();
   const sidebar = useAppSidebar(SIDEBAR_PLACE.SEARCH, useSidebarTasks());
   return (
     <>
@@ -200,6 +217,7 @@ function SearchSplitScreen() {
       </Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
+      {archiveAsk.ask}
       {sidebar.ask}
       {remind.sheet}
     </>
