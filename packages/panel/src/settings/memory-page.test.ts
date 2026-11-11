@@ -645,3 +645,22 @@ test("Add memory writes a new one in a draft row atop the table, saves it replac
     assert.match(field(page)?.textContent ?? "", /looks like it holds a credential/u),
   );
 });
+
+test("while an edit's save is out, Add memory opens no draft over it", async () => {
+  const answering = Promise.withResolvers<void>();
+  saveHeld = answering.promise;
+  const { page } = await mount();
+  openMenu(page, DEPLOYS);
+  chooseMenuItem("Edit");
+  await writeInField(page, "Deployments go out from main.");
+  pressInField(page, "Save");
+  await settle();
+
+  act(() => button(page, "Add memory").click());
+  await settle();
+
+  assert.equal(page.querySelectorAll(".memory-field").length, 1);
+  assert.ok(rows(page)[0]?.querySelector('[role="checkbox"]') !== null, "no draft row stands");
+  answering.resolve();
+  await settle();
+});

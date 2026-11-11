@@ -928,6 +928,8 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
   });
   if (editing?.replaces !== undefined && !kept.has(editing.replaces.id)) setEditing(undefined);
   const open = (memory: MemorySummary | undefined) => {
+    // Note that a save out keeps its field, so its answer, or its refusal, still finds it.
+    if (saving.isPending) return;
     const opening = openings + 1;
     setOpenings(opening);
     setEditing({ replaces: memory, text: memory?.text ?? "", refusal: undefined, opening });
