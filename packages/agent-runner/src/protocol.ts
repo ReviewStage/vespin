@@ -695,12 +695,18 @@ const UuidSchema = Schema.String.check(
  * is on the next payer: Claude Code drops a resumed session's prompt under
  * a uuid the session holds, answering nothing, so the runner hands the SDK
  * the prompt under a uuid of its own, and ACCEPTED still names the service's.
+ * `compact` asks for the session's compaction in the message's place: Codex
+ * compacts its thread (`thread/compact/start`), which takes no words, once no
+ * turn of its own runs, and Claude Code, whose CLI runs the message's bare
+ * `/compact` as its own command, needs no mark. A runner from before the mark
+ * hands the message on as words.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
   uuid: Schema.optionalKey(UuidSchema),
   content: Schema.Array(ContentBlockSchema),
   resent: Schema.optionalKey(Schema.Boolean),
+  compact: Schema.optionalKey(Schema.Boolean),
 });
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its

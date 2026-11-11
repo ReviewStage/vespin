@@ -2,6 +2,7 @@ import type { CheckoutSnapshot } from "@repo/agent-runner/protocol";
 import { PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
 import type { RunUsage, ToolCallSettlement } from "@repo/features/turn-run";
 import type { UnparsedWireValue, WireValue } from "@repo/wire";
+import type { CompactedNotice } from "@repo/wire/ui-messages";
 
 /**
  * native-moments.ts -- what a native harness's run amounts to for the transcript, said once for every harness.
@@ -161,7 +162,11 @@ export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.USAGE_TOTAL; readonly total: RunUsage }
   | { readonly kind: typeof NATIVE_MOMENT.RESULT; readonly failure?: string }
   | { readonly kind: typeof NATIVE_MOMENT.REFUSED; readonly detail: string }
-  | { readonly kind: typeof NATIVE_MOMENT.COMPACTED }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.COMPACTED;
+      /** What the transcript says of the fold where this report of it is the one drawn; none where another report of the same fold is (Codex says it twice). */
+      readonly notice?: CompactedNotice;
+    }
   | { readonly kind: typeof NATIVE_MOMENT.COMPACTION_FAILED; readonly detail: string }
   | { readonly kind: typeof NATIVE_MOMENT.NOTED; readonly said: string }
   | {
