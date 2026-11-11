@@ -38,9 +38,10 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * its context ring, cost, and payer, does not stand here, since a thread
  * reads no transcript; nor Queue and Steer, since an item's replies go one
  * at a time in their own order (`use-task-inbox.ts`) rather than on the
- * agent's queue; nor the `/` list's commands (`/model`, `/clear`,
+ * agent's queue; nor the `/` list's session commands (`/clear`,
  * `/compact`), since a reply reaches the agent wrapped as a thread's
- * message, which the harness reads as words rather than a command. What stands docked over an
+ * message, which the harness reads as words rather than a command, though
+ * `/model` opens the model chip's menu as it does in the agent's box. What stands docked over an
  * agent's box, its to-do list, its pull request, its threads, and its queue,
  * does not stand here, because a thread is no transcript and need be about no
  * pull request, and the thread's crumbs already name the agent and its task.
@@ -358,7 +359,7 @@ function AnswerCard({
         {...agentBox}
         // Note that an empty box's Send stays Send, or reads Got it, and never Stop, because an empty Send here settles a notice or says what an answer lacks.
         stoppable={false}
-        // Note that the box runs none of the `/` list's commands, because a reply reaches the agent wrapped as a thread's message (`inboxThreadMessage`), so `/compact` would go as words, and a `/clear` would take Send from a new thread.
+        // Note that the box runs none of the `/` list's session commands, `/model` alone, because a reply reaches the agent wrapped as a thread's message (`inboxThreadMessage`), so `/compact` would go as words, and a `/clear` would take Send from a new thread.
         onClear={undefined}
         composer={composer}
         usage={undefined}

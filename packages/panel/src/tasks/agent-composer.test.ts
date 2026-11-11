@@ -39,6 +39,7 @@ import { AgentComposer } from "./agent-composer.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
+import type { AgentModelControl } from "./use-agent-model.js";
 
 /**
  * The agent's message box as the developer works it, on the editor bundle's
@@ -66,6 +67,13 @@ const SKILLS: readonly SkillOption[] = [
 ];
 
 const reading: SkillSource = () => Promise.resolve({ skills: SKILLS });
+
+/** A model chip's control, its choice changed nowhere. */
+const MODEL: AgentModelControl = {
+  choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
+  note: undefined,
+  choose: () => undefined,
+};
 
 const ignore = () => undefined;
 
@@ -99,11 +107,14 @@ function Box({
   messages = [],
   skills = reading,
   onClear,
+  model,
 }: {
   sender: MessageSender;
   skills?: SkillSource;
   /** What `/clear` does, where the box runs commands. */
   onClear?: () => Promise<boolean>;
+  /** The model chip's control, which `/model` opens; none where the box draws no chip. */
+  model?: AgentModelControl;
   /** The transcript as the tab reads it, which a sent line is read back from. */
   messages?: readonly AgentTranscriptMessage[];
 }): ReactNode {
@@ -121,6 +132,7 @@ function Box({
       composer,
       skills,
       onClear,
+      model,
     }),
     // What Continue would carry, as the tab hands it on.
     createElement("output", { "data-unsent": composer.unsent.words }),
@@ -130,7 +142,11 @@ function Box({
 /** The box mounted, every message it sends written down and answered by `answer`. */
 async function mounted(
   answer: () => Promise<AgentAgentAnswer> = () => new Promise(ignore),
-  options: { readonly skills?: SkillSource; readonly onClear?: () => Promise<boolean> } = {},
+  options: {
+    readonly skills?: SkillSource;
+    readonly onClear?: () => Promise<boolean>;
+    readonly model?: AgentModelControl;
+  } = {},
 ) {
   const sent: { text: string; clientKey: string }[] = [];
   const sender: MessageSender = (_agentId, text, clientKey) => {
@@ -448,6 +464,7 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
   let cleared = 0;
   let answerClear: (took: boolean) => void = ignore;
   const box = await mounted(undefined, {
+    model: MODEL,
     skills: () =>
       Promise.resolve({
         skills: [
@@ -505,6 +522,41 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
     ["/compact keep the plan"],
   );
   assert.equal(cleared, 1);
+});
+
+test("a box with a model chip and no session, as New task's, lists /model alone where there are no skills, and runs it, chosen or typed, by opening the model menu", async () => {
+  const box = await mounted(undefined, {
+    model: MODEL,
+    skills: () => Promise.resolve({ skills: [] }),
+  });
+  const rows = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+  const menuOpen = () =>
+    box.container.querySelector(".agent-model-chip button")?.getAttribute("aria-expanded");
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(rows(), ["/model"]);
+
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.equal(menuOpen(), "true");
+  assert.equal(box.shown(), "");
+  pressInComposer(box.container, "Escape");
+  await settle();
+
+  // A session's commands run nowhere here, so a /clear typed goes as the words it is.
+  typeInComposer(box.container, "/clear");
+  await settle();
+  assert.deepEqual(rows(), []);
+  pressInComposer(box.container, "Escape");
+  pressInComposer(box.container, "Enter");
+  await settle();
+  assert.deepEqual(
+    box.sent.map((each) => each.text),
+    ["/clear"],
+  );
 });
 
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {

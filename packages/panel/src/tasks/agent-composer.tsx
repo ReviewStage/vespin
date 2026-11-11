@@ -423,7 +423,7 @@ export function AgentComposer({
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
-  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no commands, as New task's and a draft agent's, which have no session yet. */
+  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no session commands, as New task's and a draft agent's, which have no session yet and run `/model` alone. */
   onClear?: (() => Promise<boolean>) | undefined;
   /** The agent continued in the cloud with the message given, which a note of its machine gone offline offers (`FAILURE_REASON.CONTINUE_IN_CLOUD`); none where no such move is offered. */
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
@@ -462,6 +462,8 @@ export function AgentComposer({
   // Note that a box clearing its session holds, so a message sent at once never reaches the session it ends.
   const held = composer.sending || closed || clearing;
   const editingQueued = queueing?.editing === true;
+  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session.
+  const reach = { model: model !== undefined, session: onClear !== undefined };
   const statuses = useIntegrationStatuses();
   const box = useMessageBox({
     draft: composer.draft,
@@ -479,9 +481,9 @@ export function AgentComposer({
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
     commands:
-      onClear === undefined || editingQueued
+      editingQueued || (!reach.model && !reach.session)
         ? undefined
-        : { onRun: (name) => runCommand(name, true) },
+        : { reach, onRun: (name) => runCommand(name, true) },
     keywords,
     // A server's chip in the box says what a send now does with it: opens a turn, or steers the one running.
     servers: {
@@ -680,17 +682,17 @@ export function AgentComposer({
    * `/new` typed alone.
    */
   const typedCommand = (): SlashCommand | undefined => {
-    if (onClear === undefined || editingQueued) return undefined;
+    if (editingQueued) return undefined;
     const typed = leadingCommand(composer.draft);
     if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
     switch (typed.name) {
       case SLASH_COMMAND.MODEL:
-        return typed.name;
+        return reach.model ? typed.name : undefined;
       case SLASH_COMMAND.COMPACT:
         return undefined;
       case SLASH_COMMAND.CLEAR:
       case SLASH_COMMAND.NEW:
-        return typed.words === "" ? typed.name : undefined;
+        return reach.session && typed.words === "" ? typed.name : undefined;
       default:
         return absurd(typed.name);
     }
