@@ -11,6 +11,7 @@ import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
+import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 
@@ -30,6 +31,8 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * notification opens its thread (`notifications.ts`), a Stop pressed on
  * the Live Activity of its running agents goes through the host
  * (`live-activity/`), and its crash reports name it (`crash-reports.ts`).
+ * The iPad's menu bar acts on whatever stands in front, its account's
+ * commands enabled while one is signed in (`menu-commands/`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -45,23 +48,29 @@ function GuardedScreens() {
   useLiveActivity(signedIn);
   useCrashReportAccount();
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={signedIn && !updateNeeded}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(tabs)" />
-        {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
-        <Stack.Screen name="settings" options={{ presentation: "modal", title: "Settings" }} />
-        <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
-        <Stack.Screen name="start-agent" options={{ presentation: "modal", title: "New agent" }} />
-        <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Model" }} />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn && !updateNeeded}>
-        <Stack.Screen name="sign-in" />
-      </Stack.Protected>
-      <Stack.Protected guard={updateNeeded}>
-        <Stack.Screen name="update-needed" options={{ gestureEnabled: false }} />
-      </Stack.Protected>
-    </Stack>
+    <>
+      <MenuCommands signedIn={signedIn && !updateNeeded} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={signedIn && !updateNeeded}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(tabs)" />
+          {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
+          <Stack.Screen name="settings" options={{ presentation: "modal", title: "Settings" }} />
+          <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
+          <Stack.Screen
+            name="start-agent"
+            options={{ presentation: "modal", title: "New agent" }}
+          />
+          <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Model" }} />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn && !updateNeeded}>
+          <Stack.Screen name="sign-in" />
+        </Stack.Protected>
+        <Stack.Protected guard={updateNeeded}>
+          <Stack.Screen name="update-needed" options={{ gestureEnabled: false }} />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
 
