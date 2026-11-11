@@ -203,9 +203,11 @@ function refused(what: string): (error: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
-/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
+/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, its reminder set or cleared, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
 export function useInboxActs(): {
   readonly mark: (itemId: string, unread: boolean) => void;
+  /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
+  readonly remind: (itemId: string, until: number | null) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshTasks: () => Promise<void>;
@@ -215,6 +217,9 @@ export function useInboxActs(): {
     () => ({
       mark: (itemId, unread) => {
         acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }).catch(refused("The mark"));
+      },
+      remind: (itemId, until) => {
+        acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until }).catch(refused("The reminder"));
       },
       markAll: (itemIds) => {
         if (itemIds.length === 0) return;

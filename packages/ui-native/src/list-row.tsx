@@ -13,6 +13,7 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
   accessibilityLabel,
   alignmentGuide,
   buttonStyle,
@@ -29,9 +30,10 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { InboxLineKind } from "@repo/features/inbox-list-model";
+import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { sinceText } from "@repo/features/time-format";
+import { dueText, sinceText } from "@repo/features/time-format";
 import { type ReactElement, type ReactNode, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -125,6 +127,8 @@ type ListRowProps = RowActs & {
   readonly at?: number | undefined;
   /** What `at` counts from; now where none is given. */
   readonly now?: number | undefined;
+  /** When a reminder the reader set on the thread comes back, in epoch milliseconds, said in the time's place as the panel's row says it: "3:04 PM", "Mon 9:00 AM". */
+  readonly due?: number | undefined;
 };
 
 type TaskRowProps = RowActs & {
@@ -191,6 +195,32 @@ export function RowTime({ at, now }: { readonly at: number; readonly now: number
     >
       {sinceText(at, now ?? Date.now())}
     </Text>
+  );
+}
+
+/** When a reminder comes back, in the time's place: the clock in the accent ink and its time as a row says a moment to come, heard as a reminder. */
+function RowDue({ due, now }: { readonly due: number; readonly now: number | undefined }) {
+  const colors = useColors();
+  const words = dueText(due, now ?? Date.now());
+  return (
+    <HStack spacing={SPACE.TIGHT}>
+      <Image
+        systemName="clock"
+        size={MARK_SIZE.GLYPH - 4}
+        color={colors.ACCENT_TEXT}
+        modifiers={[accessibilityHidden(true)]}
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.TIME }),
+          monospacedDigit(),
+          foregroundStyle(colors.ACCENT_TEXT),
+          accessibilityLabel(`${REMIND_WORDS.DUE} ${words}`),
+        ]}
+      >
+        {words}
+      </Text>
+    </HStack>
   );
 }
 
@@ -367,10 +397,11 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
  * what it asks), its title in 15 pt with the time at the line's end, and
  * under it the glyph and words of what it asks, then the task's name, in a
  * 13 pt muted line. A teammate's face stands before the time on a thread
- * that waits on them.
+ * that waits on them, and a thread put away until a reminder says when it
+ * comes back in its time's place, as the panel's row does.
  */
 export function ListRow(props: ListRowProps) {
-  const { id, title, task, line, unread = false, done = false, face, at, now } = props;
+  const { id, title, task, line, unread = false, done = false, face, at, now, due } = props;
   const colors = useColors();
   const ring = task?.status === undefined ? undefined : <TaskStatusMark status={task.status} />;
   const row: ReactElement = (
@@ -384,7 +415,11 @@ export function ListRow(props: ListRowProps) {
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
             {face === undefined ? null : <Avatar name={face} size={MARK_SIZE.FACE} />}
-            {at === undefined ? null : <RowTime at={at} now={now} />}
+            {due !== undefined ? (
+              <RowDue due={due} now={now} />
+            ) : at === undefined ? null : (
+              <RowTime at={at} now={now} />
+            )}
           </HStack>
         }
       />
