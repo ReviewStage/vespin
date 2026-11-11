@@ -241,6 +241,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_REWIND: "agents.rewind",
   /** One agent's harness started on a fresh session in the same agent, its transcript kept (`/clear`, `coder-host/clear.ts`). */
   AGENTS_CLEAR: "agents.clear",
+  /** An agent's failed first launch booted again, from its Retry (`coder-host/boot.ts`). */
+  AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
@@ -975,6 +977,7 @@ export const PORT_ACT_USE = {
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,
   AGENTS_CLEAR: ACT_USE.WRITE,
+  AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,

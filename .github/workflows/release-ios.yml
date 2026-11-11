@@ -18,7 +18,9 @@ name: Release iOS
 # Apple Development certificate on every run until the team reaches Apple's
 # cap; and it is never unsigned, because an unsigned archive carries no
 # entitlements, so the export would drop aps-environment. The build number is
-# the run's, so every upload is one TestFlight has not seen.
+# the run's number, a whole number as TestFlight lists it, so every new run
+# uploads one TestFlight has not seen. Note that a re-run keeps its run's
+# number, so once a run has uploaded, the next build is a fresh run.
 #
 # The app reports crashes to the desktop's Sentry project, under the same DSN
 # (SENTRY_DSN), and its symbols go there through sentry-cli
@@ -75,7 +77,7 @@ jobs:
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       EXPO_NO_TELEMETRY: "1"
       LANG: en_US.UTF-8
-      VESPIN_IOS_BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+      VESPIN_IOS_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1

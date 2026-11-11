@@ -43,10 +43,12 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: settings-more-on-web
 # The Account page: who is signed in, Privacy, Sign out, and Delete account.
+# Note that the personal workspace's row below it bears the same name, so the
+# account is found by the line only it draws.
 - scrollUntilVisible:
-    element: "Ada Lovelace"
+    element: "Signed in with GitHub"
     direction: UP
-- tapOn: "Ada Lovelace"
+- tapOn: "Signed in with GitHub"
 - waitForAnimationToEnd
 - assertVisible: "Share usage data"
 - assertVisible: "Sign out"

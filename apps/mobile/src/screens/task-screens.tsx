@@ -11,7 +11,7 @@ import {
   linkOf,
   readLink,
 } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
 import { subTasksOf, taskFinished } from "@repo/features/task-list-model";
 import {
@@ -77,6 +77,7 @@ import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/u
 import { archiveQuestion } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -292,6 +293,7 @@ function taskPreview(task: TaskSummary, listing: TasksListing) {
       agents={glance.agents.map((agent) => ({
         id: agent.id,
         name: agentName(agent),
+        harness: providerOf(agent.model),
         status: agent.status,
       }))}
     />
@@ -603,6 +605,7 @@ function agentState(status: AgentStatus): AgentRowState {
 /** The task's head: its name, its chips, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
+  const pictureOf = useMemberPictures();
   return (
     <TaskHead
       name={task.name}
@@ -611,7 +614,11 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
       assignee={
         task.assignee === undefined || task.assignee === null
           ? { name: NO_ASSIGNEE_WORDS, nobody: true }
-          : { name: task.assignee.name, nobody: false }
+          : {
+              name: task.assignee.name,
+              picture: pictureOf(task.assignee.userId),
+              nobody: false,
+            }
       }
       createdBy={
         task.createdBy === undefined
@@ -775,11 +782,13 @@ export function TaskAgentRow({
   const { agent, waiting, pullRequest } = line;
   const step = useHeldAgentStep(agent.id, agent.status);
   const name = agentName(agent);
+  const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
   return (
     <AgentRow
       id={agent.id}
       name={name}
+      harness={harness}
       state={agentState(agent.status)}
       runsOn={runsOn}
       waiting={waiting}
@@ -796,6 +805,7 @@ export function TaskAgentRow({
       preview={
         <AgentPreview
           name={name}
+          harness={harness}
           status={agent.status}
           task={task === undefined ? undefined : { name: task.name, status: task.status }}
           model={modelLabel(agent.model)}
@@ -973,9 +983,8 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
   return { search, setSearch, listing, status, deletion, refreshTasks };
 }
 
-// A compact window: the tree under the workspace switcher, standing as the
-// Stack's inline title, the account's photo opening Settings at the bar's
-// leading edge and its search a round glass button at its trailing one, each
+// A compact window: the tree, the account's photo opening Settings and the
+// workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
 // row pushing its task as the Stack's next screen.
 function TasksStackList(words: TasksSearch) {
   const router = useRouter();
@@ -994,7 +1003,7 @@ function TasksStackList(words: TasksSearch) {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Screen>
         <TasksTree
           listing={listing}

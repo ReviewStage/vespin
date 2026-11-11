@@ -263,6 +263,18 @@ running agents' titles** and when each began, how many of them run, and how
 many threads wait on you. We forget the activity's token once it ends, or Apple
 says it is gone, and both tokens leave with the phone's row or your account.
 
+If you add the app's Inbox widget to your Home Screen or Lock Screen, the
+app keeps a small file for it on your iPhone, in storage it shares only with
+its own widget and notification extensions: the name of the workspace you
+chose, how many threads wait on you there, and **the titles of up to three
+of them and their tasks' names**, with the ids a tap opens. It holds no
+message's words, no sign-in token, and nothing the widget sends anywhere:
+the widget has no network of its own. The app rewrites the file as your
+Inbox changes, the notification extension updates it as a notification
+arrives, and the app deletes it when you sign out. The widget marks the
+titles as private, so iOS hides them on a locked iPhone if your settings
+say to.
+
 So your phone stays quiet while you're at your desk, the Service notes when
 a desktop or web client of yours was last active: while you use one, it
 tells the Service so at most every 30 seconds, with nothing of what you typed

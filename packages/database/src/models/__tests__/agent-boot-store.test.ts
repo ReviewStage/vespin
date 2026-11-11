@@ -77,7 +77,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
         const { userId, agentId } = yield* openAccount;
         yield* beginAgentBoot(agentId, AT, firstLine(userId));
         const heldWhileStarting = yield* claimQueueHead(agentId);
-        const up = yield* agentBootRunnerUp(agentId, past(2_000));
+        const up = yield* agentBootRunnerUp(agentId, past(2_000), 1);
         const handedOn = yield* claimQueueHead(agentId);
         yield* agentBootHandedOff(agentId, past(3_000));
         const ready = yield* agentBootOf(agentId);
@@ -105,7 +105,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
       const { agentId } = yield* openAccount;
       yield* beginAgentBoot(agentId, AT, undefined);
 
-      const up = yield* agentBootRunnerUp(agentId, past(1_000));
+      const up = yield* agentBootRunnerUp(agentId, past(1_000), 1);
 
       assert.deepEqual(
         Option.map(up, (boot) => boot.phase),
@@ -161,27 +161,65 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
     }),
   );
 
-  it.effect("is read past its deadline only while under way, and never once failed or ready", () =>
+  it.effect("moves nothing for a runner up under an attempt Retry has since replaced", () =>
     Effect.gen(function* () {
-      const starting = yield* openAccount;
-      const failed = yield* openAccount;
-      const ready = yield* openAccount;
-      yield* beginAgentBoot(starting.agentId, AT, undefined);
-      yield* beginAgentBoot(failed.agentId, AT, undefined);
-      yield* beginAgentBoot(ready.agentId, AT, undefined);
-      yield* failAgentBoot(failed.agentId, BOOT_FAILURE.MACHINE_UNAVAILABLE, AT);
-      yield* agentBootRunnerUp(ready.agentId, AT);
+      const { userId, agentId } = yield* openAccount;
+      yield* beginAgentBoot(agentId, AT, firstLine(userId));
+      yield* failAgentBoot(agentId, BOOT_FAILURE.NO_RESPONSE, past(1_000), 1);
+      yield* rebootAgent(agentId, past(2_000));
 
-      const before = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS - 1), 100);
-      const after = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS), 100);
+      const staleUp = yield* agentBootRunnerUp(agentId, past(3_000), 1);
+      const staleFailed = yield* failAgentBoot(agentId, BOOT_FAILURE.NO_RESPONSE, past(3_000), 1);
 
-      const mine = (boots: readonly { readonly agentId: string }[]) =>
-        boots
-          .map((boot) => boot.agentId)
-          .filter((id) => [starting.agentId, failed.agentId, ready.agentId].includes(id));
-      assert.deepEqual(mine(before), []);
-      assert.deepEqual(mine(after), [starting.agentId]);
+      assert.ok(Option.isNone(staleUp), "the first attempt's machine moves the second's not");
+      assert.equal(staleFailed, false, "nor does its failure");
+      assert.deepEqual(
+        Option.map(yield* agentBootOf(agentId), (boot) => [boot.phase, boot.attempt]),
+        Option.some([BOOT_PHASE.STARTING, 2]),
+      );
+      assert.ok(Option.isNone(yield* claimQueueHead(agentId)), "its first message stays held");
     }),
+  );
+
+  it.effect(
+    "is read past its deadline while under way or handing off, and never once failed or ready",
+    () =>
+      Effect.gen(function* () {
+        const starting = yield* openAccount;
+        const handingOff = yield* openAccount;
+        const failed = yield* openAccount;
+        const ready = yield* openAccount;
+        yield* beginAgentBoot(starting.agentId, AT, undefined);
+        yield* beginAgentBoot(failed.agentId, AT, undefined);
+        yield* beginAgentBoot(ready.agentId, AT, undefined);
+        // A hand-off whose queue read failed stands handing off, with its first message still queued.
+        yield* beginAgentBoot(handingOff.agentId, AT, firstLine(handingOff.userId));
+        yield* failAgentBoot(failed.agentId, BOOT_FAILURE.MACHINE_UNAVAILABLE, AT);
+        yield* agentBootRunnerUp(ready.agentId, AT, 1);
+        yield* agentBootRunnerUp(handingOff.agentId, AT, 1);
+
+        const before = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS - 1), 100);
+        const after = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS), 100);
+
+        const mine = (boots: readonly { readonly agentId: string }[]) =>
+          boots
+            .map((boot) => boot.agentId)
+            .filter((id) =>
+              [starting.agentId, handingOff.agentId, failed.agentId, ready.agentId].includes(id),
+            );
+        assert.deepEqual(mine(before), []);
+        assert.deepEqual(mine(after).toSorted(), [starting.agentId, handingOff.agentId].toSorted());
+        // The sweep fails the stuck hand-off as it fails a boot that never came up, so Retry can boot it again.
+        assert.equal(
+          yield* failAgentBoot(
+            handingOff.agentId,
+            BOOT_FAILURE.NO_RESPONSE,
+            past(BOOT_BOUNDS.DEADLINE_MS),
+            1,
+          ),
+          true,
+        );
+      }),
   );
 
   it.effect(
@@ -210,7 +248,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
           id: randomUUID(),
         });
         const read = yield* agentQueueNow(agentId);
-        yield* agentBootRunnerUp(agentId, past(1_000));
+        yield* agentBootRunnerUp(agentId, past(1_000), 1);
         yield* agentBootHandedOff(agentId, past(2_000));
         const afterBoot = yield* queueWhileBooting(agentId, userId, {
           ...automation,

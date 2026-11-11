@@ -72,6 +72,201 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.32.0 — 2026-11-11
+
+### Permissions and approvals
+
+The model chip's menu sets how an agent's actions are approved: Ask for
+approval, Approve for me, or Full access, from the next turn. An agent that
+asks stops on the command or edit and waits for you to allow or deny it, with
+a note to the agent if you deny it. Settings › Agents › New agents chooses the
+mode a new agent starts on, for Claude Code and Codex agents alike.
+([#8109](https://github.com/ReviewStage/vespin/pull/8109),
+[#8101](https://github.com/ReviewStage/vespin/pull/8101),
+[#8121](https://github.com/ReviewStage/vespin/pull/8121),
+[#8275](https://github.com/ReviewStage/vespin/pull/8275),
+[#8287](https://github.com/ReviewStage/vespin/pull/8287),
+[#8281](https://github.com/ReviewStage/vespin/pull/8281),
+[#8282](https://github.com/ReviewStage/vespin/pull/8282),
+[#8350](https://github.com/ReviewStage/vespin/pull/8350))
+
+### /model, /compact, and /clear
+
+A `/` at the start of a message offers the box's own commands: `/model`
+switches the agent's model, `/compact` folds its session, and
+`/clear` starts it afresh, on Claude Code and Codex alike.
+([#8217](https://github.com/ReviewStage/vespin/pull/8217),
+[#8225](https://github.com/ReviewStage/vespin/pull/8225))
+
+### Sounds of your own
+
+Vespin plays one sound when an agent finishes and another when something needs
+you, from a fuller, louder set. Settings › Preferences adds your own clips by
+name, to rename, remove, and play for either.
+([#8205](https://github.com/ReviewStage/vespin/pull/8205),
+[#8215](https://github.com/ReviewStage/vespin/pull/8215),
+[#8228](https://github.com/ReviewStage/vespin/pull/8228))
+
+### Plan usage at a glance
+
+Settings and the model menu show each plan's 5-hour and weekly usage, with the
+moment each window resets on hover, and an agent says whose plan or key pays
+for it. A message the usage limit refused waits for the reset and goes then.
+([#7991](https://github.com/ReviewStage/vespin/pull/7991),
+[#8099](https://github.com/ReviewStage/vespin/pull/8099),
+[#8284](https://github.com/ReviewStage/vespin/pull/8284),
+[#8314](https://github.com/ReviewStage/vespin/pull/8314))
+
+### Agents carry on by themselves
+
+A turn cut off because its runner went away, or because the model provider
+could not be reached, carries on by itself once it can, with a line in the
+transcript where it stopped.
+([#8023](https://github.com/ReviewStage/vespin/pull/8023),
+[#8028](https://github.com/ReviewStage/vespin/pull/8028))
+
+### Improvements
+
+- The Resources popover, beside Back and Forward, shows what each of Vespin's
+  processes spends in CPU and memory ([#8311](https://github.com/ReviewStage/vespin/pull/8311))
+- The Cloud chip shows its sandbox's state and size, and a command killed out
+  of memory says so to you and to the agent
+  ([#8095](https://github.com/ReviewStage/vespin/pull/8095),
+  [#8086](https://github.com/ReviewStage/vespin/pull/8086))
+- A cloud sandbox sleeps after five minutes with no agent or terminal activity,
+  and one unused for seven days is deleted, after its repository's archive
+  script runs
+  ([#8166](https://github.com/ReviewStage/vespin/pull/8166),
+  [#8125](https://github.com/ReviewStage/vespin/pull/8125),
+  [#8196](https://github.com/ReviewStage/vespin/pull/8196),
+  [#8091](https://github.com/ReviewStage/vespin/pull/8091))
+- A new agent shows its machine starting in its empty transcript, and every
+  message sent meanwhile waits in its queue
+  ([#8296](https://github.com/ReviewStage/vespin/pull/8296),
+  [#8319](https://github.com/ReviewStage/vespin/pull/8319),
+  [#8289](https://github.com/ReviewStage/vespin/pull/8289),
+  [#8307](https://github.com/ReviewStage/vespin/pull/8307))
+- Settings › Cloud setup shows each script's last run, numbers its lines, and
+  saves an edited script with ⌘S
+  ([#8208](https://github.com/ReviewStage/vespin/pull/8208),
+  [#8188](https://github.com/ReviewStage/vespin/pull/8188),
+  [#8178](https://github.com/ReviewStage/vespin/pull/8178))
+- An Inbox decide's options carry pictures, recordings, and pages on their
+  cards
+  ([#8312](https://github.com/ReviewStage/vespin/pull/8312),
+  [#8313](https://github.com/ReviewStage/vespin/pull/8313))
+- A task's Agents and Sub-tasks groups add a row from their heading, and show
+  even when empty
+  ([#8207](https://github.com/ReviewStage/vespin/pull/8207),
+  [#8316](https://github.com/ReviewStage/vespin/pull/8316))
+- Home and a person's page fold their sections, as a task's Overview does
+  ([#8273](https://github.com/ReviewStage/vespin/pull/8273),
+  [#8251](https://github.com/ReviewStage/vespin/pull/8251))
+- A sub-task put in a sidebar section stands there ([#8206](https://github.com/ReviewStage/vespin/pull/8206))
+- Recent page tabs keep their state when you return to them
+  ([#8184](https://github.com/ReviewStage/vespin/pull/8184),
+  [#8199](https://github.com/ReviewStage/vespin/pull/8199))
+- The pull request title edits with a click in its words ([#8089](https://github.com/ReviewStage/vespin/pull/8089))
+- A GitHub review thread's reply and a review's summary are written in the
+  shared message box, with Pending beside your name
+  ([#8096](https://github.com/ReviewStage/vespin/pull/8096),
+  [#8298](https://github.com/ReviewStage/vespin/pull/8298))
+- `slack`, `email`, and `draft` fences draw as they will look when sent, with a
+  Copy that keeps their formatting ([#8013](https://github.com/ReviewStage/vespin/pull/8013))
+- A pasted picture lands in the message as an inline chip ([#8026](https://github.com/ReviewStage/vespin/pull/8026))
+- A plain web link previews on hover ([#8025](https://github.com/ReviewStage/vespin/pull/8025))
+- An agent's card names everyone who started it ([#8087](https://github.com/ReviewStage/vespin/pull/8087))
+- Moving an agent still writing stops it first ([#8220](https://github.com/ReviewStage/vespin/pull/8220))
+- Vespin asks before you stop someone else's running agents ([#8267](https://github.com/ReviewStage/vespin/pull/8267))
+- Got it and Resolve can be undone ([#8092](https://github.com/ReviewStage/vespin/pull/8092),
+  [#8128](https://github.com/ReviewStage/vespin/pull/8128),
+  [#8129](https://github.com/ReviewStage/vespin/pull/8129))
+- Settings › Preferences stands apart from Account and holds Slack
+  notifications, and Settings' words are slimmer
+  ([#8197](https://github.com/ReviewStage/vespin/pull/8197),
+  [#8156](https://github.com/ReviewStage/vespin/pull/8156))
+- A forwarded or shared port is labeled with what serves it, and a shared
+  preview's address names its task's key
+  ([#8176](https://github.com/ReviewStage/vespin/pull/8176),
+  [#8274](https://github.com/ReviewStage/vespin/pull/8274))
+- Shared preview links and the sign-in page share as cards ([#8320](https://github.com/ReviewStage/vespin/pull/8320))
+- Every agent stands on a task, and a canceled task archives its agents
+  ([#7999](https://github.com/ReviewStage/vespin/pull/7999),
+  [#8115](https://github.com/ReviewStage/vespin/pull/8115))
+- Agents keep their task's status, and leave Done to you unless they are sure
+  you are finished
+  ([#8114](https://github.com/ReviewStage/vespin/pull/8114),
+  [#8276](https://github.com/ReviewStage/vespin/pull/8276))
+- New automations archive their finished runs ([#8110](https://github.com/ReviewStage/vespin/pull/8110))
+- A pull request offers an admin bypass merge ([#7912](https://github.com/ReviewStage/vespin/pull/7912))
+- Vespin's MCP server and CLI manage workspaces, members, invitations,
+  environment variables, Slack bot settings, agents' message queues, Inbox
+  threads, and connected clients, and rewind, wake, or delete agents and tasks
+  ([#8038](https://github.com/ReviewStage/vespin/pull/8038),
+  [#8040](https://github.com/ReviewStage/vespin/pull/8040),
+  [#8048](https://github.com/ReviewStage/vespin/pull/8048),
+  [#8051](https://github.com/ReviewStage/vespin/pull/8051),
+  [#8052](https://github.com/ReviewStage/vespin/pull/8052),
+  [#8057](https://github.com/ReviewStage/vespin/pull/8057),
+  [#8058](https://github.com/ReviewStage/vespin/pull/8058),
+  [#8059](https://github.com/ReviewStage/vespin/pull/8059),
+  [#8071](https://github.com/ReviewStage/vespin/pull/8071),
+  [#8084](https://github.com/ReviewStage/vespin/pull/8084),
+  [#8100](https://github.com/ReviewStage/vespin/pull/8100),
+  [#8104](https://github.com/ReviewStage/vespin/pull/8104),
+  [#8106](https://github.com/ReviewStage/vespin/pull/8106),
+  [#8108](https://github.com/ReviewStage/vespin/pull/8108),
+  [#8133](https://github.com/ReviewStage/vespin/pull/8133))
+- Vespin reads a newer service's answers without failing, and asks you to
+  update a build the service no longer serves
+  ([#8330](https://github.com/ReviewStage/vespin/pull/8330),
+  [#8331](https://github.com/ReviewStage/vespin/pull/8331),
+  [#8335](https://github.com/ReviewStage/vespin/pull/8335))
+
+### Fixes
+
+- Fixed ⌘W closing the window behind a dialog or the command palette, or a key
+  an input method was composing
+  ([#8174](https://github.com/ReviewStage/vespin/pull/8174),
+  [#8192](https://github.com/ReviewStage/vespin/pull/8192),
+  [#8165](https://github.com/ReviewStage/vespin/pull/8165))
+- Fixed ⌘S in a code editor on a non-Latin keyboard layout ([#8221](https://github.com/ReviewStage/vespin/pull/8221))
+- Fixed a code editor's two-digit line numbers wrapping, and a `>` line in a
+  fenced block drawing as a quote
+  ([#8349](https://github.com/ReviewStage/vespin/pull/8349),
+  [#8348](https://github.com/ReviewStage/vespin/pull/8348))
+- Fixed a refused send losing its words and files ([#8131](https://github.com/ReviewStage/vespin/pull/8131))
+- Fixed a typed pull request title being lost while it saved
+  ([#8042](https://github.com/ReviewStage/vespin/pull/8042),
+  [#8253](https://github.com/ReviewStage/vespin/pull/8253))
+- Fixed an agent's words folding away in a finished turn ([#8072](https://github.com/ReviewStage/vespin/pull/8072))
+- Fixed Stop showing before an agent's turn had started ([#8260](https://github.com/ReviewStage/vespin/pull/8260))
+- Fixed an archived agent's page staying open rather than going Home ([#8259](https://github.com/ReviewStage/vespin/pull/8259))
+- Fixed the `@` list losing its highlight as rows arrived, Escape leaking out of
+  one of its groups, and a task's key drawing out of place
+  ([#8170](https://github.com/ReviewStage/vespin/pull/8170),
+  [#8098](https://github.com/ReviewStage/vespin/pull/8098),
+  [#8090](https://github.com/ReviewStage/vespin/pull/8090),
+  [#8143](https://github.com/ReviewStage/vespin/pull/8143))
+- Fixed ⌘K's This task filter showing with no task open ([#8428](https://github.com/ReviewStage/vespin/pull/8428))
+- Fixed a notice marked read staying in the open count ([#7947](https://github.com/ReviewStage/vespin/pull/7947))
+- Fixed a bare link hiding part of its address ([#7887](https://github.com/ReviewStage/vespin/pull/7887))
+- Fixed a Codex message sent while stopping being dropped rather than run next ([#8235](https://github.com/ReviewStage/vespin/pull/8235))
+- Fixed a lapsed Codex sign-in reading differently from Integrations ([#8200](https://github.com/ReviewStage/vespin/pull/8200))
+- Fixed a Claude Code turn failing when its resume found no session ([#7974](https://github.com/ReviewStage/vespin/pull/7974))
+- Fixed an agent titled with the title model's own reply ([#8169](https://github.com/ReviewStage/vespin/pull/8169))
+- Fixed a deleted GitHub installation coming back ([#8242](https://github.com/ReviewStage/vespin/pull/8242))
+- Fixed the web app flashing its loading frame unstyled ([#8213](https://github.com/ReviewStage/vespin/pull/8213))
+
+### Misc
+
+- Updated agents to keep the Claude Agent SDK and Codex current, and to wait
+  with Vespin's own wakeups on every harness
+  ([#8002](https://github.com/ReviewStage/vespin/pull/8002),
+  [#8277](https://github.com/ReviewStage/vespin/pull/8277),
+  [#8288](https://github.com/ReviewStage/vespin/pull/8288))
+- Updated agents to stay out of `~/Music`, and explained macOS's access prompts ([#7989](https://github.com/ReviewStage/vespin/pull/7989))
+
 ## 0.31.0 — 2026-11-09
 
 ### Several plans and keys, used in order

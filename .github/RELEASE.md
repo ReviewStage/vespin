@@ -166,9 +166,19 @@ Apple's cloud-managed distribution certificate: once to a local `.ipa` it checks
 again to upload. The archive is never signed automatically, since a runner's keychain
 starts empty and automatic signing would create an Apple Development certificate on every
 run until the team reaches Apple's cap, and never unsigned, since an unsigned archive
-carries no entitlements to export. Its build number is `<run number>.<run attempt>`, so a
-re-run uploads a build App Store Connect has not seen. The build carries
+carries no entitlements to export. Its build number is the run's number, a whole number as
+TestFlight lists it. A re-run keeps that number, which App Store Connect refuses once it has
+uploaded, so a build after an upload is a fresh run. The build carries
 `aps-environment: production`, which the run checks in the exported app.
+
+The export registers each target's App ID and makes its profiles, but the App Group the
+app and its extensions share (`group.dev.vespin.ios`, `APP_GROUP` in `app.config.ts`) is
+registered by hand, once, in the Apple Developer account under **Certificates,
+Identifiers & Profiles → Identifiers**: add it under **App Groups**, then turn on
+**App Groups** with that group ticked on every App ID whose target names it in
+`app.config.ts`: `dev.vespin.ios`, `dev.vespin.ios.NotificationService`, and
+`dev.vespin.ios.AgentsLiveActivity`, and each later extension that shares it. An App ID
+that lacks it fails the export with no profile matching its entitlements.
 
 It needs an App Store Connect API key apart from the Mac release's, whose role is
 **Admin**, because the export creates the App Store profiles on the first run and signs

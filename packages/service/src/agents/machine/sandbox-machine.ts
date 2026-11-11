@@ -384,6 +384,9 @@ function readyScript(extraCheckouts: readonly string[]): string {
   ].join("\n");
 }
 
+/** The word the setup run marks each `<script> <exit>` line of its stderr with, so nothing else it printed there reads as one. */
+const SETUP_EXIT_MARK = "vespin-setup-exit";
+
 /** Where a created sandbox's setup writes the workspace's cloud setup scripts, as its default user, for the setup run to read. */
 const SETUP_FILE = {
   INSTALL: "/tmp/vespin-setup/install.sh",
@@ -392,36 +395,45 @@ const SETUP_FILE = {
 
 /**
  * The workspace's cloud setup scripts run in a sandbox just created, after
- * its checkout, by bash as its default user, as Conductor runs its setup
+ * its checkout, by bash as its default user, as a detached command nothing
+ * waits on, as Conductor runs its setup
  * script once a workspace is created and checked out: the install script as
  * root from the workspace folder, then, where it succeeded, the repository's
  * setup script from the checkout, its writes the group's as the clone's are
  * (`GROUP_WRITES`), each failing on its first failed command. What they print,
- * and how they exited, goes to `SETUP_LOG`, which every user reads; the run's
- * own stdout says only which ran and how each exited, a `<script> <exit>`
- * line apiece (`setupExits`), which is all the service keeps of it.
+ * and how they exited (`--- exit N`, once they finish), goes to `SETUP_LOG`,
+ * which every user reads, the agent among them; the run's own stderr says
+ * only which ran and how each exited, a `<script> <exit>` line apiece
+ * after `SETUP_EXIT_MARK` (`setupExits`), which is all the service keeps of it.
  */
 const SETUP_RUN_SCRIPT = [
   GROUP_WRITES,
   `: > ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
   "status=0",
-  `if [ -f ${SETUP_FILE.INSTALL} ]; then echo "--- install script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; (cd ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE} && sudo -n bash -e -o pipefail ${SETUP_FILE.INSTALL}) >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${CLOUD_SETUP_SCRIPT.INSTALL} $status"; fi`,
-  `if [ "$status" -eq 0 ] && [ -f ${SETUP_FILE.REPOSITORY} ]; then echo "--- setup script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; bash -e -o pipefail ${SETUP_FILE.REPOSITORY} >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${CLOUD_SETUP_SCRIPT.SETUP} $status"; fi`,
+  `if [ -f ${SETUP_FILE.INSTALL} ]; then echo "--- install script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; (cd ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE} && sudo -n bash -e -o pipefail ${SETUP_FILE.INSTALL}) >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${SETUP_EXIT_MARK} ${CLOUD_SETUP_SCRIPT.INSTALL} $status" >&2; fi`,
+  `if [ "$status" -eq 0 ] && [ -f ${SETUP_FILE.REPOSITORY} ]; then echo "--- setup script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; bash -e -o pipefail ${SETUP_FILE.REPOSITORY} >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; echo "${SETUP_EXIT_MARK} ${CLOUD_SETUP_SCRIPT.SETUP} $status" >&2; fi`,
   `echo "--- exit $status" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
   'exit "$status"',
 ].join("\n");
 
-/** A line of the setup run's stdout saying how one of its scripts exited (`SETUP_RUN_SCRIPT`). */
+/**
+ * How long past the answer a detached setup run is waited on for how its
+ * scripts exited, well inside the platform's default five-minute function
+ * lifetime, since the open itself spends some of it first.
+ */
+const SETUP_RECORD_WAIT = Duration.minutes(3);
+
+/** What the setup run's stderr says how one of its scripts exited by, after its mark; read wherever it stands, since the stderr's tail comes back on one line. */
 const SETUP_EXIT_LINE = new RegExp(
-  `^(${CLOUD_SETUP_SCRIPT.INSTALL}|${CLOUD_SETUP_SCRIPT.SETUP}) (\\d+)$`,
-  "gmu",
+  `${SETUP_EXIT_MARK} (${CLOUD_SETUP_SCRIPT.INSTALL}|${CLOUD_SETUP_SCRIPT.SETUP}) (\\d+)\\b`,
+  "gu",
 );
 
-/** Which of the setup run's scripts ran and how each exited, as its stdout says; a line it does not say so in is passed by. */
+/** Which of the setup run's scripts ran and how each exited, as its stderr says; a line it does not say so in is passed by. */
 function setupExits(
-  stdout: string,
+  stderr: string,
 ): readonly { readonly script: CloudSetupScript; readonly exitCode: number }[] {
-  return [...stdout.matchAll(SETUP_EXIT_LINE)].flatMap(([, script, exit]) =>
+  return [...stderr.matchAll(SETUP_EXIT_LINE)].flatMap(([, script, exit]) =>
     script === CLOUD_SETUP_SCRIPT.INSTALL || script === CLOUD_SETUP_SCRIPT.SETUP
       ? [{ script, exitCode: Number(exit) }]
       : [],
@@ -961,18 +973,63 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     });
 
   /**
+   * How the detached setup run's scripts exited, recorded as their last runs
+   * past the answer (`afterResponse`): the run is waited on for at most
+   * `SETUP_RECORD_WAIT`, inside the function's own lifetime, and its stderr
+   * read for the `<script> <exit>` lines it wrote. A run still going at the
+   * bound, or gone, records nothing, and nothing fails: the record is a
+   * courtesy no launch waits on. Nothing where no answer stands to wait past.
+   */
+  const recordedSetup = (
+    context: Context.Context<DatabaseServices>,
+    later: Option.Option<AfterResponse["Service"]>,
+    agent: Agent,
+    opened: SandboxRunning,
+    commandId: string,
+    ranAt: Date,
+    setup: SandboxSetup,
+  ) =>
+    Effect.gen(function* () {
+      if (Option.isNone(later)) return;
+      yield* afterResponse(
+        "A cloud setup's run record",
+        Effect.gen(function* () {
+          const exit = yield* api.commandExit(opened, commandId, SETUP_RECORD_WAIT);
+          if (typeof exit !== "number") {
+            return yield* Effect.logDebug("A cloud setup outlived its record's wait");
+          }
+          const stderr = yield* api.commandStderrTail(
+            opened,
+            commandId,
+            Object.values(setup.environment),
+          );
+          yield* Effect.forEach(setupExits(stderr ?? ""), ({ script, exitCode }) =>
+            scriptRanIn(agent, script, exitCode, ranAt).pipe(Effect.provide(context)),
+          );
+        }).pipe(
+          Effect.catch((failure) =>
+            Effect.logDebug(`A cloud setup's run was not read: ${failure._tag}`),
+          ),
+        ),
+      ).pipe(Effect.provideService(AfterResponse, later.value));
+    });
+
+  /**
    * The workspace's cloud setup scripts run in the sandbox just created
    * (`SETUP_RUN_SCRIPT`), each written to its file first so no script is
    * spliced into shell text, the setup script with the workspace's variables;
-   * nothing where none is saved. How each script that ran exited is recorded
-   * as its last run, for Settings › Cloud setup (`../script-runs.ts`). A setup
-   * that failed, or could not run, is logged and leaves the launch to go on,
-   * since the agent reads its log and says what failed.
+   * nothing where none is saved. They are started detached, as the runner
+   * is, and never waited on, so the runner launches at once and the first
+   * turn opens beside them, however long they take; the agent reads how they
+   * went in their log. How each script exited is recorded as its last run,
+   * for Settings › Cloud setup (`../script-runs.ts`), by a wait past the
+   * answer (`recordedSetup`) that a run outliving it leaves unrecorded. A
+   * setup that could not be started is logged and leaves the launch to go on.
    */
   const setUp = (
     context: Context.Context<DatabaseServices>,
+    later: Option.Option<AfterResponse["Service"]>,
     agent: Agent,
-    sandbox: RepositorySandbox,
     opened: SandboxRunning,
     setup: SandboxSetup | undefined,
   ) =>
@@ -987,24 +1044,18 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         script === undefined ? [] : [{ path, contents: encoder.encode(script), mode: 0o644 }],
       );
       yield* api.writeFiles(opened, files);
-      const ran = yield* runInSandbox(
-        sandbox,
-        {
-          command: SETUP_RUN_SCRIPT,
-          workingDirectory: CODER.CHECKOUT_PATH,
-          env: setup.environment,
-        },
-        REPOSITORY_REFUSAL.CHECKOUT_FAILED,
-      );
-      yield* Effect.forEach(setupExits(ran.stdout), ({ script, exitCode }) =>
-        scriptRanIn(agent, script, exitCode, ranAt).pipe(Effect.provide(context)),
-      );
-      if (ran.exitCode !== 0) {
-        yield* Effect.logWarning(`A sandbox's cloud setup exited ${ran.exitCode}`);
-      }
+      // Note that the scripts run as the sandbox's default user, as the clone's commands do.
+      const commandId = yield* api.start(opened, {
+        command: "bash",
+        args: ["-c", SETUP_RUN_SCRIPT],
+        cwd: CODER.CHECKOUT_PATH,
+        env: setup.environment,
+        sudo: false,
+      });
+      yield* recordedSetup(context, later, agent, opened, commandId, ranAt, setup);
     }).pipe(
       Effect.catch((failure) =>
-        Effect.logWarning(`A sandbox's cloud setup did not run: ${failure._tag}`),
+        Effect.logWarning(`A sandbox's cloud setup did not start: ${failure._tag}`),
       ),
       Effect.withSpan("web/sandboxSetup"),
     );
@@ -1026,6 +1077,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    */
   const checkedOutIn = (
     context: Context.Context<DatabaseServices>,
+    later: Option.Option<AfterResponse["Service"]>,
     checkout: AgentCheckoutReads,
     from: CreatedFrom,
     opened: SandboxRunning,
@@ -1041,7 +1093,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       );
       // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
       if (from !== CREATED_FROM.SOURCE) {
-        yield* setUp(context, checkout.agent, sandbox, opened, yield* checkout.setup);
+        yield* setUp(context, later, checkout.agent, opened, yield* checkout.setup);
       }
       return refill;
     });
@@ -1067,6 +1119,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     Effect.gen(function* () {
       const context = yield* Effect.context<DatabaseServices>();
       const parent = yield* Effect.serviceOption(Tracer.ParentSpan);
+      // Note that the create's own setup runs on the edge's runner, so what waits past the answer is handed to it from here.
+      const later = yield* Effect.serviceOption(AfterResponse);
       let refused: CheckoutRefused | undefined;
       let moved = false;
       const { sandbox, created } = yield* openAgentSandbox(
@@ -1083,7 +1137,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
               runUnder(
                 run,
                 parent,
-                checkedOutIn(context, checkout, attempt.from, runningOf(opened)).pipe(
+                checkedOutIn(context, later, checkout, attempt.from, runningOf(opened)).pipe(
                   Effect.tap((lockfile) =>
                     Effect.sync(() => {
                       moved = lockfile;

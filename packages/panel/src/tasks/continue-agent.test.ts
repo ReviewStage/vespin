@@ -444,7 +444,7 @@ function signInCard(container: ParentNode): HTMLElement | null {
   return container.querySelector<HTMLElement>(".agent-end .ui-banner");
 }
 
-test("a launch its Mac's GitHub sign-in could not start ends on a card naming the Mac and the repository, whose Copy copies the sign-in command and whose Retry asks the service to send again once however often pressed, writing no line of its own", async () => {
+test("a launch its Mac's GitHub sign-in could not start ends on a card naming the Mac and the repository, whose Copy copies the sign-in command and whose Try again asks the service to send again once however often pressed, writing no line of its own", async () => {
   const copied: string[] = [];
   const sent: string[] = [];
   const retried: string[] = [];
@@ -466,7 +466,7 @@ test("a launch its Mac's GitHub sign-in could not start ends on a card naming th
   await vi.waitFor(() =>
     assert.match(
       card.textContent ?? "",
-      /^Studio can't reach acme\/web on GitHub\.Sign in on that Mac, then retry:/,
+      /^Studio can't reach acme\/web on GitHub\.Sign in on that Mac, then try again:/,
     ),
   );
   assert.equal(tab.endRow(), null);
@@ -476,7 +476,7 @@ test("a launch its Mac's GitHub sign-in could not start ends on a card naming th
   await act(async () => (copy ?? assert.fail("the card offers Copy")).click());
   assert.deepEqual(copied, ["gh auth login"]);
 
-  const retry = tab.named(card, "Retry") ?? assert.fail("the card offers Retry");
+  const retry = tab.named(card, "Try again") ?? assert.fail("the card offers Try again");
   act(() => {
     retry.click();
     retry.click();

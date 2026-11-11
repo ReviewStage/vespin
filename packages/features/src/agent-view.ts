@@ -651,6 +651,8 @@ export const agentAgentAnswerSchema = EffectSchema.Union([
     agent: agentSummarySchema,
     txid: agentAnswerSchema.fields.txid,
     addedCheckout: agentAnswerSchema.fields.addedCheckout,
+    /** That a message sent waits in the agent's queue while its first launch boots, rather than in its transcript; absent for every other answer. */
+    queued: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   }),
   failedReaching,
 ]);

@@ -8,6 +8,11 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import {
+  AUTOMATION_PRESET,
+  type AutomationPresetName,
+  automationPreset,
+} from "@repo/features/automation-presets";
+import {
   AUTOMATION_CALL_FAILURE,
   type AutomationCallFailure,
 } from "@repo/features/automation-view";
@@ -22,6 +27,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { momentText } from "@repo/features/time-format";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT, type Experiment, experimentOn } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
@@ -50,6 +56,8 @@ import {
   RowHint,
   RowHintOptions,
   STATUS_TONE,
+  SuggestionCard,
+  SuggestionCards,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
@@ -63,6 +71,7 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { ACTOR_KIND, actorName } from "@repo/ui/actor-model";
+import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -85,6 +94,7 @@ import { stateEndMark } from "../state-glyph.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useToast } from "../toast.js";
+import { useExperimentsIn } from "../workspace-experiments.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
 import { rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
@@ -140,6 +150,11 @@ import {
  * building for the workspace and a lock for Only you. A row's glyph wears
  * where its newest run stands, a failure keeps its mark at the row's end,
  * and an automation turned off reads "Off" where its next run would.
+ * Under the list, or under the line saying there is none yet, stand the
+ * suggested automations: a press opens a new automation's page filled in
+ * from the suggestion's preset (`@repo/features/automation-presets`), to
+ * look over and Create. A suggestion behind an experiment, as Memory digest
+ * stands behind the workspace's Memory, is offered only while it is on.
  * Beside New automation, Create with an agent opens New task's own card for
  * the agent that makes one: what to automate in the member's own words, the
  * repository and the model, then Start agent, a new task's agent handed the
@@ -618,7 +633,65 @@ function AutomationsHead({
   );
 }
 
-/** The list's page: the listed workspace's automations, a new one a press away. */
+/**
+ * The presets the list suggests, in its order, each by the glyph of what it
+ * does and the experiment it stands behind, where it stands behind one.
+ * Note that one whose experiment is off where the window works is
+ * suggested nowhere, and a new page its address names opens blank.
+ */
+const SUGGESTIONS: readonly {
+  readonly preset: AutomationPresetName;
+  readonly glyph: React.ReactNode;
+  readonly experiment?: Experiment;
+}[] = [
+  {
+    preset: AUTOMATION_PRESET.MEMORY_DIGEST,
+    glyph: <GLYPH.MEMORY />,
+    experiment: EXPERIMENT.MEMORY,
+  },
+];
+
+/** The presets suggested where the window works in `workspaceId`: each whose experiment is on there, or that has none. */
+function useOfferedPresets(workspaceId: string | undefined): readonly AutomationPresetName[] {
+  const experiments = useExperimentsIn(workspaceId);
+  return SUGGESTIONS.filter(
+    ({ experiment }) => experiment === undefined || experimentOn(experiments, experiment),
+  ).map(({ preset }) => preset);
+}
+
+/**
+ * The automations suggested under the list, or under the line saying there
+ * is none yet, each a card whose press opens a new automation's page filled
+ * in from its preset, to look over and Create; nothing where none is
+ * offered.
+ */
+function SuggestedAutomations({ tasks }: { tasks: TasksControl }): React.JSX.Element | null {
+  const door = useAutomationsDoor(tasks);
+  const workspace = tasks.workspace;
+  const offered = useOfferedPresets(workspace?.id);
+  if (offered.length === 0) return null;
+  return (
+    <div className="automation-suggestions mt-page-section-gap">
+      <SuggestionCards title="Suggested">
+        {SUGGESTIONS.filter(({ preset }) => offered.includes(preset)).map(({ preset, glyph }) => {
+          const filled = automationPreset(preset);
+          return (
+            <SuggestionCard
+              key={preset}
+              glyph={glyph}
+              name={filled.name}
+              detail={filled.description}
+              disabled={workspace === undefined}
+              onPress={() => door.open({ kind: AUTOMATIONS_PAGE.NEW, preset })}
+            />
+          );
+        })}
+      </SuggestionCards>
+    </div>
+  );
+}
+
+/** The list's page: the listed workspace's automations, a new one a press away, and the automations suggested under them. */
 function ListPage({
   tasks,
   automations,
@@ -673,19 +746,23 @@ function ListPage({
         {groups.length === 0 ? (
           <div className="automations-empty flex min-h-0 flex-1 flex-col before:flex-2 before:content-[''] after:flex-3 after:content-[''] [&>.ui-empty-state]:flex-none">
             <EmptyState icon={<ZapIcon />}>No automations yet.</EmptyState>
+            <SuggestedAutomations tasks={tasks} />
           </div>
         ) : (
-          <AutomationList
-            groups={groups}
-            workspace={workspace}
-            now={now}
-            narrow={room === SHELL_ROOM.NARROW}
-            onOpen={(automation) =>
-              door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
-            }
-            onToggle={(automation, enabled) => toggle(automation.id, enabled)}
-            onDelete={deletion.ask}
-          />
+          <>
+            <AutomationList
+              groups={groups}
+              workspace={workspace}
+              now={now}
+              narrow={room === SHELL_ROOM.NARROW}
+              onOpen={(automation) =>
+                door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
+              }
+              onToggle={(automation, enabled) => toggle(automation.id, enabled)}
+              onDelete={deletion.ask}
+            />
+            <SuggestedAutomations tasks={tasks} />
+          </>
         )}
         <ConfirmDialog
           open
@@ -1015,6 +1092,7 @@ function AutomationsPages({
   // a workspaces read that did not land says so instead.
   const automations = useAutomations(workspace?.id);
   const workspacesRead = useWorkspacesRead();
+  const offered = useOfferedPresets(workspace?.id);
   // The automation the new page made, whose page is that same editor still, so what was typed while it was made stands.
   const [made, setMade] = useState<string | undefined>(undefined);
   const back = () => door.open({ kind: AUTOMATIONS_PAGE.LIST });
@@ -1061,10 +1139,18 @@ function AutomationsPages({
     );
   }
   const editing = opened === undefined || opened.id === made ? AUTOMATIONS_PAGE.NEW : opened.id;
+  // A new page is filled in from the suggestion its address names only while that suggestion is offered.
+  const preset =
+    place.kind === AUTOMATIONS_PAGE.NEW &&
+    place.preset !== undefined &&
+    offered.includes(place.preset)
+      ? place.preset
+      : undefined;
   const editor = (sentry: SentryOffer, slackBot: boolean) => (
     <AutomationEditor
       key={editing}
       automation={opened}
+      preset={preset}
       workspace={workspace}
       offersOwner={offersOwner}
       repositories={tasks.newTask.repositoriesIn(workspace?.id)}

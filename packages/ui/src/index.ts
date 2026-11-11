@@ -179,6 +179,7 @@ export * from "./components/status-dot/status-dot.js";
 export * from "./components/stepped-back/stepped-back.js";
 export * from "./components/steps/steps.js";
 export * from "./components/subject-line/subject-line.js";
+export * from "./components/suggestion-card/suggestion-card.js";
 export * from "./components/swatch/swatch.js";
 export * from "./components/switch/switch.js";
 export * from "./components/tab-notice/tab-notice.js";

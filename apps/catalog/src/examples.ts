@@ -135,6 +135,7 @@ import { SPINNERS_EXAMPLE } from "./examples/spinners";
 import { SPLIT_BARS_EXAMPLE } from "./examples/split-bars";
 import { SPLIT_BUTTONS_EXAMPLE } from "./examples/split-buttons";
 import { STEPS_EXAMPLE } from "./examples/steps";
+import { SUGGESTION_CARDS_EXAMPLE } from "./examples/suggestion-cards";
 import { SWATCHES_EXAMPLE } from "./examples/swatches";
 import { SWITCHES_EXAMPLE } from "./examples/switches";
 import { TAB_NOTICES_EXAMPLE } from "./examples/tab-notices";
@@ -233,6 +234,7 @@ export const EXAMPLES: readonly Example[] = [
   HOVER_CARDS_EXAMPLE,
   INLINE_EDITS_EXAMPLE,
   INLINE_REFS_EXAMPLE,
+  SUGGESTION_CARDS_EXAMPLE,
   SWATCHES_EXAMPLE,
   TEXT_BUTTONS_EXAMPLE,
   TEXT_FIELDS_EXAMPLE,
