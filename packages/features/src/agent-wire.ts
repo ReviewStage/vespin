@@ -1592,6 +1592,8 @@ export type ChangedFileStatus = (typeof CHANGED_FILE_STATUS)[keyof typeof CHANGE
 export const PATCH_OMITTED = {
   BINARY: "binary",
   TOO_LARGE: "too-large",
+  /** A secret file's (`isSecretFile`), whose lines no read carries, as a turn's diff reads its checkout (`checkout-diff.ts`). */
+  SECRET: "secret",
 } as const;
 
 export const CHANGES_BOUNDS = {

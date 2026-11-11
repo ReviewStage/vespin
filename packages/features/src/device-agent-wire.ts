@@ -43,6 +43,14 @@ export const DEVICE_AGENT_BOUNDS = {
   /** The most characters of diff one answer carries, past the diff script's own bound (`CHECKOUT_DIFF_BOUNDS.MAX_BYTES`). */
   MAX_DIFF_CHARS: 8 * 1024 * 1024,
   /**
+   * The most milliseconds a diff runs on the Mac before it is answered as
+   * failed, and the service waits on its answer before the request is
+   * withdrawn: one number, so neither gives up on a diff the other is still
+   * at, within the window's own deadline on the read
+   * (`HOSTED_DEADLINE.TURN_CHANGES`).
+   */
+  DIFF_WAIT_MS: 60_000,
+  /**
    * The most bytes of files and their paths, raw, one files line carries:
    * about 4 MB in base64, so its claim answers under the 4.5 MB a Vercel
    * function may answer. A file is never split, so one larger goes in a line
