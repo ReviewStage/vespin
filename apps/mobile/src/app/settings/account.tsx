@@ -27,8 +27,8 @@ import { useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { clearAccountNotifications } from "../../notifications.js";
-import { unregisterPushDevice, useFixtureRun } from "../../push-device.js";
-import { useWrite } from "../../use-write.js";
+import { useSignOut } from "../../sign-out.js";
+import { refusalOf, useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -38,7 +38,6 @@ const DELETE_ACCOUNT = "Delete account";
 export default function AccountScreen() {
   const acts = useHostActs();
   const write = useWrite();
-  const fixture = useFixtureRun();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const { data: settings } = useQuery({ ...appStateQuery, select: selectAppSettingsView });
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -47,31 +46,29 @@ export default function AccountScreen() {
     ...appStateQuery,
     select: (state) => supportAccessStanding(state, Date.now()),
   });
-  const signOut = useAsyncAction(() => undefined);
+  const signOutAccount = useSignOut();
+  const signOut = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const deletion = useAsyncAction(accountDeleteRefusalWords);
-  const supportPress = useAsyncAction(() => undefined);
+  const supportPress = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const usage = useAsyncAction(() => ACT_UNREACHED_WORDS);
   // Note that the system's switch keeps the turn a person made, so a refused write redraws it from the stored choice.
   const [usageRound, setUsageRound] = useState(0);
   const [asking, setAsking] = useState(false);
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return null;
-  // Note that the phone is unregistered first, while the account's credential still stands, so no push of the account reaches a phone signed out of it; the unregister's own deadline bounds the wait.
+  // Note that a sign-out refused says why under its row, in the host's words.
   const signOutNow = () =>
-    void signOut.run(() =>
-      write(
-        () =>
-          unregisterPushDevice(acts, fixture)
-            .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
-            .then(() => clearAccountNotifications()),
-        { retry: true },
-      ).then(() => undefined),
-    );
-  // Note that support access goes through the write door too, so a refusal says why in the notice.
+    void signOut.run(() => {
+      const said: { words?: string } = {};
+      return signOutAccount({
+        inPlace: (words) => {
+          said.words = words;
+        },
+      }).then(() => said.words);
+    });
+  // Note that support access goes through the write door too, its refusal said in place.
   const pressSupport = (grant: boolean) =>
     void supportPress.run(() =>
-      write(() => acts[ACT_KIND.ACCOUNT_SUPPORT_ACCESS]({ grant }), { retry: true }).then(
-        () => undefined,
-      ),
+      refusalOf(write, () => acts[ACT_KIND.ACCOUNT_SUPPORT_ACCESS]({ grant })),
     );
   // Note that the delete happens at the service before anything local moves, so a refusal says why under the row and the account, and this phone's pushes, still stand.
   const deleteNow = () =>
@@ -91,7 +88,10 @@ export default function AccountScreen() {
               detail={`Signed in with ${SOCIAL_PROVIDER_LABEL[account.provider]}`}
             />
           </ListSection>
-          <ListSection title="Privacy" footer={usage.refusal ?? support?.words}>
+          <ListSection
+            title="Privacy"
+            footer={usage.refusal ?? supportPress.refusal ?? support?.words}
+          >
             {settings === undefined ? null : (
               <ToggleRow
                 key={usageRound}
@@ -126,7 +126,7 @@ export default function AccountScreen() {
               />
             ) : null}
           </ListSection>
-          <ListSection>
+          <ListSection footer={signOut.refusal}>
             <ActionRow label={VERB.SIGN_OUT} destructive onPress={signOutNow} />
           </ListSection>
           <ListSection footer={deletion.refusal}>
