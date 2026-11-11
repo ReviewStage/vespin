@@ -231,10 +231,8 @@ const READ_ONLY_ENDED_BAR: TerminalBar = {
   late: false,
 };
 
-/** What a run action's read-only tab says of the state: as any tab says it, but a key never starts a shell where its shell ended, and connected it says it is read-only. */
+/** What a run action's read-only tab says of the state: as any tab says it, but a key never starts a shell where its shell ended. */
 export function readOnlyTerminalLook(state: TerminalState): TerminalLook {
   const look = terminalLook(state);
-  if (state.kind === TERMINAL_STATE.EXITED) return { ...look, bar: READ_ONLY_ENDED_BAR };
-  if (state.kind === TERMINAL_STATE.ATTACHED) return { ...look, words: "read-only" };
-  return look;
+  return state.kind === TERMINAL_STATE.EXITED ? { ...look, bar: READ_ONLY_ENDED_BAR } : look;
 }

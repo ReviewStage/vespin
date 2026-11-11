@@ -1,14 +1,14 @@
 import { knownTaskSectionIcon, type LooseTaskSectionIcon } from "@repo/features/task-section-wire";
 import type { TerminalSummary } from "@repo/features/terminal-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { PlayIcon } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import type { TerminalStripTab } from "@repo/ui/tab-strip-model";
 import { queryOptions, useQueries } from "@tanstack/react-query";
 import { useCallback, useContext, useMemo } from "react";
 import { askAct } from "../act.js";
 import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { useOwnedShells } from "./terminal-held.js";
+import { type HeldAction, useOwnedShells } from "./terminal-held.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
 import { TerminalsContext } from "./use-terminal-session.js";
 import { useWindowAccount } from "./window-account.js";
@@ -21,8 +21,9 @@ import { useWindowAccount } from "./window-account.js";
  * the agent's shells says of each run action's whether its process runs or
  * how it exited. The Run button reads that list to offer Run or Stop
  * (`run-actions-button.tsx`), and each run action's tab reads the same list
- * to say where its action stands beside its label ("Dev server · Running",
- * "Check · Exited 1"), wearing the action's icon rather than the terminal's.
+ * to say where its action stands ("Running", "Exited 1", "Stopped") as its
+ * own words beside its label, never joined to it, wearing the action's icon
+ * rather than the terminal's.
  */
 
 /** How often a shown list of an agent's shells is read again, as the Terminal tab's own list goes. */
@@ -50,10 +51,12 @@ export function shellsQuery(agentId: string, shown: boolean, enabled: boolean) {
   });
 }
 
-/** A run action's glyph: its own icon, or the play triangle where it wears none. */
+/** A run action's glyph: its own icon, or the run action's rocket where it wears none. */
 export function runActionGlyph(icon: LooseTaskSectionIcon | undefined): React.JSX.Element {
   return (
-    (icon === undefined ? undefined : sectionGlyph(knownTaskSectionIcon(icon))) ?? <PlayIcon />
+    (icon === undefined ? undefined : sectionGlyph(knownTaskSectionIcon(icon))) ?? (
+      <GLYPH.RUN_ACTION />
+    )
   );
 }
 
@@ -67,9 +70,10 @@ function runStandingWords(shell: TerminalSummary): string {
     : STANDING_WORDS.SIGNALED(exited.signal);
 }
 
-/** How a run action's Terminal tab looks: the action's icon, and where it stands once its shell is read. */
+/** How a run action's Terminal tab looks: the action it runs, and whether it runs and in what words once its shell is read. */
 export interface RunTabLook {
-  readonly icon: LooseTaskSectionIcon | undefined;
+  readonly action: HeldAction;
+  readonly running: boolean | undefined;
   readonly standing: string | undefined;
 }
 
@@ -108,7 +112,8 @@ export function useRunTabLooks(
       const shells = listed !== undefined && "terminals" in listed ? listed.terminals : [];
       const shell = shells.find((each) => each.id === entry.terminal);
       return {
-        icon: entry.action.icon,
+        action: entry.action,
+        running: shell?.running,
         standing: shell === undefined ? undefined : runStandingWords(shell),
       };
     },

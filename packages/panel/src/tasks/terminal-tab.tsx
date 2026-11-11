@@ -1,6 +1,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   readOnlyTerminalLook,
+  TERMINAL_STATE,
   type TerminalAction,
   type TerminalBar,
   terminalLook,
@@ -8,6 +9,10 @@ import {
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
+  Badge,
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_FLOW,
@@ -20,6 +25,7 @@ import {
   Text,
   TextButton,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { STRIP_TAB_KIND, type TerminalStripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useContext, useMemo, useState } from "react";
@@ -32,7 +38,8 @@ import { TERMINAL_FIND, type TerminalFind } from "../terminal/contract.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectMirrors } from "../use-app-state.js";
 import { AgentRef, agentSubject, NOTHING_HELD } from "./agent-ref.js";
-import { useRunTabLooks } from "./run-action-shells.js";
+import { type RunTabLook, useRunTabLooks } from "./run-action-shells.js";
+import { useRunActionPress } from "./run-actions-button.js";
 import { AgentGlyph } from "./tab-look.js";
 import { useHeldShells } from "./terminal-held.js";
 import {
@@ -90,6 +97,43 @@ function useScrollbackFind(find: TerminalFind | undefined): FindSource | undefin
           },
     [find],
   );
+}
+
+/** What an action's tab says it is, beside where the action stands. */
+const READ_ONLY = "Read-only";
+
+/** What the tab's Run and Stop say: the button's word, and the whole act a reader hears. */
+const RUN_WORDS = {
+  RUN: "Run",
+  STOP: "Stop",
+  RUN_LABEL: (label: string) => `Run ${label}`,
+  STOP_LABEL: (label: string) => `Stop ${label}`,
+} as const;
+
+/** A run action's tab's own press: Stop while its process runs, Run otherwise, which runs it again in this tab. */
+function runControlOf(
+  run: RunTabLook,
+  label: string,
+  press: ReturnType<typeof useRunActionPress>,
+): {
+  readonly words: string;
+  readonly label: string;
+  readonly icon: React.JSX.Element;
+  readonly onPress: () => void;
+} {
+  return run.running === true
+    ? {
+        words: RUN_WORDS.STOP,
+        label: RUN_WORDS.STOP_LABEL(label),
+        icon: <GLYPH.STOP />,
+        onPress: () => press.stop(run.action),
+      }
+    : {
+        words: RUN_WORDS.RUN,
+        label: RUN_WORDS.RUN_LABEL(label),
+        icon: <GLYPH.RUN_ACTION />,
+        onPress: () => press.run(run.action),
+      };
 }
 
 /** No cloud tab, which a Local tab hands the run action looks. */
@@ -170,7 +214,7 @@ export function TerminalTab({
   // Note that a Local tab says which step of the agent's mirror it waits on while it connects, where the host said.
   const mirrors = useQuery({ ...appStateQuery, select: selectMirrors }).data;
   const mirror = tab.kind === STRIP_TAB_KIND.LOCAL ? mirrors?.[agentId] : undefined;
-  // A run action's tab is read-only, and its bar says where the action stands before how it is connected.
+  // A run action's tab is read-only, and its bar says where the action stands and offers to run or stop it.
   const runLook = useRunTabLooks(
     tab.kind === STRIP_TAB_KIND.TERMINAL ? [tab] : NO_CLOUD_TAB,
     shown,
@@ -179,8 +223,8 @@ export function TerminalTab({
     runLook === undefined
       ? terminalLook(session.state, mirror)
       : readOnlyTerminalLook(session.state);
-  const words =
-    runLook?.standing === undefined ? look.words : `${runLook.standing} · ${look.words}`;
+  const press = useRunActionPress(agentId);
+  const runControl = runLook === undefined ? undefined : runControlOf(runLook, tab.title, press);
   // A phone draws no bar over the screen: its header's ⋯ opens the agent.
   const phone = usePhoneRoom();
   // Note that a phone has no title bar to carry "connecting…", so a state only that bar says is said in a bar over the screen.
@@ -195,6 +239,16 @@ export function TerminalTab({
               detail: subject.name,
               onSelect: onOpenAgent,
             },
+            ...(runControl === undefined
+              ? []
+              : [
+                  {
+                    label: runControl.label,
+                    icon: runControl.icon,
+                    disabled: press.busy,
+                    onSelect: runControl.onPress,
+                  },
+                ]),
           ],
         ]
       : undefined,
@@ -205,6 +259,7 @@ export function TerminalTab({
         <PaneBar
           middle={
             // Note that the name and where the connection stands share one shrinking box, so a long name is cut rather than running past the bar.
+            // Note that each fact stands as its own element a gap apart, never joined by a dot: a run action's standing and read-only as badges, the connection as quiet words.
             <span className="terminal-tab-title inline-flex min-w-0 items-center gap-item-gap overflow-hidden whitespace-nowrap text-muted-foreground">
               <AgentRef
                 subject={subject}
@@ -213,8 +268,27 @@ export function TerminalTab({
                 glyph={<AgentGlyph agent={subject.agent} />}
                 label={subject.name}
               />
-              <span className="terminal-tab-standing flex-none">· {words}</span>
+              {runLook?.standing === undefined ? null : <Badge>{runLook.standing}</Badge>}
+              {runLook !== undefined && session.state.kind === TERMINAL_STATE.ATTACHED ? (
+                <Badge>{READ_ONLY}</Badge>
+              ) : (
+                <span className="terminal-tab-standing flex-none">{look.words}</span>
+              )}
             </span>
+          }
+          actions={
+            runControl === undefined ? undefined : (
+              <Button
+                variant={BUTTON_VARIANT.QUIET}
+                size={BUTTON_SIZE.COMPACT}
+                icon={runControl.icon}
+                label={runControl.label}
+                disabled={press.busy}
+                onClick={runControl.onPress}
+              >
+                {runControl.words}
+              </Button>
+            )
           }
         />
       )}

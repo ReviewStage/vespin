@@ -112,7 +112,7 @@ export type TabSubject =
       readonly kind: typeof TAB_KIND.TERMINAL;
       /** The terminal's name ("Cloud 1"), or its run action's label, which names the tab. */
       readonly title: string;
-      /** Where the terminal is a run action's: its icon, which the tab wears, and where it stands, which follows its name; none for a developer's own shell. */
+      /** Where the terminal is a run action's, whose icon the tab wears; none for a developer's own shell. */
       readonly action?: RunTabLook | undefined;
     }
   | {
@@ -273,16 +273,17 @@ export function tabLook(subject: TabSubject): KindLook {
       };
     // Note that a terminal wears the terminal's own still glyph rather than its agent's, which
     // moves while the agent works, and is named by its terminal; each place drawing it names the agent beside it.
-    // A run action's wears the action's icon and says where it stands after its name ("Dev server · Running").
-    case TAB_KIND.TERMINAL: {
-      const { action } = subject;
-      if (action === undefined) return { icon: <GLYPH.TERMINAL />, label: subject.title };
+    // A run action's wears the action's icon; where it stands is the place's own detail, never joined to its name.
+    case TAB_KIND.TERMINAL:
       return {
-        icon: runActionGlyph(action.icon),
-        label:
-          action.standing === undefined ? subject.title : `${subject.title} · ${action.standing}`,
+        icon:
+          subject.action === undefined ? (
+            <GLYPH.TERMINAL />
+          ) : (
+            runActionGlyph(subject.action.action.icon)
+          ),
+        label: subject.title,
       };
-    }
     case TAB_KIND.LOCAL:
       return { icon: <GLYPH.TERMINAL />, label: subject.title };
     case TAB_KIND.FILE: {

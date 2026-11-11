@@ -12,7 +12,6 @@ import {
   INLINE_REF_LOOK,
   Inline,
   InlineRef,
-  PlayIcon,
   SplitButton,
   STATUS_TONE,
   useMenu,
@@ -36,6 +35,7 @@ import { showToast } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { runActionGlyph, shellsQuery } from "./run-action-shells.js";
+import type { HeldAction } from "./terminal-held.js";
 import { listedAgentIn } from "./use-workspace-agents.js";
 
 /**
@@ -121,7 +121,7 @@ function pressFailed(
 async function runAction(
   queries: QueryClient,
   agentId: string,
-  action: RunAction,
+  action: HeldAction,
   stopped: boolean,
   onShowShell: ((terminal: ShownShell) => void) | undefined,
 ): Promise<void> {
@@ -137,13 +137,40 @@ async function runAction(
 }
 
 /** Stops one action's shell, its answer laid over the shells read. */
-async function stopAction(queries: QueryClient, agentId: string, action: RunAction): Promise<void> {
+async function stopAction(
+  queries: QueryClient,
+  agentId: string,
+  action: HeldAction,
+): Promise<void> {
   const answer = await askAct(ACT_KIND.AGENTS_RUN_ACTION_STOP, {
     agentId,
     actionId: action.id,
   }).catch((cause: unknown) => ({ failure: cause }));
   if ("terminals" in answer) queries.setQueryData([QUERY_ROOT.AGENT_SHELLS, agentId], answer);
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION_STOP, agentId, answer, WORDS.NOT_STOPPED);
+}
+
+/**
+ * Runs or stops one of an agent's run actions from the tab that shows it,
+ * through the presses the Run button makes, the tab already shown; and
+ * whether a press is under way, which holds the tab's button.
+ */
+export function useRunActionPress(agentId: string): {
+  readonly busy: boolean;
+  readonly run: (action: HeldAction) => void;
+  readonly stop: (action: HeldAction) => void;
+} {
+  const queries = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const pressed = (press: Promise<void>) => {
+    setBusy(true);
+    void press.finally(() => setBusy(false));
+  };
+  return {
+    busy,
+    run: (action) => pressed(runAction(queries, agentId, action, false, undefined)),
+    stop: (action) => pressed(stopAction(queries, agentId, action)),
+  };
 }
 
 /** One of the agent's run actions as a place offers it: the action, whether it runs now, and the press that runs or stops it. */
@@ -241,9 +268,9 @@ function actionLabel({ action, runs }: OfferedAction): string {
   return runs ? WORDS.STOP(action.label) : action.label;
 }
 
-/** An action's glyph: Stop while it runs, otherwise its own icon, or the play triangle where it wears none. */
-function actionGlyph({ action, runs }: OfferedAction): React.JSX.Element {
-  return runs ? <GLYPH.STOP /> : runActionGlyph(action.icon);
+/** An action's glyph, its own icon whether or not it runs, so a reader keeps track of which action a Stop ends. */
+function actionGlyph({ action }: OfferedAction): React.JSX.Element {
+  return runActionGlyph(action.icon);
 }
 
 /** The actions as a menu lists them, the primary printing ⌥⌘R where it acts on the agent, then the way to edit them. */
@@ -252,7 +279,8 @@ function runItems(offer: RunOffer): MenuAction[][] {
     const item: MenuAction = {
       key: offered.action.id,
       label: actionLabel(offered),
-      detail: offered.action.command,
+      // While it runs its row says so under "Stop" and its name, rather than its command.
+      detail: offered.runs ? WORDS.RUNNING : offered.action.command,
       icon: actionGlyph(offered),
       replayMasked: true,
       onSelect: offered.onPress,
@@ -267,7 +295,7 @@ function runItems(offer: RunOffer): MenuAction[][] {
 /** Run ›, the actions as a phone's ⋯ lists them, where no button stands. */
 export function runSubmenu(offer: RunOffer | undefined): MenuSubmenu | undefined {
   if (offer === undefined) return undefined;
-  return { label: WORDS.SUBMENU, icon: <PlayIcon />, items: runItems(offer).flat() };
+  return { label: WORDS.SUBMENU, icon: <GLYPH.RUN_ACTION />, items: runItems(offer).flat() };
 }
 
 /** One action as ⌘K lists it: Run or Stop and its name, its command or that it runs, and ⌥⌘R on the primary where the key acts. */
@@ -318,7 +346,7 @@ export function RunActionsButton({
   return (
     <>
       <SplitButton
-        icon={first.runs ? <GLYPH.STOP /> : <PlayIcon />}
+        icon={first.runs ? <GLYPH.STOP /> : <GLYPH.RUN_ACTION />}
         label={WORDS.IN(said, agentName)}
         hintLabel={WORDS.IN(said, agentName)}
         busy={offer.busy}

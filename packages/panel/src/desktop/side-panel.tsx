@@ -1203,14 +1203,15 @@ function stripTabs(input: {
   }));
   // A cloud terminal tab is named by its terminal, wears the terminal glyph and its agent's name, and
   // hangs its agent's card, saying under a rule whose sandbox its shell runs in; a run action's wears
-  // the action's icon and says where it stands after its name.
+  // the action's icon and says where it stands ("Running") in the agent's name's place, its card naming the agent.
   const terminalTabs = terminals.map((tab) => {
     const subject = agentSubject(agentsOf(tab.terminal), tab.terminal, held, false);
+    const run = input.runLookOf(tab);
     return {
       tab,
       look: look(tab, {
-        ...tabLook({ kind: TAB_KIND.TERMINAL, title: tab.title, action: input.runLookOf(tab) }),
-        detail: subject.name,
+        ...tabLook({ kind: TAB_KIND.TERMINAL, title: tab.title, action: run }),
+        detail: run?.standing ?? subject.name,
         card: hungCard({ kind: TAB_KIND.TERMINAL, subject, models }),
       }),
       close: () => panel.onClose(tab),
