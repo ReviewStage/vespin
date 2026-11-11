@@ -1,8 +1,10 @@
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
-import { Fragment, type Node as PmNode, Slice } from "@tiptap/pm/model";
+import { Fragment, type NodeType, type Node as PmNode, Slice } from "@tiptap/pm/model";
+import type { Transaction } from "@tiptap/pm/state";
+import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
-import type { PictureNode, PictureTaken, DescriptionEditorPictures } from "./contract.js";
+import type { DescriptionEditorPictures, PictureNode, PictureTaken } from "./contract.js";
 
 /**
  * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
@@ -137,9 +139,29 @@ function removedAt(view: EditorView, pos: number): void {
 }
 
 /**
- * Pictures laid in, each in a paragraph of its own, after the top-level
- * block that `pos` stands in, or after the caret's where none is given; each
- * waits on a new upload, which is handed to the panel with its file.
+ * Where pictures laid in at `pos` stand, `tr` changed to make room: a
+ * paragraph split where `pos` falls inside its words, else the nearest
+ * place beside `pos` that takes a paragraph (a list item's among them),
+ * else after the top-level block `pos` stands in.
+ */
+function pictureRoom(tr: Transaction, pos: number, paragraph: NodeType): number {
+  const $at = tr.doc.resolve(pos);
+  const { parent, parentOffset } = $at;
+  const within = parentOffset > 0 && parentOffset < parent.content.size;
+  if (parent.type === paragraph && within) {
+    tr.split(pos);
+    return pos + 1;
+  }
+  const beside = insertPoint(tr.doc, pos, paragraph);
+  if (beside !== null) return beside;
+  return $at.depth === 0 ? pos : $at.after(1);
+}
+
+/**
+ * Pictures laid in, each in a paragraph of its own, where `pos` stands, or
+ * where the caret does where none is given; each waits on a new upload,
+ * which is handed to the panel with its file. Note that the upload finds
+ * its picture by name when it settles, so words typed meanwhile never move it.
  */
 export function laidInPictures(
   view: EditorView,
@@ -147,18 +169,19 @@ export function laidInPictures(
   pictures: DescriptionEditorPictures,
   pos?: number,
 ): void {
-  if (files.length === 0) return;
   const { state } = view;
-  const $at = state.doc.resolve(pos ?? state.selection.from);
-  const after = $at.depth === 0 ? $at.pos : $at.after(1);
+  const paragraph = state.schema.nodes.paragraph;
+  if (files.length === 0 || paragraph === undefined) return;
   const taken: PictureTaken[] = [];
   const paragraphs = files.map((file) => {
     const upload = uploadName();
     taken.push({ upload, file });
     const picture = state.schema.node(PICTURE_NODE, { src: "", alt: altOf(file), upload });
-    return state.schema.node("paragraph", null, [picture]);
+    return paragraph.create(null, [picture]);
   });
-  view.dispatch(state.tr.insert(after, paragraphs).scrollIntoView());
+  const tr = state.tr;
+  const at = pictureRoom(tr, pos ?? state.selection.from, paragraph);
+  view.dispatch(tr.insert(at, paragraphs).scrollIntoView());
   pictures.take(taken);
 }
 
@@ -187,7 +210,7 @@ export function removedPicture(view: EditorView, upload: string): void {
   if (pos !== undefined) removedAt(view, pos);
 }
 
-/** A paste of image files laid in as pictures after the caret's block; answers whether it was one. */
+/** A paste of image files laid in as pictures at the caret; answers whether it was one. */
 export function pastedPictures(
   view: EditorView,
   event: ClipboardEvent,
@@ -199,7 +222,7 @@ export function pastedPictures(
   return true;
 }
 
-/** A drop of image files from outside the editor laid in as pictures after the block they landed on; answers whether it was one. */
+/** A drop of image files from outside the editor laid in as pictures where they landed; answers whether it was one. */
 export function droppedPictures(
   view: EditorView,
   event: DragEvent,

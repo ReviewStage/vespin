@@ -3,15 +3,16 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "vitest";
 import type {
-  PictureTaken,
   DescriptionEditorHandle,
   DescriptionEditorPictures,
+  DescriptionEditorPlacement,
+  PictureTaken,
 } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
 /**
  * A description's pictures in its editor: a file pasted or chosen is laid in as a
- * picture after the caret's block, handed to the panel under its upload,
+ * picture at the caret, handed to the panel under its upload,
  * and writes nothing until the panel kept it, then its line; Remove takes
  * one still being kept out; and a picture of another description pasted in is kept
  * again on this one. Synthetic description and pictures.
@@ -31,8 +32,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The editor on `TEXT`, its caret at the end of the Approach section, with the panel's pictures stood in for. */
-function opened(markdown = TEXT) {
+/** The editor on `TEXT`, its caret at the end of the Approach section unless `placement` says, with the panel's pictures stood in for. */
+function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { section: 0 }) {
   const taken: PictureTaken[] = [];
   const pictures: DescriptionEditorPictures = {
     draw: () => ({ redraw: () => undefined, undraw: () => undefined }),
@@ -42,7 +43,7 @@ function opened(markdown = TEXT) {
   const host = document.body.appendChild(document.createElement("div"));
   const handle = mountDescriptionEditor(host, {
     markdown,
-    placement: { section: 0 },
+    placement,
     focus: false,
     label: "Description",
     className: "markdown description-unit",
@@ -98,6 +99,26 @@ test("image files pasted are laid in as pictures, and a pasted screenshot is cal
 
   assert.equal(taken.length, 1);
   assert.ok(handle.markdown().includes(`![Screenshot](${KEPT})`));
+});
+
+test("an image pasted with the caret in a list's first item stands in that item, not after the list", () => {
+  const beats =
+    "## Beats\n\n1. Open on the inbox.\n2. Show the agent at work.\n3. End on the logo.\n";
+  const caret = { section: 0, text: "Open on the inbox.", occurrence: 0, offset: 18, code: false };
+  const { handle, taken, host } = opened(beats, { x: 0, y: 0, words: { ...caret, top: 0 } });
+  const editable = host.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
+  const paste = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", {
+    value: { files: [PNG()], types: ["Files"], getData: () => "" },
+  });
+
+  editable.dispatchEvent(paste);
+  handle.settlePicture(taken[0]?.upload ?? "", KEPT);
+
+  const written = handle.markdown();
+  const picture = written.indexOf(`![members](${KEPT})`);
+  assert.ok(written.indexOf("Open on the inbox.") < picture);
+  assert.ok(picture < written.indexOf("Show the agent at work."));
 });
 
 test("a picture of another description pasted in is kept again on this one, and one of this description's is pasted as it is", () => {
