@@ -3910,7 +3910,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a repository agent's new sandbox runs its workspace's cloud setup after its checkout, the scripts written to files and the setup script given the workspace's variables, and none of the runner's credentials",
+    "a repository agent's new sandbox starts its workspace's cloud setup after its checkout without waiting on it, the scripts written to files and the setup script given the workspace's variables, and none of the runner's credentials, and records how each script exited once the run ends past the answer",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3938,15 +3938,34 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           new Date(0),
         );
 
-        api.hooks.runStdout = (args) =>
-          args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG)
-            ? `${CLOUD_SETUP_SCRIPT.INSTALL} 0\n${CLOUD_SETUP_SCRIPT.SETUP} 0\n`
-            : undefined;
+        // Note that the setup never exits here, so a launch that waited on it would never start the runner.
+        let runsBeforeSetup: number | undefined;
+        api.hooks.onStart = async (command) => {
+          if (command.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG)) {
+            runsBeforeSetup = api.runs.length;
+          }
+        };
 
-        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
+        const kept = keptAfterResponse();
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the relay."),
+        ).pipe(Effect.provide(kept.layer));
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        // The setup's own stdout said each script exited 0, which is kept as each one's last run in the agent's sandbox.
+        assert.deepEqual(
+          yield* listScriptRuns(workspace),
+          [],
+          "nothing is recorded while the run goes on",
+        );
+        // The run ends past the answer, its stderr saying how each script exited, which is kept as each one's last run.
+        const ended = api.commands.find((each) =>
+          each.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
+        );
+        assert.ok(ended !== undefined);
+        ended.stderr = `vespin-setup-exit ${CLOUD_SETUP_SCRIPT.INSTALL} 0\nvespin-setup-exit ${CLOUD_SETUP_SCRIPT.SETUP} 0\n`;
+        ended.exitCode = 0;
+        yield* kept.run;
         assert.deepEqual(
           (yield* listScriptRuns(workspace))
             .map((run) => [run.script, run.repository, run.exitCode, run.agent.id])
@@ -3963,19 +3982,24 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           "apt-get install -y redis-tools",
         );
         assert.equal(uploaded.get("/tmp/vespin-setup/setup.sh"), "pnpm install");
-        const runs = api.runs.filter((run) => run.session === own?.currentSessionId);
-        const clone = runs.findIndex(isClone);
-        const setup = runs.findIndex((run) =>
-          run.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
+        const clone = api.runs.findIndex(
+          (run) => run.session === own?.currentSessionId && isClone(run),
         );
-        assert.ok(clone !== -1 && setup > clone);
-        assert.equal(runs[setup]?.env.DATABASE_URL, "postgres://fixture");
+        const setup = api.commands.find(
+          (each) =>
+            each.sandboxSessionId === own?.currentSessionId &&
+            each.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
+        );
+        assert.ok(setup !== undefined && clone !== -1 && runsBeforeSetup !== undefined);
+        assert.ok(runsBeforeSetup > clone, "the setup starts after the checkout");
+        assert.equal(setup.user, undefined);
+        assert.equal(setup.env.DATABASE_URL, "postgres://fixture");
         // The runner's own credentials stay in the runner's environment alone.
         const runner = api.commands.find((each) => each.user === "agent");
         assert.ok(runner !== undefined);
         for (const secret of [runner.env[RUNNER_ENV.CLAUDE_TOKEN], runner.env[RUNNER_ENV.BEARER]]) {
           assert.ok(secret !== undefined);
-          assert.equal(JSON.stringify(runs[setup]?.env).includes(secret), false);
+          assert.equal(JSON.stringify(setup.env).includes(secret), false);
         }
       }),
   );

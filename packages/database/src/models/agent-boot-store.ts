@@ -19,10 +19,10 @@
  *   FAILED      -> STARTING     rebootAgent, the pause lifted
  *   READY       -> (none)       endAgentBoot, once the first turn settles
  *
- * A failure may name the attempt it was begun under, so a delivery or a
- * sweep of a boot Retry has since replaced moves nothing; the runner coming
- * up names none, as its caller reads the machine as it stands. Nothing here reads the clock: each
- * write is handed its instant.
+ * The runner coming up names the attempt its machine was begun under, and a
+ * failure may, so a delivery or a sweep of a boot Retry has since replaced
+ * moves nothing. Nothing here reads the clock: each write is handed its
+ * instant.
  */
 
 import {
@@ -261,19 +261,23 @@ export function beginAgentBoot(
 }
 
 /**
- * The agent's runner up (STARTING -> HANDING_OFF), so its queue's head goes
- * next; straight to READY where nothing stands queued. Answers the boot
- * where it moved, none where it stood elsewhere: an earlier poll moved it.
+ * The agent's runner up (STARTING -> HANDING_OFF) under `attempt`, so its
+ * queue's head goes next; straight to READY where nothing stands queued.
+ * Answers the boot where it moved, none where it stood elsewhere or under
+ * another attempt: an earlier poll moved it, or Retry replaced the machine
+ * that came up.
  */
 export function agentBootRunnerUp(
   agentId: string,
   at: Date,
+  attempt: number,
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       const holds = yield* queueHoldsInLock(agentId);
       return yield* moved(agentId, {
+        attempt,
         from: BOOTING_PHASES,
         to: holds ? BOOT_PHASE.HANDING_OFF : BOOT_PHASE.READY,
         at,

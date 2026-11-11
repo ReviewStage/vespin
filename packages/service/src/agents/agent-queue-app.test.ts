@@ -758,7 +758,7 @@ it.layer(SUITE)("an agent's queue", (it) => {
           agentSessions,
           { running: true },
           undefined,
-          kept.layer,
+          kept,
         );
         yield* queueChanged(ask, owner, agent.id, {
           change: QUEUE_CHANGE.ADD,

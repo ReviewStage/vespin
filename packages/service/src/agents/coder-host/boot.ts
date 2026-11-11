@@ -1,0 +1,143 @@
+/**
+ * boot.ts -- an agent's first launch: its machine booted with its first message waiting in its queue, the queue handed on once the machine is up, and a boot that failed said.
+ *
+ * A Start's first message waits in the agent's queue from the moment its
+ * boot begins (`beginAgentBoot`), as every line sent to the agent while it
+ * boots does (`steer.ts`'s `heldWhileBooting`), and the machine is booted
+ * for it with no message (`AgentSessions`'s `boot`): the plan's credential is read
+ * and a session claimed within the request, so a plan refused refuses the
+ * Start at once, and the machine opens past the answer, its runner
+ * launched warm. Once the runner is up the boot hands its queue on
+ * (`bootBecameReady`), which opens the first turn on the first message; a
+ * machine that could not come up fails the boot with why and pauses its
+ * queue, the messages kept.
+ */
+
+import {
+  agentBootRunnerUp,
+  beginAgentBoot,
+  failAgentBoot,
+} from "@repo/database/models/agent-boot-store";
+import type { QueuedLine } from "@repo/database/models/agent-queue-store";
+import type { Agent } from "@repo/database/models/agent-store";
+import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import type { BootFailure } from "@repo/features/agent-boot";
+import type { AgentAttachment } from "@repo/features/agent-wire";
+import { DateTime, Effect, Option } from "effect";
+import { afterResponse } from "../../http/after-response.js";
+import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
+import {
+  type AgentSessions,
+  describeUnreachable,
+  type MachineBoot,
+  SESSION_SEND_OUTCOME,
+} from "../sessions/agent-sessions.js";
+import { agentFailureSaid, agentLogIds } from "./agent-log.js";
+import { type QueueSessions, queueAtTouch } from "./agent-queue.js";
+import { routedSessions } from "./runtime-sessions.js";
+
+/** The attempt a Start's boot runs under, which `beginAgentBoot` writes; each Retry begins the next. */
+const FIRST_ATTEMPT = 1;
+
+/** A Start's first message as it waits in the agent's queue: its key, words, files, and what it names beside them. */
+export interface FirstLine {
+  readonly id: string;
+  readonly sendKey: string;
+  readonly text: string;
+  readonly attachments: readonly AgentAttachment[];
+  readonly line: QueuedLine;
+}
+
+/** The machine booted through the agent's sessions, a harness not reached answered as nothing booted. */
+const booted = (sessions: AgentSessions, agent: Agent): Effect.Effect<MachineBoot | undefined> =>
+  sessions.boot(agent.conversationId).pipe(
+    Effect.catchTag("SessionUnreachable", (failure) =>
+      Effect.as(
+        agentFailureSaid(
+          `the agent's runtime could not be reached to boot its machine: ${describeUnreachable(failure)}`,
+          failure._tag,
+          true,
+        ),
+        undefined,
+      ),
+    ),
+    Effect.annotateLogs(agentLogIds(agent)),
+  );
+
+/**
+ * The boot's session recorded as the agent's conversation's, forward only,
+ * as the harness's own boot claims it, so the queue's hand-off finds it
+ * whichever sessions answered the boot.
+ */
+const claimedFor = (agent: Agent, sessionId: string) =>
+  Effect.flatMap(DateTime.nowAsDate, (now) =>
+    hostedStoreOrUnavailable(
+      claimRuntimeSession(
+        { userId: agent.userId, conversationId: agent.conversationId },
+        sessionId,
+        now,
+      ),
+    ),
+  );
+
+/**
+ * The agent's runner up under `attempt`: its boot moved on, and its queue
+ * handed on where anything waits in it, which opens the first turn on its
+ * head. A runner up for a boot already moved on, for an attempt Retry has
+ * since replaced, or for an agent whose first launch is over, moves nothing.
+ */
+export const bootBecameReady = Effect.fn("web/bootBecameReady")(function* (
+  agent: Agent,
+  attempt: number,
+  sessionsFor: QueueSessions = routedSessions,
+) {
+  const moved = yield* agentBootRunnerUp(agent.id, yield* DateTime.nowAsDate, attempt);
+  if (Option.isNone(moved)) return;
+  yield* queueAtTouch(sessionsFor, agent);
+});
+
+/** The boot under `attempt` failed for `failure`: its queue paused, its messages kept. */
+const bootFailed = (agent: Agent, failure: BootFailure, attempt: number) =>
+  Effect.gen(function* () {
+    yield* failAgentBoot(agent.id, failure, yield* DateTime.nowAsDate, attempt);
+    yield* Effect.logWarning(`an agent's first launch failed to boot: ${failure}`);
+  });
+
+/** The machine's open past the answer: the boot failed where it could not come up, its queue handed on where it did. */
+const machineCameUp = (
+  agent: Agent,
+  up: Effect.Effect<BootFailure | undefined>,
+  attempt: number,
+  sessionsFor: QueueSessions,
+) =>
+  afterResponse(
+    "an agent's first launch's machine",
+    Effect.gen(function* () {
+      const failure = yield* up;
+      if (failure !== undefined) return yield* bootFailed(agent, failure, attempt);
+      yield* bootBecameReady(agent, attempt, sessionsFor);
+    }).pipe(Effect.annotateLogs(agentLogIds(agent))),
+  );
+
+/**
+ * The agent's first launch begun: its boot written with its first message
+ * queued, then its machine booted through the Start's sessions. Answers how
+ * the boot's start went, as an open answers, none where its runtime could
+ * not be reached, so a Start refused for its plan, its key, or its Mac is
+ * refused at once; the machine itself comes up past the answer.
+ */
+export const startBoot = Effect.fn("web/startBoot")(function* (
+  sessions: AgentSessions,
+  agent: Agent,
+  first: FirstLine,
+) {
+  yield* hostedStoreOrUnavailable(
+    beginAgentBoot(agent.id, yield* DateTime.nowAsDate, { userId: agent.userId, ...first }),
+  );
+  const boot = yield* booted(sessions, agent);
+  if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return boot;
+  yield* claimedFor(agent, boot.sessionId);
+  // Note that the first message goes through the very sessions that booted its machine.
+  yield* machineCameUp(agent, boot.up, FIRST_ATTEMPT, () => Effect.succeed(sessions));
+  return { outcome: boot.outcome, sessionId: boot.sessionId } as const;
+});

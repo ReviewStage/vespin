@@ -171,6 +171,7 @@ import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
+import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { leadingCommand } from "@repo/features/slash-command";
 import { TURN_FAILURE } from "@repo/features/turn-run";
@@ -863,6 +864,15 @@ function failedStatus(failure: { readonly _tag: string }): number {
   }
   if (failure instanceof AgentImageMissing) return FAILED_STATUS.REFUSED;
   return FAILED_STATUS.UNAVAILABLE;
+}
+
+/** Why a first launch's boot failed, in its own fixed words, from what its machine's open failed with. */
+function bootFailureOf(failure: { readonly _tag: string }): BootFailure {
+  if (failure instanceof CheckoutRefused) return BOOT_FAILURE.CHECKOUT_FAILED;
+  if (failure instanceof LaunchRefused && (failure.deviceAway || failure.deviceRemoved)) {
+    return BOOT_FAILURE.MAC_AWAY;
+  }
+  return BOOT_FAILURE.MACHINE_UNAVAILABLE;
 }
 
 /**
@@ -2580,6 +2590,52 @@ export const runnerSessions = <
         }).pipe(
           Effect.catch(failed("open")),
           Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId })),
+          Effect.provideContext(context),
+        ),
+
+      // A first launch's boot claims a session afresh, past any an earlier boot claimed, so a Retry opens
+      // a machine of its own rather than one a failed boot left half made; the plan's credential is read
+      // first, so a plan refused or at its limit refuses the Start at once, as an open does. The machine
+      // opens in `up`, under the runner lease, its runner launched with no message: warm from its start,
+      // reading the lines the agent's queue hands it once it is up.
+      boot: (conversationId) =>
+        Effect.gen(function* () {
+          const agent = yield* agentOf(conversationId);
+          const sessionId = sessionIdOf(harness.sessionPrefix, yield* Clock.currentTimeMillis);
+          return yield* Effect.gen(function* () {
+            const layout = yield* machine.layout(agent);
+            const credential = yield* harness.launch(agent, layout);
+            const recorded = yield* recordClaimed(agent, sessionId);
+            if (recorded !== sessionId) {
+              return {
+                outcome: SESSION_SEND_OUTCOME.FAILED,
+                status: FAILED_STATUS.UNAVAILABLE,
+              } as const;
+            }
+            const up = holdingRunner(
+              agent.id,
+              openedPlace(agent, sessionId, layout, undefined, credential),
+              CODER.RUNNER_LEASE.SEND_WAIT,
+            ).pipe(
+              Effect.as(undefined),
+              Effect.catch((failure) =>
+                Effect.as(
+                  agentFailureSaid(
+                    `A ${harness.name} boot failed: ${keptFailureWords(failureWords(failure))}`,
+                    failureKind(failure),
+                    !namedOutcome(failure),
+                  ),
+                  bootFailureOf(failure),
+                ),
+              ),
+              Effect.annotateLogs(agentLogIds(agent, sessionId)),
+              Effect.provideContext(context),
+            );
+            return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, up } as const;
+          }).pipe(Effect.catch(failed("boot")), Effect.annotateLogs(agentLogIds(agent, sessionId)));
+        }).pipe(
+          Effect.catch(failed("boot")),
+          Effect.annotateLogs(agentLogIds({ conversationId })),
           Effect.provideContext(context),
         ),
 
