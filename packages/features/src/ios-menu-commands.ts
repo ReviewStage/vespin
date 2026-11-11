@@ -20,6 +20,7 @@ export const MENU_COMMAND = {
   INBOX: "inbox",
   TASKS: "tasks",
   SEARCH: "search",
+  SIDEBAR: "sidebar",
   MARK_DONE: "markDone",
   TOGGLE_READ: "toggleRead",
   PIN: "pin",

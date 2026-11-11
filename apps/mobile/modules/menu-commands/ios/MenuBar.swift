@@ -8,9 +8,10 @@
 // it would do (Mark as Read or Mark as Unread, Pin or Unpin). Every command
 // is a key command whose action is one method on `UIApplication`, the end of
 // the responder chain, which posts its id for the module to send to
-// JavaScript; Show or Hide Sidebar alone is answered here, on the tab bar
-// controller's own sidebar. Note that the words are the menu bar's, in the
-// title case every Mac and iPad menu is set in (`docs/DESIGN.md`).
+// JavaScript, Show or Hide Sidebar among them, since the split views' first
+// column is JavaScript's to stand (`sidebar-shown.ts`). Note that the words
+// are the menu bar's, in the title case every Mac and iPad menu is set in
+// (`docs/DESIGN.md`).
 
 import UIKit
 
@@ -109,7 +110,7 @@ enum MenuBar {
     configuration.toolbarPreference = .removed
     configuration.inspectorPreference = .removed
     configuration.textFormattingPreference = .removed
-    // Note that the sidebar's item is Vespin's own, since the system's acts on a split view controller the tab bar's sidebar is not.
+    // Note that the sidebar's item is Vespin's own, since the system's acts on a UIKit split view controller and the split views here are SwiftUI's, standing their first column as JavaScript says.
     configuration.sidebarPreference = .removed
     configuration.findingPreference = .included
     configuration.findingConfiguration.style = .search
@@ -132,12 +133,6 @@ enum MenuBar {
     UIMainMenuSystem.shared.setNeedsRevalidate()
   }
 
-  /// Shows or hides the tab bar's sidebar, where the window stands one.
-  static func toggleSidebar() {
-    guard let tabs = sidebarTabs() else { return }
-    tabs.sidebar.isHidden.toggle()
-  }
-
   /// Words and enables a command as it is shown or pressed, so it reads as what stands in front now rather than when the menu was built.
   static func validate(_ command: UICommand, id: String) {
     guard let known = commands.first(where: { $0.id == id }) else { return }
@@ -147,9 +142,9 @@ enum MenuBar {
     command.attributes = shown.enabled ? [] : .disabled
   }
 
-  /// Whether a command may act now: one JavaScript said may, or the sidebar's where the window stands one.
+  /// Whether a command may act now: one JavaScript said may.
   static func mayAct(_ id: String) -> Bool {
-    id == "sidebar" ? sidebarTabs() != nil : enabled.contains(id)
+    enabled.contains(id)
   }
 
   private static func build(_ builder: UIMenuBuilder) {
@@ -250,21 +245,12 @@ enum MenuBar {
     return made
   }
 
-  /// How a command reads now: toggled as JavaScript says, the sidebar's as the sidebar stands, and enabled where it may act.
+  /// How a command reads now: toggled as JavaScript says, and enabled where it may act.
   private static func look(of command: Command) -> (title: String, image: UIImage?, enabled: Bool) {
-    let on =
-      command.id == "sidebar" ? sidebarTabs()?.sidebar.isHidden ?? true : toggled.contains(command.id)
+    let on = toggled.contains(command.id)
     let title = on ? command.toggledTitle ?? command.title : command.title
     let image = UIImage(systemName: on ? command.toggledSymbol ?? command.symbol : command.symbol)
     return (title, image, mayAct(command.id))
-  }
-
-  /// The tab bar controller of the window in front, where it stands a sidebar: a regular window's, never a compact one's bottom bar.
-  private static func sidebarTabs() -> UITabBarController? {
-    guard let tabs = frontTabs(), tabs.mode != .tabBar,
-      tabs.traitCollection.horizontalSizeClass == .regular
-    else { return nil }
-    return tabs
   }
 
   /// The system's own items with their keys taken off, so ⌘, opens Vespin's Settings rather than the app's page in the Settings app.
@@ -286,32 +272,12 @@ enum MenuBar {
     if #available(iOS 27.0, *) { menu.preferredImageVisibility = .visible }
     return menu
   }
-
-  /// The tab bar controller of the window in front, which stands the app's sidebar.
-  private static func frontTabs() -> UITabBarController? {
-    let window = UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .filter { $0.activationState == .foregroundActive }
-      .flatMap(\.windows)
-      .first(where: \.isKeyWindow)
-    var stack = [window?.rootViewController].compactMap { $0 }
-    while let controller = stack.popLast() {
-      if let tabs = controller as? UITabBarController { return tabs }
-      stack.append(contentsOf: controller.children)
-      if let presented = controller.presentedViewController { stack.append(presented) }
-    }
-    return nil
-  }
 }
 
 extension UIApplication {
   /// The action of every command of Vespin's, which reaches here at the end of the responder chain whatever is focused.
   @objc func vespinMenuCommand(_ sender: UICommand) {
     guard let id = sender.propertyList as? String, MenuBar.mayAct(id) else { return }
-    if id == "sidebar" {
-      MenuBar.toggleSidebar()
-      return
-    }
     NotificationCenter.default.post(name: menuCommandPosted, object: nil, userInfo: ["command": id])
   }
 

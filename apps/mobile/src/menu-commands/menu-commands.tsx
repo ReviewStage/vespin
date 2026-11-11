@@ -31,7 +31,10 @@ import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { useOpenSettings } from "../settings-button.js";
+import { useSidebarShown } from "../sidebar-shown.js";
 import { signOutRefusalWords, useSignOut } from "../sign-out.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
 
@@ -196,8 +199,17 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const workspaces = signedIn ? (switcher?.workspaces ?? []) : [];
   const workspaceNames = workspaces.map(({ name }) => name);
   const chosenWorkspace = workspaces.findIndex(({ id }) => id === switcher?.chosen.id);
-  const enabled =
-    workspaces.length > 0 ? [...subject.enabled, MENU_COMMAND.SWITCH_WORKSPACE] : subject.enabled;
+  const sidebar = useSidebarShown();
+  // Note that Show or Hide Sidebar acts in any regular window, on the app sidebar where three columns stand and on the list beside its detail where two do.
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const sidebarStands = signedIn && regular;
+  const enabled = [
+    ...subject.enabled,
+    ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
+    ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
+  ];
+  const toggled =
+    sidebarStands && !sidebar.shown ? [...subject.toggled, MENU_COMMAND.SIDEBAR] : subject.toggled;
   const working = useAgentsWorking(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
   const [refusal, setRefusal] = useState<string>();
@@ -207,7 +219,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     const now = JSON.stringify([
       subject.focus.kind,
       enabled,
-      subject.toggled,
+      toggled,
       workspaceNames,
       chosenWorkspace,
     ]);
@@ -216,7 +228,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     menuCommandsModule?.setState(
       subject.focus.kind,
       enabled,
-      subject.toggled,
+      toggled,
       workspaceNames,
       chosenWorkspace,
     );
@@ -273,6 +285,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return router.navigate("/tasks");
       case MENU_COMMAND.SEARCH:
         return router.navigate("/search");
+      case MENU_COMMAND.SIDEBAR:
+        return sidebar.toggle();
       case MENU_COMMAND.MARK_DONE:
         if (working) setAsking(ASK.MARK_DONE);
         else markDone();
