@@ -73,7 +73,7 @@ private let commands: [Command] = [
   Command(id: "remindClear", place: .remind, title: "Clear Reminder", symbol: "clock.badge.xmark"),
   Command(
     id: "openInBrowser", place: .subject, title: "Open in Browser", symbol: "safari", input: "o",
-    modifiers: [.command, .option]),
+    modifiers: [.command, .alternate]),
   Command(id: "help", place: .help, title: "Vespin Help", symbol: "questionmark.circle"),
   Command(id: "feedback", place: .help, title: "Send Feedback", symbol: "envelope"),
 ]
@@ -251,7 +251,7 @@ extension UIApplication {
   }
 
   /// Edit's Search ⌘F, the system's own item in its search style, which opens Search.
-  @objc func find(_ sender: Any?) {
+  override public func find(_ sender: Any?) {
     NotificationCenter.default.post(
       name: menuCommandPosted, object: nil, userInfo: ["command": "search"])
   }
