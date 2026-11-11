@@ -213,7 +213,7 @@ test("Mark all as read acknowledges the reader's notices, read or not or their r
   await nodOnY?.answer(true);
   await hook.sent.find((each) => each.words === `acknowledged:${V}@1`)?.answer();
   await hook.sent.find((each) => each.words === `acknowledged:${U}@${MOVED_ON}`)?.answer();
-  assert.deepEqual(hook.toasts(), ["Got it: 4 items", "Got it: 2 items, 2 could not be sent"]);
+  assert.deepEqual(hook.toasts(), ["Got it: 4 items", "Got it: 2 items, 2 not confirmed"]);
 });
 
 test("Undo after marking a notice read takes its Got it back at the service by its key, leaving the read mark", async () => {
