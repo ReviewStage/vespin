@@ -136,7 +136,7 @@ import {
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /**
- * start.ts -- an agent started on a task, or in a workspace with no task: the one path a start takes, from New task, an agent's draft, or the terminal picker, from another agent's `start_agent`, or from an automation's run.
+ * start.ts -- an agent started on a task: the one path a start takes, from New task, an agent's draft, or the terminal picker, from another agent's `start_agent`, or from an automation's run.
  *
  * The model, effort, and context window are the ask's own where it names a
  * model, the account's stored default otherwise, either checked against the
@@ -159,12 +159,8 @@ import { CODER_TOOL_SET } from "./tool-set.js";
  * agent on a task, the task moves into progress from the backlog or to do
  * and never back (`beginTaskWork`), a move that fails logged rather than
  * the Start's failure; a Start by hand on a task no one is assigned to assigns it to
- * its starter (`assignUnassignedTask`), as that fails logged too. An agent
- * started with no task is handed a prompt in a workspace the account is a
- * member of, on a repository named by the ask and read through that
- * workspace's installation as a task's is.
- * A Start from another agent of the task, or of the workspace where the
- * source has no task, to continue it or to fork it at one of its messages,
+ * its starter (`assignUnassignedTask`), as that fails logged too.
+ * A Start from another agent, to continue it or to fork it at one of its messages,
  * inherits from that agent what `takeover.ts` decides and reads: its brief,
  * its transcript replayed, its work, its choice, servers, place, branch, and
  * extra repositories where the ask names none, and for a continue its stop
@@ -190,8 +186,6 @@ import { CODER_TOOL_SET } from "./tool-set.js";
  * stands, since no work was handed. It runs on the choice any Start does.
  * Every Start makes a coder, on a task stored in pilot mode, from before
  * Pilot was removed, as on any other.
- * A Start with no task names a prompt, and a repository where it works in
- * one; one that names none works in none.
  * A Start may name repositories its agent works in beside its own
  * (`alsoRepositories`), kept after it as the agent's extras
  * (`agent-repositories.ts`), each cloned beside its checkout under one token
@@ -245,7 +239,7 @@ export type StartAsk = StartPlace & {
   readonly automationId?: string | undefined;
   /** That automation's run as it starts the agent, which the agent keeps; none for a Start by hand. */
   readonly automationOrigin?: StoredAutomationOrigin | undefined;
-  /** The automation run the agent belongs to: the run that starts it, or the run of the coding agent whose `start_agent` starts it on no task; none for an agent no run owns. */
+  /** The automation run the agent belongs to: the run that starts it, or the run of the coding agent whose `start_agent` starts it; none for an agent no run owns. */
   readonly automationRunId?: string | undefined;
   /** The coding agent whose `start_agent` asks, which the first line names as its sender and the agent's row keeps as its starter; none for a Start by a member or an automation. */
   readonly startedBy?: Agent | undefined;
@@ -367,11 +361,11 @@ const acceptedChoiceRead = /* @__PURE__ */ Effect.fnUntraced(function* (
   return { choice, keys };
 });
 
-/** Where a Start lands, read as the account: the workspace whose installation reads the repository, the repository, none for a blank Start on a task with none, the task where there is one, the account that may move it where that is the account asking, and the store's place for the agent with what it is handed. */
+/** Where a Start lands, read as the account: the workspace whose installation reads the repository, the repository, none for a blank Start on a task with none, the task, the account that may move it where that is the account asking, and the store's place for the agent with what it is handed. */
 interface StartLanding {
   readonly workspaceId: string;
   readonly repository: string | null;
-  readonly task: Task | undefined;
+  readonly task: Task;
   readonly mover: string | undefined;
   readonly place: AgentPlace;
   /** What the new agent keeps of the agent it was started from; none for one started afresh. */
@@ -730,14 +724,12 @@ const IN_THE_CLOUD: StartMachine = { asked: { machine: AGENT_MACHINE.VERCEL } };
  */
 const defaultPlaceOf = Effect.fnUntraced(function* (
   userId: string,
-  task: Task | undefined,
+  task: Task,
   automated: boolean,
 ): Effect.fn.Return<PlaceRead, HostedRefusal, DatabaseServices> {
   if (automated) return { machine: AGENT_MACHINE.VERCEL };
-  if (task !== undefined) {
-    const newest = yield* hostedStoreOrUnavailable(readNewestAgentPlace(userId, task.id));
-    if (Option.isSome(newest)) return newest.value;
-  }
+  const newest = yield* hostedStoreOrUnavailable(readNewestAgentPlace(userId, task.id));
+  if (Option.isSome(newest)) return newest.value;
   const pick = yield* hostedStoreOrUnavailable(readRunsOnPick(userId));
   return Option.getOrElse(pick, (): PlaceRead => ({ machine: AGENT_MACHINE.VERCEL }));
 });
@@ -763,7 +755,7 @@ const machineOfStart = Effect.fnUntraced(function* (
   userId: string,
   ask: Pick<StartAsk, "runsOn" | "automationOrigin">,
   source: Agent | undefined,
-  task: Task | undefined,
+  task: Task,
 ): Effect.fn.Return<StartMachine, HostedRefusal, DatabaseServices> {
   const place: PlaceRead =
     ask.runsOn ??
@@ -890,7 +882,7 @@ const extraRepositoriesOf = Effect.fnUntraced(function* (
   );
 });
 
-/** Starts the account's agent on the task or in the workspace, as above; its sessions are composed only once a new agent needs its session opened, so a retry that found its agent asks for none. */
+/** Starts the account's agent on the task, as above; its sessions are composed only once a new agent needs its session opened, so a retry that found its agent asks for none. */
 export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* (
   agentSessions: Effect.Effect<
     AgentSessions<TypedTurn>,
@@ -1047,7 +1039,6 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
               words,
               landing.task,
               reads,
-              undefined,
               yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
             );
       // The runtime says why an open it refused was refused; one that could not be asked is said here.
@@ -1153,22 +1144,20 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   // The Start answers the last transaction it committed in, which Realtime delivers after every
   // one before it, so a client waiting on it sees the agent and its task's standing alike.
   let committed = txid;
-  if (landing.task !== undefined) {
-    // A blank agent was handed no work, so its task stands where it is.
-    if (handed !== null) {
-      const begun = yield* beginTaskWorkCommitted(userId, landing.task.id).pipe(
-        Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
-      );
-      if (Option.isSome(begun)) committed = begun.value.txid;
-    }
-    // Its starter is on a task no one was, where they started it by hand, a blank agent among them;
-    // an automation's run assigns no one.
-    if (ask.automationOrigin === undefined) {
-      const assigned = yield* assignUnassignedTaskCommitted(userId, landing.task.id).pipe(
-        Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
-      );
-      if (Option.isSome(assigned)) committed = assigned.value.txid;
-    }
+  // A blank agent was handed no work, so its task stands where it is.
+  if (handed !== null) {
+    const begun = yield* beginTaskWorkCommitted(userId, landing.task.id).pipe(
+      Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
+    );
+    if (Option.isSome(begun)) committed = begun.value.txid;
+  }
+  // Its starter is on a task no one was, where they started it by hand, a blank agent among them;
+  // an automation's run assigns no one.
+  if (ask.automationOrigin === undefined) {
+    const assigned = yield* assignUnassignedTaskCommitted(userId, landing.task.id).pipe(
+      Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
+    );
+    if (Option.isSome(assigned)) committed = assigned.value.txid;
   }
   yield* recordServerEvent(
     SERVER_EVENT.AGENT_START,

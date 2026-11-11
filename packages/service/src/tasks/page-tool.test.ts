@@ -56,7 +56,6 @@ const openTask = Effect.gen(function* () {
     userId,
     taskId: task.id,
     workspaceId: task.workspaceId,
-    owner: taskPageOwner(task.id),
     agent: { kind: PAGE_SHOWER.AGENT, agentId } satisfies PageShower,
   };
 });
@@ -204,7 +203,7 @@ it.layer(getTestDB())("show_page", (it) => {
         yield* show(
           {
             userId: other.userId,
-            owner: task.owner,
+            taskId: task.taskId,
             sandbox: sandboxWith({ [`${CHECKOUT}/funnel.html`]: FUNNEL }).sandbox,
           },
           { title: "Funnel", path: "funnel.html" },

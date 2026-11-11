@@ -261,17 +261,17 @@ export function readPageVersion(
   );
 }
 
-/** A page read by its id alone: the owner it stands on, the version asked for, and the newest version there is. */
+/** A page read by its id alone: the task it stands on, the version asked for, and the newest version there is. */
 export interface FoundPage {
-  readonly owner: PageOwner;
+  readonly taskId: string;
   readonly page: PageVersion;
   readonly newestVersion: number;
 }
 
 /**
  * One version of the page by the page's id alone, the newest where none is
- * named, with the owner it stands on and its newest version; nothing where
- * the account reaches no owner holding such a page or version.
+ * named, with the task it stands on and its newest version; nothing where
+ * the account reaches no task holding such a page or version.
  */
 export function readPageById(
   userId: string,
@@ -282,10 +282,9 @@ export function readPageById(
     const found = yield* findPageById({ userId, pageId, version: version ?? null });
     if (Option.isNone(found)) return Option.none();
     const { taskId, html, ...line } = found.value;
-    const owner = { kind: PAGE_OWNER.TASK, taskId } as const;
-    const newest = yield* findNewestVersion({ owner, pageId });
+    const newest = yield* findNewestVersion({ owner: { kind: PAGE_OWNER.TASK, taskId }, pageId });
     return Option.some({
-      owner,
+      taskId,
       page: { ...lineOf(line), html },
       newestVersion: Option.match(newest, {
         onNone: () => line.version,

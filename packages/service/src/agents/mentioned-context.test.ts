@@ -72,7 +72,7 @@ test("a section the words mention is handed as it stands, under the part's headi
     part,
     `${MENTIONED_HEADING}\n\nThe description's section "Rollout":\n\n## Rollout\n\nStore first, then the desktop.`,
   );
-  assert.equal(mentionedContext(words, TASK, undefined, undefined, false), undefined);
+  assert.equal(mentionedContext(words, TASK, undefined, false), undefined);
 });
 
 test("the whole description the words mention is handed as an agent started on it is", () => {
@@ -500,12 +500,12 @@ test("another agent of the plan the words mention is handed by its id, where its
   assert.match(part, /Read its conversation with `read_agent` and its id/u);
 });
 
-test("an agent of the workspace on another task or on none is handed with its task, to an agent with a plan or with none, and an archived one is not offered to message", () => {
+test("an agent of the workspace on another task, or on one the sender cannot open, is handed with its task, and an archived one is not offered to message", () => {
   const onAnother = {
     ...OTHER_AGENT,
     task: { id: "1c1c1c1c-0000-4000-8000-000000000000", name: "Billing" },
   };
-  const onNone = { ...OTHER_AGENT, task: null, archived: true };
+  const unopened = { ...OTHER_AGENT, task: null, archived: true };
   const reads = (standing: MentionedAgent) => ({
     pages: new Map(),
     agents: new Map([[OTHER_AGENT_ID, standing]]),
@@ -514,7 +514,7 @@ test("an agent of the workspace on another task or on none is handed with its ta
   });
 
   const another = mentionedContext(`See ${agent("Store")}.`, TASK, reads(onAnother));
-  const none = mentionedContext(`See ${agent("Store")}.`, undefined, reads(onNone)) ?? "";
+  const none = mentionedContext(`See ${agent("Store")}.`, TASK, reads(unopened)) ?? "";
 
   assert.match(
     another ?? "",
@@ -523,9 +523,9 @@ test("an agent of the workspace on another task or on none is handed with its ta
   assert.match(another ?? "", /To message it, call `message_agent`/u);
   assert.match(
     none,
-    /another agent of your workspace on no task, "Store the invitations" \(id `9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b`\), archived, working in `acme\/relay`/u,
+    /another agent of your workspace on a task you cannot open, "Store the invitations" \(id `9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b`\), archived, working in `acme\/relay`/u,
   );
-  assert.match(none, /`gh pr diff 42 --repo acme\/relay`/u);
+  assert.match(none, /`gh pr diff 42`/u);
   assert.doesNotMatch(none, /To message it/u);
 });
 
@@ -564,22 +564,6 @@ test("a page the send did not find on the plan is named as gone, an agent it did
     `${MENTIONED_HEADING}\n\nThe page "Old chart": no longer on this task.\n\nThe agent "Old": not found in your workspace.`,
   );
   assert.equal(elsewhere, undefined);
-});
-
-test("an agent on no task is handed a page it showed itself, and nothing of another agent's", () => {
-  const SELF_ID = "7a7a7a7a-0000-4000-8000-000000000000";
-  const pageOf = (agentId: string) =>
-    mentionMarkdown({ kind: MENTION_KIND.PAGE, agentId, pageId: PAGE_ID }, "Chart", PLACE);
-  const ids = mentionedIds(`See ${pageOf(SELF_ID)}.`, undefined, SELF_ID);
-  const own = mentionedContext(`See ${pageOf(SELF_ID)}.`, undefined, READS, SELF_ID);
-  const theirs = mentionedContext(`See ${pageOf(OTHER_AGENT_ID)}.`, undefined, READS, SELF_ID);
-
-  assert.deepEqual(ids.pages, [PAGE_ID]);
-  assert.match(
-    own ?? "",
-    /the page "Invites by week" \(id `[^`]+`, version 3\) that you showed\./u,
-  );
-  assert.equal(theirs, undefined);
 });
 
 test("an agent mentioned in upper case is found as the store holds it", () => {

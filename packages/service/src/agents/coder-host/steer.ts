@@ -437,9 +437,8 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const runtime = yield* admittedRuntime(userId, agent, yield* Effect.fromResult(read.routing));
   if (yield* Effect.fromResult(read.repeated)) return { outcome: STEER_OUTCOME.REPEATED };
   const held = yield* Effect.fromResult(read.task);
-  if (held !== undefined && Option.isNone(held))
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  const task = held === undefined ? undefined : Option.getOrUndefined(held);
+  if (Option.isNone(held)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  const task = held.value;
   // An archived agent names nothing.
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const workspace = yield* Effect.fromResult(read.workspace);
@@ -471,7 +470,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
           : hostedStoreOrUnavailable(
               readMentioned(userId, pointed, {
                 task,
-                agentId: agent.id,
                 workspaceId: agent.organizationId,
               }),
             ),
@@ -501,7 +499,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
         pointed,
         task,
         reads,
-        agent.id,
         yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
       );
   const running = yield* Effect.fromResult(read.running);
