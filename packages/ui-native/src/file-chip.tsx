@@ -1,4 +1,4 @@
-// file-chip.tsx -- a file a message carried that is neither a picture nor a video, such as a PDF: its chip after the message's words, naming it and its size, which opens it full screen in a web view with the system's share sheet to keep it.
+// file-chip.tsx -- a file a message carried that is neither a picture nor a video, such as a PDF: its chip after the message's words, naming it and its size, which opens a PDF full screen in a web view and any other file in the system's share sheet.
 
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
@@ -35,6 +35,7 @@ const FILE_WORDS = {
   FILE: "File",
   PDF: "PDF",
   OPENS: "Opens the file",
+  SHARES: "Shares the file",
   DONE: "Done",
   SHARE: "Share",
   CANNOT_SHOW: "This file can't be shown here. Share it to open it in another app.",
@@ -93,6 +94,11 @@ function kindOf(name: string, mediaType: string): string {
     : extension.toUpperCase();
 }
 
+/** Whether a file is a PDF, the one kind the viewer draws. */
+function isPdf(mediaType: string): boolean {
+  return mediaType === PDF_TYPE;
+}
+
 /** Whether a file is drawn as a page of words: a PDF or a text file. */
 function isDocument(mediaType: string): boolean {
   return mediaType === PDF_TYPE || mediaType.startsWith("text/");
@@ -115,13 +121,16 @@ type FileViewerProps = {
 };
 
 /**
- * A file full screen: its name in a bar with Done and Share, and the file
- * under it in a web view, which draws a PDF's pages as Safari does, scrolled
- * and zoomed by the reader. Note that the web view stands on the file alone:
- * a link pressed in a PDF opens in Safari, and every other navigation is
+ * A PDF full screen: its name in a bar with Done and Share, and its pages
+ * under it in a web view, drawn as Safari draws them, scrolled and zoomed by
+ * the reader. Note that the web view stands on the file alone: a link
+ * pressed in the PDF opens in Safari, and every other navigation is
  * refused, since react-native-webview opens an address its whitelist
- * refuses without asking. A file the web view cannot draw says so in its
- * place, and Share still opens it in another app.
+ * refuses without asking. Only a PDF is handed it, cached under its `.pdf`
+ * extension, because WebKit draws a file by its extension, and any other
+ * file, an HTML one among them, would be drawn as a page that loads what it
+ * names from the web. A PDF the web view cannot draw says so in its place,
+ * and Share still opens it in another app.
  */
 function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
   const colors = useColors();
@@ -243,10 +252,11 @@ type FileChipProps = {
  * A file's chip after a message's words, as the panel stands a file's chip:
  * its glyph, its name on one line, cut in its middle so its extension
  * stays, and its kind and its size under it as muted words apart, on
- * `SURFACE` inside a hairline. A press opens it full screen (`FileViewer`);
- * while its bytes are on their way the system's spinner stands in its
- * glyph's place and a press does nothing. At an accessibility size its name
- * wraps rather than cuts.
+ * `SURFACE` inside a hairline. A press opens a PDF full screen
+ * (`FileViewer`) and any other file in the system's share sheet, which
+ * opens it in an app that reads it; while its bytes are on their way the
+ * system's spinner stands in its glyph's place and a press does nothing. At
+ * an accessibility size its name wraps rather than cuts.
  */
 export function FileChip({ name, mediaType, source, size }: FileChipProps) {
   const colors = useColors();
@@ -255,14 +265,20 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
   const kind = kindOf(name, mediaType);
   const heard = [name, kind, size].filter((part) => part !== undefined).join(", ");
   const fact = { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED };
+  const viewed = isPdf(mediaType);
+  const press = () => {
+    if (source === undefined) return;
+    if (viewed) setOpen(true);
+    else shareFile(source, name);
+  };
   return (
     <>
       <Pressable
-        onPress={() => setOpen(true)}
+        onPress={press}
         disabled={source === undefined}
         accessibilityRole="button"
         accessibilityLabel={heard}
-        accessibilityHint={FILE_WORDS.OPENS}
+        accessibilityHint={viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES}
         accessibilityState={{ busy: source === undefined }}
         style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
       >
@@ -290,7 +306,7 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
           </View>
         </View>
       </Pressable>
-      {source === undefined ? null : (
+      {source === undefined || !viewed ? null : (
         <FileViewer source={source} name={name} visible={open} onClose={() => setOpen(false)} />
       )}
     </>

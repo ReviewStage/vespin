@@ -2,6 +2,7 @@
  * cached-media.ts -- a video's or a file's bytes written once under the app's caches: a video named by its id and its type's extension, for the system's player, which reads a file and knows its kind by its extension, an Inbox thread's and an agent's recordings alike; and a file, such as a PDF, under its own name, for the web view that draws it and the share sheet that keeps it.
  */
 
+import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { Directory, File, Paths } from "expo-file-system";
@@ -26,6 +27,9 @@ const DOTS_ALONE = /^\.*$/u;
 
 /** A file's name where none it was attached under can stand. */
 const UNNAMED = "file";
+
+/** The extension a PDF is written under whatever it was named, since its viewer draws a file by its extension. */
+const PDF_EXTENSION = ".pdf";
 
 /** Bytes written under a name of their own beside `file` and moved into place as it, answering its address once they are all on disk. */
 async function written(file: File, base64: string): Promise<string> {
@@ -75,16 +79,24 @@ export async function cachedVideo(
  * of its own named `<prefix>-<id>`, so two files of one name stand apart and
  * the share sheet saves it under its own name. Written once, and answered
  * only once its bytes are all on disk, as a video is (`cachedVideo`). Note
- * that a name that would part a path, or stands as none, is made safe.
+ * that a name that would part a path, or stands as none, is made safe, and
+ * that a PDF always ends in `.pdf`, because the web view that draws it reads
+ * a file's kind from its extension, and a PDF named as a page, `plan.html`,
+ * would be drawn as one.
  */
 export async function cachedFile(
   prefix: string,
   id: string,
   name: string,
+  mediaType: string,
   base64: string,
 ): Promise<string> {
   const folder = new Directory(Paths.cache, `${prefix}-${id}`);
   folder.create({ intermediates: true, idempotent: true });
-  const safe = name.replace(PATH_PARTS, "_").trim();
-  return once(new File(folder, DOTS_ALONE.test(safe) ? UNNAMED : safe), base64);
+  const trimmed = name.replace(PATH_PARTS, "_").trim();
+  const safe = DOTS_ALONE.test(trimmed) ? UNNAMED : trimmed;
+  const pdf = mediaType === AGENT_ATTACHMENT_TYPE.PDF;
+  const named =
+    pdf && !safe.toLowerCase().endsWith(PDF_EXTENSION) ? `${safe}${PDF_EXTENSION}` : safe;
+  return once(new File(folder, named), base64);
 }

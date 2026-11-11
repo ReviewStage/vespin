@@ -341,7 +341,13 @@ function sourceOf(
     case INBOX_MEDIA.VIDEO:
       return cachedVideo(INBOX_MEDIA_PREFIX, each.attachmentId, read.contentType, read.base64);
     case INBOX_MEDIA.FILE:
-      return cachedFile(INBOX_MEDIA_PREFIX, each.attachmentId, each.name, read.base64);
+      return cachedFile(
+        INBOX_MEDIA_PREFIX,
+        each.attachmentId,
+        each.name,
+        each.mediaType,
+        read.base64,
+      );
     case INBOX_MEDIA.PICTURE:
       return Promise.resolve(`data:${read.contentType};base64,${read.base64}`);
   }
