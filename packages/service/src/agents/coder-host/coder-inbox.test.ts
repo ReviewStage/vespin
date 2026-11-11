@@ -5,10 +5,17 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
 import { writePage } from "@repo/database/models/task-pages";
+import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, leaveWorkspace, startTask } from "@repo/database/testing";
+import {
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openWorkspace,
+  startTask,
+} from "@repo/database/testing";
 import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
 import {
@@ -45,7 +52,7 @@ import { CODER } from "./bounds.js";
 import {
   INBOX_REFUSAL,
   postToInbox,
-  readOwnInbox,
+  readThreads,
   type ThreadPoster,
   withdrawAsk,
 } from "./inbox.js";
@@ -778,7 +785,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         yield* TestClock.adjust(Duration.seconds(1));
         yield* post(agent, { key: QUEUE.key, body: "No: it needs a new service." });
 
-        const open = yield* readOwnInbox(agent);
+        const open = yield* readThreads(agent, input({}));
         assert.equal(open.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(open.inbox?.[0]?.thread, [
           { from: "you", text: QUEUE.body, ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN } },
@@ -816,7 +823,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           revision: notice.revision,
         });
 
-        const settled = yield* readOwnInbox(agent);
+        const settled = yield* readThreads(agent, input({}));
         assert.equal(settled.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(settled.inbox, [
           {
@@ -860,7 +867,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           clientKey: randomUUID(),
         });
 
-        const read = yield* readOwnInbox(agent);
+        const read = yield* readThreads(agent, input({}));
 
         assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
@@ -889,7 +896,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         yield* closeInboxItemAsMember(agent.userId, settings.id, settings.revision, randomUUID());
         yield* withdrawAsk(agent, input({ key: "own", reason: "Did it myself." }));
 
-        const read = yield* readOwnInbox(agent);
+        const read = yield* readThreads(agent, input({}));
         assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
           read.inbox
@@ -952,7 +959,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             .where(eq(inboxItem.id, merged.id)),
         );
 
-        const read = yield* readOwnInbox(agent);
+        const read = yield* readThreads(agent, input({}));
 
         assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
@@ -975,6 +982,55 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             },
           ],
         );
+      }),
+  );
+
+  it.effect(
+    "an agent reads a teammate's agent's threads, and its task's, of its own workspace alone, and never an agent's of another workspace its developer belongs to",
+    () =>
+      Effect.gen(function* () {
+        const { workspaceId, ...agent } = yield* openAgent;
+        const teammateId = yield* openUser;
+        yield* joinWorkspace(workspaceId, teammateId);
+        const teammateTask = yield* createTask(teammateId, {
+          name: "Billing export",
+          organizationId: workspaceId,
+        });
+        const { workspaceId: _shared, ...teammate } = yield* agentOn(teammateId, teammateTask);
+        yield* post(teammate, QUEUE);
+        const elsewhereId = yield* openWorkspace(agent.userId);
+        const elsewhereTask = yield* createTask(agent.userId, {
+          name: "Side project",
+          organizationId: elsewhereId,
+        });
+        const { workspaceId: _elsewhere, ...elsewhere } = yield* agentOn(
+          agent.userId,
+          elsewhereTask,
+        );
+        yield* post(elsewhere, SETTINGS);
+
+        const byAgent = yield* readThreads(agent, input({ agentId: teammate.agentId }));
+        const byTask = yield* readThreads(agent, input({ taskId: teammate.taskId }));
+        const outside = yield* readThreads(agent, input({ agentId: elsewhere.agentId }));
+
+        const teammateThread = [
+          {
+            key: QUEUE.key,
+            agentId: teammate.agentId,
+            status: INBOX_STATUS.OPEN,
+            from: "agent",
+          },
+        ];
+        const summary = (read: typeof byAgent) =>
+          read.inbox?.map((line) => ({
+            key: line.key,
+            agentId: line.agentId,
+            status: line.status,
+            from: line.thread[0]?.from,
+          }));
+        assert.deepEqual(summary(byAgent), teammateThread);
+        assert.deepEqual(summary(byTask), teammateThread);
+        assert.deepEqual(outside, { status: ACTION_RESULT_STATUS.ACCEPTED, inbox: [] });
       }),
   );
 
