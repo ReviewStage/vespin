@@ -10,7 +10,7 @@ import {
   menuFocusOf,
 } from "@repo/features/ios-menu-commands";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
-import { LINK_ORIGIN } from "@repo/features/link-home";
+import { LINK_PAGE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { READ_MARK } from "@repo/features/read-mark";
 import { agentStillWriting } from "@repo/features/task-agents-model";
@@ -19,6 +19,7 @@ import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { settleStopWords } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { CONTACT_MAILTO } from "@repo/host/contract";
 import { BUZZ, buzz, ConfirmAsk } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
@@ -31,10 +32,6 @@ import { openInSafari } from "../open-link.js";
 import { useOpenSettings } from "../settings-button.js";
 import { useSignOut } from "../sign-out.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
-
-/** Where Help's two items go: the site's docs, and a mail to the people who make the app. */
-const HELP_ADDRESS = `${LINK_ORIGIN}/docs`;
-const FEEDBACK_ADDRESS = `mailto:founders@vespin.dev?subject=${encodeURIComponent(`${PRODUCT_NAME} feedback`)}`;
 
 /** What Sign Out asks first, since it leaves the phone with no account until the next sign-in. */
 const SIGN_OUT_ASK = { TITLE: `Sign out of ${PRODUCT_NAME}?`, ACT: "Sign out" } as const;
@@ -263,9 +260,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         if (subject.address !== undefined) openInSafari(subject.address);
         return;
       case MENU_COMMAND.HELP:
-        return openInSafari(HELP_ADDRESS);
+        return openInSafari(LINK_PAGE.DOCS);
       case MENU_COMMAND.FEEDBACK:
-        openURL(FEEDBACK_ADDRESS).catch((error: unknown) =>
+        openURL(CONTACT_MAILTO).catch((error: unknown) =>
           console.error("The feedback mail did not open.", error),
         );
         return;
