@@ -3,16 +3,17 @@
 import { useColors } from "@repo/ui-native";
 import { useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
+import { Platform } from "react-native";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
-// and minimizes it as a list scrolls down, and a regular window, a portrait
-// iPad's or the unfolded Duo's, floats it at the top. In a compact window its
+// and minimizes it as a list scrolls down, and floats it at the top of a
+// portrait iPad. In a compact window its
 // tabs are icons alone, their labels hidden through NativeTabs' own `hidden`
 // and heard still as each tab's accessibility label; a regular window's
-// floating bar keeps them. The selected tab is tinted in the brand's copper,
+// bar, floating or a rail, keeps them. The selected tab is tinted in the brand's copper,
 // and the Inbox carries the panel's count of what waits on you, hidden at
 // none, its fill the attention fill, the light copper in either theme, since
 // the system's white figures read at under 3:1 on the dark theme's accent,
@@ -24,16 +25,20 @@ import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 // is held unselectable (`disabled`, which keeps its look and only stops the
 // system selecting it), and its press opens the sheet.
 //
-// The bar is never `sidebarAdaptable`. Its sidebar would list only these
-// same tabs, behind a button drawn as the split view's own sidebar toggle a
-// few points from it, which hides the list beside the open item, so a
-// portrait iPad stood two identical buttons doing different things. A window
-// wide enough for three columns, an iPad's in landscape, hides the bar, and
-// each tab's root stands the app sidebar (`screens/app-sidebar.tsx`) as its
-// split view's first column instead, as Mail does: the places, Pinned and the
-// member's sections, the workspace switcher, and Settings. Tabs stay mounted
-// across the switch, so a fold, a rotation, or a resize keeps the open thread
-// or task.
+// The bar is `sidebarAdaptable` on an iPhone, which the iPhone Duo is in
+// either posture: folded, iOS 27 stands its tabs as a glass rail on the
+// outer display, and unfolded the bar becomes a sidebar rail beside the
+// split view. It is never on an iPad, because there its button floats a few
+// points from the split view's own sidebar toggle, drawn the same, while its
+// sidebar lists only the tabs the floating bar already shows. Note that this
+// reads the device's idiom rather than the window, as the layout never does,
+// because it chooses the system's own tab chrome, which iOS itself draws by
+// idiom. A window wide enough for three columns, an iPad's in landscape,
+// hides the bar, and each tab's root stands the app sidebar
+// (`screens/app-sidebar.tsx`) as its split view's first column instead, as
+// Mail does: the places, Pinned and the member's sections, the workspace
+// switcher, and Settings. Tabs stay mounted across the switch, so a fold, a
+// rotation, or a resize keeps the open thread or task.
 export default function TabsLayout() {
   const colors = useColors();
   const router = useRouter();
@@ -44,6 +49,7 @@ export default function TabsLayout() {
     <NativeTabs
       hidden={appSidebar}
       minimizeBehavior="onScrollDown"
+      sidebarAdaptable={!(Platform.OS === "ios" && Platform.isPad)}
       tintColor={colors.ACCENT}
       badgeBackgroundColor={colors.ATTENTION_FILL}
     >
