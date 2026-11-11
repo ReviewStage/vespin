@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and over the composer, a call opened on its body, a run of calls opened, the pictures and the recording it showed, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, and its held call allowed; then an agent whose transcript stands empty.
+# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and over the composer, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, and its held call allowed; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -34,8 +34,8 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: agent-call
 - tapOn: "Edited.*"
-# The second turn: the page it showed as a card, and its recording, which the
-# system's player cannot play, offering Safari in its place.
+# The second turn: the page it showed as a card, and its recording, read as
+# its MP4 copy, which the system's player plays in place.
 # Note that the card is left near the top as it scrolls in, clear of Jump to
 # latest, which floats over the middle of a short window such as the Duo's.
 - scrollUntilVisible:
@@ -55,6 +55,18 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
     optional: true
+# The recording under the card: the flow waits for the player to report it
+# can play the file, so a read that never lands, or a file it cannot play,
+# fails here rather than leaving a well with its spinner in the screenshot.
+- scrollUntilVisible:
+    element:
+      id: "video-player"
+    direction: DOWN
+    timeout: 15000
+- assertNotVisible: ".*can't play here.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-recording
 # The first turn finished: its run of calls folded under one line, the
 # pictures it showed standing apart after it.
 - scrollUntilVisible:

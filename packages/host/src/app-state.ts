@@ -367,14 +367,14 @@ export const NO_HOLDER_INBOXES: AppHolderInboxes = {
   [INBOX_SCOPE_KIND.AGENT]: {},
 };
 
-/** What pages stand on: a task, or an agent with no task. */
+/** What pages stand on: a task. */
 type PageOwnerKind = (typeof PAGE_OWNER)[keyof typeof PAGE_OWNER];
 
-/** One task's or agent's pages, as the host's read of them stands: each page by its newest version, the most recently written first, once it answered. */
+/** One task's pages, as the host's read of them stands: each page by its newest version, the most recently written first, once it answered. */
 export type AppHolderPages = AppHostRead<readonly PageLine[]>;
 
 /**
- * Each task's or agent's pages the host holds for the windows
+ * Each task's pages the host holds for the windows
  * (`compose-tasks.ts`): those a window chose, and the few let go lately, by
  * what they stand on and then its id, each as its own read stands. One
  * absent is held by nobody.
@@ -383,8 +383,8 @@ export type AppPages = {
   readonly [Kind in PageOwnerKind]: Readonly<Record<string, AppHolderPages>>;
 };
 
-/** No pages held, as the host stands before any window chooses a task or an agent and after the session ends. */
-export const NO_PAGES: AppPages = { [PAGE_OWNER.TASK]: {}, [PAGE_OWNER.AGENT]: {} };
+/** No pages held, as the host stands before any window chooses a task and after the session ends. */
+export const NO_PAGES: AppPages = { [PAGE_OWNER.TASK]: {} };
 
 /**
  * Each task's or agent's cloud Browser tabs the host holds for the windows
@@ -838,7 +838,7 @@ export interface AppState {
   [LIVE_READ.MEMORIES]: AppMemories;
   /** The models the account is offered and its devices, by the account, held while a window draws a model or a device and a while after: what every model menu, Settings › Agents, setup, and New task's Runs on read. */
   [LIVE_READ.MODELS]: AppModels;
-  /** Each task's or agent's pages the windows chose, held while a window holds them and a while after: what the panel beside an Inbox item, and beside an agent's page, lists. */
+  /** Each task's pages the windows chose, held while a window holds them and a while after: what the panel beside a task and an Inbox item lists. */
   [LIVE_READ.PAGES]: AppPages;
   /** The account's own provider keys, held while a window draws them: what Settings › Agents and Call and Dictate read. */
   [LIVE_READ.PROVIDER_KEYS]: AppProviderKeys;

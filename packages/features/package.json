@@ -103,6 +103,7 @@
     "./inbox-ask-words": "./src/inbox-ask-words.js",
     "./inbox-draft": "./src/inbox-draft.js",
     "./inbox-list-model": "./src/inbox-list-model.js",
+    "./inbox-remind-times": "./src/inbox-remind-times.js",
     "./composer-markdown": "./src/composer-markdown.js",
     "./plain-words": "./src/plain-words.js",
     "./search-tokens": "./src/search-tokens.js",

@@ -35,7 +35,7 @@ import {
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
-import { holderTaskId, type MentionHolder } from "./mention-holder.js";
+import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
 import { skillWord } from "./skill-word.js";
@@ -1430,7 +1430,7 @@ export function shownPageVersion(
   return page === undefined || typeof version !== "number" ? undefined : { page, version };
 }
 
-/** The page a read answered, which opens its tab where it is on the call's own task, or the calling agent's own on no task; one of another task or agent opens nothing here. */
+/** The page a read answered, which opens its tab where it is on the call's own task; one of another task opens nothing here. Note that `isYours` is read too, because a transcript from before keeps the answer it was given then. */
 function readPage(call: TargetedCall): ToolTarget | undefined {
   const answer = isRecord(call.output) ? call.output.page : undefined;
   const own = isRecord(answer) && (answer.isYourTask === true || answer.isYours === true);
@@ -1516,7 +1516,7 @@ export function toolTarget(call: TargetedCall): ToolTarget | undefined {
 export interface TargetPlace {
   /** The workspace's slug; empty where the place names none. */
   readonly workspace: string;
-  /** The task whose page draws the transcript, or the agent on no task whose own page does, which the description and the pages stand on; none where the place holds neither. */
+  /** The task whose page draws the transcript, which the description and the pages stand on; none where no task holds the place. */
   readonly holder: MentionHolder | undefined;
   /** The agent whose transcript is drawn, whose threads a post names. */
   readonly agentId: string | undefined;
@@ -1538,17 +1538,16 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
     case TOOL_TARGET.TASK:
       return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
-      const taskId = holderTaskId(place.holder);
+      const taskId = place.holder?.taskId;
       return taskId === undefined
         ? undefined
         : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
     }
     case TOOL_TARGET.PAGE: {
-      const holder = place.holder;
-      if (holder === undefined) return undefined;
-      return "taskId" in holder
-        ? linked({ kind: LINK_DESTINATION.PAGE, planId: holder.taskId, pageId: target.page })
-        : linked({ kind: LINK_DESTINATION.PAGE, agentId: holder.agentId, pageId: target.page });
+      const taskId = place.holder?.taskId;
+      return taskId === undefined
+        ? undefined
+        : linked({ kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: target.page });
     }
     case TOOL_TARGET.INBOX:
       return target.item === undefined || place.agentId === undefined

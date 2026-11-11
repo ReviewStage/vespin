@@ -1160,6 +1160,41 @@ export function inboxAppState(
   };
 }
 
+/** The reminders a fixture run set, by item: an instant, or null where one was cleared. */
+export type InboxReminders = ReadonlyMap<string, number | null>;
+
+/** An item with the reminder set on it, or cleared, as `reminders` holds; the item handed in where they name it not. */
+function remindedItem(item: InboxItem, reminders: InboxReminders): InboxItem {
+  const until = reminders.get(item.id);
+  if (until === undefined) return item;
+  const { remindAt: _held, ...rest } = item;
+  return until === null ? rest : { ...rest, remindAt: until };
+}
+
+/**
+ * The document with the reminders a fixture run set laid over the staged
+ * feed's items, as the host draws one the moment it is asked, so a fixture
+ * run's Inbox puts the item away under Reminders. The very document where
+ * none was set.
+ */
+export function inboxRemindersAppState(
+  state: AppStateSnapshot,
+  reminders: InboxReminders,
+): AppStateSnapshot {
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.PLAN];
+  if (reminders.size === 0 || fed === undefined) return state;
+  const reminded = Object.fromEntries(
+    Object.entries(fed).map(([taskId, items]) => [
+      taskId,
+      items.map((item) => remindedItem(item, reminders)),
+    ]),
+  );
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
+  };
+}
+
 /* ----- The act door ----- */
 
 /** One staged item by its id, in whichever task's inbox holds it. */
@@ -1190,6 +1225,12 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
+  // Note that a reminder is taken as the service takes one, the item's read state echoed; the iOS run lays it over the document itself (`inboxRemindersAppState`).
+  [ACT_KIND.AGENTS_INBOX_REMIND]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { id: itemId, unread: held.unread === true };
+  },
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
@@ -1206,7 +1247,7 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
-  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
+  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
   // Note that an answer to the invitations agent's held call is taken as the service takes one, the call settled as answered, though its row still holds it, so the window draws its own answer.
   [ACT_KIND.AGENTS_ANSWER_APPROVAL]: ({ approvalId, answer }) => ({

@@ -2200,7 +2200,7 @@ it.effect(
       const { unfollow, follow, told, pushed, reset } = yield* subject(service);
       const held = (read: WireValue) => [
         LIVE_READ.PAGES,
-        { [PAGE_OWNER.TASK]: { [INVITES]: read }, [PAGE_OWNER.AGENT]: {} },
+        { [PAGE_OWNER.TASK]: { [INVITES]: read } },
       ];
 
       yield* follow("TASKS_PAGES_FOLLOW", { taskId: INVITES });
@@ -2230,7 +2230,7 @@ it.effect(
       assert.equal(pages.held(), 0);
       assert.deepEqual(
         pushed.findLast(([kind]) => kind === LIVE_READ.PAGES),
-        [LIVE_READ.PAGES, { [PAGE_OWNER.TASK]: {}, [PAGE_OWNER.AGENT]: {} }],
+        [LIVE_READ.PAGES, { [PAGE_OWNER.TASK]: {} }],
       );
     }),
 );
@@ -2258,10 +2258,7 @@ it.effect(
       yield* followSettled;
       assert.equal(seals, 1, "a plan the reader cannot reach is not asked again while held");
       assert.deepEqual(pushed, [
-        [
-          LIVE_READ.PAGES,
-          { [PAGE_OWNER.TASK]: { [INVITES]: { failed: true } }, [PAGE_OWNER.AGENT]: {} },
-        ],
+        [LIVE_READ.PAGES, { [PAGE_OWNER.TASK]: { [INVITES]: { failed: true } } }],
       ]);
 
       yield* unfollow("TASKS_PAGES_FOLLOW", { taskId: INVITES });

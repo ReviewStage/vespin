@@ -41,7 +41,13 @@
         "metro.config.js"
       ],
       "project": ["src/**", "scripts/**"],
-      "ignoreDependencies": ["effect", "@expo/ui", "expo-glass-effect", "expo-video"]
+      "ignoreDependencies": [
+        "effect",
+        "@expo/ui",
+        "expo-glass-effect",
+        "expo-haptics",
+        "expo-video"
+      ]
     },
     "apps/catalog": {
       "project": ["src/**"],

@@ -284,6 +284,7 @@ export function AgentScreen() {
           empty={{
             title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
             symbol: failed ? "exclamationmark.triangle" : "text.bubble",
+            loading: !failed,
             action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
           }}
           older={older}
@@ -345,6 +346,7 @@ export function AgentPageScreen() {
           <EmptyState
             title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
             symbol={"failed" in read ? "exclamationmark.triangle" : "macwindow"}
+            loading={!("failed" in read)}
           />
         </Screen>
       )}

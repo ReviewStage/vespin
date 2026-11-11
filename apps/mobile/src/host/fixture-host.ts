@@ -23,8 +23,10 @@ import type {
   PortActResult,
 } from "@repo/host/contract";
 import {
+  type InboxReminders,
   inboxActAnswer,
   inboxAppState,
+  inboxRemindersAppState,
   inboxTasksView,
   olderPageAnswer,
   olderPageAppState,
@@ -56,6 +58,12 @@ const OLDER_ASKS = new WeakMap<object, number>();
 
 /** No pull request moved yet. */
 const NO_MOVES: ReadonlyMap<number, PullRequestMove> = new Map();
+
+/** The reminders each run set on the fixture's items, by the store the run stages, each map replaced whole as one is set. */
+const REMINDERS = new WeakMap<object, InboxReminders>();
+
+/** No reminder set yet. */
+const NO_REMINDERS: InboxReminders = new Map();
 
 /** What the store is handed: whole slices of the document. */
 type StorePatch = Parameters<AppStateStore["update"]>[0];
@@ -96,12 +104,26 @@ export function stageFixture(
     pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
     OLDER_ASKS.get(state) ?? 0,
   );
+  const reminded = inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS);
   const staged = {
-    ...parts,
+    ...reminded,
     tasks: stagedTasks(held),
     network: stagedNetwork(held, updateNeeded),
   };
   state.update(stagedPatch(held, staged));
+}
+
+/** Keeps a reminder the fixture took, set or cleared, and lays it over the document at once, as the host draws one; nothing for any other act. */
+function keepReminder(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.AGENTS_INBOX_REMIND) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { itemId, until } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_REMIND>;
+  REMINDERS.set(state, new Map(REMINDERS.get(state) ?? NO_REMINDERS).set(itemId, until));
+  stageFixture(state);
 }
 
 /** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
@@ -148,7 +170,9 @@ function olderRead(
  * page before the transcript's first message. Note that a mark is
  * echoed and moves no dot, as on the panel's, but a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
- * would, so a screen draws it merged or out of the queue.
+ * would, so a screen draws it merged or out of the queue, and a reminder
+ * set or cleared moves its item there, as the host draws one, so the Inbox
+ * puts it away under Reminders.
  */
 export function fixtureActs(
   acts: ActPortClient,
@@ -173,6 +197,8 @@ export function fixtureActs(
         if (staged === undefined) return Reflect.apply(sent, target, [payload, ...rest]);
         // SAFETY: as above.
         keepMove(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
+        // SAFETY: as above.
+        keepReminder(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
         return Promise.resolve(staged.answer);
       };
     },

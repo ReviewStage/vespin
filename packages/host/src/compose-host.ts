@@ -419,6 +419,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
                 })),
                 (snapshot) => experimentOn(snapshot.experiments, experiment),
               ),
+            keepAwake: Effect.map(
+              Effect.orElseSucceed(settings.store.snapshot(), () => undefined),
+              (snapshot) => snapshot?.stored.keepAwake ?? APP_SETTING_SCHEMA.keepAwake.default,
+            ),
             settingsTold: settings.told,
             hostListed: (deviceId) =>
               Effect.map(agentClient.hosts(), (answer) =>

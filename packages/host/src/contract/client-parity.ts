@@ -6,10 +6,10 @@
  * all of it, the web all but what only an app on the Mac can carry, and the
  * iOS app what its screens have been built for: today its sign-in and
  * sign-out; the Inbox: its list, which the host reads from the account
- * gate opening with no act of the app's, its read marks, its retry, its
- * pictures, and a thread's answer, reply, and resolve; the Tasks tab: its
- * tree, read from the same list, a task's status set, pin, and read mark,
- * and a task's description and pages followed; an agent's page: a message sent or
+ * gate opening with no act of the app's, its read marks, its reminders, its
+ * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
+ * tab: its tree, read from the same list, a task's status set, pin, and read
+ * mark, and a task's description and pages followed; an agent's page: a message sent or
  * queued, its queue steered, and its turn stopped; New agent on a task and
  * New task, with the models and the repositories they pick among followed;
  * and the phone's own push registration,
@@ -243,7 +243,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: panel(notYet("iOS v1 sets no reminders")),
+  [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: panel(notYet("iOS v1 opens no Inbox item by its link")),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,

@@ -123,7 +123,6 @@ const STATE: AppStateSnapshot = (() => {
       [PAGE_OWNER.TASK]: {
         [TASK_ID]: { rows: [{ id: PAGE, title: "Unfurl matrix", version: 1, at: AT }] },
       },
-      [PAGE_OWNER.AGENT]: {},
     },
     inbox: {
       ...snapshot.inbox,
