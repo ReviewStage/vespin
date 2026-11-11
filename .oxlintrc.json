@@ -69,6 +69,19 @@
       }
     },
     {
+      "files": ["apps/mobile/**", "packages/ui-native/**"],
+      "plugins": ["react"],
+      "rules": {
+        "react/refs": "error",
+        "react/immutability": "off",
+        "react/preserve-manual-memoization": "off",
+        "react/purity": "off",
+        "react/set-state-in-effect": "off",
+        "react/use-memo": "off",
+        "react-hooks/exhaustive-deps": "off"
+      }
+    },
+    {
       "files": ["**/*.test.ts", "**/*.test.mjs", "**/*.test.tsx"],
       "rules": {
         "anti-slop/enforce-delete-with-where": "off"
