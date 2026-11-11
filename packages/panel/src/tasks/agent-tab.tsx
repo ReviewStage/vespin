@@ -281,7 +281,7 @@ import {
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
-import { ForkedToLine, useForkOffered, useSideDoor } from "./fork-action.js";
+import { ForkedToLine, SideChatsLine, useForkOffered, useSideDoor } from "./fork-action.js";
 import { type ForkCut, forkCutOf, openReply } from "./fork-model.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
 import {
@@ -1919,6 +1919,7 @@ export function AgentMessage({
         </MessageContent>
         {ends ? foot : null}
         {ends ? <ForkedToLine messageId={message.id} /> : null}
+        {ends ? <SideChatsLine messageId={message.id} /> : null}
       </Message>
     );
   });
@@ -3312,6 +3313,7 @@ function AgentTabView({
             brief={agent.brief}
             onStop={onStop}
             onSide={onSide}
+            side={isSideChat(agent)}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
             followsUp

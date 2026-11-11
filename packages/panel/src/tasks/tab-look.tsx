@@ -63,10 +63,11 @@ export const TAB_KIND = {
   BROWSER: "browser",
 } as const;
 
-/** Where an agent stands as its glyph wears it: its model, and where it stands where that is known. */
+/** Where an agent stands as its glyph wears it: its model, where it stands where that is known, and whether it is a side chat (`side-chat.ts`). */
 interface AgentStanding {
   readonly model: string;
   readonly status?: AgentStatus | undefined;
+  readonly from?: { readonly side?: true } | undefined;
 }
 
 /** A task as its tab or its row names it: its name, and its status where the place knows it. */
@@ -199,7 +200,10 @@ export function SubagentMark({ model }: { model: string | undefined }) {
 export function AgentGlyph({ agent }: { agent: AgentStanding | undefined }) {
   const provider = agent === undefined ? undefined : providerOf(agent.model);
   const state = agent?.status === undefined ? GLYPH_STATE.REST : agentGlyphState(agent.status);
-  return <StateGlyph glyph={<AgentMark provider={provider} />} state={state} />;
+  // A side chat wears the side chat's glyph, as `/btw` does in the box's list, so its tab reads as one wherever it stands.
+  const glyph =
+    agent?.from?.side === true ? <GLYPH.SIDE_CHAT /> : <AgentMark provider={provider} />;
+  return <StateGlyph glyph={glyph} state={state} />;
 }
 
 /** A subagent's glyph wearing where it stands, as `AgentGlyph` wears an agent's. */

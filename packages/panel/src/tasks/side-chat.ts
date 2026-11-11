@@ -12,7 +12,7 @@
  * short answer that changes nothing unless asked, as other tools' side
  * questions do, and it is archived with the agent. Every client reads the
  * mark off the summary, so the note is the question alone, and the fork is
- * named for it, so no title is generated. Its tab opens in the side panel
+ * named for its opening words, so no title is generated. Its tab opens in the side panel
  * rather than the task's column, and closing it archives it
  * (`desktop-tasks.tsx`).
  */
@@ -27,9 +27,6 @@ import {
   messageOpening,
   openReply,
 } from "./fork-model.js";
-
-/** What a side chat is named, ahead of its question's opening words. */
-const TITLE_HEAD = "Side: ";
 
 /** Whether the agent is a side chat asked beside another (`/btw`), which stands under that agent rather than among the task's. */
 export function isSideChat(agent: Pick<AgentSummary, "from">): boolean {
@@ -82,6 +79,7 @@ export function sideChatStart(input: {
   return {
     ...start,
     ...(start.from === undefined ? undefined : { from: { ...start.from, side: true } }),
-    title: `${TITLE_HEAD}${messageOpening(question)}`,
+    // Note that the side chat's glyph marks it wherever its name stands, so the name is the question's opening alone.
+    title: messageOpening(question),
   };
 }

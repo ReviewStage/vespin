@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
+import { GLYPH } from "@repo/ui/icons";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { ArrowRightIcon, SplitIcon, XIcon } from "lucide-react";
 import { createContext, Fragment, type ReactNode, useContext } from "react";
@@ -46,6 +47,8 @@ interface ForkDoors {
     | ((messageId: string, words: string, cut: ForkCut | undefined) => void)
     | undefined;
   readonly forkedTo: (messageId: string) => readonly ReactNode[];
+  /** The chips of the side chats asked at each message (`side-chat.ts`), archived ones among them, so one is found again under the message it was asked at. */
+  readonly sideChats?: ((messageId: string) => readonly ReactNode[]) | undefined;
   readonly onContinue?: ContinueDoor | undefined;
   readonly onSide?: SideDoor | undefined;
 }
@@ -175,6 +178,19 @@ export function agentForkDoors(input: {
         ? (words, attachments) => onContinue(agent.id, words, attachments)
         : undefined,
     onSide: drafts ? onSide : undefined,
+    sideChats: (messageId) =>
+      listed
+        .filter(
+          (each) =>
+            each.from?.side === true &&
+            each.from.agentId === agent.id &&
+            each.from.messageId === messageId,
+        )
+        .map((each) => (
+          <Fragment key={each.id}>
+            {agentChip(each.id, each, cards, opens(each.id) ? open : undefined, each.title)}
+          </Fragment>
+        )),
     forkedTo: (messageId) =>
       (forks.get(messageId) ?? []).map((agentId) => (
         <Fragment key={agentId}>
@@ -227,6 +243,27 @@ export function ForkedToLine({ messageId }: { messageId: string }): ReactNode {
   return (
     <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={<SplitIcon />} data-forked-to="">
       <span>{FORK_WORDS.TO}</span>
+      {chips.map((chip, index) => (
+        // Note that each chip holds the comma after it, so no gap opens before the comma.
+        <span key={index} className="inline-flex items-center">
+          {chip}
+          {index === chips.length - 1 ? null : <span aria-hidden="true">,</span>}
+        </span>
+      ))}
+    </NoteLine>
+  );
+}
+
+/** What the line under a message names its side chats by, ahead of their chips. */
+const SIDE_CHAT_WORDS = { ONE: "Side chat", MANY: "Side chats" } as const;
+
+/** The line under a message naming the side chats asked at it, each by its chip, which opens it; nothing where none was. */
+export function SideChatsLine({ messageId }: { messageId: string }): ReactNode {
+  const chips = useContext(ForkContext)?.sideChats?.(messageId) ?? [];
+  if (chips.length === 0) return null;
+  return (
+    <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={<GLYPH.SIDE_CHAT />} data-side-chats="">
+      <span>{chips.length === 1 ? SIDE_CHAT_WORDS.ONE : SIDE_CHAT_WORDS.MANY}</span>
       {chips.map((chip, index) => (
         // Note that each chip holds the comma after it, so no gap opens before the comma.
         <span key={index} className="inline-flex items-center">

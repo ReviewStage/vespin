@@ -204,6 +204,8 @@ const SIDE_COMMANDS: ReadonlySet<SlashCommand> = new Set([SLASH_COMMAND.BTW, SLA
 export const PLACEHOLDER = {
   FIRST: "Ask to make changes",
   FOLLOW_UP: "Send a follow-up",
+  /** A side chat's (`side-chat.ts`), which takes another question about the agent it was asked of. */
+  SIDE: "Ask a follow-up question",
 } as const;
 
 /** What a box other than an agent's own asks for, calls its field, and calls its round button, and the chord its button's hint names. */
@@ -350,6 +352,7 @@ export function AgentComposer({
   approvalsWaiting = 0,
   onClear,
   onSide,
+  side = false,
   onContinueInCloud,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
@@ -431,6 +434,8 @@ export function AgentComposer({
   onClear?: (() => Promise<boolean>) | undefined;
   /** Asks a side question in a fork opened beside the agent (`/btw`, `side-chat.ts`), answering whether it started; none where the box offers none. */
   onSide?: ((question: string) => Promise<boolean>) | undefined;
+  /** Whether the box is a side chat's, which asks for another question rather than a follow-up. */
+  side?: boolean;
   /** The agent continued in the cloud with the message given, which a note of its machine gone offline offers (`FAILURE_REASON.CONTINUE_IN_CLOUD`); none where no such move is offered. */
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
@@ -475,7 +480,8 @@ export function AgentComposer({
     // Note that a closed box asks for nothing, since it takes nothing.
     placeholder: closed
       ? ""
-      : (wording?.placeholder ?? (followsUp ? PLACEHOLDER.FOLLOW_UP : PLACEHOLDER.FIRST)),
+      : (wording?.placeholder ??
+        (side ? PLACEHOLDER.SIDE : followsUp ? PLACEHOLDER.FOLLOW_UP : PLACEHOLDER.FIRST)),
     label: wording?.label ?? "Message to the agent",
     maxLength,
     held,

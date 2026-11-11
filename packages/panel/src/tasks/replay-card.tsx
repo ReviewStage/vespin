@@ -469,7 +469,7 @@ function useOpenSource(
 }
 
 /** What a side chat's head says ahead of the chip of the agent it was asked of. */
-const ASKED_OF = "Asked of";
+const SIDE_CHAT_OF = "Side chat of";
 
 /**
  * A side chat's head (`side-chat.ts`), over the question it opens on: the
@@ -490,11 +490,14 @@ export function SideChatHead({
   const source = useSource(agentId, place);
   const tile = place.tile(agentId) ?? unlistedActor(agentId, source);
   const openSource = useOpenSource(agentId, place, taskId);
+  // Note that the head stands centered over the conversation, as a divider does, in the trail's words and gap.
   return (
-    <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={<GLYPH.SIDE_CHAT />} data-side-chat-head="">
-      <span>{ASKED_OF}</span>
-      <ActorRef actor={tile} card={place.card(agentId)} onOpen={openSource} />
-    </NoteLine>
+    <div className="flex justify-center py-tight-gap">
+      <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={<GLYPH.SIDE_CHAT />} data-side-chat-head="">
+        <span>{SIDE_CHAT_OF}</span>
+        <ActorRef actor={tile} card={place.card(agentId)} onOpen={openSource} />
+      </NoteLine>
+    </div>
   );
 }
 
