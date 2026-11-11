@@ -84,17 +84,17 @@ import { ClaudeCode, type ClaudeCodeSession, type ClaudeCodeShape } from "./clau
 import { runCodex } from "./codex.js";
 import { type EventSink, makeEventSink } from "./events.js";
 import {
+  harnessEnvOf,
   installedSkillsPath,
   type LaunchContext,
   type LaunchOutcome,
   RunnerFailed,
-  type RunnerSelf,
   RunnerUnconfigured,
+  toolEnvOf,
 } from "./launch.js";
 import { readLines } from "./lines.js";
 import { openMcpRelay } from "./mcp-relay.js";
 import { type ClaudeCodeMemoryWatch, claudeCodeMemoryWatch } from "./out-of-memory.js";
-import { SANDBOX_TOOL_ENV } from "./pins.js";
 import {
   APPROVAL_BY,
   type CheckoutSnapshot,
@@ -200,8 +200,6 @@ type InFlight = Omit<RunnerWaiting, "type">;
 export interface RunnerInput {
   readonly lines: Stream.Stream<string>;
   readonly env: Readonly<Record<string, string | undefined>>;
-  /** The runner's own bundle as a command, which Codex runs for its token. */
-  readonly self?: RunnerSelf | undefined;
 }
 
 const decodeConfig = Schema.decodeUnknownEffect(Schema.fromJsonString(RunnerConfigSchema));
@@ -326,16 +324,17 @@ function queryOptions(
     includePartialMessages: true,
     disallowedTools: [...CLAUDE_CODE_TOOLS.DENIED],
     agents: { [CLAUDE_CODE_WORKER]: workerOf(config) },
-    // The CLI's environment is the runner's own and the image's tools'
-    // (`SANDBOX_TOOL_ENV`), less the bearer, which only the runner uses; Node
+    // The CLI's environment is the runner's own and, in the cloud's sandbox, the image's tools'
+    // (`toolEnvOf`), less the bearer, which only the runner uses; Node
     // leaves an undefined one unset. Every command the agent runs inherits it,
-    // the CLI's credential among it, which in the cloud's sandbox is a placeholder.
+    // the CLI's credential among it, which in the cloud's sandbox is a placeholder; on a host the CLI
+    // is handed none and runs on the machine's own login (`harnessEnvOf`).
     // The first turn waits on no server of the checkout's own (`.mcp.json`), which keeps connecting in the
     // background (`CLAUDE_CODE_MCP_STARTUP_WAIT_MS`). Note that ours and each integration's are SDK servers,
     // which the CLI waits on whatever the wait is set to (https://code.claude.com/docs/en/agent-sdk/mcp#connection-timing).
     env: {
       ...env,
-      ...SANDBOX_TOOL_ENV,
+      ...toolEnvOf(env),
       [RUNNER_ENV.BEARER]: undefined,
       [CLAUDE_CODE_MCP_STARTUP_WAIT]: "0",
       // Note that the main conversation alone keeps its cache for an hour, and only where the config asks for it,
@@ -1103,7 +1102,7 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
     Effect.map(sink.undelivered, (undelivered) => undelivered.detail),
     Deferred.await(refused),
   );
-  const context = { lines, env: input.env, bearer, sink, cutOff, trace, self: input.self };
+  const context = { lines, env: harnessEnvOf(input.env), bearer, sink, cutOff, trace };
   const outcome: LaunchOutcome =
     config.harness === RUNNER_HARNESS.CODEX
       ? yield* runCodex({ ...context, config })

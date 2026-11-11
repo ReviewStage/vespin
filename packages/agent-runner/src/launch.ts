@@ -14,12 +14,48 @@ import { join } from "node:path";
 import type { Cause, Effect, Queue, Redacted } from "effect";
 import { Data } from "effect";
 import type { EventSink } from "./events.js";
+import { SANDBOX_TOOL_ENV } from "./pins.js";
 import { RUNNER_ENV, RUNNER_PLACE, type RunnerEnd } from "./protocol.js";
 import type { LaunchTrace } from "./trace.js";
 
 /** Whether the runner runs on a host its member added (`RUNNER_PLACE.HOST`), as the environment it was started with says. */
 export function runsOnHost(env: Readonly<Record<string, string | undefined>>): boolean {
   return env[RUNNER_ENV.PLACE] === RUNNER_PLACE.HOST;
+}
+
+/** The account's credentials a launch's starter may name in its environment (`RUNNER_ENV`), none of which a host's harnesses run on. */
+const ACCOUNT_CREDENTIALS: readonly string[] = [
+  RUNNER_ENV.CLAUDE_TOKEN,
+  RUNNER_ENV.API_KEY,
+  RUNNER_ENV.OPENAI_API_KEY,
+];
+
+/**
+ * The environment a launch's harness is handed of the runner's own: on a
+ * host without any of the account's credentials, since a host's Claude Code
+ * and Codex run on the logins signed in on the machine; in the cloud's
+ * sandbox as it was started.
+ */
+export function harnessEnvOf(
+  env: Readonly<Record<string, string | undefined>>,
+): Readonly<Record<string, string | undefined>> {
+  if (!runsOnHost(env)) return env;
+  return Object.fromEntries(
+    Object.entries(env).filter(([name]) => !ACCOUNT_CREDENTIALS.includes(name)),
+  );
+}
+
+/**
+ * What every command a harness runs is handed of the machine's tools beside
+ * the launch's own environment: in the cloud's sandbox the image's
+ * (`SANDBOX_TOOL_ENV`); on a host nothing, since the image's would steer the
+ * machine's own tools, a repository's Playwright among them, away from where
+ * they keep their things.
+ */
+export function toolEnvOf(
+  env: Readonly<Record<string, string | undefined>>,
+): Readonly<Record<string, string>> {
+  return runsOnHost(env) ? {} : SANDBOX_TOOL_ENV;
 }
 
 /** Why a launch could not run at all, before or after its harness. */
@@ -29,16 +65,6 @@ export class RunnerFailed extends Data.TaggedError("RunnerFailed")<{ readonly de
 export class RunnerUnconfigured extends Data.TaggedError("RunnerUnconfigured")<{
   readonly detail: string;
 }> {}
-
-/**
- * How to start the runner's own bundle again, as a command its harness runs:
- * Node's executable and the bundle's path, as the process was started with.
- * Codex's launch runs it as app-server's token command (`codex-token.ts`).
- */
-export interface RunnerSelf {
-  readonly executable: string;
-  readonly script: string;
-}
 
 /** What a harness's launch is handed. */
 export interface LaunchContext<Config> {
@@ -57,8 +83,6 @@ export interface LaunchContext<Config> {
   readonly cutOff: Effect.Effect<string>;
   /** The launch's startup as Sentry spans, where the config handed a trace (`trace.ts`). */
   readonly trace: LaunchTrace;
-  /** The runner's own bundle as a command; none where the runner was not started from one, as in a test that names none. */
-  readonly self?: RunnerSelf | undefined;
 }
 
 /** Why a launch ended, and the harness's failure where it failed, for the last event. */

@@ -445,17 +445,14 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         // A Mac whose host bundles a runner from before the transcript store keeps its threads on its disk alone.
         assert.equal(plan.config.transcriptsUrl, undefined);
 
-        // From the host release whose runner mirrors them, they are kept at the service, its Codex home
-        // named at its default under the agent's own home, which the runner mirrors from.
+        // From the host release whose runner mirrors them, they are kept at the service, no Codex home
+        // named, since the runner mirrors them from Codex's own default under the machine's home.
         yield* recordHostVersion(deviceId, "0.11.0");
         const onKept = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
         const kept = yield* launched(onKept);
         assert.deepEqual(
           [kept.config.transcriptsUrl, kept.secrets.env.CODEX_HOME],
-          [
-            `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
-            `/Users/fixture/.vespin/agents/${onKept.id}/home/.codex`,
-          ],
+          [`${TRANSCRIPTS_URL}${FIRST_LAUNCH}`, undefined],
         );
       }),
   );
