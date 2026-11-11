@@ -865,22 +865,24 @@ test("a Start refused for a missing credential says in one sentence which harnes
   );
 });
 
-test("a message to an agent whose device is away says it is offline, in the words a Start on it gets, under the composer and in the Inbox alike", () => {
-  const away =
-    "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.";
+test("a message to an agent whose device is away offers to continue it in the cloud under the composer, and says it in a Start's words in the Inbox, which offers no move", () => {
+  const refused = {
+    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+    refusedDevice: { name: "Studio" },
+  };
+  const note = messageFailureNote(refused, null);
 
   assert.deepEqual(
+    [note, remedyLabel(note), messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED)],
     [
-      messageFailureNote(
-        {
-          failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
-          localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        },
-        null,
-      ).text,
-      messageFailureWords(AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED),
+      {
+        reason: FAILURE_REASON.CONTINUE_IN_CLOUD,
+        text: "Studio is offline. Unpushed changes stay on it.",
+      },
+      "Continue in the cloud",
+      "Your device is offline, so this agent can't start there. Wake it and log in on it, or start it in the cloud.",
     ],
-    [away, away],
   );
 });
 

@@ -143,6 +143,15 @@ export function localAgentRefusalWords(
   }
 }
 
+/**
+ * Why a message to an agent whose device is offline did not go, said under
+ * its box beside Continue in the cloud and Retry: the device by its name
+ * where the panel knows it, and that what it did not push stays there.
+ */
+export function deviceAwayWords(device: RefusingDevice | undefined): string {
+  return `${device?.name ?? UNNAMED_DEVICE} is offline. Unpushed changes stay on it.`;
+}
+
 /** Why a repository beside an agent's own is refused, as New task and Add repository… both say it. */
 const EXTRA_REPOSITORY_WHY = {
   token: (named: string) =>

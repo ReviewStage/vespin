@@ -130,6 +130,8 @@ export interface AgentComposerControl {
   send: () => void;
   /** Asks the Revert that did not go again, or sends the message whose remedy the note offers again under its key. */
   retry: () => void;
+  /** The message the note's remedy is for, as it was sent, whether or not its row is still drawn; none where the note is of no message. */
+  notedLine?: SentLine | undefined;
   /** The lines sent that the transcript has not read back yet, in order. */
   sent: readonly SentLine[];
 }
@@ -608,6 +610,11 @@ export function useAgentComposer(input: {
     setHeld((was) => ({ ...was, sent: was.sent.filter((each) => each.id !== id) }));
   };
 
+  /** A line refused by its id, as the box still holds it or, where its row took its place, as it was kept failed. */
+  const notedLineOf = (id: string): SentLine | undefined =>
+    held.sent.find((line) => line.id === id) ??
+    failedLinesOf(failedLines, agentId).find((failed) => failed.line.id === id)?.line;
+
   /** Takes a line not delivered back into the box to be written again, ahead of what the box holds, which is newer. */
   const takeBackLine = (id: string) => {
     const line = takeFailed(id);
@@ -645,6 +652,10 @@ export function useAgentComposer(input: {
       }
       if (remedied !== undefined) resend(remedied.lineId);
     },
+    notedLine:
+      held.closed === undefined && held.remedied !== undefined
+        ? notedLineOf(held.remedied.lineId)
+        : undefined,
     retryLine: resend,
     dropLine,
     takeBackLine,

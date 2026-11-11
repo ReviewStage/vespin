@@ -38,7 +38,12 @@ import {
 import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import type { KnownNames } from "@repo/features/entity-kind";
-import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
+import {
+  CONTINUE_IN_CLOUD_LABEL,
+  FAILURE_REASON,
+  type FailureReason,
+  remedyLabel,
+} from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
@@ -294,7 +299,7 @@ import {
   MessagePlaceProvider,
   useMessageReveal,
 } from "./message-links.js";
-import { type PlaceMove, useMovePlace, useMoveToCloud } from "./move-agent.js";
+import { type MoveCarry, type PlaceMove, useMovePlace, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
@@ -2941,8 +2946,8 @@ function AgentTabView({
   continuedNote?: ReactNode;
   /** Whether the tab offers Continue somewhere, or another agent continued this one, so the end line tells no one to start a new one. */
   continuable?: boolean;
-  /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers; none where Move to would not. */
-  onMoveToCloud?: (() => void) | undefined;
+  /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers, and the box's note of its Mac gone offline, carrying the message the Mac did not take; none where Move to would not. */
+  onMoveToCloud?: ((carry?: MoveCarry) => void) | undefined;
   /** The move the box's place chip offers (`useMovePlace`); none where the chip takes no press. */
   placeMove?: PlaceMove | undefined;
 }): React.JSX.Element {
@@ -3024,7 +3029,7 @@ function AgentTabView({
           host: agent.mac?.name,
           repository: published?.repository ?? undefined,
           onRetry,
-          onMoveToCloud,
+          onMoveToCloud: onMoveToCloud === undefined ? undefined : () => onMoveToCloud(),
           copy: copyThroughShell,
         }
       : undefined;
@@ -3304,6 +3309,7 @@ function AgentTabView({
             replyDoor={replyDoor}
             closedRemedy={closedRemedy}
             sendsEmpty={sendsEmpty}
+            onContinueInCloud={onMoveToCloud}
             queueing={
               agent.runtime === undefined || !controlsQueue
                 ? undefined
@@ -3733,6 +3739,15 @@ function AgentTabBody({
               carry={continued.length > 0 ? carry : undefined}
               label={continued.length > 0 ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL}
             />
+          ) : transcript.hostLost !== undefined && moveToCloud !== undefined ? (
+            // Note that a turn its machine dropped is carried on in the cloud, since a message to the machine waits on it coming back.
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<GLYPH.CLOUD />}
+              onClick={() => moveToCloud()}
+            >
+              {CONTINUE_IN_CLOUD_LABEL}
+            </Button>
           ) : otherModel ? (
             <RefusalContinue agent={agent} control={control} carry={carry} />
           ) : triesAgain ? (
