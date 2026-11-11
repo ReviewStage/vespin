@@ -119,7 +119,7 @@ export function AgentQueueDock({
   const movable = controls && messages.length > 1;
   return (
     <div className={`agent-queue-dock ${COMPOSER_DOCK_CLASS}`}>
-      {/* Note that a first launch's failed boot is said by the bar over the transcript, whose Retry lifts the pause. */}
+      {/* Note that a first launch's failed boot is said in the empty transcript, whose Retry lifts the pause. */}
       {paused === undefined || paused.because === QUEUE_PAUSE.BOOT_FAILED ? null : (
         <Banner
           look={BANNER_LOOK.INSET}

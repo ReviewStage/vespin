@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { BOOT_PHASE } from "@repo/features/agent-boot";
+import { type AgentBoot, BOOT_FAILURE, BOOT_PHASE } from "@repo/features/agent-boot";
 import { BOOT_WORDS } from "@repo/features/agent-boot-words";
 import { QUEUE_WORDS } from "@repo/features/agent-queue-words";
 import { AGENT_BRIEF, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
@@ -27,7 +27,8 @@ import { AgentTab, StartingAgentTab, type TranscriptCards } from "./agent-tab.js
  * words as its queue's row, before the service has made the agent; the
  * column draws a Start on the description still out as that tab under the
  * press's key; and an agent's own tab while its first launch boots reads
- * its empty transcript as read. Synthetic throughout.
+ * its empty transcript as read, saying how the boot stands in its centered
+ * line. Synthetic throughout.
  */
 
 const roots: Root[] = [];
@@ -68,10 +69,14 @@ test("an agent still starting says so over an empty transcript and draws the wor
     2,
     "the words are drawn once, in the queue alone",
   );
-  assert.ok(container.textContent?.includes(BOOT_WORDS.STARTING), "the bar says it is starting");
+  assert.ok(
+    container.textContent?.includes(BOOT_WORDS.STARTING),
+    "the empty transcript says it is starting",
+  );
 });
 
-test("an agent's tab while its first launch boots reads its empty transcript as read, drawing no placeholder lines under the bar", async () => {
+/** An agent's own tab drawn over a transcript whose first launch stands as `boot` says, answered with the words it draws. */
+async function bootingTabWords(boot: AgentBoot): Promise<string> {
   fakeAppBridge({});
   const agent: AgentSummary = {
     id: "agent-booting",
@@ -85,13 +90,7 @@ test("an agent's tab while its first launch boots reads its empty transcript as 
     brief: AGENT_BRIEF.PROMPT,
   };
   pushedTranscripts(() => [
-    {
-      messages: [],
-      cursor: "0:0",
-      status: AGENT_STATUS.RUNNING,
-      title: null,
-      boot: { phase: BOOT_PHASE.STARTING, since: Date.now() },
-    },
+    { messages: [], cursor: "0:0", status: AGENT_STATUS.RUNNING, title: null, boot },
   ]);
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -114,13 +113,28 @@ test("an agent's tab while its first launch boots reads its empty transcript as 
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+  return container.textContent ?? "";
+}
 
-  const words = container.textContent ?? "";
-  assert.ok(words.includes(BOOT_WORDS.STARTING), "the bar says it is starting");
+test("an agent's tab while its first launch boots reads its empty transcript as read, saying Starting… in its centered line and no placeholder", async () => {
+  const words = await bootingTabWords({ phase: BOOT_PHASE.STARTING, since: Date.now() });
+
+  assert.ok(words.includes(BOOT_WORDS.STARTING), "the empty transcript says it is starting");
   assert.ok(
     !words.includes(readingWords("the transcript")),
     "no placeholder stands for a transcript already read",
   );
+});
+
+test("an agent's tab whose first launch failed says why in its empty transcript, with Retry for its starter", async () => {
+  const words = await bootingTabWords({
+    phase: BOOT_PHASE.FAILED,
+    since: Date.now(),
+    failure: BOOT_FAILURE.CHECKOUT_FAILED,
+  });
+
+  assert.ok(words.includes("Couldn't start the machine: the repository couldn't be checked out."));
+  assert.ok(words.includes(BOOT_WORDS.RETRY), "its starter may boot it again");
 });
 
 test("the column draws a Start still out on the description as its agent's tab saying it is starting, under the press's key", async () => {

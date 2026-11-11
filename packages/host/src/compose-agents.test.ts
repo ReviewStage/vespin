@@ -684,11 +684,9 @@ it.effect(
       assert.equal(reads(), beforeQueue + 1, "the queue moving reads the page");
       assert.equal(held().at(-1)?.word?.queueRevision, 1, "its queue is at least that new");
 
-      // A first launch's boot moving on, from Starting to its setup scripts, moves nothing else.
+      // A first launch's boot moving on, from Starting to its hand-off, moves nothing else.
       const beforeBoot = reads();
-      live.transcript.set({
-        boot: [{ attempt: 1, phase: "running-scripts", setupExit: null, failure: null }],
-      });
+      live.transcript.set({ boot: [{ attempt: 1, phase: "handing-off", failure: null }] });
       yield* nextPoll;
       assert.equal(reads(), beforeBoot + 1, "the boot moving reads the page");
 

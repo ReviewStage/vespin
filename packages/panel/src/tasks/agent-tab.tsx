@@ -200,7 +200,7 @@ import {
   useAgentPermissionMode,
   useCallHeld,
 } from "./agent-approvals.js";
-import { AgentBootBar, BOOT_BAR, bootBarOf } from "./agent-boot-bar.js";
+import { AgentBootLine, BOOT_LINE, bootLineOf } from "./agent-boot-line.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";
 import {
@@ -2448,8 +2448,11 @@ function AgentTranscriptView({
   signIn,
   bringIn,
   holding = false,
+  boot,
 }: {
   messages: readonly AgentTranscriptMessage[];
+  /** What the empty transcript says in its starting line's place while the agent's first launch stands (`AgentBootLine`); none otherwise. */
+  boot?: ReactNode;
   /** Whether the log waits to draw for what stands around it, saying it is loading meanwhile. */
   holding?: boolean;
   /** Where the transcript hands the door that brings a message whose row is not drawn into view, which a link to the message asks through; none where nothing asks. */
@@ -2816,7 +2819,7 @@ function AgentTranscriptView({
       {
         <>
           {ended === undefined ? (
-            <Text tone={TEXT_TONE.MUTED}>{lead.startingLine}</Text>
+            (boot ?? <Text tone={TEXT_TONE.MUTED}>{lead.startingLine}</Text>)
           ) : signInCard !== undefined ? (
             signInCard
           ) : (
@@ -3030,9 +3033,9 @@ function AgentTabView({
   );
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
-  // Note that a first launch still booting says so over the transcript (`AgentBootBar`), so no working line or end line stands under it.
+  // Note that a first launch still booting says so in the empty transcript's centered line (`AgentBootLine`), so no working line or end line stands under it.
   const booting = bootHolds(transcript.boot?.phase);
-  const bootBar = bootBarOf(transcript.boot);
+  const bootLine = bootLineOf(transcript.boot);
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
@@ -3159,7 +3162,6 @@ function AgentTabView({
   );
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <AgentBootBar bar={bootBar} retry={controlsQueue ? agent.id : undefined} />
       <MacOwnerProvider value={macOwner}>
         <AgentPicturesProvider value={pictures}>
           <WholePartsProvider value={wholeParts}>
@@ -3195,6 +3197,14 @@ function AgentTabView({
                             failed={transcript.failed}
                             failedWith={transcript.failedWith}
                             working={standing.working && !booting}
+                            boot={
+                              bootLine === undefined ? undefined : (
+                                <AgentBootLine
+                                  line={bootLine}
+                                  retry={controlsQueue ? agent.id : undefined}
+                                />
+                              )
+                            }
                             phase={standing.phase}
                             waitsUntil={standing.waitsUntil}
                             turnId={standing.turnId ?? agent.turnId}
@@ -3387,10 +3397,10 @@ const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
 
 /**
  * The tab of an agent New task or a Start is still starting, before the
- * service has made it, drawn as its own tab draws its first launch: the bar
- * over its empty transcript saying it is starting, counting from the press,
- * and the developer's words, where it was started on some, as its queue's
- * row over the composer's card, which nothing on the row acts on yet, and
+ * service has made it, drawn as its own tab draws its first launch: its
+ * empty transcript's centered line saying it is starting, counting from the
+ * press, and the developer's words, where it was started on some, as its
+ * queue's row over the composer's card, which nothing on the row acts on yet, and
  * its model's chip where the start named the model. The agent's own tab
  * takes its place once the start answers, its words still queued until its
  * first launch hands them off.
@@ -3405,7 +3415,7 @@ export function StartingAgentTab({
 }): React.JSX.Element {
   // Note that a start on no words counts from when its tab first drew, which stands for the press.
   const [drawnAt] = useState(Date.now);
-  const bar = { kind: BOOT_BAR.STARTING, since: line?.sentAt ?? drawnAt } as const;
+  const since = line?.sentAt ?? drawnAt;
   const queued = useMemo(
     () =>
       line === undefined
@@ -3427,13 +3437,13 @@ export function StartingAgentTab({
   );
   return (
     <AgentTabFrame>
-      <AgentBootBar bar={bar} retry={undefined} />
       <AgentTranscriptView
         messages={NO_MESSAGES}
         brief={line === undefined ? AGENT_BRIEF.DESCRIPTION : AGENT_BRIEF.PROMPT}
         reading={false}
         failed={false}
         working={false}
+        boot={<AgentBootLine line={{ kind: BOOT_LINE.STARTING, since }} retry={undefined} />}
         onRetry={NO_RETRY}
         overComposer
       />
