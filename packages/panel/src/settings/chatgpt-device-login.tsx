@@ -68,10 +68,10 @@ const WORDS = {
   GETTING_CODE: "Getting a code",
   START_FAILED: "Couldn't reach Codex for a code. Try again.",
   WAIT_FAILED: "Couldn't reach Codex to finish connecting. Try again.",
-  TRY_AGAIN: "Try again",
+  RETRY: "Retry",
 } as const;
 
-/** Where the dialog stands: getting a code, waiting on it, or ended in a failure Try again starts over from. */
+/** Where the dialog stands: getting a code, waiting on it, or ended in a failure Retry starts over from. */
 const STANDING = {
   STARTING: "starting",
   WAITING: "waiting",
@@ -231,7 +231,7 @@ export function ChatGptDeviceLogin({
       />
       <Inline>
         <Button variant={BUTTON_VARIANT.PRIMARY} onClick={retry}>
-          {WORDS.TRY_AGAIN}
+          {WORDS.RETRY}
         </Button>
       </Inline>
     </Stack>
