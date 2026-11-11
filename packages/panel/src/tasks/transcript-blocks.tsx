@@ -965,6 +965,11 @@ function useElementDraw(element: TranscriptElement | undefined): {
   );
 }
 
+/** A call's Markdown block, as a memory's words, drawn as the turn's own words are, so its links, chips, and pictures keep a reply's rules. */
+function toolMarkdown(text: string): ReactNode {
+  return <TranscriptWords text={text} />;
+}
+
 /**
  * A turn's words as markdown, with an element of the transcript's own
  * written in where one is given. Words still being written are read as
@@ -1429,14 +1434,15 @@ export function TranscriptTool({
           )
         ) : (
           <>
-            <ToolInput block={input} />
+            <ToolInput block={input} markdown={toolMarkdown} />
             {cut === undefined ? (
-              <ToolOutput block={output} errorText={errorText} />
+              <ToolOutput block={output} errorText={errorText} markdown={toolMarkdown} />
             ) : (
               <CutWords cut={cut} waiting={CUT_WORDS.OUTPUT}>
                 <ToolOutput
                   block={{ kind: TOOL_BLOCK.TEXT, text: cutText(cut) }}
                   errorText={undefined}
+                  markdown={toolMarkdown}
                 />
               </CutWords>
             )}
@@ -1877,8 +1883,8 @@ export function TranscriptSubagent({
           {line}
         </ToolSummary>
         <ToolContent bare>
-          <ToolInput block={body.input} />
-          <ToolOutput block={body.output} errorText={undefined} />
+          <ToolInput block={body.input} markdown={toolMarkdown} />
+          <ToolOutput block={body.output} errorText={undefined} markdown={toolMarkdown} />
         </ToolContent>
       </Tool>
     ) : onOpen === undefined ? (
