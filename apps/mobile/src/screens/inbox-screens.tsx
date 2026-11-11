@@ -191,7 +191,8 @@ function InboxEmpty({
   readonly feed: InboxFeed;
   readonly onRetry: () => void;
 }) {
-  if (feed === INBOX_FEED.READING) return <EmptyState title={READING_INBOX} symbol="tray" />;
+  if (feed === INBOX_FEED.READING)
+    return <EmptyState title={READING_INBOX} symbol="tray" loading />;
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
@@ -410,7 +411,8 @@ function ThreadDetail({
 /** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
 function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
   const { refresh, refreshTasks } = useInboxActs();
-  if (feed === INBOX_FEED.READING) return <EmptyState title={READING_INBOX} symbol="tray" />;
+  if (feed === INBOX_FEED.READING)
+    return <EmptyState title={READING_INBOX} symbol="tray" loading />;
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState

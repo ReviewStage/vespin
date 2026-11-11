@@ -297,6 +297,7 @@ export function PullRequestScreen() {
           <EmptyState
             title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
             symbol={failed ? "exclamationmark.triangle" : "arrow.triangle.pull"}
+            loading={!failed}
             action={
               failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined
             }
