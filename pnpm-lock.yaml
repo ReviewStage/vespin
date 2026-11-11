@@ -1590,31 +1590,6 @@ importers:
         specifier: 4.5.4
         version: 4.5.4
 
-  tools/anti-slop:
-    dependencies:
-      '@oxlint/plugins':
-        specifier: 1.79.0
-        version: 1.79.0
-      effect:
-        specifier: 'catalog:'
-        version: 4.0.4
-      oxc-parser:
-        specifier: 0.152.0
-        version: 0.152.0
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 26.2.0
-      oxlint:
-        specifier: 1.79.0
-        version: 1.79.0
-      typescript:
-        specifier: 'catalog:'
-        version: 7.0.2
-      vitest:
-        specifier: 'catalog:'
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/browser-playwright@5.0.0)(@vitest/ui@5.0.0)(jsdom@30.0.1)(vite@7.3.1)
-
   tools/claude-code-probe:
     dependencies:
       '@effect/platform-node':
@@ -4214,10 +4189,6 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
-
-  '@oxlint/plugins@1.79.0':
-    resolution: {integrity: sha512-S0uyoxakDINJ4DPgqxGlEEvrdSMeQb7Z2lKVjxoY2gwsbZbfg2Xr8Klfeo5ZeraHmmdBCELFUHkSe6KEmBpMvg==}
-    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@pierre/diffs@1.6.1':
     resolution: {integrity: sha512-XTfLW4bFETyosZfFNUoyRh1zPE4tmAijOoxdHx4X805tlaq/7/fuQXIiJSm21+jLkDo8vn5elQ+2O4YtMTKM0Q==}
@@ -13070,8 +13041,6 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.79.0':
     optional: true
-
-  '@oxlint/plugins@1.79.0': {}
 
   '@pierre/diffs@1.6.1(@shikijs/themes@4.5.0)(react-dom@19.2.8)(react@19.2.8)':
     dependencies:

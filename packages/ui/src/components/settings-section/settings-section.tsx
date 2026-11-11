@@ -48,7 +48,7 @@ import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
  * card is a column of rows it rules one from the next, a reveal area whose
  * rows unroll in it. The rules between rows stay in `settings-section.css`,
  * since they fall on other components' boxes, as do the placeholders' own
- * boxes, which a skeleton's lint rule holds to a skeleton's class alone.
+ * boxes, which wear a skeleton's class alone.
  */
 
 /** A card's line where its rows would stand: a note's words, in a description's muted words, or a failure (`ErrorState`). */

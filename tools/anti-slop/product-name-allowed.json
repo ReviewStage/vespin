@@ -1,4 +1,0 @@
-{
-  "packages/agent-runner/src/codex.ts": "The client name the runner gives Codex's app server; the runner's bundle reaches no `@repo/features`, so it cannot read `PRODUCT_NAME`.",
-  "apps/mobile/app.config.ts": "The app's display name. Expo evaluates this file under Node's own resolver when it generates the native project, and that resolver follows no `@repo` door to the `.ts` beside its `.js`, so it cannot import `PRODUCT_NAME`."
-}

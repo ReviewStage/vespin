@@ -16,7 +16,7 @@ import { cn } from "../cn.js";
  * `--ui-loop-motion` (`components/skeleton/skeleton.css`), rather than on
  * `animate-pulse`, whose loop runs on through reduced motion and a capture
  * run. It is named `SkeletonBlock` rather than `Skeleton`, because the
- * root lint rule `anti-slop/skeleton-through-components` holds a component
+ * root AGENTS.md's Layout holds a component
  * named `*Skeleton` to classes naming themselves a skeleton's, and this is
  * the one element every skeleton's block is drawn with.
  */
