@@ -4,19 +4,23 @@
  * Better Auth's `deleteUser` deletes the account's `account` rows, so their
  * tokens leave our database, but the providers that issued them are never
  * told: a GitHub sign-in is an authorization of our GitHub App, whose user
- * token reaches repositories and pull requests until GitHub expires it, about
- * eight hours on. So an account's deletion reads each sign-in's token before
+ * token reaches repositories and pull requests for about eight hours, and
+ * whose refresh token mints new ones for about six months. So an account's deletion reads each sign-in's token before
  * the delete (`grantsOf`) and revokes it at its provider after (`revoke`), as
  * it revokes an integration's grant at Vercel Connect
  * (`accounts/account-deletion.ts`).
  *
  * GitHub's is the App's own user token, read as every caller that acts as
  * the developer reads it (`GitHubApp.userToken`), refreshed where it is about
- * to expire so there is a live token to revoke, and revoked under the App's
- * client credentials (`GitHubApp.revokeUserToken`). Google's is opened under
- * the session secret Better Auth sealed it under: the refresh token where the
- * row holds one, since revoking it revokes the grant, and else the access
- * token while it is unexpired, which is all an expired one reaches; Google is
+ * to expire, since GitHub takes only a live token as the grant's name, and the
+ * whole grant it names is revoked under the App's client credentials
+ * (`GitHubApp.revokeUserGrant`), which takes the refresh token with it; a
+ * token revoked alone would leave the refresh token standing. Google's is
+ * opened under the session secret Better Auth sealed it under: the refresh
+ * token where the row holds one, since revoking it revokes the grant, and
+ * else the access token while it is unexpired, which is all an expired one
+ * reaches. Note that our Google sign-in asks for no offline access, so Google
+ * issues no refresh token and a row holds the access token alone. Google is
  * asked at its revocation endpoint
  * (https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke).
  * A provider is one row of each table below, so Sign in with Apple's revoke
@@ -233,7 +237,7 @@ function signInRevocation(
     ) => Effect.Effect<void, { readonly message: string }, HttpClient.HttpClient>
   > = {
     [SIGN_IN_PROVIDER.GOOGLE]: revokeAtGoogle,
-    [SIGN_IN_PROVIDER.GITHUB]: github.revokeUserToken,
+    [SIGN_IN_PROVIDER.GITHUB]: github.revokeUserGrant,
   };
 
   return {
