@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import net from "node:net";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { Duration, Effect, Option, Path } from "effect";
+import { Duration, Effect, Option, Path, Result } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { Reporter } from "../effect/seams.js";
 
@@ -44,7 +44,10 @@ const TRIES = 3;
 /** How taking the lock went: taken, held by another daemon, or not made at all, the daemon running without it. */
 export const HOST_LOCK = { TAKEN: "taken", HELD: "held", UNLOCKED: "unlocked" } as const;
 
-/** Whether a daemon's socket answers at the path given: false where nothing listens there, or nothing stands. */
+/** What a connect fails with where no daemon answers: nothing listens on the socket, nothing stands, or what stands is no socket. */
+const DEAD = new Set(["ECONNREFUSED", "ENOENT", "ENOTSOCK"]);
+
+/** Whether a daemon's socket answers at the path given: false where nothing listens there, nothing stands, or no socket does. */
 const answers = (path: string) =>
   Effect.callback<boolean>((resume) => {
     const socket = net.connect(path);
@@ -54,7 +57,7 @@ const answers = (path: string) =>
     });
     socket.once("error", (error: NodeJS.ErrnoException) => {
       socket.destroy();
-      resume(Effect.succeed(error.code !== "ECONNREFUSED" && error.code !== "ENOENT"));
+      resume(Effect.succeed(!DEAD.has(error.code ?? "")));
     });
   });
 
@@ -110,10 +113,18 @@ export const hostLockTaken = Effect.fnUntraced(function* (stateRoot: string) {
   const ownInode = yield* inode(own);
   if (ownInode === undefined) return yield* unlocked("its socket could not be read");
   for (let tried = 0; tried < TRIES; tried += 1) {
-    const linked = yield* Effect.option(fileSystem.link(own, lock));
-    if (Option.isNone(linked)) {
+    const linked = yield* Effect.result(fileSystem.link(own, lock));
+    if (Result.isFailure(linked)) {
+      // Note that only a name that stands may be another daemon's; a state root that takes no link runs without the lock.
+      if (linked.failure.reason._tag !== "AlreadyExists") {
+        return yield* unlocked("no link could be made there");
+      }
+      const probed = yield* inode(lock);
       if (yield* answers(lock)) return HOST_LOCK.HELD;
-      yield* Effect.ignore(fileSystem.remove(lock, { force: true }));
+      // Note that the name is removed only while it still names the socket found dead, never one another daemon linked since.
+      if ((yield* inode(lock)) === probed) {
+        yield* Effect.ignore(fileSystem.remove(lock, { force: true }));
+      }
       continue;
     }
     yield* Effect.sleep(SETTLE);

@@ -6,7 +6,8 @@
  * the test's clock.
  */
 
-import { writeFileSync } from "node:fs";
+import { linkSync } from "node:fs";
+import net from "node:net";
 import { join } from "node:path";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
@@ -31,6 +32,16 @@ const taken = (stateRoot: string, scope: Scope.Scope) =>
       Effect.repeat({ until: () => taking.pollUnsafe() !== undefined, times: 200 }),
     );
     return yield* Fiber.join(taking);
+  });
+
+/** A socket listened on at `socket`, linked at `lock`, then closed, as a daemon that died leaves its lock. */
+const deadSocketLinked = (socket: string, lock: string) =>
+  Effect.callback<void>((resume) => {
+    const server = net.createServer();
+    server.listen(socket, () => {
+      linkSync(socket, lock);
+      server.close(() => resume(Effect.void));
+    });
   });
 
 describe("hostLockTaken", () => {
@@ -58,8 +69,8 @@ describe("hostLockTaken", () => {
   it.effect("a lock left by a daemon that died is taken", () =>
     Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped();
-      // Note that a daemon killed outright leaves the lock's name behind, with nothing answering on it.
-      writeFileSync(join(stateRoot, "daemon.lock"), "");
+      // Note that a daemon killed outright leaves the lock's name linked to its socket, with nothing listening on it.
+      yield* deadSocketLinked(join(stateRoot, "daemon-dead.sock"), join(stateRoot, "daemon.lock"));
       const scope = yield* Scope.make();
       expect(yield* taken(stateRoot, scope)).toBe(HOST_LOCK.TAKEN);
       yield* Scope.close(scope, Exit.void);

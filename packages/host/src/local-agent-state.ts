@@ -85,7 +85,10 @@ export const keepRunnerGroup = (stateRoot: string, agentId: string, group: numbe
     const folder = path.join(stateRoot, RUNNER_GROUPS_FOLDER);
     yield* fileSystem.makeDirectory(folder, { recursive: true, mode: 0o700 });
     const text = yield* encodeRunnerGroup({ group, startedAt });
-    yield* fileSystem.writeFileString(path.join(folder, agentId), text);
+    // Note that the record is written beside its name and moved onto it, so a daemon killed mid-write never leaves a part of one.
+    const written = path.join(folder, `.${agentId}.written`);
+    yield* fileSystem.writeFileString(written, text);
+    yield* fileSystem.rename(written, path.join(folder, agentId));
   }).pipe(Effect.ignore);
 
 /** The agent's runner no longer kept, once its process group has been ended. */
