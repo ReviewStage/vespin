@@ -1137,6 +1137,12 @@
     background: transparent;
   }
 
+  /* Settings › Agents' cards, one per harness, a card's gap apart. */
+  .ui-landing-keys-cards {
+    display: grid;
+    gap: var(--ui-space-16);
+  }
+
   /* Under the Pinned line (`docs/DESIGN.md`), the room beside the words is
      narrower than the ball, so the hero stacks as a phone's does: the words,
      then the ball under them, no wider than the column, no taller than it

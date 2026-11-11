@@ -23,7 +23,12 @@ import {
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
-import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
+import {
+  MARK_PROVIDER,
+  type MarkProvider,
+  PROVIDER_MARK_SIZE,
+  ProviderMark,
+} from "../../marks/provider-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
@@ -64,11 +69,14 @@ import { MoreButton } from "../more-button/more-button.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { PROGRESS_COUNT_LOOK, ProgressCount } from "../progress-ring/progress-ring.js";
 import { SearchField } from "../search-field/search-field.js";
+import { SettingsOrderedRows } from "../settings-ordered-rows/settings-ordered-rows.js";
 import {
+  SETTINGS_ROW_CONTROLS,
   SETTINGS_ROW_STATE,
   SettingsRow,
   SettingsRowMark,
   SettingsRowStateLine,
+  SettingsRowUsage,
 } from "../settings-row/settings-row.js";
 import { SETTINGS_SECTION_FRAME, SettingsSection } from "../settings-section/settings-section.js";
 import { Shimmer } from "../shimmer/shimmer.js";
@@ -81,6 +89,7 @@ import { TIME_LOOK, Time } from "../time/time.js";
 import { Toolbar } from "../toolbar/toolbar.js";
 import { TOOLBAR_INSET, TOOLBAR_LOOK } from "../toolbar/toolbar-frame.js";
 import { UnreadMark } from "../unread-mark/unread-mark.js";
+import type { UsageMeterRow } from "../usage-meters/usage-meters.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 import {
   agentFace,
@@ -1109,33 +1118,94 @@ function DevicesScene(): React.JSX.Element {
   );
 }
 
-/** A harness's row in Settings › Agents: its mark, its name, the credential it connects with, and the step of the story it connects at. */
-type KeyRow = {
+/** A credential under a harness in Settings › Agents: its provider's mark, its name, and its usage windows, or none for a key, which says Ready. */
+type KeyCredential = {
+  readonly id: string;
+  readonly name: string;
+  readonly mark: MarkProvider;
+  readonly usage?: readonly UsageMeterRow[];
+};
+
+/** A harness's card in Settings › Agents: its mark and name over its credentials, which connect at `at`. */
+type KeyHarness = {
   readonly id: string;
   readonly name: string;
   readonly mark: ReactNode;
-  readonly connected: string;
+  readonly credentials: readonly KeyCredential[];
   readonly at: number;
 };
 
-const KEY_ROWS: readonly KeyRow[] = [
-  {
-    id: "claude",
-    name: "Claude",
-    mark: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
-    connected: "Claude plan",
-    at: 0,
-  },
-  {
-    id: "codex",
-    name: "Codex",
-    mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
-    connected: "OpenAI API key",
-    at: 2,
-  },
+/** How much of its windows the Claude plan has used at each step, as the turns it runs use them. */
+const CLAUDE_USE = [
+  { session: 18, week: 41 },
+  { session: 26, week: 43 },
+  { session: 34, week: 44 },
+  { session: 42, week: 46 },
+  { session: 49, week: 47 },
+] as const;
+
+/** The two harnesses at `step`: Claude's plan using its windows, and Codex's API key arriving on the second step. */
+function keyHarnesses(step: number): readonly KeyHarness[] {
+  const use = CLAUDE_USE[step % CLAUDE_USE.length] ?? CLAUDE_USE[0];
+  return [
+    {
+      id: "claude",
+      name: "Claude",
+      mark: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
+      at: 0,
+      credentials: [
+        {
+          id: "claude-plan",
+          name: "Claude plan",
+          mark: MARK_PROVIDER.CLAUDE,
+          usage: [
+            { label: "5-hour", usedPercent: use.session },
+            { label: "Weekly", usedPercent: use.week },
+          ],
+        },
+      ],
+    },
+    {
+      id: "codex",
+      name: "Codex",
+      // Note that Codex is marked by ChatGPT's mark, because its own picture is a file the app serves and the landing does not.
+      mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
+      at: 2,
+      credentials: [{ id: "codex-key", name: "API key", mark: MARK_PROVIDER.CHATGPT }],
+    },
+  ];
+}
+
+/** Every meter on the page, which each plan's meters line up with as one table. */
+const KEY_METERS: readonly UsageMeterRow[] = [
+  { label: "5-hour", usedPercent: 100 },
+  { label: "Weekly", usedPercent: 100 },
 ];
 
+/** One credential's row: its mark, its name, its meters or Ready, and its ⋯. */
+function KeyCredentialRow({ credential }: { credential: KeyCredential }): React.JSX.Element {
+  return (
+    <SettingsRow
+      leading={<ProviderMark provider={credential.mark} size={PROVIDER_MARK_SIZE.ROW} />}
+      label={credential.name}
+      description={
+        credential.usage === undefined ? (
+          <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>Ready</SettingsRowStateLine>
+        ) : (
+          <SettingsRowUsage rows={credential.usage} alignWith={KEY_METERS} />
+        )
+      }
+      controls={SETTINGS_ROW_CONTROLS.BESIDE}
+      end={() => <MoreButton thing={credential.name} onClick={still} />}
+    />
+  );
+}
+
 /**
+ * Settings › Agents as the app draws it: a card for each harness, its mark,
+ * its name, and Add over the plans and keys it runs on. Claude's plan uses
+ * its windows as the story runs, and Codex's API key arrives.
+ *
  * Note that the section stands in no device, so it is made a picture here as
  * a device makes its screen one: a reader is told what it shows, and its rows
  * are inert, since none of them is ever pressed.
@@ -1148,35 +1218,37 @@ function KeysScene(): React.JSX.Element {
       ref={ref}
       className="ui-landing-scene ui-landing-keys"
       role="img"
-      aria-label="Settings › Agents: Claude connected on its Claude plan, and Codex connecting with an OpenAI API key"
+      aria-label="Settings › Agents: Claude on its Claude plan, its usage meters filling, and Codex on an OpenAI API key"
       {...DESKTOP_SURFACE}
     >
-      <div inert>
-        <SettingsSection title="Agents">
-          {KEY_ROWS.map((row) => {
-            const connected = step >= row.at;
-            return (
+      <div className="ui-landing-keys-cards" inert>
+        {keyHarnesses(step).map((harness) => {
+          const credentials = step >= harness.at ? harness.credentials : [];
+          return (
+            <SettingsSection key={harness.id}>
               <SettingsRow
-                key={row.id}
-                leading={<SettingsRowMark>{row.mark}</SettingsRowMark>}
-                label={row.name}
-                description={
-                  <SettingsRowStateLine
-                    state={connected ? SETTINGS_ROW_STATE.CONNECTED : SETTINGS_ROW_STATE.PLAIN}
-                  >
-                    {connected ? row.connected : "Not connected"}
-                  </SettingsRowStateLine>
-                }
+                leading={<SettingsRowMark>{harness.mark}</SettingsRowMark>}
+                label={harness.name}
+                controls={SETTINGS_ROW_CONTROLS.BESIDE}
               >
                 {() => (
                   <Button variant={BUTTON_VARIANT.OUTLINE} onClick={still}>
-                    {connected ? "Manage" : "Connect"}
+                    Add
                   </Button>
                 )}
               </SettingsRow>
-            );
-          })}
-        </SettingsSection>
+              {credentials.length === 0 ? null : (
+                <SettingsOrderedRows
+                  label={harness.name}
+                  rows={credentials.map((credential) => ({
+                    key: credential.id,
+                    row: <KeyCredentialRow credential={credential} />,
+                  }))}
+                />
+              )}
+            </SettingsSection>
+          );
+        })}
       </div>
     </div>
   );
