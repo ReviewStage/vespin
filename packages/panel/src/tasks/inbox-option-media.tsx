@@ -49,13 +49,9 @@ function fileWords(label: string, file: InboxOptionFile, at: number): string {
   return `${label} · ${file.caption ?? `${at + 1}`}`;
 }
 
-/** What an address is called where its agent gave it no words: its host, as a reader knows a site by. */
+/** What an address is called where its agent gave it no words: its host, as a reader knows a site by. Note that the wire admits an https address alone, so it always reads. */
 function addressWords(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
+  return new URL(url).host;
 }
 
 /** What opens the item's viewer at each of an option's files, by its attachment, as its thumb last drew it. */
