@@ -579,7 +579,13 @@ function runActionSavable(label: string, command: string): boolean {
   );
 }
 
-/** A save of a repository's whole list of run actions, an empty one removing it, its answer drawn over the page at once. */
+/**
+ * A save of a repository's whole list of run actions, an empty one removing
+ * it, its answer drawn over the page at once. Note that the section holds
+ * one for every row and its card, and each control stands still while it is
+ * out, because a save writes the whole list as its control last read it, so
+ * a second press under the first would write over the first's change.
+ */
 function useSaveRunActions(workspaceId: string) {
   const queries = useQueryClient();
   return useMutation({
@@ -602,17 +608,19 @@ function useSaveRunActions(workspaceId: string) {
   });
 }
 
+/** The section's one save of a repository's run actions. */
+type RunActionSave = ReturnType<typeof useSaveRunActions>;
+
 /**
  * The card that adds a run action to a repository, or edits one: its label
  * and its command, the command colored as Bash. Saving writes the
  * repository's whole list with the action added at its end or changed in
  * its place.
  */
-function useRunActionDialog(workspaceId: string, lists: RunActionLists) {
+function useRunActionDialog(saving: RunActionSave, lists: RunActionLists) {
   const [target, setTarget] = useState<RunActionTarget | undefined>(undefined);
   const [label, setLabel] = useState("");
   const [command, setCommand] = useState("");
-  const saving = useSaveRunActions(workspaceId);
   const lines = useTypedCodeColoring(SCRIPT_LANGUAGE, command);
   const act = useConfirmAct(saving, {
     send: () => {
@@ -711,14 +719,15 @@ function useRunActionDialog(workspaceId: string, lists: RunActionLists) {
  * and Remove, a removal asking first.
  */
 function RunActionRow({
-  workspaceId,
+  saving,
   repository,
   actions,
   index,
   manages,
   onEdit,
 }: {
-  workspaceId: string;
+  /** The section's one save, which every row and the card share (`useSaveRunActions`). */
+  saving: RunActionSave;
   repository: string;
   /** The repository's whole list, which every change saves anew. */
   actions: readonly RunAction[];
@@ -726,7 +735,6 @@ function RunActionRow({
   manages: boolean;
   onEdit: () => void;
 }): React.JSX.Element | null {
-  const saving = useSaveRunActions(workspaceId);
   const action = actions[index];
   const save = (next: readonly RunActionWritten[]) => saving.mutate({ repository, actions: next });
   const moved = (by: number) => {
@@ -765,7 +773,15 @@ function RunActionRow({
             onSelect: () => save(moved(1)),
           },
         ],
-        [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }],
+        [
+          {
+            label: "Remove",
+            icon: <TrashIcon />,
+            danger: true,
+            disabled: busy,
+            onSelect: removal.ask,
+          },
+        ],
       ]
     : [];
   return (
@@ -777,7 +793,6 @@ function RunActionRow({
           label: <ReplayMask>{action.label}</ReplayMask>,
           description: <ReplayMask>{action.command}</ReplayMask>,
           indent: SETTINGS_ROW_INDENT.MARK,
-          error: saveRefusal(saving.error),
         }}
       />
       {manages ? (
@@ -820,7 +835,8 @@ function RunActionsSection({
   manages: boolean;
   pictures: boolean;
 }): React.JSX.Element {
-  const dialog = useRunActionDialog(workspaceId, lists);
+  const saving = useSaveRunActions(workspaceId);
+  const dialog = useRunActionDialog(saving, lists);
   return (
     <SettingsSection
       title="Run actions"
@@ -831,7 +847,9 @@ function RunActionsSection({
             workspaceId={workspaceId}
             label="Add action"
             taken={[]}
-            onPick={(repository) => dialog.open({ repository })}
+            onPick={(repository) => {
+              if (!saving.isPending) dialog.open({ repository });
+            }}
           />
         ) : undefined
       }
@@ -842,7 +860,7 @@ function RunActionsSection({
           {lists.map((list) => (
             <RunActionsOfRepository
               key={list.repository.toLowerCase()}
-              workspaceId={workspaceId}
+              saving={saving}
               repository={list.repository}
               actions={list.actions}
               manages={manages}
@@ -860,7 +878,7 @@ function RunActionsSection({
 
 /** One repository's row and its run actions' rows under it. */
 function RunActionsOfRepository({
-  workspaceId,
+  saving,
   repository,
   actions,
   manages,
@@ -868,7 +886,7 @@ function RunActionsOfRepository({
   onAdd,
   onEdit,
 }: {
-  workspaceId: string;
+  saving: RunActionSave;
   repository: string;
   actions: readonly RunAction[];
   manages: boolean;
@@ -877,6 +895,8 @@ function RunActionsOfRepository({
   onEdit: (index: number) => void;
 }): React.JSX.Element {
   const full = actions.length >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS;
+  // Why the last save of this repository's list was refused, said under its row, whichever control sent it.
+  const refused = saving.variables?.repository === repository ? saving.error : null;
   return (
     <>
       <MenuRow
@@ -884,7 +904,14 @@ function RunActionsOfRepository({
         alone
         actions={
           manages
-            ? [{ label: "Add action", icon: <PlusIcon />, disabled: full, onSelect: onAdd }]
+            ? [
+                {
+                  label: "Add action",
+                  icon: <PlusIcon />,
+                  disabled: full || saving.isPending,
+                  onSelect: onAdd,
+                },
+              ]
             : []
         }
         row={{
@@ -900,12 +927,13 @@ function RunActionsOfRepository({
               <ReplayMask>{repository}</ReplayMask>
             </Inline>
           ),
+          error: saveRefusal(refused),
         }}
       />
       {actions.map((action, index) => (
         <RunActionRow
           key={action.id}
-          workspaceId={workspaceId}
+          saving={saving}
           repository={repository}
           actions={actions}
           index={index}
