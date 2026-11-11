@@ -85,13 +85,14 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
 import { inProcessChannel } from "./in-process-channel.js";
+import { type KeepShareToken, sharingAccountSourceLayer } from "./share-token-account.js";
 
 /**
  * The service the app talks to: production's, or the Preview a build names
  * in `EXPO_PUBLIC_SERVICE_ORIGIN`, which Expo writes into the bundle as it
  * is built, so a production build carries only the origin itself.
  */
-const SERVICE_ORIGIN = process.env.EXPO_PUBLIC_SERVICE_ORIGIN ?? LINK_ORIGIN;
+export const SERVICE_ORIGIN = process.env.EXPO_PUBLIC_SERVICE_ORIGIN ?? LINK_ORIGIN;
 
 /** The one place every act is from: the app's screens, which stand as the host's one panel. */
 const APP_SCREENS = Symbol("app screens");
@@ -124,6 +125,8 @@ export interface DeviceSeams {
   readonly cipher: SecretCipherSeam;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
+  /** Keeps the account's current access token where the share sheet reads it, or removes it (`share-token-account.ts`). */
+  readonly keepShareToken: KeepShareToken;
 }
 
 /** What the app hands the composition. */
@@ -394,7 +397,13 @@ export function composeMobile(
       device.fileSystem,
       Path.layer,
       httpClient,
-      Layer.provide(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), accountSeams(device)),
+      Layer.provide(
+        sharingAccountSourceLayer(
+          oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS),
+          device.keepShareToken,
+        ),
+        accountSeams(device),
+      ),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
   const launched = Layer.unwrap(

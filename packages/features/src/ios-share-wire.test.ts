@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { CLIENT_PLATFORM } from "./client-identity.js";
 import { shareDraftOf, shareSnapshotOf } from "./ios-share-wire.js";
 import { TASK_STATUS, type TaskSummary } from "./task-wire.js";
 import { WORKSPACE_ROLE, type Workspace } from "./workspace-wire.js";
@@ -15,6 +16,12 @@ const ACME: Workspace = {
   name: "Acme",
   role: WORKSPACE_ROLE.OWNER,
   github: { login: "acme", active: true },
+};
+
+/** Where the sheet's Start goes, as a build of 0.1.0 names itself. */
+const SERVICE = {
+  origin: "https://vespin.test",
+  client: { platform: CLIENT_PLATFORM.IOS, version: "0.1.0" },
 };
 
 /** A task of the account's, numbered `number`, in `repository`. */
@@ -36,7 +43,7 @@ test("a workspace is offered the repositories its GitHub reaches, the newest wor
   // Listed newest first, as the Tasks list orders them.
   const tasks = [task(3, "globex/site"), task(2, "acme/ledger"), task(1, "acme/web")];
   // Note that the workspace's own list is unread, as it is until New task has opened on it.
-  const snapshot = shareSnapshotOf("user-ada", ACME.id, [ACME], tasks, () => undefined);
+  const snapshot = shareSnapshotOf("user-ada", ACME.id, [ACME], tasks, () => undefined, SERVICE);
   expect(snapshot.workspaces).toEqual([
     { id: ACME.id, name: "Acme", repositories: ["acme/ledger", "acme/web"] },
   ]);

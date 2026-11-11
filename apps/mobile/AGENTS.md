@@ -221,9 +221,16 @@ extension `app.config.ts` adds beside the other two, whose Swift is under
 its sheet is plain SwiftUI, drawn from a snapshot the app keeps in their
 App Group (`src/share-sheet.ts`, `@repo/features/ios-share-wire`): the
 workspace the phone works in, each workspace, and the repositories each
-reaches. Start keeps the words and picks as a draft in the group, and the
-app opens New task on it, prefilled, the next time it comes forward, since
-no public API lets an extension bring its app forward. Every file the app
+reaches, and where Start is sent. Start sends the task as New task does
+(`share-extension/ShareStart.swift`), under the account's current access
+token, which the app keeps in one Keychain item it and the extension alone
+share (`modules/share-token/`, written from `src/host/share-token-account.ts`
+on every sign-in and renewal and deleted on sign-out; the Keychain group is
+each target's `VespinShareKeychainGroup`). The refresh token never leaves the
+app, since it rotates on every use. With no token, a stale one, or no answer,
+Start keeps the words and picks as a draft in the group instead, and the app
+opens New task on it, prefilled, the next time it comes forward, since no
+public API lets an extension bring its app forward. Every file the app
 and its extensions share goes through `src/app-group.ts`, flat JSON at the
 group's root, and each Swift target reads the group from its Info.plist's
 `VespinAppGroup`.

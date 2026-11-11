@@ -1,6 +1,6 @@
 // AppGroupFiles.swift -- the share extension's side of the files it shares with the app through their App Group: the snapshot it reads and the draft it keeps.
 //
-// The app writes the snapshot whenever what New task offers changes, and
+// The app writes the snapshot, with where Start is sent, whenever it changes, and
 // opens New task on the draft the next time it comes forward, then removes
 // it (`src/share-sheet.ts`, `@repo/features/ios-share-wire`). The group is
 // read from this bundle's Info.plist (`VespinAppGroup`), never spelled here.
@@ -16,11 +16,13 @@ struct ShareWorkspace: Identifiable, Hashable {
   let repositories: [String]
 }
 
-/// What the app left for the sheet: the account, the workspace the phone works in, and every workspace offered.
+/// What the app left for the sheet: the account, the workspace the phone works in, every workspace offered, and where Start is sent.
 struct ShareSnapshot {
   let accountId: String
   let chosenWorkspaceId: String?
   let workspaces: [ShareWorkspace]
+  /// None from an app before Start was sent, where the sheet only keeps drafts.
+  let service: ShareService?
 }
 
 /// What the sheet keeps for New task.
@@ -48,7 +50,15 @@ enum AppGroupFiles {
     }
     return ShareSnapshot(
       accountId: accountId, chosenWorkspaceId: json["chosenWorkspaceId"] as? String,
-      workspaces: workspaces)
+      workspaces: workspaces, service: service(json["service"]))
+  }
+
+  /// Where Start is sent, from the snapshot's `service`, or none where it reads as no address.
+  private static func service(_ value: Any?) -> ShareService? {
+    guard let json = value as? [String: Any], let origin = (json["origin"] as? String).flatMap({ URL(string: $0) }),
+      origin.scheme == "https" || origin.host == "localhost"
+    else { return nil }
+    return ShareService(origin: origin, headers: json["headers"] as? [String: String] ?? [:])
   }
 
   /// Keeps `draft` for New task, in place of any kept before; whether it was kept.
