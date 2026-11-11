@@ -41,10 +41,18 @@ const ACT_FAILED = {
 const ARCHIVE_AT_REST = { title: archiveStopWords(false).title, act: "Archive agent" } as const;
 
 /** What Archive asks first: its title, what it stops where the agent works, and its act. */
-interface ArchiveQuestion {
+export interface ArchiveQuestion {
   readonly title: string;
   readonly message: string | undefined;
   readonly act: string;
+}
+
+/** What Archive asks of an agent by where it stands now: the panel's Stop and archive where it still works, which says what archiving stops, and Archive agent at rest. */
+export function archiveQuestion(working: boolean): ArchiveQuestion {
+  const stopWords = archiveStopWords(false);
+  return working
+    ? { title: stopWords.title, message: stopWords.body, act: stopWords.verb }
+    : { title: ARCHIVE_AT_REST.title, message: undefined, act: ARCHIVE_AT_REST.act };
 }
 
 /** What the agent's menu does. */
@@ -73,7 +81,6 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
   const { data: pinned = false } = useQuery({ ...appStateQuery, select });
   const [note, setNote] = useState<string | undefined>(undefined);
   const working = agent !== undefined && agentStillWriting(agent.status);
-  const stopWords = archiveStopWords(false);
 
   /** Sends an act, saying `failed` where the service refused it or never answered, and buzzing as it lands. */
   const send = (
@@ -113,9 +120,7 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
         () => acts[ACT_KIND.AGENTS_PIN]({ agentId, pinned: !pinned }),
         pinned ? ACT_FAILED.UNPIN : ACT_FAILED.PIN,
       ),
-    archiveQuestion: working
-      ? { title: stopWords.title, message: stopWords.body, act: stopWords.verb }
-      : { title: ARCHIVE_AT_REST.title, message: undefined, act: ARCHIVE_AT_REST.act },
+    archiveQuestion: archiveQuestion(working),
     archive: (onArchived) =>
       send(
         () => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }),
