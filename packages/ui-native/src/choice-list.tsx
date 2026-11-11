@@ -51,7 +51,7 @@ type ChoiceListProps = {
   readonly recommended?: readonly string[] | undefined;
   /** The labels picked so far. */
   readonly picked: readonly string[];
-  /** Whether a person may pick several, which draws squares rather than circles. */
+  /** Whether a person may pick several, which draws Reminders' round checks once picked; the caller says so in `title`, since an unpicked row reads as a circle either way. */
   readonly multiple?: boolean | undefined;
   /** Called with the labels picked once a row is pressed. */
   readonly onChange: (picked: readonly string[]) => void;
