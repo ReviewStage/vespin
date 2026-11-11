@@ -28,7 +28,7 @@ import { useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { clearAccountNotifications } from "../../notifications.js";
-import { unregisterPushDevice, useFixtureRun } from "../../push-device.js";
+import { signOutRefusalWords, useSignOut } from "../../sign-out.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -37,7 +37,6 @@ const DELETE_ACCOUNT = "Delete account";
 
 export default function AccountScreen() {
   const acts = useHostActs();
-  const fixture = useFixtureRun();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const { data: settings } = useQuery({ ...appStateQuery, select: selectAppSettingsView });
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -46,7 +45,8 @@ export default function AccountScreen() {
     ...appStateQuery,
     select: (state) => supportAccessStanding(state, Date.now()),
   });
-  const signOut = useAsyncAction(() => undefined);
+  const signOutAccount = useSignOut();
+  const signOut = useAsyncAction(signOutRefusalWords);
   const deletion = useAsyncAction(accountDeleteRefusalWords);
   const supportPress = useAsyncAction(() => undefined);
   const usage = useAsyncAction(rejectionWords);
@@ -54,14 +54,7 @@ export default function AccountScreen() {
   const [usageRound, setUsageRound] = useState(0);
   const [asking, setAsking] = useState(false);
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return null;
-  // Note that the phone is unregistered first, while the account's credential still stands, so no push of the account reaches a phone signed out of it; the unregister's own deadline bounds the wait.
-  const signOutNow = () =>
-    void signOut.run(() =>
-      unregisterPushDevice(acts, fixture)
-        .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
-        .then(() => clearAccountNotifications())
-        .catch((error: unknown) => console.error("The sign-out did not finish.", error)),
-    );
+  const signOutNow = () => void signOut.run(signOutAccount);
   // Note that the delete happens at the service before anything local moves, so a refusal says why under the row and the account, and this phone's pushes, still stand.
   const deleteNow = () =>
     void deletion.run(() =>
@@ -119,7 +112,7 @@ export default function AccountScreen() {
               />
             ) : null}
           </ListSection>
-          <ListSection>
+          <ListSection footer={signOut.refusal}>
             <ActionRow label={VERB.SIGN_OUT} destructive onPress={signOutNow} />
           </ListSection>
           <ListSection footer={deletion.refusal}>
