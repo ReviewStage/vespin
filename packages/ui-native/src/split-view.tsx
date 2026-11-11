@@ -50,6 +50,8 @@ export type BarMenu = {
     readonly label: string;
     readonly symbol: SfSymbol;
     readonly disabled?: boolean | undefined;
+    /** Whether the act takes something away for good, such as Permanently delete, which the system draws red. */
+    readonly destructive?: boolean | undefined;
     readonly onPress: () => void;
   }[];
   /** Menus within it, after its acts, such as a task's Status. */
@@ -125,6 +127,7 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
           systemImage={action.symbol}
           onPress={action.onPress}
           {...(action.disabled === true ? { disabled: true } : {})}
+          {...(action.destructive === true ? { role: "destructive" } : {})}
         />
       ))}
       {(menu.submenus ?? []).map((submenu) => (

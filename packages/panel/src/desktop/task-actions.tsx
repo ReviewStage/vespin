@@ -11,13 +11,13 @@ import {
 } from "@repo/features/task-wire";
 import {
   DOCUMENT_REGION,
+  deleteTaskWords,
   RENAME_FAILED_NOTE,
   SETTLED_STATUS,
   settleOffered,
   TASK_MARK,
   type TaskMark,
 } from "@repo/features/tasks-model";
-import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
@@ -863,23 +863,14 @@ function TaskMenuFooter({
  * not yet done or canceled is pointed at Mark done, which keeps
  * all of it.
  */
-function deleteQuestion(name: string, settled: boolean): DialogQuestion {
-  const lost = `“${name}” and its board and transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+function deleteQuestion(name: string, task: TaskSummary | undefined): DialogQuestion {
   return {
-    title: "Permanently delete task?",
-    body: settled ? lost : `${lost} To keep it out of the way instead, mark it done.`,
-    verb: "Permanently delete task",
+    ...deleteTaskWords(name, task),
     running: "Deleting",
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
     bodyReplayMasked: true,
   };
-}
-
-/** Whether a task is already out of the way: done or canceled. */
-function settledTask(task: TaskSummary | undefined): boolean {
-  if (task === undefined) return false;
-  return !settleOffered(task, SETTLED_STATUS.DONE) || !settleOffered(task, SETTLED_STATUS.CANCELED);
 }
 
 /**
@@ -994,7 +985,7 @@ export function useTaskMenuItems(
       <ConfirmDialog
         open
         confirm={deletion}
-        question={deleteQuestion(name, settledTask(task))}
+        question={deleteQuestion(name, task)}
         restoreTo={nextRowOrHead}
       />
       {moving.dialog}

@@ -39,6 +39,7 @@ import {
   AgentPreview,
   AgentRow,
   type AgentRowState,
+  askForName,
   BAR_TITLE,
   type BarMenu,
   ConfirmAsk,
@@ -57,6 +58,7 @@ import {
   type RowSwipe,
   Screen,
   SplitView,
+  shareLink,
   TaskHead,
   TaskPreview,
   TaskRow,
@@ -74,16 +76,20 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { threadComments, threadOpen, useTaskComments } from "../tasks/use-comments.js";
 import {
   type StatusQuestion,
   type TaskAgentLine,
   type TaskOverview,
   type TasksListing,
+  useDeleteAsk,
+  useListingAsks,
   useStatusAsk,
   useTaskOverview,
   useTaskReadOnOpen,
   useTasksListing,
   useTasksRead,
+  useTaskWrites,
 } from "../tasks/use-tasks.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
@@ -119,6 +125,12 @@ const WORDS = {
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
   MORE: { label: "More", symbol: "ellipsis" },
+  COPY_LINK: "Copy link",
+  RENAME: "Rename",
+  RENAME_TASK: "Rename task",
+  NEW_SUB_TASK: "New sub-task",
+  COMMENTS: "Comments",
+  DELETE: "Permanently delete",
   NO_TASKS: "No tasks to do",
   UNLISTED_TASK: "Task",
   STOP: "Stop",
@@ -148,6 +160,24 @@ function openOnWeb(destination: LinkDestination, workspace: Workspace | undefine
   openInSafari(linkOf(destination, workspace.slug ?? workspace.id));
 }
 
+/** A task's address on vespin.dev, as the panel's Copy link copies it, raised in the share sheet whose first row copies it. */
+function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
+  if (workspace === undefined) return;
+  shareLink(
+    linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, workspace.slug ?? workspace.id),
+  );
+}
+
+/** Asks for a task's new name in the system's alert, opened on the name it has, and renames it to the name typed. */
+function askRename(task: TaskSummary, rename: (taskId: string, name: string) => void): void {
+  askForName({
+    title: WORDS.RENAME_TASK,
+    act: WORDS.RENAME,
+    name: task.name,
+    onName: (name) => rename(task.id, name),
+  });
+}
+
 /** A task's Status as a menu: each status, checked where the task stands, setting it on a press. */
 function statusSubmenu(
   task: TaskSummary,
@@ -169,9 +199,11 @@ function statusSubmenu(
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
  * the task is not, which a full swipe runs; and in its long press menu,
- * after those, Mark as read or unread, likewise, and Open in browser.
- * Rename, Move to section, Delete, priority, and assignee are left to the
- * desktop and the web.
+ * after those, the panel's order: Copy link, which raises the share sheet,
+ * Rename, in the system's name alert, Mark as read or unread, whichever the
+ * task is not, Open in browser, and Permanently delete last, which asks
+ * first. Move to section, priority, and assignee are left to the desktop
+ * and the web.
  */
 function rowActs(
   task: TaskSummary,
@@ -206,6 +238,18 @@ function rowActs(
     ],
     menuActions: [
       {
+        label: WORDS.COPY_LINK,
+        symbol: "link",
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => shareTaskLink(task, listing.workspace),
+      },
+      {
+        label: WORDS.RENAME,
+        symbol: "pencil",
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => askRename(task, listing.rename),
+      },
+      {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? "envelope.open" : "envelope.badge",
         tone: ROW_ACTION_TONE.NEUTRAL,
@@ -217,6 +261,12 @@ function rowActs(
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, listing.workspace),
+      },
+      {
+        label: WORDS.DELETE,
+        symbol: "trash",
+        tone: ROW_ACTION_TONE.DESTRUCTIVE,
+        onPress: () => listing.askDelete(task),
       },
     ],
   };
@@ -384,9 +434,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
  * count, every row acting as the Tasks tab's does.
  */
 export function useSidebarTasks(): SidebarTasks {
-  const read = useTasksListing("");
-  const { setStatus, question } = useStatusAsk(read);
-  const listing: TasksListing = { ...read, setStatus };
+  const { listing, status, deletion } = useListingAsks(useTasksListing(""));
   const { tree } = listing;
   const groups = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections];
   return {
@@ -394,26 +442,64 @@ export function useSidebarTasks(): SidebarTasks {
       <GroupSection key={group.key} group={group} listing={listing} />
     )),
     ids: new Set(groups.flatMap((group) => group.rows.map(({ task }) => task.id))),
-    ask: <StatusQuestionAsk question={question} />,
+    ask: (
+      <>
+        <StatusQuestionAsk question={status} />
+        <StatusQuestionAsk question={deletion} />
+      </>
+    ),
   };
 }
 
-/** What a task's ⋯ holds: its Status, each status checked where it stands, and Open in browser. */
-function taskMenu(overview: TaskOverview): BarMenu {
+/** What a task's ⋯ asks first, and what opens New task for a sub-task of it. */
+interface TaskMenuDoors {
+  readonly askDelete: (task: TaskSummary) => void;
+  readonly newSubTask: (task: TaskSummary) => void;
+}
+
+/**
+ * What a task's ⋯ holds, in the panel's order: Copy link, Rename, New
+ * sub-task, Open in browser, and Permanently delete, red and last, which asks
+ * first; and its Status, each status checked where it stands.
+ */
+function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
   return {
     ...WORDS.MORE,
     choices: [],
     actions: [
       {
+        label: WORDS.COPY_LINK,
+        symbol: "link",
+        onPress: () => shareTaskLink(task, overview.workspace),
+      },
+      { label: WORDS.RENAME, symbol: "pencil", onPress: () => askRename(task, overview.rename) },
+      {
+        label: WORDS.NEW_SUB_TASK,
+        symbol: "plus.square.on.square",
+        onPress: () => doors.newSubTask(task),
+      },
+      {
         label: VERB.OPEN_IN_BROWSER,
         symbol: "safari",
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, overview.workspace),
       },
+      {
+        label: WORDS.DELETE,
+        symbol: "trash",
+        destructive: true,
+        onPress: () => doors.askDelete(task),
+      },
     ],
     submenus: [{ ...statusSubmenu(task, overview.setStatus), actions: [] }],
   };
+}
+
+/** Opens New task as a sub-task of the task, as the panel's New sub-task opens its card. */
+function useNewSubTask(): (task: TaskSummary) => void {
+  const router = useRouter();
+  return (task) => router.push({ pathname: "/start-task", params: { parent: task.id } });
 }
 
 /** What an agent's mark says of it: at work while it may still write, failed, or at rest. */
@@ -444,8 +530,9 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** The task's relations as the panel's two groups list them: its sub-tasks, and the tasks it waits on and holds up. */
+/** The task's relations as the panel's two groups list them: its sub-tasks, New sub-task after them, which opens New task for one, and the tasks it waits on and holds up. */
 function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
+  const newSubTask = useNewSubTask();
   const { task, document, tasks } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
@@ -457,19 +544,23 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const related = sides.some(({ ids }) => ids.length > 0);
   return (
     <>
-      {subTasks.length === 0 ? null : (
-        <ListSection title={WORDS.SUB_TASKS} count={subTasks.length}>
-          {subTasks.map((sub) => (
-            <RelationRow
-              key={sub.id}
-              id={sub.id}
-              name={sub.name}
-              status={sub.status}
-              relation={TASK_RELATION_WORDS[TASK_RELATION_KIND.SUB_TASK]}
-            />
-          ))}
-        </ListSection>
-      )}
+      <ListSection title={WORDS.SUB_TASKS} count={subTasks.length}>
+        {subTasks.map((sub) => (
+          <RelationRow
+            key={sub.id}
+            id={sub.id}
+            name={sub.name}
+            status={sub.status}
+            relation={TASK_RELATION_WORDS[TASK_RELATION_KIND.SUB_TASK]}
+          />
+        ))}
+        <LinkRow
+          symbol="plus"
+          label={WORDS.NEW_SUB_TASK}
+          tone={LINK_ROW_TONE.ACCENT}
+          onPress={() => newSubTask(task)}
+        />
+      </ListSection>
       {!related ? null : (
         <ListSection
           title={WORDS.TASK_RELATIONS}
@@ -688,10 +779,42 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
 }
 
 /**
+ * The description's comment threads that still stand open, as the panel's
+ * comments list holds them, the oldest started first: each its first
+ * comment's words and when it last moved, opening the thread with its reply
+ * field; none where no thread stands open.
+ */
+function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
+  const router = useRouter();
+  const { task } = overview;
+  const open = useTaskComments(task.id).filter(threadOpen);
+  if (open.length === 0) return null;
+  return (
+    <ListSection title={WORDS.COMMENTS} count={open.length}>
+      {open.map((thread) => (
+        <LinkRow
+          key={thread.id}
+          symbol="text.bubble"
+          label={threadComments(thread)[0]?.words ?? thread.quote}
+          detail={provenanceText(thread.updatedAt, Date.now())}
+          onPress={() =>
+            router.push({
+              pathname: "/tasks/comments/[id]",
+              params: { id: thread.id, task: task.id },
+            })
+          }
+        />
+      ))}
+    </ListSection>
+  );
+}
+
+/**
  * A task's Overview, as the panel's phone draws it: its head, its relations,
  * its agents with New agent and the line of its threads that need you, its
- * pages, and its description read-only where its workspace has Task
- * descriptions on. A pull reads the task list again.
+ * pages, and, where its workspace has Task descriptions on, its description
+ * read-only and the comment threads that stand open on it. A pull reads the
+ * task list again.
  */
 function OverviewPage({
   overview,
@@ -735,22 +858,22 @@ function OverviewPage({
           />
         </ListSection>
       )}
+      {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>
   );
 }
 
 /**
  * The list screens' search, the listing under it, its status set asking
- * first where it stops agents, with the question that asks, and the pull
- * that reads the list again.
+ * first where it stops agents and its delete asking always, with the
+ * questions that ask, and the pull that reads the list again.
  */
 function useTasksScreen() {
   const [search, setSearch] = useState("");
   const read = useTasksListing(search);
-  const { setStatus, question } = useStatusAsk(read);
+  const { listing, status, deletion } = useListingAsks(read);
   const { refreshTasks } = useInboxActs();
-  const listing: TasksListing = { ...read, setStatus };
-  return { search, setSearch, listing, question, refreshTasks };
+  return { search, setSearch, listing, status, deletion, refreshTasks };
 }
 
 // A compact window: the tree under the workspace switcher, standing as the
@@ -760,7 +883,7 @@ function useTasksScreen() {
 function TasksStackList() {
   const router = useRouter();
   const switcher = useWorkspaceSwitcher();
-  const { search, setSearch, listing, question, refreshTasks } = useTasksScreen();
+  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen();
   return (
     <>
       <Stack.Screen options={{ title: TASKS_TITLE, ...switcherTitle(switcher) }}>
@@ -782,7 +905,8 @@ function TasksStackList() {
           onRefresh={refreshTasks}
         />
       </Screen>
-      <StatusQuestionAsk question={question} />
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
     </>
   );
 }
@@ -799,7 +923,8 @@ function TasksSplitScreen({
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
 }) {
-  const { search, setSearch, listing, question, refreshTasks } = useTasksScreen();
+  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen();
+  const newSubTask = useNewSubTask();
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const read = useTasksRead();
@@ -846,7 +971,7 @@ function TasksSplitScreen({
             overview === undefined
               ? undefined
               : {
-                  menu: taskMenu(overview),
+                  menu: taskMenu(overview, { askDelete: listing.askDelete, newSubTask }),
                   path: {
                     path: taskPath(overview.task, overview.workspace),
                     status: overview.task.status,
@@ -855,7 +980,8 @@ function TasksSplitScreen({
           }
         />
       </Screen>
-      <StatusQuestionAsk question={question} />
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}
       {sidebar.ask}
     </>
@@ -876,16 +1002,24 @@ export function TasksListScreen() {
 /** The Tasks tab's pushed screen: one task's Overview, named by the route's `id`, its path small in the bar and its ⋯ beside it, read as it opens; Task not found where the read list holds no such task, and the reading state while it is still read. */
 export function TaskScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const colors = useColors();
   const held = useTaskOverview(id);
   const { setStatus, question } = useStatusAsk(
     held ?? { setStatus: () => undefined, agentsWorking: () => false },
   );
   const overview = held === undefined ? undefined : { ...held, setStatus };
+  const { remove } = useTaskWrites();
+  // Note that a task deleted from its own page gives way to the list it stood in, rather than saying it is not found.
+  const deletion = useDeleteAsk(remove, () => router.back());
+  const newSubTask = useNewSubTask();
   const { refreshTasks } = useInboxActs();
   const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
-  const menu = overview === undefined ? undefined : taskMenu(overview);
+  const menu =
+    overview === undefined
+      ? undefined
+      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask });
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
@@ -922,6 +1056,7 @@ export function TaskScreen() {
               <Stack.Toolbar.MenuAction
                 key={action.label}
                 icon={action.symbol}
+                destructive={action.destructive === true}
                 onPress={action.onPress}
               >
                 {action.label}
@@ -944,6 +1079,7 @@ export function TaskScreen() {
         )}
       </Screen>
       <StatusQuestionAsk question={question} />
+      <StatusQuestionAsk question={deletion.question} />
       {archiveAsk.ask}
     </>
   );

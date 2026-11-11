@@ -8,13 +8,15 @@
  * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its reminders, its
  * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
- * tab: its tree, read from the same list, a task's status set, pin, and read
- * mark, and a task's description and pages followed; an agent's page: a message sent or
+ * tab: its tree, read from the same list, a task's status set, pin, read
+ * mark, rename, and delete, and a task's description, pages, and comment
+ * threads followed, with a reply on a thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, and the
  * agent renamed, pinned, and archived; New agent on a task and
- * New task, with the models and the repositories they pick among followed;
+ * New task, a sub-task or a related task among it, or one filed for later
+ * with no agent, with the models and the repositories they pick among followed;
  * Settings' Account page: Share usage data, support access, and the
  * account's deletion; a workspace made from the switcher, which New
  * workspace names; Settings' Workspace page: the rename, the members read
@@ -330,8 +332,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_CLOSE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_OFFLINE_REFUSED_CLEAR]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_START]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DELETE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_RENAME]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_DELETE]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_RENAME]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MARK_READ]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.TASKS),
@@ -377,10 +379,10 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_PICTURE_READ]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_COMMENT_START]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_COMMENT_ACT]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_COMMENT_ACT]: EVERYWHERE,
 
   [PORT_ACT_KIND.TERMINAL_LIST]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TERMINAL_CREATE]: panel(IOS.DESK_TOOLS),

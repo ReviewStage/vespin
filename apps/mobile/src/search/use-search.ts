@@ -24,8 +24,8 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
 import {
   agentLine,
+  type ReadListing,
   type TaskAgentLine,
-  type TasksListing,
   useTasksListing,
   useWaiting,
 } from "../tasks/use-tasks.js";
@@ -35,7 +35,7 @@ export interface SearchFound {
   readonly tasks: readonly TaskSummary[];
   readonly inbox: readonly InboxListed[];
   readonly agents: readonly TaskAgentLine[];
-  readonly listing: TasksListing;
+  readonly listing: ReadListing;
   readonly readerId: string | undefined;
 }
 

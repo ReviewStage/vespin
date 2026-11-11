@@ -125,6 +125,7 @@ export {
   SplitView,
 } from "./split-view.js";
 export { STATUS_MARK_LOOK } from "./status-mark-model.js";
+export { askForName, type NameAsk, shareLink } from "./system-asks.js";
 export {
   AGENT_ROW_STATE,
   AgentRow,
