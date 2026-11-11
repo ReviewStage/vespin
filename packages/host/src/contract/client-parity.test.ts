@@ -18,7 +18,7 @@ describe("CLIENT_PARITY", () => {
     // Note that the client the answered kinds are built over is never called, since nothing is sent.
     const answered = feedbackProcedures(
       HttpClient.make(() => Effect.die("Nothing is sent.")),
-      "https://vespin.dev/api/feedback",
+      "https://vespin.dev",
     );
 
     const refused = refusedPlatformProcedures();

@@ -258,9 +258,6 @@ function portDependencies(
   };
 }
 
-/** Where a note to the people who make the app goes: the service's own feedback endpoint, a Preview's where one is built in. */
-const FEEDBACK_PATH = "/api/feedback";
-
 /**
  * The platform kinds the app answers itself: a note to the people who make
  * the app, carried to the service's feedback endpoint over the host's own
@@ -270,7 +267,7 @@ const FEEDBACK_PATH = "/api/feedback";
  */
 const platformProcedures = (http: HttpClient.HttpClient): PlatformActProcedures<MobileSender> => ({
   ...refusedPlatformProcedures<MobileSender>(),
-  ...feedbackProcedures<MobileSender>(http, new URL(FEEDBACK_PATH, SERVICE_ORIGIN).href),
+  ...feedbackProcedures<MobileSender>(http, SERVICE_ORIGIN),
 });
 
 /**

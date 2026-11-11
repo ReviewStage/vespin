@@ -608,6 +608,23 @@ test("a deletion asks first, then goes back to the list without the automation",
   assert.ok(!rows(page).some(([name]) => name === SWEEP.name));
 });
 
+test("a deletion the service refuses says why in the deletion's words, not a save's", async () => {
+  world.deleteRefusal = AUTOMATION_CALL_FAILURE.UNANSWERED;
+  mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+
+  act(() => button("Automation actions").click());
+  act(() => menuItem("Delete").click());
+  await settle();
+  act(() => dialogButton("Delete automation").click());
+  await settle();
+
+  assert.match(
+    document.querySelector("[role=dialog], [role=alertdialog]")?.textContent ?? "",
+    /The automation could not be deleted\. Try again\./u,
+  );
+});
+
 test("a row's Delete asks first, and once confirmed the row leaves the list and the history passes over its page", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();

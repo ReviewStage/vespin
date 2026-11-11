@@ -51,6 +51,11 @@ export function downloadText(file: {
   return Promise.resolve(true);
 }
 
+/** Puts words on the browser's clipboard as plain text. */
+export function copyText(words: string): Promise<void> {
+  return navigator.clipboard.writeText(words);
+}
+
 /**
  * Puts a PNG, its bytes in base64 once drawn, on the browser's clipboard as
  * a picture. Note that the write is asked for now, with the picture still a
@@ -204,7 +209,7 @@ export function webPlatform(
   const platform: AppPlatform = {
     commandKey,
     browserTab: true,
-    copyText: (words) => navigator.clipboard.writeText(words),
+    copyText,
     copyImage: copyPng,
     copyRich: copyRichText,
     saveFile: downloadText,

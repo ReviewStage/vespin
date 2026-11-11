@@ -19,13 +19,13 @@ import { actPortFor, type PlatformActProcedures } from "./base.js";
 /** The one platform kind these answer. */
 type FeedbackKind = typeof WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND;
 
-/** Feedback's send, carried to `url` over `http`. */
+/** Feedback's send, carried to the feedback endpoint on `baseUrl`, the service's origin, over `http`. */
 export function feedbackProcedures<Sender>(
   http: HttpClient.HttpClient,
-  url: string,
+  baseUrl: string,
 ): Pick<PlatformActProcedures<Sender>, FeedbackKind> {
   const port = actPortFor<Sender>();
-  const feedback = feedbackDelivery({ url });
+  const feedback = feedbackDelivery({ baseUrl });
   const KIND = WINDOW_SURFACE_ACT_KIND;
 
   return {
