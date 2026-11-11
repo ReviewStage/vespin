@@ -11,6 +11,8 @@
  * linear in the words' length.
  */
 
+import { checkoutRelativePath } from "@repo/features/checkout-path";
+
 /** What an inline span of code opens. */
 export const INLINE_CODE_TARGET = {
   FILE: "file",
@@ -52,15 +54,6 @@ const PORT = /^\d{1,5}$/u;
 
 /** A file's extension: letters and digits, at least one a letter. */
 const EXTENSION = /^(?=[a-z\d]{0,15}[a-z])[a-z\d]{1,16}$/iu;
-
-/**
- * The folder every agent's checkout stands in, in the cloud
- * (`/workspace/repository`) and on a Mac (`…/<agent>/repository`), which an
- * absolute path is read under. Note that an absolute path through no such
- * folder opens nothing, because nothing in its words says where the
- * checkout begins.
- */
-const CHECKOUT_FOLDER = "/repository/";
 
 /**
  * The extensions a file named alone, with no folder, is taken to be a
@@ -116,27 +109,12 @@ function webTarget(words: string): InlineCodeTarget | undefined {
   return URL.canParse(href) ? { kind: INLINE_CODE_TARGET.WEB, href } : undefined;
 }
 
-/** A path as written, read as a path in the checkout: a relative one as it is, past a leading `./`; an absolute one under the checkout's folder, as a harness's own file tools name every file; none for one that climbs out or names no file. */
-export function checkoutPath(written: string): string | undefined {
-  let path = written;
-  if (path.startsWith("/")) {
-    const at = path.indexOf(CHECKOUT_FOLDER);
-    if (at < 0) return undefined;
-    path = path.slice(at + CHECKOUT_FOLDER.length);
-  } else if (path.startsWith("./")) {
-    path = path.slice(2);
-  }
-  const steps = path.split("/");
-  if (steps.some((step) => step === "" || step === "." || step === "..")) return undefined;
-  return path;
-}
-
 /** The words as a file of the checkout at its line; none for any other. */
 function fileTarget(words: string): InlineCodeTarget | undefined {
   const suffix = LINE_SUFFIX.exec(words);
   const written = suffix === null ? words : words.slice(0, suffix.index);
   if (!PATH_ONLY_CHARACTERS.test(written) || written.startsWith("~")) return undefined;
-  const path = checkoutPath(written);
+  const path = checkoutRelativePath(written);
   if (path === undefined) return undefined;
   const name = path.slice(path.lastIndexOf("/") + 1);
   const dot = name.lastIndexOf(".");

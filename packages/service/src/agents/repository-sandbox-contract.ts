@@ -1,13 +1,16 @@
 /**
  * repository-sandbox-contract.ts -- where a repository's checkout stands in a sandbox and the variables its scripts read.
  *
- * A leaf of its own, importing only the state folder's leaf, because the coding agent's bounds
+ * A leaf of its own, importing only the state folder's leaf and the
+ * checkout's (`@repo/features/checkout-path`, which the transcript reads a
+ * path into the checkout by), because the coding agent's bounds
  * (`coder-host/bounds.ts`) name the checkout's path and every tool file of
  * the agent reads those bounds: kept in `repository-shell.ts`, the path
  * reached GitHub's App and the auth service with it, and each tool's own
  * bundle carried them.
  */
 
+import { CLOUD_CHECKOUT_PATH } from "@repo/features/checkout-path";
 import { SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
 
 /**
@@ -20,7 +23,7 @@ import { SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
 export const REPOSITORY_SANDBOX_CONTRACT = {
   PATH: {
     WORKSPACE: "/workspace",
-    CHECKOUT: "/workspace/repository",
+    CHECKOUT: CLOUD_CHECKOUT_PATH,
     CHECKOUT_RECORD: `${SANDBOX_STATE_FOLDER}/repository`,
     /** What the workspace's cloud setup scripts printed as the sandbox was created, and how they exited. */
     SETUP_LOG: "/tmp/vespin-setup.log",

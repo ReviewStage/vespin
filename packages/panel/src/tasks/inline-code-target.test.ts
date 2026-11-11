@@ -23,7 +23,12 @@ it.each([
   { words: "console.log", opens: undefined },
   { words: "packages/ui/", opens: undefined },
   { words: "../outside.ts", opens: undefined },
+  {
+    words: "/Users/ana/.vespin/agents/7f3a/repository/src/tile.css",
+    opens: { kind: "file", path: "src/tile.css", line: undefined },
+  },
   { words: "/tmp/scratch.ts", opens: undefined },
+  { words: "/tmp/repository/src/tile.css", opens: undefined },
   { words: "pnpm exec vitest run x.ts", opens: undefined },
 ])("$words opens $opens.kind", ({ words, opens }) => {
   expect(inlineCodeTarget(words)).toEqual(opens);

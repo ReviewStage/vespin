@@ -1,3 +1,4 @@
+import { checkoutRelativePath } from "@repo/features/checkout-path";
 import {
   type DateSpan,
   dateChipText,
@@ -83,7 +84,6 @@ import {
   dateMentionNode,
 } from "./date-picker.js";
 import { useInboxItemTitle } from "./inbox-item-chip.js";
-import { checkoutPath } from "./inline-code-target.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { WrittenAs } from "./selection-markdown.js";
 import { useKnownNames, useWordTargets } from "./use-known-names.js";
@@ -957,14 +957,14 @@ export function linkChip(
  * A file of the task's repository as its mention chip, as a call's row
  * names one it read or wrote and a turn's files-changed row names each
  * (`turn-files.tsx`), with `state` after its name where given. An absolute
- * path is read under the checkout's folder, since Claude Code's file tools
- * name every file so (`inline-code-target.ts`'s `checkoutPath`). None where
- * the place knows no repository, or the path is no file of it, as an
- * absolute one through no checkout or one that climbs out is not.
+ * path is read into the agent's checkout, since Claude Code's file tools
+ * name every file so (`checkoutRelativePath`). None where the place knows no
+ * repository, or the path is no file of it, as an absolute one outside the
+ * checkout or one that climbs out is not.
  */
 export function fileChip(written: string, doors: MentionDoors, state?: ReactNode): ReactNode {
   const repository = doors.place.repository;
-  const path = checkoutPath(written);
+  const path = checkoutRelativePath(written);
   if (repository === null || path === undefined) return undefined;
   const target = encodeMention({ kind: MENTION_KIND.FILE, path }, doors.place);
   const found = linkMention(target, target, repository);
