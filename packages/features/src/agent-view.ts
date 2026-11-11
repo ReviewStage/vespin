@@ -56,7 +56,7 @@ import {
   liveActivityEndedRequestSchema,
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
-import { memoryIdSchema } from "./memory-wire.js";
+import { memoryIdSchema, memorySaveRequestSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
@@ -594,6 +594,28 @@ export const memoryForgetParamsSchema = EffectSchema.Struct({
 });
 
 export type MemoryForgetParams = typeof memoryForgetParamsSchema.Type;
+
+/** A memory kept in the member's own words, or one corrected in place where it names the memory it `replaces`, as Settings asks it. */
+export const memorySaveParamsSchema = memorySaveRequestSchema;
+
+export type MemorySaveParams = typeof memorySaveParamsSchema.Type;
+
+/**
+ * Why a keep kept nothing, apart from the coding-agent calls' failures: the
+ * member has Memory off (`memory-off`), the workspace or the memory it
+ * replaces names nothing (`not-found`), its words look like a credential
+ * (`memory-credential`), the workspace holds all it may (`memory-full`), the
+ * method refused (`method-not-allowed`), which a save's POST never meets, or
+ * no answer at all (`unanswered`).
+ */
+export const MEMORY_SAVE_FAILURE = failureSetOf({ saveMemory: accountContract.saveMemory });
+
+export type MemorySaveFailure = (typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE];
+
+/** A keep, as the window hears it: what it came to and the memory as it then stands, or why nothing was kept. */
+export const memorySaveAnswerViewSchema = answerView(accountContract.saveMemory);
+
+export type MemorySaveAnswerView = typeof memorySaveAnswerViewSchema.Type;
 
 /** Writing the default, as the window asks it: the choice to keep. */
 export const agentDefaultWriteParamsSchema = modelChoiceSchema;

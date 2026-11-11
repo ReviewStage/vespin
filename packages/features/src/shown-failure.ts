@@ -137,6 +137,7 @@ export const FAILURE_SURFACE = {
   MEMBERS_READ: "members.read",
   MEMORIES_READ: "memories.read",
   MEMORY_FORGET: "memory.forget",
+  MEMORY_SAVE: "memory.save",
   MENTIONS_READ: "mentions.read",
   MESSAGE_EDIT: "message.edit",
   MESSAGE_REVEAL: "message.reveal",

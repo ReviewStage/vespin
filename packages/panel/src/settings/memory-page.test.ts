@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, MEMORY_SAVE_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -14,11 +14,19 @@ import {
 } from "@repo/host/app-state";
 import type { PortActKind, PortActResult } from "@repo/host/contract";
 import { ReplayUnmask, showsInReplay } from "@repo/ui/session-replay-marks";
+import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { stateWith } from "../testing/app-state.js";
+import {
+  composerEditor,
+  composerWords,
+  editorBundleLanded,
+  installEditorLayout,
+  writeInComposer,
+} from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
 import { MemorySection } from "./memory-page.js";
@@ -26,14 +34,19 @@ import { MemorySection } from "./memory-page.js";
 /**
  * Settings › Memory over a bridge answering as the host would: the memories
  * of the workspace Settings shows are held for that workspace and drawn as
- * the host lays them on the document, listed in the service's order with
- * their words whole and whose words they are; Delete is offered from a
+ * the host lays them on the document, a row each with their words whole;
+ * Delete is offered from a
  * memory's ⋯, unavailable on one the reader may not forget, asks first in
  * the confirm dialog, and the memory leaves the list as the host draws it
  * gone; several chosen are forgotten one after another on one question; a
  * forget that fails says so in the dialog and keeps the memory listed;
  * another workspace is held for its own memories; and a read that fails
- * offers to try again. Synthetic workspaces, members, and memories.
+ * offers to try again. The memories agents recall most stand first, one no
+ * agent was handed in the window says so, and Edit saves a memory's words
+ * from the card it opens, which goes with a memory deleted while it saves
+ * and is never replaced while it saves; Add memory saves a new one from the
+ * same card, which stands under a refusal. Synthetic workspaces, members,
+ * and memories.
  */
 
 const READER = "user-reader";
@@ -79,6 +92,16 @@ let sent: AnyAct[] = [];
 let readFails = false;
 /** Whether a forget is answered with a failure rather than the memories. */
 let refuseForget = false;
+/** What the test's service answers a save with, by the save. */
+let saveAnswer: (save: {
+  readonly workspaceId: string;
+  readonly text: string;
+  readonly replaces?: string;
+}) => PortActResult<typeof ACT_KIND.MEMORIES_SAVE> = () => ({
+  failure: AGENT_CALL_FAILURE.UNANSWERED,
+});
+/** What a save waits on before the test's service answers it; nothing from the start. */
+let saveHeld: Promise<void> = Promise.resolve();
 /** Whether the host has read nothing yet, so it lays no memories. */
 let readsNothing = false;
 /** Each workspace's memories as the test's host lays them on the document, under the version it last delivered. */
@@ -135,6 +158,10 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       stored = { ...stored, [workspaceId]: after };
       return Promise.resolve(done({ memories: after }));
     }
+    case ACT_KIND.MEMORIES_SAVE: {
+      const { payload } = request;
+      return saveHeld.then(() => done(saveAnswer(payload)));
+    }
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
   }
@@ -147,6 +174,8 @@ beforeEach(() => {
   sent = [];
   readFails = false;
   refuseForget = false;
+  saveAnswer = () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+  saveHeld = Promise.resolve();
   readsNothing = false;
   laid = NO_KEYS_HELD;
   version = 1;
@@ -164,6 +193,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
+  vi.useRealTimers();
 });
 
 async function settle(): Promise<void> {
@@ -231,7 +261,12 @@ async function mount(
   };
 }
 
-const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>(".memory-row")];
+beforeAll(() => {
+  installEditorLayout();
+  return Effect.runPromise(editorBundleLanded);
+});
+
+const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>("tbody tr[data-index]")];
 
 const words = (page: HTMLElement) =>
   rows(page).map((row) => row.querySelector(".memory-text")?.textContent);
@@ -248,10 +283,33 @@ const button = (within: Element, label: string) =>
 const dialog = () =>
   document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("no question");
 
-/** A memory row's own press, which ⌘ chooses. */
-const pressOf = (page: HTMLElement, memory: MemorySummary) =>
-  rowOf(page, memory).querySelector<HTMLButtonElement>("[data-card-press]") ??
-  assert.fail("no press on the row");
+/** A memory row's box, which chooses it. */
+const boxOf = (page: HTMLElement, memory: MemorySummary) =>
+  rowOf(page, memory).querySelector<HTMLElement>('[role="checkbox"]') ??
+  assert.fail("no box on the row");
+
+/** The card's field a memory's words are written in, where one stands; the card hangs over the window, outside the page. */
+const field = (_page: HTMLElement) => document.querySelector<HTMLElement>(".memory-field");
+
+/** Waits for the field's editor to run, then writes `words` over what it holds. */
+async function writeInField(page: HTMLElement, words: string): Promise<void> {
+  const box = () => field(page) ?? assert.fail("no field");
+  // Note that the editor lands from its own bundle, which a render inside `act` lays in.
+  await vi.waitFor(async () => {
+    await settle();
+    assert.ok(composerEditor(box()).editor !== undefined, "the editor runs");
+  });
+  writeInComposer(box(), words);
+}
+
+/** Presses the field's own `label`, its Save. */
+function pressInField(_page: HTMLElement, label: string): void {
+  const press =
+    [...document.querySelectorAll<HTMLButtonElement>(".memory-field button")].find(
+      (each) => (each.getAttribute("aria-label") ?? each.textContent) === label,
+    ) ?? assert.fail(`no ${label} in the field`);
+  act(() => press.click());
+}
 
 /** Opens a memory's ⋯. */
 function openMenu(page: HTMLElement, memory: MemorySummary): void {
@@ -288,7 +346,7 @@ async function searchFor(page: HTMLElement, query: string): Promise<void> {
   await settle();
 }
 
-test("what Vespin kept in the workspace is held for it and listed in the service's order, each memory's words whole and named by whose they are", async () => {
+test("what Vespin kept in the workspace is held for it and drawn a row each, its words whole and masked", async () => {
   const { page } = await mount();
 
   assert.deepEqual(
@@ -298,10 +356,6 @@ test("what Vespin kept in the workspace is held for it and listed in the service
     [{ workspaceId: ACME.id }],
   );
   assert.deepEqual(words(page), [DEPLOYS.text, TESTS.text]);
-  const keeper = (memory: MemorySummary) =>
-    rowOf(page, memory).querySelector(".ui-comment-head")?.textContent ?? "";
-  assert.match(keeper(DEPLOYS), /^You/u);
-  assert.match(keeper(TESTS), /^Dean/u);
   assert.equal(
     showsInReplay(rowOf(page, DEPLOYS).querySelector(".memory-text")),
     false,
@@ -345,18 +399,14 @@ test("Delete asks first, then deletes the memory for good and lists what the hos
 
 test("a memory a search hid comes back unchosen, so a later act on what is chosen leaves it be", async () => {
   const { page } = await mount();
-  act(() => {
-    pressOf(page, DEPLOYS).dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true }),
-    );
-  });
+  act(() => boxOf(page, DEPLOYS).click());
 
   await searchFor(page, "store");
   await searchFor(page, "");
 
   // Note that the element is checked as a yes or no, because a failure's diff of an element would print the whole document.
   assert.ok(page.querySelector('[role="toolbar"]') === null, "nothing stands chosen");
-  assert.equal(pressOf(page, DEPLOYS).getAttribute("data-selected"), null);
+  assert.equal(boxOf(page, DEPLOYS).getAttribute("aria-checked"), "false");
 });
 
 test("a forget that fails says so in the dialog and keeps the memory listed", async () => {
@@ -406,13 +456,7 @@ test("several memories chosen are forgotten on one question, one after another, 
   stored = { [ACME.id]: [DEPLOYS, pricing, TESTS] };
   const { page } = await mount();
 
-  for (const memory of [DEPLOYS, pricing, TESTS]) {
-    act(() => {
-      pressOf(page, memory).dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true }),
-      );
-    });
-  }
+  for (const memory of [DEPLOYS, pricing, TESTS]) act(() => boxOf(page, memory).click());
   act(() => button(page.querySelector('[role="toolbar"]') ?? page, "Delete").click());
   assert.match(
     dialog().textContent ?? "",
@@ -481,7 +525,8 @@ test("while the memories are read the page says Reading, which is neither its fa
   const { page } = await mount();
 
   const status = page.querySelector('[role="status"]') ?? assert.fail("no reading region");
-  assert.equal(status.textContent, "Reading Vespin's memory");
+  // Note that the skeleton draws the table's own headings, hidden from a reader, after the words a reader hears.
+  assert.match(status.textContent ?? "", /^Reading Vespin's memory/u);
   assert.doesNotMatch(page.textContent ?? "", /could not be read|hasn't remembered/u);
 });
 
@@ -489,7 +534,7 @@ test("before the workspaces are read the page says Reading, and does not say non
   const { page } = await mount(true, null);
 
   const status = page.querySelector('[role="status"]') ?? assert.fail("no reading region");
-  assert.equal(status.textContent, "Reading your workspaces");
+  assert.match(status.textContent ?? "", /^Reading your workspaces/u);
   assert.doesNotMatch(page.textContent ?? "", /none is open/u);
   assert.equal(sent.length, 0, "no workspace is a memory read of none");
 });
@@ -501,4 +546,122 @@ test("workspaces that could not be read say so with Retry, which asks for them a
   assert.match(page.textContent ?? "", /Your workspaces could not be read\./u);
   act(() => button(page, "Retry").click());
   assert.equal(retried, 1);
+});
+
+test("the memories agents recalled most in the last 30 days stand first, then the most recently kept", async () => {
+  const pricing: MemorySummary = {
+    ...TESTS,
+    id: "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    text: "Pricing lives in the billing service.",
+    updatedAt: Date.UTC(2026, 9, 8, 12),
+    recalls30d: 4,
+    lastRecalledAt: Date.UTC(2026, 9, 20, 12),
+  };
+  const flags: MemorySummary = {
+    ...TESTS,
+    id: "3d4e5f6a-7b8c-4d9e-8f0a-2b3c4d5e6f7a",
+    text: "Feature flags live in src/flags.ts.",
+    updatedAt: Date.UTC(2026, 9, 7, 12),
+    recalls30d: 9,
+    lastRecalledAt: Date.UTC(2026, 9, 21, 12),
+  };
+  stored = { [ACME.id]: [DEPLOYS, TESTS, pricing, flags] };
+  const { page } = await mount();
+
+  assert.deepEqual(words(page), [flags.text, pricing.text, DEPLOYS.text, TESTS.text]);
+});
+
+test("a memory older than the recall window that no agent was handed in it reads Unused, no recalls, and Never", async () => {
+  vi.useFakeTimers({ toFake: ["Date"], now: Date.UTC(2026, 10, 20, 12) });
+  const { page } = await mount();
+
+  const cells = [...rowOf(page, DEPLOYS).querySelectorAll("td")].map((cell) => cell.textContent);
+  assert.match(cells.join(" | "), /Unused/u);
+  assert.deepEqual(cells.slice(2, 4), ["—", "Never"]);
+});
+
+test("Edit opens the memory's words in a card and saves the new words in place of the memory it edits", async () => {
+  const corrected = "Deployments go out from main through Vercel.";
+  saveAnswer = (save) => ({
+    outcome: MEMORY_SAVED.CORRECTED,
+    memory: { ...DEPLOYS, text: save.text, updatedAt: Date.UTC(2026, 9, 13, 12) },
+  });
+  const { page } = await mount();
+
+  openMenu(page, DEPLOYS);
+  chooseMenuItem("Edit");
+  assert.equal(composerWords(field(page) ?? assert.fail("no card")), DEPLOYS.text);
+  await writeInField(page, corrected);
+  pressInField(page, "Save");
+  await settle();
+
+  assert.deepEqual(
+    sent
+      .filter((request) => request.kind === ACT_KIND.MEMORIES_SAVE)
+      .map((request) => request.payload),
+    [{ workspaceId: ACME.id, text: corrected, replaces: DEPLOYS.id }],
+  );
+  await vi.waitFor(() => assert.ok(field(page) === null, "the card goes once the words are taken"));
+});
+
+test("an edit whose memory is deleted while it saves goes with it, and its answer opens no field again", async () => {
+  const answering = Promise.withResolvers<void>();
+  saveHeld = answering.promise;
+  saveAnswer = () => ({ failure: MEMORY_SAVE_FAILURE.NOT_FOUND });
+  const { page } = await mount();
+  openMenu(page, DEPLOYS);
+  chooseMenuItem("Edit");
+  await writeInField(page, "Deployments go out from main.");
+  pressInField(page, "Save");
+  await settle();
+
+  // Another member deletes the memory while the save is out.
+  act(() => lay(ACME.id, { rows: [TESTS] }));
+  // Note that the field is checked as a yes or no, because a failure's diff of an element would print the whole document.
+  await vi.waitFor(() => assert.ok(field(page) === null, "put away"));
+  answering.resolve();
+  await settle();
+
+  assert.ok(field(page) === null, "no field stands");
+});
+
+test("Add memory writes a new one in the card, saves it replacing nothing, and keeps the card under a refusal", async () => {
+  saveAnswer = () => ({ failure: MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL });
+  const { page } = await mount();
+
+  act(() => button(page, "Add memory").click());
+  await writeInField(page, "Release notes are written before the tag is pushed.");
+  pressInField(page, "Save");
+  await settle();
+
+  assert.deepEqual(
+    sent
+      .filter((request) => request.kind === ACT_KIND.MEMORIES_SAVE)
+      .map((request) => request.payload),
+    [{ workspaceId: ACME.id, text: "Release notes are written before the tag is pushed." }],
+  );
+  await vi.waitFor(() =>
+    assert.match(field(page)?.textContent ?? "", /looks like it holds a credential/u),
+  );
+});
+
+test("while an edit's save is out, Add memory opens nothing over its card", async () => {
+  const answering = Promise.withResolvers<void>();
+  saveHeld = answering.promise;
+  const { page } = await mount();
+  openMenu(page, DEPLOYS);
+  chooseMenuItem("Edit");
+  await writeInField(page, "Deployments go out from main.");
+  pressInField(page, "Save");
+  await settle();
+
+  act(() => button(page, "Add memory").click());
+  await settle();
+
+  assert.equal(
+    composerWords(field(page) ?? assert.fail("no card")),
+    "Deployments go out from main.",
+  );
+  answering.resolve();
+  await settle();
 });

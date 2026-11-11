@@ -15,6 +15,7 @@ import {
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
   type MemoriesAnswerView,
+  type MemorySaveAnswerView,
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import {
@@ -328,6 +329,10 @@ function fakeService() {
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
   let forgetGate: Effect.Effect<void> = Effect.void;
+  /** What a memory's save answers, once its gate lets it; unanswered from the start. */
+  let saveAnswer: MemorySaveAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
+  /** What a memory's save waits on before the service answers it; nothing from the start. */
+  let saveGate: Effect.Effect<void> = Effect.void;
   /** What a message on an inbox thread waits on before the service answers it; nothing from the start. */
   let messageGate: Effect.Effect<void> = Effect.void;
   /** What a host's removal answers, once its gate lets it; unanswered from the start. */
@@ -740,6 +745,16 @@ function fakeService() {
           Effect.sync(() => forgetAnswer),
         ),
       ),
+    saveMemory: (save) =>
+      Effect.andThen(
+        Effect.sync(() => {
+          asked.push(`save-memory:${save.workspaceId}:${save.replaces ?? "new"}`);
+        }),
+        Effect.andThen(
+          Effect.suspend(() => saveGate),
+          Effect.sync(() => saveAnswer),
+        ),
+      ),
     readSound: () => Effect.succeed({ clip: null }),
     addSound: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     renameSound: () => Effect.succeed({ sound: null }),
@@ -966,6 +981,11 @@ function fakeService() {
     answerForgets: (answer: MemoriesAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       forgetAnswer = answer;
       forgetGate = gate;
+    },
+    /** What each memory's save answers from now on, and what it waits on before it does. */
+    answerSaves: (answer: MemorySaveAnswerView, gate: Effect.Effect<void> = Effect.void) => {
+      saveAnswer = answer;
+      saveGate = gate;
     },
     /** How long ago the account's devices beat, as the service answers from now on. */
     answerPresence: (next: DevicePresenceAnswerView) => {
@@ -1244,6 +1264,7 @@ export function subject(
       leaveStartsUnanswered: service.leaveStartsUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
+      answerSaves: service.answerSaves,
       answerPresence: service.answerPresence,
       answerKeys: service.answerKeys,
       markKeys: service.markKeys,

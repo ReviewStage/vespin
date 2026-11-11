@@ -53,7 +53,7 @@ import { type HostActTable, liveTold } from "./host-acts.js";
 import type { HostKernel } from "./host-kernel.js";
 import { heldHosts, hostRemove } from "./hosts-follow.js";
 import type { HeldSlice } from "./live-collection.js";
-import { heldMemories, memoryForget } from "./memory-follow.js";
+import { heldMemories, memoryForget, memorySave } from "./memory-follow.js";
 import type { WindowFocus } from "./window-focus.js";
 
 /** The service's side of the account's asks, as this concern asks it. */
@@ -78,6 +78,7 @@ export type AccountAsksClient = Pick<
   | "saveGitHubToken"
   | "removeGitHubToken"
   | "forgetMemory"
+  | "saveMemory"
   | "readSound"
   | "addSound"
   | "renameSound"
@@ -394,6 +395,11 @@ function actsOf(
     MEMORIES_FORGET: declaredWrite(
       pool,
       memoryForget((forget) => asked(client.forgetMemory(forget))),
+    ),
+    // A correction's words are drawn over its memory the moment it is asked; a new memory draws as the read carries it.
+    MEMORIES_SAVE: declaredWrite(
+      pool,
+      memorySave((save) => asked(client.saveMemory(save))),
     ),
     // Note that a sound's bytes and name pass through once, to the window that asked or on to the service, and are noted nowhere, as the service keeps them alone.
     SOUND_READ: (read) => asked(client.readSound(read)),

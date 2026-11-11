@@ -135,7 +135,7 @@ import { useWordsDates } from "./words-dates.js";
  * running on (`useKnownNames`), or, for one the window lists not, an
  * archived agent say, the harness read for it (`mentioned-agent-card.tsx`); either
  * opens its tab through the window's opener for an app link, as a link
- * copied to it does, and an agent hangs its tab's own card where the place
+ * copied to it does, or where its place opens it (`onOpenAgent`), and an agent hangs its tab's own card where the place
  * has one, and otherwise the same card read as it is hung, on any task of
  * the workspace or on none (`mentioned-agent-card.tsx`). A person wears
  * their picture and hangs their card, their email and role, or grayed as
@@ -215,6 +215,8 @@ export interface MentionDoors {
   readonly onOpenTurnChanges?:
     | ((agentId: string, messageId: string, path: string) => void)
     | undefined;
+  /** Opens an agent's chip somewhere other than its tab's top, as a memory's opens its transcript at the line that kept it; none opens its tab as its link does. */
+  readonly onOpenAgent?: ((agentId: string) => void) | undefined;
   /** One of the plan's agents as its chip wears it, none for an agent not of the plan; the door is none where the place knows the plan's agents not. */
   readonly agentOf?: ((agentId: string) => MentionedAgentLook | undefined) | undefined;
   /** The card a pull request one of the plan's agents opened hangs on its Pull request tab, by any link to it; none for any other, or where the place knows the plan's agents not. */
@@ -309,9 +311,14 @@ function pressOf(
             ? mention
             : { kind: MENTION_KIND.TASK, taskId: mention.taskId },
         );
-    // A page, an agent, or a person opens as its app link does, through the window's opener, under the workspace it was written in.
+    case MENTION_KIND.AGENT: {
+      const { onOpenAgent } = doors;
+      return onOpenAgent === undefined
+        ? () => openLink(target)
+        : () => onOpenAgent(mention.agentId);
+    }
+    // A page or a person opens as its app link does, through the window's opener, under the workspace it was written in.
     case MENTION_KIND.PAGE:
-    case MENTION_KIND.AGENT:
     case MENTION_KIND.PERSON:
       return () => openLink(target);
     // The app has no tab of its own on a task, so its chip opens the task it thinks about.
