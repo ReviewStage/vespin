@@ -30,7 +30,6 @@ import {
   recommendedLabels,
 } from "@repo/features/inbox-wire";
 import { decodeMention, MENTION_KIND, mentionLinksIn } from "@repo/features/mention-link";
-import { PAGE_OWNER, type PageOwner, type PagePlace } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result } from "effect";
@@ -540,15 +539,7 @@ function keptOptionMedia(
   );
 }
 
-/** Where a page stands as a reader names it, where it is the agent's own: on its task, or on the agent itself; nothing for any other. */
-function ownPagePlace(agent: InboxAgent, owner: PageOwner): PagePlace | undefined {
-  if (owner.kind === PAGE_OWNER.TASK) {
-    return owner.taskId === agent.taskId ? { taskId: owner.taskId } : undefined;
-  }
-  return owner.agentId === agent.agentId ? { agentId: owner.agentId } : undefined;
-}
-
-/** A page an option names as the store keeps it: one shown on the agent's task, at the version named, the one the agent was shown, or its newest; refused where the agent's account reaches no such page or version there. */
+/** A page an option names as the store keeps it: one shown on the agent's own task, at the version named, the one the agent was shown, or its newest; refused where the agent's account reaches no such page or version there. */
 function keptOptionPage(
   agent: InboxAgent,
   pageId: string,
@@ -561,16 +552,15 @@ function keptOptionPage(
   return readPageById(agent.userId, pageId, version).pipe(
     Effect.map((found) => {
       if (Option.isNone(found)) return Result.fail(INBOX_REFUSAL.NO_PAGE);
-      const { owner, page } = found.value;
-      const place = ownPagePlace(agent, owner);
-      if (place === undefined) return Result.fail(INBOX_REFUSAL.NO_PAGE);
+      const { taskId, page } = found.value;
+      if (taskId !== agent.taskId) return Result.fail(INBOX_REFUSAL.NO_PAGE);
       return Result.succeed({
         media: {
           type: INBOX_OPTION_MEDIA.PAGE,
           pageId: page.id,
           version: page.version,
           title: page.title,
-          place,
+          place: { taskId },
         },
       });
     }),
