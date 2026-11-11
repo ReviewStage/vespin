@@ -169,6 +169,9 @@ test("the words a box opens on stand as they were written, a known skill's /name
   assert.deepEqual(box.drafts, [], "the words opened on are not handed back");
   const padded = mounted("Fill in `` [`x`](y) `` here");
   assert.deepEqual(padded.drafts, [], "nor are words the editor spells otherwise, a padded span");
+  typeInComposer(padded.host, "!");
+  pressInComposer(padded.host, "z", { metaKey: true });
+  assert.equal(padded.drafts.at(-1), "Fill in `` [`x`](y) `` here", "an edit undone is them again");
 
   typeInComposer(box.host, ", please");
   assert.deepEqual(box.drafts, ["Cut it with /release now\nthen tell me, please"]);

@@ -1138,13 +1138,17 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
   });
   laidIn(editor, state, props.text);
   // Note that the words opened on are the owner's own, so the editor's reading of them, which may spell them otherwise (a code span's padding), is no change to hand back.
-  state.emitted = textOf(editor.state.doc);
+  const opening = textOf(editor.state.doc);
+  // The words handed back when the box reads as it opened again, as after an edit undone: the owner's own where they were laid in whole, which a bound refusing them leaves not.
+  const given =
+    opening === textOf(documentOf(editor.schema, props.text, state)) ? props.text : opening;
+  state.emitted = opening;
   editor.on("transaction", ({ transaction }) => {
     for (const [mark, pos] of state.marks) state.marks.set(mark, transaction.mapping.map(pos));
     const text = textOf(editor.state.doc);
     if (!transaction.docChanged || text === state.emitted) return;
     state.emitted = text;
-    props.onDraft(text);
+    props.onDraft(text === opening ? given : text);
   });
   if (props.focus) editor.view.focus();
   return {
