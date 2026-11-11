@@ -12,7 +12,6 @@ import {
   ConfirmDialog,
   type DialogQuestion,
   IconButton,
-  LIST_DENSITY,
   LIST_ROW_ACTIONS,
   LIST_VARIANT,
   List,
@@ -145,7 +144,7 @@ export function AgentQueueDock({
         <List
           label={QUEUE_WORDS.LIST}
           variant={LIST_VARIANT.CARD}
-          density={LIST_DENSITY.DENSE}
+          fingerTall
           moves
           onPointerDown={drag}
         >
