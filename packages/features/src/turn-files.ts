@@ -10,11 +10,12 @@
  * over is not in the call. A file edited twice in the turn is one file with
  * its counts summed, in the order the turn first named it, and one the patch
  * moved is named where it moved to. A patch whose root names another checkout
- * names no file of the task's (`tool-call-model.ts`), so it adds none.
+ * names no file of the task's (`tool-call-model.ts`), so it adds none, and
+ * nor does a call that failed or never answered, whose edit did not land.
  */
 
 import { AGENT_PART, type AgentPart } from "./agent-parts.js";
-import { TOOL_BLOCK } from "./tool-call-block.js";
+import { TOOL_BLOCK, TOOL_STATE } from "./tool-call-block.js";
 import { patchFiles, toolCallView } from "./tool-call-model.js";
 import { CALL_KIND } from "./turn-rows.js";
 
@@ -63,7 +64,7 @@ function filesOfCall(
 export function turnFiles(parts: readonly AgentPart[]): TurnFiles | undefined {
   const byPath = new Map<string, { added: number; removed: number }>();
   for (const part of parts) {
-    if (part.kind !== AGENT_PART.TOOL) continue;
+    if (part.kind !== AGENT_PART.TOOL || part.state !== TOOL_STATE.OUTPUT_AVAILABLE) continue;
     for (const file of filesOfCall(part)) {
       const standing = byPath.get(file.path) ?? { added: 0, removed: 0 };
       standing.added += file.added;
