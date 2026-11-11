@@ -73,7 +73,7 @@ function percentWords(usedPercent: number): string {
   return `${String(Math.round(usedPercent))}%`;
 }
 
-/** One cell's words, drawn by `children` where given, as wide as the widest of `sizes`, which it holds hidden in the same place. */
+/** One cell's words, drawn by `children` where given, as wide as the widest of `sizes`, which it holds hidden in the same place, and centered in its height, since a hidden size that wraps makes the cell taller than its own words. */
 function Cell({
   words,
   sizes,
@@ -86,7 +86,7 @@ function Cell({
   children?: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <span className={cn("grid", className)}>
+    <span className={cn("grid items-center", className)}>
       {children ?? <span className="col-start-1 row-start-1">{words}</span>}
       {sizes
         .filter((size) => size !== words)
