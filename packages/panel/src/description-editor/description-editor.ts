@@ -1,9 +1,15 @@
 import { WRITING_BLOCK, WRITING_SHORTCUTS } from "@repo/settings/shortcuts";
 import { linkMarkAttributes } from "@repo/ui/link-face";
 import { MARKDOWN_CLASS } from "@repo/ui/markdown-class";
-import { type AnyExtension, Editor, Extension, type NodeViewRenderer } from "@tiptap/core";
+import {
+  type AnyExtension,
+  Editor,
+  Extension,
+  type JSONContent,
+  type NodeViewRenderer,
+} from "@tiptap/core";
 import Heading from "@tiptap/extension-heading";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { OrderedList, TaskItem, TaskList } from "@tiptap/extension-list";
 import Paragraph from "@tiptap/extension-paragraph";
 import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
@@ -131,6 +137,32 @@ const DocumentParagraph = Paragraph.extend({
       return helpers.createNode("paragraph", undefined, helpers.parseInline(tokens));
     }
     return this.parent?.(token, helpers) ?? [];
+  },
+});
+
+/** A numbered item as read, given an empty line for its words where it opens on none: holding nothing, or only a list nested under it. */
+function withWordsLine(item: JSONContent): JSONContent {
+  const content = item.content ?? [];
+  const worded = item.type !== "listItem" || content[0]?.type === "paragraph";
+  return worded ? item : { ...item, content: [{ type: "paragraph" }, ...content] };
+}
+
+/**
+ * A numbered list whose empty item opens as an empty line to type on. Note
+ * that TipTap's own reads an item with no words (`1.`, as an agent leaves
+ * one under a heading) as an item with no line for its words, which the
+ * schema does not allow, so the document opened invalid, with no line in the
+ * item for the caret: a click or ↓ left it on the line above, and what was
+ * typed went there. A bulleted item already opens with its empty line. This
+ * is TipTap's own fix waiting upstream (ueberdosis/tiptap#8466), so it goes
+ * once a TipTap carrying that fix is installed.
+ */
+const DocumentOrderedList = OrderedList.extend({
+  parseMarkdown(token, helpers) {
+    const read = this.parent?.(token, helpers) ?? [];
+    return Array.isArray(read)
+      ? read
+      : { ...read, content: (read.content ?? []).map(withWordsLine) };
   },
 });
 
@@ -313,6 +345,7 @@ export function markdownExtensions(
   const kit = StarterKit.configure({
     blockquote: false,
     heading: false,
+    orderedList: false,
     paragraph: false,
     underline: false,
     trailingNode: false,
@@ -323,6 +356,7 @@ export function markdownExtensions(
     blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
     blockRulesOutOfCells(withoutTipTapChords(DocumentHeading)),
+    blockRulesOutOfCells(withoutTipTapChords(DocumentOrderedList)),
     Markdown,
     withoutTipTapChords(TaskList),
     drawnTaskItem(drawTaskBox),
