@@ -31,13 +31,15 @@ const SOURCE_GLOBS = [
 /**
  * The workspaces read together in one program; a workspace named in no group
  * is a program of its own. Note that we split the repository, because one
- * program over all of it kept every type it resolved and outgrew the 4 GB
- * heap `package.json` gives this check, and that we group the workspaces
+ * program over all of it kept every type it resolved and outgrew a 4 GB
+ * heap, and that we group the workspaces
  * rather than read each alone, because each program resolves again the types
  * it shares with the others: a program per workspace took twice as long. Each
  * group here peaks below the heap `apps/web` alone takes, about 2 GB, so a
  * workspace joins a group only where a measured heap says the group still
- * does; `@repo/service` and `apps/web` stand alone for that reason.
+ * does; `@repo/service` and `apps/web` stand alone for that reason. The
+ * 3 GB heap `package.json` gives this check leaves room above that peak while
+ * keeping the check's resident memory off the CI runner the typecheck shares.
  */
 const PROGRAM_GROUPS = [
   [
