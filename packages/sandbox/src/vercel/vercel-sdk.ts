@@ -917,7 +917,16 @@ function vercelSandbox(
                 ...createParams(ask, mounted),
                 signal,
               });
-              if (ask.user !== undefined) await madeUser(created, ask.user, signal);
+              // Note that a sandbox whose user could not be made is stopped, so no reader takes it for one still being set up.
+              if (ask.user !== undefined) {
+                await madeUser(created, ask.user, signal).catch(async (failure: unknown) => {
+                  await created
+                    .currentSession()
+                    .stop({ signal })
+                    .catch(() => undefined);
+                  throw failure;
+                });
+              }
               return created;
             }),
           ),

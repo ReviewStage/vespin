@@ -126,9 +126,10 @@ const INSTALL_SCRIPT = `sudo -n -u ${AGENT_USER} -H bash -c '${GROUP_WRITES}; cd
  * `sudo`: its root opened (`OPEN_DRIVE_ROOT`) and what an older fill
  * installed handed over (`HAND_INSTALL_TO_AGENT`). Every fill runs it,
  * whether or not it installs, so a drive an older fill installed is
- * handed over at its next fill.
+ * handed over at its next fill, and fails on the first command that fails,
+ * so a handover cut short fails the fill.
  */
-const READY_FOR_AGENT = `sudo -n bash -c '${OPEN_DRIVE_ROOT}; ${HAND_INSTALL_TO_AGENT}'`;
+const READY_FOR_AGENT = `sudo -n bash -c 'set -e; ${OPEN_DRIVE_ROOT}; ${HAND_INSTALL_TO_AGENT}'`;
 
 /** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits `DIFFERS_EXIT` where they do. */
 const LOCKFILE_DIFF_SCRIPT = `git diff --quiet "$${BASE_COMMIT_VARIABLE}" HEAD -- ${LOCKFILES.join(" ")}`;
