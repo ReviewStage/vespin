@@ -1282,6 +1282,7 @@ export function SidebarTask({
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}
+          onPoint={current ? undefined : () => tasks.onPointTask(task.id)}
           onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           selectKey={task.id}
           menu={

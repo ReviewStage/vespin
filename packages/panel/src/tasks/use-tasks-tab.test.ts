@@ -65,6 +65,7 @@ import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
 import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
+import { descriptionDocumentQuery } from "../live-reads.js";
 import {
   installPanelSpanRecorder,
   PANEL_SPAN,
@@ -1060,6 +1061,30 @@ test("a tab closed on another plan opens that plan again, and the tab on it once
 
   tab.stand({ tasks: OPEN });
   assert.deepEqual(panelOf(tab), { open: true, tab: FILE });
+});
+
+test("a task's description is read from the moment the pointer rests on its row, and from its press, before the host opens it", async () => {
+  const tab = mount(
+    { shown: true, tasks: LISTING },
+    { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
+  );
+  // Whether the window holds the task's description, which the host reads for as long as it is held.
+  const held = (taskId: string) =>
+    testQueryClientNow()
+      .getQueryCache()
+      .find({ queryKey: descriptionDocumentQuery(taskId).queryKey })
+      ?.isActive() === true;
+  const pointed = "5d1e2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a";
+  assert.equal(held(pointed), false);
+
+  act(() => tab.control().onPointTask(pointed));
+  assert.equal(held(pointed), true, "the task the pointer rests on is read ahead of a press");
+
+  // Note that the host is never made to open it, so only the press holds it.
+  act(() => tab.control().onSelect(OTHER_TASK_ID));
+  await vi.waitFor(() => assert.equal(tab.told.at(-1), ACT_KIND.TASKS_SELECT));
+  assert.equal(tab.control().activeTaskId, TASK.id);
+  assert.equal(held(OTHER_TASK_ID), true, "the task pressed is read before the host opens it");
 });
 
 test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it stands shut once a plan with no tab was passed through", () => {

@@ -477,6 +477,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     ),
     activeTaskId: undefined,
     boundFor: overrides.activeTaskId,
+    onPointTask: () => {},
     listFailed: false,
     listRead: true,
     region: { kind: DOCUMENT_REGION.NONE },

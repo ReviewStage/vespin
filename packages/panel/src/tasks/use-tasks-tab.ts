@@ -59,6 +59,7 @@ import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import {
   mutationOptions,
   type QueryClient,
+  QueryObserver,
   useMutation,
   useQuery,
   useQueryClient,
@@ -353,6 +354,8 @@ export interface TasksControl {
    * home page, asked for or standing.
    */
   boundFor: string | undefined;
+  /** Reads `taskId`'s description ahead of a press the pointer says is coming, so the task opens on it drawn. */
+  onPointTask: (taskId: string) => void;
   listFailed: boolean;
   /** Whether the list drawn is one the service answered, rather than the empty one before the first read lands. */
   listRead: boolean;
@@ -1338,6 +1341,25 @@ export function useTasksTab(input: {
   // back (`places/place-binding.ts`). A fixture's tasks are opened nowhere, so nothing is asked of them.
   const openTaskId = tasks.activeTaskId;
   const { boundFor, ask, boundNow, boundForNow } = useTaskAsk(openTaskId);
+  // The description of the task a press asked for is held from the press, rather than once the host binds it a round
+  // trip later, so its read runs beside the select. Note that a fixture's tasks are read nowhere, so nothing is read
+  // ahead of them.
+  useQuery(descriptionDocumentQuery(fixture === undefined ? boundFor : undefined));
+  // The description of the task the pointer last came to rest on is held ahead of the press, by an observer of its own
+  // rather than state, because a pointer crossing the sidebar must not draw the tab again at every row.
+  const pointedHold = useRef<{ readonly taskId: string; readonly release: () => void } | undefined>(
+    undefined,
+  );
+  const pointTask = useCallback(
+    (taskId: string) => {
+      if (fixture !== undefined || pointedHold.current?.taskId === taskId) return;
+      pointedHold.current?.release();
+      const observer = new QueryObserver(queryClient, descriptionDocumentQuery(taskId));
+      pointedHold.current = { taskId, release: observer.subscribe(() => {}) };
+    },
+    [fixture, queryClient],
+  );
+  useEffect(() => () => pointedHold.current?.release(), []);
   // Home is the listed workspace's too, at `/app` while none is listed, so another listed, or the first one read, stands its
   // Home in the step's place. Note that Home with a task still bound is left as it is, since the binding moves it next
   // (`places/place-binding.ts`).
@@ -2999,6 +3021,7 @@ export function useTasksTab(input: {
     },
     activeTaskId: tasks.activeTaskId,
     boundFor,
+    onPointTask: pointTask,
     listFailed: tasks.listStatus === TASKS_READ.FAILED,
     listRead: tasks.listStatus === TASKS_READ.READY,
     region,
