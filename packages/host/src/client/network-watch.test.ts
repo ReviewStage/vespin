@@ -44,7 +44,6 @@ function watched(
     const reach = yield* SubscriptionRef.make<ServiceReachState>({
       reachable: true,
       answeredAt: 0,
-      updateNeeded: false,
     });
     const state = new AppStateStore(initialAppState(RUN, false, []), yield* Effect.context());
     yield* linkNetworkWatch({
@@ -105,13 +104,12 @@ it.effect(
       const scope = yield* Scope.make();
       const { machine, reach, state, regained } = yield* watched(scope);
 
-      yield* SubscriptionRef.set(reach, { reachable: false, answeredAt: 0, updateNeeded: false });
+      yield* SubscriptionRef.set(reach, { reachable: false, answeredAt: 0 });
       yield* SubscriptionRef.set(machine, false);
       yield* Effect.yieldNow;
       assert.deepEqual(state.snapshot().network, {
         online: false,
         reachable: false,
-        updateNeeded: false,
       });
 
       yield* SubscriptionRef.set(machine, true);
@@ -121,13 +119,11 @@ it.effect(
       yield* SubscriptionRef.set(reach, {
         reachable: true,
         answeredAt: 12_000,
-        updateNeeded: false,
       });
       yield* Effect.yieldNow;
       assert.deepEqual(state.snapshot().network, {
         online: true,
         reachable: true,
-        updateNeeded: false,
       });
       assert.equal(regained.times, 1);
       yield* Scope.close(scope, Exit.void);
@@ -162,7 +158,6 @@ it.effect(
       assert.deepEqual(state.snapshot().network, {
         online: true,
         reachable: false,
-        updateNeeded: false,
       });
 
       yield* send(reach);
@@ -175,7 +170,6 @@ it.effect(
       assert.deepEqual(state.snapshot().network, {
         online: true,
         reachable: true,
-        updateNeeded: false,
       });
       yield* Scope.close(scope, Exit.void);
     }),
@@ -190,9 +184,9 @@ it.effect(
       yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1, updateNeeded: true });
       yield* Effect.yieldNow;
       assert.equal(state.snapshot().network.updateNeeded, true);
-      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 2, updateNeeded: false });
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 2 });
       yield* Effect.yieldNow;
-      assert.equal(state.snapshot().network.updateNeeded, false);
+      assert.equal(state.snapshot().network.updateNeeded, undefined);
       yield* Scope.close(scope, Exit.void);
     }),
 );

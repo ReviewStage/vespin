@@ -898,11 +898,7 @@ it.effect(
   "a live read that gets no answer is asked again past the bound on a backoff, and the transcript reads on the moment the service answers again",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make({
-        reachable: false,
-        answeredAt: 0,
-        updateNeeded: false,
-      });
+      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt: 0 });
       yield* Effect.gen(function* () {
         const { acts, asked, held, sealTranscript, live } = yield* subject();
         const seals = () => asked.filter((ask) => ask === `transcript-live:${AGENT_ID}`).length;
@@ -921,7 +917,7 @@ it.effect(
 
         // Note that the read never gave up, so the service answering again asks at once, a minute short of its wait.
         sealTranscript(LIVE_ANSWERED);
-        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1, updateNeeded: false });
+        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1 });
         yield* settled;
         assert.equal(seals(), 7);
         transcriptRows(live, 2);
@@ -1229,11 +1225,7 @@ it.effect(
   "a transcript held again while the service answers no read at all stays followed, and reads on the moment the service is back",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make({
-        reachable: false,
-        answeredAt: 0,
-        updateNeeded: false,
-      });
+      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt: 0 });
       yield* Effect.gen(function* () {
         const harness = yield* subject();
         yield* followedOnce(harness);
@@ -1248,7 +1240,7 @@ it.effect(
         const back = pageNow("3:0", { holds: false, text: "Back again." });
         harness.pageNow(back);
         harness.pageNewest(newestPage("3:0", "Back again.", "40"));
-        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1, updateNeeded: false });
+        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1 });
         yield* settled;
         assert.equal(held().at(-1)?.failure, undefined);
         assert.ok(JSON.stringify(held().at(-1)?.messages).includes("Back again."));

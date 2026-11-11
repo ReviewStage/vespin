@@ -159,14 +159,10 @@ it("a stream's first document names every entry, and each after it names only th
       .sort(),
   );
 
-  pushes.pushState(WINDOW, {
-    ...first,
-    version: 2,
-    network: { online: false, reachable: true, updateNeeded: false },
-  });
+  pushes.pushState(WINDOW, { ...first, version: 2, network: { online: false, reachable: true } });
   assert.deepEqual(await delivered(stream), {
     version: 2,
-    entries: { network: { online: false, reachable: true, updateNeeded: false } },
+    entries: { network: { online: false, reachable: true } },
   });
 });
 
@@ -177,19 +173,12 @@ it("a document replaced unsent takes nothing it moved with it: the one sent name
   pushes.pushState(WINDOW, first);
   await delivered(stream);
 
-  const offline = {
-    ...first,
-    version: 2,
-    network: { online: false, reachable: true, updateNeeded: false },
-  };
+  const offline = { ...first, version: 2, network: { online: false, reachable: true } };
   pushes.pushState(WINDOW, offline);
   pushes.pushState(WINDOW, { ...offline, version: 3, agents: { unseen: [] } });
   assert.deepEqual(await delivered(stream), {
     version: 3,
-    entries: {
-      network: { online: false, reachable: true, updateNeeded: false },
-      agents: { unseen: [] },
-    },
+    entries: { network: { online: false, reachable: true }, agents: { unseen: [] } },
   });
 });
 

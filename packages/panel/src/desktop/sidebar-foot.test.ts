@@ -478,7 +478,7 @@ test("an update ready to install offers Restart in the sidebar once its toast is
 
 test("the Mac offline says so in the foot, and nothing does while it is online", async () => {
   const offlineShown = async (online: boolean) => {
-    await footOn({ network: { online, reachable: true, updateNeeded: false } });
+    await footOn({ network: { online, reachable: true } });
     const mark = document.querySelector('.offline-mark[aria-label="Offline"]');
     const words = mark?.textContent ?? null;
     for (const root of roots.splice(0)) act(() => root.unmount());

@@ -25,7 +25,7 @@ import {
 const BASE_URL = "https://app.test";
 
 /** The service's reach as it is first kept, at the test clock's start, before any call was made. */
-const REACHABLE: ServiceReachState = { reachable: true, answeredAt: 0, updateNeeded: false };
+const REACHABLE: ServiceReachState = { reachable: true, answeredAt: 0 };
 const PATH = "/api/account/preferences";
 
 function refusal(): Response {
@@ -200,7 +200,7 @@ it.effect(
       yield* send;
       assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, true);
       yield* send;
-      assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, false);
+      assert.equal((yield* SubscriptionRef.get(reach)).updateNeeded, undefined);
     }),
 );
 

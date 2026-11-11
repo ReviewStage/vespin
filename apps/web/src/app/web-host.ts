@@ -477,7 +477,7 @@ const composedWeb = (
       const askUpdate = failedChunkAnswer(staleBuildTab(tab, BUILD_TOO_OLD));
       yield* Effect.forkScoped(
         Stream.runForEach(
-          Stream.changes(Stream.map(state.changes, ({ network }) => network.updateNeeded)),
+          Stream.changes(Stream.map(state.changes, ({ network }) => network.updateNeeded === true)),
           (needed) => (needed ? askUpdate() : Effect.void),
         ),
       );

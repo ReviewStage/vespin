@@ -35,10 +35,7 @@ function documentOf(
   reachable = true,
 ): AppStateSnapshot {
   const tasks = live === undefined ? IDLE_TASKS_VIEW : { ...IDLE_TASKS_VIEW, live };
-  return {
-    ...stateWith({}, { network: { online, reachable, updateNeeded: false }, tasks }),
-    version,
-  };
+  return { ...stateWith({}, { network: { online, reachable }, tasks }), version };
 }
 
 /** The pill drawn over `first`, and a push that delivers a later document to it. */

@@ -117,19 +117,12 @@ test("a delivery naming one slice replaces that slice alone, and every slice it 
   const { drawn, push } = await window(first);
   const held = drawn.at(-1);
 
-  await push({
-    version: 2,
-    entries: { network: { online: false, reachable: true, updateNeeded: false } },
-  });
+  await push({ version: 2, entries: { network: { online: false, reachable: true } } });
   await vi.waitFor(() => expect(drawn.at(-1) === held).toBe(false));
   const now = drawn.at(-1);
 
   assert.ok(held && now);
-  assert.deepEqual(now, {
-    ...first,
-    version: 2,
-    network: { online: false, reachable: true, updateNeeded: false },
-  });
+  assert.deepEqual(now, { ...first, version: 2, network: { online: false, reachable: true } });
   assert.equal(now.settings, held.settings);
   assert.equal(now.tasks, held.tasks);
   assert.equal(now.audio, held.audio);
@@ -142,10 +135,7 @@ test("a delivery older than the document held is dropped", async () => {
   const { drawn, push } = await window(first);
   const held = drawn.at(-1);
 
-  await push({
-    version: 2,
-    entries: { network: { online: false, reachable: true, updateNeeded: false } },
-  });
+  await push({ version: 2, entries: { network: { online: false, reachable: true } } });
   assert.equal(drawn.at(-1), held);
 });
 
@@ -154,7 +144,7 @@ test("a delivery heard after the window's second read is refused asks for the wh
   const after = {
     ...signedInAs({ id: "user-bo", email: "bo@example.com", name: "Bo" }),
     version: 3,
-    network: { online: false, reachable: true, updateNeeded: false },
+    network: { online: false, reachable: true },
   };
   const listeners = new Set<(delivery: AppStateDelivery) => void>();
   const answers = [
@@ -182,10 +172,7 @@ test("a delivery heard after the window's second read is refused asks for the wh
   // The account moved on main while the window could not read it, so this delivery was built on Bo's document, not Ada's.
   act(() => {
     for (const listener of listeners) {
-      listener({
-        version: 3,
-        entries: { network: { online: false, reachable: true, updateNeeded: false } },
-      });
+      listener({ version: 3, entries: { network: { online: false, reachable: true } } });
     }
   });
   await settle();

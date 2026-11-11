@@ -203,7 +203,7 @@ test("the sidebar's plans that could not be read say so, and Retry reads the lis
 });
 
 test("the sidebar's tasks that could not be read again while the app is offline stand with no line over them", async () => {
-  handState({}, { network: { online: false, reachable: true, updateNeeded: false } });
+  handState({}, { network: { online: false, reachable: true } });
   const page = await mount(sidebarOver(tasksControl({ listFailed: true, tasks: [TASK] })));
   assert.ok(page.textContent?.includes(TASK.name), "the task held still stands");
   // Note that the window reads as connected until the document saying it is offline reaches its query.

@@ -117,8 +117,8 @@ export interface ServiceReachState {
   readonly reachable: boolean;
   /** When an attempt was last answered, in the clock's milliseconds; when the reach was first kept, before any was. */
   readonly answeredAt: number;
-  /** Whether the service's last answer refused this build as older than it serves (426, `host-upgrade-needed`), until an answer of any other status. */
-  readonly updateNeeded: boolean;
+  /** Set where the service's last answer refused this build as older than it serves (426, `host-upgrade-needed`), until an answer of any other status. */
+  readonly updateNeeded?: true;
 }
 
 /**
@@ -269,7 +269,7 @@ const heardAnswer = (status: number) =>
   toldReach((_, now) => ({
     reachable: true,
     answeredAt: now,
-    updateNeeded: status === HTTP_STATUS.UPGRADE_REQUIRED,
+    ...(status === HTTP_STATUS.UPGRADE_REQUIRED ? { updateNeeded: true } : undefined),
   }));
 
 /** An attempt that ended with no answer, which says the service is unreachable only once nothing was answered for `SILENCE_BEFORE_UNREACHABLE`. */

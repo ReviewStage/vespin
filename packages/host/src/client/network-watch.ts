@@ -6,9 +6,6 @@ import { Clock, Effect, Layer, type Scope, Stream, SubscriptionRef } from "effec
 import { type AppState, networkConnected } from "../app-state.js";
 import type { AppStateStore } from "./app-state-store.js";
 
-/** What the signals move of the `network` slice: the platform's flag, and the service's reach, with whether it refused this build as too old. */
-type NetworkSignals = Pick<AppState["network"], "online" | "reachable" | "updateNeeded">;
-
 /**
  * Where the service's calls tell whether it answered (`ServiceReach`): one
  * per client, provided beside the `HttpClient` its calls go out on, so every
@@ -18,7 +15,7 @@ type NetworkSignals = Pick<AppState["network"], "online" | "reachable" | "update
 export const serviceReachLayer: Layer.Layer<ServiceReach> = Layer.effect(
   ServiceReach,
   Effect.flatMap(Clock.currentTimeMillis, (answeredAt) =>
-    SubscriptionRef.make<ServiceReachState>({ reachable: true, answeredAt, updateNeeded: false }),
+    SubscriptionRef.make<ServiceReachState>({ reachable: true, answeredAt }),
   ),
 );
 
@@ -58,12 +55,12 @@ export const linkNetworkWatch = /* @__PURE__ */ Effect.fn("client/linkNetworkWat
   const scope = yield* Effect.scope;
   const reach = yield* ServiceReach;
   // Note that what catches up runs beside the watch, so a slow answer never holds the next change.
-  const moved = (signal: () => Partial<NetworkSignals>) =>
+  const moved = (change: (before: AppState["network"]) => AppState["network"]) =>
     Effect.catchDefect(
       Effect.withErrorReporting(
         Effect.suspend(() => {
           const before = state.snapshot().network;
-          const after = { ...before, ...signal() };
+          const after = change(before);
           if (
             after.online === before.online &&
             after.reachable === before.reachable &&
@@ -86,18 +83,23 @@ export const linkNetworkWatch = /* @__PURE__ */ Effect.fn("client/linkNetworkWat
         ),
     );
   yield* Effect.forkScoped(
-    Stream.runForEach(Stream.changes(online), (found) => moved(() => ({ online: found }))),
-  );
-  yield* Effect.forkScoped(
-    Stream.runForEach(
-      Stream.changes(Stream.map(SubscriptionRef.changes(reach), (found) => found.reachable)),
-      (reachable) => moved(() => ({ reachable })),
+    Stream.runForEach(Stream.changes(online), (found) =>
+      moved((before) => ({ ...before, online: found })),
     ),
   );
   yield* Effect.forkScoped(
     Stream.runForEach(
-      Stream.changes(Stream.map(SubscriptionRef.changes(reach), (found) => found.updateNeeded)),
-      (updateNeeded) => moved(() => ({ updateNeeded })),
+      Stream.changes(Stream.map(SubscriptionRef.changes(reach), (found) => found.reachable)),
+      (reachable) => moved((before) => ({ ...before, reachable })),
+    ),
+  );
+  yield* Effect.forkScoped(
+    Stream.runForEach(
+      Stream.changes(
+        Stream.map(SubscriptionRef.changes(reach), (found) => found.updateNeeded === true),
+      ),
+      (needed) =>
+        moved(({ updateNeeded: _, ...rest }) => (needed ? { ...rest, updateNeeded: true } : rest)),
     ),
   );
 });
