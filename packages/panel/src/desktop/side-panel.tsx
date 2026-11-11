@@ -2597,7 +2597,7 @@ export function SidePanel({
     | undefined;
   /**
    * Where the panel stands over a phone's page other than a task's, an
-   * Inbox item's or an agent's, which has no header of its own to name the
+   * Inbox item's, which has no header of its own to name the
    * tab: the panel heads itself (`phone-head.tsx`), its way back shutting it
    * to the page named, the tab shown or the list of its tabs centered, and a
    * ⋯ holding the list, the tab's own actions, and Close; none elsewhere.

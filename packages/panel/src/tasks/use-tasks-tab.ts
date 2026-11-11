@@ -2951,7 +2951,7 @@ export function useTasksTab(input: {
   // out takes the pane's way back (`places/narrow-backs.ts`): its toggle, which reads Close panel, leaving full screen,
   // and closing the last tab its strip draws, which closes the tab as ever and then shuts the panel by the way back.
   const shutsWhole = sidePanel.fullScreenOnly;
-  const paneOver = { routed: routedInbox.open || agentView !== undefined, taskId: boundFor };
+  const paneOver = { routed: routedInbox.open, taskId: boundFor };
   const paneBack = () => backs.pane(paneOver, () => sidePanel.onSetOpen(false));
   const closePane = (tab: SidePanelTab) => {
     const last = sidePanel.strip.length === 1 && sidePanel.strip.some((one) => sameTab(one, tab));
