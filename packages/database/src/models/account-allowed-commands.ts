@@ -7,20 +7,24 @@
  * is kept once per member, so a second add of it, from another ask or by
  * hand, answers it kept and changes nothing, the agent it first came from
  * standing. The list is held to its bound (`ALLOWED_COMMAND_BOUNDS`) by a
- * count before the add: two adds racing past the bound's last place may
- * both land, which keeps one over the bound rather than refusing either.
+ * count before the add, under a lock of the member's own, so two adds racing
+ * for the bound's last place land one after the other and the second is
+ * refused; two members' adds never wait on each other.
  */
 
 import { ALLOWED_COMMAND_BOUNDS } from "@repo/features/allowed-command-wire";
 import type { CommandPrefix } from "@repo/wire";
 import { and, asc, count, eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { accountAllowedCommand } from "../schemas/account-allowed-command.js";
 import { InstantColumnSchema } from "./columns.js";
 
 type AllowedCommandEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/** The seed of a member's add lock, apart from every other advisory lock's keyed by the same id. */
+const ADD_LOCK_SEED = 11;
 
 /** How an add stood: kept anew, already kept, or refused at the list's bound. */
 export const ALLOWED_COMMAND_ADDED = {
@@ -144,15 +148,20 @@ export function addAllowedCommand(add: {
   readonly agentId: string | null;
   readonly at: Date;
 }): AllowedCommandEffect<AllowedCommandAdded> {
-  return Effect.gen(function* () {
-    const [counted] = yield* countOfUser({ userId: add.userId });
-    if ((counted?.kept ?? 0) >= ALLOWED_COMMAND_BOUNDS.MAX_COMMANDS) {
-      const found = yield* findPrefix({ userId: add.userId, prefix: add.prefix });
-      return found.length > 0 ? ALLOWED_COMMAND_ADDED.KEPT : ALLOWED_COMMAND_ADDED.FULL;
-    }
-    const inserted = yield* insertPrefix(add);
-    return inserted.length > 0 ? ALLOWED_COMMAND_ADDED.ADDED : ALLOWED_COMMAND_ADDED.KEPT;
-  });
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* client`select pg_advisory_xact_lock(hashtextextended(${add.userId}, ${ADD_LOCK_SEED}))`;
+        const [counted] = yield* countOfUser({ userId: add.userId });
+        if ((counted?.kept ?? 0) >= ALLOWED_COMMAND_BOUNDS.MAX_COMMANDS) {
+          const found = yield* findPrefix({ userId: add.userId, prefix: add.prefix });
+          return found.length > 0 ? ALLOWED_COMMAND_ADDED.KEPT : ALLOWED_COMMAND_ADDED.FULL;
+        }
+        const inserted = yield* insertPrefix(add);
+        return inserted.length > 0 ? ALLOWED_COMMAND_ADDED.ADDED : ALLOWED_COMMAND_ADDED.KEPT;
+      }),
+    ),
+  );
 }
 
 /** One of the member's commands removed; one they keep not is left as it is, so a removal retried answers the same. */
