@@ -1,4 +1,4 @@
-// search-screens.tsx -- the Search tab: the system's search field in its bar, focused as the tab opens, over the tasks, Inbox items, and agents it finds, each kind in its own section drawn by its own list's row.
+// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, each kind in its own section drawn by its own list's row, beside the app sidebar in a regular window.
 
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
@@ -10,7 +10,7 @@ import {
   SEARCH_FOUND_KIND,
   SEARCH_FOUND_TITLE,
 } from "@repo/features/search-found-model";
-import { EmptyState, LIST_LOOK, ListSection, RowList, Screen } from "@repo/ui-native";
+import { EmptyState, LIST_LOOK, ListSection, RowList, Screen, SplitView } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SearchBarCommands } from "react-native-screens";
@@ -18,9 +18,12 @@ import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useStatusAsk } from "../tasks/use-tasks.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
-import { StatusQuestionAsk, TaskAgentRow, TaskNodeRow } from "./task-screens.js";
+import { StatusQuestionAsk, TaskAgentRow, TaskNodeRow, useSidebarTasks } from "./task-screens.js";
 
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
@@ -98,38 +101,57 @@ function FoundList({
 }
 
 /**
- * The Search tab, as ⌘K finds things for a phone: what a query finds of the
- * workspace's tasks, the reader's Inbox, and the agents on its tasks, each
- * kind best first; what it finds before anything is typed, and that nothing
- * matches where nothing does. The field is focused each time the tab opens
- * on nothing typed, as the system's Search tab does, so a query is typed at
- * once; one left typed stands with its results instead.
+ * What the Search tab reads and draws, in either window: the query, what it
+ * finds of the workspace's tasks, the reader's Inbox, and the agents on its
+ * tasks, each kind best first, and what opens a row found, each in its own
+ * tab; the questions and sheets a found row's acts raise stand beside it.
  */
-export function SearchScreen() {
+function useSearchScreen() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const field = useRef<SearchBarCommands>(null);
-  // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
-  const typed = useRef(query);
-  useEffect(() => {
-    typed.current = query;
-  }, [query]);
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents.
   const { setStatus, question } = useStatusAsk(found.listing);
   const listing: TasksListing = { ...found.listing, setStatus };
   const remind = useRemindSheet();
-  useFocusEffect(
-    useCallback(() => {
-      if (typed.current === "") field.current?.focus();
-    }, []),
-  );
   const routes = foundRoutes(found);
   const open = (id: string) => {
     const route = routes.get(id);
     if (route !== undefined) router.push(route);
   };
   const none = found.tasks.length + found.inbox.length + found.agents.length === 0;
+  const results =
+    query.trim() === "" ? (
+      <EmptyState title={SEARCH_TITLE} symbol="magnifyingglass" description={SEARCH_FINDS} />
+    ) : none ? (
+      <EmptyState title={noResultsWords(query)} symbol="magnifyingglass" />
+    ) : (
+      <FoundList found={found} listing={listing} onOpen={open} onRemind={remind.open} />
+    );
+  return { query, setQuery, results, question, remind };
+}
+
+/**
+ * A compact window's Search, as ⌘K finds things for a phone: the system's
+ * field in the Stack's bar over what it finds, or what it finds before
+ * anything is typed, and that nothing matches where nothing does. The field
+ * is focused each time the tab opens on nothing typed, as the system's
+ * Search tab does, so a query is typed at once; one left typed stands with
+ * its results instead.
+ */
+function SearchStackScreen() {
+  const { query, setQuery, results, question, remind } = useSearchScreen();
+  const field = useRef<SearchBarCommands>(null);
+  // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
+  const typed = useRef(query);
+  useEffect(() => {
+    typed.current = query;
+  }, [query]);
+  useFocusEffect(
+    useCallback(() => {
+      if (typed.current === "") field.current?.focus();
+    }, []),
+  );
   return (
     <>
       <Stack.Screen options={{ title: SEARCH_TITLE }}>
@@ -142,16 +164,47 @@ export function SearchScreen() {
       </Stack.Screen>
       <SettingsBarButton />
       <Screen>
-        {query.trim() === "" ? (
-          <EmptyState title={SEARCH_TITLE} symbol="magnifyingglass" description={SEARCH_FINDS} />
-        ) : none ? (
-          <EmptyState title={noResultsWords(query)} symbol="magnifyingglass" />
-        ) : (
-          <FoundList found={found} listing={listing} onOpen={open} onRemind={remind.open} />
-        )}
+        {results}
         <StatusQuestionAsk question={question} />
         {remind.sheet}
       </Screen>
     </>
+  );
+}
+
+/**
+ * A regular window's Search: the app sidebar beside what the query finds,
+ * under the system's field in the column's bar, as the iPad's Mail searches
+ * beside its mailboxes. A row found opens in its own tab, beside its list.
+ */
+function SearchSplitScreen() {
+  const { setQuery, results, question, remind } = useSearchScreen();
+  const sidebar = useAppSidebar(SIDEBAR_PLACE.SEARCH, useSidebarTasks());
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <Screen>
+        <SplitView
+          {...sidebar.split}
+          detail={results}
+          detailBar={{
+            title: SEARCH_TITLE,
+            search: { placeholder: SEARCH_EVERYTHING, onChange: setQuery },
+          }}
+        />
+        <StatusQuestionAsk question={question} />
+        {sidebar.ask}
+        {remind.sheet}
+      </Screen>
+    </>
+  );
+}
+
+/** The Search tab's root screen, laid out by the window's size class. */
+export function SearchScreen() {
+  return useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? (
+    <SearchSplitScreen />
+  ) : (
+    <SearchStackScreen />
   );
 }

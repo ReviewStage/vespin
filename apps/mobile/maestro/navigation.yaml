@@ -1,0 +1,58 @@
+# navigation.yaml -- how the app is found around: a regular window's sidebar with its places, Pinned and the member's sections, a pinned task opened beside its list from it, and Settings at its foot; the workspace switcher's menu ending with Settings; and a compact window's tab bar minimized as a list scrolls down.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `tasks.yaml` is, so the sidebar
+# lists the fixture's pinned and sectioned tasks and no server is reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+# A regular window, the iPad's, stands the sidebar where a compact window
+# stands the tab bar: the Inbox with its count, Tasks, and Search, then
+# Pinned and the member's sections with their tasks. A pinned task opens
+# beside the Tasks list, and Settings waits at the sidebar's foot.
+- runFlow:
+    when:
+      visible: "Pinned"
+    commands:
+      - takeScreenshot: ipad-sidebar
+      - tapOn: "Weekly digest email"
+      - assertVisible: "Created by .*"
+      - waitForAnimationToEnd
+      - takeScreenshot: ipad-sidebar-task
+      - tapOn:
+          id: "search-tab"
+      - assertVisible: "Find a task, an Inbox item, or an agent."
+      - waitForAnimationToEnd
+      - takeScreenshot: ipad-sidebar-search
+      - tapOn: "Inbox"
+# The workspace switcher heads the sidebar in a regular window and the Inbox's
+# bar in a compact one; its menu ends with Settings, under Workspace
+# settings. A tap off the menu closes it.
+- tapOn:
+    id: "workspace-switcher"
+- assertVisible: "Workspace settings"
+- assertVisible: "New workspace"
+- takeScreenshot: switcher-settings
+- tapOn:
+    point: "90%, 90%"
+- waitForAnimationToEnd
+# A compact window, the iPhone's, keeps the system's tab bar, Search at its
+# trailing end, and minimizes it as the Tasks list scrolls down, the round +
+# staying on its own glass beside it.
+- runFlow:
+    when:
+      notVisible: "Pinned"
+    commands:
+      - tapOn: "Tasks"
+      - assertVisible: "Weekly digest email"
+      - waitForAnimationToEnd
+      - takeScreenshot: tab-bar
+      - scroll
+      - waitForAnimationToEnd
+      - takeScreenshot: tab-bar-minimized

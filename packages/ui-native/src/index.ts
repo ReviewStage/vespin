@@ -99,7 +99,14 @@ export {
   ValueRow,
 } from "./settings-form.js";
 export type { SfSymbol } from "./sf-symbol.js";
-export { type BarAction, type BarMenu, type BarSearch, SplitView } from "./split-view.js";
+export {
+  type BarAction,
+  type BarMenu,
+  type BarPath,
+  type BarSearch,
+  type ColumnBar,
+  SplitView,
+} from "./split-view.js";
 export { STATUS_MARK_LOOK } from "./status-mark-model.js";
 export {
   AGENT_ROW_STATE,
@@ -155,6 +162,7 @@ export {
   newWorkspaceAction,
   type SwitcherAction,
   type SwitcherWorkspace,
+  settingsAction,
   WorkspaceSwitcher,
   WorkspaceSwitcherMenu,
   WorkspaceTile,

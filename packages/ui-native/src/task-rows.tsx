@@ -10,6 +10,7 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
   font,
@@ -331,12 +332,14 @@ type GroupRowProps = {
   readonly id: string;
   readonly title: string;
   readonly symbol: SfSymbol;
-  /** How many tasks the group holds. */
-  readonly count: number;
+  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given. */
+  readonly count?: number | undefined;
+  /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
+  readonly testId?: string | undefined;
 };
 
-/** A group of tasks a wide window's first column picks: its glyph, its name, and how many tasks it holds. */
-export function GroupRow({ id, title, symbol, count }: GroupRowProps) {
+/** A place a wide window's sidebar picks, such as the Inbox or Tasks: its glyph, its name, and how many it holds. */
+export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
   const colors = useColors();
   const row: ReactElement = (
     <RowHead
@@ -345,10 +348,13 @@ export function GroupRow({ id, title, symbol, count }: GroupRowProps) {
       lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} />}
       title={title}
       ink={colors.TEXT_BODY}
-      end={<EndWords words={String(count)} />}
+      end={count === undefined ? undefined : <EndWords words={String(count)} />}
     />
   );
-  return <RowFrame id={id} row={row} />;
+  if (testId === undefined) return <RowFrame id={id} row={row} />;
+  return (
+    <RowFrame id={id} row={<HStack modifiers={[accessibilityIdentifier(testId)]}>{row}</HStack>} />
+  );
 }
 
 type WordsRowProps = {

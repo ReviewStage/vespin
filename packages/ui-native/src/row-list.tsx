@@ -11,8 +11,6 @@ import {
   frame,
   listStyle,
   monospacedDigit,
-  navigationBarTitleDisplayMode,
-  navigationTitle,
   refreshable,
   scrollContentBackground,
   shapes,
@@ -44,8 +42,6 @@ type RowListProps = {
   readonly selected?: string | undefined;
   /** Called with the id of the row a person picked. */
   readonly onSelect?: ((id: string) => void) | undefined;
-  /** The title a split view's sidebar heads its column with, small and inline as every screen's title stands. */
-  readonly title?: string | undefined;
   /** What a pull down the list reads again, its spinner standing until it settles; none where a pull reads nothing. */
   readonly onRefresh?: (() => Promise<void>) | undefined;
   readonly children: ReactNode;
@@ -67,7 +63,7 @@ function listGround(colors: BrandColors, look: ListLook): string {
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back.
  */
-export function RowList({ look, selected, onSelect, title, onRefresh, children }: RowListProps) {
+export function RowList({ look, selected, onSelect, onRefresh, children }: RowListProps) {
   const colors = useColors();
   return (
     <List
@@ -80,9 +76,6 @@ export function RowList({ look, selected, onSelect, title, onRefresh, children }
         listStyle(look),
         scrollContentBackground("hidden"),
         background(listGround(colors, look)),
-        ...(title === undefined
-          ? []
-          : [navigationTitle(title), navigationBarTitleDisplayMode("inline")]),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
