@@ -1,5 +1,5 @@
 import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
-import type { Task } from "@repo/features/task-wire";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
@@ -624,7 +624,7 @@ function usePlaceCommands(
 function titleSubject(
   tab: PanelTab,
   tasks: TasksControl,
-  shownTask: Task | undefined,
+  shownTask: Pick<TaskSummary, "name" | "workspaceId"> | undefined,
   place: RoutedPlace | undefined,
   inAutomations: boolean,
 ): Parameters<typeof useWindowTitle>[0] {
@@ -861,7 +861,13 @@ export function DesktopShell({
     tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
       ? region.task
       : undefined;
-  useWindowTitle(titleSubject(tab, tasks, shownTask, place, inAutomations));
+  // Note that while the plan's description is read, the window is named by the task as the list holds it.
+  const namedTask =
+    shownTask ??
+    (tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READING
+      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
+      : undefined);
+  useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
   // from the mark and the agents' activity its row in the list carries.
   const looks = useTaskLooks(

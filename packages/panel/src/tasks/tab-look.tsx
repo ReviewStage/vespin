@@ -152,10 +152,16 @@ export function PlanGlyph({ status }: { status: TaskStatus | undefined }) {
  * while no task is open.
  */
 export function openPlanStanding(
-  tasks: Pick<TasksControl, "region" | "tasks">,
+  tasks: Pick<TasksControl, "region" | "tasks" | "activeTaskId">,
 ): PlanStanding | undefined {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY) return undefined;
-  const { task } = tasks.region;
+  const { region } = tasks;
+  // Note that while its description is read, the tab wears the task as the list holds it.
+  if (region.kind === DOCUMENT_REGION.READING) {
+    const listed = tasks.tasks.find((each) => each.id === tasks.activeTaskId);
+    return listed === undefined ? undefined : { name: listed.name, status: listed.status };
+  }
+  if (region.kind !== DOCUMENT_REGION.READY) return undefined;
+  const { task } = region;
   const listed = tasks.tasks.find((each) => each.id === task.id) ?? task;
   return { name: task.name, status: listed.status };
 }
