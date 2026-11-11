@@ -36,11 +36,13 @@ import {
 } from "@repo/features/inbox-wire";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
   INBOX_FEED,
   type InboxFeed,
+  selectAgentHarnesses,
   selectAgentTitles,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
@@ -80,7 +82,9 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -153,6 +157,8 @@ function InboxRows({
   onRemind,
   onResolve,
 }: InboxRowsProps) {
+  // The members' pictures, read once for every row rather than once a row.
+  const pictureOf = useMemberPictures();
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {listed.map((each) => (
@@ -160,6 +166,7 @@ function InboxRows({
           key={each.item.id}
           listed={each}
           readerId={readerId}
+          pictureOf={pictureOf}
           onMark={onMark}
           onRemind={onRemind}
           onResolve={onResolve}
@@ -176,17 +183,21 @@ function InboxRows({
  * edge marks it read or unread, and one from the trailing edge resolves it
  * while it stands open, which a full swipe runs, or opens Remind me. A long
  * press lifts its preview, the thread's newest messages, over the same acts.
+ * On an iPad it drags out as its vespin.dev link.
  * The one row every list of Inbox items draws, the Search tab's among them.
  */
 export function InboxRow({
   listed,
   readerId,
+  pictureOf,
   onMark,
   onRemind,
   onResolve,
 }: {
   readonly listed: InboxListed;
   readonly readerId: string | undefined;
+  /** Each member's picture by their id, read once by the list the row stands in. */
+  readonly pictureOf: PictureOf;
   readonly onMark: (itemId: string, unread: boolean) => void;
   /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
   readonly onRemind: (item: InboxItem) => void;
@@ -198,7 +209,10 @@ export function InboxRow({
   const waitsOn = inboxWaitsOn(item);
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
     () =>
@@ -208,8 +222,10 @@ export function InboxRow({
           agentName,
           readerId,
         ),
+        pictureOf,
+        harness,
       ),
-    [item, agentName, readerId],
+    [item, agentName, readerId, pictureOf, harness],
   );
   const resolve =
     item.status === INBOX_STATUS.OPEN
@@ -234,7 +250,11 @@ export function InboxRow({
       summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
       unread={unread}
       done={isDone(item)}
-      face={waitsOn === undefined || waitsOn.userId === readerId ? undefined : waitsOn.name}
+      face={
+        waitsOn === undefined || waitsOn.userId === readerId
+          ? undefined
+          : { name: waitsOn.name, picture: pictureOf(waitsOn.userId) }
+      }
       at={item.updatedAt}
       due={item.remindAt}
       trailingActions={[
@@ -249,6 +269,10 @@ export function InboxRow({
           onPress: () => onMark(item.id, !unread),
         },
       ]}
+      link={linkOf(
+        { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+        workspace?.slug ?? workspace?.id ?? holder.task.workspaceId ?? "",
+      )}
       preview={
         <ThreadPreview
           title={title}
@@ -333,6 +357,12 @@ function useAgentTitles(): ReadonlyMap<string, string> {
   return data;
 }
 
+/** The harness an agent runs in, as the document holds its model, whose mark its tile wears; none before the agent is listed. */
+function useAgentHarness(agentId: string): ModelProvider | undefined {
+  const { data } = useQuery({ ...appStateQuery, select: selectAgentHarnesses });
+  return data?.get(agentId);
+}
+
 /**
  * Where a thread stands: a compact window's pushed screen, whose stack's bar
  * names the path and which draws its own Remind me sheet, or a split view's
@@ -369,6 +399,8 @@ function ThreadDetail({
   const openLink = useOpenLink();
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const harness = useAgentHarness(item.agentId);
+  const pictureOf = useMemberPictures();
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
@@ -429,6 +461,11 @@ function ThreadDetail({
   const menu = threadMenu(item, answer, () => openRemind(item));
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
+    writer: {
+      ...message.writer,
+      picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+      harness: message.writer.agent ? harness : undefined,
+    },
     stamp:
       message.stamp === undefined
         ? undefined
@@ -574,10 +611,12 @@ function ThreadColumn({
   return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
 }
 
+/** The list's search words and how to change them, held by the tab's root screen above its two layouts. */
+type InboxSearch = { readonly search: string; readonly setSearch: (search: string) => void };
+
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
-function useInboxScreen(chosen?: string | undefined) {
+function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
-  const [search, setSearch] = useState("");
   const listing = useInboxListing({ show, search, chosen });
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
@@ -586,19 +625,21 @@ function useInboxScreen(chosen?: string | undefined) {
   return { show, search, setSearch, listing, acts, scopes, menu, remind };
 }
 
-// A compact window: the list under the workspace switcher, standing as the
-// Stack's inline title, and the scope pills, the account's photo opening
-// Settings at the bar's leading edge, and its search and its ⋯ menu as round
+// A compact window: the list under the scope pills, the account's photo
+// opening Settings and the workspace switcher beside it at the bar's leading
+// edge, and its search and its ⋯ menu as round
 // glass buttons at its trailing one, each row pushing its thread as the Stack's
 // next screen.
-function InboxStackList() {
+function InboxStackList(words: InboxSearch) {
   const router = useRouter();
   const switcher = useWorkspaceSwitcher();
-  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen();
+  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(words);
+  const field = useRefilledSearchField(search);
   return (
     <>
       <Stack.Screen options={{ title: INBOX_TITLE, ...switcherTitle(switcher) }}>
         <Stack.SearchBar
+          ref={field}
           placeholder={SEARCH_INBOX}
           placement="integratedButton"
           allowToolbarIntegration={false}
@@ -606,7 +647,7 @@ function InboxStackList() {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (
@@ -658,11 +699,16 @@ function InboxStackList() {
 function InboxSplitScreen({
   selected,
   select,
+  words,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
+  readonly words: InboxSearch;
 }) {
-  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(selected);
+  const { show, search, setSearch, listing, acts, scopes, menu, remind } = useInboxScreen(
+    words,
+    selected,
+  );
   const sidebar = useAppSidebar(SIDEBAR_PLACE.INBOX, useSidebarTasks());
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
   return (
@@ -716,15 +762,16 @@ function InboxSplitScreen({
   );
 }
 
-/** The Inbox tab's root screen: its list, laid out by the window's size class. */
+/** The Inbox tab's root screen: its list, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
 export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
+  const [search, setSearch] = useState("");
   useSurfaceOpen(PRODUCT_SURFACE.INBOX);
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <InboxSplitScreen selected={selected} select={select} />
+    <InboxSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
-    <InboxStackList />
+    <InboxStackList search={search} setSearch={setSearch} />
   );
 }
 

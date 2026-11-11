@@ -1,5 +1,9 @@
-import { HOST_LIVE } from "@repo/features/tasks-view";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import {
+  LIVE_MARK,
+  LIVE_MARK_WORDS,
+  type LiveMark,
+  selectLiveMark,
+} from "@repo/host/app-state-reads";
 import { ANNOUNCE, BANNER_LOOK, Banner, STATUS_TONE, Tooltip, useAnnounce } from "@repo/ui";
 import { RefreshCwIcon, WifiOffIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -25,51 +29,25 @@ import { appStateQuery } from "../use-app-state.js";
  * pill's glyph and its hint (`OfflineStrip`).
  */
 
-/** What the pill stands for, the Mac's own network first, since nothing else can be read without it. */
-const LIVE_MARK = {
-  MAC_OFFLINE: "mac-offline",
-  SERVICE_OFFLINE: "service-offline",
-  CATCHING_UP: "catching-up",
-} as const;
-
-type LiveMark = (typeof LIVE_MARK)[keyof typeof LIVE_MARK];
-
-/** The pill's word, the hint that says why, and its glyph, for each thing it stands for. */
-const LIVE_MARK_LOOK = {
-  [LIVE_MARK.MAC_OFFLINE]: { word: "Offline", hint: "You're offline.", Icon: WifiOffIcon },
-  [LIVE_MARK.SERVICE_OFFLINE]: {
-    word: "Offline",
-    hint: "Can't connect. Check your internet connection.",
-    Icon: WifiOffIcon,
-  },
-  [LIVE_MARK.CATCHING_UP]: {
-    word: "Catching up",
-    hint: "Live updates fell behind. What you see may be out of date.",
-    Icon: RefreshCwIcon,
-  },
-} as const satisfies Record<LiveMark, { word: string; hint: string; Icon: unknown }>;
-
-/** What the pill stands for now, or none, which redraws its readers only as it turns. */
-const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined => {
-  const { network } = state;
-  if (!network.online) return LIVE_MARK.MAC_OFFLINE;
-  const live = state.tasks.live;
-  if (!network.reachable || live === HOST_LIVE.OFFLINE) return LIVE_MARK.SERVICE_OFFLINE;
-  if (live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
-  return undefined;
-};
+/** Each mark's glyph, beside the words every client says it in (`LIVE_MARK_WORDS`). */
+const LIVE_MARK_GLYPH = {
+  [LIVE_MARK.MAC_OFFLINE]: WifiOffIcon,
+  [LIVE_MARK.SERVICE_OFFLINE]: WifiOffIcon,
+  [LIVE_MARK.CATCHING_UP]: RefreshCwIcon,
+} as const satisfies Record<LiveMark, unknown>;
 
 /** The pill, or nothing while the Mac is online and live updates are current. */
 export function OfflineMark(): React.JSX.Element | null {
   const mark = useQuery({ ...appStateQuery, select: selectLiveMark }).data;
-  useAnnounce(ANNOUNCE.POLITE, mark === undefined ? "" : LIVE_MARK_LOOK[mark].word);
+  useAnnounce(ANNOUNCE.POLITE, mark === undefined ? "" : LIVE_MARK_WORDS[mark].word);
   // Note that the last mark is held drawn through its fade, as anything leaving is.
   const shown = useDisclosure(mark !== undefined);
   const last = useRef(mark);
   if (mark !== undefined) last.current = mark;
   const drawn = mark ?? last.current;
   if (!shown.mounted || drawn === undefined) return null;
-  const { word, hint, Icon } = LIVE_MARK_LOOK[drawn];
+  const { word, hint } = LIVE_MARK_WORDS[drawn];
+  const Icon = LIVE_MARK_GLYPH[drawn];
   return (
     <Tooltip label={hint}>
       <span
@@ -98,7 +76,8 @@ export function OfflineMark(): React.JSX.Element | null {
 export function OfflineStrip(): React.JSX.Element | null {
   const mark = useQuery({ ...appStateQuery, select: selectLiveMark }).data;
   if (mark === undefined) return null;
-  const { hint, Icon } = LIVE_MARK_LOOK[mark];
+  const { hint } = LIVE_MARK_WORDS[mark];
+  const Icon = LIVE_MARK_GLYPH[mark];
   return (
     <Banner
       look={BANNER_LOOK.STRIP}

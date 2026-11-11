@@ -27,15 +27,24 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
-import { AgentTile, FailedMark, TaskStatusMark, ToneGlyph, WorkingMark } from "./marks.js";
+import {
+  AgentTile,
+  type Face,
+  FailedMark,
+  TaskStatusMark,
+  ToneGlyph,
+  WorkingMark,
+} from "./marks.js";
 import { PageHeader } from "./page-header.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
@@ -111,7 +120,7 @@ type TaskHeadProps = {
   /** Its priority's name. */
   readonly priority: string | undefined;
   /** Who it is assigned to, or the words for no one. */
-  readonly assignee: { readonly name: string; readonly nobody: boolean };
+  readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
 };
@@ -156,6 +165,8 @@ type AgentRowProps = {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
   readonly name: string;
+  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
   readonly runsOn: string;
@@ -188,6 +199,7 @@ function PullRequestLink({
       onPress={pullRequest.onPress}
       modifiers={[
         buttonStyle("borderless"),
+        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         accessibilityValue(PULL_REQUEST_STATE_LABEL[pullRequest.state]),
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
@@ -233,7 +245,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
  * want you.
  */
 export function AgentRow(props: AgentRowProps) {
-  const { id, name, state, runsOn, waiting, pullRequest } = props;
+  const { id, name, harness, state, runsOn, waiting, pullRequest } = props;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
@@ -242,7 +254,7 @@ export function AgentRow(props: AgentRowProps) {
       <RowHead
         unread={false}
         faded={false}
-        lead={<AgentTile name={name} size={MARK_SIZE.LEAD} />}
+        lead={<AgentTile name={name} harness={harness} size={MARK_SIZE.LEAD} />}
         title={name}
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}

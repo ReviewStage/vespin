@@ -154,6 +154,10 @@ import { SHOW_IMAGE_TOOL } from "../coder-host/show-image.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import { macCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../mac-command.js";
 import {
+  FORGET_MEMORY_TOOL,
+  LIST_MEMORIES_TOOL,
+  runAgentForget,
+  runAgentListMemories,
   runAgentRecall,
   runAgentRemember,
   SAVE_MEMORY_TOOL,
@@ -558,6 +562,8 @@ const CATALOG = [
   // The workspace's shared memory.
   agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gate: TOOL_GATE.MEMORY }),
   agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, ...READS, gate: TOOL_GATE.MEMORY }),
+  agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gate: TOOL_GATE.MEMORY, ...READS }),
+  agentTool(FORGET_MEMORY_TOOL, runAgentForget, { gate: TOOL_GATE.MEMORY }),
   // The description's comments.
   commentTool(READ_COMMENTS_TOOL, READS),
   commentTool(REPLY_TO_COMMENT_TOOL),

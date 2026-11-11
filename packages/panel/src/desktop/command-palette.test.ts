@@ -198,8 +198,11 @@ function Looker({ looked }: { looked: typeof DOCUMENT_TASK | undefined }): null 
   return null;
 }
 
-/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer. */
-function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
+/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer, over `tasks` where it is given. */
+function paletteOverTask(): (
+  looked: typeof DOCUMENT_TASK | undefined,
+  over?: TasksControl,
+) => void {
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
@@ -207,7 +210,7 @@ function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
     activeTaskId: DOCUMENT_TASK.id,
   });
-  return (looked) =>
+  return (looked, over = tasks) =>
     act(() =>
       root.render(
         withQueryClient(
@@ -219,7 +222,7 @@ function paletteOverTask(): (looked: typeof DOCUMENT_TASK | undefined) => void {
               available: true,
               tab: PANEL_TAB.TASKS,
               onTabChange: () => undefined,
-              tasks: tasks,
+              tasks: over,
               settings: {
                 rows: {
                   settings: settingsView(),
@@ -537,13 +540,13 @@ function footer(): (string | null)[] {
   );
 }
 
-test("with the field empty, ← and → step through the filters, wrapping at the ends", () => {
+test("with the field empty, ← and → step through the filters, wrapping at the ends, and with no task open never land on This task", () => {
   openPalette();
 
   assert.equal(key(RIGHT), false, "the step is the palette's, not the caret's");
   assert.equal(chosenFilter(), "Tasks");
   key(RIGHT);
-  assert.equal(chosenFilter(), "This task");
+  assert.equal(chosenFilter(), "Inbox", "with no task open, This task is stepped past");
   key(LEFT);
   key(LEFT);
   assert.equal(chosenFilter(), "All");
@@ -551,6 +554,18 @@ test("with the field empty, ← and → step through the filters, wrapping at th
   assert.equal(chosenFilter(), "Settings", "stepping back from All wraps to the last filter");
   key(RIGHT);
   assert.equal(chosenFilter(), "All", "stepping on from the last filter wraps to All");
+});
+
+test("a task closed while ⌘K stands on This task turns the palette back to All", () => {
+  const drawn = paletteOverTask();
+  drawn(undefined);
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
+  });
+  chooseFilter("This task");
+
+  drawn(undefined, tasksControl());
+  assert.equal(chosenFilter(), "All");
 });
 
 test("once anything is typed, ← and → only move the caret, even at the text's ends", () => {
@@ -574,7 +589,7 @@ test("⌘[ and ⌘] step through the filters, wrapping at the ends, whether or n
   assert.equal(chosenFilter(), "Tasks");
   type("invite");
   key(FORWARD);
-  assert.equal(chosenFilter(), "This task");
+  assert.equal(chosenFilter(), "Inbox");
   assert.equal(key(BACK), false, "the window's Back is held off");
   key(BACK);
   key(BACK);
@@ -593,15 +608,15 @@ test("a press on a filter chooses it and leaves the caret in the field, no filte
     [],
     "no filter is a tab stop",
   );
-  const agents = filterOptions().find((each) => each.textContent === "This task");
-  assert.ok(agents);
+  const inbox = filterOptions().find((each) => each.textContent === "Inbox");
+  assert.ok(inbox);
   const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
   act(() => {
-    agents.dispatchEvent(down);
+    inbox.dispatchEvent(down);
   });
   assert.equal(down.defaultPrevented, true, "the press does not move the keyboard");
-  act(() => agents.click());
-  assert.equal(chosenFilter(), "This task");
+  act(() => inbox.click());
+  assert.equal(chosenFilter(), "Inbox");
   assert.equal(document.activeElement, field(), "the caret stays in the field");
   assert.equal(field().value, "invite");
 });
@@ -648,13 +663,13 @@ test("in a row too narrow for every filter, the filter a key chooses is scrolled
   key(FORWARD);
   assert.equal(bar.scrollLeft, 0, "Tasks already stands in view");
   key(FORWARD);
-  assert.equal(chosenFilter(), "This task");
+  assert.equal(chosenFilter(), "Inbox");
   assert.equal(bar.scrollLeft, 50);
   key(BACK);
   key(BACK);
   key(BACK);
   assert.equal(chosenFilter(), "Settings");
-  assert.equal(bar.scrollLeft, 350);
+  assert.equal(bar.scrollLeft, 300);
   key(FORWARD);
   assert.equal(chosenFilter(), "All");
   assert.equal(bar.scrollLeft, 0);
@@ -714,8 +729,8 @@ test("the field asks to search Vespin under All, and the kind under its filter",
   openPalette();
   assert.equal(field().placeholder, "Search Vespin");
 
-  chooseFilter("This task");
-  assert.equal(field().placeholder, "Search this task");
+  chooseFilter("Inbox");
+  assert.equal(field().placeholder, "Search inbox");
   chooseFilter("Commands");
   assert.equal(field().placeholder, "Search commands");
 });
@@ -2636,24 +2651,14 @@ test("⌘K's \"This task\" offers the task's Inbox while an item waits on it and
   assert.equal(endWordsOf(listed), "2 need you");
 });
 
-test("⌘K draws no Issues filter, with every experiment on, since Vespin keeps no issues of its own", async () => {
+test("with no task open, ⌘K draws no This task filter, which would list nothing, and no Issues filter, with every experiment on, since Vespin keeps no issues of its own", async () => {
   handState(experimentsOn(...Object.values(EXPERIMENT)));
   await paletteUnderState(tasksControl({ workspace: ACME }));
   await settle();
 
   assert.deepEqual(
     filterOptions().map((option) => option.textContent),
-    [
-      "All",
-      "Tasks",
-      "This task",
-      "Inbox",
-      "People",
-      "Automations",
-      "Files",
-      "Commands",
-      "Settings",
-    ],
+    ["All", "Tasks", "Inbox", "People", "Automations", "Files", "Commands", "Settings"],
   );
 });
 

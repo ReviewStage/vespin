@@ -66,7 +66,12 @@ import {
 } from "@repo/features/failure-remedy";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import { contextWindowsOf, effortLabel, SPEED_WORD, windowOf } from "@repo/features/model-effort";
-import { agentName, CATALOG_ID_SEPARATOR, modelLabel } from "@repo/features/model-label";
+import {
+  agentName,
+  CATALOG_ID_SEPARATOR,
+  modelLabel,
+  providerOf,
+} from "@repo/features/model-label";
 import {
   type CatalogModel,
   type ContextWindows,
@@ -1182,18 +1187,7 @@ export function closesComposer(failure: AgentCallFailure): boolean {
  * process's notifications so neither is ever named two ways
  * (`@repo/features/model-label`).
  */
-export { agentName, modelLabel };
-
-/**
- * The provider whose harness runs a model, read from its catalog id, whose
- * prefix is the provider's word (`models-wire.ts`), so a tab wears its
- * harness's mark before the catalog itself is read; none for a provider
- * we run no agent on.
- */
-export function providerOf(modelId: string): ModelProvider | undefined {
-  const prefix = modelId.slice(0, Math.max(0, modelId.indexOf(CATALOG_ID_SEPARATOR)));
-  return Object.values(MODEL_PROVIDER).find((provider) => provider === prefix);
-}
+export { agentName, modelLabel, providerOf };
 
 /** The first run of digits and points in a model's own name, which is its version: `claude-opus-5.5` is 5.5, `gpt-6-astra` is 6. */
 const MODEL_VERSION = /\d+(?:\.\d+)*/u;
@@ -2099,9 +2093,9 @@ function sentLineMessage(line: SentLine): AgentTranscriptMessage {
 }
 
 /**
- * The line an agent New task started is drawn on before its transcript is
- * read: the developer's words as they went, under the id their start's key
- * names, on their way.
+ * The words an agent New task started on, as its tab draws them before the
+ * service has made it: the developer's words as they went, under the id
+ * their start's key names, which that tab draws as its queue's row.
  */
 export function openingLineOf(words: {
   readonly key: string;
@@ -2119,20 +2113,6 @@ export function openingLineOf(words: {
     sentAt: words.sentAt ?? Date.now(),
     state: SENT_LINE_STATE.PENDING,
   };
-}
-
-/**
- * The line an agent was started on, while its transcript reads back no line
- * of the developer's. Note that the service writes that first row under a
- * key of its own, or the retired runtime under none, so the line is let go by any row of
- * theirs rather than by its id, and the first is always that one.
- */
-export function unreadOpeningLine(
-  opening: SentLine | undefined,
-  messages: readonly AgentTranscriptMessage[],
-): SentLine | undefined {
-  if (opening === undefined) return undefined;
-  return messages.some((message) => message.role === MESSAGE_ROLE.USER) ? undefined : opening;
 }
 
 /** The transcript's rows, with the lines sent and not yet read back at its end, in the order they went. */

@@ -16,12 +16,17 @@ import { READ_MARK } from "@repo/features/read-mark";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { taskRowLook } from "@repo/features/task-tree-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
-import { settleStopWords } from "@repo/features/tasks-model";
+import {
+  MARK_FAILED_NOTES,
+  settleFailedNote,
+  settleStopWords,
+  TASK_MARK,
+} from "@repo/features/tasks-model";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import { BUZZ, buzz, ConfirmAsk } from "@repo/ui-native";
+import { BUZZ, ConfirmAsk } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
@@ -32,8 +37,9 @@ import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
-import { signOutRefusalWords, useSignOut } from "../sign-out.js";
+import { useSignOut } from "../sign-out.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
@@ -42,8 +48,6 @@ import { menuCommandsModule } from "./menu-commands-module.js";
 const SIGN_OUT_ASK = {
   TITLE: `Sign out of ${PRODUCT_NAME}?`,
   ACT: VERB.SIGN_OUT,
-  REFUSED: "Couldn't sign out",
-  AGAIN: "Try again",
 } as const;
 
 /** The sheets a command opens, by their routes. */
@@ -180,7 +184,6 @@ function useAgentsWorking(taskId: string | undefined): boolean {
 const ASK = {
   NONE: "none",
   SIGN_OUT: "signOut",
-  SIGN_OUT_REFUSED: "signOutRefused",
   MARK_DONE: "markDone",
 } as const;
 type Ask = (typeof ASK)[keyof typeof ASK];
@@ -199,6 +202,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const acts = useHostActs();
+  const write = useWrite();
   const inbox = useInboxActs();
   const signOut = useSignOut();
   const openSettings = useOpenSettings();
@@ -220,7 +224,6 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     sidebarStands && !sidebar.shown ? [...subject.toggled, MENU_COMMAND.SIDEBAR] : subject.toggled;
   const working = useAgentsWorking(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
-  const [refusal, setRefusal] = useState<string>();
   // Note that the menu is told only as what it shows changes, since each telling rebuilds it.
   const told = useRef<string>(undefined);
   useEffect(() => {
@@ -242,23 +245,22 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     );
   });
 
-  // Note that a refused sign-out says why and offers it again, since the phone is still signed in.
+  // Note that a refused sign-out says why in the failure notice, with Try again, since the phone is still signed in and nothing here needs deciding.
   const signOutNow = () => {
-    signOut().catch((error: unknown) => {
-      setRefusal(signOutRefusalWords(error));
-      setAsking(ASK.SIGN_OUT_REFUSED);
-    });
+    void signOut();
   };
 
   const markDone = (stopAgents?: true) => {
     const taskId = subject.task?.id;
     if (taskId === undefined) return;
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
-    acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status: TASK_STATUS.DONE, ...stopping }).then(
-      (landed) => buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR),
-      (error: unknown) => {
-        console.error("Mark Done did not go.", error);
-        buzz(BUZZ.ERROR);
+    write(
+      () => acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status: TASK_STATUS.DONE, ...stopping }),
+      {
+        refused: (landed) => (landed ? undefined : settleFailedNote(TASK_STATUS.DONE, 1)),
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_STATUS, id: taskId },
+        went: BUZZ.SUCCESS,
       },
     );
   };
@@ -308,21 +310,25 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         if (threadId !== undefined) inbox.mark(threadId, !subject.threadUnread);
         else if (task !== undefined) {
           const unread = subject.toggled.includes(MENU_COMMAND.TOGGLE_READ);
-          acts[ACT_KIND.TASKS_MARK_READ]({
-            taskId: task.id,
-            readMark: unread ? READ_MARK.READ : READ_MARK.UNREAD,
-          }).catch((error: unknown) => console.error("The mark did not go.", error));
+          const readMark = unread ? READ_MARK.READ : READ_MARK.UNREAD;
+          write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId: task.id, readMark }), {
+            retry: true,
+            subject: { kind: WRITE_SUBJECT.TASK_READ, id: task.id },
+          });
         }
         return;
       case MENU_COMMAND.PIN:
         if (task === undefined) return;
-        acts[ACT_KIND.TASKS_PIN]({ taskId: task.id, pinned: task.pinnedAt === undefined }).then(
-          (landed) => buzz(landed ? BUZZ.SELECTION : BUZZ.ERROR),
-          (error: unknown) => {
-            console.error("The pin did not go.", error);
-            buzz(BUZZ.ERROR);
-          },
-        );
+        {
+          const pinned = task.pinnedAt === undefined;
+          write(() => acts[ACT_KIND.TASKS_PIN]({ taskId: task.id, pinned }), {
+            refused: (landed) =>
+              landed ? undefined : MARK_FAILED_NOTES[pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN],
+            retry: true,
+            subject: { kind: WRITE_SUBJECT.TASK_PIN, id: task.id },
+            went: BUZZ.SELECTION,
+          });
+        }
         return;
       case MENU_COMMAND.REMIND_CLEAR:
         if (threadId !== undefined) inbox.remind(threadId, null);
@@ -371,17 +377,6 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         act={SIGN_OUT_ASK.ACT}
         destructive
         presented={asking === ASK.SIGN_OUT}
-        onAct={() => {
-          dismiss();
-          signOutNow();
-        }}
-        onDismiss={dismiss}
-      />
-      <ConfirmAsk
-        title={SIGN_OUT_ASK.REFUSED}
-        message={refusal}
-        act={SIGN_OUT_ASK.AGAIN}
-        presented={asking === ASK.SIGN_OUT_REFUSED}
         onAct={() => {
           dismiss();
           signOutNow();

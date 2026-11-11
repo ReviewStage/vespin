@@ -7,9 +7,11 @@
  * the panel sends: New agent's `AGENTS_START` on the task, and New task's
  * one `TASKS_START`, which makes the task and starts its agent together, as
  * Home's composer does, the pictures attached going with its words as the
- * panel's attachments do. A start names a model only where one was picked, so
- * an untouched sheet starts on the account's default at the moment it goes,
- * as the panel's does.
+ * panel's attachments do, and in the relation picked, as New task's rows
+ * start one. File for later is the same act with no agent, the task filed
+ * in the Backlog under its words. A start names a model only
+ * where one was picked, so an untouched sheet starts on the account's
+ * default at the moment it goes, as the panel's does.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
@@ -32,7 +34,17 @@ import {
   modelSpeedOf,
 } from "@repo/features/models-wire";
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
-import { recentRepositories, startFailureNote, workspaceReaches } from "@repo/features/tasks-model";
+import {
+  TASK_CREATE_RELATION_KIND,
+  TASK_STATUS,
+  type TaskCreateRelation,
+} from "@repo/features/task-wire";
+import {
+  type FiledTask,
+  recentRepositories,
+  startFailureNote,
+  workspaceReaches,
+} from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -243,30 +255,57 @@ export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartA
       ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
       ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
       ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
-    }).catch((error: unknown) => {
-      console.error("The agent's start did not go.", error);
-      return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
-    });
+    }).catch(unanswered("The agent's start"));
     if ("failure" in answer) return { refused: startRefusalWords(answer) };
     return { agentId: answer.agent.id, taskId };
   };
 }
 
+/** Where a new task stands: the workspace and repository it starts in, and the relation it starts in where one was picked. */
+interface TaskPlace {
+  readonly repository: string | undefined;
+  readonly relation: TaskCreateRelation | undefined;
+}
+
+/** Whether a relation puts the new task in another's tree, which works in that task's repository. */
+export function inTree(relation: TaskCreateRelation | undefined): boolean {
+  return (
+    relation?.kind === TASK_CREATE_RELATION_KIND.SUB_TASK_OF ||
+    relation?.kind === TASK_CREATE_RELATION_KIND.PARENT_OF
+  );
+}
+
+/** What a start names of where its task stands: its workspace, its repository but in another's tree, whose repository the service takes, and its relation. */
+function placeOf(workspaceId: string | undefined, { repository, relation }: TaskPlace) {
+  return {
+    ...(workspaceId === undefined ? undefined : { workspaceId }),
+    ...(repository === undefined || inTree(relation) ? undefined : { repository }),
+    ...(relation === undefined ? undefined : { relations: [relation] }),
+  };
+}
+
+/** A start the host refused or never answered, said as the panel's note says it. */
+function unanswered(what: string) {
+  return (error: unknown) => {
+    console.error(`${what} did not go.`, error);
+    return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+  };
+}
+
 /**
  * New task's one start, as Home's composer sends it (`TASKS_START`): the
- * task in the workspace and repository picked, and its agent on the words,
- * under one key for the sheet. A task made whose agent was refused stands,
- * with why its agent did not start.
+ * task in the workspace and repository picked, in the relation picked, and
+ * its agent on the words, under one key for the sheet. A task made whose
+ * agent was refused stands, with why its agent did not start.
  */
 export function useStartTask(
   workspaceId: string | undefined,
-): (ask: StartAsk & { readonly repository: string | undefined }) => Promise<StartAnswer> {
+): (ask: StartAsk & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
-  return async ({ prompt, attachments, picked, runsOn, repository }) => {
+  return async ({ prompt, attachments, picked, runsOn, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
-      ...(workspaceId === undefined ? undefined : { workspaceId }),
-      ...(repository === undefined ? undefined : { repository }),
+      ...placeOf(workspaceId, place),
       planning: false,
       agent: {
         idempotencyKey: key,
@@ -275,10 +314,7 @@ export function useStartTask(
         ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
         ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
       },
-    }).catch((error: unknown) => {
-      console.error("The task's start did not go.", error);
-      return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
-    });
+    }).catch(unanswered("The task's start"));
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
     const started = answer.agentStart;
     if (started === undefined) return { taskId: answer.planId };
@@ -286,5 +322,28 @@ export function useStartTask(
       return { taskId: answer.planId, note: startRefusalWords(started) };
     }
     return { agentId: started.agent.id, taskId: answer.planId };
+  };
+}
+
+/**
+ * File for later: the same start with no agent (`TASKS_START` without
+ * `agent`), the task filed in the Backlog, named by the words' first line
+ * and handed them whole as its brief (`filedTaskOf`, which the sheet reads
+ * so it offers the act only on words), in the workspace,
+ * repository, and relation picked, for an agent to be started on later.
+ */
+export function useFileTask(
+  workspaceId: string | undefined,
+): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
+  const acts = useHostActs();
+  return async ({ filed, ...place }) => {
+    const answer = await acts[ACT_KIND.TASKS_START]({
+      ...placeOf(workspaceId, place),
+      ...filed,
+      status: TASK_STATUS.BACKLOG,
+      planning: false,
+    }).catch(unanswered("The task's filing"));
+    if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
+    return { taskId: answer.planId };
   };
 }

@@ -29,8 +29,12 @@ tester.run("ask-beside-screen", askBesideScreenRule, {
     mobile(
       "function A() { return <><Screen><RowList /></Screen><StatusQuestionAsk question={q} />{remind.sheet}</>; }",
     ),
-    // What the screen draws inside is its content, whatever it reads off a hook.
-    mobile("function A() { return <Screen>{page.body}<Rows ask={ask} /></Screen>; }"),
+    // What the screen draws inside is its content, whatever it reads off a hook, a task's rows among it.
+    mobile(
+      "function A() { return <Screen>{page.body}<Rows task={task} onAsk={() => openAsk(sheet)} /></Screen>; }",
+    ),
+    // A scalar of an ask, such as whether one stands open, draws no ask.
+    mobile("function A() { return <Screen><Rows disabled={Boolean(remind.sheet)} /></Screen>; }"),
   ],
   invalid: [
     {
@@ -57,6 +61,19 @@ tester.run("ask-beside-screen", askBesideScreenRule, {
       code: 'function A() { return <Screen>{[<ConfirmAsk key="confirm" presented />]}</Screen>; }',
       filename: MOBILE_FILE,
       errors: [{ messageId: "insideScreen", data: { name: "ConfirmAsk" } }],
+    },
+    {
+      code: "function A() { return <Screen><SplitView {...sidebar.columns({ view: <>{archive.ask}</> })} /></Screen>; }",
+      filename: MOBILE_FILE,
+      errors: [{ messageId: "insideScreen", data: { name: ".ask" } }],
+    },
+    {
+      code: "function A() { return <Screen>{remind?.sheet}{statusAsk as ReactNode}</Screen>; }",
+      filename: MOBILE_FILE,
+      errors: [
+        { messageId: "insideScreen", data: { name: ".sheet" } },
+        { messageId: "insideScreen", data: { name: "statusAsk" } },
+      ],
     },
   ],
 });

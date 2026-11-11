@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it and its status changed from its ⋯, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link share sheet, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -21,11 +21,12 @@ onFlowComplete:
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-list
-# A group folds under its header, heard with its count and whether it is
-# folded, and opens again.
-- tapOn: "Launch, [0-9]+, unfolded"
+# A group folds under its header, heard by its title and count (whether it is
+# collapsed or expanded is its value, which Maestro does not match), and
+# opens again.
+- tapOn: "Launch, [0-9]+"
 - assertNotVisible: "Launch checklist"
-- tapOn: "Launch, [0-9]+, folded"
+- tapOn: "Launch, [0-9]+"
 - assertVisible: "Launch checklist"
 # A long press offers Mark done in the row's menu, and a swipe from the
 # trailing edge marks it done at once; either way the row leaves the list.
@@ -68,7 +69,8 @@ onFlowComplete:
 # A long press on a task lifts its preview, its Overview at a glance: its
 # status, key and repository, its name, and its agents, the pinned Weekly
 # digest email's at work. Under it stands the panel's row menu: Open, Mark
-# done, Status, Unpin on a pinned task, Mark as unread, and Open in browser.
+# done, Status, Unpin on a pinned task, Copy link, Rename, Mark as unread,
+# Open in browser, and Permanently delete.
 - scrollUntilVisible:
     element: "Weekly digest email"
     direction: UP
@@ -91,10 +93,42 @@ onFlowComplete:
 - longPressOn: "Weekly digest email"
 - assertVisible: "Open"
 - assertVisible: "Status"
+- assertVisible: "Copy link"
+- assertVisible: "Rename"
 - assertVisible: "Mark as unread"
 - assertVisible: "Unpin"
 - assertVisible: "Open in browser"
+- assertVisible: "Permanently delete"
 - takeScreenshot: tasks-row-menu
+# Rename asks for the name in the system's alert, opened on the task's name,
+# and Cancel keeps it.
+- tapOn: "Rename"
+- assertVisible: "Rename task"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-rename
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# Permanently delete asks first, in the panel's words, and Cancel keeps the
+# task.
+- longPressOn: "Weekly digest email"
+- tapOn: "Permanently delete"
+- assertVisible: "Permanently delete task?"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-delete-ask
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- assertVisible: "Weekly digest email"
+# Copy link raises the system's share sheet on the task's address, whose
+# first row copies it; its close puts it away.
+- longPressOn: "Weekly digest email"
+- tapOn: "Copy link"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-copy-link
+- tapOn:
+    text: "Close"
+    optional: true
+- waitForAnimationToEnd
+- longPressOn: "Weekly digest email"
 # Mark as unread draws the row's dot.
 - tapOn: "Mark as unread"
 - waitForAnimationToEnd
@@ -131,8 +165,8 @@ onFlowComplete:
 # A long press on an agent lifts its preview: its tile and name, where it
 # stands with its model and where it runs, its latest step where the app
 # holds its transcript, and its pull request, over Open and Stop, which a
-# swipe from its trailing edge reveals too while it works. A tap off the
-# preview closes it.
+# swipe from its trailing edge reveals too while it works; once it rests the
+# swipe offers Archive, which asks first. A tap off the preview closes it.
 - longPressOn: "Build teammate invitations"
 - assertVisible: "Open"
 - waitForAnimationToEnd
@@ -193,6 +227,52 @@ onFlowComplete:
     direction: UP
 - assertVisible: "Todo"
 - takeScreenshot: task-status-set
+# Its ⋯ holds the panel's acts: Copy link, Rename, New sub-task, Open in
+# browser, and Permanently delete, red and last, which asks first.
+- tapOn: "More"
+- assertVisible: "Copy link"
+- assertVisible: "New sub-task"
+- assertVisible: "Permanently delete"
+- takeScreenshot: task-more-menu
+- tapOn: "Permanently delete"
+- assertVisible: "Permanently delete task?"
+- waitForAnimationToEnd
+- takeScreenshot: task-delete-ask
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# New sub-task under its Sub-tasks opens New task as a sub-task of it, its
+# repository the task's own; Cancel on a sheet with nothing typed closes it.
+- scrollUntilVisible:
+    element: "New sub-task"
+    direction: DOWN
+- tapOn: "New sub-task"
+- assertVisible: "Describe the task"
+- assertVisible: "Relation, Sub-task of"
+- hideKeyboard
+- waitForAnimationToEnd
+- takeScreenshot: new-sub-task
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# Its description's open comment threads stand under it; one opens with its
+# comments and the reply field, a reply typed into it.
+- scrollUntilVisible:
+    element: "Comments"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: task-comments
+- tapOn: "Should an owner be able to resend.*"
+- assertVisible: "Yes: Resend stands beside each expired invite.*"
+- waitForAnimationToEnd
+- takeScreenshot: task-comment-thread
+- tapOn: "Reply"
+- inputText: "Thanks, that covers it."
+- waitForAnimationToEnd
+- takeScreenshot: task-comment-reply
+- tapOn: "Send"
+- waitForAnimationToEnd
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: on an iPad
 # the app sidebar, the list, and the task side by side.
 - tapOn: "Tasks"

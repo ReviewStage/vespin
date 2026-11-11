@@ -166,8 +166,9 @@ Apple's cloud-managed distribution certificate: once to a local `.ipa` it checks
 again to upload. The archive is never signed automatically, since a runner's keychain
 starts empty and automatic signing would create an Apple Development certificate on every
 run until the team reaches Apple's cap, and never unsigned, since an unsigned archive
-carries no entitlements to export. Its build number is `<run number>.<run attempt>`, so a
-re-run uploads a build App Store Connect has not seen. The build carries
+carries no entitlements to export. Its build number is the run's number, a whole number as
+TestFlight lists it. A re-run keeps that number, which App Store Connect refuses once it has
+uploaded, so a build after an upload is a fresh run. The build carries
 `aps-environment: production`, which the run checks in the exported app.
 
 The export registers each target's App ID and makes its profiles, but the App Group the

@@ -15,6 +15,7 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  contentShape,
   controlSize,
   disabled as disabledModifier,
   fixedSize,
@@ -30,7 +31,8 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import type { Glyph } from "./glyph.js";
-import { Avatar, TaskStatusMark, ToneGlyph } from "./marks.js";
+import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -188,6 +190,8 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
       onPress={onPress}
       modifiers={[
         buttonStyle("plain"),
+        contentShape(shapes.capsule(), "hoverEffect"),
+        hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
         ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
@@ -264,8 +268,8 @@ type FieldChipProps = {
   readonly label: string;
   /** A task's status, whose ring leads the chip. */
   readonly status?: TaskStatus | undefined;
-  /** A person, whose face leads the chip. */
-  readonly face?: string | undefined;
+  /** A person, whose face leads the chip, their picture where one is known. */
+  readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
   readonly symbol?: SfSymbol | undefined;
   /** A mark leading the chip in its tone where none of the above does, such as a pull request's state. */
@@ -275,7 +279,9 @@ type FieldChipProps = {
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
 function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
-  if (props.face !== undefined) return <Avatar name={props.face} size={MARK_SIZE.FACE} />;
+  if (props.face !== undefined) {
+    return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
+  }
   if (props.symbol !== undefined) {
     return <Image systemName={props.symbol} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />;
   }

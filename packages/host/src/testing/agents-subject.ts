@@ -598,6 +598,11 @@ function fakeService() {
     warm: () => Effect.succeed({ warm: true as const }),
     runAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     stopRunAction: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    boot: (agentId) =>
+      Effect.sync(() => {
+        asked.push(`boot:${agentId}`);
+        return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
+      }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
@@ -1009,6 +1014,7 @@ const TRANSCRIPT_PARTS = [
   "windowParts",
   "queueRevision",
   "launch",
+  "boot",
 ] as const;
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
 export const ACCOUNT_PARTS = ["items", "planless", "plans", "automations", "failedRuns"] as const;

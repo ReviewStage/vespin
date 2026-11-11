@@ -44,6 +44,14 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import {
+  DESCRIPTION_COMMENT_ACTION,
+  DESCRIPTION_COMMENT_ACTOR,
+  DESCRIPTION_COMMENT_ENTRY,
+  DESCRIPTION_COMMENT_SCOPE,
+  DESCRIPTION_COMMENT_STATUS,
+  type DescriptionCommentThread,
+} from "@repo/features/description-comment-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
@@ -84,7 +92,11 @@ import {
   type Task,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import {
+  COMMENT_SUBJECT,
+  DESCRIPTION_COMMENT_CALL_FAILURE,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import {
   INVITATION_ROLE,
@@ -147,11 +159,23 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
 
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
 const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
+
+/**
+ * The sign-in pictures the fixture's people stand in with: organizations'
+ * logos on GitHub's avatar host, which the apps may load pictures from,
+ * rather than anyone's face; Alan Turing is left with none, so his letters
+ * stand in, as anyone's do without one.
+ */
+const PICTURE = {
+  ADA: "https://avatars.githubusercontent.com/u/9919?v=4",
+  GRACE: "https://avatars.githubusercontent.com/u/1342004?v=4",
+} as const;
 const ACCOUNT: AccountSnapshot = {
   status: ACCOUNT_STATUS.SIGNED_IN,
   id: ADA.userId,
   email: "ada@example.com",
   name: ADA.name,
+  pictureUrl: PICTURE.ADA,
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
@@ -178,6 +202,9 @@ const AGENT = {
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
+
+/** The model the digest's agent runs on, Codex's, from the fixture's catalog. */
+const CODEX_MODEL = "openai/gpt-6.1-sol";
 
 /** The fixture's workspace by the name its addresses spell it with, as the panel's tasks fixture names it. */
 const FIXTURE_WORKSPACE_SLUG = "personal";
@@ -722,9 +749,20 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       pendingApprovals: [INVITES_HELD],
     },
   ],
+  // Note that the digest's agent runs on Codex, so the agents' marks show both harnesses.
   [
     TASK.DIGEST,
-    agentOn(AGENT.DIGEST, TASK.DIGEST, "Send the weekly digest", AGENT_STATUS.RUNNING, 4 * HOUR),
+    {
+      ...agentOn(
+        AGENT.DIGEST,
+        TASK.DIGEST,
+        "Send the weekly digest",
+        AGENT_STATUS.RUNNING,
+        4 * HOUR,
+      ),
+      model: CODEX_MODEL,
+      runtime: AGENT_RUNTIME.CODEX,
+    },
   ],
   [
     TASK.ROUNDING,
@@ -869,6 +907,7 @@ const FIXTURE_WORKSPACE: Workspace = {
   github: { login: "ada", active: true },
   personal: true,
   memberCount: 1,
+  pictureUrl: PICTURE.ADA,
   experiments: [
     {
       experiment: EXPERIMENT.DESCRIPTIONS,
@@ -882,12 +921,19 @@ const FIXTURE_WORKSPACE: Workspace = {
 /** The fixture workspace's people, as Settings › Workspace lists them: the account, its owner, an admin, and a member. */
 const MEMBERS: WorkspaceMembersAnswer = {
   members: [
-    { userId: ADA.userId, name: ADA.name, email: "ada@example.com", role: WORKSPACE_ROLE.OWNER },
+    {
+      userId: ADA.userId,
+      name: ADA.name,
+      email: "ada@example.com",
+      role: WORKSPACE_ROLE.OWNER,
+      pictureUrl: PICTURE.ADA,
+    },
     {
       userId: "user-grace",
       name: "Grace Hopper",
       email: "grace@example.com",
       role: WORKSPACE_ROLE.ADMIN,
+      pictureUrl: PICTURE.GRACE,
     },
     {
       userId: "user-alan",
@@ -909,6 +955,12 @@ const INVITATIONS: readonly WorkspaceInvitation[] = [
   },
 ];
 
+/** Relay's photo, as the host holds a workspace's photo once fetched: a small teal tile with a band across it, so a drawn photo reads apart from a letter on its hue. */
+const TEAM_PHOTO = {
+  version: "relay-photo-1",
+  url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAA+UlEQVR42s3YawrCMBBG0bsT9+cfl+Dm3IA7UhBE1CaTeXwTSGkeEziUNp2E6/32t5wu55bCEajLNAK1mCYgvWkOEptMIKXJCpKZFkAaE89rKxOv2z4m3rVNTHw2djDx1W438dvVa+Jvb6OJo4EuE4OxFhPjYb2JaYTYhCVIacIYJzNhD9WYWIoWmFidUG3CMafUhO/B1plwv31FJiKfaIWJ4DqWbiK+2OeaSPkjJprIShuyTCTmVikmchPQuIn0LD1oomIrEzFRtN9zm6jbFPtMlJ4cOExUH6+smspBqyYFaMkkAtlNOpDRJAVZTGrQ1NQAGpt6QAPTA4OnmUbTnrGMAAAAAElFTkSuQmCC",
+} as const;
+
 /**
  * A team the fixture's account is a member of beside its own, where a list
  * names none, so the iOS app's workspace switcher has another to list and
@@ -921,6 +973,7 @@ const TEAM_WORKSPACE: Workspace = {
   role: WORKSPACE_ROLE.MEMBER,
   github: { login: "relay-dev", active: true },
   memberCount: 6,
+  photoVersion: TEAM_PHOTO.version,
 };
 
 /**
@@ -1139,6 +1192,80 @@ function stagedPages(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ
   return laid;
 }
 
+/** The threads on the reference journey's description: one open, Ada's question and its agent's answer, and one resolved, which its page leaves out. */
+const INVITES_THREADS: readonly DescriptionCommentThread[] = [
+  {
+    id: fixtureId(301),
+    scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
+    quote: "Invites expire after seven days",
+    anchor: { from: 0, to: 31 },
+    section: "Goal",
+    status: DESCRIPTION_COMMENT_STATUS.OPEN,
+    entries: [
+      {
+        id: fixtureId(302),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        words: "Should an owner be able to resend an expired invite from this page?",
+        at: LANDED - 3 * HOUR,
+      },
+      {
+        id: fixtureId(303),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.INVITES },
+        words: "Yes: Resend stands beside each expired invite, and it mints a new link.",
+        at: LANDED - 2 * HOUR,
+      },
+    ],
+    createdAt: LANDED - 3 * HOUR,
+    updatedAt: LANDED - 2 * HOUR,
+    revision: 2,
+  },
+  {
+    id: fixtureId(304),
+    scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
+    quote: "Send the invite email from the workspace's own domain",
+    section: "Goal",
+    status: DESCRIPTION_COMMENT_STATUS.RESOLVED,
+    entries: [
+      {
+        id: fixtureId(305),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        words: "Done in the email template.",
+        at: LANDED - 5 * HOUR,
+      },
+    ],
+    createdAt: LANDED - 5 * HOUR,
+    updatedAt: LANDED - 4 * HOUR,
+    revision: 3,
+  },
+];
+
+/** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
+const STAGED_COMMENTS = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS]
+>();
+
+function stagedComments(
+  state: AppStateSnapshot,
+): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS] {
+  const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
+  const staged = STAGED_COMMENTS.get(held);
+  if (staged !== undefined) return staged;
+  const laid = {
+    ...held,
+    [COMMENT_SUBJECT.DESCRIPTION]: {
+      ...held[COMMENT_SUBJECT.DESCRIPTION],
+      [TASK.INVITES]: { rows: INVITES_THREADS },
+    },
+  };
+  STAGED_COMMENTS.set(held, laid);
+  STAGED_COMMENTS.set(laid, laid);
+  return laid;
+}
+
 /* ----- The window's document ----- */
 
 /**
@@ -1270,7 +1397,7 @@ const MODELS: ModelsAnswer = {
       efforts: ["low", "medium", "high"],
     },
     {
-      id: "openai/gpt-6.1-sol",
+      id: CODEX_MODEL,
       name: "GPT-6.1 Sol",
       provider: MODEL_PROVIDER.OPENAI,
       efforts: ["low", "medium", "high", "xhigh"],
@@ -1384,12 +1511,17 @@ export function inboxAppState(
     },
     [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
+    [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.WORKSPACE_PHOTOS]: {
+      ...state[LIVE_READ.WORKSPACE_PHOTOS],
+      [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
+    },
     [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
@@ -1669,16 +1801,50 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
+  [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, status: AGENT_STATUS.STARTING } };
+  },
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
     agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),
   }),
-  [ACT_KIND.TASKS_START]: ({ agent }) => ({
-    planId: fixtureId(92),
-    agentStart: {
-      agent: agentOn(fixtureId(93), fixtureId(92), agent?.prompt ?? "", AGENT_STATUS.STARTING, 0),
-    },
-  }),
+  // Note that a start with no agent, File for later's, is answered with the task made alone.
+  [ACT_KIND.TASKS_START]: ({ agent }) =>
+    agent === undefined
+      ? { planId: fixtureId(92) }
+      : {
+          planId: fixtureId(92),
+          agentStart: {
+            agent: agentOn(
+              fixtureId(93),
+              fixtureId(92),
+              agent.prompt ?? "",
+              AGENT_STATUS.STARTING,
+              0,
+            ),
+          },
+        },
+  // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
+  [ACT_KIND.TASKS_RENAME]: () => true,
+  [ACT_KIND.TASKS_DELETE]: () => true,
+  // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
+  [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
+    const thread = INVITES_THREADS.find((each) => each.id === threadId);
+    if (planId !== TASK.INVITES || thread === undefined) {
+      return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+    }
+    if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
+    const reply = {
+      id: fixtureId(306),
+      kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+      writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+      words: action.words,
+      at: Date.now(),
+    };
+    return { thread: { ...thread, entries: [...thread.entries, reply] } };
+  },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

@@ -86,6 +86,7 @@ import {
   type InstallationFixture,
   openGithubUser,
 } from "../testing/github-app-fake.js";
+import { openedOnBoot } from "../testing/native-harness-fake.js";
 import { consumeAutomationRunMessage } from "./automation-run-consumer.js";
 import { executeAutomationRun } from "./automation-runs.js";
 import { reconsiderRunArchive } from "./run-archive.js";
@@ -151,24 +152,25 @@ interface Opened {
 function fakeAgentSessions() {
   const opened: Opened[] = [];
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
-  const sessions = (account: string): AgentSessions => ({
-    open: (message) =>
-      Effect.sync(() => {
-        opened.push({ account, message });
-        return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
-      }),
-    send: (sessionId, message) =>
-      Effect.sync(() => {
-        sent.push({ sessionId, message });
-        return {
-          outcome: SESSION_SEND_OUTCOME.ACCEPTED,
-          sessionId,
-          deliveryId: randomUUID(),
-        } as const;
-      }),
-    cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
-    reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
-  });
+  const sessions = (account: string): AgentSessions =>
+    openedOnBoot({
+      open: (message) =>
+        Effect.sync(() => {
+          opened.push({ account, message });
+          return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
+        }),
+      send: (sessionId, message) =>
+        Effect.sync(() => {
+          sent.push({ sessionId, message });
+          return {
+            outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+            sessionId,
+            deliveryId: randomUUID(),
+          } as const;
+        }),
+      cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
+      reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
+    });
   return { opened, sent, sessionsFor: (account: string) => Effect.succeed(sessions(account)) };
 }
 

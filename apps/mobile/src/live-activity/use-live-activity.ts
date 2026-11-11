@@ -20,6 +20,7 @@
  * activity otherwise, so none outlasts its flow.
  */
 
+import { STOP_FAILED } from "@repo/features/agent-refusal-words";
 import {
   type LiveActivityContentState,
   liveActivityContentStateSchema,
@@ -30,6 +31,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { launchLiveActivity } from "../host/launch-arguments.js";
 import { registeredPushDevice, useFixtureRun, usePushDeviceKey } from "../push-device.js";
+import { useWrite } from "../use-write.js";
 import { liveActivityModule } from "./live-activity-module.js";
 
 /** How long ago each of the fixture's agents began its turn, so its timers read as a working afternoon. */
@@ -103,6 +105,7 @@ function useActivityTokens(): {
 /** The Live Activity's tokens and end told to the service and its Stop sent through the host while an account is signed in, and a fixture run's own activity started or ended once a launch. */
 export function useLiveActivity(signedIn: boolean): void {
   const acts = useHostActs();
+  const write = useWrite();
   const fixture = useFixtureRun();
   const key = usePushDeviceKey();
   const { start, activity, ends, told } = useActivityTokens();
@@ -196,15 +199,17 @@ export function useLiveActivity(signedIn: boolean): void {
     if (liveActivityModule === null || !signedIn) return undefined;
     const module = liveActivityModule;
     const subscription = module.addListener("onStop", ({ request, agentId }) => {
-      acts[ACT_KIND.AGENTS_STOP]({ agentId })
-        .then((answer) => {
-          if ("failure" in answer) console.error(`The stop was refused: ${answer.failure}.`);
-        })
-        .catch((error: unknown) => console.error("The stop did not go.", error))
-        .finally(() => module.answerStop(request));
+      write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
+        refused: (answer) => {
+          if (!("failure" in answer)) return undefined;
+          console.error(`The stop was refused: ${answer.failure}.`);
+          return STOP_FAILED;
+        },
+        unanswered: STOP_FAILED,
+      }).finally(() => module.answerStop(request));
     });
     return () => subscription.remove();
-  }, [acts, signedIn]);
+  }, [acts, write, signedIn]);
   useEffect(() => {
     if (liveActivityModule === null || !fixture) return;
     // Note that the state is encoded through the service's own Schema, so the widget decodes the bytes a push would carry.

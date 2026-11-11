@@ -1,4 +1,4 @@
-import { type CatalogModel, MODEL_PROVIDER } from "./models-wire.js";
+import { type CatalogModel, MODEL_PROVIDER, type ModelProvider } from "./models-wire.js";
 
 /**
  * model-label.ts -- a model as a tab, a menu, or a notification names it: the catalog's own name, or the id's own name spelled out; an agent by its title, its automation, or its model; and whether an automation's run started it.
@@ -37,6 +37,17 @@ export function catalogIdOf(model: string): string {
   return model.includes(CATALOG_ID_SEPARATOR)
     ? model
     : `${MODEL_PROVIDER.OPENAI}${CATALOG_ID_SEPARATOR}${model}`;
+}
+
+/**
+ * The provider whose harness runs a model, read from its catalog id, whose
+ * prefix is the provider's word (`models-wire.ts`), so a tab wears its
+ * harness's mark before the catalog itself is read; none for a provider
+ * we run no agent on.
+ */
+export function providerOf(modelId: string): ModelProvider | undefined {
+  const prefix = modelId.slice(0, Math.max(0, modelId.indexOf(CATALOG_ID_SEPARATOR)));
+  return Object.values(MODEL_PROVIDER).find((provider) => provider === prefix);
 }
 
 /** A name without the maker's word it leads with. */

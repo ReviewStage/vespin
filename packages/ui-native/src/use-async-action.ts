@@ -8,7 +8,7 @@
  * once the catalogs meet, and change either only with the other.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /** Where one action stands. */
 export const ASYNC_ACTION_STAGE = {
@@ -75,7 +75,9 @@ export function useAsyncAction<Refusal = string>(
   const [state, setState] = useState<AsyncActionState<Refusal>>(IDLE);
   const out = useRef(false);
   const newestUnanswered = useRef(unanswered);
-  newestUnanswered.current = unanswered;
+  useEffect(() => {
+    newestUnanswered.current = unanswered;
+  }, [unanswered]);
 
   const run = useCallback((act: AsyncActionAct<Refusal>): Promise<boolean> => {
     if (out.current) return Promise.resolve(false);

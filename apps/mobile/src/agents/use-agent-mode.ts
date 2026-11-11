@@ -14,7 +14,6 @@ import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_RUNTIME } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -26,6 +25,7 @@ import {
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 import { useFollowedAgent } from "./use-agent.js";
 
 /** One mode as the control offers it: its name, and what it does. */
@@ -54,6 +54,7 @@ export interface AgentMode {
 /** The agent's mode and its change; none for an agent whose harness never asks, or before the agent is read. */
 export function useAgentMode(agentId: string): AgentMode | undefined {
   const acts = useHostActs();
+  const send = useWrite();
   const agent = useFollowedAgent(agentId);
   const [note, setNote] = useState<string | undefined>(undefined);
   /** How many changes have been sent, so an answer to an earlier one is told apart from the latest. */
@@ -75,16 +76,15 @@ export function useAgentMode(agentId: string): AgentMode | undefined {
       const write = writes.current;
       setNote(undefined);
       buzz(BUZZ.SELECTION);
-      acts[ACT_KIND.AGENTS_PERMISSION_MODE]({ agentId, permissionMode: picked })
-        .catch((error: unknown) => {
-          console.error("The agent's permission mode was not changed.", error);
-          return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
-        })
-        .then((answer) => {
-          if (write !== writes.current || !("failure" in answer)) return;
-          setNote(PERMISSION_MODE_WORDS.CHANGE_FAILED);
-          buzz(BUZZ.ERROR);
-        });
+      send(() => acts[ACT_KIND.AGENTS_PERMISSION_MODE]({ agentId, permissionMode: picked }), {
+        refused: (answer) =>
+          "failure" in answer ? PERMISSION_MODE_WORDS.CHANGE_FAILED : undefined,
+        unanswered: PERMISSION_MODE_WORDS.CHANGE_FAILED,
+        // Note that only the latest change's refusal is said.
+        inPlace: (words) => {
+          if (write === writes.current) setNote(words);
+        },
+      });
     },
   };
 }

@@ -3,6 +3,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
+import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
@@ -31,7 +32,6 @@ import {
   ListSection,
   MemberRow,
   type MemberRowAct,
-  rejectionWords,
   Screen,
   SettingsForm,
   useAsyncAction,
@@ -45,6 +45,7 @@ import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
+import { refusalOf, useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -124,10 +125,12 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   const members = held?.members?.rows?.members;
   const invitations = held?.invitations?.rows;
   const [asking, setAsking] = useState<Asking | undefined>(undefined);
-  const rename = useAsyncAction(rejectionWords);
-  const people = useAsyncAction(rejectionWords);
-  const invite = useAsyncAction(rejectionWords);
-  const leave = useAsyncAction(rejectionWords);
+  // Note that each refusal says why in place, in the host's words through the one write door, never an error's own text.
+  const write = useWrite();
+  const rename = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  const people = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  const invite = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  const leave = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const dismiss = () => setAsking(undefined);
   const hasAdmin = members?.some((member) => member.role === WORKSPACE_ROLE.ADMIN) === true;
 
@@ -135,11 +138,13 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
     const may = memberActs(workspace, member, member.userId === readerId);
     const role = (next: typeof ASSIGNABLE_ROLE.ADMIN | typeof ASSIGNABLE_ROLE.MEMBER) => () =>
       void people.run(() =>
-        acts[ACT_KIND.WORKSPACE_MEMBER_ROLE]({
-          workspaceId,
-          userId: member.userId,
-          role: next,
-        }).then(() => undefined),
+        refusalOf(write, () =>
+          acts[ACT_KIND.WORKSPACE_MEMBER_ROLE]({
+            workspaceId,
+            userId: member.userId,
+            role: next,
+          }),
+        ),
       );
     return [
       ...(may.promote
@@ -163,7 +168,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   const sendInvite = (role: (typeof INVITATION_ROLES)[number]) => (email: string) => {
     dismiss();
     void invite.run(() =>
-      acts[ACT_KIND.WORKSPACE_INVITE]({ workspaceId, email, role }).then(() => undefined),
+      refusalOf(write, () => acts[ACT_KIND.WORKSPACE_INVITE]({ workspaceId, email, role })),
     );
   };
 
@@ -172,7 +177,11 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
       <Screen>
         <SettingsForm>
           <ListSection footer={rename.refusal}>
-            <AccountRow name={workspace.name} email={WORKSPACE_ROLE_WORDS[workspace.role]} />
+            <AccountRow
+              name={workspace.name}
+              email={WORKSPACE_ROLE_WORDS[workspace.role]}
+              picture={workspace.photoVersion === undefined ? workspace.pictureUrl : undefined}
+            />
             {manages && !personal ? (
               <ActionRow
                 label={RENAME_WORDS.ROW}
@@ -257,7 +266,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               dismiss();
               if (name === workspace.name) return;
               void rename.run(() =>
-                acts[ACT_KIND.WORKSPACE_RENAME]({ workspaceId, name }).then(() => undefined),
+                refusalOf(write, () => acts[ACT_KIND.WORKSPACE_RENAME]({ workspaceId, name })),
               );
             },
           },
@@ -293,7 +302,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           const { userId } = asking.member;
           dismiss();
           void people.run(() =>
-            acts[ACT_KIND.WORKSPACE_MEMBER_REMOVE]({ workspaceId, userId }).then(() => undefined),
+            refusalOf(write, () => acts[ACT_KIND.WORKSPACE_MEMBER_REMOVE]({ workspaceId, userId })),
           );
         }}
       />
@@ -312,8 +321,8 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           const invitationId = asking.invitation.id;
           dismiss();
           void invite.run(() =>
-            acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }).then(
-              () => undefined,
+            refusalOf(write, () =>
+              acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }),
             ),
           );
         }}
@@ -328,7 +337,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
         onAct={() => {
           dismiss();
           void leave
-            .run(() => acts[ACT_KIND.WORKSPACE_LEAVE]({ workspaceId }).then(() => undefined))
+            .run(() => refusalOf(write, () => acts[ACT_KIND.WORKSPACE_LEAVE]({ workspaceId })))
             .then((left) => {
               if (left) router.back();
             });

@@ -1,4 +1,5 @@
 import "@orpc/experimental-effect/extensions/input-output";
+import { ORPCError } from "@orpc/client";
 import { oc } from "@orpc/contract";
 import { Schema as EffectSchema } from "effect";
 
@@ -15,6 +16,16 @@ import { Schema as EffectSchema } from "effect";
 
 /** The one error an act answers: refused, with a sentence. */
 export const ACT_ERROR = { REFUSED: "REFUSED" } as const;
+
+/**
+ * The sentence an act's refusal carries, as the host drew it for the person
+ * who asked; none for any other failure, such as a transport's or a fault's,
+ * whose own text is for the log and never a screen. The panel's act door and
+ * the iOS app's writes read a rejection through this one door.
+ */
+export function actRefusalSentence(error: unknown): string | undefined {
+  return error instanceof ORPCError && error.code === ACT_ERROR.REFUSED ? error.message : undefined;
+}
 
 /** An act whose refusal, unless its row words one of its own, reads `sentence`. */
 export function actProcedure(sentence: string) {

@@ -26,6 +26,7 @@
         ]
       }
     ],
+    "anti-slop/agent-box-reads-agent": "error",
     "anti-slop/archive-through-agent-change": "error",
     "anti-slop/ask-beside-screen": "error",
     "anti-slop/async-press-needs-busy": "error",
@@ -66,6 +67,19 @@
       "files": ["packages/ui/src/icons/icons.ts"],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["apps/mobile/**", "packages/ui-native/**"],
+      "plugins": ["react"],
+      "rules": {
+        "react/refs": "error",
+        "react/immutability": "off",
+        "react/preserve-manual-memoization": "off",
+        "react/purity": "off",
+        "react/set-state-in-effect": "off",
+        "react/use-memo": "off",
+        "react-hooks/exhaustive-deps": "off"
       }
     },
     {

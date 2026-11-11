@@ -37,6 +37,12 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 export { EmptyState } from "./empty-state.js";
+export {
+  FailureNoticeProvider,
+  type FailureNotices,
+  useFailureNotices,
+} from "./failure-notice.js";
+export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 export { GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
@@ -62,6 +68,7 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  type Face,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -87,6 +94,7 @@ export {
 export {
   ConfirmAsk,
   MarkRow,
+  MergeActRow,
   PullRequestHead,
   WORDS_ASK_KIND,
   WordsAsk,
@@ -125,6 +133,7 @@ export {
   SplitView,
 } from "./split-view.js";
 export { STATUS_MARK_LOOK } from "./status-mark-model.js";
+export { askForName, type NameAsk, shareLink } from "./system-asks.js";
 export {
   AGENT_ROW_STATE,
   AgentRow,
@@ -176,6 +185,7 @@ export {
 } from "./use-async-action.js";
 export { Video } from "./video.js";
 export {
+  NoBarTitle,
   newWorkspaceAction,
   type SwitcherAction,
   type SwitcherWorkspace,

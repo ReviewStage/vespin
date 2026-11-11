@@ -11,7 +11,9 @@ builds a control of its own.
   task on one line, its sub-tasks folded under the panel's chevron), each
   row's acts behind a swipe from either edge, a full swipe running the
   first, and in its long press menu, which lifts the row's preview
-  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open, a
+  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
+  and a row's link, which an iPad drags out of it (`interactions.ts`, the
+  hover, drag, and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's
@@ -24,13 +26,19 @@ builds a control of its own.
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
-  for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
+  for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
+  merge under the checks in a regular window), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a sheet that starts work,
   `SwitchRow` and `HintPickRows` (a choice among a few, what each does under
   its name) for an agent's options, `RenameAsk` (the system's alert a name is
   typed in),
-  `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
+  `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
+  write did not go: a banner of Liquid Glass sliding down from the top with
+  the refusal's words and Try again, said aloud by VoiceOver, faded rather
+  than slid where the reader reduces motion, standing in a window of its own
+  over sheets, and said once for a stretch offline, `failure-notice-model.ts`),
+  and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of Liquid
@@ -160,7 +168,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
   its checks and reviewers as rows, each glyph the SF Symbol closest to the
   panel's (`pull-request-look.ts`); and its acts in the bar, an act that
-  asks first asking in `ConfirmAsk`.
+  asks first asking in `ConfirmAsk`, but for the merge's press in a regular
+  window, whose bar folds it into More: it stands under the checks as a
+  large button (`MergeActRow`), as GitHub's own app draws Merge.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's bar keeps its labels. A window wide enough

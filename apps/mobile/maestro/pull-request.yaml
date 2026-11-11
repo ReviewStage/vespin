@@ -36,10 +36,30 @@ appId: dev.vespin.ios
 - assertVisible: "grace"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
-# Merging acts on the press, as the panel's merge control does.
+# Merging acts on the press, as the panel's merge control does. Note that a
+# regular window draws the press in the page, under the checks, where it may
+# stand below the fold, so it is scrolled to first; an iPad's bar that folds
+# its buttons into its overflow, "More", has it opened where it is in neither.
+- runFlow:
+    when:
+      notVisible: "Squash and merge"
+    commands:
+      - scrollUntilVisible:
+          element: "Squash and merge"
+          direction: DOWN
+          timeout: 5000
+          optional: true
+- runFlow:
+    when:
+      notVisible: "Squash and merge"
+    commands:
+      - tapOn: "More"
 - tapOn: "Squash and merge"
-- extendedWaitUntil:
-    visible: "Merged"
+# Note that the state stands in the page's head, which a scroll to the press
+# may have taken out of sight, so the wait for it scrolls back up.
+- scrollUntilVisible:
+    element: "Merged"
+    direction: UP
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-merged
@@ -106,6 +126,20 @@ appId: dev.vespin.ios
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-queued
+- runFlow:
+    when:
+      notVisible: "Remove from queue"
+    commands:
+      - scrollUntilVisible:
+          element: "Remove from queue"
+          direction: DOWN
+          timeout: 5000
+          optional: true
+- runFlow:
+    when:
+      notVisible: "Remove from queue"
+    commands:
+      - tapOn: "More"
 - tapOn: "Remove from queue"
 - assertVisible: "Remove from the merge queue?"
 - waitForAnimationToEnd
@@ -113,14 +147,37 @@ appId: dev.vespin.ios
 - tapOn:
     text: "Remove from queue"
     below: "Remove from the merge queue?"
+- scrollUntilVisible:
+    element: "Send the invite email from the workspace.*"
+    direction: UP
 - extendedWaitUntil:
-    visible: "Merge when ready"
+    notVisible: "Queued #2"
     timeout: 30000
-- assertNotVisible: "Queued #2"
+- runFlow:
+    when:
+      notVisible: "Merge when ready"
+    commands:
+      - scrollUntilVisible:
+          element: "Merge when ready"
+          direction: DOWN
+          timeout: 5000
+          optional: true
+- runFlow:
+    when:
+      notVisible: "Merge when ready"
+    commands:
+      - tapOn: "More"
+- assertVisible: "Merge when ready"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-dequeued
-# Its diff and comments open on GitHub, from the bar's menu.
-- tapOn: "More"
+- scrollUntilVisible:
+    element: "Send the invite email from the workspace.*"
+    direction: UP
+# Its diff and comments open on GitHub, from the bar's menu, the last "More"
+# on screen where an iPad's overflow stands open with the menu inside it.
+- tapOn:
+    text: "More"
+    index: -1
 - assertVisible: "Open on GitHub"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-menu

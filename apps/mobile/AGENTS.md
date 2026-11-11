@@ -22,6 +22,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
 | `xcrun simctl launch booted dev.vespin.ios -authServer stub` | Launch it signed out against the stubbed account service, as `maestro/sign-in.yaml` does |
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -agent 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5` | Launch it on the Inbox fixture, opened on its invitations agent's page, as `maestro/agent.yaml` does |
+| `xcrun simctl launch booted dev.vespin.ios -fixture inbox -refuseWrites true` | Launch it on the Inbox fixture with a task's status and pin refused, as `maestro/failure-notice.yaml` does, to see the failure notice |
 | `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
@@ -181,6 +182,20 @@ hands a continued activity or a tapped item to JavaScript, which opens it
 through the routing a link takes. `maestro/spotlight.yaml` finds a task from
 the Home Screen's search; Handoff shows only between real devices.
 
+## The native interactions module
+
+What `@expo/ui` has no modifier for, an iPad pointer's hover effect and drag
+and drop, is the app's own native module, autolinked from
+`modules/native-interactions/`: its Swift registers each modifier with
+`@expo/ui`'s registry (`ViewModifierRegistry`) as the module is made, and
+`@repo/ui-native` hands them to its views (`src/interactions.ts`), so no
+screen names one. A row drags out as its vespin.dev link, a task's onto a
+group's header, in the Tasks list or the iPad's sidebar, moves it there, and pictures dropped on
+an agent's composer or a sheet that starts work are kept as JPEGs and
+attached. A view handed a modifier the build does not register draws as it
+would without it. No Maestro flow can drag or hover, so these are checked by
+hand on an iPad with a trackpad.
+
 ## The share extension
 
 Vespin stands in the system's share sheet for text and a web link: a share
@@ -242,6 +257,15 @@ pull request with UI shows its screenshots to the developer in a thread.
   shares (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
+- **Every write goes through `useWrite`** (`src/use-write.ts`). What went
+  is silent but for its buzz, as iOS's own apps are, and what did not says
+  why: in place where the screen holds the words it came from (a send, an
+  answer, a start, a pull request's change), and otherwise in `@repo/ui-native`'s
+  one failure notice, with Try again, in the panel's own words for the
+  refusal. While the service cannot be reached, a write that got no answer
+  says so once for the stretch rather than once each. An alert stands only
+  where the person must decide, such as Mark done stopping a working agent
+  (`ConfirmAsk`). A read on open or a follow nobody pressed for goes quietly.
 - **React 19.3** comes through the `mobile` pnpm catalog, since React Native
   0.88 is compiled against it, while the web and desktop apps stand on the
   default catalog's 19.2. A React module from `@repo/panel` or `@repo/ui`

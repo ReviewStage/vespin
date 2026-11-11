@@ -445,7 +445,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     // service answers; a refusal opens the card again where it was left.
     const { handed, card } = from;
     const stays = !opensNewTask;
-    // Note that the agent's first line is stamped at the press, which its line after the answer keeps.
+    // Note that the starting page's line is stamped at the press.
     const sentAt = Date.now();
     const line =
       handed === undefined || stays
@@ -563,7 +563,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
         // what stands now is the developer's since, a New task opened again among it, and stays.
         if (stays) {
           if (handed === undefined) setNewTaskAsk(undefined);
-          else openAgent(answer.planId, handed, answer.agentStart, from.device, sentAt);
+          else openAgent(answer.planId, handed, answer.agentStart, from.device);
           const { agentStart } = answer;
           sayStarted(
             answer.planId,
@@ -578,7 +578,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
           return undefined;
         }
         letGoOfPage();
-        openAgent(answer.planId, handed, answer.agentStart, from.device, sentAt);
+        openAgent(answer.planId, handed, answer.agentStart, from.device);
         return undefined;
       },
       (refused: Error) =>
@@ -617,15 +617,9 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     handed: NewTaskAgent,
     started: AgentAgentAnswer | undefined,
     device: MacOffer | undefined,
-    sentAt: number,
   ) => {
     if (started !== undefined && !("failure" in started)) {
-      agents.onTaskStarted(planId, started.agent, {
-        key: handed.idempotencyKey,
-        prompt: handed.prompt,
-        attachments: handed.attachments,
-        sentAt,
-      });
+      agents.onTaskStarted(planId, started.agent);
       showTab(planId, agentTab(started.agent.id));
       return;
     }
