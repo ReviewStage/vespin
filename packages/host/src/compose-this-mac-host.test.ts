@@ -1,5 +1,5 @@
 /**
- * compose-this-mac-host.test.ts -- This Mac's host kept as the member and the account's experiments say: nothing enrolled until This Mac is turned on, then enrolled under a new id or a refused record's own, its record written and the install script run; turned off by the install's own uninstall; a record of the account's kept under its id, never enrolled again while it stands; the host stopped with its files kept where Bring your own host is off or nobody is signed in; a record that is not the account's left alone; and This Mac told the windows as its record moves.
+ * compose-this-mac-host.test.ts -- This Mac's host kept as the member and the account's experiments say: nothing enrolled until This Mac is turned on, then enrolled under a new id or a refused record's own, its record written and the install script run; turned off by the install's own uninstall; a record of the account's kept under its id, never enrolled again while it stands; the host stopped with its files kept where Bring your own host is off or its account signs out, and left alone by a run never signed in; a record that is not the account's left alone; and This Mac told the windows as its record moves.
  *
  * The composer runs over a real state folder of its own, a fake service
  * that enrolls the Mac, lists the account's hosts, and serves the install
@@ -50,6 +50,8 @@ const BRING_YOUR_OWN_HOST_ON = {
 };
 
 interface MacOptions {
+  /** Whether an account is signed in as the composer starts; one is by default. */
+  readonly signedIn?: boolean;
   /** The experiments the account has on; Bring your own host by default. */
   readonly experiments?: Partial<Record<Experiment, boolean>>;
   /** The devices the service lists among the account's hosts, beside each it enrolls. */
@@ -99,7 +101,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
     let version: string | null = null;
     let told: AppThisMacHosts | undefined;
     let keepAwake: KeepAwake = KEEP_AWAKE.WORKING;
-    let userId: string | undefined = USER_ID;
+    let userId: string | undefined = options.signedIn === false ? undefined : USER_ID;
     const client = {
       enrollOwn: (deviceId: string) =>
         HttpClient.get(ENROLL_URL).pipe(
@@ -338,6 +340,24 @@ it.effect(
 
         assert.deepEqual(mac.asked, ["stop"]);
         assert.deepEqual(Option.getOrUndefined(yield* readHostDevice(stateRoot)), record);
+      }).pipe(Effect.provide(FILES)),
+    ),
+);
+
+it.effect(
+  "a run never signed in leaves the host alone, since another build of the app may be running it",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const record = { deviceId: KEPT_ID, deviceSecret: OLD_SECRET, serviceOrigin: SERVICE };
+        const mac = yield* thisMac(yield* recorded(record), {
+          listed: [KEPT_ID],
+          loaded: true,
+          signedIn: false,
+        });
+        yield* nudged(Duration.minutes(1));
+
+        assert.deepEqual(mac.asked, []);
       }).pipe(Effect.provide(FILES)),
     ),
 );

@@ -52,10 +52,12 @@ import type { RunMode } from "./run-mode.js";
  * again (a sign-in, a sign-out, an experiment turned on or off), This Mac
  * turned on or off, and a move in the install's state folder, which its own
  * host writes apart from this app; and it is acted on only when it changed.
- * While no account is signed in, the host its record names stands stopped
- * and kept from starting at the next login, so a Mac never runs agents for an
- * account no longer signed in; nothing is installed or started, and nothing
- * is removed, so signing in again starts the same host on the same record.
+ * Signing out stops the host and keeps it from starting at the next login,
+ * where this run read it as the account's while signed in, so a Mac never
+ * runs agents for an account no longer signed in; nothing is removed, so
+ * signing in again starts the same host on the same record. A run that was
+ * never signed in leaves the host alone, since another build of the app,
+ * signed in, may be running it.
  *
  * This Mac runs agents only where the member turned it on: Settings ›
  * Hosts' Run agents on this Mac (`HOSTS_THIS_MAC_SET`), whose switch reads
@@ -220,13 +222,16 @@ export function composeThisMacHost(
       kernel.emit(GATEWAY_EVENT.THIS_MAC_HOST_CHANGED, carried(held));
     });
 
-    /** Whether the record's device is the account's, as the service lists its hosts. */
+    /** Whether this run read the host as the account's while signed in, so a sign-out after it is the sign-out of the host's own account. */
+    const ownedHere = MutableRef.make(false);
+
+    /** Whether the record's device is the account's, as the service lists its hosts; one that is is kept as read here. */
     const accountOwns = (record: HostDevice) =>
-      Effect.flatMap(dependencies.hostListed(record.deviceId), (listed) =>
-        Option.isSome(listed)
-          ? Effect.succeed(listed.value)
-          : Effect.fail("read the account's hosts"),
-      );
+      Effect.flatMap(dependencies.hostListed(record.deviceId), (listed) => {
+        if (Option.isNone(listed)) return Effect.fail("read the account's hosts");
+        if (listed.value) MutableRef.set(ownedHere, true);
+        return Effect.succeed(listed.value);
+      });
 
     /**
      * The Mac enrolled under the device id given, or one minted, on the
@@ -374,19 +379,21 @@ export function composeThisMacHost(
     });
 
     /**
-     * The host stopped and kept from starting at the next login while nobody
-     * is signed in, its files kept. Note that no account can be asked
-     * whether it owns the record, so any of this app's service's that stands
-     * unrefused is stopped, since whoever enrolled it is signed in here no
-     * longer; a refused one already rests.
+     * The host stopped and kept from starting at the next login once its
+     * account signed out, its files kept. Note that no account can be asked
+     * whether it owns the record once nobody is signed in, so only a host this
+     * run read as the account's is stopped, since another build of the app,
+     * signed in, may be running one this run never owned; a refused one
+     * already rests.
      */
     const stoppedSignedOut = Effect.gen(function* () {
-      if (!host.runsHost) return;
+      if (!host.runsHost || !MutableRef.get(ownedHere)) return;
       const record = yield* ownServiceRecord;
       if (Option.isNone(record) || record.value.refused === true) return;
       const stopped = yield* host.stop;
       if (Result.isFailure(stopped)) return yield* Effect.fail(`stop it: ${stopped.failure}`);
-      report("this Mac's host was stopped, since nobody is signed in");
+      MutableRef.set(ownedHere, false);
+      report("this Mac's host was stopped, since its account signed out");
     });
 
     /** What the app keeps the host at now, as the account and its experiments stand. */
