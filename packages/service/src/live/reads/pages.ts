@@ -1,5 +1,5 @@
 /**
- * pages.ts -- one task's pages, and one coding agent's on no task, bound: their one statement each, the tables they read, the topics that wake them, and who they admit.
+ * pages.ts -- one task's pages, and one coding agent's own, which a released desktop still follows and which hold none now that every page stands on a task, bound: their one statement each, the tables they read, the topics that wake them, and who they admit.
  *
  * Each statement reads what `listPages` reads, under the same account and
  * rule of who may read it, the task's or the agent's, the instant in epoch
@@ -62,7 +62,7 @@ function taskPagesNewest(userId: string, taskId: string) {
   );
 }
 
-/** Each page of the coding agent on no task by its newest version, as `listPages` reads it, under the agent's rule of who may read it. */
+/** Each page the coding agent showed on no task by its newest version, under the agent's rule of who may read it: none, since every page stands on a task, kept for a released desktop that asks. */
 function agentPagesNewest(userId: string, agentId: string) {
   return queryBuilder
     .selectDistinctOn([taskPageVersion.pageId], NEWEST_COLUMNS)

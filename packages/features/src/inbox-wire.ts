@@ -908,7 +908,7 @@ export const inboxItemSchema = EffectSchema.Struct({
   /**
    * The member the item waits on: the member its agent addressed it to, or,
    * where it names none, its task's assignee, or, where the task has nobody
-   * assigned or the agent works on no task, the member who started the agent
+   * assigned, the member who started the agent
    * (`startedBy`). Absent from a service before it, which the desktop reads
    * as waiting on `startedBy`.
    */
@@ -1002,7 +1002,7 @@ export function openAskOf(thread: readonly InboxMessage[]): InboxAsking | undefi
 /**
  * The member an item waits on: the member its agent addressed it to, else
  * its task's assignee, or its agent's starter where the task has nobody
- * assigned or the agent works on no task, as the service resolves it
+ * assigned, as the service resolves it
  * (`inbox-store.ts`'s `WAITS_ON`); its starter from a service before it
  * said; none where it names neither.
  */

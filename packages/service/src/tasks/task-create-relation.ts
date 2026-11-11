@@ -2,7 +2,7 @@
  * task-create-relation.ts -- a task made for a member, as every door makes one, with the relations it starts in, confirmed before it writes and written beside it in its own transaction.
  *
  * `createTaskAsked` is the one make: the app's New task, `create_task`, and
- * `start_agent`'s task for an agent on no task, each in its own words.
+ * the task a member's `start_agent` makes where it names none, each in its own words.
  *
  * A task may start related to others (`taskCreateRequestSchema`'s
  * `relations`, or an agent's `create_task`'s one `relation`, from the new

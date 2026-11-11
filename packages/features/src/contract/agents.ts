@@ -9,11 +9,10 @@
  * for the agent it made and 200 for the one a retry under the same key
  * already made, so it answers its status beside its body
  * (`outputStructure: "detailed"`). A Start from an agent is keyed by that
- * agent rather than a task (`POST /api/agents/{id}/agents`), so an agent with
- * no task is continued and forked as one on a task is; its body is a Start's,
+ * agent rather than a task (`POST /api/agents/{id}/agents`), the new agent
+ * landing on that agent's task; its body is a Start's,
  * whose `from` names the path's agent. A delete (`DELETE /api/agents/{id}`)
- * takes the agent for good, as a task's delete takes a task. No path starts
- * a fresh agent on no task. Outputs are the
+ * takes the agent for good, as a task's delete takes a task. Outputs are the
  * wire schemas flipped (`packages/service/src/orpc/base.ts`).
  *
  * Every procedure declares its own refusals (`declaredProcedure`).
@@ -277,7 +276,7 @@ export const agentsContract = {
     )
     .input(exactBodyInput(idParams, agentStartRequestSchema))
     .output(EffectSchema.flip(startAnswerSchema)),
-  /** An agent started from the one the path names, continuing it or forking it, in that agent's own place: its task, or its workspace and repository where it has no task. */
+  /** An agent started from the one the path names, continuing it or forking it, in that agent's own place, its task. */
   startFrom: declaredProcedure
     .errors(refuses(...START_REFUSALS))
     .meta(bodyCap(MAXIMUM_START_BODY_BYTES))

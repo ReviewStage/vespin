@@ -15,7 +15,7 @@
  * 201 for the agent it made or 200 for the one a retry under the same key
  * made before; a blank one hands the agent nothing. A Start from an agent
  * (`POST /api/agents/{id}/agents`) takes the same path in the place that
- * agent stands in, its task or, with none, its workspace and repository,
+ * agent stands in, its task,
  * and answers alike. The calls into an agent
  * (`GET /api/agents/{id}/calls`) are read as a task's are, by the agent. A change
  * (`PATCH /api/agents/{id}`) names one of a title, an archive, a pin, a
@@ -309,7 +309,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     });
   return {
     /**
-     * A workspace's agents, on a task or with none, newest started first,
+     * A workspace's agents, on any task, newest started first,
      * the archived ones left out unless `archived=include` asks, narrowed to
      * one repository where the query names one and to agents whose title or
      * task's name holds the query's words where it names some, as the plan

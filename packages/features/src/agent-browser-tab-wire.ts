@@ -4,7 +4,7 @@
  * Each coding agent, whose workers share its sandbox, runs one browser in
  * its own sandbox, and the service keeps a line for each tab open in it, so
  * every window of a member who sees the agent lists them, on any client and
- * across a relaunch, whether the agent is on a task or on none. A tab says
+ * across a relaunch. A tab says
  * whose browser it is in, who opened it, and the member driving it, where
  * one took it over: a takeover is held until an instant the member's window
  * keeps moving on, so one whose window went away lapses on its own, and two
@@ -182,8 +182,7 @@ export const agentBrowserTabAddressRequestSchema = EffectSchema.Struct({
 /**
  * What a list of Browser tabs is read for, as a window names it: one coding
  * agent's browser, or every browser of a task's agents together, by its id
- * alone, the field naming which. An agent's tabs are its own wherever it
- * works, so an agent on no task lists them as well as one on a task.
+ * alone, the field naming which.
  */
 export const browserTabsPlaceSchema = EffectSchema.Union([
   EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),

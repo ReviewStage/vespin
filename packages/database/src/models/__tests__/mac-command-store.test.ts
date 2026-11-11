@@ -331,7 +331,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
         const db = yield* Database;
         const agent = yield* openAgent(starter, workspace);
         const target = { userId: starter, conversationId: agent.conversationId };
-        assert.equal(yield* macOwnerOf(target), starter, "no task");
+        assert.equal(yield* macOwnerOf(target), starter, "no one assigned");
         const handed = yield* createTask(starter, {
           organizationId: workspace,
           assigneeId: teammate,
