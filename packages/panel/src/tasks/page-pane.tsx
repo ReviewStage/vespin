@@ -314,13 +314,14 @@ interface FrameComments {
   readonly onPressed: () => void;
 }
 
-/** What the frame said for a page's comments: where each element marked stands, by its path, and the words selected in it. */
+/** What the frame said for a page's comments: where each element marked stands, by its path, the words selected in it, and the element marked the pointer is over. */
 interface FrameSaid {
   readonly marks: ReadonlyMap<string, FrameBox | null>;
   readonly selected: PagePicked | undefined;
+  readonly over: string | undefined;
 }
 
-const NOTHING_SAID: FrameSaid = { marks: new Map(), selected: undefined };
+const NOTHING_SAID: FrameSaid = { marks: new Map(), selected: undefined, over: undefined };
 
 function sameMarks(a: readonly PageMark[], b: readonly PageMark[]): boolean {
   return (
@@ -397,6 +398,10 @@ function useFrameComments(frame: RefObject<HTMLIFrameElement | null>, asks: Fram
       if ("selected" in message) {
         const selected = message.selected ?? undefined;
         return setSaid((was) => ({ ...was, selected }));
+      }
+      if ("over" in message) {
+        const over = message.over ?? undefined;
+        return setSaid((was) => ({ ...was, over }));
       }
       if ("pressed" in message) return latest.current.onPressed();
       if (!latest.current.picking) return;
@@ -613,7 +618,9 @@ function versionStepAction(
  * it, whether the frame is picking an element, the thread being started,
  * and the threads open. An element picked, or words selected and replied
  * to, start a comment on that element, its words the thread's quote, or
- * are quoted into the comment already being started; Whole page starts one
+ * are quoted into the comment already being started; words replied to are
+ * quoted into the comment they start too, as the stock quote every box's
+ * Reply lays in, whole and edited in place. Whole page starts one
  * on the page as a whole. A comment
  * being started is let go on Escape, Cancel, or a press away, its draft
  * kept where it holds words or files of the writer's own, and dropped where
@@ -628,11 +635,12 @@ function useCommenting(place: DescriptionCommentPlace | undefined) {
   const [picking, setPicking] = useState(false);
   const [pending, setPending] = useState<PageCommentOn | undefined>(undefined);
   const [open, setOpen] = useState<readonly string[] | undefined>(undefined);
-  // Note that the comment's first element stands over its field as the thread's quote line, so only an element quoted into a comment already being started is quoted into its words.
+  // Note that an element picked stands over its field as the thread's quote line, so only one quoted into a comment already being started is quoted into its words; words replied to are laid into them as a quote, as every box's Reply lays its quote in.
   const begin = (on: PageCommentOn, quote: string | undefined) => {
     setPicking(false);
     setOpen(undefined);
-    if (place !== undefined && quote !== undefined && pending !== undefined) {
+    const quoted = pending !== undefined || on.element?.words === true;
+    if (place !== undefined && quote !== undefined && quoted) {
       drafts.update(place, (was) => ({ ...was, text: withQuote(was.text, quote) }));
     }
     if (pending === undefined) setPending(on);
@@ -709,26 +717,38 @@ function pageReserve(row: HTMLElement): number {
   return row.getBoundingClientRect().width * (1 - COMMENTS_SHARE);
 }
 
-/** The elements holding open threads, each once, in the order their threads were started, with the words the first quotes where it was started on words selected; then those holding only comments held in the reader's review; then the one a draft was started on, untinted. */
+/**
+ * The elements holding open threads, in the order their threads were
+ * started, then those holding comments held in the reader's review, then the
+ * one a draft was started on: each once for every different run of words
+ * selected in it that a thread or a held comment quotes, so every one is
+ * tinted, and once untinted where none quotes any. Note that a draft is no
+ * thread, so the words it was started on are not tinted.
+ */
 function threadMarks(
   threads: readonly DescriptionCommentThread[],
   held: PageReviewControl["held"],
   drafted: DraftPageElement | undefined,
 ): readonly PageMark[] {
-  const posted = [...threadsByElement(threads)].map(([path, [first]]) =>
-    first?.scope === DESCRIPTION_COMMENT_SCOPE.WORDS ? { path, words: first.quote } : { path },
+  const quoted = new Map<string, Set<string>>();
+  const mark = (path: string, words: string | undefined) => {
+    const marked = quoted.get(path) ?? new Set<string>();
+    quoted.set(path, marked);
+    if (words !== undefined) marked.add(words);
+  };
+  for (const [path, onIt] of threadsByElement(threads)) {
+    for (const thread of onIt) {
+      mark(path, thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS ? thread.quote : undefined);
+    }
+  }
+  for (const { element } of held) {
+    if (element !== undefined)
+      mark(element.path, element.words === true ? element.quote : undefined);
+  }
+  if (drafted !== undefined) mark(drafted.path, undefined);
+  return [...quoted].flatMap(([path, words]) =>
+    words.size === 0 ? [{ path }] : [...words].map((each) => ({ path, words: each })),
   );
-  const marked = new Set(posted.map((mark) => mark.path));
-  const heldMarks = held.flatMap((comment) => {
-    const on = comment.element;
-    if (on === undefined || marked.has(on.path)) return [];
-    marked.add(on.path);
-    return [on.words === true ? { path: on.path, words: on.quote } : { path: on.path }];
-  });
-  // Note that a draft is no thread, so the words it was started on are not tinted.
-  const draftMark =
-    drafted === undefined || marked.has(drafted.path) ? [] : [{ path: drafted.path }];
-  return [...posted, ...heldMarks, ...draftMark];
 }
 
 /**
@@ -1023,6 +1043,7 @@ export function PagePane({
                   room={room}
                   marks={framed.said.marks}
                   selected={framed.said.selected}
+                  over={framed.said.over}
                   picking={commenting.picking}
                   pending={commenting.pending}
                   open={commenting.open}

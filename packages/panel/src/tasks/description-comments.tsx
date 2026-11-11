@@ -57,6 +57,7 @@ import {
   ErrorState,
   FailureNote,
   Fill,
+  GAP,
   HoverCard,
   HoverCardScroll,
   IconButton,
@@ -66,6 +67,7 @@ import {
   MenuSurface,
   PaneBar,
   POPOVER_SIDE,
+  pointCard,
   QuietWords,
   RectFloat,
   SCROLL_FADE,
@@ -74,6 +76,7 @@ import {
   ScrollArea,
   Skeleton,
   SkeletonRegion,
+  Stack,
   TEXT_BUTTON_TONE,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -108,6 +111,7 @@ import {
   MessageSquarePlusIcon,
   RotateCcwIcon,
 } from "@repo/ui/icons";
+import { QUOTE_CLASS } from "@repo/ui/quote-face";
 import { MESSAGE_BLOCK, messageBlocks, messageText, replyOf } from "@repo/ui/reply-quote";
 import { ReplayUnmask, writeWithheldSheet } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
@@ -229,12 +233,13 @@ import {
  */
 
 /**
- * The words a thread is on, quoted over it in the label's type and the
- * quiet ink beside a rule in the mark's edge, two lines at most; struck out,
- * under a stronger rule, where the words are gone.
+ * The words a thread is on, quoted over it in the quote's face every quote
+ * wears (`@repo/ui/quote-face`), a message's and the message box's alike:
+ * whole where they are words chosen, as a selection or a Reply chooses
+ * them, and two lines at most where they are a whole block or element,
+ * which may run on for a section; struck out where the words are gone.
  */
-const QUOTE_CLASS =
-  "comment-quote mx-0 mt-0 mb-control-gap line-clamp-2 border-l-2 border-l-comment-mark-edge pl-row-inset text-label font-text text-muted-foreground data-[gone=true]:border-l-border-strong data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike";
+const COMMENT_QUOTE_CLASS = `${QUOTE_CLASS} comment-quote data-[clipped=true]:line-clamp-2 data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike`;
 
 /**
  * A card's place in the margin: a card already there travels to its next
@@ -1422,27 +1427,30 @@ function GoneQuote({
   );
 }
 
-/** A quote line over a comment: the words it is on, or a press that shows them where they stand, labeled `label`, where one is offered. */
+/** A quote line over a comment: the words it is on, whole where they were chosen, or a press that shows them where they stand, labeled `label`, where one is offered. */
 function QuoteLine({
   words,
   label,
+  whole = false,
   gone = false,
   onShow,
 }: {
   words: string;
   label: string;
+  /** Whether the words were chosen, a few of a block's, so they are quoted whole rather than cut to two lines. */
+  whole?: boolean;
   gone?: boolean;
   onShow?: (() => void) | undefined;
 }): React.JSX.Element {
   if (onShow === undefined) {
     return (
-      <blockquote className={QUOTE_CLASS} data-gone={gone}>
+      <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
         {words}
       </blockquote>
     );
   }
   return (
-    <blockquote className={QUOTE_CLASS} data-gone={gone}>
+    <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
       <Tooltip label={label}>
         <LineButton look={LINE_BUTTON_LOOK.QUOTE} onClick={onShow}>
           {words}
@@ -1466,6 +1474,7 @@ function ThreadQuote({
     <QuoteLine
       words={thread.quote}
       label={thread.page === undefined ? COMMENT_WORDS.SHOW_WORDS : COMMENT_WORDS.SHOW_ELEMENT}
+      whole={thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS}
       gone={gone}
       onShow={onShowWords}
     />
@@ -3406,12 +3415,59 @@ function pinBox(pins: ReadonlyMap<string, HTMLElement>, path: string): FrameBox 
   return pins.get(path)?.getBoundingClientRect();
 }
 
+/**
+ * Where a card about an element in the frame opens from, in the window:
+ * under the element where the room shows its foot, and otherwise under its
+ * top edge, where its pin stands, since a card under a foot past the room
+ * has nowhere to stand; none where the element is not measured.
+ */
+function underElement(room: HTMLElement | null, box: FrameBox | undefined): FrameBox | undefined {
+  if (room === null || box === undefined) return undefined;
+  const foot = room.getBoundingClientRect().height;
+  return inWindow(room, box.bottom <= foot ? box : { ...box, bottom: Math.max(box.top, 0) });
+}
+
 /** Keeps the pin drawn for `path` in `pins` while it stands, by its element's path. */
 function keptPin(pins: Map<string, HTMLElement>, path: string) {
   return (node: HTMLElement | null) => {
     if (node === null) pins.delete(path);
     else pins.set(path, node);
   };
+}
+
+/** The pin drawn for `path`, its held comments' before its threads', where one stands. */
+function pinOf(
+  pins: readonly ReadonlyMap<string, HTMLElement>[],
+  path: string,
+): HTMLElement | undefined {
+  for (const each of pins) {
+    const pin = each.get(path)?.querySelector<HTMLElement>(".ui-comment-pin");
+    if (pin !== undefined && pin !== null) return pin;
+  }
+  return undefined;
+}
+
+/**
+ * Tells the comments on the element marked that the pointer is over in the
+ * page (`over`), as the pointer over its pin tells them, and lets them go
+ * as it leaves for another or for none. Note that its pins may be drawn
+ * only after the pointer arrived, as a comment held there is, or a held one
+ * posted, so whether each is drawn (`drawn`) asks again.
+ */
+function usePointedPin(
+  over: string | undefined,
+  drawn: { readonly held: boolean; readonly posted: boolean },
+  held: ReadonlyMap<string, HTMLElement>,
+  posted: ReadonlyMap<string, HTMLElement>,
+): void {
+  const { held: heldDrawn, posted: postedDrawn } = drawn;
+  useEffect(() => {
+    if (over === undefined || !(heldDrawn || postedDrawn)) return undefined;
+    const pin = pinOf([held, posted], over);
+    if (pin === undefined) return undefined;
+    pointCard(pin, true);
+    return () => pointCard(pin, false);
+  }, [over, heldDrawn, postedDrawn, held, posted]);
 }
 
 /** Where a thread on the whole page is started: the frame's top edge. */
@@ -3433,33 +3489,75 @@ export function threadsByElement(
 /** A preview's files by their names and types alone, which it draws and opens none of. */
 const NO_PREVIEW_FILES: readonly Pick<FileChip, "name" | "mediaType">[] = [];
 
+/** What a pin's card says of one comment: who wrote it and when, the words it quotes where they were chosen, and its words. */
+interface PreviewEntry {
+  readonly head: Pick<
+    Parameters<typeof Comment>[0],
+    "author" | "nameRef" | "status" | "at" | "now"
+  >;
+  readonly quote?: string | undefined;
+  readonly words: string;
+  readonly files?: readonly Pick<FileChip, "name" | "mediaType">[] | undefined;
+}
+
 /**
- * What the pointer over a pin is told: the first comment whole, as its
- * thread draws it, scrolling in the card where it is long, each file its
- * words name drawn there as its chip by its name and type alone, since a
- * preview reads no file's bytes and opens none.
+ * A pin's comments as the pointer over it, or over its element in the
+ * page, is told them: each whole, under the words it quotes where they were
+ * chosen, so several on one element tell which words each is on, scrolling
+ * past the card's height.
  */
-function PinPreview({
+function PinPreview({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <HoverCard>
+      <HoverCardScroll>
+        <Stack gap={GAP.BLOCK}>{children}</Stack>
+      </HoverCardScroll>
+    </HoverCard>
+  );
+}
+
+/** One comment in a pin's card. */
+function PreviewComment({
   head,
+  quote,
   words,
   files = NO_PREVIEW_FILES,
-}: {
-  head: Pick<Parameters<typeof Comment>[0], "author" | "nameRef" | "status" | "at" | "now">;
-  words: string;
-  files?: readonly Pick<FileChip, "name" | "mediaType">[] | undefined;
-}): React.JSX.Element {
+}: PreviewEntry): React.JSX.Element {
   const shown = useWordFiles(
     files.map((file) => ({ name: file.name, mediaType: file.mediaType, url: "" })),
     words,
   );
   return (
-    <HoverCard>
-      <Comment {...head}>
-        <HoverCardScroll>
-          <CommentWords words={words} files={shown.named} />
-        </HoverCardScroll>
-      </Comment>
-    </HoverCard>
+    <Comment {...head}>
+      {quote === undefined ? null : (
+        <QuoteLine words={quote} label={COMMENT_WORDS.SHOW_ELEMENT} whole />
+      )}
+      <CommentWords words={words} files={shown.named} />
+    </Comment>
+  );
+}
+
+/** A thread's first comment in its pin's card, under the words it quotes where they were chosen. */
+function ThreadPreview({
+  thread,
+  agents,
+  now,
+}: {
+  thread: DescriptionCommentThread;
+  agents: EditAgents | undefined;
+  now: number;
+}): React.JSX.Element | null {
+  const first = thread.entries.find((entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
+  const fallback: DescriptionCommentWriter = { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER };
+  const { author, nameRef } = useWriter(first?.writer ?? fallback, agents);
+  if (first === undefined) return null;
+  return (
+    <PreviewComment
+      head={{ author, nameRef, at: first.at, now }}
+      quote={thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS ? thread.quote : undefined}
+      words={ownWordsOf(thread, first.words ?? "")}
+      files={first.files}
+    />
   );
 }
 
@@ -3474,6 +3572,7 @@ function PagePin({
   open,
   onOpen,
   onHint,
+  cardAt,
   stands,
 }: {
   threads: readonly DescriptionCommentThread[];
@@ -3481,16 +3580,19 @@ function PagePin({
   open: boolean;
   onOpen: () => void;
   onHint: (over: boolean) => void;
+  /** Where its preview hangs from, where its comments open when pressed. */
+  cardAt: () => FrameBox | undefined;
   stands: CommentPinStands;
 }): React.JSX.Element | null {
   const now = useMinute();
   const thread = threads[0];
   const first = thread?.entries.find((entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
   const fallback: DescriptionCommentWriter = { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER };
-  const { author, nameRef } = useWriter(first?.writer ?? fallback, doors.agents);
+  const { author } = useWriter(first?.writer ?? fallback, doors.agents);
   const comments = threads.length;
   return (
     <CommentPin
+      cardAt={cardAt}
       author={author}
       count={comments}
       label={`${comments} ${comments === 1 ? "comment" : "comments"}`}
@@ -3500,11 +3602,11 @@ function PagePin({
       onHover={onHint}
       preview={
         thread === undefined || first === undefined ? null : (
-          <PinPreview
-            head={{ author, nameRef, at: first.at, now }}
-            words={ownWordsOf(thread, first.words ?? "")}
-            files={first.files}
-          />
+          <PinPreview>
+            {threads.map((each) => (
+              <ThreadPreview key={each.id} thread={each} agents={doors.agents} now={now} />
+            ))}
+          </PinPreview>
         )
       }
     />
@@ -3533,7 +3635,9 @@ function heldWords(comment: HeldComment): string {
  * field, and Delete, which takes it out of the review at once with Undo.
  * Where it stands apart from its element, in the Review panel, its quote line
  * says what it is on, its element's words, its thread's quote where it is a
- * reply, or the page's title, and pressed, shows its element on the page.
+ * reply, or the page's title, and pressed, shows its element on the page; by
+ * its element, it says the words it was started on where they were selected
+ * in it, as several comments' may be.
  */
 export function PendingPageComment({
   comment,
@@ -3546,7 +3650,7 @@ export function PendingPageComment({
   review: Pick<PageReviewControl, "edit" | "remove" | "markEditing">;
   /** Whether the review is on its way, which offers no Edit or Delete. */
   busy: boolean;
-  /** The page's title, the quote line of a comment on the whole page; none draws no quote line, as by its element. */
+  /** The page's title, the quote line of a comment on the whole page; none where it stands by its element, which draws the words selected alone. */
   title?: string | undefined;
   /** Shows its element on the page; none where its quote line is only words. */
   onShow?: ((path: string) => void) | undefined;
@@ -3563,6 +3667,13 @@ export function PendingPageComment({
     return () => markEditing(comment.clientKey, false);
   }, [open, markEditing, comment.clientKey]);
   const { clientKey, element } = comment;
+  // What its quote line says: apart from its element, what it is on; by it, the words it was started on where they are a few of the element's.
+  const quoted =
+    title === undefined
+      ? element?.words === true
+        ? element.quote
+        : undefined
+      : (comment.reply?.quote ?? element?.quote ?? title);
   // The element its quote line shows: its own, or the one its thread is on, where it is a reply.
   const shownPath = comment.reply === undefined ? element?.path : comment.reply.path;
   // Note that one a send posted already is the service's as it stood, so it offers neither.
@@ -3607,10 +3718,11 @@ export function PendingPageComment({
           ) : undefined
         }
       >
-        {title === undefined ? null : (
+        {quoted === undefined ? null : (
           <QuoteLine
-            words={comment.reply?.quote ?? element?.quote ?? title}
+            words={quoted}
             label={COMMENT_WORDS.SHOW_ELEMENT}
+            whole={comment.reply === undefined && element?.words === true}
             onShow={
               shownPath === undefined || onShow === undefined ? undefined : () => onShow(shownPath)
             }
@@ -3649,17 +3761,21 @@ function HeldPin({
   stands,
   onOpen,
   onHint,
+  cardAt,
 }: {
   held: readonly HeldComment[];
   open: boolean;
   stands: CommentPinStands;
   onOpen: () => void;
   onHint: (over: boolean) => void;
+  /** Where its preview hangs from, where its comments open when pressed. */
+  cardAt: () => FrameBox | undefined;
 }): React.JSX.Element {
   const { author, nameRef } = useReaderWriter();
   const first = held[0];
   return (
     <CommentPin
+      cardAt={cardAt}
       author={author}
       count={held.length}
       label={PAGE_REVIEW_WORDS.pin(held.length)}
@@ -3670,11 +3786,17 @@ function HeldPin({
       onHover={onHint}
       preview={
         first === undefined ? null : (
-          <PinPreview
-            head={{ author, nameRef, status: <PendingWords /> }}
-            words={heldWords(first)}
-            files={first.attachments}
-          />
+          <PinPreview>
+            {held.map((comment) => (
+              <PreviewComment
+                key={comment.clientKey}
+                head={{ author, nameRef, status: <PendingWords /> }}
+                quote={comment.element?.words === true ? comment.element.quote : undefined}
+                words={heldWords(comment)}
+                files={comment.attachments}
+              />
+            ))}
+          </PinPreview>
         )
       }
     />
@@ -3702,16 +3824,20 @@ function DraftPin({
   stands,
   onOpen,
   onHint,
+  cardAt,
 }: {
   words: string;
   files: readonly AgentAttachment[];
   stands: CommentPinStands;
   onOpen: () => void;
   onHint: (over: boolean) => void;
+  /** Where its preview hangs from, where its comments open when pressed. */
+  cardAt: () => FrameBox | undefined;
 }): React.JSX.Element {
   const { author, nameRef } = useReaderWriter();
   return (
     <CommentPin
+      cardAt={cardAt}
       look={COMMENT_PIN_LOOK.DRAFT}
       label={PAGE_COMMENT_WORDS.DRAFT}
       open={false}
@@ -3719,11 +3845,13 @@ function DraftPin({
       onPress={onOpen}
       onHover={onHint}
       preview={
-        <PinPreview
-          head={{ author, nameRef, status: <DraftWords /> }}
-          words={words}
-          files={files}
-        />
+        <PinPreview>
+          <PreviewComment
+            head={{ author, nameRef, status: <DraftWords /> }}
+            words={words}
+            files={files}
+          />
+        </PinPreview>
       }
     />
   );
@@ -3764,17 +3892,18 @@ function draftPinAt(
 /**
  * A page's comments over the page itself, as the description's folded margin draws
  * its own: each element holding open threads pinned with the face of who
- * started them, the pointer over a pin outlining its element faintly and
- * told the first comment whole, and a press opening its threads in a card
- * under the pin, or closing them, where the column beside the page does not
- * stand to open them in;
+ * started them, the pointer over a pin, or over its element in the page,
+ * told every comment on it, and a press opening its threads in a card
+ * under the element, where the comment that started them was written and
+ * clear of what they are on, or closing them, where the column beside the
+ * page does not stand to open them in;
  * the thread being started, in a card by the element it was started from;
  * while the page is picking an element, a line saying so, with Whole page
  * and Cancel; and Reply by words selected in the page, which quotes them
  * into the comment being written, or starts one on the element holding
  * them. A comment being started may be held in the reader's review
  * instead, pinned dashed to its element until the review is sent, its pin
- * opening the comments held there in a card under it, as a posted
+ * opening the comments held there in a card under the element, as a posted
  * pin opens its threads, column or no column, since the column lists
  * posted threads alone. A comment started and let go with words of the
  * writer's own left in it is pinned where it was started, the muted pencil
@@ -3792,6 +3921,7 @@ export function PageCommentLayer({
   room,
   marks,
   selected,
+  over,
   picking,
   pending,
   open,
@@ -3819,6 +3949,8 @@ export function PageCommentLayer({
   marks: ReadonlyMap<string, FrameBox | null>;
   /** The words selected in the page, as the frame said them. */
   selected: PagePicked | undefined;
+  /** The element marked that the pointer is over in the page, whose comments are told as its pin's are; none. */
+  over: string | undefined;
   picking: boolean;
   pending: PageCommentOn | undefined;
   /** The threads open, by their ids. */
@@ -3871,6 +4003,15 @@ export function PageCommentLayer({
     if (box === undefined || box === null || box.bottom < 0) return [];
     return [{ path, held, box, step: byElement.has(path) ? HELD_PIN_STEP : 0 }];
   });
+  usePointedPin(
+    over,
+    {
+      held: heldMarks.some((mark) => mark.path === over),
+      posted: pins.some((pin) => pin.path === over),
+    },
+    heldPins.current,
+    postedPins.current,
+  );
   // Note that a draft's pin stands left of its element's posted and held pins, so none covers another.
   const draftMark = draftPinAt(
     drafted,
@@ -3893,6 +4034,7 @@ export function PageCommentLayer({
                 held={held}
                 open={heldOpen === path}
                 stands={pinStands(box)}
+                cardAt={() => underElement(room.current, marks.get(path) ?? undefined)}
                 onOpen={() => {
                   // Note that an edit standing open holds its card, so no pin takes its place until it is saved or canceled.
                   if (review.editing) return;
@@ -3927,6 +4069,7 @@ export function PageCommentLayer({
             }}
             onHint={(over) => onHint(over ? path : undefined)}
             stands={pinStands(box)}
+            cardAt={() => underElement(room.current, marks.get(path) ?? undefined)}
           />
         </span>
       ))}
@@ -3943,6 +4086,7 @@ export function PageCommentLayer({
             words={drafted.words}
             files={drafted.attachments}
             stands={pinStands(draftMark.box)}
+            cardAt={() => underElement(room.current, draftMark.at ?? PAGE_TOP)}
             onOpen={() => {
               if (review?.editing === true) return;
               setHeldOpen(undefined);
@@ -3955,11 +4099,12 @@ export function PageCommentLayer({
       )}
       <RectFloat
         open={floats && opened.length > 0}
-        // Note that a thread opens under its pin, or by its element where its pin is not yet drawn, as one just started is.
+        // Note that a thread opens under its element, where the comment that started it was written, clear of what it is on; under its pin where the element is not measured.
         anchor={() =>
           at === undefined
             ? inWindow(room.current, PAGE_TOP)
-            : (pinBox(postedPins.current, at) ?? inWindow(room.current, marks.get(at) ?? undefined))
+            : (underElement(room.current, marks.get(at) ?? undefined) ??
+              pinBox(postedPins.current, at))
         }
         side={POPOVER_SIDE.BELOW}
         // Note that a held reply's edit standing open in a thread holds the card, so a stray press never drops its words.
@@ -3979,6 +4124,8 @@ export function PageCommentLayer({
                   open
                   place={THREAD_PLACE.FLOAT}
                   doors={full}
+                  // Note that words selected in the element are quoted over their thread, since several threads' words may stand in one element.
+                  quote={thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS}
                 />
               ))}
             </div>
@@ -3990,8 +4137,8 @@ export function PageCommentLayer({
         anchor={() =>
           heldOpen === undefined
             ? undefined
-            : (pinBox(heldPins.current, heldOpen) ??
-              inWindow(room.current, marks.get(heldOpen) ?? undefined))
+            : (underElement(room.current, marks.get(heldOpen) ?? undefined) ??
+              pinBox(heldPins.current, heldOpen))
         }
         side={POPOVER_SIDE.BELOW}
         // Note that an edit standing open in the card holds it, so its words are never lost to a stray press.
@@ -4021,7 +4168,7 @@ export function PageCommentLayer({
       </RectFloat>
       <RectFloat
         open={pending !== undefined}
-        anchor={() => inWindow(room.current, pending?.box ?? PAGE_TOP)}
+        anchor={() => underElement(room.current, pending?.box ?? PAGE_TOP)}
         side={POPOVER_SIDE.BELOW}
         // Note that a comment being sent, or holding files or a dictation, which no draft keeps, stands through a press away, as a description's does.
         onPressAway={() => {
@@ -4034,9 +4181,9 @@ export function PageCommentLayer({
             <PendingCard
               on={pageDraftOn(page.id)}
               place={THREAD_PLACE.FLOAT}
-              // Note that the element's words stand over the field as the thread's quote line will, rather than as a quote in its words.
+              // Note that an element picked has its words stand over the field as the thread's quote line will, while words replied to stand in the field as the quote Reply laid in.
               head={
-                pending.element === undefined ? undefined : (
+                pending.element === undefined || pending.element.words === true ? undefined : (
                   <QuoteLine words={pending.element.quote} label={COMMENT_WORDS.SHOW_ELEMENT} />
                 )
               }

@@ -455,6 +455,11 @@ function routedContent(
   }
 }
 
+/** A message line's words: its text blocks, one after another. */
+function textOf(content: readonly ContentBlock[]): string {
+  return content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n\n");
+}
+
 /** The bytes a line carries beside a replay ahead of it: the turn's words, the developer's, and each picture or document counted as a file (`fileBlocksBytes`). */
 function besideBytes(turnText: string | undefined, content: readonly ContentBlock[]): number {
   const words = [
@@ -1410,7 +1415,12 @@ export const runnerSessions = <
           Effect.tapError(logStoreFailure),
           Effect.orElseSucceed(() => Option.none<string>()),
         );
-        const turn = { kind: sent.turn, turnId: Option.getOrUndefined(awaited) };
+        const { content } = sent.line;
+        const turn = {
+          kind: sent.turn,
+          turnId: Option.getOrUndefined(awaited),
+          words: textOf(content),
+        };
         const [opened, experiments] = yield* Effect.all(
           [
             coderTurnMessage(admitted, agent, turn, handed, now),
@@ -1418,7 +1428,6 @@ export const runnerSessions = <
           ],
           { concurrency: "unbounded" },
         );
-        const { content } = sent.line;
         // Note that the replay is fitted beside what else the line carries, so the whole line fits the window.
         const replay = replayed
           ? yield* restartReplay(agent, besideBytes(opened.text, content), sent.line.uuid)
