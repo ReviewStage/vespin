@@ -97,6 +97,7 @@ import { FIXTURE_IDS, FIXTURE_PAGE } from "@repo/host/fixture-stage";
 import { agentTab, changesTab, fileTab, pageTab, terminalTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { longRunHold, longRunPicture, longRunTranscript } from "./agent-long-run-fixture.js";
+import { fixtureAgentFields, mocksAlwaysAllow } from "./always-allow-prototype.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import type { MainTab } from "./use-main-tabs.js";
 import type { SidePanelState, StagedSidePanel } from "./use-side-panel.js";
@@ -280,7 +281,7 @@ const DELETIONS = CHANGED_FILES.reduce((sum, file) => sum + file.deletions, 0);
 
 /** The agent as the task's list and its tab hold it. */
 function agentSummary(taskId: string, running = false): AgentSummary {
-  return {
+  const summary: AgentSummary = {
     id: FIXTURE_AGENT_ID,
     planId: taskId,
     model: "anthropic/claude-opus-5.5",
@@ -293,6 +294,10 @@ function agentSummary(taskId: string, running = false): AgentSummary {
     brief: AGENT_BRIEF.PROMPT,
     sandboxVcpus: 2,
   };
+  // Note that the always-allow prototype stands the agent on an asking mode with a held call.
+  return mocksAlwaysAllow()
+    ? { ...summary, ...fixtureAgentFields(), status: AGENT_STATUS.RUNNING }
+    : summary;
 }
 
 /** A tool's call as the transcript stores it, answered. */

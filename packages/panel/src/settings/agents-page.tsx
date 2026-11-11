@@ -73,9 +73,11 @@ import {
   unsearchedModels,
   windowLabel,
 } from "../tasks/agent-model.js";
+import { alwaysAllowUi, mocksAlwaysAllow } from "../tasks/always-allow-prototype.js";
 import { useRepositoryRemedy } from "../tasks/repository-remedy.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { AgentAuthSection } from "./agent-auth-section.js";
+import { AlwaysAllowedSection } from "./always-allowed-section.js";
 import { ReadFailed } from "./marks.js";
 import { PickerRow } from "./picker-row.js";
 import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
@@ -486,6 +488,7 @@ export function AgentsPage({
     <>
       <AgentAuthSection signedIn={signedIn} onKeys={onKeys} />
       <AgentsSection signedIn={signedIn} ownKeys={ownKeys} view={view} />
+      {mocksAlwaysAllow() ? <AlwaysAllowedSection ui={alwaysAllowUi()} /> : null}
     </>
   );
 }

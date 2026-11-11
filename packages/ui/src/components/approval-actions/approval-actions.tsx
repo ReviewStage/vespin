@@ -4,6 +4,9 @@ import type { ShownError } from "../../reported-failure.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { GAP, Inline, Stack } from "../layout/layout.js";
+import { dropBelow, Menu, useMenu } from "../menu/menu.js";
+import { SplitButton } from "../split-button/split-button.js";
+import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { TextField } from "../text-field/text-field.js";
 
 /**
@@ -68,6 +71,68 @@ export interface DenyNoteDoors {
   readonly onCancel: () => void;
 }
 
+/** One place a kept rule may apply, as Always allow's menu offers it (prototype). */
+export interface AlwaysAllowScope {
+  readonly label: string;
+  readonly detail?: string | undefined;
+  readonly onSelect: () => void;
+}
+
+/** What Always allow keeps, said before it is pressed (prototype): a line under the presses, and the places its chevron offers where the place is chosen. */
+export interface AlwaysAllowKeeps {
+  readonly line?: ReactNode;
+  readonly scopes?: readonly AlwaysAllowScope[] | undefined;
+  /** The press's words where they differ from Always allow's. */
+  readonly label?: string | undefined;
+}
+
+/** Always allow with its chevron of places (prototype). */
+function AlwaysAllowSplit({
+  label,
+  scopes,
+  disabled,
+  busy,
+  onAllow,
+}: {
+  label: string;
+  scopes: readonly AlwaysAllowScope[];
+  disabled: boolean;
+  busy: boolean;
+  onAllow: () => void;
+}): React.JSX.Element {
+  const menu = useMenu(true);
+  return (
+    <>
+      <SplitButton
+        variant={BUTTON_VARIANT.OUTLINE}
+        disabled={disabled}
+        busy={busy}
+        busyLabel={WORDS.ALLOWING}
+        onClick={onAllow}
+        menu={{ label: "Where to always allow", ...menu.trigger(dropBelow) }}
+      >
+        {label}
+      </SplitButton>
+      {menu.drawn === undefined ? null : (
+        <Menu
+          label="Always allow"
+          heading="Don't ask again for this"
+          menu={menu.drawn}
+          onClose={menu.close}
+          replayUnmasked
+          groups={[
+            scopes.map((scope) => ({
+              label: scope.label,
+              detail: scope.detail,
+              onSelect: scope.onSelect,
+            })),
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
 /** The denial's field, with Deny and Cancel after it. */
 function DenyNote({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): React.JSX.Element {
   const [words, setWords] = useState("");
@@ -113,8 +178,11 @@ export function ApprovalActions({
   error,
   noteMaxLength,
   note,
+  keeps,
   onAnswer,
 }: {
+  /** What Always allow keeps, said before it is pressed (prototype); nothing where none is given. */
+  keeps?: AlwaysAllowKeeps | undefined;
   /** The answer that is out, whose press stands busy while the others take nothing; none while none is. */
   answering?: ApprovalAction | undefined;
   /** Why the last answer did not go, said under the presses; none while nothing went wrong. */
@@ -153,19 +221,34 @@ export function ApprovalActions({
           >
             {WORDS.ALLOW}
           </Button>
-          <Button
-            variant={BUTTON_VARIANT.OUTLINE}
-            disabled={out && answering !== APPROVAL_ACTION.ALLOW_FOR_AGENT}
-            busy={answering === APPROVAL_ACTION.ALLOW_FOR_AGENT}
-            busyLabel={WORDS.ALLOWING}
-            onClick={() => onAnswer(APPROVAL_ACTION.ALLOW_FOR_AGENT)}
-          >
-            {WORDS.ALLOW_FOR_AGENT}
-          </Button>
+          {keeps?.scopes === undefined ? (
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              disabled={out && answering !== APPROVAL_ACTION.ALLOW_FOR_AGENT}
+              busy={answering === APPROVAL_ACTION.ALLOW_FOR_AGENT}
+              busyLabel={WORDS.ALLOWING}
+              onClick={() => onAnswer(APPROVAL_ACTION.ALLOW_FOR_AGENT)}
+            >
+              {keeps?.label ?? WORDS.ALLOW_FOR_AGENT}
+            </Button>
+          ) : (
+            <AlwaysAllowSplit
+              label={keeps.label ?? WORDS.ALLOW_FOR_AGENT}
+              scopes={keeps.scopes}
+              disabled={out && answering !== APPROVAL_ACTION.ALLOW_FOR_AGENT}
+              busy={answering === APPROVAL_ACTION.ALLOW_FOR_AGENT}
+              onAllow={() => onAnswer(APPROVAL_ACTION.ALLOW_FOR_AGENT)}
+            />
+          )}
           <Button variant={BUTTON_VARIANT.QUIET} disabled={out} onClick={() => setDenying(true)}>
             {WORDS.DENY}
           </Button>
         </Inline>
+      )}
+      {keeps?.line === undefined || denying ? null : (
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {keeps.line}
+        </Text>
       )}
       <ErrorLine error={error} />
     </Stack>

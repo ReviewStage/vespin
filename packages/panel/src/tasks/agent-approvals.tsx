@@ -58,6 +58,13 @@ import {
 import type { AgentActAnswer, Unreached } from "../act.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
+import { AnsweredKeeps, keepsOf } from "./always-allow-mockups.js";
+import {
+  ALWAYS_ALLOW_STEP,
+  ALWAYS_ALLOW_UI,
+  alwaysAllowStep,
+  alwaysAllowUi,
+} from "./always-allow-prototype.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
 
@@ -335,7 +342,12 @@ export function useAgentApprovals(input: {
           (ask): ApprovalView => ({
             approval: ask.approval,
             answering: ask.answering,
-            settled: ask.settled,
+            // Note that the always-allow prototype stages the call answered.
+            settled:
+              alwaysAllowUi() !== ALWAYS_ALLOW_UI.CURRENT &&
+              alwaysAllowStep() === ALWAYS_ALLOW_STEP.ANSWERED
+                ? HELD_WORDS.ALLOWED_FOR_AGENT
+                : ask.settled,
             error: ask.error,
             onAnswer: (card, message) => answer(agent.id, ask.approval.id, card, message),
           }),
@@ -431,6 +443,37 @@ function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): Reac
 
 /** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
 export function heldCallOf(ask: ApprovalView): HeldCall {
+  // Note that the always-allow prototype stages the call answered, or says what Always allow keeps.
+  const ui = alwaysAllowUi();
+  if (
+    ui !== ALWAYS_ALLOW_UI.CURRENT &&
+    (ask.settled === HELD_WORDS.ALLOWED_FOR_AGENT ||
+      alwaysAllowStep() === ALWAYS_ALLOW_STEP.ANSWERED)
+  ) {
+    return {
+      status: HELD_WORDS.ALLOWED_FOR_AGENT,
+      waiting: false,
+      about: undefined,
+      actions: <AnsweredKeeps ui={ui} />,
+    };
+  }
+  if (ui !== ALWAYS_ALLOW_UI.CURRENT && ask.settled === undefined) {
+    return {
+      status: HELD_WORDS.WAITING,
+      waiting: true,
+      about: heldAbout(ask.approval),
+      actions: (
+        <ApprovalActions
+          answering={ask.answering}
+          error={ask.error}
+          noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
+          note={(doors) => <DenyNoteBox {...doors} />}
+          keeps={keepsOf(ui, () => ask.onAnswer(APPROVAL_ACTION.ALLOW_FOR_AGENT))}
+          onAnswer={ask.onAnswer}
+        />
+      ),
+    };
+  }
   return {
     status: ask.settled ?? HELD_WORDS.WAITING,
     waiting: ask.settled === undefined,
