@@ -43,6 +43,7 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowSubmenu,
   TaskRow,
 } from "./list-row.js";
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
