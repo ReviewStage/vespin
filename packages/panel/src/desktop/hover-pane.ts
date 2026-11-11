@@ -10,7 +10,7 @@
  */
 
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 /** How a pane stands over the work. */
 export const PANE_FLOAT = {
@@ -110,11 +110,6 @@ export function useHoverPane(
   }, [onState]);
   // A peek opened by its toggle takes the keyboard as one opened from away does.
   const toggled = useRef(false);
-  // Whether the pointer left a peek while a popup raised from it stood, which
-  // puts the peek away once that popup goes. Note that it is let go with the
-  // peek as it is drawn, so a later peek never inherits it.
-  const [lingering, setLingering] = useState(false);
-  if (lingering && state !== PANE_FLOAT.PEEK) setLingering(false);
   const open = useCallback(() => {
     toggled.current = true;
     onState(PANE_FLOAT.OPEN);
@@ -140,21 +135,28 @@ export function useHoverPane(
     focusAt(held)?.focus();
   }, [state, focusAt, ref]);
   useEffect(() => () => onState(PANE_FLOAT.CLOSED), [onState]);
-  // Note that the popup's own control says when it goes, its button's
+  // A peek whose popup goes while the pointer is away from it goes too,
+  // wherever the pointer went meanwhile: into the popup, which React counts
+  // as inside the pane and so tells it no leave, or out of the window. Note
+  // that the popup's own control says when it goes, its button's
   // `aria-expanded`, or by leaving the pane altogether, so the pane's own
   // attributes and children are all that is watched. Where the pointer
   // stands is the last element it came over, none once it left the window.
   useEffect(() => {
     const held = ref.current;
-    if (!lingering || held === null) return;
+    if (state !== PANE_FLOAT.PEEK || held === null) return;
     let over = false;
+    let raised = raisesPopup(held);
     const came = (event: PointerEvent) => {
       over = event.target instanceof Node && held.contains(event.target);
     };
+    const left = (event: PointerEvent) => {
+      if (event.relatedTarget === null) over = false;
+    };
     const settle = () => {
-      if (raisesPopup(held)) return;
-      setLingering(false);
-      if (!over) onState(PANE_FLOAT.CLOSED);
+      const was = raised;
+      raised = raisesPopup(held);
+      if (was && !raised && !over) onState(PANE_FLOAT.CLOSED);
     };
     const watch = new MutationObserver(settle);
     watch.observe(held, {
@@ -164,12 +166,13 @@ export function useHoverPane(
       attributeFilter: ["aria-expanded"],
     });
     document.addEventListener("pointerover", came);
-    settle();
+    document.addEventListener("pointerout", left);
     return () => {
       watch.disconnect();
       document.removeEventListener("pointerover", came);
+      document.removeEventListener("pointerout", left);
     };
-  }, [lingering, onState, ref]);
+  }, [state, onState, ref]);
   // Note that only Tab is held, the keyboard walking out of the pane brought
   // back to its start once it has landed outside, since a focus moved back
   // while it is still leaving is overtaken by the one in flight; a focus the
@@ -240,11 +243,9 @@ export function useHoverPane(
       const to = event.relatedTarget;
       // A menu or a dialog the pane raised stands outside it, and is no way out either.
       if (to instanceof Element && (to.closest(stays) ?? to.closest(KEY_LAYERS)) !== null) return;
+      // A popup raised from it holds it, until that popup goes.
       const held = ref.current;
-      if (held !== null && raisesPopup(held)) {
-        setLingering(true);
-        return;
-      }
+      if (held !== null && raisesPopup(held)) return;
       onState(PANE_FLOAT.CLOSED);
     },
     onKeyDown: (event) => {

@@ -199,6 +199,13 @@ test("a peek stays while a popup raised from it stands, wherever the pointer lea
   // The popup's going is heard as a mutation, which is told after the press.
   await act(async () => part(page, ".resources").click());
   assert.equal(standing(page), PANE_FLOAT.CLOSED, "the card gone, the peek goes with it");
+
+  // The pointer still on the card, which tells the pane no leave, as the card is put away.
+  pointerCross(part(page, ".work"), part(page, ".edge"));
+  await act(async () => part(page, ".resources").click());
+  pointerCross(aside, document.querySelector(".card") ?? assert.fail("the card is drawn"));
+  await act(async () => part(page, ".resources").click());
+  assert.equal(standing(page), PANE_FLOAT.CLOSED, "the card put away under the pointer");
 });
 
 test("a pane opened from away holds the keyboard against Tab until Escape hands it back", () => {
