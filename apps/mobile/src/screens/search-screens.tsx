@@ -48,7 +48,7 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
   ]);
 }
 
-/** What the query found, a section per kind that found any: Tasks, Inbox, then Agents, each row as its own list draws it. */
+/** What the query found, a section per kind that found any: Tasks, Inbox, then Agents, each row as its own list draws it, and a pull that reads the Inbox and the task list again. */
 function FoundList({
   found,
   listing,
@@ -62,9 +62,15 @@ function FoundList({
   /** Opens Remind me on a thread found, as the Inbox's row does. */
   readonly onRemind: (item: InboxItem) => void;
 }) {
-  const { mark } = useInboxActs();
+  const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   return (
-    <RowList look={LIST_LOOK.PLAIN} onSelect={onOpen}>
+    <RowList
+      look={LIST_LOOK.PLAIN}
+      onSelect={onOpen}
+      onRefresh={async () => {
+        await Promise.all([refresh(), refreshTasks()]);
+      }}
+    >
       {found.tasks.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS]} count={found.tasks.length}>
           {found.tasks.map((task) => (
@@ -81,6 +87,7 @@ function FoundList({
               readerId={found.readerId}
               onMark={mark}
               onRemind={onRemind}
+              onResolve={resolve}
             />
           ))}
         </ListSection>

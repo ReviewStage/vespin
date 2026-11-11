@@ -23,6 +23,7 @@ import {
   MINE,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -40,6 +41,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
 import { cachedVideo } from "../cached-media.js";
@@ -204,11 +206,13 @@ function refused(what: string): (error: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
-/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, its reminder set or cleared, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
+/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, its reminder set or cleared, an open one resolved from its row, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
 export function useInboxActs(): {
   readonly mark: (itemId: string, unread: boolean) => void;
   /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
   readonly remind: (itemId: string, until: number | null) => void;
+  /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused. */
+  readonly resolve: (item: InboxItem) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshTasks: () => Promise<void>;
@@ -224,6 +228,19 @@ export function useInboxActs(): {
           (answer) => buzz("failure" in answer ? BUZZ.ERROR : BUZZ.SUCCESS),
           (error: unknown) => {
             refused("The reminder")(error);
+            buzz(BUZZ.ERROR);
+          },
+        );
+      },
+      resolve: (item) => {
+        acts[ACT_KIND.AGENTS_INBOX_CLOSE]({
+          itemId: item.id,
+          revision: item.revision,
+          clientKey: randomUUID(),
+        }).then(
+          (answer) => buzz("failure" in answer || !answer.taken ? BUZZ.ERROR : BUZZ.SUCCESS),
+          (error: unknown) => {
+            refused("The resolve")(error);
             buzz(BUZZ.ERROR);
           },
         );
