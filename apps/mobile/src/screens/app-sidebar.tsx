@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a regular window's sidebar, as Mail's and Linear's stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
+// app-sidebar.tsx -- a regular window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
 
 import {
   type ColumnBar,
@@ -82,7 +82,7 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
  * selected. A place opens its tab, and a task opens on the Tasks tab beside
  * its list, as a link to it does. The account's photo and Settings both open
  * Settings, the photo where the iPhone stands it and Settings at the foot,
- * as Linear's iPad sidebar stands it; New task opens its sheet.
+ * where an iPad sidebar stands it; New task opens its sheet.
  */
 export function useAppSidebar(
   place: SidebarPlace,

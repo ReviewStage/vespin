@@ -220,7 +220,7 @@ export function workspaceSettingsAction(onPress: () => void): SwitcherAction {
   return { label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, symbol: "building.2", onPress };
 }
 
-/** The menu's last act, Settings, as Notion's switcher ends its menu with it: the same Settings the account's photo opens. */
+/** The menu's last act, Settings: the same Settings the account's photo opens, found from the workspace's name as well. */
 export function settingsAction(onPress: () => void): SwitcherAction {
   return { label: "Settings", symbol: "gearshape", onPress };
 }
