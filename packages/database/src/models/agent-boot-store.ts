@@ -11,19 +11,17 @@
  *
  * The phases (`@repo/features/agent-boot`'s `BOOT_PHASE`), and nothing else:
  *
- *   (none)          -> STARTING         beginAgentBoot, its first line queued
- *   STARTING        -> RUNNING_SCRIPTS  agentBootScriptsStarted
- *   STARTING | RUNNING_SCRIPTS -> HANDING_OFF  agentBootRunnerUp, its queue
- *                                       holding a message; READY where none
- *   HANDING_OFF     -> READY            agentBootHandedOff
- *   STARTING | RUNNING_SCRIPTS -> FAILED  failAgentBoot, its queue paused
- *   FAILED          -> STARTING         rebootAgent, the pause lifted
- *   READY           -> (none)           endAgentBoot, once the first turn settles
+ *   (none)      -> STARTING     beginAgentBoot, its first line queued
+ *   STARTING    -> HANDING_OFF  agentBootRunnerUp, its queue holding a
+ *                               message; READY where none
+ *   HANDING_OFF -> READY        agentBootHandedOff
+ *   STARTING    -> FAILED       failAgentBoot, its queue paused
+ *   FAILED      -> STARTING     rebootAgent, the pause lifted
+ *   READY       -> (none)       endAgentBoot, once the first turn settles
  *
- * A failure and the scripts' start may name the attempt they were begun
- * under, so a delivery or a sweep of a boot Retry has since replaced moves
- * nothing; the runner coming up and the scripts' end name none, as their
- * callers read the machine as it stands. Nothing here reads the clock: each
+ * A failure may name the attempt it was begun under, so a delivery or a
+ * sweep of a boot Retry has since replaced moves nothing; the runner coming
+ * up names none, as its caller reads the machine as it stands. Nothing here reads the clock: each
  * write is handed its instant.
  */
 
@@ -63,7 +61,6 @@ export interface AgentBootRow {
   readonly phase: BootPhase;
   readonly phaseAt: Date;
   readonly deadlineAt: Date;
-  readonly setupExit: number | undefined;
   readonly failure: BootFailure | undefined;
 }
 
@@ -73,7 +70,6 @@ const BootRowSchema = Schema.Struct({
   phase: Schema.Literals(PHASES),
   phaseAt: Schema.Date,
   deadlineAt: Schema.Date,
-  setupExit: Schema.NullOr(Schema.Number),
   failure: Schema.NullOr(Schema.Literals(FAILURES)),
 });
 
@@ -83,14 +79,12 @@ const BOOT_COLUMNS = {
   phase: agentBootTable.phase,
   phaseAt: agentBootTable.phaseAt,
   deadlineAt: agentBootTable.deadlineAt,
-  setupExit: agentBootTable.setupExit,
   failure: agentBootTable.failure,
 };
 
 function bootOf(row: typeof BootRowSchema.Type): AgentBootRow {
   return {
     ...row,
-    setupExit: row.setupExit ?? undefined,
     failure: row.failure ?? undefined,
   };
 }
@@ -132,12 +126,11 @@ const updatePhase = SqlSchema.findAll({
     from: Schema.Array(Schema.Literals(PHASES)),
     to: Schema.Literals(PHASES),
     at: Schema.Date,
-    setupExit: Schema.NullOr(Schema.Number),
     failure: Schema.NullOr(Schema.Literals(FAILURES)),
     nextAttempt: Schema.Boolean,
   }),
   Result: BootRowSchema,
-  execute: ({ agentId, attempt, from, to, at, setupExit, failure, nextAttempt }) =>
+  execute: ({ agentId, attempt, from, to, at, failure, nextAttempt }) =>
     Database.use((db) =>
       db
         .update(agentBootTable)
@@ -145,11 +138,10 @@ const updatePhase = SqlSchema.findAll({
           phase: to,
           phaseAt: at,
           deadlineAt: deadlineFrom(at),
-          ...(setupExit === null ? undefined : { setupExit }),
           ...(failure === null ? undefined : { failure }),
-          // Note that a next attempt keeps nothing of the last: no failure, and no exit of scripts it has not run.
+          // Note that a next attempt keeps nothing of the last, its failure among it.
           ...(nextAttempt
-            ? { attempt: sql`${agentBootTable.attempt} + 1`, failure: null, setupExit: null }
+            ? { attempt: sql`${agentBootTable.attempt} + 1`, failure: null }
             : undefined),
         })
         .where(
@@ -199,7 +191,6 @@ function moved(
     readonly from: readonly BootPhase[];
     readonly to: BootPhase;
     readonly at: Date;
-    readonly setupExit?: number | undefined;
     readonly failure?: BootFailure | undefined;
     readonly nextAttempt?: boolean | undefined;
   },
@@ -211,7 +202,6 @@ function moved(
       from: move.from,
       to: move.to,
       at: move.at,
-      setupExit: move.setupExit ?? null,
       failure: move.failure ?? null,
       nextAttempt: move.nextAttempt === true,
     }),
@@ -270,52 +260,14 @@ export function beginAgentBoot(
   );
 }
 
-/** The workspace's setup scripts begun in the agent's sandbox (STARTING -> RUNNING_SCRIPTS), under `attempt` where one is named; nothing for an agent whose first launch is over. */
-export function agentBootScriptsStarted(
-  agentId: string,
-  at: Date,
-  attempt?: number,
-): AgentBootEffect<void> {
-  return Effect.asVoid(
-    underAgentQueueLock(
-      agentId,
-      moved(agentId, { attempt, from: [BOOT_PHASE.STARTING], to: BOOT_PHASE.RUNNING_SCRIPTS, at }),
-      () => false,
-    ),
-  );
-}
-
-const updateSetupExit = SqlSchema.void({
-  Request: Schema.Struct({ agentId: Schema.String, setupExit: Schema.Number }),
-  execute: ({ agentId, setupExit }) =>
-    Database.use((db) =>
-      db
-        .update(agentBootTable)
-        .set({ setupExit })
-        .where(
-          and(
-            eq(agentBootTable.agentId, agentId),
-            eq(agentBootTable.phase, BOOT_PHASE.RUNNING_SCRIPTS),
-          ),
-        ),
-    ),
-});
-
-/** The setup scripts' exit code kept where they ran for the agent's first launch, its phase left as it stands until its runner is up; nothing for one whose first launch is over. */
-export function agentBootScriptsEnded(agentId: string, setupExit: number): AgentBootEffect<void> {
-  return updateSetupExit({ agentId, setupExit });
-}
-
 /**
- * The agent's runner up (STARTING | RUNNING_SCRIPTS -> HANDING_OFF), with
- * the setup scripts' exit code where they ran, so its queue's head goes
+ * The agent's runner up (STARTING -> HANDING_OFF), so its queue's head goes
  * next; straight to READY where nothing stands queued. Answers the boot
  * where it moved, none where it stood elsewhere: an earlier poll moved it.
  */
 export function agentBootRunnerUp(
   agentId: string,
   at: Date,
-  setupExit: number | undefined,
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   return underAgentQueueLock(
     agentId,
@@ -325,7 +277,6 @@ export function agentBootRunnerUp(
         from: BOOTING_PHASES,
         to: holds ? BOOT_PHASE.HANDING_OFF : BOOT_PHASE.READY,
         at,
-        setupExit,
       });
     }),
     () => false,
@@ -344,8 +295,8 @@ export function agentBootHandedOff(agentId: string, at: Date): AgentBootEffect<v
 }
 
 /**
- * The agent's first launch failed (STARTING | RUNNING_SCRIPTS -> FAILED)
- * for `failure`, under `attempt` where one is named, and its queue paused in
+ * The agent's first launch failed (STARTING -> FAILED) for `failure`,
+ * under `attempt` where one is named, and its queue paused in
  * the same transaction, its messages kept for Retry. Answers whether it
  * moved.
  */

@@ -8,7 +8,6 @@ CREATE TABLE "agent_boot" (
 	"phase" text NOT NULL,
 	"phase_at" timestamp with time zone NOT NULL,
 	"deadline_at" timestamp with time zone NOT NULL,
-	"setup_exit" integer,
 	"failure" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -71,4 +70,4 @@ $app_sync$;
 --> statement-breakpoint
 CREATE TRIGGER "app_sync_write" AFTER INSERT OR DELETE ON "agent_boot" FOR EACH ROW EXECUTE FUNCTION "app_sync_agent_boot"();
 --> statement-breakpoint
-CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "agent_boot" FOR EACH ROW WHEN (OLD."agent_id" IS DISTINCT FROM NEW."agent_id" OR OLD."attempt" IS DISTINCT FROM NEW."attempt" OR OLD."phase" IS DISTINCT FROM NEW."phase" OR OLD."phase_at" IS DISTINCT FROM NEW."phase_at" OR OLD."deadline_at" IS DISTINCT FROM NEW."deadline_at" OR OLD."setup_exit" IS DISTINCT FROM NEW."setup_exit" OR OLD."failure" IS DISTINCT FROM NEW."failure" OR OLD."created_at" IS DISTINCT FROM NEW."created_at") EXECUTE FUNCTION "app_sync_agent_boot"();
+CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "agent_boot" FOR EACH ROW WHEN (OLD."agent_id" IS DISTINCT FROM NEW."agent_id" OR OLD."attempt" IS DISTINCT FROM NEW."attempt" OR OLD."phase" IS DISTINCT FROM NEW."phase" OR OLD."phase_at" IS DISTINCT FROM NEW."phase_at" OR OLD."deadline_at" IS DISTINCT FROM NEW."deadline_at" OR OLD."failure" IS DISTINCT FROM NEW."failure" OR OLD."created_at" IS DISTINCT FROM NEW."created_at") EXECUTE FUNCTION "app_sync_agent_boot"();

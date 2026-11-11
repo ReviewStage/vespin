@@ -11,7 +11,6 @@ import { agentTable } from "./agent.js";
  * writer). `phase` is where the boot stands (`@repo/features/agent-boot`'s
  * `BOOT_PHASE`), `phase_at` when it entered it, which the bar counts from,
  * `deadline_at` when the minute sweep fails a boot still under way,
- * `setup_exit` the workspace's setup scripts' exit code once they ended,
  * `failure` why the boot failed where it did, and `attempt` how many boots
  * Retry has begun, so a delivery of an earlier attempt moves nothing. The
  * row goes with its agent. It holds ids, words of fixed sets, a number, and
@@ -27,7 +26,6 @@ export const agentBootTable = pgTable(
     phase: text("phase").$type<BootPhase>().notNull(),
     phaseAt: timestamptz("phase_at").notNull(),
     deadlineAt: timestamptz("deadline_at").notNull(),
-    setupExit: integer("setup_exit"),
     failure: text("failure").$type<BootFailure>(),
     createdAt: createdAt(),
   },

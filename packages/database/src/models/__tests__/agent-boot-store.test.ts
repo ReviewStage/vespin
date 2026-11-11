@@ -12,8 +12,6 @@ import {
   agentBootHandedOff,
   agentBootOf,
   agentBootRunnerUp,
-  agentBootScriptsEnded,
-  agentBootScriptsStarted,
   beginAgentBoot,
   endAgentBoot,
   failAgentBoot,
@@ -73,15 +71,13 @@ const firstLine = (userId: string) => ({
 
 it.layer(getTestDB())("an agent's first launch", (it) => {
   it.effect(
-    "boots with its first message queued and held, runs its scripts, and hands off once its runner is up",
+    "boots with its first message queued and held, and hands off once its runner is up",
     () =>
       Effect.gen(function* () {
         const { userId, agentId } = yield* openAccount;
         yield* beginAgentBoot(agentId, AT, firstLine(userId));
         const heldWhileStarting = yield* claimQueueHead(agentId);
-        yield* agentBootScriptsStarted(agentId, past(1_000));
-        yield* agentBootScriptsEnded(agentId, 2);
-        const up = yield* agentBootRunnerUp(agentId, past(2_000), undefined);
+        const up = yield* agentBootRunnerUp(agentId, past(2_000));
         const handedOn = yield* claimQueueHead(agentId);
         yield* agentBootHandedOff(agentId, past(3_000));
         const ready = yield* agentBootOf(agentId);
@@ -89,8 +85,8 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
 
         assert.ok(Option.isNone(heldWhileStarting), "nothing goes while the machine boots");
         assert.deepEqual(
-          Option.map(up, (boot) => [boot.phase, boot.setupExit]),
-          Option.some([BOOT_PHASE.HANDING_OFF, 2]),
+          Option.map(up, (boot) => boot.phase),
+          Option.some(BOOT_PHASE.HANDING_OFF),
         );
         assert.deepEqual(
           Option.map(handedOn, (message) => message.text),
@@ -109,7 +105,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
       const { agentId } = yield* openAccount;
       yield* beginAgentBoot(agentId, AT, undefined);
 
-      const up = yield* agentBootRunnerUp(agentId, past(1_000), undefined);
+      const up = yield* agentBootRunnerUp(agentId, past(1_000));
 
       assert.deepEqual(
         Option.map(up, (boot) => boot.phase),
@@ -124,8 +120,6 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
       Effect.gen(function* () {
         const { userId, agentId } = yield* openAccount;
         yield* beginAgentBoot(agentId, AT, firstLine(userId));
-        yield* agentBootScriptsStarted(agentId, past(500));
-        yield* agentBootScriptsEnded(agentId, 1);
 
         const failed = yield* failAgentBoot(agentId, BOOT_FAILURE.CHECKOUT_FAILED, past(1_000));
         const pausedBy = (yield* agentQueueNow(agentId)).paused?.because;
@@ -137,8 +131,8 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
         assert.equal(pausedBy, QUEUE_PAUSE.BOOT_FAILED);
         assert.equal(failedAgain, false, "a failed boot fails no second time");
         assert.deepEqual(
-          Option.map(rebooted, (boot) => [boot.phase, boot.attempt, boot.failure, boot.setupExit]),
-          Option.some([BOOT_PHASE.STARTING, 2, undefined, undefined]),
+          Option.map(rebooted, (boot) => [boot.phase, boot.attempt, boot.failure]),
+          Option.some([BOOT_PHASE.STARTING, 2, undefined]),
         );
         assert.equal(afterReboot.paused, undefined);
         assert.deepEqual(
@@ -176,7 +170,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
       yield* beginAgentBoot(failed.agentId, AT, undefined);
       yield* beginAgentBoot(ready.agentId, AT, undefined);
       yield* failAgentBoot(failed.agentId, BOOT_FAILURE.MACHINE_UNAVAILABLE, AT);
-      yield* agentBootRunnerUp(ready.agentId, AT, undefined);
+      yield* agentBootRunnerUp(ready.agentId, AT);
 
       const before = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS - 1), 100);
       const after = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS), 100);
@@ -216,7 +210,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
           id: randomUUID(),
         });
         const read = yield* agentQueueNow(agentId);
-        yield* agentBootRunnerUp(agentId, past(1_000), undefined);
+        yield* agentBootRunnerUp(agentId, past(1_000));
         yield* agentBootHandedOff(agentId, past(2_000));
         const afterBoot = yield* queueWhileBooting(agentId, userId, {
           ...automation,

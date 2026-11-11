@@ -3,11 +3,12 @@ import { countedNumber } from "./service-wire.js";
 import { TURN_DEADLINE } from "./turn-deadline.js";
 
 /**
- * agent-boot.ts -- an agent's first launch as one record: its machine booting, its setup scripts running, the first queued message handed off, or the boot failed; the one rule every reader holds a line by while it boots.
+ * agent-boot.ts -- an agent's first launch as one record: its machine booting, the first queued message handed off, or the boot failed; the one rule every reader holds a line by while it boots.
  *
  * An agent's first launch boots its machine before any turn opens: a cloud
- * agent's sandbox opens, checks out, and runs the workspace's setup
- * scripts; a Mac agent's host prepares its folder and starts its runner.
+ * agent's sandbox opens, checks out, and starts its runner, the workspace's
+ * setup scripts left running beside it, unseen here; a Mac agent's host
+ * prepares its folder and starts its runner.
  * Meanwhile every line sent to the agent, its Start's own first message
  * among them, waits in the agent's queue (`agent-queue-wire.ts`), and the
  * boot's end hands the queue on, which opens the first turn. The record is
@@ -17,7 +18,6 @@ import { TURN_DEADLINE } from "./turn-deadline.js";
  *
  *   STARTING         the machine boots: a sandbox opening, a Mac's launch
  *                    claimed or not yet
- *   RUNNING_SCRIPTS  a cloud sandbox runs the workspace's setup scripts
  *   HANDING_OFF      the runner is up and the queue's head is on its way, so
  *                    nothing sent now overtakes the first message
  *   READY            the first message went
@@ -28,7 +28,6 @@ import { TURN_DEADLINE } from "./turn-deadline.js";
 /** Where an agent's first launch stands. */
 export const BOOT_PHASE = {
   STARTING: "starting",
-  RUNNING_SCRIPTS: "running-scripts",
   HANDING_OFF: "handing-off",
   READY: "ready",
   FAILED: "failed",
@@ -68,7 +67,6 @@ export type BootHold = (typeof BOOT_HOLD)[keyof typeof BOOT_HOLD];
 
 const HOLD_OF_PHASE = {
   [BOOT_PHASE.STARTING]: BOOT_HOLD.DIVERT_AND_WAIT,
-  [BOOT_PHASE.RUNNING_SCRIPTS]: BOOT_HOLD.DIVERT_AND_WAIT,
   [BOOT_PHASE.FAILED]: BOOT_HOLD.DIVERT_AND_WAIT,
   [BOOT_PHASE.HANDING_OFF]: BOOT_HOLD.DIVERT,
   [BOOT_PHASE.READY]: BOOT_HOLD.NONE,
@@ -89,10 +87,7 @@ export function bootHolds(phase: BootPhase | null | undefined): boolean {
 }
 
 /** The phases a boot is still under way in, which its deadline bounds. */
-export const BOOTING_PHASES: readonly BootPhase[] = [
-  BOOT_PHASE.STARTING,
-  BOOT_PHASE.RUNNING_SCRIPTS,
-];
+export const BOOTING_PHASES: readonly BootPhase[] = [BOOT_PHASE.STARTING];
 
 /** How long a boot may stand under way before the minute sweep fails it: as long as a queued turn awaits its runner today. */
 export const BOOT_BOUNDS = {
@@ -101,15 +96,12 @@ export const BOOT_BOUNDS = {
 
 /**
  * An agent's first launch as its transcript reads it: its phase and when it
- * entered it, which the bar counts from; the setup scripts' exit code once
- * they ended; why it failed, where it did; and whether the machine runs
- * setup scripts at all, which only a cloud sandbox with a workspace's
- * scripts saved does.
+ * entered it, which the transcript counts from, and why it failed, where it
+ * did.
  */
 export const agentBootSchema = EffectSchema.Struct({
   phase: EffectSchema.Literals(Object.values(BOOT_PHASE)),
   since: countedNumber,
-  setupExit: EffectSchema.optionalKey(EffectSchema.Int),
   failure: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(BOOT_FAILURE))),
 });
 
