@@ -299,7 +299,7 @@ import {
   useMessageReveal,
 } from "./message-links.js";
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
-import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
+import { ReplayCard, type ReplayPlace, replayPlace, SideChatHead } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
@@ -2762,12 +2762,20 @@ function AgentTranscriptView({
                           opening !== undefined &&
                           replay !== undefined ? (
                           <>
-                            <ReplayCard
-                              replay={opening.replay}
-                              sentAt={first.sentAt}
-                              place={replay}
-                              taskId={taskId}
-                            />
+                            {replay.side ? (
+                              <SideChatHead
+                                agentId={opening.replay.agentId}
+                                place={replay}
+                                taskId={taskId}
+                              />
+                            ) : (
+                              <ReplayCard
+                                replay={opening.replay}
+                                sentAt={first.sentAt}
+                                place={replay}
+                                taskId={taskId}
+                              />
+                            )}
                             {opening.note === undefined ? null : (
                               <SteadyAgentMessage
                                 message={opening.note}

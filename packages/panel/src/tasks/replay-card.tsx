@@ -15,6 +15,8 @@ import {
   MESSAGE_LINE_ALIGN,
   MessageHead,
   MessageLine,
+  NOTE_LINE_LOOK,
+  NoteLine,
   OneLine,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -22,7 +24,7 @@ import {
   Text,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName } from "@repo/ui/actor-model";
-import { ICON_SIZE } from "@repo/ui/icons";
+import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
@@ -42,7 +44,6 @@ import {
   earlierStepsLine,
   leftOutLine,
   REPLAY_PAGE,
-  REPLAY_VERB,
   replayCallsServer,
   replayCount,
   replayPage,
@@ -444,6 +445,60 @@ function ReplayFoot({
 }
 
 /**
+ * The press that opens the source: its tab where the place lists it, and
+ * otherwise a link to it, as on an agent's own page, which lists that agent
+ * alone; none where neither opens.
+ */
+function useOpenSource(
+  agentId: string,
+  place: ReplayPlace,
+  taskId: string | undefined,
+): (() => void) | undefined {
+  const openPlace = useOpenPlace();
+  const open = place.onOpen;
+  if (open !== undefined && place.agents.some((each) => each.id === agentId)) {
+    return () => open(agentId);
+  }
+  if (openPlace === undefined) return undefined;
+  return () =>
+    openPlace(
+      taskId === undefined
+        ? { kind: LINK_DESTINATION.AGENT, agentId }
+        : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId },
+    );
+}
+
+/** What a side chat's head says ahead of the chip of the agent it was asked of. */
+const ASKED_OF = "Asked of";
+
+/**
+ * A side chat's head (`side-chat.ts`), over the question it opens on: the
+ * side chat's glyph and the chip of the agent it was asked of, which opens
+ * that agent. It stands in the card's place, since a side chat replays
+ * nothing to show, so the question is drawn once, under it.
+ */
+export function SideChatHead({
+  agentId,
+  place,
+  taskId,
+}: {
+  agentId: string;
+  place: ReplayPlace;
+  /** The task the agents are of, under which the source is opened; none where they are of none. */
+  taskId: string | undefined;
+}): React.JSX.Element {
+  const source = useSource(agentId, place);
+  const tile = place.tile(agentId) ?? unlistedActor(agentId, source);
+  const openSource = useOpenSource(agentId, place, taskId);
+  return (
+    <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={<GLYPH.SIDE_CHAT />} data-side-chat-head="">
+      <span>{ASKED_OF}</span>
+      <ActorRef actor={tile} card={place.card(agentId)} onOpen={openSource} />
+    </NoteLine>
+  );
+}
+
+/**
  * The card: the source's chip and how many steps on its summary row, and,
  * opened, our summary and the steps left out, the newest steps
  * a page at a time, and the foot; the line naming who started the agent and
@@ -464,7 +519,6 @@ export function ReplayCard({
 }): React.JSX.Element {
   const { agentId } = replay;
   const source = useSource(agentId, place);
-  const listed = place.agents.some((each) => each.id === agentId);
   const tile = place.tile(agentId) ?? unlistedActor(agentId, source);
   const name = actorName(tile);
   const { members, former } = useMemberDirectory();
@@ -477,26 +531,11 @@ export function ReplayCard({
           members,
           former,
         );
-  const openPlace = useOpenPlace();
-  const open = place.onOpen;
-  // Note that a source the place does not list, as on an agent's own page, opens as a link to it would.
-  const openSource =
-    listed && open !== undefined
-      ? () => open(agentId)
-      : openPlace === undefined
-        ? undefined
-        : () =>
-            openPlace(
-              taskId === undefined
-                ? { kind: LINK_DESTINATION.AGENT, agentId }
-                : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId },
-            );
-  // A side chat's card only names the agent it was asked of, so it shows its own lines alone.
-  const { side } = place;
-  const verb = side ? REPLAY_VERB.ASKED : replayVerb(replay);
-  const left = side ? undefined : leftOutLine(replay);
-  const summary = side ? undefined : summaryLine(replay);
-  const count = side ? undefined : replayCount(replay);
+  const openSource = useOpenSource(agentId, place, taskId);
+  const verb = replayVerb(replay);
+  const left = leftOutLine(replay);
+  const summary = summaryLine(replay);
+  const count = replayCount(replay);
   return (
     <Message from={MESSAGE_ROLE.USER} className="agent-origin">
       <Plan
@@ -540,7 +579,7 @@ export function ReplayCard({
               <em>{left}</em>
             </Text>
           )}
-          {side ? null : <ReplaySteps steps={replay.steps} place={place} />}
+          <ReplaySteps steps={replay.steps} place={place} />
           <ReplayFoot agentId={agentId} place={place} />
         </PlanContent>
       </Plan>
