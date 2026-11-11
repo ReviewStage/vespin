@@ -134,6 +134,7 @@ async function drawnTab(
   restoring = false,
 ) {
   const opened: string[] = [];
+  const turns: [string, string, string][] = [];
   const page: TaskMentionsValue = {
     holder: { taskId: TASK },
     taskName: "Fix the tile",
@@ -147,6 +148,9 @@ async function drawnTab(
       onOpenTask: () => undefined,
       onOpenFile: (path) => {
         opened.push(path);
+      },
+      onOpenTurnChanges: (agentId, messageId, path) => {
+        turns.push([agentId, messageId, path]);
       },
     },
   };
@@ -250,7 +254,7 @@ async function drawnTab(
     pressInComposer(container, "Enter");
     await settle();
   };
-  return { container, calls, opened, message, editAndSend, sendFromFoot, dialog, press };
+  return { container, calls, opened, turns, message, editAndSend, sendFromFoot, dialog, press };
 }
 
 test("sending an edited middle message asks first, and Cancel keeps every later message and sends nothing", async () => {
@@ -359,7 +363,11 @@ test("a turn that edited a file says which, with its lines added and removed, ov
     chip.textContent ?? "",
   );
   await act(async () => chip.click());
-  assert.deepEqual(on.opened, ["src/tile.css"], "the chip opens the file as any file chip does");
+  assert.deepEqual(
+    [on.turns, on.opened],
+    [[[AGENT, "middle", "src/tile.css"]], []],
+    "the chip opens the turn's changes, by the line that opened the turn, standing on the file",
+  );
   assert.equal(
     on.message("reply-1").querySelector("[data-turn-files]"),
     null,

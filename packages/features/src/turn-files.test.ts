@@ -3,11 +3,13 @@
  */
 
 import assert from "node:assert/strict";
+import { MESSAGE_ROLE } from "@repo/wire";
 import { test } from "vitest";
 import { AGENT_PART, type AgentPart } from "./agent-parts.js";
 import { AGENT_TOOL } from "./agent-tools.js";
+import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { TOOL_STATE } from "./tool-call-block.js";
-import { turnFiles } from "./turn-files.js";
+import { turnFiles, turnLinesOf } from "./turn-files.js";
 
 function call(
   tool: string,
@@ -75,5 +77,42 @@ test("a turn with no edit, whose patch names another checkout's files, or whose 
       call(AGENT_TOOL.WRITE_FILE, { filePath: "b.ts", content: "b\n" }, TOOL_STATE.INPUT_AVAILABLE),
     ]),
     undefined,
+  );
+});
+
+test("each reply names the developer's line that opened its turn, a line that arrived inside a turn opening none", () => {
+  const line = (
+    id: string,
+    arrivedIn?: { journalId: string; afterStep: number },
+  ): AgentTranscriptMessage => ({
+    id,
+    role: MESSAGE_ROLE.USER,
+    parts: [],
+    clientId: id,
+    sentAt: 1,
+    ...(arrivedIn === undefined ? undefined : { arrivedIn }),
+  });
+  const reply = (id: string): AgentTranscriptMessage => ({
+    id,
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [],
+  });
+  assert.deepEqual(
+    [
+      ...turnLinesOf([
+        reply("early"),
+        line("first"),
+        reply("one"),
+        line("steer", { journalId: "j", afterStep: 2 }),
+        reply("two"),
+        line("second"),
+        reply("three"),
+      ]),
+    ],
+    [
+      ["one", "first"],
+      ["two", "first"],
+      ["three", "second"],
+    ],
   );
 });

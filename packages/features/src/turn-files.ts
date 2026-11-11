@@ -14,7 +14,9 @@
  * nor does a call that failed or never answered, whose edit did not land.
  */
 
+import { MESSAGE_ROLE } from "@repo/wire";
 import { AGENT_PART, type AgentPart } from "./agent-parts.js";
+import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { TOOL_BLOCK, TOOL_STATE } from "./tool-call-block.js";
 import { patchFiles, toolCallView } from "./tool-call-model.js";
 import { CALL_KIND } from "./turn-rows.js";
@@ -79,4 +81,25 @@ export function turnFiles(parts: readonly AgentPart[]): TurnFiles | undefined {
     added: files.reduce((sum, file) => sum + file.added, 0),
     removed: files.reduce((sum, file) => sum + file.removed, 0),
   };
+}
+
+/**
+ * The developer's line that opened each reply's turn, by the reply's id: the
+ * nearest line before the reply that opened a turn, which a line that
+ * arrived inside one did not; none for a reply before any such line. The
+ * turn's changes are read by that line (`agents.turnChanges`).
+ */
+export function turnLinesOf(
+  messages: readonly AgentTranscriptMessage[],
+): ReadonlyMap<string, string> {
+  const lines = new Map<string, string>();
+  let opened: string | undefined;
+  for (const message of messages) {
+    if (message.role === MESSAGE_ROLE.USER) {
+      if (message.arrivedIn === undefined) opened = message.id;
+      continue;
+    }
+    if (opened !== undefined) lines.set(message.id, opened);
+  }
+  return lines;
 }

@@ -30,6 +30,7 @@ import {
   type AgentPullRequestAnswerView,
   type AgentPullRequestViewedAnswerView,
   type AgentReviewOptionsAnswerView,
+  type AgentTurnChangesAnswerView,
 } from "@repo/features/agent-view";
 import {
   AGENT_AUTHOR,
@@ -46,6 +47,7 @@ import {
   DEPLOYMENT_STATE,
   DIFF_SIDE,
   type GitHubPerson,
+  LOCAL_AGENT_REFUSAL,
   MERGE_STATE,
   PULL_REQUEST_STATE,
   REVIEW_DECISION,
@@ -762,6 +764,23 @@ const CHANGES = {
   },
 };
 
+/** The file the first turn added, which its files row names, as the turn's Changes tab reads it. */
+const INVITE_CHANGES = CHANGED_FILES.filter((file) => file.path === "src/members/invite.ts");
+
+/**
+ * What each turn's Changes tab reads, by the line that opened the turn: a
+ * turn whose snapshot the machine no longer holds, one on a Mac away, and
+ * the invite for every other.
+ */
+const TURN_CHANGES: Readonly<Record<string, AgentTurnChangesAnswerView>> = {
+  "fixture-agent-pending-ask": { failure: AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING },
+  "fixture-agent-race-ask": {
+    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+    refusedDevice: { name: "Studio" },
+  },
+};
+
 /** The pull request's chapters, made for its head: the pending state first, then the invite itself. */
 const CHAPTERS = {
   pullRequest: {
@@ -1018,6 +1037,8 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   }),
   [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
+  [ACT_KIND.AGENTS_TURN_CHANGES]: ({ messageId }) =>
+    TURN_CHANGES[messageId] ?? { files: INVITE_CHANGES, truncated: false },
   [ACT_KIND.AGENTS_PORTS]: () => ({ running: true, ports: [3000, 5173] }),
   [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: STAGED_SHARE.shared }),
   [ACT_KIND.AGENTS_PORT_SHARE]: ({ port }) => {

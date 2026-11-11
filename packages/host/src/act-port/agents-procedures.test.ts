@@ -98,6 +98,7 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_SHOWN]: "Could not note which agent is shown on this system.",
   [AGENT_ACT_KIND.AGENTS_PAGE]: "Could not read the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_CHANGES]: "Could not read the agent's changes on this system.",
+  [AGENT_ACT_KIND.AGENTS_TURN_CHANGES]: "Could not read the turn's changes on this system.",
   [AGENT_ACT_KIND.AGENTS_GITHUB_IMAGE]: "Could not read the pull request's image on this system.",
   [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: "Could not change the pull request on this system.",
   [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]:
@@ -150,6 +151,7 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   AGENTS_DELETE: { agentId: AGENT_ID },
   AGENTS_PAGE: { agentId: AGENT_ID },
   AGENTS_CHANGES: { agentId: AGENT_ID },
+  AGENTS_TURN_CHANGES: { agentId: AGENT_ID, messageId: "line-1" },
   AGENTS_GITHUB_IMAGE: {
     agentId: AGENT_ID,
     src: "https://github.com/user-attachments/assets/0f1e2d3c",

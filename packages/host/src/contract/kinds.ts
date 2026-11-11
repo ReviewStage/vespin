@@ -284,6 +284,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_PULL_REQUEST_PART_RETRY: "agents.pullRequestPartRetry",
   /** One agent's changes, its pull request's files with their patches, which its Changes tab draws. */
   AGENTS_CHANGES: "agents.changes",
+  /** The files one of an agent's turns changed, read on its machine between the checkouts its runner recorded, which the turn's Changes tab draws. */
+  AGENTS_TURN_CHANGES: "agents.turnChanges",
   /**
    * Our own tools one agent is offered, held for the window while it holds
    * the stream open and a while after among those let go lately, asked again
@@ -988,6 +990,7 @@ export const PORT_ACT_USE = {
   AGENTS_PULL_REQUEST_PART_FOLLOW: ACT_USE.READ,
   AGENTS_PULL_REQUEST_PART_RETRY: ACT_USE.READ,
   AGENTS_CHANGES: ACT_USE.FETCH,
+  AGENTS_TURN_CHANGES: ACT_USE.FETCH,
   AGENTS_WORKSPACE_TOOLS_FOLLOW: ACT_USE.READ,
   AGENTS_WORKSPACE_TOOLS_RETRY: ACT_USE.READ,
   AGENTS_GITHUB_IMAGE: ACT_USE.FETCH,

@@ -48,10 +48,16 @@ const DIFF = [
   "diff --git a/logo.png b/logo.png",
   "index 1111111..2222222 100644",
   "Binary files a/logo.png and b/logo.png differ",
+  "diff --git a/.env.local b/.env.local",
+  "--- a/.env.local",
+  "+++ b/.env.local",
+  "@@ -1 +1 @@",
+  "-TOKEN=old",
+  "+TOKEN=new",
   "",
 ].join("\n");
 
-test("each file of a diff is read with its paths, a space in one among them, kind, counts, and hunks, a binary one left out by name", () => {
+test("each file of a diff is read with its paths, a space in one among them, kind, counts, and hunks, a binary one and a secret one left out by name", () => {
   assert.deepEqual(checkoutDiffFiles(DIFF), {
     truncated: false,
     files: [
@@ -117,6 +123,15 @@ test("each file of a diff is read with its paths, a space in one among them, kin
         deletions: 0,
         patch: null,
         omitted: PATCH_OMITTED.BINARY,
+      },
+      {
+        path: ".env.local",
+        previousPath: null,
+        status: CHANGED_FILE_STATUS.MODIFIED,
+        additions: 1,
+        deletions: 1,
+        patch: null,
+        omitted: PATCH_OMITTED.SECRET,
       },
     ],
   });

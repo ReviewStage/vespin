@@ -46,6 +46,7 @@ import {
   sameTab,
   subagentTab,
   TAB_WORDS,
+  turnChangesTab,
 } from "@repo/ui/tab-strip-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
@@ -95,6 +96,7 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
+import { askTurnFileReveal } from "../tasks/turn-file-reveal.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -735,6 +737,11 @@ function DescriptionDocument({
   const agentLookDoor = useSteadyDoor(agentLook);
   const pullRequestCardDoor = useSteadyDoor(pullRequestCard);
   const openMentionedFileDoor = useSteadyDoor(openMentionedFile);
+  // A turn's files row opens the turn's Changes tab standing on the file pressed (`turn-file-reveal.ts`).
+  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string, path: string) => {
+    askTurnFileReveal(agentId, messageId, path);
+    onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
+  });
   const { onFork: forkDoor, onContinue: continueDoor } = useAgentDraftDoors(
     agents,
     false,
@@ -975,6 +982,7 @@ function DescriptionDocument({
             workspace,
             onOpen: openMention,
             onOpenFile: openMentionedFileDoor,
+            onOpenTurnChanges: openTurnChangesDoor,
             reveal,
             onRevealed: onSectionRevealed,
             agentOf: agentLookDoor,
@@ -984,6 +992,7 @@ function DescriptionDocument({
       workspace,
       openMention,
       openMentionedFileDoor,
+      openTurnChangesDoor,
       reveal,
       onSectionRevealed,
       agentLookDoor,
@@ -1125,6 +1134,7 @@ function DescriptionDocument({
       {
         onOpenTask: openMention,
         onOpenFile: openMentionedFileDoor,
+        onOpenTurnChanges: openTurnChangesDoor,
         agentOf: agentLookDoor,
         pullRequestOf: pullRequestCardDoor,
       },
@@ -1137,6 +1147,7 @@ function DescriptionDocument({
     readMentionAgents,
     openMention,
     openMentionedFileDoor,
+    openTurnChangesDoor,
     agentLookDoor,
     pullRequestCardDoor,
   ]);

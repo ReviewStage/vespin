@@ -154,6 +154,8 @@ export const MAC_MACHINE = {
   EXIT_WAIT: Duration.seconds(2),
   /** How long a restore of the worktree waits for its Mac to settle the line, which a large worktree takes a while over. */
   RESTORE_WAIT: Duration.minutes(2),
+  /** How long a diff of the worktree waits for its Mac's answer, as long as the Mac gives the diff (`DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS`). */
+  DIFF_WAIT: Duration.millis(DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS),
   /**
    * The first host release whose bundled runner keeps the CLI's transcript
    * at the service where its config names `transcriptsUrl`, and reads a
@@ -392,14 +394,16 @@ function deviceMachineOver(
     });
 
   /**
-   * One request asked of the agent's Mac and its answer waited for, the row
-   * withdrawn however the wait ends; unavailable where the Mac is away, or
-   * did not answer in time.
+   * One request asked of the agent's Mac and its answer waited for, at most
+   * the wait given, a tool's request's where none is, the row withdrawn
+   * however the wait ends; unavailable where the Mac is away, or did not
+   * answer in time.
    */
   const asked = (
     session: string,
     kind: (typeof DEVICE_AGENT_REQUEST_KIND)[keyof typeof DEVICE_AGENT_REQUEST_KIND],
     args: DeviceAgentObject,
+    wait: Duration.Duration = MAC_MACHINE.ANSWER_WAIT,
   ) =>
     Effect.gen(function* () {
       const pin = yield* pinOfSession(session);
@@ -415,7 +419,7 @@ function deviceMachineOver(
           Option.isSome,
           deviceTopics(userId),
           MAC_MACHINE.POLL,
-          MAC_MACHINE.ANSWER_WAIT,
+          wait,
         );
         return Option.flatMap(held, ({ read }) => read);
       }).pipe(Effect.ensuring(Effect.ignore(stored(withdrawDeviceAgentRequest(userId, id)))));
@@ -736,10 +740,12 @@ function deviceMachineOver(
           const unsupported: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED };
           return unsupported;
         }
-        const answer = yield* asked(session, DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, {
-          from: range.from,
-          to: range.to,
-        });
+        const answer = yield* asked(
+          session,
+          DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+          { from: range.from, to: range.to },
+          MAC_MACHINE.DIFF_WAIT,
+        );
         if (answer.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return missing;
         if (answer.exit === 0) {
           const diffed: CheckoutDiffOutcome = {

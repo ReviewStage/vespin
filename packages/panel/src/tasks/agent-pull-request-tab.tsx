@@ -3754,3 +3754,6 @@ function PullRequestTabBody({
   // The member's own pending comments, told apart wherever a comment is drawn (`pending-comments.tsx`).
   return <PendingCommentsProvider value={pendingComments}>{page}</PendingCommentsProvider>;
 }
+
+// The turn's Changes tab rides this chunk, which the side panel reads it from (`desktop/pages-on-demand.ts`).
+export { TurnChangesPane } from "./agent-changes-tab.js";

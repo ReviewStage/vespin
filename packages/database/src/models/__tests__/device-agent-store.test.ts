@@ -605,6 +605,24 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         yield* answered({ exit: 3, diff: "" }),
         Option.some({ kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, exit: 3, diff: "" }),
       );
+
+      // A diff request answered no bytes, as a host from before the kind would answer it, reads as a failed diff.
+      const id = randomUUID();
+      yield* queueDeviceAgentRequest(userId, {
+        id,
+        agentId,
+        kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
+        args: { from: "0123", to: null },
+      });
+      yield* claimDeviceAgentRequest(userId, deviceId, id);
+      yield* answerDeviceAgentRequest(userId, deviceId, id, {
+        kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
+        bytes: null,
+      });
+      assert.deepEqual(
+        yield* deviceAgentRequestAnswer(userId, id),
+        Option.some({ kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, exit: 1, diff: "" }),
+      );
     }),
   );
 

@@ -212,7 +212,10 @@ export function heldTaskMentions(
   workspace: string,
   text: string | undefined,
   { pages, agents, readAgents }: TaskHolding,
-  doors: Pick<MentionDoors, "onOpenTask" | "onOpenFile" | "agentOf" | "pullRequestOf">,
+  doors: Pick<
+    MentionDoors,
+    "onOpenTask" | "onOpenFile" | "onOpenTurnChanges" | "agentOf" | "pullRequestOf"
+  >,
 ): TaskMentionsValue {
   const holder = { taskId: task.id };
   const { repository } = task;

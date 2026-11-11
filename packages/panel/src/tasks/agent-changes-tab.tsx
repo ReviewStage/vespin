@@ -1,4 +1,9 @@
-import { AGENT_CALL_FAILURE, type AgentChangesAnswerView } from "@repo/features/agent-view";
+import { localAgentRefusalWords } from "@repo/features/agent-refusal-words";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentChangesAnswerView,
+  type AgentTurnChangesAnswerView,
+} from "@repo/features/agent-view";
 import {
   type AgentChangedFile,
   CHANGED_FILE_STATUS,
@@ -68,7 +73,11 @@ import {
 import { failureShown, unreadShown } from "../failure-report.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useRegained } from "../use-regained.js";
-import { agentChangesQueryOptions, ChangesFailed } from "./agent-reads.js";
+import {
+  agentChangesQueryOptions,
+  agentTurnChangesQueryOptions,
+  ChangesFailed,
+} from "./agent-reads.js";
 import {
   type ChangesList,
   FileHead,
@@ -143,6 +152,7 @@ import type { PullRequestSource } from "./pull-request-source.js";
 import { PullRequestWriteNote, type ReadAgain } from "./pull-request-writes.js";
 import { refusedAnswer, taskFileQueryOptions } from "./repository-reads.js";
 import { landable, type ThreadLanding, ThreadLandingProvider } from "./thread-reveal.js";
+import { type TurnFileReveal, useTurnFileReveal } from "./turn-file-reveal.js";
 import { useViewSettingsSheet, VIEW_SETTINGS_SCOPE, ViewSettingsButton } from "./view-settings.js";
 import { useViewedFiles, type ViewedFiles } from "./viewed-files.js";
 
@@ -1997,5 +2007,222 @@ export function AgentChangesTab({
       </Fill>
       <FilesChangedKeysSheet open={shown && list.keysShown} onDismiss={hideKeys} />
     </Fill>
+  );
+}
+
+/** What a turn's Changes tab says beside its files. */
+const TURN_CHANGES_WORDS = {
+  READING: "Reading the turn's changes",
+  FAILED: "The turn's changes could not be read.",
+  GONE: "These changes are no longer available.",
+  GONE_WHY: "The checkout the turn started from is gone from the agent's machine.",
+  EMPTY: "This turn changed no files.",
+  TRUNCATED: "Only the first files are shown; this turn changed more.",
+} as const;
+
+const NO_TURN_FILES: readonly AgentChangedFile[] = [];
+
+/** A read of a turn's changes the act failed, as the tab reads it. */
+const UNANSWERED_TURN_CHANGES: AgentTurnChangesAnswerView = {
+  failure: AGENT_CALL_FAILURE.UNANSWERED,
+};
+
+/**
+ * The files one of an agent's turns changed, drawn as the Pull request tab's
+ * Files changed draws a pull request's: the diff list, the tree beside it,
+ * and the View settings and Collapse all over it, read on the agent's
+ * machine between the checkouts its runner recorded as the tab is first
+ * shown (`agentTurnChangesQueryOptions`). No pull request stands behind it,
+ * so there is no comment, no viewed mark, no image, and no gap opened
+ * between hunks. A read refused by name says why in the files' place: the
+ * snapshot gone from the machine, or the agent's Mac away, with Retry where
+ * trying again could answer.
+ */
+export function TurnChangesTab({
+  agentId,
+  messageId,
+  shown,
+  tree,
+  fileReveal,
+}: {
+  agentId: string;
+  /** The developer's line that opened the turn. */
+  messageId: string;
+  /** Whether the panel is on screen, which is when the tab reads. */
+  shown: boolean;
+  /** Whether the tree beside File and Changes tabs is open, and its toggle. */
+  tree: TreeShown;
+  /** A file to bring into view, once per ask, among those drawn. */
+  fileReveal?: TurnFileReveal | undefined;
+}): React.JSX.Element {
+  const changes = useQuery({ ...agentTurnChangesQueryOptions(agentId, messageId), enabled: shown });
+  // A read the act never answered is a failure the tab says as one, asked again on Retry.
+  const answer: AgentTurnChangesAnswerView | undefined =
+    changes.data ?? (changes.error === null ? undefined : UNANSWERED_TURN_CHANGES);
+  const retry = () => void changes.refetch();
+  const files = answer !== undefined && "files" in answer ? answer.files : NO_TURN_FILES;
+  const changed = useMemo(() => {
+    const paths = files.map((file) => file.path);
+    return { paths, ordered: treeOrder(files), folders: changedFolders(paths) };
+  }, [files]);
+  const room = usePaneRoom(tree);
+  const edge = useTreeEdge(tree);
+  const [diffBox, setDiffBox] = useState<HTMLDivElement | null>(null);
+  const roomy = useSplitRoom(diffBox);
+  const viewSettings = useFileViewSettings();
+  const minimize = () =>
+    viewSettings.change("diffMinimizeComments", !viewSettings.settings.diffMinimizeComments);
+  const list = useChangesList(files, undefined, minimize, room.toggle);
+  const marks = useMemo(() => changeMarks(files, { viewed: list.viewed }), [files, list.viewed]);
+  const { hideKeys, go, expand } = list;
+  useEffect(() => {
+    if (!shown) hideKeys();
+  }, [shown, hideKeys]);
+  const openTab = useOpenFileTab();
+  const { closeOver } = room;
+  const choose = useCallback(
+    (path: string, newTab: boolean) => {
+      if (newTab && openTab !== undefined) return openTab(path);
+      closeOver();
+      go(path);
+    },
+    [closeOver, go, openTab],
+  );
+  // The file a press asked for is opened and stood on, each ask once, as the pull request's reveal is.
+  const latestReveal = useRef({ fileReveal, expand, go });
+  latestReveal.current = { fileReveal, expand, go };
+  useEffect(() => {
+    const { fileReveal, expand, go } = latestReveal.current;
+    if (fileReveal === undefined) return;
+    expand(fileReveal.path);
+    go(fileReveal.path);
+  }, [fileReveal?.ask]);
+  const texts = useFileTexts(null, null, null, files);
+  const settings = useViewSettingsSheet({ kind: VIEW_SETTINGS_SCOPE.DIFF, roomy });
+  const phone = usePhoneRoom();
+  const shownFile = shownFileOf(files, list.current);
+  useTabActions(
+    phone && shown && shownFile !== undefined
+      ? [[paneToggleAction(room), settings.action, foldAllAction(list)]]
+      : undefined,
+  );
+  if (answer === undefined) return <SpinnerRegion delay label={TURN_CHANGES_WORDS.READING} />;
+  if ("failure" in answer) {
+    if (answer.failure === AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING) {
+      return (
+        <EmptyState icon={<GLYPH.PULL_REQUEST_CHANGES />} title={TURN_CHANGES_WORDS.GONE}>
+          {TURN_CHANGES_WORDS.GONE_WHY}
+        </EmptyState>
+      );
+    }
+    return (
+      <ErrorState
+        failure={failureShown({ surface: FAILURE_SURFACE.AGENT_TURN_CHANGES_READ, cause: answer })}
+        onRetry={retry}
+        placement={ERROR_STATE_PLACEMENT.CENTERED}
+      >
+        {answer.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED
+          ? localAgentRefusalWords(answer.localAgentRefusal, answer.refusedDevice)
+          : TURN_CHANGES_WORDS.FAILED}
+      </ErrorState>
+    );
+  }
+  if (shownFile === undefined) {
+    return (
+      <EmptyState icon={<GLYPH.PULL_REQUEST_CHANGES />}>{TURN_CHANGES_WORDS.EMPTY}</EmptyState>
+    );
+  }
+  return (
+    <Fill
+      className="file-view"
+      {...room.root}
+      onKeyDown={(event) => {
+        room.root.onKeyDown(event);
+        list.onKeyDown(event);
+      }}
+    >
+      {phone ? (
+        settings.sheet
+      ) : (
+        <FileViewBar
+          menu={
+            <>
+              <ViewSettingsButton scope={{ kind: VIEW_SETTINGS_SCOPE.DIFF, roomy }} />
+              <FoldAllButton list={list} />
+            </>
+          }
+          tree={room.toggles}
+        />
+      )}
+      {answer.truncated ? (
+        <TabNotice>
+          <p>{TURN_CHANGES_WORDS.TRUNCATED}</p>
+        </TabNotice>
+      ) : null}
+      <Fill flow={FILL_FLOW.ROW} clip className="file-view-body relative" {...room.body}>
+        <FilesList
+          list={list}
+          threads={undefined}
+          images={undefined}
+          commenting={undefined}
+          texts={texts}
+          filterShown={room.drawn}
+          roomy={roomy}
+          boxRef={setDiffBox}
+          reveal={undefined}
+          flash={undefined}
+          overscroll={undefined}
+        />
+        <FileTreePane
+          file={shownFile.path}
+          only={changed.paths}
+          marks={marks}
+          label="Changed files"
+          listFolder={changed.folders}
+          search={{ query: list.query, onQuery: list.onQuery }}
+          onOpen={choose}
+          onViewed={list.markViewed}
+          over={room.docked ? undefined : room.over}
+          narrow={room.narrow}
+          pane={room.beside.pane}
+          leaving={room.beside.leaving}
+          width={tree.width?.width}
+          edge={edge}
+        />
+        {tree.open ? null : (
+          <ChangesStrip
+            files={changed.ordered}
+            current={shownFile.path}
+            viewed={list.viewed}
+            peek={room.strip}
+          />
+        )}
+      </Fill>
+      <FilesChangedKeysSheet open={shown && list.keysShown} onDismiss={hideKeys} />
+    </Fill>
+  );
+}
+
+/** A turn's Changes tab as the side panel mounts it, standing on the file a press on the turn's files row asked for (`turn-file-reveal.ts`). */
+export function TurnChangesPane({
+  agentId,
+  messageId,
+  shown,
+  tree,
+}: {
+  agentId: string;
+  messageId: string;
+  shown: boolean;
+  tree: TreeShown;
+}): React.JSX.Element {
+  const fileReveal = useTurnFileReveal(agentId, messageId);
+  return (
+    <TurnChangesTab
+      agentId={agentId}
+      messageId={messageId}
+      shown={shown}
+      tree={tree}
+      fileReveal={fileReveal}
+    />
   );
 }

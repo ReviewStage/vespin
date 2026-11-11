@@ -81,6 +81,24 @@ function landedChanges(answer: AgentChangesAnswerView) {
 }
 
 /**
+ * The files one of an agent's turns changed, read on its machine between the
+ * checkouts its runner recorded, as the turn's Changes tab is first shown and
+ * on Retry; a refusal stands as the answer, which the tab says by name. The
+ * files, once read, stand for the window's life, since nothing changes a
+ * turn's diff but the next turn's; a refusal is read again as the tab is next
+ * shown, since the Mac may be back or the snapshot there by then.
+ */
+export function agentTurnChangesQueryOptions(agentId: string, messageId: string) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.AGENT_TURN_CHANGES, agentId, messageId],
+    queryFn: () => askAct(ACT_KIND.AGENTS_TURN_CHANGES, { agentId, messageId }),
+    staleTime: (query) =>
+      query.state.data !== undefined && "files" in query.state.data ? Number.POSITIVE_INFINITY : 0,
+    retry: false,
+  });
+}
+
+/**
  * An agent's changes, its pull request's files, or those of the pull request
  * of its repository by the number given. Its Changes tab reads them as it is
  * first shown, as its agent ends, and on Refresh, so the query is read on
