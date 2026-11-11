@@ -36,13 +36,25 @@ function workerText(): string | undefined {
 
 let started: Worker | undefined;
 
-/** The worker every PDF is read in, started from the build's text as a `blob:` the first time it is asked for. */
+/**
+ * The worker every PDF is read in, started from the build's text as a
+ * `blob:` the first time it is asked for; none where it cannot start, which
+ * the viewer shows as a PDF it cannot open. The address is let go once the
+ * worker first answers, by which time it has read its script, so the
+ * script's text is not held for the window's life.
+ */
 function worker(): Worker | undefined {
   if (started !== undefined) return started;
   const text = workerText();
   if (text === undefined || text.length === 0) return undefined;
   const address = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
-  started = new Worker(address, { type: "module", name: "pdf" });
+  try {
+    started = new Worker(address, { type: "module", name: "pdf" });
+  } catch {
+    URL.revokeObjectURL(address);
+    return undefined;
+  }
+  started.addEventListener("message", () => URL.revokeObjectURL(address), { once: true });
   return started;
 }
 

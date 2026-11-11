@@ -157,8 +157,8 @@ function PdfPage({
       if (left) return;
       emptied(canvasHolder);
       canvasHolder.append(canvas);
-      // The words stand where the page prints them, at the scale the page was drawn at.
-      setScale(fitted.scale);
+      // The words stand where the page prints them, at the scale the page was drawn at, in the page's own unit.
+      setScale(fitted.scale * fitted.userUnit);
       const layer = document.createElement("div");
       layer.className = "ui-pdf-text";
       words = new TextLayer({
@@ -233,23 +233,25 @@ export function PdfPages({ base64, label, worker, refused }: PdfPagesProps): Rea
 
   useEffect(() => {
     let left = false;
-    const task = getDocument({
-      data: bytesOf(base64),
-      worker: PDFWorker.create({ port: worker }),
-      useSystemFonts: true,
-    });
-    task.promise
-      .then(async (document) => {
-        const first = await document.getPage(1);
-        if (!left) setOpened({ kind: OPENED.OPEN, document, ratio: ratioOf(first) });
-      })
-      .catch(() => {
-        if (!left) setOpened({ kind: OPENED.REFUSED });
+    let task: ReturnType<typeof getDocument> | undefined;
+    // Note that bytes that are no base64, or a document pdf.js refuses to start on, are refused as a file it cannot open is.
+    const opening = (async () => {
+      task = getDocument({
+        data: bytesOf(base64),
+        worker: PDFWorker.create({ port: worker }),
+        useSystemFonts: true,
       });
+      const document = await task.promise;
+      const first = await document.getPage(1);
+      if (!left) setOpened({ kind: OPENED.OPEN, document, ratio: ratioOf(first) });
+    })();
+    opening.catch(() => {
+      if (!left) setOpened({ kind: OPENED.REFUSED });
+    });
     return () => {
       left = true;
       setOpened(OPENING);
-      void task.destroy();
+      void task?.destroy();
     };
   }, [base64, worker]);
 
