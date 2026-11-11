@@ -39,6 +39,7 @@ import type { ReactNode } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { Fold, type FoldProps } from "./fold.js";
+import { MessageResponse } from "./message.js";
 
 /**
  * tool.tsx -- AI Elements' Tool: one tool call as a compact row, with its input and its answer under it once opened.
@@ -67,7 +68,10 @@ import { Fold, type FoldProps } from "./fold.js";
  * one cut at 40 lines, so a long answer shows its first lines over "Show
  * all", and Copy copies the whole of it either way; a command is one
  * "Terminal" card instead, its prompt line over what it printed, as a shell
- * shows them. JSON reads as words (`readableBlock`), an answer that only
+ * shows them. A Markdown block, as a memory's words, is no card but the
+ * words drawn as the agent's reply is (`MessageResponse`), at the
+ * transcript's body size so its code spans match its prose. JSON reads as
+ * words (`readableBlock`), an answer that only
  * acknowledges is left out, and an empty one says "No output". What the
  * words say is the caller's decision (`tasks/tool-call-model.ts`); how a
  * block of each kind is drawn is this file's. Its look is `.tool`'s
@@ -310,7 +314,7 @@ export function ToolContent({
   );
 }
 
-/** A block as the card draws it: what its lines are, what Copy copies, and what each line does where it is a patch. */
+/** A block as the card draws it: what its lines are, what Copy copies, and what each line does where it is a patch; Markdown as a reply's words instead, with no card. */
 function BlockCard({
   block,
   title,
@@ -320,6 +324,13 @@ function BlockCard({
   title: string;
   data: `data-${string}`;
 }): ReactNode {
+  if (block.kind === TOOL_BLOCK.MARKDOWN) {
+    return (
+      <div className="tool-markdown min-w-0 text-body" {...{ [data]: "" }}>
+        <MessageResponse words={block.text} />
+      </div>
+    );
+  }
   const isCommand = block.kind === TOOL_BLOCK.COMMAND;
   return (
     <CodeCard
