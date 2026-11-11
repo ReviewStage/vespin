@@ -454,7 +454,8 @@ export function heldCallOf(ask: ApprovalView): HeldCall {
       status: HELD_WORDS.ALLOWED_FOR_AGENT,
       waiting: false,
       about: undefined,
-      actions: <AnsweredKeeps ui={ui} />,
+      // Note that under `d` the row's own Always allowed says it all.
+      actions: ui === ALWAYS_ALLOW_UI.ACCOUNT ? undefined : <AnsweredKeeps ui={ui} />,
     };
   }
   if (ui !== ALWAYS_ALLOW_UI.CURRENT && ask.settled === undefined) {

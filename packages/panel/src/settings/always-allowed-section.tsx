@@ -9,17 +9,29 @@
 
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
+  BUTTON_VARIANT,
+  Button,
+  DIALOG_TONE,
+  Dialog,
+  DialogActions,
+  FormField,
+  PlusIcon,
+  SETTINGS_ROW_STATE,
   SettingsLine,
   SettingsRowMark,
+  SettingsRowStateLine,
   SettingsSection,
   TEXT_FONT,
   TEXT_VARIANT,
   Text,
+  TextField,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
+import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { useState } from "react";
+import { ActorLine, ActorRef } from "../actor-ref.js";
 import { HarnessMark } from "../harness-marks.js";
 import {
   ALWAYS_ALLOW_HARNESS,
@@ -113,3 +125,169 @@ export function AlwaysAllowedSection({ ui }: { ui: AlwaysAllowUi }): React.JSX.E
     </SettingsSection>
   );
 }
+
+/** The agent that kept a rule, as its chip wears it. */
+function keeperOf(rule: KeptRule): Actor {
+  return {
+    kind: ACTOR_KIND.AGENT,
+    agentId: rule.id,
+    name: rule.from,
+    provider:
+      rule.harness === ALWAYS_ALLOW_HARNESS.CODEX
+        ? MODEL_PROVIDER.OPENAI
+        : MODEL_PROVIDER.ANTHROPIC,
+    state: ACTOR_STATE.REST,
+  };
+}
+
+/** One command prefix on the account's list: the prefix, who added it when, and Remove in its ⋯, as a machine's row on Hosts. */
+function AccountRuleRow({
+  rule,
+  onRemove,
+}: {
+  rule: KeptRule;
+  onRemove: () => void;
+}): React.JSX.Element {
+  return (
+    <MenuRow
+      thing={rule.rule}
+      actions={[{ label: "Remove", icon: <GLYPH.REMOVE />, danger: true, onSelect: onRemove }]}
+      row={{
+        label: (
+          <Text as="span" variant={TEXT_VARIANT.LABEL} font={TEXT_FONT.MONO}>
+            {`${rule.rule} *`}
+          </Text>
+        ),
+        description: (
+          <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN} block wrap>
+            {rule.byYou === true ? (
+              <>
+                Added <Time at={rule.addedAt} look={TIME_LOOK.AGO} /> by you
+              </>
+            ) : (
+              <ActorLine>
+                {"Added "}
+                <Time at={rule.addedAt} look={TIME_LOOK.AGO} />
+                {" by "}
+                <ActorRef actor={keeperOf(rule)} />
+              </ActorLine>
+            )}
+          </SettingsRowStateLine>
+        ),
+      }}
+    />
+  );
+}
+
+/** Add command's card: one field for the prefix, as Add variable's card asks for a name. */
+function AddCommandDialog({
+  open,
+  onAdd,
+  onClose,
+}: {
+  open: boolean;
+  onAdd: (prefix: string) => void;
+  onClose: () => void;
+}): React.JSX.Element {
+  const [typed, setTyped] = useState("");
+  const prefix = typed.trim();
+  const add = () => {
+    if (prefix === "") return;
+    onAdd(prefix);
+    onClose();
+  };
+  return (
+    <Dialog
+      open={open}
+      title="Add command"
+      replayUnmasked
+      onDismiss={onClose}
+      onExited={() => setTyped("")}
+      actions={
+        <DialogActions
+          onCancel={onClose}
+          act={{
+            verb: "Add",
+            tone: DIALOG_TONE.PRIMARY,
+            running: "Adding",
+            disabled: prefix === "",
+            onPress: add,
+          }}
+        />
+      }
+    >
+      <FormField label="Commands that start with">
+        {(control) => (
+          <TextField
+            field={control}
+            autoCorrect={false}
+            spellCheck={false}
+            placeholder="pnpm test"
+            value={typed}
+            onChange={setTyped}
+            onEnter={add}
+          />
+        )}
+      </FormField>
+    </Dialog>
+  );
+}
+
+/** `d`'s list: the account's command prefixes, Add command on its heading, each removable from its ⋯. */
+export function AccountRulesSection(): React.JSX.Element {
+  const [rules, setRules] = useState<readonly KeptRule[]>(keptRules(ALWAYS_ALLOW_UI.ACCOUNT));
+  const [adding, setAdding] = useState(OPENED_ADDING);
+  return (
+    <>
+      <SettingsSection
+        title="Always allowed"
+        caption="Commands your agents run without asking."
+        action={
+          <Button
+            variant={BUTTON_VARIANT.OUTLINE}
+            icon={<PlusIcon />}
+            onClick={() => setAdding(true)}
+          >
+            Add command
+          </Button>
+        }
+      >
+        {rules.length === 0 ? (
+          <SettingsLine>No commands yet.</SettingsLine>
+        ) : (
+          rules.map((rule) => (
+            <AccountRuleRow
+              key={rule.id}
+              rule={rule}
+              onRemove={() => setRules((was) => was.filter((each) => each.id !== rule.id))}
+            />
+          ))
+        )}
+      </SettingsSection>
+      <AddCommandDialog
+        open={adding}
+        onClose={() => setAdding(false)}
+        onAdd={(prefix) =>
+          setRules((was) => [
+            {
+              id: `added-${was.length}`,
+              harness: ALWAYS_ALLOW_HARNESS.CLAUDE,
+              rule: prefix,
+              says: "",
+              scope: RULE_SCOPE.EVERYWHERE,
+              addedAt: Date.now(),
+              from: "",
+              byYou: true,
+            },
+            ...was,
+          ])
+        }
+      />
+    </>
+  );
+}
+
+/** Whether the staged page opens on Add command's card (`&aa-add=open`). */
+const OPENED_ADDING =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("aa-add") === "open";

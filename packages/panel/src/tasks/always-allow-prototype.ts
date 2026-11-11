@@ -184,6 +184,8 @@ export interface KeptRule {
   readonly addedAt: number;
   /** The agent whose Always allow kept it. */
   readonly from: string;
+  /** Whether the member added it by hand, from Settings, rather than an agent's Always allow. */
+  readonly byYou?: boolean;
 }
 
 const DAY = 24 * 60 * 60 * 1000;

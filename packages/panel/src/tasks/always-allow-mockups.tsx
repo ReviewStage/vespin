@@ -82,7 +82,13 @@ export function keepsOf(ui: AlwaysAllowUi, onAllow: () => void): AlwaysAllowKeep
   const harness = alwaysAllowHarness();
   if (ui === ALWAYS_ALLOW_UI.CURRENT) return undefined;
   if (ui === ALWAYS_ALLOW_UI.ACCOUNT) {
-    return { line: <>Always allow won't ask again for {prefixWords()}.</> };
+    return {
+      line: (
+        <>
+          Always allow covers <Rule>{`${SUGGESTED_RULE[ALWAYS_ALLOW_HARNESS.CODEX]} *`}</Rule>
+        </>
+      ),
+    };
   }
   if (ui === ALWAYS_ALLOW_UI.CHOOSE) {
     return {
