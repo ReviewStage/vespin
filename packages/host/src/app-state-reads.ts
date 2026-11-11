@@ -16,7 +16,9 @@ import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositorie
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HOST_LIVE } from "@repo/features/tasks-view";
+import { formatInstant } from "@repo/features/time-format";
 import {
   type AccountExperiment,
   type AccountExperimentChoices,
@@ -259,6 +261,36 @@ export const selectAdminAccess = (state: AppStateSnapshot): boolean => state.acc
 /** Whether the account's access is still being read, as it is for a moment after a sign-in or a launch. */
 export const selectAdminAccessPending = (state: AppStateSnapshot): boolean =>
   state.access.pending === true;
+
+/** Where the member's grant of support access stands, as Settings' row reads it on every client. */
+export interface SupportAccessStanding {
+  /** Whether a grant stands now, so the row's press revokes it. */
+  readonly granted: boolean;
+  /** Whether a grant may be offered: not while a maintainer is already signed in as the member, since the service refuses one then, nor before the access is read, since a grant standing unread would be extended. */
+  readonly grantable: boolean;
+  /** What the row says beside it: until when a grant stands, or what granting means. */
+  readonly words: string;
+}
+
+/**
+ * The member's grant of support access read at `now`, in epoch
+ * milliseconds: whether it stands and until when, and whether a grant may
+ * be offered. A revoke is always offered where one stands, and ends a
+ * maintainer's sign-in.
+ */
+export function supportAccessStanding(state: AppStateSnapshot, now: number): SupportAccessStanding {
+  const until = state.access.supportAccessUntil;
+  const granted = until !== undefined && until > now;
+  const impersonated =
+    state.account.status === ACCOUNT_STATUS.SIGNED_IN && state.account.impersonated === true;
+  return {
+    granted,
+    grantable: !granted && !impersonated && state.access.pending !== true,
+    words: granted
+      ? `The ${PRODUCT_NAME} team can sign in as you until ${formatInstant(until)}.`
+      : `Let the ${PRODUCT_NAME} team sign in as you to help.`,
+  };
+}
 
 const experimentSelects = new Map<AccountExperiment, (state: AppStateSnapshot) => boolean>();
 

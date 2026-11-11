@@ -64,7 +64,7 @@ export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_LINE }),
-            foregroundStyle(colors.DANGER),
+            foregroundStyle(colors.DANGER_TEXT),
             multilineTextAlignment("center"),
           ]}
         >

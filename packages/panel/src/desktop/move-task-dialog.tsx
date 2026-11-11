@@ -2,6 +2,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { strandedTaskHome, workspaceReaches } from "@repo/features/tasks-model";
 import { countWords, TERM } from "@repo/features/words";
+import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   ChoiceList,
@@ -23,7 +24,6 @@ import { type ReactNode, useRef, useState } from "react";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { sharedWords } from "./workspace-ref.js";
 import { TILE_SIZE, WorkspaceTile } from "./workspace-tile.js";
 
 /**
@@ -77,7 +77,7 @@ function rowLine(
   personalId: string | undefined,
 ): string | undefined {
   if (reaches(workspace, repository)) {
-    return sharedWords(workspace.memberCount, workspace.id === personalId);
+    return workspaceSharedWords(workspace.memberCount, workspace.id === personalId);
   }
   const github =
     workspace.github === null ? "No GitHub connected" : `${workspace.github.login} on GitHub`;

@@ -14,7 +14,9 @@ import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 // NativeTabs' own `hidden` and heard still as each tab's accessibility label;
 // a regular window's sidebar keeps them, since a sidebar row is its words.
 // The selected tab is tinted in the brand's copper, and the Inbox carries the
-// panel's count of what waits on you in copper, hidden at none, counted on
+// panel's count of what waits on you in copper, hidden at none, its fill the
+// attention fill, the light copper in either theme, since the system's white
+// figures read at under 3:1 on the dark theme's accent, counted on
 // the same threads the Inbox lists. The round + opens New task as a sheet
 // over whatever tab stands, rather than standing a tab of its own: it is
 // held unselectable (`disabled`, which keeps its look and only stops the
@@ -29,7 +31,7 @@ export default function TabsLayout() {
       minimizeBehavior="onScrollDown"
       sidebarAdaptable
       tintColor={colors.ACCENT}
-      badgeBackgroundColor={colors.ACCENT}
+      badgeBackgroundColor={colors.ATTENTION_FILL}
     >
       <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox">
         <NativeTabs.Trigger.Icon sf="tray" />

@@ -1,20 +1,30 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
 import { eq } from "drizzle-orm";
 import { Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
+import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { memory } from "../../schemas/memory.js";
-import { getTestDB, joinWorkspace, leaveWorkspace, openWorkspace } from "../../testing/index.js";
+import { task } from "../../schemas/task.js";
+import {
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openAgentOnOwnTask,
+  openWorkspace,
+} from "../../testing/index.js";
 import {
   forgetMemory,
   listMemories,
   MEMORY_FORGET,
   MEMORY_OUTCOME,
   type MemoryOutcome,
+  readMemorySources,
   rememberMemory,
 } from "../memory-store.js";
 
@@ -30,7 +40,11 @@ import {
  * new memory and never a correction; and a memory outlives the member who
  * said it, as git history outlives its committers: one who leaves leaves
  * their memories with the workspace, and an account deleted leaves them too,
- * named by nobody, which then only a manager may forget.
+ * named by nobody, which then only a manager may forget. Where a memory's
+ * words came from moves with them: an agent's keep names it and its turn's
+ * line, a correction names the corrector's or none for a member's, and the
+ * same words kept again stay where they first came from; and only a member
+ * who may open the agent's task reads where they came from.
  *
  * Synthetic accounts, workspaces, and words throughout.
  */
@@ -63,6 +77,12 @@ function keptId(outcome: MemoryOutcome): string {
 
 const wordsOf = (workspaceId: string) =>
   Effect.map(listMemories(workspaceId), (memories) => memories.map((kept) => kept.text));
+
+/** Where the workspace's one memory came from, as the store holds it: its agent and line. */
+const sourceOf = (workspaceId: string) =>
+  Effect.map(listMemories(workspaceId), (memories) =>
+    memories.map((kept) => [kept.agentId, kept.messageId]),
+  );
 
 it.layer(getTestDB())("the workspace's memory store", (it) => {
   it.effect(
@@ -118,6 +138,81 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
           (yield* listMemories(workspaceId)).map((kept) => [kept.text, kept.userId]),
           [[DEPLOYS_CORRECTED, teammate]],
         );
+      }),
+  );
+
+  it.effect(
+    "an agent's keep names it and its turn's line, the same words kept again stay where they came from, and a correction names the corrector's, or none for a member's own",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, workspaceId } = yield* openTeam;
+        const keeper = yield* openAgentOnOwnTask(owner, workspaceId);
+        const corrector = yield* openAgentOnOwnTask(teammate, workspaceId);
+        const keepersLine = randomUUID();
+        const correctorsLine = randomUUID();
+        const id = keptId(
+          yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined, {
+            agentId: keeper,
+            messageId: keepersLine,
+          }),
+        );
+
+        yield* rememberMemory(workspaceId, teammate, DEPLOYS, undefined, {
+          agentId: corrector,
+          messageId: correctorsLine,
+        });
+        const keptAgain = yield* sourceOf(workspaceId);
+        yield* rememberMemory(workspaceId, teammate, DEPLOYS_CORRECTED, id, {
+          agentId: corrector,
+          messageId: null,
+        });
+        const corrected = yield* sourceOf(workspaceId);
+        yield* rememberMemory(workspaceId, owner, DEPLOYS, id, undefined);
+        const byMember = yield* sourceOf(workspaceId);
+
+        assert.deepEqual(keptAgain, [[keeper, keepersLine]]);
+        assert.deepEqual(corrected, [[corrector, null]]);
+        assert.deepEqual(byMember, [[null, null]]);
+      }),
+  );
+
+  it.effect(
+    "where a memory came from is read, with its agent's task, only by a member of its workspace who may open that task",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { owner, teammate, workspaceId } = yield* openTeam;
+        const elsewhere = yield* openWorkspace(owner);
+        const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
+        const [agent] = yield* db
+          .select({ taskId: agentTable.taskId })
+          .from(agentTable)
+          .where(eq(agentTable.id, agentId));
+        assert.ok(agent !== undefined);
+        const line = randomUUID();
+        const agents = keptId(
+          yield* rememberMemory(workspaceId, owner, DEPLOYS, undefined, {
+            agentId,
+            messageId: line,
+          }),
+        );
+        const members = keptId(yield* rememberMemory(workspaceId, teammate, TESTS_RUN, undefined));
+
+        const shared = yield* readMemorySources(teammate, workspaceId, [agents, members]);
+        // The task moves onto its starter's own GitHub token, which the teammate has none of.
+        yield* db
+          .update(task)
+          .set({ githubAccess: GITHUB_ACCESS.TOKEN })
+          .where(eq(task.id, agent.taskId));
+        const starters = yield* readMemorySources(owner, workspaceId, [agents]);
+        const teammates = yield* readMemorySources(teammate, workspaceId, [agents]);
+        const fromElsewhere = yield* readMemorySources(owner, elsewhere, [agents]);
+
+        const source = { agentId, messageId: line, taskId: agent.taskId, taskName: "Flaky tests" };
+        assert.deepEqual([...shared], [[agents, source]]);
+        assert.deepEqual([...starters], [[agents, source]]);
+        assert.deepEqual([...teammates], []);
+        assert.deepEqual([...fromElsewhere], []);
       }),
   );
 

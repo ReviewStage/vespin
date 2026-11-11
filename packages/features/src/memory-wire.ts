@@ -30,6 +30,16 @@ import { trimmedText } from "./text-schema.js";
  * the member has Memory on, as those tools are. A memory that looks like it
  * holds a credential is refused before the store is reached, as an agent's
  * is.
+ *
+ * Each memory also says where its words came from (`source`): the coding
+ * agent that kept or last corrected them, the line that opened its turn
+ * then, which a link to the agent's transcript lands on, and the task the
+ * agent works on, only where the reader may open that task; none for a
+ * member's own keep, a memory kept before it was recorded, or one whose
+ * agent is gone. And how often coding agents were handed it, by their
+ * search or as a turn opened, in the last `MEMORY_RECALL_WINDOW_DAYS` days
+ * (`recalls30d`), and when last (`lastRecalledAt`), a member's own search
+ * not counted.
  */
 
 export const MEMORY_BOUNDS = {
@@ -41,6 +51,9 @@ export const MEMORY_BOUNDS = {
   MAX_QUERY_CHARS: 300,
 } as const;
 
+/** How far back a memory's recalls are counted (`recalls30d`): the thirty days before the read. */
+export const MEMORY_RECALL_WINDOW_DAYS = 30;
+
 /** The query every request names its workspace in, and `DELETE` its memory. */
 export const MEMORY_QUERY = {
   WORKSPACE_ID: "workspaceId",
@@ -51,6 +64,15 @@ export const MEMORY_QUERY = {
 
 /** A memory's id as the service mints it: the row's UUID. */
 export const memoryIdSchema = wireUuidSchema;
+
+/** Where a memory's words came from, as a reader who may open the agent's task sees it. */
+const memorySourceSchema = EffectSchema.Struct({
+  agentId: EffectSchema.String,
+  /** The line that opened the agent's turn as it kept them, a `messages` id; null for a turn no line opened. */
+  messageId: EffectSchema.NullOr(EffectSchema.String),
+  taskId: EffectSchema.String,
+  taskName: EffectSchema.String,
+});
 
 /** One memory as a member of its workspace sees it. */
 const memorySummarySchema = EffectSchema.Struct({
@@ -64,6 +86,12 @@ const memorySummarySchema = EffectSchema.Struct({
   createdAt: countedNumber,
   /** When it was last kept or corrected, in epoch milliseconds. */
   updatedAt: countedNumber,
+  /** The agent, line, and task its words came from; null for a member's own keep, one from before it was kept, one whose agent is gone, and one whose task the reader may not open. */
+  source: EffectSchema.NullOr(memorySourceSchema),
+  /** How often coding agents were handed it in the last `MEMORY_RECALL_WINDOW_DAYS` days. */
+  recalls30d: countedNumber,
+  /** When a coding agent was last handed it, in epoch milliseconds; null where none ever was. */
+  lastRecalledAt: EffectSchema.NullOr(countedNumber),
 });
 
 export type MemorySummary = typeof memorySummarySchema.Type;
