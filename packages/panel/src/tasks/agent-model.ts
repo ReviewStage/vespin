@@ -16,6 +16,7 @@ import {
 import {
   ACTION,
   credentialMissingWords,
+  deviceAwayWords,
   extraRepositoryRefusalWords,
   HOST_REMOVED,
   keyUnreadableWords,
@@ -1160,14 +1161,12 @@ export function messageFailureNote(
   // Note that the box's note stands beside Continue in new agent, so it tells no one to continue.
   if (refused.failure === AGENT_CALL_FAILURE.AGENT_RETIRED) return callFailure(BOX_RETIRED);
   if (refused.failure === AGENT_CALL_FAILURE.DEVICE_REMOVED) return callFailure(HOST_REMOVED);
-  // Note that a device away refuses a message in the words it refuses a Start in.
+  // Note that a device that refuses a message for another reason says it in the words it refuses a Start in.
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
-    return callFailure(
-      localAgentRefusalWords(
-        refused.localAgentRefusal ?? LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        refused.refusedDevice,
-      ),
-    );
+    const refusal = refused.localAgentRefusal ?? LOCAL_AGENT_REFUSAL.MAC_AWAY;
+    return refusal === LOCAL_AGENT_REFUSAL.MAC_AWAY
+      ? { reason: FAILURE_REASON.CONTINUE_IN_CLOUD, text: deviceAwayWords(refused.refusedDevice) }
+      : callFailure(localAgentRefusalWords(refusal, refused.refusedDevice));
   }
   const theirs = starter === undefined ? undefined : starterKeyWords(refused.failure, starter);
   if (theirs !== undefined) return callFailure(theirs);

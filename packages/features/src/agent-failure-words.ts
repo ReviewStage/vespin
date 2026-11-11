@@ -70,11 +70,11 @@ const MENDED_BY_NEW_AGENT: ReadonlySet<AgentFailure> = new Set([
 
 /**
  * Why an agent whose host stopped beating while its turn ran failed, said
- * whole in place of a failure's words: the host by its name, and that a
- * message carries the agent on once the host is back.
+ * whole in place of a failure's words: the host by its name, and that what
+ * it did not push stays there, which its row's Continue in the cloud leaves behind.
  */
 export function hostLostWords(host: string): string {
-  return `${host} went offline during this turn. Send a message to carry on once it's back.`;
+  return `${host} went offline. Unpushed changes stay on it.`;
 }
 
 /** What a host's launch was doing as it stopped, by the step it last reported, as "it failed while" goes on. */

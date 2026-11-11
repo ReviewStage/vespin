@@ -23,6 +23,8 @@ import {
 export interface MobileHostStartOptions {
   /** The profile a fixture run stands on; none for a live run. */
   readonly fixture: RunProfile | undefined;
+  /** Whether a fixture run stands as the service's refusal of an old build leaves it; never in a live run. */
+  readonly fixtureUpdateNeeded?: boolean | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files. */
@@ -68,6 +70,7 @@ export async function startMobileHost(
         httpClient,
         fork,
         fixture: options.fixture,
+        fixtureUpdateNeeded: options.fixtureUpdateNeeded,
         appVersion: options.appVersion,
         stateRoot: options.stateRoot,
         device: options.device,

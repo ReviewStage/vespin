@@ -5,9 +5,11 @@ import {
   ContextMenu,
   HStack,
   Image,
+  Menu,
   Spacer,
   SwipeActions,
   Text,
+  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import {
@@ -79,12 +81,27 @@ export type RowAction = {
   readonly onPress: () => void;
 };
 
-/** The acts a row carries: a swipe from either edge, and the same acts in its long press menu. */
+/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them. */
+export type RowSubmenu = {
+  readonly label: string;
+  readonly symbol: SfSymbol;
+  readonly choices: readonly {
+    readonly label: string;
+    readonly on: boolean;
+    readonly onPress: () => void;
+  }[];
+};
+
+/** The acts a row carries: a swipe from either edge, the same acts in its long press menu, and what that menu holds alone. */
 type RowActs = {
   /** The acts a swipe from the trailing edge reveals, the first of them on a full swipe. */
   readonly trailingActions?: readonly RowAction[] | undefined;
   /** The acts a swipe from the leading edge reveals. */
   readonly leadingActions?: readonly RowAction[] | undefined;
+  /** Menus the long press menu holds after the swipes' acts, such as a task's Status. */
+  readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
+  /** Acts the long press menu alone holds, last, such as Pin or Open in browser. */
+  readonly menuActions?: readonly RowAction[] | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -145,6 +162,22 @@ function actionButton(action: RowAction, colors: BrandColors) {
   );
 }
 
+/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks. */
+function rowSubmenu(submenu: RowSubmenu) {
+  return (
+    <Menu key={submenu.label} label={submenu.label} systemImage={submenu.symbol}>
+      {submenu.choices.map((choice) => (
+        <Toggle
+          key={choice.label}
+          label={choice.label}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+    </Menu>
+  );
+}
+
 /** A row's time, 12 pt in the muted ink and tabular figures, as the panel's rows end. */
 export function RowTime({ at, now }: { readonly at: number; readonly now: number | undefined }) {
   const colors = useColors();
@@ -182,29 +215,41 @@ export function rowPlacement(colors: BrandColors) {
  * dot in the margin, and its hairline, which starts under the words rather
  * than the mark. Its acts stand twice, as the system's own rows carry them:
  * behind a swipe from either edge, and in the menu a long press opens, the
- * trailing ones first, so a person who never swipes still finds them.
+ * trailing ones first, so a person who never swipes still finds them; that
+ * menu then holds its submenus and the acts only it offers.
  */
 export function RowFrame({
   id,
   row,
   trailingActions = [],
   leadingActions = [],
+  menuSubmenus = [],
+  menuActions = [],
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
 }) {
   const colors = useColors();
-  const actions = [...trailingActions, ...leadingActions];
+  const swiped = [...trailingActions, ...leadingActions];
   const frameModifiers = [tag(id), ...rowPlacement(colors)];
-  if (actions.length === 0) return <HStack modifiers={frameModifiers}>{row}</HStack>;
+  if (swiped.length + menuSubmenus.length + menuActions.length === 0) {
+    return <HStack modifiers={frameModifiers}>{row}</HStack>;
+  }
+  const menu = (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {swiped.map((action) => actionButton(action, colors))}
+        {menuSubmenus.map(rowSubmenu)}
+        {menuActions.map((action) => actionButton(action, colors))}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
+    </ContextMenu>
+  );
+  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
+  if (swiped.length === 0) return <HStack modifiers={frameModifiers}>{menu}</HStack>;
   return (
     <SwipeActions modifiers={frameModifiers}>
-      <ContextMenu>
-        <ContextMenu.Items>
-          {actions.map((action) => actionButton(action, colors))}
-        </ContextMenu.Items>
-        <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
-      </ContextMenu>
+      {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing">
           {trailingActions.map((action) => actionButton(action, colors))}

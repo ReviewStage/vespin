@@ -10,7 +10,11 @@ import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.
 import { HostFailedScreen } from "../screens/host-failed.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
-import { launchFixtureProfile, launchStubsAuthServer } from "./launch-arguments.js";
+import {
+  launchFixtureProfile,
+  launchStubsAuthServer,
+  launchUpdateNeeded,
+} from "./launch-arguments.js";
 import {
   type HostFollow,
   type MobileHostStartOptions,
@@ -76,6 +80,7 @@ function launchOptions(): MobileHostStartOptions {
   const base = {
     errorReporting: crashReportsErrorReporting,
     fixture: launchFixtureProfile(),
+    fixtureUpdateNeeded: launchUpdateNeeded(),
     appVersion: Constants.expoConfig?.version ?? UNVERSIONED,
     stateRoot: hostStateRoot(),
   };

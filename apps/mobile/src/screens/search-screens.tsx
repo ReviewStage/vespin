@@ -16,8 +16,9 @@ import type { SearchBarCommands } from "react-native-screens";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { type TasksListing, useStatusAsk } from "../tasks/use-tasks.js";
 import { InboxRow } from "./inbox-screens.js";
-import { TaskAgentRow, TaskNodeRow } from "./task-screens.js";
+import { StatusQuestionAsk, TaskAgentRow, TaskNodeRow } from "./task-screens.js";
 
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
@@ -46,9 +47,12 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
 /** What the query found, a section per kind that found any: Tasks, Inbox, then Agents, each row as its own list draws it. */
 function FoundList({
   found,
+  listing,
   onOpen,
 }: {
   readonly found: SearchFound;
+  /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
+  readonly listing: TasksListing;
   readonly onOpen: (id: string) => void;
 }) {
   const { mark } = useInboxActs();
@@ -57,7 +61,7 @@ function FoundList({
       {found.tasks.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS]} count={found.tasks.length}>
           {found.tasks.map((task) => (
-            <TaskNodeRow key={task.id} node={{ task, children: [] }} listing={found.listing} />
+            <TaskNodeRow key={task.id} node={{ task, children: [] }} listing={listing} />
           ))}
         </ListSection>
       )}
@@ -102,6 +106,9 @@ export function SearchScreen() {
   const typed = useRef(query);
   typed.current = query;
   const found = useSearchFound(query);
+  // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents.
+  const { setStatus, question } = useStatusAsk(found.listing);
+  const listing: TasksListing = { ...found.listing, setStatus };
   useFocusEffect(
     useCallback(() => {
       if (typed.current === "") field.current?.focus();
@@ -130,8 +137,9 @@ export function SearchScreen() {
         ) : none ? (
           <EmptyState title={noResultsWords(query)} symbol="magnifyingglass" />
         ) : (
-          <FoundList found={found} onOpen={open} />
+          <FoundList found={found} listing={listing} onOpen={open} />
         )}
+        <StatusQuestionAsk question={question} />
       </Screen>
     </>
   );
