@@ -114,8 +114,8 @@ function PickFace({
  * choice closes it. It stands on the sidebar's ground with its rows on the
  * surface, as Settings' form does. Note that it stands in a host of its
  * own, the size of nothing, as `ConfirmAsk` does, so a screen draws it
- * beside whatever it shows and opens it from a swipe, a long press, or a
- * bar's menu.
+ * beside whatever it shows, beside its `Screen` rather than inside it, and
+ * opens it from a swipe, a long press, or a bar's menu.
  */
 export function RemindSheet({
   presented,

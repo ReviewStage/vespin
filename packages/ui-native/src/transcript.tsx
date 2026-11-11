@@ -28,6 +28,7 @@ import {
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
+import { useDockRoom } from "./glass-bar.js";
 import { isLucideSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { Markdown, Picture } from "./markdown.js";
@@ -777,8 +778,6 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   readonly empty?: EmptyStateProps | undefined;
   /** What the times count from; now where none is given. */
   readonly now?: number | undefined;
-  /** The room left under the newest row, so it scrolls clear of a bar docked over the list's foot (`DOCK_ROOM`). */
-  readonly footRoom?: number | undefined;
   /** The pages older than the oldest row, read as the reader scrolls up to it; none where nothing older stands. */
   readonly older?: OlderPages | undefined;
 };
@@ -796,7 +795,6 @@ export function AgentTranscript({
   head,
   empty,
   now,
-  footRoom = 0,
   older,
   ...drawing
 }: AgentTranscriptProps) {
@@ -808,7 +806,8 @@ export function AgentTranscript({
   const anchored = useRef(true);
   const [away, setAway] = useState(false);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
-  const foot = bottom + TAB_BAR_ROOM + footRoom;
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
+  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
