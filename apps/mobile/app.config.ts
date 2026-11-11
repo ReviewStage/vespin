@@ -328,8 +328,9 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
 // directory and its colors written as its asset catalog, and its target
 // added to the project Expo generates, embedded in the app, built for the
 // app's deployment target, and signed as the app is. A project that holds
-// the target already, as a prebuild over an existing `ios/` does, is left as
-// it stands.
+// the target already, as a prebuild over an existing `ios/` does, keeps it,
+// and only its build settings are written again, so a setting added since,
+// such as its entitlements, still reaches it.
 const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConfig => {
   const colors = Object.entries(extension.COLORS ?? {});
   const written = withDangerousMod(config, [
@@ -367,30 +368,31 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
   ]);
   return withXcodeProject(written, (modConfig) => {
     const project = modConfig.modResults;
-    if (project.pbxTargetByName(extension.TARGET)) return modConfig;
     const sources = extension.SOURCES.map(({ NAME }) => NAME);
     const resources = colors.length > 0 ? [EXTENSION_ASSET_CATALOG] : [];
     const entitlements =
       extension.ENTITLEMENTS === undefined ? [] : [extensionEntitlementsName(extension)];
-    const group = project.addPbxGroup(
-      [...sources, ...resources, extensionPlistName(extension), ...entitlements],
-      extension.TARGET,
-      extension.TARGET,
-    );
-    project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
-    // Note that the xcode library's addTarget writes into these sections without making them, and a fresh Expo project has neither.
-    const objects = project.hash.project.objects;
-    objects.PBXTargetDependency ??= {};
-    objects.PBXContainerItemProxy ??= {};
-    const target = project.addTarget(
-      extension.TARGET,
-      "app_extension",
-      extension.TARGET,
-      extension.BUNDLE_IDENTIFIER,
-    );
-    project.addBuildPhase(sources, "PBXSourcesBuildPhase", "Sources", target.uuid);
-    project.addBuildPhase(resources, "PBXResourcesBuildPhase", "Resources", target.uuid);
-    project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
+    if (!project.pbxTargetByName(extension.TARGET)) {
+      const group = project.addPbxGroup(
+        [...sources, ...resources, extensionPlistName(extension), ...entitlements],
+        extension.TARGET,
+        extension.TARGET,
+      );
+      project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
+      // Note that the xcode library's addTarget writes into these sections without making them, and a fresh Expo project has neither.
+      const objects = project.hash.project.objects;
+      objects.PBXTargetDependency ??= {};
+      objects.PBXContainerItemProxy ??= {};
+      const target = project.addTarget(
+        extension.TARGET,
+        "app_extension",
+        extension.TARGET,
+        extension.BUNDLE_IDENTIFIER,
+      );
+      project.addBuildPhase(sources, "PBXSourcesBuildPhase", "Sources", target.uuid);
+      project.addBuildPhase(resources, "PBXResourcesBuildPhase", "Resources", target.uuid);
+      project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
+    }
     for (const settings of Object.values(
       project.pbxXCBuildConfigurationSection() as Record<string, unknown>,
     )) {
