@@ -96,7 +96,9 @@ export function useWrite(): Write {
   const { data: mark } = useQuery({ ...appStateQuery, select: selectLiveMark });
   // Note that the mark is read as the answer lands, not as the press was made, since a write waits on the service for as long as its call does.
   const markNow = useRef(mark);
-  markNow.current = mark;
+  useEffect(() => {
+    markNow.current = mark;
+  }, [mark]);
   const write: Write = useCallback(
     <Answer>(act: () => PromiseLike<Answer>, saying: WriteSaying<Answer> = {}) => {
       const send = (): Promise<boolean> => {
