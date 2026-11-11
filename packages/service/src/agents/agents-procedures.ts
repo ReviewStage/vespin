@@ -661,7 +661,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
           const ran = yield* sandboxOrUpstream(
-            sandbox.run(sessionId, randomUUID(), {
+            // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
+            sandbox.run(sessionId, action.id, {
               actionId: action.id,
               label: action.label,
               command: action.command,

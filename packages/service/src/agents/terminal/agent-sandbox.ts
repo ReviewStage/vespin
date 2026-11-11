@@ -360,8 +360,13 @@ function agentSandboxOver(
               ? startRunAction(terminalId, run)
               : typeIntoTerminal(standing.id, run.command);
           const started = yield* api.run(running, ask);
-          // A shell tmux could not start or type into is an outage: its id is the service's own or one tmux just listed.
-          if (started.exitCode !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
+          if (started.exitCode !== 0) {
+            // Note that a shell is started under its action's id, so a press made at once beside this one starts it first and tmux refuses this one's: that press's shell is the answer.
+            const raced = (yield* shells()).find((shell) => shell.runAction === run.actionId);
+            if (standing === undefined && raced !== undefined) return Result.succeed(raced);
+            // A shell tmux could not start or type into is otherwise an outage: its id is the action's or one tmux just listed.
+            return yield* Effect.fail(new SandboxUnavailable({}));
+          }
           const shell = (yield* shells()).find((each) => each.id === (standing?.id ?? terminalId));
           return shell === undefined
             ? Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND })

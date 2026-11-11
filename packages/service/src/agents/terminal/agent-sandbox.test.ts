@@ -346,6 +346,66 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       }),
   );
 
+  it.effect(
+    "a run action pressed twice at once answers the one shell the first press started, its session the action's own",
+    () =>
+      Effect.gen(function* () {
+        const action = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
+        const run = { actionId: action, label: "Dev server", command: "pnpm dev", environment: {} };
+        // tmux as two presses at once leave it: both list no shell, the other press's start lands first, and this one's start is refused, its name taken.
+        let shells: string[] = [];
+        const sandbox = memorySandbox({
+          run: ({ ask }) => {
+            const scriptAt = ask.args.indexOf("-c") + 1;
+            const tmuxArgs = ask.args.slice(scriptAt + 2);
+            if (tmuxArgs.length === 0) return ran(0, shells.join("\n"));
+            if (tmuxArgs[0] !== "new-session") return ran(0);
+            shells = [
+              [
+                `terminal-${action}`,
+                "100",
+                field("Dev server"),
+                field("node"),
+                field("/workspace/repository"),
+                field(action),
+              ].join(" "),
+            ];
+            return ran(1);
+          },
+        });
+        sandbox.stand({
+          name: SANDBOX,
+          status: SANDBOX_STATUS.RUNNING,
+          running: RUNNING_SESSION,
+          tags: { sessionId: SESSION },
+        });
+        const layer = Layer.provide(
+          agentSandboxLayer,
+          Layer.mergeAll(
+            LOCAL_AGENT_ENVIRONMENT,
+            Layer.succeed(AgentImage, FIXTURE_IMAGE),
+            sandbox.layer,
+          ),
+        );
+
+        const raced = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, action, run),
+        ).pipe(Effect.provide(layer));
+
+        assert.deepEqual(
+          raced,
+          Result.succeed({
+            id: action,
+            title: "Dev server",
+            command: "node",
+            cwd: "/workspace/repository",
+            running: true,
+            runAction: action,
+          }),
+        );
+      }),
+  );
+
   it.effect("a list tmux could not give is an outage, never a sandbox with no shells", () =>
     Effect.gen(function* () {
       const api = standing(SANDBOX_STATUS.RUNNING, [], 1);
