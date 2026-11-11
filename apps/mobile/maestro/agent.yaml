@@ -216,6 +216,15 @@ appId: dev.vespin.ios
 - tapOn: "Cancel"
 - assertNotVisible: "Archive agent?"
 - assertVisible: "Invite by email"
+# Confirmed, the archive is taken, as the fixture takes it, with no refusal
+# said over the composer; launched straight onto the page, there is nothing
+# to go back to, so the page stays.
+- tapOn: "More"
+- tapOn: "Archive"
+- tapOn: "Stop agents"
+- assertNotVisible: "Archive agent?"
+- assertNotVisible:
+    id: "ask-note"
 # An agent whose transcript is not read yet, or could not be: the fixture
 # holds none for this id, so the list stands empty and its empty state, which
 # is SwiftUI's, stands in the rows' place in a host of its own, rather than
