@@ -556,8 +556,8 @@ const CATALOG = [
   agentTool(DELETE_AUTOMATION_TOOL, runDeleteAutomation),
   agentTool(RUN_AUTOMATION_TOOL, runRunAutomation),
   // The workspace's shared memory.
-  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { gate: TOOL_GATE.MEMORY }),
-  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { gate: TOOL_GATE.MEMORY, ...READS }),
+  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gate: TOOL_GATE.MEMORY }),
+  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, ...READS, gate: TOOL_GATE.MEMORY }),
   // The description's comments.
   commentTool(READ_COMMENTS_TOOL, READS),
   commentTool(REPLY_TO_COMMENT_TOOL),

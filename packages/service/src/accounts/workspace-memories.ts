@@ -16,7 +16,9 @@
  * `search_memory`, and a coding agent's (`../agents/memory-tools.ts`), each
  * answering the outcome in its own words. Words that look like a credential
  * are never kept, and a search ranks the memories by how many of its words
- * each holds (`rankMemories`). Whether the member has Memory on is the
+ * each holds (`rankMemories`); a coding agent's first turn is handed the
+ * ones its task and words find by the same ranking (`matchWorkspaceMemories`).
+ * Whether the member has Memory on is the
  * caller's to check, as each tool and procedure does before it calls here.
  */
 
@@ -69,6 +71,12 @@ const MEMORY_SEARCH_BOUNDS = {
   RECALL_RESULTS: 8,
   /** The most distinct words of a query matched. */
   QUERY_WORDS: 16,
+  /** The most memories a coding agent's first turn is handed. */
+  TURN_RESULTS: 5,
+  /** The most distinct words of a first turn's task and words matched, which run longer than a search's few. */
+  TURN_QUERY_WORDS: 64,
+  /** The shortest word of a first turn's text matched: a lone letter, as "agent's" leaves, would match every word it begins. */
+  TURN_SHORTEST_WORD: 2,
 } as const;
 
 /** Words too common to tell one memory from another. */
@@ -158,20 +166,23 @@ function wordsOf(text: string): readonly string[] {
   return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
+/** A query's distinct telling words, none of the common ones, at most the number given, each at least as long as the length given. */
+function askedWords(query: string, most: number, shortest = 1): readonly string[] {
+  return [...new Set(wordsOf(query))]
+    .filter((word) => word.length >= shortest && !COMMON_WORDS.has(word))
+    .slice(0, most);
+}
+
 /**
- * The memories a query finds, best first: each scored by how many of the
- * query's distinct words begin one of its own, so "deploy" finds
- * "deployment", ties going to the one kept most recently. A query with no
- * telling word answers the most recent; one that finds nothing answers none.
+ * The memories that hold any of the words asked, best first: each scored by
+ * how many of them begin one of its own, so "deploy" finds "deployment",
+ * ties going to the one kept most recently; at most the number given.
  */
-function rankMemories(
+function matchingMemories(
   memories: readonly StoredMemory[],
-  query: string | undefined,
+  asked: readonly string[],
+  most: number,
 ): readonly StoredMemory[] {
-  const asked = [...new Set(wordsOf(query ?? ""))]
-    .filter((word) => !COMMON_WORDS.has(word))
-    .slice(0, MEMORY_SEARCH_BOUNDS.QUERY_WORDS);
-  if (asked.length === 0) return memories.slice(0, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
   return memories
     .map((memory, recency) => {
       const own = wordsOf(memory.text);
@@ -180,8 +191,21 @@ function rankMemories(
     })
     .filter((scored) => scored.score > 0)
     .sort((a, b) => b.score - a.score || a.recency - b.recency)
-    .slice(0, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS)
+    .slice(0, most)
     .map((scored) => scored.memory);
+}
+
+/**
+ * The memories a query finds, best first (`matchingMemories`). A query with
+ * no telling word answers the most recent; one that finds nothing answers none.
+ */
+function rankMemories(
+  memories: readonly StoredMemory[],
+  query: string | undefined,
+): readonly StoredMemory[] {
+  const asked = askedWords(query ?? "", MEMORY_SEARCH_BOUNDS.QUERY_WORDS);
+  if (asked.length === 0) return memories.slice(0, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
+  return matchingMemories(memories, asked, MEMORY_SEARCH_BOUNDS.RECALL_RESULTS);
 }
 
 /** The workspace's memories as the reader sees them: each named by its member, and forgettable where the reader may. */
@@ -330,5 +354,35 @@ export function searchWorkspaceMemories(
     const found = rankMemories(stored, query);
     const memories = yield* summariesFor(userId, MANAGING_ROLES.has(role.value), found);
     return { kind: WORKSPACE_MEMORY.READ, memories, total: stored.length } as const;
+  });
+}
+
+/**
+ * The workspace's memories a coding agent's first turn is handed, to a member
+ * of it: the few its task and words find, ranked as a search ranks them
+ * (`matchingMemories`) over more of the text, since a turn's opening runs
+ * longer than a search's few words. Unlike a search, text with no telling
+ * word, or a workspace whose memories hold none of its words, answers none
+ * rather than the most recent, so a turn is handed only what bears on it;
+ * and an account no member of the workspace is answered none.
+ */
+export function matchWorkspaceMemories(
+  userId: string,
+  workspaceId: string,
+  text: string,
+): WorkspaceStoreEffect<readonly StoredMemory[]> {
+  return Effect.gen(function* () {
+    const asked = askedWords(
+      text,
+      MEMORY_SEARCH_BOUNDS.TURN_QUERY_WORDS,
+      MEMORY_SEARCH_BOUNDS.TURN_SHORTEST_WORD,
+    );
+    if (asked.length === 0) return [];
+    if (Option.isNone(yield* roleIn(userId, workspaceId))) return [];
+    return matchingMemories(
+      yield* listMemories(workspaceId),
+      asked,
+      MEMORY_SEARCH_BOUNDS.TURN_RESULTS,
+    );
   });
 }
