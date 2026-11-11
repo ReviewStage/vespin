@@ -354,6 +354,15 @@ export type WorkspaceMemorySaveAnswer =
       >;
     };
 
+export type WorkspaceMemoryPageAnswer =
+  | {
+      readonly kind: typeof WORKSPACE_MEMORY.READ;
+      readonly memories: readonly MemorySummary[];
+      /** How many memories were kept or corrected since the time, across every page. */
+      readonly total: number;
+    }
+  | { readonly kind: typeof WORKSPACE_MEMORY.NOT_MEMBER };
+
 export type WorkspaceMemorySearchAnswer =
   | {
       readonly kind: typeof WORKSPACE_MEMORY.READ;
@@ -453,5 +462,32 @@ export function matchWorkspaceMemories(
       asked,
       MEMORY_SEARCH_BOUNDS.TURN_RESULTS,
     );
+  });
+}
+
+/**
+ * One page of the workspace's memories kept or corrected at or after
+ * `since` (epoch milliseconds), most recent first, to a member of it, and
+ * how many there are across every page. Unlike a search, nothing is ranked
+ * or capped past the page, and only the page's memories are read beside
+ * their words.
+ */
+export function listWorkspaceMemoriesSince(
+  userId: string,
+  workspaceId: string,
+  since: number,
+  page: { readonly offset: number; readonly limit: number },
+): WorkspaceStoreEffect<WorkspaceMemoryPageAnswer> {
+  return Effect.gen(function* () {
+    const role = yield* roleIn(userId, workspaceId);
+    if (Option.isNone(role)) return { kind: WORKSPACE_MEMORY.NOT_MEMBER } as const;
+    const recent = (yield* listMemories(workspaceId)).filter((kept) => kept.updatedAt >= since);
+    const memories = yield* summariesFor(
+      userId,
+      workspaceId,
+      MANAGING_ROLES.has(role.value),
+      recent.slice(page.offset, page.offset + page.limit),
+    );
+    return { kind: WORKSPACE_MEMORY.READ, memories, total: recent.length } as const;
   });
 }

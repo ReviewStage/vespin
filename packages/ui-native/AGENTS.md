@@ -18,8 +18,8 @@ builds a control of its own.
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's
   sidebar, the list, and the detail, or the list and the detail, each column
-  under its own `ColumnBar`: its inline title, the account's photo, a header
-  such as the workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
+  under its own `ColumnBar`: its inline title, what leads it such as the
+  workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
@@ -36,8 +36,9 @@ builds a control of its own.
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass sliding down from the top with
   the refusal's words and Try again, said aloud by VoiceOver, faded rather
-  than slid where the reader reduces motion, standing in a window of its own
-  over sheets, and said once for a stretch offline, `failure-notice-model.ts`),
+  than slid where the reader reduces motion, standing over the app's root
+  view (not a `FullWindowOverlay`, whose window never drew on iOS 27.2), and
+  said once for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
@@ -134,10 +135,16 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
-  button is the chevron alone. The account's photo leads each tab's root bar
-  and opens Settings (`AccountButton`, `SplitView`'s `sidebarBar`): the
-  system stands it in the same round glass, the photo clipped to a circle
-  inside. Nothing draws a copy of glass.
+  button is the chevron alone. One button leads every tab's root bar, as
+  Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile and ⌄
+  alone, `SWITCHER_LOOK.TILE`, so the screen's title keeps its place beside
+  it, as Linear's does), whose menu holds the workspaces, the account by its
+  name opening Settings, New workspace and Workspace settings; the account's
+  photo (`AccountButton`) only before the workspaces are read, opening
+  Settings, which the system stands in the same round glass, the photo
+  clipped to a circle inside. A landscape iPad's sidebar heads its
+  list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
+  copy of glass.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
@@ -146,9 +153,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Group headers** (`ListSection`) are small and muted with a count; a
   `foldable` one folds in place on a press, its chevron on the left.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
-  you: the unread dot, an ask's glyph and words, the selected tab and the
-  Inbox count, a picked option, and a primary `Button`. Status tones stand
-  on the status marks alone: a task's ring, and a pull request's state.
+  you and what you chose, as the panel draws it: the unread dot, an ask's
+  glyph, a count of what needs you, a reminder's time, the selected tab and
+  the Inbox count, a picked option or a switch that is on, and a filled
+  `Button`. Everything else stands in the ink: an ask's words on a row,
+  links, bar buttons, swipe actions, a bordered or plain button, and a
+  row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
+  asks for copper by name. Status tones stand on the status marks alone: a
+  task's ring, and a pull request's state.
 - **Capsules.** `ScopePills` are a list's scopes in a row under its title,
   the chosen one filled with the ink, and `Chip` one of them; `FieldChip`
   and `StatusChip` read a task's status, priority and assignee. Each stands

@@ -175,6 +175,7 @@ import {
 } from "../ai-elements/tool.js";
 import { useDrawnDark } from "../drawn-dark.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
+import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -1166,6 +1167,8 @@ const CALL_ICON = {
   [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
+  [CALL_KIND.LIST_MEMORIES]: () => <GLYPH.MEMORY />,
+  [CALL_KIND.FORGET_MEMORY]: () => <GLYPH.MEMORY />,
   [CALL_KIND.READ_COMMENTS]: () => <GLYPH.COMMENT />,
   [CALL_KIND.REPLY_TO_COMMENT]: () => <GLYPH.COMMENT />,
   [CALL_KIND.RESOLVE_THREAD]: () => <GLYPH.RESOLVED />,
@@ -1264,8 +1267,9 @@ function chippedLine(
  * The chip a call's row names what it read or wrote by: the first file's,
  * of the task's repository, with its hover card, or the website chip of the
  * page it fetched; nothing where it names neither, or the place knows no
- * repository, or the path is no file of it, as an absolute one or one that
- * climbs out is not, and the row says its subject as words.
+ * repository, or the path is no file of it, as an absolute one through no
+ * checkout or one that climbs out is not, and the row says its subject as
+ * words.
  */
 function calledChip(
   kind: CallKind,
@@ -1515,7 +1519,7 @@ export function TranscriptOpeningCall({
   const { line, chip } = chippedLine(kind, subject, undefined, agent);
   return (
     <Tooltip label={hint} card={card ?? undefined}>
-      <LineButton data-call-id={callId} data-opens="" onClick={onOpen}>
+      <LineButton data-call-id={callId} data-opens="" {...FIND_DETAIL} onClick={onOpen}>
         <ToolLine
           state={state}
           icon={<Icon aria-hidden="true" />}
@@ -1900,7 +1904,7 @@ export function TranscriptSubagent({
       </Tooltip>
     );
   return (
-    <div className="subagent-row @container/subagent-row text-caption-inline">
+    <div className="subagent-row @container/subagent-row text-caption-inline" {...FIND_DETAIL}>
       {row}
       {errorText === undefined ? null : (
         <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
@@ -1935,12 +1939,14 @@ function TurnFold({
   children: ReactNode;
 }): ReactNode {
   return (
-    <Disclosure defaultOpen={open} data-turn-fold="">
-      <DisclosureSummary>
-        {running ? <Shimmer>{summary}</Shimmer> : <span>{summary}</span>}
-      </DisclosureSummary>
-      <DisclosureBody>{children}</DisclosureBody>
-    </Disclosure>
+    <FindDetailFolds>
+      <Disclosure defaultOpen={open} data-turn-fold="" {...FIND_DETAIL}>
+        <DisclosureSummary>
+          {running ? <Shimmer>{summary}</Shimmer> : <span>{summary}</span>}
+        </DisclosureSummary>
+        <DisclosureBody>{children}</DisclosureBody>
+      </Disclosure>
+    </FindDetailFolds>
   );
 }
 

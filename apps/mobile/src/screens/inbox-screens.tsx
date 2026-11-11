@@ -36,11 +36,13 @@ import {
 } from "@repo/features/inbox-wire";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
   INBOX_FEED,
   type InboxFeed,
+  selectAgentHarnesses,
   selectAgentTitles,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
@@ -80,6 +82,7 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -88,7 +91,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
-import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
@@ -154,6 +157,8 @@ function InboxRows({
   onRemind,
   onResolve,
 }: InboxRowsProps) {
+  // The members' pictures, read once for every row rather than once a row.
+  const pictureOf = useMemberPictures();
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {listed.map((each) => (
@@ -161,6 +166,7 @@ function InboxRows({
           key={each.item.id}
           listed={each}
           readerId={readerId}
+          pictureOf={pictureOf}
           onMark={onMark}
           onRemind={onRemind}
           onResolve={onResolve}
@@ -183,12 +189,15 @@ function InboxRows({
 export function InboxRow({
   listed,
   readerId,
+  pictureOf,
   onMark,
   onRemind,
   onResolve,
 }: {
   readonly listed: InboxListed;
   readonly readerId: string | undefined;
+  /** Each member's picture by their id, read once by the list the row stands in. */
+  readonly pictureOf: PictureOf;
   readonly onMark: (itemId: string, unread: boolean) => void;
   /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
   readonly onRemind: (item: InboxItem) => void;
@@ -200,6 +209,7 @@ export function InboxRow({
   const waitsOn = inboxWaitsOn(item);
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
@@ -212,8 +222,10 @@ export function InboxRow({
           agentName,
           readerId,
         ),
+        pictureOf,
+        harness,
       ),
-    [item, agentName, readerId],
+    [item, agentName, readerId, pictureOf, harness],
   );
   const resolve =
     item.status === INBOX_STATUS.OPEN
@@ -221,7 +233,7 @@ export function InboxRow({
           {
             label: RESOLVE,
             symbol: "checkmark.circle",
-            tone: ROW_ACTION_TONE.ACCENT,
+            tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => onResolve(item),
           } as const,
         ]
@@ -238,7 +250,11 @@ export function InboxRow({
       summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
       unread={unread}
       done={isDone(item)}
-      face={waitsOn === undefined || waitsOn.userId === readerId ? undefined : waitsOn.name}
+      face={
+        waitsOn === undefined || waitsOn.userId === readerId
+          ? undefined
+          : { name: waitsOn.name, picture: pictureOf(waitsOn.userId) }
+      }
       at={item.updatedAt}
       due={item.remindAt}
       trailingActions={[
@@ -249,7 +265,7 @@ export function InboxRow({
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
           symbol: unread ? "envelope.open" : "envelope.badge",
-          tone: ROW_ACTION_TONE.ACCENT,
+          tone: ROW_ACTION_TONE.NEUTRAL,
           onPress: () => onMark(item.id, !unread),
         },
       ]}
@@ -341,6 +357,12 @@ function useAgentTitles(): ReadonlyMap<string, string> {
   return data;
 }
 
+/** The harness an agent runs in, as the document holds its model, whose mark its tile wears; none before the agent is listed. */
+function useAgentHarness(agentId: string): ModelProvider | undefined {
+  const { data } = useQuery({ ...appStateQuery, select: selectAgentHarnesses });
+  return data?.get(agentId);
+}
+
 /**
  * Where a thread stands: a compact window's pushed screen, whose stack's bar
  * names the path and which draws its own Remind me sheet, or a split view's
@@ -377,6 +399,8 @@ function ThreadDetail({
   const openLink = useOpenLink();
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const harness = useAgentHarness(item.agentId);
+  const pictureOf = useMemberPictures();
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
@@ -437,6 +461,11 @@ function ThreadDetail({
   const menu = threadMenu(item, answer, () => openRemind(item));
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
+    writer: {
+      ...message.writer,
+      picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+      harness: message.writer.agent ? harness : undefined,
+    },
     stamp:
       message.stamp === undefined
         ? undefined
@@ -608,7 +637,7 @@ function InboxStackList(words: InboxSearch) {
   const field = useRefilledSearchField(search);
   return (
     <>
-      <Stack.Screen options={{ title: INBOX_TITLE, ...switcherTitle(switcher) }}>
+      <Stack.Screen options={{ title: INBOX_TITLE }}>
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_INBOX}

@@ -53,8 +53,9 @@ import type { AgentModelControl } from "./use-agent-model.js";
  * Who pays is read once, the page's payer before the settled turns', and
  * the plan the agent's harness runs on only where neither names one
  * (`paidByOf`), so a Codex agent says its plan before its first turn
- * settles. A Claude Code agent's chip hands its menu the agent's permission
- * mode too, its last pinned row (`agent-approvals.tsx`), and off Full
+ * settles. The chip of an agent whose harness takes a mode, running or
+ * about to start, hands its menu the agent's permission mode too, its last
+ * pinned row (`agent-approvals.tsx`), and off Full
  * access wears the mode's glyph before the model's name, in the harness
  * mark's place where the composer is narrow, its label naming the mode
  * after the model. The reader's own plan is named where their keys hold the one the

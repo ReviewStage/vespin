@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { ConversationEmptyState } from "../ai-elements/conversation.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { agentName, unrunnableChoice } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
@@ -37,7 +38,10 @@ import { WorkingLine } from "./working-time.js";
  * changed it and else on the account's default, in the task's repository;
  * the tab then gives way to the agent's own. The words and the choice are
  * the draft's, held by its owner, as are the files, so they wait while the
- * tab is away. A
+ * tab is away. The model chip's menu offers the Permissions row a running
+ * agent's does, on the member's Default permissions until a pick, which
+ * goes with the Start so the agent's first launch runs on it
+ * (`useNewAgentPermissionMode`), a fork's and a continue's alike. A
  * send that did not start it
  * leaves the words in the box with why under it and what mends it: Retry,
  * which asks again under the draft's own key, or, for a repository out of
@@ -140,6 +144,12 @@ export function DraftAgentTab({
         );
   // A fork runs on its source's model and effort until the developer picks another.
   const choice = draft.choice ?? (source === undefined ? fallback : forkChoice(source));
+  // The mode the agent starts in: the one picked on the chip's menu, else the member's Default permissions.
+  const mode = useNewAgentPermissionMode({
+    model: choice?.model,
+    picked: draft.permissionMode,
+    choose: (permissionMode) => control.onDraftChange({ permissionMode }),
+  });
   // Note that a model nothing of the account's pays for holds Send, with the press that connects one, rather than being refused once sent.
   const unpaid =
     control.models === undefined || choice === undefined
@@ -169,12 +179,20 @@ export function DraftAgentTab({
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
     void starting.run(() => {
       if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
-      const { id, choice, attachments, disabledServers } = draft;
+      const { id, choice, attachments, disabledServers, permissionMode } = draft;
       // Note that a place picked while the experiment was on is not sent once it is off.
       const runsOn = placesOn ? draft.runsOn : undefined;
       const started =
         fork === undefined
-          ? latest.current.startPrompt(id, prompt, choice, attachments, disabledServers, runsOn)
+          ? latest.current.startPrompt(
+              id,
+              prompt,
+              choice,
+              attachments,
+              disabledServers,
+              runsOn,
+              permissionMode,
+            )
           : latest.current.startFork(
               id,
               fork,
@@ -183,6 +201,7 @@ export function DraftAgentTab({
               attachments,
               disabledServers,
               runsOn,
+              permissionMode,
             );
       // Note that the working line stands only once the Start is out, and goes however it lands.
       if (fork !== undefined) setSentAt(Date.now());
@@ -249,6 +268,7 @@ export function DraftAgentTab({
           modelsFailed={control.modelsFailed}
           readModels={control.readModels}
           usage={undefined}
+          mode={mode}
           servers={{
             disabled: draft.disabledServers,
             onSwitch: (next) => control.onDraftChange({ disabledServers: next }),

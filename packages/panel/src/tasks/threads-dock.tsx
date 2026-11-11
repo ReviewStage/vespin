@@ -1,5 +1,10 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { decideButtons, inboxLineKind, inboxPreview } from "@repo/features/inbox-list-model";
+import {
+  decideButtons,
+  inboxLineKind,
+  inboxPreview,
+  NEEDS_YOU,
+} from "@repo/features/inbox-list-model";
 import { INBOX_ASK, type InboxItem, knownAsk, openAskOf } from "@repo/features/inbox-wire";
 import {
   BUTTON_SIZE,
@@ -75,14 +80,11 @@ export interface TurnDone {
   readonly archive: { readonly onSelect: () => void; readonly busy: boolean } | undefined;
 }
 
-/** What the bar says while asks of the agent's wait on the developer. */
-const NEEDS_YOU_WORDS = "Needs you";
-
 /** What the bar's Done says. */
 const DONE_WORDS = {
   DONE: "Done",
   ARCHIVE: "Archive agent",
-  ARCHIVING: "Archiving…",
+  ARCHIVING: "Archiving",
   FOLLOW_UPS: "Follow-ups",
   OTHER_AGENT: "Another agent on this task",
 } as const;
@@ -203,10 +205,10 @@ function DoneBar({ threads, done }: { threads: AgentThreads; done: TurnDone }): 
 /** The bar's Needs you: its head as the dock's row, counting what waits, then the oldest asks on rows of their own. */
 function NeedsYouBar({ threads, next }: { threads: AgentThreads; next: InboxItem }): ReactNode {
   return (
-    <List label={NEEDS_YOU_WORDS} variant={LIST_VARIANT.CARD} fingerTall>
+    <List label={NEEDS_YOU.LABEL} variant={LIST_VARIANT.CARD} fingerTall>
       <ListRow
         leading={<InboxIcon aria-hidden="true" />}
-        title={NEEDS_YOU_WORDS}
+        title={NEEDS_YOU.LABEL}
         meta={<WaitingCount count={threads.waiting.length} />}
         onPress={() => threads.onOpen(next)}
       />

@@ -64,26 +64,23 @@ type ChoiceListProps = {
 /** How thick the card's and the tag's edges are drawn. */
 const HAIRLINE = 0.5;
 
-/** The share of the accent's ink the Recommended tag's edge stands at. */
-const TAG_EDGE_OPACITY = "73";
-
 /** The mark leading an option, 18 pt: a ring or a square, the ring filled with the accent at its heart once picked. */
 function pickMark(picked: boolean, multiple: boolean) {
   if (multiple) return picked ? "checkmark.square.fill" : "square";
   return picked ? "smallcircle.filled.circle.fill" : "circle";
 }
 
-/** The small bordered tag after the recommended option's label, in the accent's words, since a recommendation is for you. */
+/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked. */
 function RecommendedTag() {
   const colors = useColors();
   return (
     <Text
       modifiers={[
         font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
-        foregroundStyle(colors.ACCENT_TEXT),
+        foregroundStyle(colors.TEXT_MUTED),
         padding({ horizontal: 5, vertical: 1 }),
         strokeBorder({
-          content: `${colors.ACCENT}${TAG_EDGE_OPACITY}`,
+          content: colors.CHIP_EDGE,
           shape: "roundedRectangle",
           cornerRadius: RADIUS.TAG,
           style: { lineWidth: 1 },

@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile and name at the bar's leading edge, opening the menu of every workspace, New workspace, and Workspace settings.
+// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile and name at the bar's leading edge, opening the menu of every workspace, the account opening Settings, New workspace, and Workspace settings.
 
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -8,7 +8,6 @@ import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   newWorkspaceAction,
   type SwitcherWorkspace,
-  settingsAction,
   type WorkspaceSwitcher,
   workspaceSettingsAction,
 } from "@repo/ui-native";
@@ -17,7 +16,7 @@ import { useRouter } from "expo-router";
 import type { ComponentProps } from "react";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
-import { SETTINGS_ROUTE, useOpenSettings } from "./settings-button.js";
+import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
 
 /** What the switcher is drawn from, which a tab's root bar draws it by. */
 export type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;
@@ -56,17 +55,18 @@ function switcherWorkspace(
 }
 
 /**
- * The switcher's workspaces, the chosen one, and its acts: a choice is kept
- * as the phone's (`chosen-workspace.ts`), which the Inbox, its count, Tasks,
- * and New task follow at once; New workspace opens its sheet, and Workspace
- * settings opens Settings on the chosen workspace's page, and Settings its
- * main list, so it is found from the workspace's name as well as from the
- * account's photo. None before the
+ * The switcher's workspaces, the chosen one, the account, and its acts: a
+ * choice is kept as the phone's (`chosen-workspace.ts`), which the Inbox, its
+ * count, Tasks, and New task follow at once; the account opens Settings on
+ * its main list, as Notion's one workspace button does, so the bar holds no
+ * photo of its own beside it; New workspace opens its sheet, and Workspace
+ * settings opens Settings on the chosen workspace's page. None before the
  * account's workspaces are read.
  */
 export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const router = useRouter();
   const openSettings = useOpenSettings();
+  const account = useSettingsAccount();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const { chosen, choose } = useChosenWorkspace(workspaces);
@@ -79,26 +79,10 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     workspaces: drawn,
     chosen: switcherWorkspace(chosen, chosen.id === first, photos),
     onChoose: choose,
+    account: account === undefined ? undefined : { name: account.name, onPress: account.onPress },
     actions: [
       newWorkspaceAction(() => router.push("/new-workspace")),
       workspaceSettingsAction(() => openSettings(SETTINGS_ROUTE.WORKSPACE)),
-      settingsAction(() => openSettings()),
     ],
   };
-}
-
-/**
- * The bar's title where a tab's root names its workspace at its leading
- * edge (`SettingsBarButton`'s `switcher`): a title view that draws nothing,
- * since the workspace's name already says where the reader is; the tab's
- * name drawn as before the account's workspaces are read. Note that the
- * title is hidden by an empty view rather than an empty `headerTitle`
- * string, because a string stands as the native title too, and the tab's
- * own `title` must stay the screen's name for the back button's history and
- * the reader.
- */
-export function switcherTitle(switcher: SwitcherProps | undefined): {
-  readonly headerTitle?: () => null;
-} {
-  return switcher === undefined ? {} : { headerTitle: () => null };
 }

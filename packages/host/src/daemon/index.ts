@@ -1,8 +1,15 @@
 /**
- * index.ts -- a host's door (`@repo/host/daemon`): what a host's daemon (`apps/host`) composes on every OS, each OS's description, the platform, the box's device record, its connect with a code, its leave, the uninstall of the host the app ships, the service that runs it, and the daemon run on them, kept out of the main barrel and every door a browser loads.
+ * index.ts -- a host's door (`@repo/host/daemon`): what a host's daemon (`apps/host`) composes on every OS, each OS's description, the platform, the box's device record, its connect with a code, its leave, the command once the app runs the host, the uninstall of the host the app ships, the service that runs it, and the daemon run on them, kept out of the main barrel and every door a browser loads.
  */
 
 export { hostDeviceWhen, readHostDevice, writeHostDevice } from "../host-device-record.js";
+export {
+  APP_RUNS_HOST_WORDS,
+  appHostCommandLinked,
+  appRefusesCommand,
+  COMMAND_LINK_OUTCOME,
+  type CommandLinkOutcome,
+} from "./app-host-command.js";
 export { HOST_DAEMON_END, hostDaemon, hostRefusedRest } from "./host-daemon.js";
 export { HOST_LEAVE_OUTCOME, leaveHostDevice } from "./host-leave.js";
 export { HOST_LOCK, hostLockTaken } from "./host-lock.js";

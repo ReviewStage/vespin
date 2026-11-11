@@ -102,6 +102,7 @@ import {
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { addAgentRepository } from "./coder-host/agent-repository-add.js";
 import { answeredApproval } from "./coder-host/approval-answer.js";
+import { retryBoot } from "./coder-host/boot.js";
 import { harnessTakesMode } from "./coder-host/permission-mode.js";
 import {
   agentPullRequestReach,
@@ -554,6 +555,12 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     stop: signedIn.stop.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       yield* stoppedAgent(writer, userId, agent);
+      return { agent: yield* summaryOf(userId, agent) };
+    }),
+    /** The agent's failed first launch booted again (`coder-host/boot.ts`), answered as it then stands. */
+    boot: signedIn.boot.effect(function* ({ input, context }) {
+      const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
+      yield* retryBoot(userId, agent);
       return { agent: yield* summaryOf(userId, agent) };
     }),
     /** The agent on screen kept warm (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */

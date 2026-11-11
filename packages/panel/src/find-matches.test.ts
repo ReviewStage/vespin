@@ -2,7 +2,14 @@
 
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import { FIND_SHADOW_ATTRIBUTE, findRanges, matchFrom, watchText } from "./find-matches.js";
+import {
+  FIND_SHADOW_ATTRIBUTE,
+  findRanges,
+  matchFrom,
+  releaseFolds,
+  reveal,
+  watchText,
+} from "./find-matches.js";
 
 /**
  * find-matches.test.ts -- a find reads the words a marked host's shadow
@@ -22,6 +29,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   frames = [];
   vi.restoreAllMocks();
+  Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
 });
 
 /** Asks for frames into `frames` rather than the window's clock, so a test says when the next is drawn. */
@@ -151,4 +159,34 @@ test("a find kept at a match after a slotted comment keeps to it, and one at the
 
   assert.equal(matchFrom(ranges, ranges[2], tab), 2);
   assert.equal(matchFrom(ranges, ranges[1], tab), 1);
+});
+
+test("a fold the find opened closes as it steps to a match outside it, unless the reader pressed its line, and every one it holds closes on a query that matches nothing", () => {
+  const tab = document.body.appendChild(document.createElement("div"));
+  tab.innerHTML =
+    "<details id='one'><summary>Ran</summary><p>seats one</p></details>" +
+    "<details id='two'><summary>Read</summary><p>seats two</p></details>" +
+    "<details id='three'><summary>Edited</summary><p>seats three</p></details>";
+  // jsdom lays nothing out, so a match stands nowhere and nothing scrolls to it.
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+  const fold = (id: string) =>
+    tab.querySelector<HTMLDetailsElement>(`#${id}`) ?? assert.fail(`fold ${id}`);
+  const [one, two, three] = findRanges(tab, "seats");
+  const folds = new Set<HTMLDetailsElement>();
+
+  reveal(one ?? assert.fail("the first match"), tab, folds);
+  assert.equal(fold("one").open, true);
+  reveal(two ?? assert.fail("the second match"), tab, folds);
+  assert.deepEqual([fold("one").open, fold("two").open], [false, true]);
+
+  // The reader presses the second fold's line, so it is theirs to close.
+  fold("two")
+    .querySelector("summary")
+    ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  fold("two").open = true;
+  reveal(three ?? assert.fail("the third match"), tab, folds);
+  assert.deepEqual([fold("two").open, fold("three").open], [true, true]);
+
+  releaseFolds(folds);
+  assert.deepEqual([fold("two").open, fold("three").open], [true, false]);
 });

@@ -270,7 +270,7 @@ export function MergeActRow({
       modifiers={[
         buttonStyle(prominent ? "borderedProminent" : "bordered"),
         controlSize("large"),
-        tint(colors.ACCENT),
+        tint(prominent ? colors.ACCENT : colors.TEXT),
         disabled(dimmed),
         listRowBackground("clear"),
         listRowSeparator("hidden"),
@@ -285,7 +285,7 @@ export function MergeActRow({
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
-          foregroundStyle(prominent ? colors.ON_ACCENT : colors.ACCENT_TEXT),
+          foregroundStyle(prominent ? colors.ON_ACCENT : colors.TEXT),
           frame({ maxWidth: Number.POSITIVE_INFINITY }),
         ]}
       >

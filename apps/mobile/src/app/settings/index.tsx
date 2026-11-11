@@ -190,12 +190,12 @@ export default function SettingsScreen() {
             <PushRow
               label="What's new"
               goes={PUSH_ROW_GOES.OUT}
-              onPress={() => openInSheet(LINK_PAGE.CHANGELOG, colors.ACCENT)}
+              onPress={() => openInSheet(LINK_PAGE.CHANGELOG, colors.TEXT)}
             />
             <PushRow
               label="Help"
               goes={PUSH_ROW_GOES.OUT}
-              onPress={() => openInSheet(LINK_PAGE.DOCS, colors.ACCENT)}
+              onPress={() => openInSheet(LINK_PAGE.DOCS, colors.TEXT)}
             />
             <PushRow
               label="Send feedback"

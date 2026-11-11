@@ -802,7 +802,7 @@ test("Cancel withdraws a Codex login still waiting, handing the focus back to Ad
   assert.ok(document.activeElement === button(page, "Add to Codex"));
 });
 
-test("a login that expires says so with Try again, which asks for a new code", async () => {
+test("a login that expires says so with Retry, which asks for a new code", async () => {
   waitOpen = Promise.withResolvers();
   const page = await mount();
   const header = () => credential(page, "Codex");
@@ -813,7 +813,7 @@ test("a login that expires says so with Try again, which asks for a new code", a
   act(() => waiting.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.EXPIRED, message: expired })));
   await settle();
   assert.ok(header().textContent?.includes(expired));
-  await press(header(), "Try again");
+  await press(header(), "Retry");
   assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 2);
   assert.match(header().textContent ?? "", /225Q-1343X/u);
 });

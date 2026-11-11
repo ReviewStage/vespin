@@ -14,11 +14,13 @@ import { EmptyState, LIST_LOOK, ListSection, RowList, Screen, SplitView } from "
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useMemberPictures } from "../member-pictures.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns } from "../use-window-size-class.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
@@ -75,6 +77,7 @@ function FoundList({
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
+  const pictureOf = useMemberPictures();
   return (
     <RowList
       look={LIST_LOOK.PLAIN}
@@ -97,6 +100,7 @@ function FoundList({
               key={listed.item.id}
               listed={listed}
               readerId={found.readerId}
+              pictureOf={pictureOf}
               onMark={mark}
               onRemind={onRemind}
               onResolve={resolve}
@@ -166,6 +170,7 @@ function useSearchScreen({ query, setQuery }: SearchWords) {
 function SearchStackScreen(words: SearchWords) {
   const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
   const field = useRefilledSearchField(query);
+  const switcher = useWorkspaceSwitcher();
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
   useEffect(() => {
@@ -186,7 +191,7 @@ function SearchStackScreen(words: SearchWords) {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />

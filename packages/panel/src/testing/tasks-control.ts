@@ -280,7 +280,6 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onDraftChange: ignore,
     onHandDraft: ignore,
     onTaskStarted: ignore,
-    opening: undefined,
     onDraftAttachments: ignore,
     onDiscardDraft: ignore,
     startPrompt: () => Promise.resolve(undefined),

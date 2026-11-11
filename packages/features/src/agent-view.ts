@@ -430,6 +430,8 @@ export const hostIdParamsSchema = hostIdRequestSchema;
  * state is gone either way; the service may not have taken its leave, so
  * the account may still list it (`stillListed`), and an agent's folder may
  * still stand, the words it could not be removed with (`folderLeft`).
+ * Refused where this Mac's host is another account's (`anotherAccount`),
+ * which the account signed in does not hold, so cannot turn on or off.
  */
 export const thisMacHostSetAnswerViewSchema = EffectSchema.Union([
   EffectSchema.Struct({
@@ -437,7 +439,10 @@ export const thisMacHostSetAnswerViewSchema = EffectSchema.Union([
     stillListed: EffectSchema.optionalKey(EffectSchema.Literal(true)),
     folderLeft: EffectSchema.optionalKey(EffectSchema.String),
   }),
-  hostDoneAnswerViewSchema.members[1],
+  EffectSchema.Struct({
+    ...hostDoneAnswerViewSchema.members[1].fields,
+    anotherAccount: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  }),
 ]);
 
 export type ThisMacHostSetAnswerView = typeof thisMacHostSetAnswerViewSchema.Type;
@@ -644,6 +649,8 @@ export const agentAgentAnswerSchema = EffectSchema.Union([
     agent: agentSummarySchema,
     txid: agentAnswerSchema.fields.txid,
     addedCheckout: agentAnswerSchema.fields.addedCheckout,
+    /** That a message sent waits in the agent's queue while its first launch boots, rather than in its transcript; absent for every other answer. */
+    queued: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   }),
   failedReaching,
 ]);

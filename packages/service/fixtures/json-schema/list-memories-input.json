@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "since": {
+      "type": "string",
+      "description": "Only the memories kept or corrected at or after this time, as a time with its offset, such as 2026-11-02T09:00-05:00; leave it out for every memory."
+    },
+    "offset": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many of the memories to pass over, most recent first: the nextOffset an earlier list answered, to read the next page; leave it out for the first."
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

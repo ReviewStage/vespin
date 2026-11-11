@@ -28,22 +28,30 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
+  agentBootHandedOff,
+  agentBootOf,
+  endAgentBoot,
+} from "@repo/database/models/agent-boot-store";
+import {
   type AgentQueueRead,
   agentQueueNow,
   claimedAt,
   claimQueueHead,
   dropQueuedMessage,
   pauseAgentQueue,
+  type QueuedLine,
   type QueuedMessageRow,
   refuseQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import { type Agent, readAgentOfConversation } from "@repo/database/models/agent-store";
 import { latestTurnsOfReached } from "@repo/database/models/message-reads";
-import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
+import { type SettledAgentTurn, senderNameOf, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueue, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE, AGENT_STATUS } from "@repo/features/agent-wire";
-import { TURN_STATUS } from "@repo/wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
+import { MESSAGE_CHANNEL, TURN_STATUS } from "@repo/wire";
 import { Clock, DateTime, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
@@ -52,7 +60,7 @@ import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
 import { CARRY_ON_OUTCOME, carriedOn, decidedCarryOn } from "./carry-on.js";
 import { routedSessions } from "./runtime-sessions.js";
 import { agentStatusOf, startedBlank } from "./status.js";
-import { steerAgentWritten } from "./steer.js";
+import { STEER_DELIVERY, steerAgentWritten } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /** The agents' sessions as the service reaches them acting for one member, whose queued message goes as theirs, or the refusal where it cannot. */
@@ -64,6 +72,13 @@ export type QueueSessions = (
   HttpClient.HttpClient | DatabaseServices
 >;
 
+/** The name a line diverted while the agent booted goes under where no member typed it, as its row keeps it (`senderNameOf`), or the product's for its own; none for a member's own. */
+function from(line: QueuedLine | undefined): { readonly name: string } | undefined {
+  if (line?.sender.kind === MESSAGE_SENDER.APP) return { name: PRODUCT_NAME };
+  const name = senderNameOf(line?.sender);
+  return name === null ? undefined : { name };
+}
+
 /**
  * The queue as the agent's own transcript carries it at `now`, on every
  * page, empty or not: its messages but one being sent, which of them a
@@ -73,21 +88,25 @@ export type QueueSessions = (
 export function wireQueue(read: AgentQueueRead, now: Date): AgentQueue {
   const queued = read.messages.filter((message) => !claimedAt(message, now));
   return {
-    messages: queued.map((message) => ({
-      id: message.id,
-      text: message.text,
-      queuedBy: message.userId,
-      ...(message.editing ? { editing: true as const } : undefined),
-      ...(message.attachments.length === 0
-        ? undefined
-        : {
-            files: message.attachments.map((file) => ({
-              name: file.name,
-              mediaType: file.mediaType,
-              id: file.id,
-            })),
-          }),
-    })),
+    messages: queued.map((message) => {
+      const sentAs = from(message.line);
+      return {
+        id: message.id,
+        text: message.text,
+        queuedBy: message.userId,
+        ...(sentAs === undefined ? undefined : { from: sentAs }),
+        ...(message.editing ? { editing: true as const } : undefined),
+        ...(message.attachments.length === 0
+          ? undefined
+          : {
+              files: message.attachments.map((file) => ({
+                name: file.name,
+                mediaType: file.mediaType,
+                id: file.id,
+              })),
+            }),
+      };
+    }),
     // Note that a pause stands only over messages, so one a member's messages cascaded out from under reads as none.
     ...(read.paused === undefined || queued.length === 0
       ? undefined
@@ -109,23 +128,34 @@ export function queueOnPage(agentId: string) {
   });
 }
 
-/** Whether the agent is at work, as its status reads: starting, or a turn queued for its runner or running. */
+/**
+ * Whether the agent is at work, as its status reads: starting, or a turn
+ * queued for its runner or running. Note that an agent whose first launch
+ * still boots is not at work here, because the queue's own lock is what
+ * holds its head until the machine is up (`claimQueueHead`).
+ */
 const atWork = Effect.fn("web/queueAtWork")(function* (agent: Agent) {
   const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(agent.conversationId);
+  const boot = Option.getOrUndefined(yield* agentBootOf(agent.id))?.phase;
   const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
     blank: startedBlank(agent),
+    boot,
   });
-  return status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING;
+  return status === AGENT_STATUS.RUNNING || (status === AGENT_STATUS.STARTING && !bootHolds(boot));
 });
 
 /**
- * One claimed message sent now as its member's own message, under its own
- * send key, and taken out of the queue once it went: as the next turn where
- * none runs, or steering the one under way. It is counted under its member
- * as it goes, once, since a repeat under its key sends nothing new. A refusal
- * fails, the message still claimed, for its caller to let go of.
+ * One claimed message sent now, and taken out of the queue once it went: as
+ * the next turn where none runs, or steering the one under way. A member's
+ * own message goes as theirs under its own id; a line a send diverted while
+ * the agent booted goes as it was sent, under its key, as its sender, with
+ * what carried it. A member's message is counted under them as it goes,
+ * once, since a repeat under its key sends nothing new. A message that went
+ * while the agent's first launch handed its queue off ends that hand-off
+ * before it leaves the queue, so the next waits for the turn it opened. A
+ * refusal fails, the message still claimed, for its caller to let go of.
  */
 export const sendQueued = Effect.fn("web/sendQueued")(function* (
   sessionsFor: QueueSessions,
@@ -140,7 +170,7 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
     agent,
     {
       text: message.text,
-      clientKey: message.id,
+      clientKey: message.sendKey ?? message.id,
       // Note that each file goes as it came, without the id the queue read its bytes by.
       ...(message.attachments.length === 0
         ? undefined
@@ -151,10 +181,32 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
               data,
             })),
           }),
-      sender: { kind: MESSAGE_SENDER.MEMBER, userId: message.userId },
+      sender: message.line?.sender ?? { kind: MESSAGE_SENDER.MEMBER, userId: message.userId },
+      ...(message.line?.metadata === undefined ? undefined : { metadata: message.line.metadata }),
+      ...(message.line?.serverWords === undefined
+        ? undefined
+        : { serverWords: message.line.serverWords }),
+      ...(message.line?.mentionWords === undefined
+        ? undefined
+        : { mentionWords: message.line.mentionWords }),
     },
+    STEER_DELIVERY.NOW,
   );
-  if (sent !== undefined) {
+  const handedOff = yield* agentBootHandedOff(agent.id, yield* DateTime.nowAsDate).pipe(
+    Effect.as(true),
+    Effect.catchCause((cause) =>
+      Effect.as(
+        Effect.logWarning("agent-queue: a first launch's hand-off did not end", cause),
+        false,
+      ),
+    ),
+  );
+  // Note that only a member's own message counts as one sent, never a Start's first, which its Start counted.
+  const members =
+    message.line === undefined ||
+    (message.line.sender.kind === MESSAGE_SENDER.MEMBER &&
+      message.line.metadata?.channel !== MESSAGE_CHANNEL.START);
+  if (sent !== undefined && members) {
     yield* recordServerEvent(
       SERVER_EVENT.MESSAGE_SEND,
       { userId: message.userId, workspaceId: agent.organizationId },
@@ -167,6 +219,10 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
       },
     );
   }
+  // Note that a first launch's hand-off that was not recorded keeps the message's claim to lapse, as a failed drop
+  // does, so the next hand-off sends it again under its key, answered as a repeat, and records the hand-off then;
+  // dropped now, the boot would stand handing off over an empty queue that nothing hands on again.
+  if (!handedOff) return;
   // Note that the message went, so a failure to take it out of the queue is no refusal of it: it is logged, and
   // its claim left to lapse, after which the next hand-off sends it again under its id, answered as a repeat.
   yield* dropQueuedMessage(agent.id, message).pipe(
@@ -266,6 +322,12 @@ export const queueAtTurnEnd = Effect.fn("web/queueAtTurnEnd")(function* (
   sessionsFor: QueueSessions,
   agent: Agent,
 ) {
+  // A first launch whose first message went is over once its turn ends, so a later cold start reads as it always has.
+  yield* endAgentBoot(agent.id).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("agent-queue: a first launch's boot was not ended", cause),
+    ),
+  );
   const turns = yield* latestTurnsOfReached([agent.conversationId]).pipe(
     Effect.catchCause((cause) =>
       Effect.as(Effect.logWarning("agent-queue: a turn read failed", cause), undefined),

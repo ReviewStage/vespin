@@ -63,7 +63,7 @@ import { afterResponse } from "../../http/after-response.js";
 import { agentLogIds } from "./agent-log.js";
 import type { QueueSessions } from "./agent-queue.js";
 import { hostLostOf } from "./status.js";
-import { steerAgentWritten } from "./steer.js";
+import { STEER_DELIVERY, steerAgentWritten } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /** The services a carry-on's send runs over: the store, and what a message to an agent reaches (`steerAgentWritten`). */
@@ -253,6 +253,8 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
         sender: { kind: MESSAGE_SENDER.APP },
         metadata: carryOnLine(reason),
       },
+      // Note that a carry-on is the cut-off turn's own continuation, which the queue already stood aside for.
+      STEER_DELIVERY.NOW,
     );
     yield* Effect.logInfo("a cut-off turn was carried on").pipe(
       Effect.annotateLogs({ turnId, reason }),

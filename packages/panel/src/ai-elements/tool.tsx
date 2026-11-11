@@ -37,6 +37,7 @@ import {
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import type { ReactNode } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
+import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { Fold, type FoldProps } from "./fold.js";
 
@@ -109,11 +110,14 @@ const TOOL_BODY_CLASS = "tool-body my-tight-gap mr-0 ml-transcript-gutter";
 
 export type ToolProps = Omit<FoldProps, "className">;
 
+/** One call, folded under its line: a detail of the transcript, which a find may leave out (`FIND_DETAIL`). */
 export function Tool({ children, ...props }: ToolProps): ReactNode {
   return (
-    <Fold className="tool text-caption-inline" {...props}>
-      {children}
-    </Fold>
+    <FindDetailFolds>
+      <Fold className="tool text-caption-inline" {...FIND_DETAIL} {...props}>
+        {children}
+      </Fold>
+    </FindDetailFolds>
   );
 }
 

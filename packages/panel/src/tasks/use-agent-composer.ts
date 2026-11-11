@@ -388,6 +388,11 @@ export function useAgentComposer(input: {
       // A rewind that did not go drops nothing, so the messages it would have dropped are drawn again.
       if (rewound !== undefined && "failure" in rewound)
         ours((was) => ({ ...was, cut: undefined }));
+      // A line the agent's first launch holds went into its queue, which draws it, so the box lets it go.
+      if (!("failure" in answer) && answer.queued === true) {
+        ours((was) => ({ ...was, sent: was.sent.filter((each) => each.id !== line.id) }));
+        return;
+      }
       if (!("failure" in answer)) {
         ours((was) => ({
           ...was,

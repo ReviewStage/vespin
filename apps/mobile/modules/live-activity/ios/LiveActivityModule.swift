@@ -1,4 +1,4 @@
-// LiveActivityModule.swift -- the app's side of its Live Activity: the tokens the service pushes to, the activity's end, the Stop button's requests, and a fixture's activity started on the phone.
+// LiveActivityModule.swift -- the app's side of its Live Activity: the tokens the service pushes to, the activity's end, the Stop button's requests, and a fixture's activity started on the phone; and the Inbox widget drawn again once the app moves its snapshot.
 //
 // The service starts, updates, and ends the activity by push, so the app
 // only hands it tokens: the push-to-start token, and the update token of
@@ -10,11 +10,15 @@
 // the app's target) waits in the standard defaults; each is handed on while
 // JavaScript listens for Stops, and taken away once it answers. A fixture run starts
 // an activity of its own (`startFixture`), since no push reaches a
-// simulator, and ends it (`endAll`).
+// simulator, and ends it (`endAll`). The Inbox widget, which the same
+// extension draws, is asked to draw again (`reloadInboxWidget`) once the
+// app's JavaScript has written its snapshot into the App Group
+// (`src/inbox-widget/`), since only WidgetKit's Swift can ask.
 
 import ActivityKit
 import ExpoModulesCore
 import Foundation
+import WidgetKit
 
 public final class LiveActivityModule: Module {
   /// The defaults key and the ping `StopAgentIntent` names.
@@ -99,6 +103,11 @@ public final class LiveActivityModule: Module {
         AgentsActivityAttributes.ContentState.self, from: Data(contentState.utf8))
       _ = try Activity.request(
         attributes: AgentsActivityAttributes(), content: .init(state: state, staleDate: nil))
+    }
+
+    // The Inbox widget's kind, as `InboxWidgetSnapshot.kind` names it in the widget extension.
+    Function("reloadInboxWidget") { () -> Void in
+      WidgetCenter.shared.reloadTimelines(ofKind: "InboxWidget")
     }
 
     AsyncFunction("endAll") { () async -> Void in

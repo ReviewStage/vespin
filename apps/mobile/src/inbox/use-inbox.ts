@@ -29,6 +29,7 @@ import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
+import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
@@ -66,16 +67,27 @@ const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 /**
  * Every holder of Inbox items in the workspace chosen in Settings, as the
  * panel's Inbox lists the chosen workspace's alone, heard anew as another is
- * chosen; every workspace's before the account's workspaces are read.
+ * chosen; every workspace's before the account's workspaces are read. With
+ * them, the workspace chosen and how many the account has, which the Inbox
+ * widget names (`inbox-widget/`).
  */
-function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
+export function useChosenInbox(): {
+  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
+  readonly chosen: Workspace | undefined;
+  readonly workspaces: number;
+} {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
   const { data: groups = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(chosen?.id),
   });
-  return useSendsDrawn(groups);
+  return { groups: useSendsDrawn(groups), chosen, workspaces: workspaces.length };
+}
+
+/** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`). */
+function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
+  return useChosenInbox().groups;
 }
 
 /** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
@@ -236,7 +248,7 @@ export function useInboxActs(): {
           refused: (answer) =>
             "failure" in answer
               ? until === null
-                ? REMIND_REFUSED.CANCEL
+                ? REMIND_REFUSED.CLEAR
                 : REMIND_REFUSED.SET
               : undefined,
           retry: true,

@@ -18,11 +18,13 @@ import {
   type SessionMessage,
   SessionUnreachable,
 } from "../agents/sessions/agent-sessions.js";
+import { bootedAtOnce } from "./native-harness-fake.js";
 
 /** An account's agent sessions, writing down every message sent, by session, or refusing every send. */
 export function recordingSessions(refusing = false) {
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
   const sessions: AgentSessions = {
+    boot: bootedAtOnce,
     open: () =>
       Effect.succeed({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` }),
     send: (sessionId, message) =>

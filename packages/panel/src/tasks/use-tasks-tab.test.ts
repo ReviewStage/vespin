@@ -56,13 +56,14 @@ import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
-import { act, createElement, Fragment, useState } from "react";
+import { act, createElement, Fragment, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useAdminView } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
+import { useHomeNewTask } from "../desktop/desktop-welcome.js";
 import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
 import {
@@ -228,6 +229,19 @@ interface Standing {
   admin?: boolean;
   /** The address the window's page was loaded at, holding no step; `/app` where none is named. */
   loadedAt?: string;
+  /** Whether Home's own composer is drawn while Home stands, its words heeding New task as Home's do (`useHomeNewTask`). */
+  homeComposer?: boolean;
+}
+
+/** Home's own composer as New task reaches it: words that take the caret at each press while it stands. */
+function HomeComposerWords({ asks }: { asks: number }): React.JSX.Element {
+  const box = useRef<HTMLDivElement>(null);
+  useHomeNewTask(box, asks);
+  return createElement(
+    "div",
+    { ref: box },
+    createElement("div", { className: "ProseMirror home-words", tabIndex: -1 }),
+  );
 }
 
 /**
@@ -479,15 +493,22 @@ function mount(
       onToBound: () => placeLeave.pass(tasks.onLeaveRouted),
       onToUnbound: homeView.onOpen,
     });
-    return held.history
-      ? createElement(WindowHistoryProbe, {
-          tasks: control,
-          room: held.room,
-          automations: automationsView,
-          versionHistory: versionHistoryView,
-          inbox: inboxView,
-        })
-      : null;
+    return createElement(
+      Fragment,
+      null,
+      held.history
+        ? createElement(WindowHistoryProbe, {
+            tasks: control,
+            room: held.room,
+            automations: automationsView,
+            versionHistory: versionHistoryView,
+            inbox: inboxView,
+          })
+        : null,
+      held.homeComposer === true && control.atHome
+        ? createElement(HomeComposerWords, { asks: control.newTask.homeAsks })
+        : null,
+    );
   }
   const container = document.createElement("div");
   document.body.append(container);
@@ -743,6 +764,29 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   act(() => home.control().newTask.onOpen());
   assert.equal(home.control().newTask.open, true, "the Inbox gets the dialog");
   assert.equal(home.control().newTask.homeAsks, 1);
+});
+
+test("New task pressed on Settings, which it leaves for Home, asks Home's own composer for the caret rather than opening the dialog over it", () => {
+  const settings = mount({
+    shown: false,
+    loadedAt: "/app/settings",
+    tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces },
+    homeComposer: true,
+  });
+  // Note that the chord brings the Tasks tab forward, which lands on Home, and then presses New task as Settings drew it.
+  const { onOpen } = settings.control().newTask;
+  act(() => {
+    settings.arrive("/app");
+    settings.stand({ shown: true });
+    onOpen();
+  });
+  assert.equal(settings.control().newTask.open, false, "no dialog over Home");
+  // Note that Home's composer is first drawn by the press itself, and its first draw takes no caret on a phone.
+  assert.equal(
+    document.activeElement,
+    document.querySelector(".home-words"),
+    "Home's composer takes the caret",
+  );
 });
 
 test("an agent's start pressed on Home's own composer and refused opens no dialog over Home, handing the composer the card it pressed with and why, which a page opened since lets go", async () => {
@@ -1021,11 +1065,14 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
 });
 
-test("a column whose last agent is archived opens a new agent's draft in its place", async () => {
+test("the agent a column shows, archived, leaves its task for Home, and the column opens a new agent's draft in its place", async () => {
   const archived = { ...RUNNING_AGENT, archivedAt: 5 };
   const tab = mount(
     { shown: true, tasks: withAgents([RUNNING_AGENT]) },
-    { [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }) },
+    {
+      [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }),
+      [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve(),
+    },
   );
   await settle();
   const column = () => tab.control().mainTabs;
@@ -1042,6 +1089,7 @@ test("a column whose last agent is archived opens a new agent's draft in its pla
     "a draft, as a task with no agent opens on",
   );
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, shown]);
+  await vi.waitFor(() => assert.ok(tab.told.includes(ACT_KIND.TASKS_CLOSE), "the task is left"));
 });
 
 test("a tab closed on another plan opens that plan again, and the tab on it once the host has it open", async () => {
@@ -3972,6 +4020,11 @@ test("an archived agent opens in a tab of its task's column, which stays once it
   act(() => tab.control().onShowAgent(TASK.id, AGENT_ID));
   assert.equal(tab.control().agentView.agentId, undefined, "no page of its own stands");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
+  await settle();
+  assert.ok(
+    !tab.told.includes(ACT_KIND.TASKS_CLOSE),
+    "an agent opened archived is read on its task",
+  );
 
   tab.stand({ tasks: withAgents([RUNNING_AGENT]) });
   await settle();
@@ -4025,7 +4078,7 @@ test("New task's agent opens alone, no plan beside it, and the task left draws n
   assert.deepEqual(panelOf(tab), { open: false, tab: FILE }, "the task left keeps its tab, shut");
 });
 
-test("New task's agent stands on its task with the words it started on as its first line before the task's agents or its transcript are read", async () => {
+test("New task's agent stands on its task before the task's agents or its transcript are read", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
   const tab = mount(
     { shown: true, tasks: OPEN, descriptions: AGENT_DESCRIPTIONS },
@@ -4034,7 +4087,7 @@ test("New task's agent stands on its task with the words it started on as its fi
         Promise.resolve({ planId: OTHER_TASK_ID, agentStart: { agent: started } }),
     },
   );
-  const { prompt } = await startAgentTask(tab);
+  await startAgentTask(tab);
 
   const agents = tab.control().agents;
   assert.deepEqual(
@@ -4043,8 +4096,6 @@ test("New task's agent stands on its task with the words it started on as its fi
     "the agent stands as the task's list",
   );
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
-  assert.equal(agents.opening?.agentId, AGENT_ID);
-  assert.equal(agents.opening?.line.text, prompt, "its first line is the words it started on");
 });
 
 test("New task's agent start opens its page at once on the words as its agent's first line, before the service answers, which opens the agent's own tab in its place", async () => {
@@ -4089,7 +4140,6 @@ test("New task's agent start opens its page at once on the words as its agent's 
   await settle();
   assert.equal(tab.control().newTask.starting, undefined, "the task's own page takes its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
-  assert.equal(tab.control().agents.opening?.line.text, prompt);
 });
 
 test("what the developer opened while New task's agent start was out, a page and New task again, still stands as the start lands", async () => {

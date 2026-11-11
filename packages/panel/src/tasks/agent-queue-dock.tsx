@@ -12,7 +12,6 @@ import {
   ConfirmDialog,
   type DialogQuestion,
   IconButton,
-  LIST_DENSITY,
   LIST_ROW_ACTIONS,
   LIST_VARIANT,
   List,
@@ -96,7 +95,8 @@ export function AgentQueueDock({
   /** Gives up the edit of the message on its row, this box's own or one another window left standing. */
   onCancelEdit: (message: QueuedMessage) => void;
   onMove: (from: number, to: number) => void;
-  onSteer: (message: QueuedMessage) => void;
+  /** Steers a queued message into the turn under way or as the next; none while the agent's first launch boots, which takes no line until its machine is up. */
+  onSteer: ((message: QueuedMessage) => void) | undefined;
   onEdit: (message: QueuedMessage) => void;
   /** Deletes the message once the dialog's Delete is pressed, answering how that went. */
   onDelete: (message: QueuedMessage) => Promise<ActionResult>;
@@ -118,7 +118,8 @@ export function AgentQueueDock({
   const movable = controls && messages.length > 1;
   return (
     <div className={`agent-queue-dock ${COMPOSER_DOCK_CLASS}`}>
-      {paused === undefined ? null : (
+      {/* Note that a first launch's failed boot is said in the empty transcript, whose Retry lifts the pause. */}
+      {paused === undefined || paused.because === QUEUE_PAUSE.BOOT_FAILED ? null : (
         <Banner
           look={BANNER_LOOK.INSET}
           tone={paused.because === QUEUE_PAUSE.REFUSED ? STATUS_TONE.DANGER : STATUS_TONE.NEUTRAL}
@@ -143,7 +144,7 @@ export function AgentQueueDock({
         <List
           label={QUEUE_WORDS.LIST}
           variant={LIST_VARIANT.CARD}
-          density={LIST_DENSITY.DENSE}
+          fingerTall
           moves
           onPointerDown={drag}
         >
@@ -191,14 +192,16 @@ export function AgentQueueDock({
                     </Button>
                   ) : (
                     <>
-                      <Button
-                        size={BUTTON_SIZE.COMPACT}
-                        variant={BUTTON_VARIANT.QUIET}
-                        icon={<GLYPH.STEER />}
-                        onClick={() => onSteer(message)}
-                      >
-                        {QUEUE_WORDS.STEER}
-                      </Button>
+                      {onSteer === undefined ? null : (
+                        <Button
+                          size={BUTTON_SIZE.COMPACT}
+                          variant={BUTTON_VARIANT.QUIET}
+                          icon={<GLYPH.STEER />}
+                          onClick={() => onSteer(message)}
+                        >
+                          {QUEUE_WORDS.STEER}
+                        </Button>
+                      )}
                       <IconButton
                         size={BUTTON_SIZE.COMPACT}
                         label={QUEUE_WORDS.EDIT}

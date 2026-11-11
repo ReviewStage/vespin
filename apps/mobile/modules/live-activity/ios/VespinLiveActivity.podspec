@@ -1,4 +1,4 @@
-# VespinLiveActivity.podspec -- the app's Live Activity module (`LiveActivityModule.swift`), which Expo's autolinking finds under `modules/` and builds into the app.
+# VespinLiveActivity.podspec -- the app's Live Activity and Inbox widget module (`LiveActivityModule.swift`), which Expo's autolinking finds under `modules/` and builds into the app.
 Pod::Spec.new do |s|
   s.name           = 'VespinLiveActivity'
   s.version        = '0.1.0'
@@ -12,6 +12,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  s.frameworks = 'WidgetKit'
 
   s.source_files = '*.swift'
   s.pod_target_xcconfig = {

@@ -242,7 +242,7 @@ export type TaskRunsOnRequest = typeof taskRunsOnRequestSchema.Type;
  * (`agent-wire.ts`), its key, which a retry carries again, the choice,
  * a prompt and its files, the servers switched off, where it runs, the
  * repositories it works in beside the task's, the branch its checkout is
- * cloned at, and its title, held to the same
+ * cloned at, its title, and its permission mode, held to the same
  * words-or-files rule, but never `from` or a note, since a new task has no
  * agent to take over from. The prompt travels as `prompt`, the key the
  * desktop's own Start params name it by: the `task` an agent Start's body
@@ -260,6 +260,7 @@ const taskAgentStartSchema = EffectSchema.Struct({
   alsoRepositories: agentStartRequestFields.alsoRepositories,
   branch: agentStartRequestFields.branch,
   title: agentStartRequestFields.title,
+  permissionMode: agentStartRequestFields.permissionMode,
 }).check(startBrief);
 
 export type TaskAgentStart = typeof taskAgentStartSchema.Type;

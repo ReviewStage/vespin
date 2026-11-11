@@ -228,7 +228,7 @@ function PullRequestToolbar({
       {press === undefined ? null : (
         <Stack.Toolbar.Button
           variant={press.prominent ? "prominent" : "plain"}
-          tintColor={colors.ACCENT}
+          tintColor={press.prominent ? colors.ACCENT : colors.TEXT}
           disabled={press.disabled}
           onPress={press.onPress}
         >

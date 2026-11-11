@@ -4,7 +4,8 @@
  * The pages are a routed place (`panel-router.tsx`) under the workspace
  * their address names, read from the address alone: the list at
  * `/<workspace>/automations`, its Runs tab at `/automations/runs`, a new
- * automation's page at `/automations/new`, an automation's at
+ * automation's page at `/automations/new`, filled in from a suggestion's
+ * preset where its `?preset=` names one, an automation's at
  * `/automation/<id>`, its runs alone at `/automation/<id>/runs`, and one of
  * its runs at `/automation/<id>/run/<runId>`, which a narrow room stands
  * alone too. Each is a step of its own but the automation a new page made,
@@ -15,6 +16,7 @@
  * for as long as the window lives, so Back passes over its steps for good.
  */
 
+import { AUTOMATION_PRESET, type AutomationPresetName } from "@repo/features/automation-presets";
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
 import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
@@ -77,14 +79,27 @@ export interface AutomationsRoute extends AutomationsStanding {
   readonly onTurn: (workspace: string) => void;
 }
 
+/** The preset an address's `?preset=` names, where it names one this build knows. */
+function presetOf(named: string | undefined): AutomationPresetName | undefined {
+  return Object.values(AUTOMATION_PRESET).find((preset) => preset === named);
+}
+
 /** The page the address stands, where it stands one. */
 function placeOf(
   leaf: string | undefined,
   params: Readonly<Record<string, string | undefined>>,
+  search: Readonly<Record<string, string>>,
 ): { place: AutomationsPlace; runs: boolean } | undefined {
   const page = Object.entries(AUTOMATIONS_LEAF).find(([id]) => id === leaf)?.[1];
   if (page === undefined) return undefined;
   const { automationId, runId } = params;
+  if (page.kind === AUTOMATIONS_PAGE.NEW) {
+    const preset = presetOf(search.preset);
+    return {
+      place: preset === undefined ? { kind: page.kind } : { kind: page.kind, preset },
+      runs: false,
+    };
+  }
   if (page.kind !== AUTOMATIONS_PAGE.EDIT) return { place: { kind: page.kind }, runs: false };
   if (automationId === undefined) return undefined;
   const place: AutomationsPlace =
@@ -102,7 +117,11 @@ function navigationTo(to: AutomationsPlace, workspace: string): NavigateOptions 
     case AUTOMATIONS_PAGE.RUNS:
       return { to: "/$workspace/automations/runs", params: { workspace } };
     case AUTOMATIONS_PAGE.NEW:
-      return { to: "/$workspace/automations/new", params: { workspace } };
+      return {
+        to: "/$workspace/automations/new",
+        params: { workspace },
+        search: to.preset === undefined ? {} : { preset: to.preset },
+      };
     case AUTOMATIONS_PAGE.EDIT:
       return to.runId === undefined
         ? {
@@ -120,7 +139,9 @@ function navigationTo(to: AutomationsPlace, workspace: string): NavigateOptions 
 export function useAutomationsPlace(): AutomationsStanding {
   const here = useWindowPlace();
   const standing =
-    here.place === ROUTED_PLACE.AUTOMATIONS ? placeOf(here.leaf, here.params) : undefined;
+    here.place === ROUTED_PLACE.AUTOMATIONS
+      ? placeOf(here.leaf, here.params, here.search)
+      : undefined;
   return {
     open: standing !== undefined,
     place: standing?.place ?? AUTOMATIONS_LIST,

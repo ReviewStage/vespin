@@ -71,6 +71,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  // The find's choice of searching calls and thoughts is the window's, kept across draws.
+  window.localStorage.clear();
 });
 
 const AGENT_ID = "4b0f6d3e-2c1a-4f5e-9d8c-7a6b5c4d3e2f";
@@ -259,6 +261,16 @@ function findTally(): string | null | undefined {
     ?.textContent;
 }
 
+/** Presses the find bar's button named `label`. */
+function pressInBar(label: string): void {
+  const bar = document.querySelector('[role="search"][aria-label="Find"]');
+  const button =
+    [...(bar?.querySelectorAll("button") ?? [])].find(
+      (each) => each.getAttribute("aria-label") === label || each.textContent === label,
+    ) ?? assert.fail(`the find bar's ${label}`);
+  act(() => button.click());
+}
+
 test("⌘F finds words in a row the log has not drawn, scrolls the log to it, and lights the match there", async () => {
   const held = messages(0, 400);
   held[7] = message(7, "The lantern is lit in the seventh reply.");
@@ -383,7 +395,7 @@ test("⌘F counts a line the voice said over a long turn's first piece after tha
   assert.equal(findTally(), "1 of 1");
 });
 
-test("⌘F counts a match in a closed call's answer far up the log, steps to it, and opens the fold on it", async () => {
+test("⌘F leaves a closed call's answer far up the log out until asked, then counts the match there, steps to it, and opens the fold on it", async () => {
   const held = messages(0, 400);
   held[7] = {
     id: "m-7",
@@ -415,7 +427,14 @@ test("⌘F counts a match in a closed call's answer far up the log, steps to it,
   });
   typeFind("lantern");
   await act(settled);
+  assert.equal(findTally(), "No results", "the calls are left out at first");
+  assert.ok(
+    document.querySelector(".find-bar")?.textContent?.includes("1 more in tool calls and thinking"),
+    "the bar says the calls hold a match",
+  );
 
+  pressInBar("Include");
+  await act(settled);
   assert.equal(findTally(), "1 of 1");
   assert.ok(drawnRows(container).includes("m-7"), "the seventh reply's row is drawn");
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
@@ -452,6 +471,7 @@ async function farTally(far: AgentTranscriptMessage, query: string) {
   act(() => {
     runAppCommand(APP_COMMAND.FIND);
   });
+  pressInBar("Search tool calls and thinking");
   typeFind(query);
   await act(settled);
   return findTally();

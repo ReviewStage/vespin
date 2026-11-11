@@ -17,17 +17,18 @@ import {
 import { GLYPH } from "@repo/ui/icons";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useRef, useState } from "react";
+import { TRY_AGAIN_LABEL, TRYING_AGAIN_LABEL } from "./agent-model.js";
 
 /**
- * github-sign-in-card.tsx -- the card a transcript ends on where a Mac could not start its agent because the Mac's own GitHub sign-in cannot reach the repository: the command that signs in, to copy, then Retry, and Move to cloud where Move to would offer it.
+ * github-sign-in-card.tsx -- the card a transcript ends on where a Mac could not start its agent because the Mac's own GitHub sign-in cannot reach the repository: the command that signs in, to copy, then Try again, and Move to cloud where Move to would offer it.
  *
  * A repository reached on the member's own token runs on a Mac through that
  * Mac's own git and gh login, which its host checks before it clones; where
  * the login cannot reach the repository the launch settles unstarted with
  * `DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN`, and this card stands in place of
  * the end line's sentence. It names the Mac and the repository where the tab
- * knows them, else "This Mac" and "the repository". Retry asks the service
- * to send again, as the failed end line's Try again does: the lines the
+ * knows them, else "This Mac" and "the repository". Try again asks the service
+ * to send again, and is named as the failed end line's Try again, since it is the same act: the lines the
  * launch never took, or, where none was lost, a line of the developer's own
  * (`RETRY_LINE`), so the same agent launches anew with its first message;
  * the press holds off a second send while it is out, and a refused one is
@@ -40,16 +41,14 @@ import { useRef, useState } from "react";
 const GITHUB_SIGN_IN_WORDS = {
   UNNAMED_MAC: "This Mac",
   UNNAMED_REPOSITORY: "the repository",
-  HOW: "Sign in on that Mac, then retry:",
+  HOW: "Sign in on that Mac, then try again:",
   COMMAND: "gh auth login",
   COMMAND_LABEL: "Sign-in command",
   COMMAND_WHAT: "command",
-  RETRY: "Retry",
-  RETRYING: "Retrying",
   MOVE_TO_CLOUD: "Move to cloud",
 } as const;
 
-/** The line Retry sends the agent, which reads in the transcript as the developer's own. */
+/** The line Try again sends the agent, which reads in the transcript as the developer's own. */
 export const RETRY_LINE = "Try again";
 
 /** What the card draws and presses: the Mac and the repository by name where known, and its acts. */
@@ -66,7 +65,7 @@ export interface GitHubSignInDoors {
   readonly copy: (text: string) => Promise<void>;
 }
 
-/** The card, its Retry pressed once until what it sent takes its place, or the service refuses it. */
+/** The card, its Try again pressed once until what it sent takes its place, or the service refuses it. */
 export function GitHubSignInCard({
   host,
   repository,
@@ -103,11 +102,11 @@ export function GitHubSignInCard({
           <Button
             variant={BUTTON_VARIANT.PRIMARY}
             busy={retry.running}
-            busyLabel={GITHUB_SIGN_IN_WORDS.RETRYING}
+            busyLabel={TRYING_AGAIN_LABEL}
             disabled={retried}
             onClick={pressRetry}
           >
-            {GITHUB_SIGN_IN_WORDS.RETRY}
+            {TRY_AGAIN_LABEL}
           </Button>
         </>
       }

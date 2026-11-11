@@ -800,7 +800,11 @@ const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema
  * and refused beside `from`, since an agent started from another is cloned
  * at that agent's branch. Its `title` is the agent's from the start, which no
  * generated title covers; one from another agent takes it in place of
- * `<title> (continued)`.
+ * `<title> (continued)`. Its `permissionMode` is the mode the agent's first
+ * launch already runs in and its row keeps, as the new-agent menus pick it;
+ * one naming none starts on the starter's Default permissions, a harness
+ * that takes no mode that asks starts on Full access, and an automation's
+ * run on Full access whatever it names.
  */
 export const agentStartRequestFields = {
   idempotencyKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
@@ -818,6 +822,7 @@ export const agentStartRequestFields = {
   alsoRepositories: EffectSchema.optionalKey(agentAlsoRepositoriesSchema),
   branch: EffectSchema.optionalKey(startBranchSchema),
   title: EffectSchema.optionalKey(trimmedText(AGENT_BOUNDS.MAX_TITLE_CHARS)),
+  permissionMode: EffectSchema.optionalKey(agentPermissionModeSchema),
 };
 
 /** Whether `words` carry the files, as a prompt or a note does: no files without them, and words, files, or both with them. */
@@ -1400,6 +1405,13 @@ export const agentAnswerSchema = EffectSchema.Struct({
 export const agentMessageAnswerSchema = EffectSchema.Struct({
   agent: agentSummarySchema,
   txid: EffectSchema.optionalKey(EffectSchema.String),
+  /**
+   * The agent's queue with the message in it, where the agent's machine was
+   * still booting its first launch and the message waits there to go once it
+   * is up (`agent-boot.ts`), in place of a line written; absent where the
+   * message was sent, and from a service older than it.
+   */
+  queued: EffectSchema.optionalKey(agentQueueSchema),
 });
 
 /**

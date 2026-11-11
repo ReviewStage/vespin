@@ -24,18 +24,26 @@ appId: dev.vespin.ios
       authServer: stub
 - assertVisible: "Inbox"
 - assertNotVisible: "Sign in to Vespin"
-# The account's photo leads the Inbox's bar, heard as Settings, and opens it.
-- assertVisible: "Settings"
+# The workspace switcher leads the Inbox's bar, and its menu's account,
+# heard as its name and Settings, opens it.
+- assertVisible:
+    id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-account
-- tapOn: "Settings"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
 - assertVisible: "Ada Lovelace"
-- assertVisible: "Analytical Engines"
+# The workspace the app works in stands under the account, the signed-in
+# account's own one first; the switcher in the bar chooses among the others.
+- assertVisible: "Ada's workspace"
 - waitForAnimationToEnd
 - takeScreenshot: settings
-- tapOn: "Analytical Engines"
-# Note that Sign out stands at the form's foot, below the fold of a short
-# window such as the folded iPhone Duo's, so the form scrolls to it first.
+# Sign out stands on the Account page, which the account's row opens.
+- tapOn: "Ada Lovelace"
+- waitForAnimationToEnd
+# Note that Sign out stands at the page's foot, below the fold of a short
+# window such as the folded iPhone Duo's, so the page scrolls to it first.
 - scrollUntilVisible:
     element: "Sign out"
 - tapOn: "Sign out"

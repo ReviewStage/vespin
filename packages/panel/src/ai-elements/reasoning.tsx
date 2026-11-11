@@ -9,6 +9,7 @@ import {
 } from "@repo/ui";
 import { BrainIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
 import { Fold, FoldBody, type FoldProps } from "./fold.js";
 
 /**
@@ -40,11 +41,14 @@ export const REASONING_WORDS_CLASS = "m-0 whitespace-pre-wrap wrap-anywhere";
 
 export type ReasoningProps = Omit<FoldProps, "className">;
 
+/** One thought, folded under its line: a detail of the transcript, which a find may leave out (`FIND_DETAIL`). */
 export function Reasoning({ children, ...props }: ReasoningProps): ReactNode {
   return (
-    <Fold className="reasoning text-caption-inline" {...props}>
-      {children}
-    </Fold>
+    <FindDetailFolds>
+      <Fold className="reasoning text-caption-inline" {...FIND_DETAIL} {...props}>
+        {children}
+      </Fold>
+    </FindDetailFolds>
   );
 }
 

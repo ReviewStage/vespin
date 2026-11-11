@@ -263,6 +263,42 @@ running agents' titles** and when each began, how many of them run, and how
 many threads wait on you. We forget the activity's token once it ends, or Apple
 says it is gone, and both tokens leave with the phone's row or your account.
 
+If you add the app's Inbox widget to your Home Screen or Lock Screen, the
+app keeps a small file for it on your iPhone, in storage it shares only with
+its own widget and notification extensions: the name of the workspace you
+chose, how many threads wait on you there, and **the titles of up to three
+of them and their tasks' names**, with the ids a tap opens. It holds no
+message's words, no sign-in token, and nothing the widget sends anywhere:
+the widget has no network of its own. The app rewrites the file as your
+Inbox changes, the notification extension updates it as a notification
+arrives, and the app deletes it when you sign out. The widget marks the
+titles as private, so iOS hides them on a locked iPhone if your settings
+say to.
+
+While you are signed in to the Vespin iOS app, it keeps a small file on your
+phone, in a folder only the app and its own extensions can read, for
+Vespin's share sheet: **your account's id, your workspaces' ids and names,
+and the names of the repositories each reaches**, with the Service's address
+and the app's version. The app also keeps **your account's current sign-in
+token** (the short-lived access token, never the refresh token that renews
+it) in one Keychain item that only the app and its share sheet can read. That
+item stays on this iPhone, never syncs to iCloud or moves to another device,
+holds the time the token stops being sent, a little under an hour after it
+was issued, is rewritten each time the token is renewed, and is deleted when
+you sign out. When you share text or a link to Vespin from another app and press
+Start, the share sheet sends **the words you shared and edited**, with the
+workspace and repository you picked, to the Service under that token, exactly
+as the app's New task does, and the task starts there. Where the task
+doesn't start, because the token has expired, the Service refuses it, or the
+Service doesn't answer, the share sheet keeps those words and picks as a
+draft in the same folder instead, which the app opens New task on the next
+time you open the app, then deletes. Signing out deletes the files and the
+Keychain item. Deleting the app deletes the files at once, but iOS keeps an
+app's Keychain items after the app is deleted, so the item stays on the
+iPhone until the app is installed and opened again, which deletes it; by
+then the token in it has expired, within an hour of being issued, and the
+share sheet never sends a token past its expiry.
+
 So your phone stays quiet while you're at your desk, the Service notes when
 a desktop or web client of yours was last active: while you use one, it
 tells the Service so at most every 30 seconds, with nothing of what you typed

@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- a workspace's tile, and the switcher a tab's root bar names the workspace with: its tile and name, opening the menu of every workspace, New workspace, and Workspace settings.
+// workspace-switcher.tsx -- a workspace's tile, and the switcher a tab's root bar names the workspace with: its tile and name, opening the menu of every workspace, the account opening Settings, New workspace, and Workspace settings.
 
 import {
   Divider,
@@ -42,8 +42,16 @@ const BAR_TILE_SIZE = 22;
 /** The widest the name stands in a bar, so a long one is cut short rather than pushing the bar's other buttons off it. */
 const NAME_MAX_WIDTH = 180;
 
-/** The chevron after the name, which says the name opens a menu. */
+/** The chevron after the name, which says the name opens a menu, in the body's ink, since the muted ink faded into a dark bar's glass. */
 const CHEVRON_SIZE = 10;
+
+/** How the switcher's button stands: the tile and the name, where a sidebar's row has room, or the tile alone, where a bar's title stands beside it. */
+export const SWITCHER_LOOK = {
+  NAMED: "named",
+  TILE: "tile",
+} as const;
+
+export type SwitcherLook = (typeof SWITCHER_LOOK)[keyof typeof SWITCHER_LOOK];
 
 /** What a flow finds the switcher by. */
 const SWITCHER_ID = "workspace-switcher";
@@ -60,6 +68,19 @@ export type SwitcherWorkspace = {
   readonly picture?: string | undefined;
 };
 
+/** The signed-in account as the menu's row that opens Settings. */
+export type SwitcherAccount = {
+  /** The account's name, or its address where it has none. */
+  readonly name: string;
+  readonly onPress: () => void;
+};
+
+/** What the account's row says under its name: where it goes. */
+const SETTINGS = "Settings";
+
+/** The account's row's image. Note that a menu draws its rows' images as templates in one ink, so a photo would stand as a flat silhouette; the system's person stands in its place. */
+const ACCOUNT_SYMBOL = "person.crop.circle";
+
 /** An act under the menu's workspaces, such as New workspace. */
 export type SwitcherAction = {
   readonly label: string;
@@ -73,8 +94,12 @@ type WorkspaceSwitcherProps = {
   /** The one the phone works in, which the bar names and the menu checks. */
   readonly chosen: SwitcherWorkspace;
   readonly onChoose: (id: string) => void;
-  /** The acts under the workspaces: New workspace, Workspace settings, then Settings. */
+  /** The signed-in account, whose row under the workspaces opens Settings; none while nobody is signed in. */
+  readonly account?: SwitcherAccount | undefined;
+  /** The acts after the account: New workspace, then Workspace settings. */
   readonly actions: readonly SwitcherAction[];
+  /** How its button stands; the tile and the name where none is given. */
+  readonly look?: SwitcherLook | undefined;
 };
 
 /** The picture a tile draws over its letter: the photo as held, else the owner's picture asked for at the tile's size; none while the letter stands alone. */
@@ -139,15 +164,20 @@ function heardAs(chosen: SwitcherWorkspace): string {
  * The switcher for a bar SwiftUI draws, such as a split view's sidebar: the
  * chosen workspace's tile and name and a chevron, which open the system's
  * menu of every workspace by its letter, its name, and who shares it, the
- * chosen one checked as the system checks a choice, then the acts under a
- * rule. Note that a menu's row takes the system's image and words alone, so
- * each workspace leads with its letter's symbol rather than its tile.
+ * chosen one checked as the system checks a choice, then under a rule the
+ * account by its name, opening Settings, and the acts, as Notion's one
+ * workspace button holds the account and its settings. Note that a menu's
+ * row takes the system's image and words alone, so each workspace leads
+ * with its letter's symbol rather than its tile, and the account with the
+ * system's person rather than its photo.
  */
 export function WorkspaceSwitcherMenu({
   workspaces,
   chosen,
   onChoose,
+  account,
   actions,
+  look = SWITCHER_LOOK.NAMED,
 }: WorkspaceSwitcherProps) {
   const colors = useColors();
   return (
@@ -156,20 +186,22 @@ export function WorkspaceSwitcherMenu({
       label={
         <HStack spacing={SPACE.TIGHT + 2}>
           <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
-          <Text
-            modifiers={[
-              font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
-              foregroundStyle(colors.TEXT),
-              lineLimit(1),
-              frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
-            ]}
-          >
-            {chosen.name}
-          </Text>
+          {look === SWITCHER_LOOK.TILE ? null : (
+            <Text
+              modifiers={[
+                font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
+                foregroundStyle(colors.TEXT),
+                lineLimit(1),
+                frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
+              ]}
+            >
+              {chosen.name}
+            </Text>
+          )}
           <Image
             systemName="chevron.down"
             size={CHEVRON_SIZE}
-            color={colors.TEXT_MUTED}
+            color={colors.TEXT_BODY}
             modifiers={[accessibilityHidden()]}
           />
         </HStack>
@@ -187,7 +219,14 @@ export function WorkspaceSwitcherMenu({
           <Image systemName={tileSymbol(workspace.name)} />
         </Toggle>
       ))}
-      {actions.length === 0 ? null : <Divider />}
+      {account === undefined && actions.length === 0 ? null : <Divider />}
+      {account === undefined ? null : (
+        <SwiftUIButton onPress={account.onPress}>
+          <Text>{account.name}</Text>
+          <Text>{SETTINGS}</Text>
+          <Image systemName={ACCOUNT_SYMBOL} />
+        </SwiftUIButton>
+      )}
       {actions.map((action) => (
         <SwiftUIButton
           key={action.label}
@@ -203,15 +242,17 @@ export function WorkspaceSwitcherMenu({
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
  * holds React Native views: the same menu in a SwiftUI host the size of its
- * label, standing as a bar item at the bar's leading edge, as Notion's and
- * Linear's iPhone apps name their workspace there. Note that it stands as a
+ * label, standing as the one bar item at the bar's leading edge, as Linear's
+ * iPhone app stands its workspace there: the tile and ⌄ alone, so the
+ * screen's own title keeps its place in the bar, and the menu names the
+ * workspace, checked. Note that it stands as a
  * bar item rather than the bar's title view, because a host sized to its
  * contents drew at no size at all in the native stack's title on iOS 27.
  */
 export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   return (
     <Host matchContents>
-      <WorkspaceSwitcherMenu {...props} />
+      <WorkspaceSwitcherMenu {...props} look={SWITCHER_LOOK.TILE} />
     </Host>
   );
 }
@@ -224,9 +265,4 @@ export function newWorkspaceAction(onPress: () => void): SwitcherAction {
 /** The menu's act that opens the chosen workspace's settings, as the panel words it, by a workspace's glyph so it stands apart from Settings' gear. */
 export function workspaceSettingsAction(onPress: () => void): SwitcherAction {
   return { label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, symbol: "building.2", onPress };
-}
-
-/** The menu's last act, Settings: the same Settings the account's photo opens, found from the workspace's name as well. */
-export function settingsAction(onPress: () => void): SwitcherAction {
-  return { label: "Settings", symbol: "gearshape", onPress };
 }
