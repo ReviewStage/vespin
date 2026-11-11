@@ -11,7 +11,9 @@
 // scaled down as it is decoded, so a large photo never stands whole in the
 // extension's small memory, then encoded smaller until it fits. The
 // pictures are kept in order while they fit together, and the rest are
-// counted as left out.
+// counted as left out. Each is decoded upright at its scaled size, one at a
+// time, and the JPEG is written from those pixels alone, so none of the
+// source's metadata (its GPS, EXIF or TIFF) leaves the phone.
 
 import Foundation
 import ImageIO
