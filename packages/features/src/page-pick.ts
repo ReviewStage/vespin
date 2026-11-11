@@ -21,7 +21,9 @@ import { DESCRIPTION_COMMENT_BOUNDS } from "./description-comment-wire.js";
  * page, with where they stand and the element holding them, as a press or
  * a key lets them go, or a finger's rests, and that none are once they go;
  * and it says a press landed in the page that selected nothing, which
- * dismisses a card standing over it, as a press anywhere else does.
+ * dismisses a card standing over it, as a press anywhere else does; and
+ * which element marked the pointer is over, so the panel tells its
+ * comments as it does over the element's pin.
  * The outline is a stylesheet the document adopts over an attribute set on
  * the element, so the page's own tree is never rewritten.
  *
@@ -74,7 +76,7 @@ export type PagePickAsk =
       readonly marks: readonly PageMark[];
     };
 
-/** An element the panel marks: by its path, with the words selected in it that a thread quotes, where one does. */
+/** An element the panel marks: by its path, with the words selected in it that a thread quotes, where one does; an element several threads quote words of is marked once for each. */
 export interface PageMark {
   readonly path: string;
   readonly words?: string;
@@ -116,8 +118,10 @@ export type PagePicked = typeof pickedSchema.Type;
  * A message the frame posts to the panel: the element picked; that the pick
  * was let go, by Escape in the page; where each element marked stands, or
  * none where the page holds it no more; the words selected, in the shape
- * of an element picked whose quote they are, or none once they go; or that
- * a press landed in the page, selecting nothing.
+ * of an element picked whose quote they are, or none once they go; that
+ * a press landed in the page, selecting nothing; or the element marked that
+ * the pointer is over, the innermost where several hold it, or none as it
+ * leaves them.
  */
 export const pagePickAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ type: EffectSchema.Literal(PAGE_PICK_TYPE), picked: pickedSchema }),
@@ -138,6 +142,10 @@ export const pagePickAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
     type: EffectSchema.Literal(PAGE_PICK_TYPE),
     pressed: EffectSchema.Literal(true),
+  }),
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(PAGE_PICK_TYPE),
+    over: EffectSchema.NullOr(elementPathSchema),
   }),
 ]);
 
@@ -234,6 +242,8 @@ export const PAGE_PICK_SCRIPT = `(() => {
   const stop = () => {
     pick.on = false;
     mark("hovered", null);
+    // Note that the pointer may rest where it was, on an element marked, so that element is told again.
+    tellOver(told.at);
   };
 
   const target = (event) => (event.target instanceof Element ? event.target : null);
@@ -248,25 +258,30 @@ export const PAGE_PICK_SCRIPT = `(() => {
     }
   };
 
-  const told = { marks: [], said: "[]", selected: "", queued: false, settle: undefined };
+  const told = { marks: [], said: "[]", selected: "", queued: false, settle: undefined, over: null, at: null };
 
   // The words a thread quotes, found in its element's text as one string, as a range; none where they stand there no more.
+  // Note that both are read with each run of whitespace as one space, because a selection's words are the page as drawn, its source's line breaks and indents run together, and a quote cut to its bound ends in an ellipsis the page never held.
   const wordsIn = (element, words) => {
-    const nodes = [];
+    const sought = flat(words).replace(/…$/u, "");
+    if (sought === "") return null;
+    const at = [];
     let text = "";
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-      nodes.push({ node, start: text.length });
-      text += node.data;
+      for (let offset = 0; offset < node.data.length; offset += 1) {
+        const spaced = /\\s/u.test(node.data[offset]);
+        if (spaced && (text === "" || text.endsWith(" "))) continue;
+        text += spaced ? " " : node.data[offset];
+        at.push({ node, offset });
+      }
     }
-    const at = text.indexOf(words);
-    if (at < 0 || words === "") return null;
-    const end = at + words.length;
-    const first = nodes.findLast((each) => each.start <= at);
-    const last = nodes.findLast((each) => each.start < end);
+    const from = text.indexOf(sought);
+    if (from < 0) return null;
+    const last = at[from + sought.length - 1];
     const range = document.createRange();
-    range.setStart(first.node, at - first.start);
-    range.setEnd(last.node, end - last.start);
+    range.setStart(at[from].node, at[from].offset);
+    range.setEnd(last.node, last.offset + 1);
     return range;
   };
 
@@ -281,14 +296,42 @@ export const PAGE_PICK_SCRIPT = `(() => {
     CSS.highlights.set(WORDS, new Highlight(...ranges));
   };
 
+  // The block holding the words a range takes: the nearest one around every text it takes more than spaces of, so a triple-click's selection, which runs on to the start of the next block, stands on its own block rather than the list or the section around both.
+  const holderOf = (range) => {
+    const around = range.commonAncestorContainer;
+    let first = null;
+    let last = null;
+    const walker = document.createTreeWalker(around, NodeFilter.SHOW_TEXT);
+    for (let node = around.nodeType === Node.TEXT_NODE ? around : walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const from = node === range.startContainer ? range.startOffset : 0;
+      const to = node === range.endContainer ? range.endOffset : node.data.length;
+      if (!range.intersectsNode(node) || node.data.slice(from, to).trim() === "") continue;
+      first ??= node;
+      last = node;
+    }
+    let element = around instanceof Element ? around : around.parentElement;
+    if (first !== null) {
+      const taken = document.createRange();
+      taken.setStart(first, 0);
+      taken.setEnd(last, last.data.length);
+      element = taken.commonAncestorContainer instanceof Element ? taken.commonAncestorContainer : taken.commonAncestorContainer.parentElement;
+    }
+    // Note that words inside a run of bold or a link stand on the box they are read in, as an element picked with the pointer does, and never on one drawing no box of its own, which has nowhere to pin; an inline block draws its own.
+    const unboxed = (each) => {
+      const display = getComputedStyle(each).display;
+      return display === "inline" || display === "contents";
+    };
+    while (element !== null && element !== document.body && element.parentElement !== null && unboxed(element)) element = element.parentElement;
+    return element;
+  };
+
   // The words selected, as an element picked whose quote they are: none where none are, or they stand in a field.
   const selected = () => {
     const selection = getSelection();
     if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return null;
     const words = cut(String(selection).trim(), MAX_QUOTE);
     const range = selection.getRangeAt(0);
-    const node = range.commonAncestorContainer;
-    const element = node instanceof Element ? node : node.parentElement;
+    const element = holderOf(range);
     if (words === "" || element === null || element.closest("input, textarea, select, [contenteditable]") !== null) return null;
     return { path: pathOf(element), quote: words, section: sectionOf(element), box: boxOf(range.getBoundingClientRect()), words: true };
   };
@@ -296,7 +339,8 @@ export const PAGE_PICK_SCRIPT = `(() => {
   // What the panel holds of the page told again where it moved: each element marked, and the words selected.
   const tell = () => {
     told.queued = false;
-    const marks = told.marks.map(({ path }) => {
+    // Note that an element marked for each of several threads' words is said once.
+    const marks = [...new Set(told.marks.map(({ path }) => path))].map((path) => {
       const element = find(path);
       return { path, box: element === null ? null : boxOf(element.getBoundingClientRect()) };
     });
@@ -336,8 +380,29 @@ export const PAGE_PICK_SCRIPT = `(() => {
     else told.settle = setTimeout(tellSelected, 300);
   });
 
+  // The element marked that the pointer is over, the innermost, said as it changes; none while picking, which outlines what it is over instead.
+  const tellOver = (element) => {
+    let over = null;
+    for (const { path } of pick.on || element === null ? [] : told.marks) {
+      const marked = find(path);
+      if (marked !== null && marked.contains(element) && (over === null || over.element.contains(marked))) over = { path, element: marked };
+    }
+    const path = over === null ? null : over.path;
+    if (path === told.over) return;
+    told.over = path;
+    post({ over: path });
+  };
+
   addEventListener("pointerover", (event) => {
     if (pick.on) mark("hovered", target(event));
+    told.at = target(event);
+    tellOver(told.at);
+  }, true);
+  // Note that the pointer leaving the page for the window around it is over nothing marked.
+  addEventListener("pointerout", (event) => {
+    if (event.relatedTarget !== null) return;
+    told.at = null;
+    tellOver(null);
   }, true);
 
   for (const name of PRESSES) {
@@ -368,7 +433,11 @@ export const PAGE_PICK_SCRIPT = `(() => {
   addEventListener("message", (event) => {
     const ask = event.data;
     if (event.source !== parent || ask === null || typeof ask !== "object" || ask.type !== TYPE) return;
-    if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.START)}) pick.on = true;
+    // Note that a pick under way is over nothing marked, so the element the pointer stays on is told again once it ends.
+    if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.START)}) {
+      pick.on = true;
+      tellOver(null);
+    }
     else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.STOP)}) stop();
     else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.UNSELECT)}) getSelection()?.removeAllRanges();
     else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.MARK)} && Array.isArray(ask.marks)) {
@@ -376,6 +445,8 @@ export const PAGE_PICK_SCRIPT = `(() => {
       told.said = "";
       tell();
       tint();
+      // Note that an element newly marked under a pointer resting on it is told, as one the pointer arrives on is.
+      tellOver(told.at);
     } else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.SHOW)} && typeof ask.path === "string") {
       const element = find(ask.path);
       mark("shown", element);
