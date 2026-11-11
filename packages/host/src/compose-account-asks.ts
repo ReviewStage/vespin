@@ -20,12 +20,13 @@
  */
 
 import type { HostedAgentClient } from "@repo/features";
-import type {
-  AllowedCommandsWriteAnswerView,
-  AllowedCommandWriteParams,
-  ChatGptDevicePollAnswerView,
-  GitHubTokenAnswerView,
-  ProviderKeysAnswerView,
+import {
+  ALLOWED_COMMANDS_WRITE_FAILURE,
+  type AllowedCommandsWriteAnswerView,
+  type AllowedCommandWriteParams,
+  type ChatGptDevicePollAnswerView,
+  type GitHubTokenAnswerView,
+  type ProviderKeysAnswerView,
 } from "@repo/features/agent-view";
 import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import { samePrefix } from "@repo/features/allowed-command-model";
@@ -385,26 +386,44 @@ function writesAnswered(
   };
 }
 
+/** A write the account that sent it can no longer make, answered as no answer at all. */
+const COMMANDS_UNANSWERED: AllowedCommandsWriteAnswerView = {
+  failure: ALLOWED_COMMANDS_WRITE_FAILURE.UNANSWERED,
+};
+
 /**
- * One write of the always-allowed commands sent to the service: an add as
- * it stands, and a removal by its first words, read off the list as the
- * service answers it now, since an id the window saw may have been
- * replaced by a take-back that added the command again. A removal of
- * words the list no longer holds answers the list as it stands.
+ * One write of the always-allowed commands sent to the service for the
+ * account that asked it (`sentFor`): an add as it stands, and a removal by
+ * its first words, read off the list as the service answers it now, since
+ * an id the window saw may have been replaced by a take-back that added
+ * the command again. A removal of words the list no longer holds answers
+ * the list as it stands. Note that each call is sent only while that
+ * account is still the one signed in, because a write waits its turn
+ * behind others and must not land on whoever signed in meanwhile.
  */
 function allowedCommandWrite(
-  client: AccountAsksClient,
+  { client, accountId }: Pick<AccountAsksDependencies, "client" | "accountId">,
   asked: Asked,
   write: AllowedCommandWriteParams,
+  sentFor: string | undefined,
 ): Effect.Effect<AllowedCommandsWriteAnswerView> {
-  if ("add" in write) return asked(client.addAllowedCommand(write.add));
-  return Effect.flatMap(asked(client.readAllowedCommands()), (answer) => {
-    if ("failure" in answer) return Effect.succeed(answer);
-    const kept = answer.commands.find((each) => samePrefix(each.prefix, write.remove));
-    return kept === undefined
-      ? Effect.succeed(answer)
-      : asked(client.removeAllowedCommand(kept.id));
-  });
+  const forSender = (call: () => Effect.Effect<AllowedCommandsWriteAnswerView>) =>
+    Effect.suspend(() =>
+      sentFor !== undefined && accountId() === sentFor
+        ? call()
+        : Effect.succeed(COMMANDS_UNANSWERED),
+    );
+  if ("add" in write) return forSender(() => asked(client.addAllowedCommand(write.add)));
+  return Effect.flatMap(
+    forSender(() => asked(client.readAllowedCommands())),
+    (answer) => {
+      if ("failure" in answer) return Effect.succeed(answer);
+      const kept = answer.commands.find((each) => samePrefix(each.prefix, write.remove));
+      return kept === undefined
+        ? Effect.succeed(answer)
+        : forSender(() => asked(client.removeAllowedCommand(kept.id)));
+    },
+  );
 }
 
 /** `read` asked again for the account signed in now, as Try again asks; nothing while nobody is. */
@@ -457,7 +476,12 @@ function actsOf(
     GITHUB_TOKEN_REMOVE: () => Effect.flatMap(asked(client.removeGitHubToken()), tokenWritten),
     // Note that the commands' writes run one at a time, each laying its answer before the next is sent, because a write's answer is the whole list and one landing late would lay an older list over a newer.
     ALLOWED_COMMANDS_WRITE: (write) =>
-      commandsInTurn(Effect.flatMap(allowedCommandWrite(client, asked, write), commandsWritten)),
+      Effect.suspend(() => {
+        const sentFor = dependencies.accountId();
+        return commandsInTurn(
+          Effect.flatMap(allowedCommandWrite(dependencies, asked, write, sentFor), commandsWritten),
+        );
+      }),
     MEMORIES_FORGET: declaredWrite(
       pool,
       memoryForget((forget) => asked(client.forgetMemory(forget))),
