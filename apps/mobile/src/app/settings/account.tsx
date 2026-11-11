@@ -27,7 +27,7 @@ import { useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { clearAccountNotifications } from "../../notifications.js";
-import { useSignOut } from "../../sign-out.js";
+import { signOutRefusalWords, useSignOut } from "../../sign-out.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -45,7 +45,7 @@ export default function AccountScreen() {
     select: (state) => supportAccessStanding(state, Date.now()),
   });
   const signOutAccount = useSignOut();
-  const signOut = useAsyncAction(() => undefined);
+  const signOut = useAsyncAction(signOutRefusalWords);
   const deletion = useAsyncAction(accountDeleteRefusalWords);
   const supportPress = useAsyncAction(() => undefined);
   const [asking, setAsking] = useState(false);
@@ -101,7 +101,7 @@ export default function AccountScreen() {
               />
             ) : null}
           </ListSection>
-          <ListSection>
+          <ListSection footer={signOut.refusal}>
             <ActionRow label={VERB.SIGN_OUT} destructive onPress={signOutNow} />
           </ListSection>
           <ListSection footer={deletion.refusal}>

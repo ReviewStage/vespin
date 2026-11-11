@@ -208,6 +208,17 @@ export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Pro
   return done;
 }
 
+/**
+ * The phone registered again under the account still signed in, where a
+ * sign-out unregistered it and then did not go, so its pushes come back at
+ * once rather than at the next launch. It names the phone by the token this
+ * launch read, as the unregister did; nothing where none was read.
+ */
+export function reregisterPushDevice(acts: ActPortClient, fixture: boolean): Promise<void> {
+  const key = fixture ? FIXTURE_KEY : keyRead;
+  return key === undefined ? Promise.resolve() : registeredPushDevice(acts, key);
+}
+
 /** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
 export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
   readonly standing: PushDeviceStatusAnswer | undefined;

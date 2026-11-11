@@ -17,6 +17,7 @@ import { agentStillWriting } from "@repo/features/task-agents-model";
 import { taskRowLook } from "@repo/features/task-tree-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { settleStopWords } from "@repo/features/tasks-model";
+import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
@@ -30,11 +31,16 @@ import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { useOpenSettings } from "../settings-button.js";
-import { useSignOut } from "../sign-out.js";
+import { signOutRefusalWords, useSignOut } from "../sign-out.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
 
 /** What Sign Out asks first, since it leaves the phone with no account until the next sign-in. */
-const SIGN_OUT_ASK = { TITLE: `Sign out of ${PRODUCT_NAME}?`, ACT: "Sign out" } as const;
+const SIGN_OUT_ASK = {
+  TITLE: `Sign out of ${PRODUCT_NAME}?`,
+  ACT: VERB.SIGN_OUT,
+  REFUSED: "Couldn't sign out",
+  AGAIN: "Try again",
+} as const;
 
 /** The commands that act on no one thing, enabled whenever an account is signed in. */
 const SIGNED_IN_COMMANDS: readonly MenuCommand[] = [
@@ -160,7 +166,12 @@ function useAgentsWorking(taskId: string | undefined): boolean {
 }
 
 /** The question a command asks before it acts. */
-const ASK = { NONE: "none", SIGN_OUT: "signOut", MARK_DONE: "markDone" } as const;
+const ASK = {
+  NONE: "none",
+  SIGN_OUT: "signOut",
+  SIGN_OUT_REFUSED: "signOutRefused",
+  MARK_DONE: "markDone",
+} as const;
 type Ask = (typeof ASK)[keyof typeof ASK];
 
 /**
@@ -182,6 +193,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const subject = useSubject(signedIn);
   const working = useAgentsWorking(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
+  const [refusal, setRefusal] = useState<string>();
   // Note that the menu is told only as what it shows changes, since each telling rebuilds it.
   const told = useRef<string>(undefined);
   useEffect(() => {
@@ -190,6 +202,14 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     told.current = now;
     menuCommandsModule?.setState(subject.focus.kind, subject.enabled, subject.toggled);
   });
+
+  // Note that a refused sign-out says why and offers it again, since the phone is still signed in.
+  const signOutNow = () => {
+    signOut().catch((error: unknown) => {
+      setRefusal(signOutRefusalWords(error));
+      setAsking(ASK.SIGN_OUT_REFUSED);
+    });
+  };
 
   const markDone = (stopAgents?: true) => {
     const taskId = subject.task?.id;
@@ -292,7 +312,18 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         presented={asking === ASK.SIGN_OUT}
         onAct={() => {
           dismiss();
-          void signOut();
+          signOutNow();
+        }}
+        onDismiss={dismiss}
+      />
+      <ConfirmAsk
+        title={SIGN_OUT_ASK.REFUSED}
+        message={refusal}
+        act={SIGN_OUT_ASK.AGAIN}
+        presented={asking === ASK.SIGN_OUT_REFUSED}
+        onAct={() => {
+          dismiss();
+          signOutNow();
         }}
         onDismiss={dismiss}
       />
