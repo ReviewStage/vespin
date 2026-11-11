@@ -38,6 +38,11 @@ const DURATION_FAST = "--ui-duration-fast";
 /** A WebM's bytes as a picture read answers them; the stand-in element never decodes them. */
 const WEBM_URL = "data:video/webm;base64,GkXfow==";
 
+/** Recordings of their own for the tests that move the playhead, since where a recording was left outlives its player. */
+const SEEK_URL = "data:video/webm;base64,GkXfo0FA";
+const HELD_URL = "data:video/webm;base64,GkXfo0FB";
+const KEPT_URL = "data:video/webm;base64,GkXfo0KG";
+
 /**
  * A WebM header stating its frames a tenth of a second long: the EBML magic,
  * a DefaultDuration of 100,000,000 nanoseconds in four bytes
@@ -168,7 +173,7 @@ test("Space and K play and pause the video while focus is in its player, and nei
 });
 
 test("the arrows seek five seconds within the video's length, flashing how far, from its scrubber too, and never reach the place around it", () => {
-  const { container, press, seekAt, reached } = mountPlayer();
+  const { container, press, seekAt, reached } = mountPlayer(undefined, SEEK_URL);
   const flash = () => container.querySelector(".ui-video-player-flash")?.textContent;
   press("ArrowRight");
   press("ArrowRight");
@@ -199,7 +204,7 @@ test("Space on one of the bar's buttons is the button's, and other keys pass on 
 });
 
 test("a held Space or K plays or pauses once, while a held arrow goes on seeking", () => {
-  const { press, toggleLabel, seekAt } = mountPlayer();
+  const { press, toggleLabel, seekAt } = mountPlayer(undefined, HELD_URL);
   press("k");
   for (const _ of [1, 2, 3]) press("k", undefined, true);
   expect(toggleLabel()).toBe("Pause");
@@ -244,15 +249,16 @@ test("Full screen opens the video in the browser's own player where the browser 
 });
 
 test("a recording opened in the viewer starts where it was left, and its first player goes on from the viewer's place", () => {
-  // Note that the recording is one no other test plays, because where a recording was left outlives its player.
-  const kept = "data:video/webm;base64,GkXfo0KG";
-  const inline = mountPlayer(() => undefined, kept);
+  const inline = mountPlayer(() => undefined, KEPT_URL);
   inline.press("ArrowRight");
   inline.press("ArrowRight");
   inline.pressButton("Expand");
-  const viewer = mountPlayer(undefined, kept, VIDEO_PLAYER_PLACE.VIEWER);
+  const viewer = mountPlayer(undefined, KEPT_URL, VIDEO_PLAYER_PLACE.VIEWER);
   expect(viewer.playhead()).toBe(10);
   viewer.press("ArrowRight");
+  // A change of speed in the first player, before it plays, moves nothing and keeps the viewer's place.
+  inline.press(">");
+  act(() => inline.video.dispatchEvent(new Event("ratechange")));
   inline.pressButton("Play");
   expect(inline.playhead()).toBe(15);
 });

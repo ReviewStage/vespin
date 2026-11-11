@@ -736,7 +736,8 @@ export function VideoPlayer({
   const keeps = useRef<string>(undefined);
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
-  const read = (shown: HTMLVideoElement) => {
+  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which must not claim another player's place.
+  const read = (shown: HTMLVideoElement, moved = true) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
     // Note that the time is held within the length, because the seek that reads a length stands past it a moment.
     setPlayback({
@@ -745,7 +746,7 @@ export function VideoPlayer({
       duration,
       speed: shown.playbackRate,
     });
-    if (keeps.current !== undefined) {
+    if (moved && keeps.current !== undefined) {
       keepPlace(keeps.current, { at: Math.min(shown.currentTime, duration), by: self });
     }
   };
@@ -824,14 +825,18 @@ export function VideoPlayer({
           const shown = event.currentTarget;
           const left = keeps.current === undefined ? undefined : places.get(keeps.current);
           // Played again after another player moved the same recording, it goes on from there.
-          if (left !== undefined && left.by !== self && left.at < shown.duration) {
-            shown.currentTime = left.at;
+          if (left !== undefined && left.by !== self) {
+            shown.currentTime = left.at < shown.duration ? left.at : 0;
           }
           read(shown);
         }}
         onPause={(event) => read(event.currentTarget)}
         onEnded={(event) => read(event.currentTarget)}
-        onRateChange={(event) => read(event.currentTarget)}
+        onRateChange={(event) => read(event.currentTarget, false)}
+        // A new address resets the old one's time before its own loads, which is no place of the old recording's.
+        onEmptied={() => {
+          keeps.current = undefined;
+        }}
       />
       {flash === undefined ? null : <KeyFlash flash={flash} onGone={() => setFlash(undefined)} />}
       {loaded ? (
