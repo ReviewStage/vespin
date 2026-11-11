@@ -73,9 +73,9 @@ repositories where the App is installed. A cloud agent works on a checkout of
 the repository in its own Vercel Sandbox: on a drive of its own where it was
 forked from its repository's default-branch drive or from the drive of the agent
 it was continued from, and in the sandbox otherwise; an agent on your own
-machine keeps its work there. The default branch of every repository your
+machine keeps its work there. The default branch of a repository your
 workspace's installation grants is kept on a drive cloud agents start from,
-filled before any agent is started on it.
+filled as the repository is connected or when an agent first starts on it.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
 Apart from them, we generally do not keep copies of repository content beyond
 what lands in an agent's transcript, except a pull request's number, title,

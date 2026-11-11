@@ -20,7 +20,7 @@ import {
   HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
-import { type BaseDriveFills, filledInBackground } from "../agents/base-drive-refresh.js";
+import { type BaseDriveFills, filledInBackground } from "../agents/base-drive-connect.js";
 import { agentPublished } from "../agents/coder-host/published.js";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import { cadenceOrUnavailable } from "../automations/automation-cadence.js";
@@ -90,7 +90,7 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * repository there (`github-procedures.ts`, `workspace-repository.ts`). But
  * a repository given, or an installation made or brought back, has its
  * workspace's base drives filled past the answer where none stands
- * (`base-drive-refresh.ts`), so the first agent on a repository just
+ * (`base-drive-connect.ts`), so the first agent on a repository just
  * connected forks one rather than cloning.
  *
  * A user revoking their authorization of the App, which GitHub also sends
@@ -397,7 +397,7 @@ function installationGranting(event: string, payload: UnparsedWireValue): number
  * The base drives of the workspace the installation stands for filled past
  * the answer (`filledInBackground`), where the deployment fills them and the
  * installation is linked to a workspace; a workspace the store could not
- * read is logged and left to the hourly refresh.
+ * read fills nothing, and a launch fills its drive as before.
  */
 const drivesFilledFor = (drives: BaseDriveFills | undefined, installationId: number) =>
   Effect.gen(function* () {
