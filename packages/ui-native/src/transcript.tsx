@@ -866,6 +866,8 @@ export function AgentTranscript({
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        // Note that a drag down into the keyboard lowers it, as Messages' transcript does, since the composer docked over the list holds no key that does.
+        keyboardDismissMode="interactive"
         onContentSizeChange={onContentSizeChange}
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBegin}

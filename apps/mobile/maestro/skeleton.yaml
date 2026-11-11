@@ -46,8 +46,21 @@ appId: dev.vespin.ios
 - takeScreenshot: task
 # The Search tab is tapped by its id, since a split view's search field is
 # named Search too; it finds the task by its name. `search.yaml` walks it.
-- tapOn:
-    id: "search-tab"
+- runFlow:
+    when:
+      visible:
+        id: "search-tab"
+    commands:
+      - tapOn:
+          id: "search-tab"
+# The iPad's top tab bar carries no id, so there the tab is the Search right of Tasks.
+- runFlow:
+    when:
+      notVisible: "Find a task, an Inbox item, or an agent."
+    commands:
+      - tapOn:
+          text: "Search"
+          rightOf: "Tasks"
 - assertVisible: "Find a task, an Inbox item, or an agent."
 - tapOn: "Search Vespin"
 - inputText: "invitations"
