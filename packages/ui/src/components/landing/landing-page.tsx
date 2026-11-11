@@ -93,10 +93,41 @@ export function LandingFacts({
   );
 }
 
-/** The landing: `bar` over the hero's `title`, `lead`, and `actions` beside the ball, the sections, the `close`, and the `footer` over the wordmark. */
+/** Y Combinator's orange, the one ink of its mark, which no theme role holds. */
+const Y_COMBINATOR_ORANGE = "#FB651E";
+
+/** Y Combinator's mark: a white Y on its orange square. */
+function YCombinatorMark(): React.JSX.Element {
+  return (
+    <svg className="ui-landing-backer-mark" viewBox="0 0 16 16" aria-hidden="true">
+      <rect width="16" height="16" rx="2" fill={Y_COMBINATOR_ORANGE} />
+      <path d="M4.4 3.5h1.9L8 7.1l1.7-3.6h1.9L8.9 8.9v3.6H7.1V8.9Z" fill="#fff" />
+    </svg>
+  );
+}
+
+/** The hero's chip saying Y Combinator backs the product, going to `href`, the company's page there, in a new tab. */
+export function LandingBackedBy({ href }: { href: string }): React.JSX.Element {
+  return (
+    <a
+      className="ui-landing-backer"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Backed by Y Combinator"
+    >
+      Backed by
+      <YCombinatorMark />
+      <span className="ui-landing-backer-name">Combinator</span>
+    </a>
+  );
+}
+
+/** The landing: `bar` over the hero's `badge`, `title`, `lead`, and `actions` beside the ball, the sections, the `close`, and the `footer` over the wordmark. */
 export function LandingPage({
   bar,
   barCall,
+  badge,
   title,
   lead,
   actions,
@@ -108,6 +139,8 @@ export function LandingPage({
   bar: ReactNode;
   /** The bar's call at its end, which a page narrower than a phone's leaves to the hero. */
   barCall?: ReactNode;
+  /** What stands over the line, such as `LandingBackedBy`; none sets the line first. */
+  badge?: ReactNode;
   /** The page's one line, its `h1`. */
   title: ReactNode;
   /** The sentence under the line; none sets the calls under the line itself. */
@@ -127,6 +160,7 @@ export function LandingPage({
       <main>
         <div className="ui-landing-hero">
           <div className="ui-landing-hero-words">
+            {badge === undefined ? null : <div className="ui-landing-hero-badge">{badge}</div>}
             <h1 className="ui-landing-title">{title}</h1>
             {lead === undefined ? null : <p className="ui-landing-hero-lead">{lead}</p>}
             <div className="ui-landing-actions">{actions}</div>

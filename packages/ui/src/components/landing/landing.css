@@ -197,6 +197,48 @@
     padding: 0 var(--ui-landing-inset) 0 var(--ui-landing-gutter);
   }
 
+  /* The chip over the hero's line: a hairline pill, quiet words around
+     the backer's mark, whose orange is the chip's one color. */
+  .ui-landing-hero-badge {
+    margin-bottom: 24px;
+  }
+
+  .ui-landing-backer {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--ui-color-border-strong);
+    border-radius: var(--ui-radius-full);
+    background: color-mix(in srgb, var(--ui-color-surface) 60%, transparent);
+    color: var(--ui-color-text-muted);
+    font-size: var(--ui-type-caption-size);
+    line-height: 1.2;
+    text-decoration: none;
+    transition-property: border-color, color;
+    transition-duration: var(--ui-duration-hover);
+  }
+
+  .ui-landing-backer:hover {
+    border-color: var(--ui-color-text-muted);
+    color: var(--ui-color-text);
+  }
+
+  .ui-landing-backer:focus-visible {
+    outline: var(--ui-focus-ring-width) solid var(--ui-color-focus-ring);
+    outline-offset: var(--ui-focus-ring-offset);
+  }
+
+  .ui-landing-backer-mark {
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  .ui-landing-backer-name {
+    color: var(--ui-color-text);
+  }
+
   .ui-landing-title {
     font-family: var(--ui-display-landing-face);
     font-size: var(--ui-display-landing-title-size);
