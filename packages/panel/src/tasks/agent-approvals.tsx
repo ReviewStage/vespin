@@ -20,11 +20,19 @@ import {
   ApprovalActions,
   AskFirstIcon,
   AutoApproveIcon,
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
+  COMPOSER_LOOK,
+  COMPOSER_SEND_TONE,
+  DENY_NOTE_WORDS,
+  type DenyNoteDoors,
   FullAccessIcon,
   type MenuRow,
   STATUS_TONE,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {
   createContext,
   type ReactNode,
@@ -37,6 +45,7 @@ import {
 import type { AgentActAnswer, Unreached } from "../act.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
+import { MessageBox, useMessageBox } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
 
 /**
@@ -458,6 +467,59 @@ function aboutOf(approval: AgentPendingApproval): string | undefined {
   return words.length === 0 ? undefined : words.join(" ");
 }
 
+/**
+ * The words that tell the agent why its call was denied, written in the
+ * composer's own box (`MessageBox`) as every message to it is, its `@` list
+ * the task's: under them a quiet Cancel, which offers the answers again, as
+ * Esc does, and Deny in the danger ink, which Enter presses too, with the
+ * words or without them, since they are optional.
+ */
+function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): React.JSX.Element {
+  const [words, setWords] = useState("");
+  const deny = () => {
+    if (busy) return;
+    const message = words.trim();
+    onDeny(message === "" ? undefined : message);
+  };
+  const box = useMessageBox({
+    draft: words,
+    setDraft: setWords,
+    placeholder: DENY_NOTE_WORDS.PLACEHOLDER,
+    label: DENY_NOTE_WORDS.LABEL,
+    maxLength: maxLength ?? APPROVAL_BOUNDS.MAX_MESSAGE_CHARS,
+    onSubmit: deny,
+    onLeave: busy ? undefined : onCancel,
+    held: busy,
+    takesFiles: false,
+    focus: true,
+  });
+  return (
+    <MessageBox
+      box={box}
+      look={COMPOSER_LOOK.CARD}
+      className="comment-field approval-deny-note"
+      beforeSend={
+        <Button
+          variant={BUTTON_VARIANT.QUIET}
+          size={BUTTON_SIZE.COMPACT}
+          disabled={busy}
+          onClick={onCancel}
+        >
+          <ReplayUnmask>{DENY_NOTE_WORDS.CANCEL}</ReplayUnmask>
+        </Button>
+      }
+      send={{
+        label: DENY_NOTE_WORDS.DENY,
+        inWords: true,
+        tone: COMPOSER_SEND_TONE.DANGER,
+        empty: false,
+        busy,
+        busyLabel: DENY_NOTE_WORDS.DENYING,
+      }}
+    />
+  );
+}
+
 /** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
 export function heldCallOf(ask: ApprovalView): HeldCall {
   return {
@@ -470,6 +532,7 @@ export function heldCallOf(ask: ApprovalView): HeldCall {
           answering={ask.answering}
           error={ask.error}
           noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
+          note={(doors) => <DenyNoteBox {...doors} />}
           onAnswer={ask.onAnswer}
         />
       ) : undefined,
