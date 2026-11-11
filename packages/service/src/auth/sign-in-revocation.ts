@@ -24,8 +24,8 @@
  * joins as one more.
  *
  * Revoking is best effort and never holds the deletion up: each provider is
- * given `PROVIDER_DEADLINE` to read and again to revoke, and one that fails or
- * runs past it is logged by its words and left. A token leaves only as a
+ * given `PROVIDER_DEADLINE` to read and again to revoke, and one that fails,
+ * runs past it, or dies is logged and left. A token leaves only as a
  * `Redacted`, and a failure carries the provider's status or the kind of
  * failure, never the request that carried the token.
  */
@@ -155,22 +155,30 @@ const revokeAtGoogle = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redac
   if (status !== GOOGLE_REVOKED_STATUS) return yield* new SignInRevokeRefused({ status });
 });
 
-/** The provider's step, under the deadline, a failure or an overrun logged by its words and answered as the fallback. */
+/** What a defect is logged as: its kind alone, since a thrown value's words or fields may quote whatever it was handed. */
+function defectKind(defect: unknown): string {
+  return typeof defect === "object" && defect !== null ? defect.constructor.name : typeof defect;
+}
+
+/**
+ * The provider's step, under the deadline, a failure, an overrun, or a
+ * defect logged and answered as the fallback. Note that we catch defects
+ * too, because this runs inside an account's deletion: before the delete a
+ * defect would refuse it, and after it a defect would answer a delete that
+ * happened as one that failed. A failure is logged by its words, which carry
+ * a status or a kind and never a token; a defect by its kind alone.
+ */
 function bestEffort<A, E extends { readonly message: string }, R>(
   provider: SignInProvider,
   step: Effect.Effect<A, E, R>,
   fallback: A,
 ): Effect.Effect<A, never, R> {
+  const warning = `${SIGN_IN_PROVIDER_NAME[provider]} could not revoke a deleted account's sign-in`;
   return step.pipe(
     Effect.timeout(PROVIDER_DEADLINE),
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `${SIGN_IN_PROVIDER_NAME[provider]} could not revoke a deleted account's sign-in`,
-          failure.message,
-        ),
-        fallback,
-      ),
+    Effect.catch((failure) => Effect.as(Effect.logWarning(warning, failure.message), fallback)),
+    Effect.catchDefect((defect) =>
+      Effect.as(Effect.logWarning(warning, defectKind(defect)), fallback),
     ),
   );
 }

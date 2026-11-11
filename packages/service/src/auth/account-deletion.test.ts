@@ -64,11 +64,13 @@ import { WELCOME_MAIL_ENVIRONMENT } from "../accounts/welcome-mail.js";
 import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
 import { BASE_DRIVE, baseDriveName } from "../agents/base-drive.js";
 import { AutomationCadence } from "../automations/automation-cadence.js";
+import { GitHubApp } from "../github/github-app.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { accountDeletionTestServices } from "../testing/account-deletion-services.js";
 import { announcingClock, driven } from "../testing/clock-driven.js";
 import {
   fakeGitHub,
+  GITHUB_APP_SETTINGS,
   GITHUB_FIXTURE,
   type SentToGitHub,
   signInWithGitHub,
@@ -573,13 +575,42 @@ const hanging = (sent: SentToGitHub) =>
     sent.signal?.addEventListener("abort", () => refuse(new Error("aborted")));
   });
 
+/** The App over the fixture settings, as every fake stands it. */
+const FIXTURE_APP = GitHubApp.layer(GITHUB_APP_SETTINGS);
+
+/** The fixture App, but that its read of the sign-in token dies once it has the token, as a bug past the read would, before the delete. */
+const APP_DYING_ON_READ = Layer.effect(
+  GitHubApp,
+  Effect.map(Effect.service(GitHubApp), (app) => ({
+    ...app,
+    userToken: (userId: string) =>
+      Effect.andThen(app.userToken(userId), Effect.die(new Error("a bug past the read"))),
+  })),
+).pipe(Layer.provide(FIXTURE_APP));
+
 it.effect.each([
-  { github: "answers", answer: () => new Response(null, { status: 204 }) },
-  { github: "refuses", answer: () => new Response(null, { status: 500 }) },
-  { github: "never answers", answer: hanging },
+  {
+    github: "is answered",
+    answer: () => new Response(null, { status: 204 }),
+    app: FIXTURE_APP,
+    githubRevoked: true,
+  },
+  {
+    github: "is refused",
+    answer: () => new Response(null, { status: 500 }),
+    app: FIXTURE_APP,
+    githubRevoked: true,
+  },
+  { github: "is never answered", answer: hanging, app: FIXTURE_APP, githubRevoked: true },
+  {
+    github: "dies reading its token",
+    answer: () => new Response(null, { status: 204 }),
+    app: APP_DYING_ON_READ,
+    githubRevoked: false,
+  },
 ])(
-  "deleting an account revokes its GitHub and Google sign-in tokens at their providers once its rows are gone, and a GitHub that $github holds the deletion up no longer than its deadline",
-  ({ answer }) =>
+  "deleting an account revokes its GitHub and Google sign-in tokens at their providers once its rows are gone, and a GitHub revoke that $github holds the deletion up no longer than its deadline and never stops Google's",
+  ({ answer, app, githubRevoked }) =>
     Effect.gen(function* () {
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
         Effect.promise(() => opened.close()),
@@ -599,7 +630,7 @@ it.effect.each([
           }
           githubAsked();
           return answer(sent);
-        });
+        }, app);
         // The route runs in a runtime of its own, so it waits on the test's clock, each wait announced.
         const { clock, asleep } = yield* announcingClock;
         const route = yield* openAuthRoute(
@@ -645,20 +676,19 @@ it.effect.each([
           method: sent.method,
           body: sent.body,
         }));
+        const githubRevoke = {
+          url: GITHUB_REVOKE_URL,
+          method: HTTP_METHOD.DELETE,
+          body: JSON.stringify({ access_token: standingGithubRow(now).accessToken }),
+        };
+        const googleRevoke = {
+          url: GOOGLE_REVOKE_URL,
+          method: HTTP_METHOD.POST,
+          body: new URLSearchParams({ token: GOOGLE_ACCESS_TOKEN }).toString(),
+        };
         assert.deepEqual(
           revokes.toSorted((a, b) => a.url.localeCompare(b.url)),
-          [
-            {
-              url: GITHUB_REVOKE_URL,
-              method: HTTP_METHOD.DELETE,
-              body: JSON.stringify({ access_token: standingGithubRow(now).accessToken }),
-            },
-            {
-              url: GOOGLE_REVOKE_URL,
-              method: HTTP_METHOD.POST,
-              body: new URLSearchParams({ token: GOOGLE_ACCESS_TOKEN }).toString(),
-            },
-          ],
+          githubRevoked ? [githubRevoke, googleRevoke] : [googleRevoke],
         );
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
