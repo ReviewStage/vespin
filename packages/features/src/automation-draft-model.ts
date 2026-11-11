@@ -1,4 +1,5 @@
 import { Result } from "effect";
+import type { AutomationPreset } from "./automation-presets.js";
 import {
   nextScheduledRun,
   readSchedule,
@@ -665,6 +666,26 @@ export function withGithubEvent(
 ): AutomationDraft {
   if (event === draft.githubEvent) return draft;
   return { ...draft, githubEvent: event, githubFilters: {} };
+}
+
+/**
+ * A new draft filled in from a preset: its name, schedule, task, and
+ * archiving, its runs each on a new agent, where it runs and who owns it
+ * kept as they were chosen, and its zone the member's own. One whose runs
+ * need no repository starts with none chosen.
+ */
+export function presetDraft(draft: AutomationDraft, preset: AutomationPreset): AutomationDraft {
+  return {
+    ...draft,
+    name: preset.name,
+    prompt: preset.prompt,
+    triggerKind: AUTOMATION_TRIGGER.SCHEDULE,
+    schedule: scheduleDraftOf(preset.cron),
+    target: AUTOMATION_TARGET.NEW_AGENT,
+    agentId: null,
+    archiveSuccessful: preset.archiveSuccessful,
+    ...(preset.inRepository ? undefined : { repository: null, alsoRepositories: [] }),
+  };
 }
 
 /**

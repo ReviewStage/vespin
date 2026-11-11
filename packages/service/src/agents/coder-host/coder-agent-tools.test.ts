@@ -47,6 +47,7 @@ import { agentPin } from "@repo/database/schemas";
 import { agentDelegationTable, agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
 import { device } from "@repo/database/schemas/device";
+import { memory } from "@repo/database/schemas/memory";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import {
@@ -176,6 +177,7 @@ import {
 import { runReadAgentTranscript } from "../agent-transcript-tool.js";
 import { AUTOMATION_TOOL_REFUSAL } from "../automation-tools.js";
 import { AgentBrowser } from "../browser/agent-browser.js";
+import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL } from "../memory-tools.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   type AgentSessions,
@@ -1508,6 +1510,11 @@ test("message_agent shows the model the recorded input", async () => {
 
 test("end_turn shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "end-turn-input", END_TURN_TOOL.inputSchema);
+});
+
+test("list_memories and forget_memory show the model the recorded input", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "list-memories-input", LIST_MEMORIES_TOOL.inputSchema);
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "forget-memory-input", FORGET_MEMORY_TOOL.inputSchema);
 });
 
 test("schedule_wakeup shows the model the recorded input", async () => {
@@ -4666,6 +4673,70 @@ test("while its workspace has Memory off, a coding agent's remember and recall a
   assert.deepEqual(recalled, refused);
   assert.deepEqual(
     (await database.run(listMemories(workspaceId))).map((memory) => memory.text),
+    ["Deploys go out from main."],
+  );
+});
+
+/** A time a week before now, as list_memories reads one: to the minute, with its offset. */
+function weekAgo(): string {
+  return `${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)}+00:00`;
+}
+
+/** A memory written straight into a workspace, last kept a month ago. */
+async function keepLastMonth(organizationId: string, userId: string, text: string): Promise<void> {
+  const then = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  await database.run(
+    Effect.gen(function* () {
+      const db = yield* Database;
+      yield* db
+        .insert(memory)
+        .values({ organizationId, userId, text, createdAt: then, updatedAt: then });
+    }),
+  );
+}
+
+test("list_memories answers only the memories of the agent's own workspace kept since the time, each with the task it came from", async () => {
+  const { workspaceId, elsewhere, plans, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const host = hostOf();
+  await turnMemoryOn(workspaceId, agents.caller.userId);
+  await turnMemoryOn(elsewhere, agents.otherWorkspaces.userId);
+  const asCaller = await peerCaller(host, agents.caller, agentSessions.services);
+  const asOtherWorkspace = await peerCaller(host, agents.otherWorkspaces, agentSessions.services);
+  await asCaller(AGENT_TOOL.SAVE_MEMORY, { text: "Deploys go out from main." });
+  await keepLastMonth(workspaceId, agents.caller.userId, "Tests run on PGlite.");
+  // Note that the caller's starter is a member of the other workspace too, so only the agent's own workspace keeps this out.
+  await asOtherWorkspace(AGENT_TOOL.SAVE_MEMORY, { text: "Docs build with Astro." });
+
+  const listed = await asCaller(AGENT_TOOL.LIST_MEMORIES, {
+    since: weekAgo(),
+    workspaceId: elsewhere,
+  });
+
+  assert.equal(listed.status, ACTION_RESULT_STATUS.ACCEPTED);
+  assert.ok(Array.isArray(listed.memories));
+  assert.deepEqual(
+    listed.memories.map((each) => (isRecord(each) ? [each.text, each.task] : each)),
+    [["Deploys go out from main.", { id: plans.invitations, name: "Teammate invitations" }]],
+  );
+  assert.equal(listed.total, 1);
+});
+
+test("forget_memory is refused for a memory in another member's words where the agent's starter does not manage the workspace, and the memory stands", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const host = hostOf();
+  await turnMemoryOn(workspaceId, agents.caller.userId);
+  const asCaller = await peerCaller(host, agents.caller, agentSessions.services);
+  const asTeammate = await peerCaller(host, agents.teammates, agentSessions.services);
+  const kept = await asCaller(AGENT_TOOL.SAVE_MEMORY, { text: "Deploys go out from main." });
+  assert.ok(isRecord(kept.memory) && isWireString(kept.memory.id));
+
+  const refused = await asTeammate(AGENT_TOOL.FORGET_MEMORY, { memoryId: kept.memory.id });
+
+  assert.equal(refused.status, ACTION_RESULT_STATUS.REJECTED);
+  assert.deepEqual(
+    (await database.run(listMemories(workspaceId))).map((each) => each.text),
     ["Deploys go out from main."],
   );
 });

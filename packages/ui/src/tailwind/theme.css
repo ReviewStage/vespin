@@ -728,6 +728,10 @@
   --spacing-corner-badge-glyph: 10px; /* off-scale: the glyph on that disc */
   --spacing-section-icon-scroll: 220px; /* off-scale: the icon grid's room, about seven rows */
   --container-section-icon-picker: 340px; /* off-scale: ten icon buttons and the picker's insets */
+  --grid-template-columns-suggestion-cards: repeat(
+    auto-fill,
+    minmax(240px, 1fr)
+  ); /* off-scale: a suggestion card's least width */
   --grid-template-columns-section-icons: repeat(
     10,
     28px

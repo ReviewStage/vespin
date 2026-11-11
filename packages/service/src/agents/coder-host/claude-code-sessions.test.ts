@@ -900,6 +900,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "delete_automation",
             "run_automation",
             "save_memory",
+            "forget_memory",
             "reply_to_comment",
             "update_comment",
             "run_on_mac",

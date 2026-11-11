@@ -19,6 +19,7 @@
     "./agent-refusal-words": "./src/agent-refusal-words.js",
     "./app-links": "./src/app-links.js",
     "./automation-live": "./src/automation-live.js",
+    "./automation-presets": "./src/automation-presets.js",
     "./automation-schedule": "./src/automation-schedule.js",
     "./automation-wire": "./src/automation-wire.js",
     "./automation-view": "./src/automation-view.js",
