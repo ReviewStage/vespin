@@ -1,9 +1,9 @@
+import { searchHit } from "@repo/features/search-score";
 import { noMatchWords, TERM } from "@repo/features/words";
 import { Command } from "cmdk";
 import { memo, type ReactNode, type Ref, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "../../cn.js";
 import { SearchIcon } from "../../icons/lucide-glyphs.js";
-import { searchHit } from "../../search-score.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { COMBOBOX_HEADING } from "../../shadcn/combobox.js";
 import { DialogContent, Dialog as ShadcnDialog } from "../../shadcn/dialog.js";

@@ -43,7 +43,13 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf="checklist" />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="search" role="search" accessibilityLabel="Search">
+      {/* Note that the Search tab carries an id of its own, since a list's round search button and a split view's search field are named Search too, and a flow taps the tab by it. */}
+      <NativeTabs.Trigger
+        name="search"
+        role="search"
+        accessibilityLabel="Search"
+        testID="search-tab"
+      >
         <NativeTabs.Trigger.Icon sf="magnifyingglass" />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Search</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>

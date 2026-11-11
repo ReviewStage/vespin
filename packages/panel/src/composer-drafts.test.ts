@@ -1082,7 +1082,6 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
   await act(async () =>
     reads.deliverHolders({
       [INBOX_SCOPE_KIND.PLAN]: { [INVITES.plan.id]: { rows: [mine] } },
-      [INBOX_SCOPE_KIND.AGENT]: {},
     }),
   );
   await vi.waitFor(() =>

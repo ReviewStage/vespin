@@ -4,7 +4,6 @@ import { INBOX_BLOCK } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, readLink, taskNumberOf } from "@repo/features/link-grammar";
 import { LONE_LINK, type LoneLink, loneLinkOf } from "@repo/features/lone-link";
-import { holderTaskId } from "@repo/features/mention-holder";
 import {
   decodeMention,
   isBareLink,
@@ -41,8 +40,7 @@ import { useOpenLink } from "./use-open-link.js";
  * hangs the card its chip hangs (`mention-chip.tsx`): a pull request's its
  * key, state, size, opener, branches, labels, and counts, and a page's
  * the page's own card, a preview of it (`page-card.tsx`), where the window
- * holds the page, or, for a page of an agent on no task, where the agent's
- * pages read as the card is hung hold it (`chip-cards.tsx`). Either opens what it names as its chip does.
+ * holds the page. Either opens what it names as its chip does.
  * Where the place hands its doors, an Inbox thread, a page's row has the
  * page itself under it, live at its newest version (`shown-page.tsx`). Lines
  * of a file are the card an Inbox code block draws (`inbox-code-card.tsx`),
@@ -115,7 +113,7 @@ function PullRequestRowCard({
   const doors = useMentionDoors();
   const openLink = useOpenLink();
   const standing = useLinkStanding(mention, {
-    taskId: holderTaskId(doors.holder),
+    taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
   const known = standing?.pullRequest;
@@ -249,11 +247,8 @@ function PageCards({
   return (
     <>
       <PageRowCard page={named} target={target} words={words} />
-      {live ? (
-        <ShownNewestPage
-          place={"taskId" in named ? { taskId: named.taskId } : { agentId: named.agentId }}
-          pageId={named.pageId}
-        />
+      {live && "taskId" in named ? (
+        <ShownNewestPage place={{ taskId: named.taskId }} pageId={named.pageId} />
       ) : null}
     </>
   );

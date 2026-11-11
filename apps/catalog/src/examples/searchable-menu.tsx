@@ -120,7 +120,27 @@ interface Held {
   rows: readonly MenuRow[];
   note?: React.ReactNode;
   pinned?: boolean;
+  /** The row chosen as the menu first opens. */
+  chosen?: string;
 }
+
+/** A member's own sounds, each with a ⋯ that renames or removes it, over the built-in ones. */
+const SOUNDS: readonly MenuRow[] = [
+  ...["Manuel says done", "Soft knock"].map((label) => ({
+    id: label,
+    label,
+    section: "Yours",
+    actions: {
+      thing: "Sound",
+      rows: [
+        { id: "rename", label: "Rename…" },
+        { id: "remove", label: "Remove…" },
+      ],
+      onPick: () => undefined,
+    },
+  })),
+  ...["Chime", "Done", "Knock"].map((label) => ({ id: label, label, section: "Simple" })),
+];
 
 /** A button and the menu it opens, hung from the edge `align` names, on the side `side` asks for, at `width`. */
 function Hung({
@@ -139,7 +159,7 @@ function Hung({
   const [open, setOpen] = useState(false);
   // Note that the menu is held drawn through its fade, as a panel owner does, so it fades out in place.
   const drawn = useDisclosure(open);
-  const [chosen, setChosen] = useState<string | undefined>("acme/app");
+  const [chosen, setChosen] = useState<string | undefined>(held.chosen ?? "acme/app");
   const [effort, setEffort] = useState("high");
   const [approval, setApproval] = useState("ask");
   const menuId = useId();
@@ -599,6 +619,16 @@ function SearchableMenuExample(): React.JSX.Element {
             label="With a foot"
             align={POPOVER_ALIGN.START}
             held={{ rows: REPOSITORIES, pinned: true }}
+          />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="searchable-menu-row-acts" title="A row's own acts behind its ⋯">
+        <div className="catalog-popover-stage">
+          <Hung
+            label="Sounds"
+            align={POPOVER_ALIGN.START}
+            width={POPOVER_WIDTH.NARROW}
+            held={{ rows: SOUNDS, chosen: "Manuel says done" }}
           />
         </div>
       </CatalogSection>

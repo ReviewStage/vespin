@@ -180,6 +180,7 @@ import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectListedTasks } from "../use-app-state.js";
@@ -2886,7 +2887,7 @@ function AgentTabView({
   bringIn?: RefObject<MessageBringer | undefined> | undefined;
   /** Where a replay the agent opens on is drawn (`replay-card.tsx`); none where none is read. */
   replay?: ReplayPlace | undefined;
-  /** The automation's run that started the agent, as its page reads it; none on a plan's tab, and for an agent started by hand. */
+  /** The automation's run that started the agent, as its tab reads it; none for an agent started by hand, and before the run is read. */
   run?: AgentOrigin | undefined;
   models: readonly CatalogModel[] | undefined;
   modelsFailed: boolean;
@@ -3333,8 +3334,6 @@ function AgentTabView({
 
 /** What an agent's tab is handed beside the agent. */
 interface AgentTabDoors {
-  /** The automation's run that started the agent, as its page reads it; none on a plan's tab. */
-  run?: AgentOrigin | undefined;
   /** The threads the agent posted that wait on the developer, docked over its box (`ThreadsDock`); none where nothing waits or none are read. */
   threads?: AgentThreads | undefined;
   control: AgentsControl;
@@ -3483,13 +3482,16 @@ function AgentTabBody({
   onOpenPullRequest,
   onOpenTarget,
   cards,
-  run,
   threads,
 }: Omit<AgentTabDoors, "onHeld"> & {
   agent: AgentSummary;
   transcript: AgentTranscriptControl;
 }): React.JSX.Element {
   const { messages } = transcript;
+  // The run that started an automation's agent, held while its tab stands; an agent the list names no automation of has none, and asks nothing.
+  const run = useQuery(
+    agentOriginQuery(agent.automationName === undefined ? undefined : agent.id),
+  ).data;
   const starter = teammateStarter(agent.startedBy, control.me);
   const approvals = useAgentApprovals({ agent, write: control.onAnswerApproval });
   const { messageSent } = approvals;
@@ -3721,7 +3723,7 @@ function AgentTabBody({
         skills={control.readSkills}
         starter={starter}
         readerId={control.me}
-        run={run}
+        run={run ?? undefined}
         replay={replayPlace({
           agent,
           control,

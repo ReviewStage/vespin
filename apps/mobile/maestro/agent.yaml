@@ -49,9 +49,9 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
     optional: true
-# The recording under the card: the flow waits for the player to hold the
-# file, so a read that never lands fails here rather than leaving a well with
-# its spinner in the screenshot.
+# The recording under the card: the flow waits for the player to report it
+# can play the file, so a read that never lands, or a file it cannot play,
+# fails here rather than leaving a well with its spinner in the screenshot.
 - scrollUntilVisible:
     element:
       id: "video-player"

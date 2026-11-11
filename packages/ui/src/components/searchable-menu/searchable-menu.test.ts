@@ -22,7 +22,8 @@ import {
  * keys it reads: typing filters the rows to those every word matches, the
  * arrows pass over a row that cannot be picked and go on into the pinned
  * rows, Enter picks the one the field names to a reader, Right and Left
- * open and close a submenu, Escape closes the submenu before the menu and
+ * open and close a submenu, a row's ⋯ opens its acts while a press on it
+ * still picks it, Escape closes the submenu before the menu and
  * never reaches what stands behind it, keys an input method is composing
  * with pick and move nothing, and a list too short to search reads the
  * same keys itself. A read that failed says so in the list's place with
@@ -378,6 +379,39 @@ test("a listed row with a submenu opens it on Enter or Right rather than being p
   assert.equal(closed, null);
   assert.deepEqual(asked.said, []);
   assert.deepEqual(said, ["open mac"]);
+});
+
+test("a listed row's ⋯ opens its acts beside it, and a press on the row still picks it", () => {
+  const said: string[] = [];
+  const asked = mount({
+    placeholder: "Search sounds",
+    rows: [
+      {
+        id: "glass",
+        label: "Glass",
+        actions: {
+          thing: "Sound",
+          rows: [
+            { id: "rename", label: "Rename…" },
+            { id: "remove", label: "Remove…" },
+          ],
+          onPick: (id) => said.push(id),
+        },
+      },
+    ],
+  });
+  const more =
+    document.querySelector<HTMLElement>('[role="option"] button[aria-label="Sound actions"]') ??
+    assert.fail("the row draws its ⋯");
+  act(() => more.click());
+  const acts = document.querySelector('[aria-label="Sound actions"][role="listbox"]')?.textContent;
+  press({ key: "ArrowDown" });
+  press({ key: "Enter" });
+  act(() => document.querySelector<HTMLElement>('[role="option"]')?.click());
+
+  assert.equal(acts, "Rename…Remove…");
+  assert.deepEqual(said, ["remove"]);
+  assert.deepEqual(asked.said, ["pick glass"]);
 });
 
 test("a search finds a listed row by the rows of its submenu", () => {

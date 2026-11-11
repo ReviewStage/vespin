@@ -35,17 +35,11 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
-  INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { AGENT_ARCHIVER, type AgentSummary, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_SOURCE, githubImageOf } from "@repo/features/github-image";
-import {
-  ACCOUNT_INBOX_READ,
-  AGENT_INBOX_READ,
-  INBOX_ITEMS_READ,
-  TASK_INBOX_READ,
-} from "@repo/features/inbox-live";
+import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   acknowledgedNow,
@@ -316,7 +310,7 @@ export interface AgentsComposer extends Composer {
   readonly modelsMoved: Effect.Effect<void>;
   /** The session's account reads opened for the account signed in, as the gate opening opens them. */
   readonly open: Effect.Effect<void>;
-  /** Every transcript's, every plan's and agent's inbox's, the account inbox's, and the account's items' subscription let go, as a sign-out lets them go. */
+  /** Every transcript's, every plan's inbox's, the account inbox's, and the account's items' subscription let go, as a sign-out lets them go. */
   readonly reset: Effect.Effect<void>;
   /** The row writes this composer declares that may wait for the service, which a queue kept on disk is laid back by. */
   readonly queueable: readonly AnyWrite[];
@@ -431,17 +425,7 @@ export function composeAgents(
     const inboxes = yield* scopeInboxes({
       seal: (scope, poll, userId, after) =>
         asked(
-          scope.kind === INBOX_SCOPE_KIND.PLAN
-            ? client.liveRead(
-                TASK_INBOX_READ,
-                { id: scope.id, userId },
-                poll ? { after } : undefined,
-              )
-            : client.liveRead(
-                AGENT_INBOX_READ,
-                { id: scope.id, userId },
-                poll ? { after } : undefined,
-              ),
+          client.liveRead(TASK_INBOX_READ, { id: scope.id, userId }, poll ? { after } : undefined),
         ),
       accountId: dependencies.accountId,
       pool: dependencies.pool,
@@ -1136,7 +1120,7 @@ function composed(
       hold: ({ agentId }) => tools.hold(agentId),
       retry: ({ agentId }) => tools.retry(agentId),
     },
-    // A task's or an agent's inbox is held for the windows while the Inbox shows it.
+    // A task's inbox is held for the windows while the Inbox shows it.
     AGENTS_INBOX_FOLLOW: {
       hold: (scope) => holders.hold(new InboxScopeKey({ kind: scope.kind, id: scope.id })),
       retry: (scope) => holders.retry(new InboxScopeKey({ kind: scope.kind, id: scope.id })),

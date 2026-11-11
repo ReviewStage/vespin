@@ -8,13 +8,13 @@ import { type HeldAnswers, type HeldSlice, heldSlice } from "./live-collection.j
 import { pushLive } from "./live-push.js";
 
 /**
- * origin-follow.ts -- the run of an automation that started each agent whose page the windows hold, followed over the service's held poll and told whole on its app-state slice.
+ * origin-follow.ts -- the run of an automation that started each agent whose tab the windows hold, followed over the service's held poll and told whole on its app-state slice.
  *
- * An agent's page draws the agent itself from the task list, which names
+ * An agent's tab draws the agent itself from the task list, which names
  * the automation that started it but carries no run, since a list of many
- * carries no prompt. The page holds the run by the agent's id, and the host
+ * carries no prompt. The tab holds the run by the agent's id, and the host
  * follows it while any window holds it and a while after (`heldSlice`), so
- * opening the page again reads nothing. Nothing moves the run once the
+ * opening the tab again reads nothing. Nothing moves the run once the
  * agent is made, so its follow answers once and is held quiet after.
  */
 

@@ -45,6 +45,7 @@ import {
   selectTasks,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -70,7 +71,7 @@ function useTasksWorkspace(): Workspace | undefined {
 }
 
 /** How many of the reader's threads wait on them, by the task holding them and by the agent that posted them, in the chosen workspace. */
-function useWaiting(workspaceId: string | undefined): {
+export function useWaiting(workspaceId: string | undefined): {
   readonly byTask: ReadonlyMap<string, number>;
   readonly byAgent: ReadonlyMap<string, number>;
 } {
@@ -165,10 +166,12 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
     acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
       (landed) => {
+        buzz(landed ? BUZZ.SUCCESS : BUZZ.ERROR);
         if (!landed) letGo();
       },
       (error: unknown) => {
         refused("The status")(error);
+        buzz(BUZZ.ERROR);
         letGo();
       },
     );
@@ -226,8 +229,15 @@ export function useTasksListing(search: string): TasksListing {
       const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
       acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }).catch(refused("The mark"));
     };
+    // Note that a pin taps as a toggle does, lighter than a status's buzz, and a refused one buzzes as any refusal does.
     const pin = (taskId: string, pinned: boolean) => {
-      acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }).catch(refused("The pin"));
+      acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }).then(
+        (landed) => buzz(landed ? BUZZ.SELECTION : BUZZ.ERROR),
+        (error: unknown) => {
+          refused("The pin")(error);
+          buzz(BUZZ.ERROR);
+        },
+      );
     };
     const agentsWorking = agentsWorkingIn(view, tasks);
     return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin };
@@ -235,12 +245,25 @@ export function useTasksListing(search: string): TasksListing {
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
-interface TaskAgentLine {
+export interface TaskAgentLine {
   readonly agent: ListedAgent;
   readonly waiting: number;
   readonly pullRequest:
     | NonNullable<AppStateSnapshot["tasks"]["agentPullRequests"]>[number]["pullRequest"]
     | undefined;
+}
+
+/** An agent's line: how many of its threads wait on the reader, and the pull request the document holds for it. */
+export function agentLine(
+  agent: ListedAgent,
+  waitingByAgent: ReadonlyMap<string, number>,
+  view: AppStateSnapshot["tasks"] | undefined,
+): TaskAgentLine {
+  return {
+    agent,
+    waiting: waitingByAgent.get(agent.id) ?? 0,
+    pullRequest: view?.agentPullRequests?.find((each) => each.agentId === agent.id)?.pullRequest,
+  };
 }
 
 /** A task's page as the screen draws it: the task, its description where it is read, its agents, its pages, and what waits on the reader. */
@@ -300,14 +323,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       onTask,
       (agent) => agent,
       (agent) => (waiting.byAgent.get(agent.id) ?? 0) > 0,
-    ).map(
-      (agent): TaskAgentLine => ({
-        agent,
-        waiting: waiting.byAgent.get(agent.id) ?? 0,
-        pullRequest: view?.agentPullRequests?.find((each) => each.agentId === agent.id)
-          ?.pullRequest,
-      }),
-    );
+    ).map((agent) => agentLine(agent, waiting.byAgent, view));
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
     return {

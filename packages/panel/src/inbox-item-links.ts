@@ -51,10 +51,11 @@ const ITEM_BESIDE: { readonly [Name in LinkDestinationName]?: ItemPlaceBeside } 
   PAGE: (at, _workspace, here) => {
     // A page under a task named by a number no one found the task for is the window's, which finds it on the service.
     if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
-    // A page of the item's own task opens beside the item; another's opens there too, read on its own place,
-    // as an older link's page an agent showed on itself is, so the reader stays on the item.
-    const own = "planId" in at && at.planId === here.taskId;
-    const place: PagePlace = "planId" in at ? { taskId: at.planId } : { agentId: at.agentId };
+    // A page of the item's own task opens beside the item; another task's opens there too, read on its own place,
+    // so the reader stays on the item. An older link's page an agent showed on itself is the window's, which finds its task.
+    if (!("planId" in at)) return NOTHING;
+    const own = at.planId === here.taskId;
+    const place: PagePlace = { taskId: at.planId };
     return beside(
       own
         ? { kind: THING.PAGE, pageId: at.pageId }

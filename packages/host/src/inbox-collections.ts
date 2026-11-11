@@ -1,8 +1,8 @@
 /**
  * inbox-collections.ts -- an inbox item as the sync engine's pool holds it: one row however many inbox reads hold it, the changes a member's write draws over it, and the waits of the reads every inbox write on the account reaches.
  *
- * An item is a kind of the pool (`@repo/sync`), `INBOX_ITEM`: a plan's or
- * an agent's inbox (`scope-inbox-follow.ts`) and the account's feed of
+ * An item is a kind of the pool (`@repo/sync`), `INBOX_ITEM`: a plan's
+ * inbox (`scope-inbox-follow.ts`) and the account's feed of
  * every item (`account-items-follow.ts`) each stand on the items they
  * answer, so an item several reads hold, as the open task's inbox and the
  * feed both do, is one row, and a write over it reaches all of them. Main's

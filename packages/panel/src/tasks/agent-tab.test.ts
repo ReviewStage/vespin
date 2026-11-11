@@ -797,7 +797,6 @@ test("a call that showed or read a page hangs the page's card as its tab does, p
       [PAGE_OWNER.TASK]: {
         [taskId]: { rows: [{ id: "page-1", title: "Pricing explorer", version: 2, at: 1_000 }] },
       },
-      [PAGE_OWNER.AGENT]: {},
     },
   };
   fakeAppBridge({

@@ -1,4 +1,4 @@
-# skeleton.yaml -- every tab, a thread, an ask's choices, and a task, each shot once.
+# skeleton.yaml -- every tab, a thread, an ask's choices, a task, and a search, each shot once.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device.
@@ -44,9 +44,17 @@ appId: dev.vespin.ios
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
 - takeScreenshot: task
-- tapOn: "Search"
-- assertVisible: "Find a task, a thread, or an agent."
+# The Search tab is tapped by its id, since a split view's search field is
+# named Search too; it finds the task by its name. `search.yaml` walks it.
+- tapOn:
+    id: "search-tab"
+- assertVisible: "Find a task, an Inbox item, or an agent."
+- tapOn: "Search Vespin"
+- inputText: "invitations"
+- assertVisible: "Teammate invitations"
 - takeScreenshot: search
+# Note that the keyboard is put away, since it stands over the tab bar.
+- hideKeyboard
 # The tab bar's round + opens New task as a sheet over the tabs.
 - tapOn: "New task"
 - assertVisible: "Describe the task"

@@ -28,7 +28,7 @@ import {
   addressOf,
   beside,
   go,
-  HERE,
+  type HERE,
   NOTHING,
   placeAddress,
   ROUTE,
@@ -84,18 +84,12 @@ import { numberedTaskIdNow } from "./use-link-standing.js";
  * on the route tree.
  */
 
-/** A task's page or an agent's a press comes from, and what it holds. */
-export type PagesHere =
-  | ({
-      readonly kind: typeof HERE.TASK;
-      /** The task the page shows. */
-      readonly taskId: string;
-    } & Holding)
-  | ({
-      readonly kind: typeof HERE.AGENT;
-      /** The agent the page shows. */
-      readonly agentId: string;
-    } & Holding);
+/** A task's page a press comes from, and what it holds. */
+export type PagesHere = {
+  readonly kind: typeof HERE.TASK;
+  /** The task the page shows. */
+  readonly taskId: string;
+} & Holding;
 
 /** The tasks the window lists, as their rows name their pull requests. */
 export interface Listed {
@@ -209,26 +203,24 @@ export function PullRequestsOnGitHub({ children }: { children: ReactNode }): Rea
   );
 }
 
-/** What a place of the app pressed on a task's page or an agent's opens beside it, read as its declaration reads it. */
+/** What a place of the app pressed on a task's page opens beside it, read as its declaration reads it. */
 type PagePlaceBeside = (place: LinkDestination, here: PagesHere) => Route;
 
 /**
- * Each place of the app a task's page or an agent's opens beside it, by the
- * name of the declaration its route matched (`LINK_ROUTED_PLACE`): a page
- * of another task, or of another agent on no task, than the one it shows,
- * read on its own place; its own is the window's, which opens it as the
- * panel's. Every other place is the window's.
+ * Each place of the app a task's page opens beside it, by the name of the
+ * declaration its route matched (`LINK_ROUTED_PLACE`): a page of another
+ * task than the one it shows, read on its own place; its own is the
+ * window's, which opens it as the panel's, and so is an older link's page
+ * an agent showed on itself, which the window finds the task of. Every
+ * other place is the window's.
  */
 const PAGE_BESIDE: { readonly [Name in LinkDestinationName]?: PagePlaceBeside } = {
   PAGE: (at, here) => {
     // Note that a task named by a number no one found the task for is no place a page reads on, so the window finds it on the service.
     if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
-    const place: PagePlace = "planId" in at ? { taskId: at.planId } : { agentId: at.agentId };
-    const own =
-      here.kind === HERE.TASK
-        ? "planId" in at && at.planId === here.taskId
-        : "agentId" in at && at.agentId === here.agentId;
-    return own ? NOTHING : beside({ kind: THING.PAGE, pageId: at.pageId, place });
+    if (!("planId" in at) || at.planId === here.taskId) return NOTHING;
+    const place: PagePlace = { taskId: at.planId };
+    return beside({ kind: THING.PAGE, pageId: at.pageId, place });
   },
 };
 
@@ -254,7 +246,7 @@ function besidePages(address: Address, here: PagesHere): Route {
 }
 
 /**
- * A task's or an agent's page's opener for what it opens beside it
+ * A task's page's opener for what it opens beside it
  * (`besidePages`): a pull request of one of its agents', in that agent's Pull
  * request tab through `open`, or another of its repository, by its number in
  * its first agent's; and a page of another place through `openPage`, read on
