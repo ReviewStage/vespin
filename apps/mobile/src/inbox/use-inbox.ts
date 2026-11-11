@@ -38,6 +38,7 @@ import {
   selectTaskListStatus,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
@@ -219,7 +220,13 @@ export function useInboxActs(): {
         acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }).catch(refused("The mark"));
       },
       remind: (itemId, until) => {
-        acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until }).catch(refused("The reminder"));
+        acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until }).then(
+          (answer) => buzz("failure" in answer ? BUZZ.ERROR : BUZZ.SUCCESS),
+          (error: unknown) => {
+            refused("The reminder")(error);
+            buzz(BUZZ.ERROR);
+          },
+        );
       },
       markAll: (itemIds) => {
         if (itemIds.length === 0) return;
