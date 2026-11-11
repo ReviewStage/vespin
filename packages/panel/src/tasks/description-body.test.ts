@@ -245,9 +245,10 @@ test("a description kept hidden behind another tab draws its title and none of i
   drawShown(true);
   await settle();
   const opened = section();
+  const unit = container.querySelector(".description-unit");
   drawShown(false);
   await settle();
-  const kept = section();
+  const kept = section() && container.querySelector(".description-unit") === unit;
   drawShown(false, { ...TASK, id: "task-other" });
   await settle();
   drawShown(false);
@@ -255,7 +256,7 @@ test("a description kept hidden behind another tab draws its title and none of i
 
   assert.deepEqual(hidden, [TASK.name, false], "the title stands and no section is drawn");
   assert.equal(opened, true, "the sections are drawn once shown");
-  assert.equal(kept, true, "the sections stay once hidden again");
+  assert.equal(kept, true, "the sections stay mounted once hidden again");
   assert.equal(section(), false, "a task come back to while hidden, after another, draws none");
 });
 
