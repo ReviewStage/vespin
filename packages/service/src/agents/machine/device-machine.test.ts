@@ -69,6 +69,7 @@ import {
   agentRepositoryRead,
   cloneAgentRepository,
   finishCheckoutWith,
+  repositoryCredentialOf,
 } from "../coder-host/checkout.js";
 import { reconcileAgent } from "../coder-host/reconcile.js";
 import {
@@ -274,8 +275,12 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const target = { userId: opened.userId, conversationId: agent.conversationId };
           const sandbox = sandboxDouble(() => undefined);
           yield* Effect.gen(function* () {
-            yield* cloneAgentRepository(agent, sandbox, yield* agentRepositoryRead(target, agent));
-            yield* finishCheckoutWith(sandbox, yield* agentCheckoutPlan(target, agent));
+            const read = yield* agentRepositoryRead(target, agent);
+            yield* cloneAgentRepository(agent, sandbox, read);
+            yield* finishCheckoutWith(
+              sandbox,
+              yield* agentCheckoutPlan(target, agent, repositoryCredentialOf(read)),
+            );
           }).pipe(Effect.provide(github.layer));
 
           // A member with no GitHub sign-in writes as the App's bot, at the noreply address GitHub links to it.
