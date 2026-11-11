@@ -1101,6 +1101,14 @@ test("the open task marked done leaves for Home, on any of its tabs, and one ope
   );
   await settle();
   assert.ok(!settled.told.includes(ACT_KIND.TASKS_CLOSE), "a task opened done stays open");
+  const unread = mount(
+    { shown: true, tasks: { ...OPEN, listStatus: TASKS_READ.READING } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+  await settle();
+  unread.stand({ tasks: { ...OPEN, tasks: [done] } });
+  await settle();
+  assert.ok(!unread.told.includes(ACT_KIND.TASKS_CLOSE), "nor one first read done");
 
   const tab = mount(
     { shown: true, tasks: { ...OPEN, tasks: [listed()] } },

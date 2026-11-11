@@ -1632,20 +1632,28 @@ export function useTasksTab(input: {
     if (!leaveMove() && fixture === undefined && bound !== undefined) unbindTask();
   }, [fixture, leaveMove, unbindTask]);
   // The open task leaves the window for Home once it is marked done or canceled, or leaves the list read, as a delete
-  // takes it, since the sidebar draws it no longer. Note that only the move does, because a settled task opened from
-  // the Tasks page or a link is read where it stands.
+  // takes it, since the sidebar draws it no longer. Note that only the move does, and only while the task's own place
+  // is on screen, because a settled task opened from the Tasks page or a link is read where it stands, and a routed
+  // page standing over the task, the Board's among them, keeps its place.
   const shownTaskId = viewed.activeTaskId;
   const openRow = tasks.tasks.find((task) => task.id === shownTaskId);
-  const openGone =
+  const openSettled =
     openRow === undefined
-      ? tasks.listStatus === TASKS_READ.READY
+      ? undefined
       : openRow.status === SETTLED_STATUS.DONE || openRow.status === SETTLED_STATUS.CANCELED;
-  const openStood = useRef<string | undefined>(undefined);
+  const listReady = tasks.listStatus === TASKS_READ.READY;
+  const openStood = useRef<{ taskId: string; settled: boolean } | undefined>(undefined);
   useEffect(() => {
     const was = openStood.current;
-    openStood.current = shownTaskId !== undefined && !openGone ? shownTaskId : undefined;
-    if (was !== undefined && was === shownTaskId && openGone) leaveTask();
-  }, [shownTaskId, openGone, leaveTask]);
+    // Note that a task the list holds no row of yet stands nowhere, so the first row read of it is no move.
+    openStood.current =
+      shownTaskId === undefined || openSettled === undefined
+        ? undefined
+        : { taskId: shownTaskId, settled: openSettled };
+    if (was === undefined || was.taskId !== shownTaskId || !stateShown) return;
+    const removed = openSettled === undefined && listReady;
+    if (removed || (!was.settled && openSettled === true)) leaveTask();
+  }, [shownTaskId, openSettled, listReady, stateShown, leaveTask]);
   // A workspace chosen on purpose, from the switcher, a workspace made, or
   // one left, is listed at once, and the task on screen follows: the task
   // last open there opens again, where it is still that workspace's, or
