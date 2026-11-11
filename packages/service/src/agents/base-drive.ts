@@ -205,8 +205,8 @@ function stillFilling(found: ListedSandbox, now: number): boolean {
   );
 }
 
-/** The fill's sandbox found under the base's name as a launch reads it: none, so the drive is free to fork; one filling; or one a fill left. */
-function readOf(found: ListedSandbox | undefined, now: number): BaseDriveRead {
+/** The fill's sandbox found under a drive's name as a launch reads it: none, so the drive is free to fork; one filling; or one a fill left. */
+export function readOf(found: ListedSandbox | undefined, now: number): BaseDriveRead {
   if (found === undefined) return { state: BASE_STATE.READY };
   if (stillFilling(found, now)) return { state: BASE_STATE.FILLING };
   return { state: BASE_STATE.WANTED, reason: BASE_WANTED.UNFINISHED, stale: found };
