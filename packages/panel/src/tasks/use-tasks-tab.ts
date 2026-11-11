@@ -576,8 +576,9 @@ function pinOnTask(pin: SidebarPin, taskId: string): boolean {
  * arrive in the conversation: one with a thread waiting on them, a question
  * before a notice, as the Inbox lists what waits; else the task's agent
  * that was last active, one at work counting as active now, archived ones
- * left out (`agentsOfTask`); none where it has none, so it opens on its
- * description.
+ * left out (`agentsOfTask`), as are side chats, which stand under their
+ * agents' side panels (`side-chat.ts`); none where it has none, so it opens
+ * on its description.
  */
 function resumingAgentOf(
   taskId: string,
@@ -587,7 +588,7 @@ function resumingAgentOf(
   const items = waiting.find((each) => each.taskId === taskId)?.items ?? [];
   const waitingOn = items.find(holdsAsk) ?? items[0];
   if (waitingOn !== undefined) return waitingOn.agentId;
-  const lines = agentsOfTask(agents, taskId);
+  const lines = agentsOfTask(agents, taskId).filter((line) => !isSideChat(line));
   const working = lines.find((line) => agentStillWriting(line.status));
   if (working !== undefined) return working.id;
   let latest = lines[0];

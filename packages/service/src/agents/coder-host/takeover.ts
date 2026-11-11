@@ -506,6 +506,8 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const forked = from.messageId !== undefined;
   // A side chat copies none of the work, so it pushes no branch and boots from no snapshot: it reads what the source pushed.
   const side = from.side === true;
+  // Note that a side chat stands under its source and is archived with it, so none is asked of a source already archived.
+  if (side && source.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const work = side
     ? SIDE_CHAT_WORK
     : yield* sourceWorkOf(userId, source, repository, forked, idempotencyKey);
