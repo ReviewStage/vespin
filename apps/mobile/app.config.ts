@@ -283,7 +283,10 @@ const plistXml = (value: PlistValue, depth: number): string => {
 // A dictionary's keys and values as XML, each key at `depth` tabs.
 const plistEntries = (entries: Readonly<Record<string, PlistValue>>, depth: number): string =>
   Object.entries(entries)
-    .map(([key, value]) => `${"\t".repeat(depth)}<key>${key}</key>\n${plistXml(value, depth)}`)
+    .map(
+      ([key, value]) =>
+        `${"\t".repeat(depth)}<key>${plistText(key)}</key>\n${plistXml(value, depth)}`,
+    )
     .join("\n");
 
 // A whole plist document of one dictionary.
