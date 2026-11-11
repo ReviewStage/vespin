@@ -15,7 +15,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
-import { editorBundleLanded, installEditorLayout } from "../testing/composer.js";
+import { editorBundleLanded, installEditorLayout, typeInComposer } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
@@ -25,6 +25,7 @@ import { AgentTab } from "./agent-tab.js";
 /**
  * agent-approvals.test.ts -- a tool call a Claude Code agent holds says so on
  * its own row, and Allow sends the answer and the row says it was allowed;
+ * Deny opens a box for why, whose words go to the agent with the denial;
  * a Claude Code agent's model chip and a Codex agent's both name their mode
  * off Full access.
  */
@@ -166,6 +167,19 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   assert.deepEqual(answered, [{ answer: "allow" }]);
   assert.equal(buttonReading(container, "Allow"), undefined);
   assert.ok(call.textContent?.includes("Allowed"));
+});
+
+test("Deny opens a box for why, and its Deny sends the denial with the words written", async () => {
+  const { container, answered } = await drawnTab(CLAUDE_AGENT);
+  await act(async () => (buttonReading(container, "Deny") ?? assert.fail("Deny")).click());
+  await settle();
+  const note =
+    container.querySelector<HTMLElement>(".approval-deny-note") ?? assert.fail("the box for why");
+  typeInComposer(note, "Not on the production database.");
+  await act(async () => (buttonReading(note, "Deny") ?? assert.fail("the box's Deny")).click());
+  await settle();
+
+  assert.deepEqual(answered, [{ answer: "deny", message: "Not on the production database." }]);
 });
 
 test("a Claude Code agent's model chip and a Codex agent's both name their mode off Full access", async () => {
