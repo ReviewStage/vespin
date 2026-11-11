@@ -213,9 +213,16 @@ async function opened(container: HTMLElement) {
   const pressed = () =>
     container.querySelector<HTMLButtonElement>('.picture-block button[aria-label="Expand"]') ??
     container.querySelector<HTMLButtonElement>(".picture-block button");
+  const recording = () => container.querySelector(".picture-block video");
   await vi.waitFor(() =>
-    assert.equal(pressed() === null, false, "the picture is drawn, its bytes read"),
+    assert.equal(
+      pressed() === null && recording() === null,
+      false,
+      "the picture is drawn, its bytes read",
+    ),
   );
+  // A recording's bar stands once its size is read, as a browser reads it.
+  act(() => recording()?.dispatchEvent(new Event("loadedmetadata")));
   const picture = pressed();
   assert.ok(picture, "the picture is drawn, its bytes read");
   await act(async () => picture.click());
