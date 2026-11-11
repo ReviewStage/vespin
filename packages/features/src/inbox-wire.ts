@@ -538,6 +538,32 @@ const inboxOptionMediaSchema = EffectSchema.Union([
 
 export type InboxReadOptionMedia = typeof inboxOptionMediaSchema.Type;
 
+/** Whether an option's media is of a kind this build draws. */
+const isKnownOptionMedia = EffectSchema.is(EffectSchema.Union(KNOWN_OPTION_MEDIA));
+
+/**
+ * The files a message's ask hands its options, by attachment: those its
+ * options' cards draw, which the message draws nowhere else; none where it
+ * asks no `decide` this build knows.
+ */
+export function optionFileIds(ask: InboxReadAsk | undefined): ReadonlySet<string> {
+  if (ask === undefined || ask.type !== INBOX_ASK.DECIDE || !("options" in ask)) return new Set();
+  return new Set(
+    ask.options.flatMap((option) =>
+      knownOptionMedia(option).flatMap((media) =>
+        media.type === INBOX_OPTION_MEDIA.FILE ? [media.attachmentId] : [],
+      ),
+    ),
+  );
+}
+
+/** The media of an option this build draws, in order: every kind but one a newer service wrote. */
+export function knownOptionMedia(option: {
+  readonly media?: readonly InboxReadOptionMedia[] | undefined;
+}): readonly InboxOptionMedia[] {
+  return (option.media ?? []).filter(isKnownOptionMedia);
+}
+
 /** An option's file, kept as a file of the message whose ask offers it. */
 export type InboxOptionFile = Extract<InboxOptionMedia, { type: typeof INBOX_OPTION_MEDIA.FILE }>;
 
