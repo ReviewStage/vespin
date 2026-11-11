@@ -18,6 +18,7 @@ import {
   type AutomationSummary,
 } from "@repo/features/automation-wire";
 import { LINK_DESTINATION, type LinkDestination, type ReadLink } from "@repo/features/link-grammar";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import {
@@ -25,6 +26,7 @@ import {
   type Workspace,
   type WorkspaceMember,
 } from "@repo/features/workspace-wire";
+import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ACTOR_KIND } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
@@ -201,19 +203,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The developer's messages as `reader` sees the tab drawn, one element for each of `messages`, every place a press opened kept in `opened`, and every automation's page in `automations`' own, where the workspace lists them. */
+/** The developer's messages as `reader` sees the tab drawn, one element for each of `messages`, every place a press opened kept in `opened`, every automation's page in `automations`' own, where the workspace lists them, and the host's reads `hosted` holds laid on main's document. */
 async function drawnFor(
   reader: string,
   opened: LinkDestination[] = [],
   agent: AgentSummary = AGENT,
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
   automations?: { readonly rows: readonly AutomationSummary[]; readonly opened: string[] },
+  hosted: Partial<AppStateSnapshot> = {},
 ): Promise<readonly Element[]> {
   fakeActs({
     act: (): Promise<FakeActAnswer> =>
       Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." }),
   });
-  handState({}, { tasks: { ...IDLE_TASKS_VIEW, taskAgents: [listedAgent(SENDER_NOW)] } });
+  handState(
+    {},
+    { ...hosted, tasks: { ...IDLE_TASKS_VIEW, taskAgents: [listedAgent(SENDER_NOW)] } },
+  );
   handMembers(() => ({ rows: { members: MEMBERS } }));
   if (automations !== undefined) {
     holdAutomations(handHostReads({}).deliverAutomations, {
@@ -424,6 +430,26 @@ test("a line an automation sent hangs its card and opens its page, on an agent i
   });
   act(() => sender.click());
   assert.deepEqual(opened, [TRIAGE.id]);
+  fakeAppBridge({});
+});
+
+test("an automation's agent opens on the run its tab holds, naming the pull request the run was about beside the automation", async () => {
+  const automated: AgentSummary = {
+    ...AGENT,
+    automationId: TRIAGE.id,
+    automationName: TRIAGE.name,
+  };
+  const fired = line("run", "Triage the failures.\n\nFired by a pull request.");
+  const run = {
+    prompt: "Triage the failures.",
+    subject: { number: 12, title: "Fix the flaky invite test" },
+  };
+  const drawn = await drawnFor(DEAN.userId, [], automated, [fired], undefined, {
+    [LIVE_READ.AGENT_ORIGINS]: { [automated.id]: { rows: run } },
+  });
+  const opening = drawn[0] ?? assert.fail("nothing drawn");
+  assert.ok(opening.querySelector("[data-origin-description]"), "it opens on the run's card");
+  assert.match(opening.textContent ?? "", /Nightly triage.*Fix the flaky invite test/u);
   fakeAppBridge({});
 });
 

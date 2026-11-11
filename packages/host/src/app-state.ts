@@ -270,12 +270,12 @@ type AppAgentOrigin = AppHostRead<AgentOrigin | null>;
 
 /**
  * Each agent's origin the host holds for the windows (`compose-agents.ts`):
- * those an agent's page chose, and the few let go lately, by the agent's
+ * those an agent's tab chose, and the few let go lately, by the agent's
  * id, each as its own read stands. One absent is held by nobody.
  */
 export type AppAgentOrigins = Readonly<Record<string, AppAgentOrigin>>;
 
-/** No origin held, as the host stands before any window shows an agent's page and after the session ends. */
+/** No origin held, as the host stands before any window shows an automation's agent and after the session ends. */
 export const NO_AGENT_ORIGINS: AppAgentOrigins = {};
 
 /** The key an agent's own transcript stands under beside its workers', which stand under the call that started each. */
@@ -336,7 +336,7 @@ export type AppTranscripts = Readonly<
 /** No transcript held, as the host stands before any tab shows one and after the session ends. */
 export const NO_TRANSCRIPTS: AppTranscripts = {};
 
-/** One value for each holder of inbox items, a plan or an agent, by its kind and then its id, never by a key built from both. */
+/** One value for each holder of inbox items, a plan, by its kind and then its id, never by a key built from both. */
 type ByInboxHolder<Value> = {
   readonly [Kind in InboxScopeKind]: Readonly<Record<string, Value>>;
 };
@@ -350,11 +350,11 @@ export type AppInboxItems = {
   readonly [INBOX_SCOPE_KIND.PLAN]: Readonly<Record<string, readonly InboxItem[]>>;
 };
 
-/** One plan's or agent's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
+/** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
 export type AppHolderInbox = AppHostRead<readonly InboxItem[]>;
 
 /**
- * Each plan's or agent's inbox the host holds for the windows
+ * Each plan's inbox the host holds for the windows
  * (`scope-inbox-follow.ts`): the holders a window chose, and the few let go
  * lately, by kind and then by id, each as its own read stands. A holder
  * absent is held by nobody, so a surface draws it from the account's feed.
@@ -364,7 +364,6 @@ export type AppHolderInboxes = ByInboxHolder<AppHolderInbox>;
 /** No holder's inbox held, as the host stands before any window chooses one and after the session ends. */
 export const NO_HOLDER_INBOXES: AppHolderInboxes = {
   [INBOX_SCOPE_KIND.PLAN]: {},
-  [INBOX_SCOPE_KIND.AGENT]: {},
 };
 
 /** What pages stand on: a task. */
@@ -818,13 +817,13 @@ export interface AppState {
   tasks: TasksView;
   agents: AppAgentsSlice;
   inbox: AppInboxSlice;
-  /** Each agent's origin the windows chose, held while an agent's page holds it and a while after: the run its page says started it. */
+  /** Each agent's origin the windows chose, held while an agent's tab holds it and a while after: the run its tab says started it. */
   [LIVE_READ.AGENT_ORIGINS]: AppAgentOrigins;
   /** The account's preferences row, by the account, held for the signed-in session: the default agent, the chapters model, and Slack notifications every surface draws. */
   [LIVE_READ.ACCOUNT_PREFERENCES]: AppAccountPreferences;
   /** Every inbox item the account reaches, held for the signed-in session: what the window's Inbox, its search, and a person's page list. */
   [LIVE_READ.INBOX_ITEMS]: AppHostRead<AppInboxItems>;
-  /** Each plan's or agent's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane, a task's Inbox tab, and an agent's page read past the feed. */
+  /** Each plan's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane and a task's Inbox tab read past the feed. */
   [LIVE_READ.HOLDER_INBOX]: AppHolderInboxes;
   /** The skills the account sees in each workspace the windows chose, by the workspace, held while Settings › Skills shows them and a while after: what that page draws. */
   [LIVE_READ.INSTALLED_SKILLS]: AppInstalledSkills;
