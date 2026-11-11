@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
+import os from "node:os";
 import { HostedDeviceAgentClient } from "@repo/features";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { Effect, Layer, Option } from "effect";
+import { Clock, Effect, Layer, Option } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { composeLocalAgents } from "../compose-local-agents.js";
 import { LocalAgentPlatform, type LocalAgentPlatformSeam, Reporter } from "../effect/seams.js";
 import { type HostDevice, hostDeviceWhen, markHostDeviceRefused } from "../host-device-record.js";
+import { hostRunnersLeftStopped } from "./host-runners-left.js";
 import { hostServiceStanding } from "./host-standing.js";
 import { type HostReleases, hostTargetOf, hostUpdate } from "./host-update.js";
 
@@ -23,7 +25,9 @@ import { type HostReleases, hostTargetOf, hostUpdate } from "./host-update.js";
  * install, handed its releases, updates itself to the newer release the service
  * names (`host-update.ts`), and once it switched to it, returns the same
  * way, every runner stopped, for its service manager to start it again on
- * the new release. Everything else is the follower's own: its reads
+ * the new release. Before the follower starts, the runners a daemon killed
+ * outright left running are ended (`host-runners-left.ts`), so it lets go
+ * of no turn one of them still holds. Everything else is the follower's own: its reads
  * asked again in place when the service is out of reach.
  *
  * A box whose record is refused rests (`hostRefusedRest`) rather than
@@ -56,6 +60,8 @@ export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOption
   const { deviceId } = options.device;
   const { releases, platform } = options;
   const target = hostTargetOf(platform.devicePlatform, platform.deviceArch);
+  const now = yield* Clock.currentTimeMillis;
+  yield* hostRunnersLeftStopped(options.stateRoot, now - os.uptime() * 1000);
   // Note that the follower and the update live in this scope alone, so closing it once the secret is refused, or the daemon switched releases, stops every runner it started.
   const ended = yield* Effect.scoped(
     Effect.gen(function* () {
