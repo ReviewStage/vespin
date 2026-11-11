@@ -8,6 +8,7 @@ import {
   type ListLook,
   ListSection,
   RowList,
+  SWITCHER_LOOK,
   WorkspaceSwitcherMenu,
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
@@ -96,8 +97,8 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
  * because a second leading item folds into the bar's overflow beside the
  * sidebar's own button. A narrower regular window, a portrait iPad's or the
  * unfolded Duo's, keeps the system's tab bar, and the list stands first
- * under the switcher at its bar's leading edge, as the compact bar stands
- * it.
+ * under the switcher's tile at its bar's leading edge beside the list's
+ * title, as the compact bar stands it.
  */
 export function useAppSidebar(
   place: SidebarPlace,
@@ -128,7 +129,11 @@ export function useAppSidebar(
     if (!threeColumns && list !== undefined) {
       // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
       const leading =
-        header ?? (account === undefined ? undefined : <AccountBarItem {...account} />);
+        switcher !== undefined ? (
+          <WorkspaceSwitcherMenu {...switcher} look={SWITCHER_LOOK.TILE} />
+        ) : account === undefined ? undefined : (
+          <AccountBarItem {...account} />
+        );
       return { sidebar: list.view, sidebarBar: { ...list.bar, leading }, ...visibility };
     }
     return {

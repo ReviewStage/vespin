@@ -20,7 +20,7 @@ import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns } from "../use-window-size-class.js";
-import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
@@ -183,7 +183,7 @@ function SearchStackScreen(words: SearchWords) {
   );
   return (
     <>
-      <Stack.Screen options={{ title: SEARCH_TITLE, ...switcherTitle(switcher) }}>
+      <Stack.Screen options={{ title: SEARCH_TITLE }}>
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_EVERYTHING}

@@ -185,10 +185,11 @@ export {
 } from "./use-async-action.js";
 export { Video } from "./video.js";
 export {
-  NoBarTitle,
   newWorkspaceAction,
+  SWITCHER_LOOK,
   type SwitcherAccount,
   type SwitcherAction,
+  type SwitcherLook,
   type SwitcherWorkspace,
   WorkspaceSwitcher,
   WorkspaceSwitcherMenu,

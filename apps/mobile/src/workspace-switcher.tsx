@@ -6,7 +6,6 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
-  NoBarTitle,
   newWorkspaceAction,
   type SwitcherWorkspace,
   type WorkspaceSwitcher,
@@ -86,20 +85,4 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
       workspaceSettingsAction(() => openSettings(SETTINGS_ROUTE.WORKSPACE)),
     ],
   };
-}
-
-/**
- * The bar's title where a tab's root names its workspace at its leading
- * edge in place of the photo (`SettingsBarButton`'s `switcher`): an empty title view
- * (`NoBarTitle`), since the workspace's name already says where the reader
- * is; the tab's name drawn as before the account's workspaces are read.
- * Note that the title is hidden by an empty view rather than an empty
- * `headerTitle` string, because a string stands as the native title too,
- * and the tab's own `title` must stay the screen's name for the back
- * button's history and the reader.
- */
-export function switcherTitle(switcher: SwitcherProps | undefined): {
-  readonly headerTitle?: typeof NoBarTitle;
-} {
-  return switcher === undefined ? {} : { headerTitle: NoBarTitle };
 }

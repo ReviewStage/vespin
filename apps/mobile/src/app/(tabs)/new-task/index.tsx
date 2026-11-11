@@ -3,7 +3,7 @@
 import { EmptyState, Screen } from "@repo/ui-native";
 import { Stack, useRouter } from "expo-router";
 import { SettingsBarButton } from "../../../settings-button.js";
-import { switcherTitle, useWorkspaceSwitcher } from "../../../workspace-switcher.js";
+import { useWorkspaceSwitcher } from "../../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../../screen-boundary.js";
 
@@ -12,7 +12,7 @@ export default function NewTaskScreen() {
   const switcher = useWorkspaceSwitcher();
   return (
     <>
-      <Stack.Screen options={{ title: "New task", ...switcherTitle(switcher) }} />
+      <Stack.Screen options={{ title: "New task" }} />
       <SettingsBarButton switcher={switcher} />
       <Screen>
         <EmptyState

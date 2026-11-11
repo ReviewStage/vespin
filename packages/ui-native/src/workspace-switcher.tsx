@@ -24,7 +24,7 @@ import {
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { identityLetter, WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { useState } from "react";
-import { PixelRatio, useColorScheme, View } from "react-native";
+import { PixelRatio, useColorScheme } from "react-native";
 import { AvatarPhoto, TILE_ROUNDING } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -44,6 +44,14 @@ const NAME_MAX_WIDTH = 180;
 
 /** The chevron after the name, which says the name opens a menu, in the body's ink, since the muted ink faded into a dark bar's glass. */
 const CHEVRON_SIZE = 10;
+
+/** How the switcher's button stands: the tile and the name, where a sidebar's row has room, or the tile alone, where a bar's title stands beside it. */
+export const SWITCHER_LOOK = {
+  NAMED: "named",
+  TILE: "tile",
+} as const;
+
+export type SwitcherLook = (typeof SWITCHER_LOOK)[keyof typeof SWITCHER_LOOK];
 
 /** What a flow finds the switcher by. */
 const SWITCHER_ID = "workspace-switcher";
@@ -90,6 +98,8 @@ type WorkspaceSwitcherProps = {
   readonly account?: SwitcherAccount | undefined;
   /** The acts after the account: New workspace, then Workspace settings. */
   readonly actions: readonly SwitcherAction[];
+  /** How its button stands; the tile and the name where none is given. */
+  readonly look?: SwitcherLook | undefined;
 };
 
 /** The picture a tile draws over its letter: the photo as held, else the owner's picture asked for at the tile's size; none while the letter stands alone. */
@@ -167,6 +177,7 @@ export function WorkspaceSwitcherMenu({
   onChoose,
   account,
   actions,
+  look = SWITCHER_LOOK.NAMED,
 }: WorkspaceSwitcherProps) {
   const colors = useColors();
   return (
@@ -175,16 +186,18 @@ export function WorkspaceSwitcherMenu({
       label={
         <HStack spacing={SPACE.TIGHT + 2}>
           <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
-          <Text
-            modifiers={[
-              font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
-              foregroundStyle(colors.TEXT),
-              lineLimit(1),
-              frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
-            ]}
-          >
-            {chosen.name}
-          </Text>
+          {look === SWITCHER_LOOK.TILE ? null : (
+            <Text
+              modifiers={[
+                font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
+                foregroundStyle(colors.TEXT),
+                lineLimit(1),
+                frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
+              ]}
+            >
+              {chosen.name}
+            </Text>
+          )}
           <Image
             systemName="chevron.down"
             size={CHEVRON_SIZE}
@@ -229,29 +242,19 @@ export function WorkspaceSwitcherMenu({
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
  * holds React Native views: the same menu in a SwiftUI host the size of its
- * label, standing as the one bar item at the bar's leading edge, as Notion's
- * and Linear's iPhone apps name their workspace there. Note that it stands as a
+ * label, standing as the one bar item at the bar's leading edge, as Linear's
+ * iPhone app stands its workspace there: the tile and ⌄ alone, so the
+ * screen's own title keeps its place in the bar, and the menu names the
+ * workspace, checked. Note that it stands as a
  * bar item rather than the bar's title view, because a host sized to its
  * contents drew at no size at all in the native stack's title on iOS 27.
  */
 export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   return (
     <Host matchContents>
-      <WorkspaceSwitcherMenu {...props} />
+      <WorkspaceSwitcherMenu {...props} look={SWITCHER_LOOK.TILE} />
     </Host>
   );
-}
-
-/**
- * The stack bar's title where the switcher names the workspace at the bar's
- * leading edge: an empty title view, which hides the drawn title while the
- * screen keeps its own for the back button's history and the reader. Note
- * that it is a view rather than nothing, because a header title that
- * renders nothing leaves the stack no title view, and iOS then draws the
- * screen's title beside the bar's leading items.
- */
-export function NoBarTitle() {
-  return <View accessible={false} importantForAccessibility="no-hide-descendants" />;
 }
 
 /** The menu's act that makes a workspace, as the panel words it. */

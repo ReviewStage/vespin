@@ -136,13 +136,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
   button is the chevron alone. One button leads every tab's root bar, as
-  Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile, the
-  name and ⌄), whose menu holds the workspaces, the account by its name
-  opening Settings, New workspace and Workspace settings; the account's
+  Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile and ⌄
+  alone, `SWITCHER_LOOK.TILE`, so the screen's title keeps its place beside
+  it, as Linear's does), whose menu holds the workspaces, the account by its
+  name opening Settings, New workspace and Workspace settings; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
-  list with the switcher and stands Settings at its foot. Nothing draws a
+  list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
   copy of glass.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
