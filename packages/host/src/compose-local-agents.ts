@@ -810,7 +810,7 @@ export function composeLocalAgents(
               runners.delete(agentId);
               // Note that the launch is starting again until its settle is answered, so no beat settles it as a runner gone before its runner's scope closes and its exit code is sent.
               starting.add(line.id);
-              // Note that whether any runner works is told once the turn is let go of and settled, so a Mac kept awake for it does not sleep while it is.
+              // Note that whether any runner works is told once its runner's scope has closed and its launch is settled, so a Mac kept awake for it does not sleep while it is.
               yield* Scope.close(runnerScope, Exit.void).pipe(
                 Effect.andThen(settle(line.id, Option.getOrUndefined(Option.map(code, Number)))),
                 Effect.ensuring(

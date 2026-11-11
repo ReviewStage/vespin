@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "8963991e-34a5-4154-97fe-23279ba57231",
-  "prevIds": ["1ac778b5-7c48-4bc2-82e8-955235cc4308"],
+  "id": "3f6bd1e8-cc74-486f-ad6f-6053fb731f4d",
+  "prevIds": ["47072cf9-6e70-4101-a184-d185fe77cfd7", "aa988ae4-9b01-4348-ad15-1d4af3e0290a"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -13,6 +13,18 @@
     {
       "isRlsEnabled": false,
       "name": "account_provider_key",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "account_sound",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "account_sound_choice",
       "entityType": "tables",
       "schema": "public"
     },
@@ -31,6 +43,12 @@
     {
       "isRlsEnabled": false,
       "name": "agent_approval",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "agent_boot",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1024,6 +1042,149 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content_type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sha256",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "byte_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "bytea",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bytes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound_choice"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "slot",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound_choice"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sound_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_sound_choice"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
@@ -1752,6 +1913,97 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "attempt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "phase",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "phase_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "deadline_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "failure",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": "gen_random_uuid()",
       "generated": null,
       "identity": null,
@@ -2279,6 +2531,32 @@
       "generated": null,
       "identity": null,
       "name": "claimed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "queued_message"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "send_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "queued_message"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "line",
       "entityType": "columns",
       "schema": "public",
       "table": "queued_message"
@@ -13010,6 +13288,34 @@
           "opclass": null
         },
         {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "account_sound_user",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
           "value": "idempotency_key",
           "isExpression": false,
           "asc": true,
@@ -13297,6 +13603,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "deadline_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_boot_deadline",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_boot"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "conversation_id",
           "isExpression": false,
           "asc": true,
@@ -13450,6 +13777,34 @@
       "method": "btree",
       "concurrently": false,
       "name": "queued_message_agent_position",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "queued_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "send_key",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"send_key\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "queued_message_agent_send_key",
       "entityType": "indexes",
       "schema": "public",
       "table": "queued_message"
@@ -16569,6 +16924,45 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_sound_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_sound_choice_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_sound_choice"
+    },
+    {
+      "nameExplicit": true,
+      "columns": ["user_id", "sound_id"],
+      "schemaTo": "public",
+      "tableTo": "account_sound",
+      "columnsTo": ["user_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_sound_choice_sound_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_sound_choice"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["child_conversation_id"],
       "schemaTo": "public",
       "tableTo": "conversations",
@@ -16748,6 +17142,19 @@
       "entityType": "fks",
       "schema": "public",
       "table": "agent_approval"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_boot_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_boot"
     },
     {
       "nameExplicit": false,
@@ -18973,6 +19380,14 @@
       "table": "write_receipt"
     },
     {
+      "columns": ["user_id", "slot"],
+      "nameExplicit": false,
+      "name": "account_sound_choice_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "account_sound_choice"
+    },
+    {
       "columns": ["user_id", "agent_id"],
       "nameExplicit": false,
       "name": "agent_pin_pkey",
@@ -19173,6 +19588,14 @@
       "entityType": "pks"
     },
     {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "account_sound_pkey",
+      "schema": "public",
+      "table": "account_sound",
+      "entityType": "pks"
+    },
+    {
       "columns": ["child_conversation_id"],
       "nameExplicit": false,
       "name": "agent_delegation_pkey",
@@ -19194,6 +19617,14 @@
       "name": "agent_approval_pkey",
       "schema": "public",
       "table": "agent_approval",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["agent_id"],
+      "nameExplicit": false,
+      "name": "agent_boot_pkey",
+      "schema": "public",
+      "table": "agent_boot",
       "entityType": "pks"
     },
     {
@@ -19782,6 +20213,15 @@
     },
     {
       "nameExplicit": true,
+      "columns": ["user_id", "id"],
+      "nullsNotDistinct": false,
+      "name": "account_sound_user_id",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "nameExplicit": true,
       "columns": ["conversation_id", "client_id"],
       "nullsNotDistinct": false,
       "name": "messages_conversation_client",
@@ -19896,6 +20336,27 @@
       "schema": "public",
       "table": "personal_workspace",
       "entityType": "uniques"
+    },
+    {
+      "value": "octet_length(\"bytes\") <= 3300000 and octet_length(\"bytes\") = \"byte_count\"",
+      "name": "account_sound_bytes_bound",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "value": "char_length(\"name\") between 1 and 64",
+      "name": "account_sound_name_bound",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "account_sound"
+    },
+    {
+      "value": "\"slot\" in ('finish', 'ask')",
+      "name": "account_sound_choice_slot",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "account_sound_choice"
     },
     {
       "value": "(num_nonnulls(\"inbox_item_id\", \"conversation_id\", \"description_comment_id\") = 1 or (\"task_id\" is not null and num_nonnulls(\"inbox_item_id\", \"conversation_id\", \"description_comment_id\") = 0)) and (\"inbox_message_id\" is null or \"inbox_item_id\" is not null)",
