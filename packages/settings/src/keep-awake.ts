@@ -42,7 +42,7 @@ export const KEEP_AWAKE_OPTION_LABEL = {
 export const KEEP_AWAKE_DETAIL = {
   [KEEP_AWAKE.NEVER]: undefined,
   [KEEP_AWAKE.WORKING]: "Closing the lid still puts it to sleep.",
-  [KEEP_AWAKE.PLUGGED_IN]: "On battery, only while agents work.",
+  [KEEP_AWAKE.PLUGGED_IN]: "Even with no agents running. On battery, only while they work.",
 } as const satisfies Record<KeepAwake, string | undefined>;
 
 const readsKeepAwake = Schema.is(Schema.Literals(KEEP_AWAKE_LIST));
