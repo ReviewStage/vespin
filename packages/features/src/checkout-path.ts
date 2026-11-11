@@ -38,26 +38,27 @@ function inMacCheckout(path: string): string | undefined {
   return agent.slice(slash + 1 + checkout.length);
 }
 
-/** Whether a step of a path is a dot step, which names where it stands or its parent rather than a folder or a file. */
-function isDotStep(step: string): boolean {
-  return step === "." || step === "..";
+/** Whether a step of a path names no folder or file: an empty one, or a dot step, which names where it stands or its parent. */
+function isNoStep(step: string): boolean {
+  return step === "" || step === "." || step === "..";
 }
 
 /**
  * A path as written, read as a path in the checkout: a relative one as it
  * is, past a leading `./`; an absolute one in the cloud's checkout or a Mac
  * agent's; none for an absolute one anywhere else, or one that climbs out
- * or names no file. Note that a dot step anywhere past a leading `./`
- * refuses the whole path, before a root is matched, because
- * `…/agents/../repository/` would otherwise read as an agent's checkout.
+ * or names no file. Note that every step is judged before a root is
+ * matched, and only an absolute path written bare opens on an empty one,
+ * because `…/agents/../repository/` or `.//workspace/repository/` would
+ * otherwise read as a checkout's.
  */
 export function checkoutRelativePath(written: string): string | undefined {
+  const dotted = written.startsWith("./");
+  const plain = dotted ? written.slice(2) : written;
+  const absolute = !dotted && plain.startsWith("/");
+  const steps = plain.split("/");
+  if ((absolute ? steps.slice(1) : steps).some(isNoStep)) return undefined;
+  if (!absolute) return plain;
   const cloud = `${CLOUD_CHECKOUT_PATH}/`;
-  const plain = written.startsWith("./") ? written.slice(2) : written;
-  if (plain.split("/").some(isDotStep)) return undefined;
-  let path: string | undefined = plain;
-  if (plain.startsWith(cloud)) path = plain.slice(cloud.length);
-  else if (plain.startsWith("/")) path = inMacCheckout(plain);
-  if (path === undefined || path.split("/").includes("")) return undefined;
-  return path;
+  return plain.startsWith(cloud) ? plain.slice(cloud.length) : inMacCheckout(plain);
 }
