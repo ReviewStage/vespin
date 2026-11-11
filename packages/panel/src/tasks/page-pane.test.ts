@@ -250,7 +250,11 @@ test("the page's Reload hangs a hint in the words it is named by", () => {
 
 test("over the source, View settings offers the settings its lines follow, and the tab's one ⋯ is handed Copy source before Reload page", async () => {
   const { container, press, handed } = mount(FUNNEL);
-  assert.deepEqual(handed(), [["Open in browser"], ["Reload page"]]);
+  assert.deepEqual(handed(), [
+    ["Open in browser"],
+    ["Zoom in", "Zoom out", "Actual size"],
+    ["Reload page"],
+  ]);
   assert.equal(container.querySelector('button[aria-label="View options"]'), null);
 
   await press("View source");
@@ -509,8 +513,14 @@ test("on a phone the page draws no bar, and the task's header's ⋯ offers every
     "Later version",
     "View source",
     "Reload page",
+    "Zoom in",
+    "Zoom out",
+    "Actual size",
   ]);
   assert.deepEqual(handed.item("Later version"), { disabled: true, detail: "Version 3 of 3" });
+  assert.deepEqual(handed.item("Actual size"), { disabled: true, detail: "100%" });
+  handed.press("Zoom in");
+  assert.deepEqual(handed.item("Actual size"), { disabled: false, detail: "110%" });
 
   handed.press("Earlier version");
   assert.equal(container.querySelector("iframe")?.getAttribute("src"), versionUrl(2));
