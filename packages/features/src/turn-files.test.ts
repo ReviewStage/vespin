@@ -9,15 +9,19 @@ import { AGENT_TOOL } from "./agent-tools.js";
 import { TOOL_STATE } from "./tool-call-block.js";
 import { turnFiles } from "./turn-files.js";
 
-function call(tool: string, input: Record<string, string>): AgentPart {
+function call(
+  tool: string,
+  input: Record<string, string>,
+  state: (typeof TOOL_STATE)[keyof typeof TOOL_STATE] = TOOL_STATE.OUTPUT_AVAILABLE,
+): AgentPart {
   return {
     kind: AGENT_PART.TOOL,
     tool,
     callId: `call-${tool}-${Object.values(input).join("").length}`,
-    state: TOOL_STATE.OUTPUT_AVAILABLE,
+    state,
     input,
-    output: "ok",
-    errorText: undefined,
+    output: state === TOOL_STATE.OUTPUT_AVAILABLE ? "ok" : undefined,
+    errorText: state === TOOL_STATE.OUTPUT_ERROR ? "old_string not found" : undefined,
   };
 }
 
@@ -59,10 +63,17 @@ test("a turn's files are each path its patches and writes name, with the lines a
   });
 });
 
-test("a turn with no edit, or whose patch names another checkout's files, changed no file", () => {
+test("a turn with no edit, whose patch names another checkout's files, or whose edit failed or never answered, changed no file", () => {
   assert.equal(turnFiles([call(AGENT_TOOL.READ_FILE, { filePath: "a.ts" })]), undefined);
   assert.equal(
     turnFiles([call(AGENT_TOOL.APPLY_PATCH, { patchText: EDIT, root: "/elsewhere" })]),
+    undefined,
+  );
+  assert.equal(
+    turnFiles([
+      call(AGENT_TOOL.APPLY_PATCH, { patchText: EDIT }, TOOL_STATE.OUTPUT_ERROR),
+      call(AGENT_TOOL.WRITE_FILE, { filePath: "b.ts", content: "b\n" }, TOOL_STATE.INPUT_AVAILABLE),
+    ]),
     undefined,
   );
 });
