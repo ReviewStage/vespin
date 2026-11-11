@@ -15,6 +15,11 @@ export const NATIVE_HELPERS = [
     binary: "mac-microphone-route",
     frameworks: ["CoreAudio", "IOKit"],
   },
+  {
+    source: "OpenLoginItems.swift",
+    binary: "open-login-items",
+    frameworks: ["ServiceManagement"],
+  },
 ];
 
 /**

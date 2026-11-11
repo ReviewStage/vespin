@@ -1,31 +1,32 @@
+import path from "node:path";
 import { NodeChildProcessSpawner, NodeFileSystem, NodePath } from "@effect/platform-node";
 import { appProcesses, type ElectronProcessName, readProcessTable } from "@repo/host";
 import { MAC_PROCESS_KIND, type MacProcessKind, type MacResources } from "@repo/host/contract";
 import { Duration, Effect, Layer, Result } from "effect";
 import { app, type ProcessMetric } from "electron";
-import { printed } from "./this-mac-host";
+import { printed } from "./cli-install";
 
 /**
- * mac-resources.ts -- what this Mac spends on the app now, as a panel's Resources popover asks: the process table read with `ps`, Electron's own processes named from its metrics, and the host found through launchd.
+ * mac-resources.ts -- what this Mac spends on the app now, as a panel's Resources popover asks: the process table read with `ps`, Electron's own processes named from its metrics, and the host found in the table by the Node the app carries for it.
  *
  * `ps` gives every process its CPU and resident memory in one read, and
  * `@repo/host`'s `appProcesses` keeps those of the app's: main, the host
- * that runs local agents (`dev.vespin.host.standalone`, whose pid launchd
- * answers), and each one's descendants. `ps`'s CPU is the kernel's own
- * decaying figure, as Activity Monitor's is, so a read needs no second
- * sample to answer.
+ * that runs local agents (the process launchd started on the bundle's own
+ * Node, which only the host's agent runs), and each one's descendants.
+ * `ps`'s CPU is the kernel's own decaying figure, as Activity Monitor's is,
+ * so a read needs no second sample to answer.
  */
 
-/** The account install's LaunchAgent, by its label (`MAC_LABEL` in the install script). */
-const HOST_LABEL = "dev.vespin.host.standalone";
+/** The Node the bundle carries for its host (`BUNDLED_HOST.nodePath`), beside `Contents/Resources`. */
+const HOST_NODE = path.join(path.dirname(process.resourcesPath), "Helpers", "node");
 
-/** How long `ps` and launchd may take to answer; a read the popover waits on is short. */
+/** launchd's pid, the parent of every agent it starts. */
+const LAUNCHD_PID = 1;
+
+/** How long `ps` may take to answer; a read the popover waits on is short. */
 const ANSWER_WITHIN = Duration.seconds(5);
 
-/** The pid launchd says a running job has, on a line of its own in `launchctl print`. */
-const LAUNCHD_PID = /^\s*pid = (\d+)$/mu;
-
-/** What `ps` and launchd run on. */
+/** What `ps` runs on. */
 const spawner = Layer.provideMerge(
   NodeChildProcessSpawner.layer,
   Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
@@ -50,28 +51,16 @@ function electronProcesses(): Map<number, ElectronProcessName> {
   return named;
 }
 
-/** The host's pid while launchd runs it; none where it is not installed or not running. */
-const hostPid = Effect.map(
-  printed("launchctl", ["print", `gui/${process.getuid?.() ?? 0}/${HOST_LABEL}`], ANSWER_WITHIN),
-  (said) => {
-    if (Result.isFailure(said)) return undefined;
-    const pid = LAUNCHD_PID.exec(said.success)?.[1];
-    return pid === undefined ? undefined : Number(pid);
-  },
-);
-
 /** The app's processes now; none where `ps` did not answer. */
 export const readMacResources: Effect.Effect<MacResources> = Effect.gen(function* () {
-  const [table, host] = yield* Effect.all(
-    [printed("ps", ["-axo", "pid=,ppid=,pcpu=,rss=,comm="], ANSWER_WITHIN), hostPid],
-    { concurrency: "unbounded" },
-  );
+  const table = yield* printed("ps", ["-axo", "pid=,ppid=,pcpu=,rss=,comm="], ANSWER_WITHIN);
   if (Result.isFailure(table)) return { processes: [] };
+  const rows = readProcessTable(table.success);
   return {
     processes: appProcesses({
-      table: readProcessTable(table.success),
+      table: rows,
       main: process.pid,
-      host,
+      host: rows.find((row) => row.command === HOST_NODE && row.parent === LAUNCHD_PID)?.pid,
       electron: electronProcesses(),
     }),
   };

@@ -18,6 +18,7 @@ import {
   SecretCipher,
   SignInConsent,
   TerminalSocket,
+  THIS_MAC_AGENT_STATUS,
   ThisMacHost,
 } from "./effect/seams.js";
 import { ENTITY_STORE_FILE_NAME } from "./entity-store.js";
@@ -114,11 +115,13 @@ describe("the host's platform concerns", () => {
             }),
             Layer.succeed(ThisMacHost, {
               stateRoot,
+              home: stateRoot,
               runsHost: false,
-              loaded: Effect.succeed(false),
-              install: () => Effect.succeed(Result.fail("no install in a fixture")),
-              stop: Effect.succeed(Result.fail("no launchd in a fixture")),
-              uninstall: Effect.succeed(Result.fail("no install in a fixture")),
+              registers: false,
+              status: Effect.succeed(THIS_MAC_AGENT_STATUS.NOT_FOUND),
+              registeredHere: Effect.succeed(false),
+              register: Effect.succeed(Result.fail("no agent in a fixture")),
+              unregister: Effect.succeed(Result.fail("no agent in a fixture")),
               machine: Effect.succeed({
                 name: "Studio",
                 platform: DEVICE_PLATFORM.DARWIN,

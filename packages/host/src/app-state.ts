@@ -491,8 +491,8 @@ export type AppWorkspaceInvitations = Readonly<
  * This Mac as its host reads it (`compose-this-mac-host.ts`): the machine's
  * id in the keyed hash every host reports (`@repo/host/node`'s
  * `machine-identity.ts`), where it could be read, and the device of the
- * record of the account install on this Mac, where that install was
- * enrolled with this app's service.
+ * record of the host the app carries, where it was enrolled with this app's
+ * service.
  */
 export interface AppThisMacHost {
   deviceId?: string;
@@ -501,6 +501,8 @@ export interface AppThisMacHost {
   enrolled?: boolean;
   /** How many agents' folders its host made on this Mac, which turning it off may delete; absent reads as none. */
   agentFolders?: number;
+  /** Whether macOS holds its host until the member allows the app in System Settings › Login Items; absent reads as not. */
+  needsApproval?: boolean;
 }
 
 /** This Mac as the host last read it, by the account signed in: the one key the host holds, none while nobody is signed in. */

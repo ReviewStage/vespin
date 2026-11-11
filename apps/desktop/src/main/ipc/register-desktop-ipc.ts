@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { BROWSER_LIVE_PORT_CHANNEL } from "@repo/features/browser-live-acts";
 import { TERMINAL_PORT_CHANNEL } from "@repo/features/terminal-acts";
 import {
@@ -30,6 +31,7 @@ import { type ReportHandlers, registerBridgeHost } from "../bridge-host";
 import { installCli } from "../native/cli-install";
 import { readMacResources } from "../native/mac-resources";
 import { spawnMacShell } from "../native/mac-shell";
+import { nativeHelperPath } from "../native/native-helper";
 import type { DesktopServices } from "../services/compose-desktop";
 import { windowPushes } from "../window/window-pushes";
 import { cliProcedures } from "./cli-acts";
@@ -160,6 +162,10 @@ export function registerDesktopIpc(services: DesktopServices): void {
       microphoneRouteWatcher: () => native.microphoneRouteWatcher(),
       recordProductEvent,
       openExternal: config.openExternal,
+      // The helper calls `SMAppService.openSystemSettingsLoginItems()`, which Electron does not wrap (`native/macos/OpenLoginItems.swift`); one that could not run refuses the act, which the press says.
+      openLoginItems: async () => {
+        await promisify(execFile)(nativeHelperPath("open-login-items"));
+      },
       copyText: (words) => clipboard.writeText(words),
       copyRich: ({ html, text }) => clipboard.write({ html, text }),
       copyImage: (png) => {

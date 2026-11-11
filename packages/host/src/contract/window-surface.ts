@@ -119,6 +119,11 @@ export const windowSurfaceActsContract = {
   )
     .input(exactInput(EffectSchema.Undefined))
     .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS]: actProcedure(
+    "Could not open the login items settings.",
+  )
+    .input(exactInput(EffectSchema.Undefined))
+    .output(EffectSchema.Void),
   [WINDOW_SURFACE_ACT_KIND.CONTACT_EMAIL]: actProcedure(
     "Could not open a new email on this system.",
   )

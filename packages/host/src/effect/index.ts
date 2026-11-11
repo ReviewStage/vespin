@@ -52,6 +52,8 @@ export {
   SignInConsent,
   StateRoot,
   TerminalSocket,
+  THIS_MAC_AGENT_STATUS,
+  type ThisMacAgentStatus,
   ThisMacHost,
   type ThisMacHostSeam,
 } from "./seams.js";
