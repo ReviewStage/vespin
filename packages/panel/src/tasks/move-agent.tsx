@@ -76,10 +76,11 @@ type MoveDoors = Pick<
 >;
 
 /** Whether the agent offers a move at all, on the terms the header says, the continue that carries it aside. */
-function useMoveOffered(agent: MovedAgent, agents: MoveDoors): boolean {
+function useMoveOffered(agent: MovedAgent | undefined, agents: MoveDoors): boolean {
   return (
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST) })
       .data === true &&
+    agent !== undefined &&
     agents.onUnarchive === undefined &&
     agents.agents?.some((each) => each.id === agent.id) === true &&
     agent.archivedAt === undefined
@@ -152,14 +153,18 @@ export interface PlaceMove {
 /**
  * The move an agent's place chip offers, on the terms Move to › offers one
  * (`useMoveOffered`): the member's devices and the continue that carries
- * the agent to a place picked, or none where no move is offered. Note that
- * it stands though the member has no device, since the chip then says where
- * one is added, rather than taking no press.
+ * the agent to a place picked, or none where no move is offered or the
+ * agent is not read yet. Note that it stands though the member has no
+ * device, since the chip then says where one is added, rather than taking
+ * no press.
  */
-export function useMovePlace(agent: MovedAgent, agents: MoveDoors): PlaceMove | undefined {
+export function useMovePlace(
+  agent: MovedAgent | undefined,
+  agents: MoveDoors,
+): PlaceMove | undefined {
   const { continueAgent } = agents;
   const offered = useMoveOffered(agent, agents);
-  if (!offered || continueAgent === undefined) return undefined;
+  if (agent === undefined || !offered || continueAgent === undefined) return undefined;
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
   return {
     devices: agents.macs ?? NO_DEVICES,

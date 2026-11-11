@@ -1,4 +1,4 @@
-import { AGENT_STATUS, type AgentAttachment, type AgentSummary } from "@repo/features/agent-wire";
+import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
 import { INBOX_BOX_WORDS, type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
 import { type InboxDraft, inboxMissing, inboxThreadSend } from "@repo/features/inbox-draft";
 import { acknowledgedOnOpen, awaitsNod } from "@repo/features/inbox-list-model";
@@ -9,10 +9,9 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
-import { usePerson } from "../member-directory.js";
 import { useToast } from "../toast.js";
+import { useAgentBox } from "./agent-box.js";
 import { AgentComposer } from "./agent-composer.js";
-import { teammateStarter } from "./agent-model.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { inboxNoteReading } from "./inbox-model.js";
@@ -20,8 +19,6 @@ import { putBackRefused } from "./refused-send.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
-import { useAgentModel } from "./use-agent-model.js";
-import { useAgentServers } from "./use-agent-servers.js";
 import type { AgentsControl } from "./use-agents.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 
@@ -29,11 +26,21 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * inbox-answer-box.tsx -- the box at the end of every Inbox item's thread, the reader's draft reply: the agent's own message box, writing to the item's agent, with the open question's controls as its body while one waits.
  *
  * The box is the agent composer (`agent-composer.tsx`), drawn as an agent's
- * tab draws it under the transcript, for the agent that wrote the thread:
- * its + menu attaches files and switches that agent's MCP servers, its model
- * chip changes what the agent runs on for its next step, and its microphone,
- * `@` and `/` lists, and the ⋯ a narrow card folds them into are the agent
- * box's, so the two boxes read and fold alike. What stands docked over an
+ * tab draws it under the transcript, for the agent that wrote the thread,
+ * and handed what it reads off that agent by the same hook the tab reads it
+ * through (`agent-box.tsx`'s `useAgentBox`): its + menu attaches files and
+ * switches that agent's MCP servers, its model chip changes what the agent
+ * runs on and its permission mode for its next step, the chips after the +
+ * say where it runs and what it forwards, the line over the field says a
+ * send denies a tool call waiting, and its microphone, `@` and `/` lists,
+ * and the ⋯ a narrow card folds them into are the agent box's, so the two
+ * boxes read and fold alike. What the tab reads off the agent's transcript,
+ * its context ring, cost, and payer, does not stand here, since a thread
+ * reads no transcript; nor Queue and Steer, since an item's replies go one
+ * at a time in their own order (`use-task-inbox.ts`) rather than on the
+ * agent's queue; nor the `/` list's commands (`/model`, `/clear`,
+ * `/compact`), since a reply reaches the agent wrapped as a thread's
+ * message, which the harness reads as words rather than a command. What stands docked over an
  * agent's box, its to-do list, its pull request, its threads, and its queue,
  * does not stand here, because a thread is no transcript and need be about no
  * pull request, and the thread's crumbs already name the agent and its task.
@@ -242,16 +249,8 @@ function AnswerCard({
     : asks
       ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
       : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
-  // The item's agent's model and servers, which the box's chips change as the agent's own box does.
-  const model = useAgentModel({ agent, choose: agents.onChoose });
-  // Note that a teammate's agent is named as theirs, so its chip names their plan and none of the reader's.
-  const starter = usePerson(agent?.startedBy);
-  const owner = teammateStarter(agent?.startedBy, readerId) === undefined ? undefined : starter;
-  const servers = useAgentServers({
-    agent: agent ?? { id: item.agentId },
-    write: agents.onSwitchServers,
-    onOpenSettings: agents.onOpenIntegrations,
-  });
+  // What the box reads off the item's agent, read as the agent's own tab reads it, so the two boxes stand alike.
+  const agentBox = useAgentBox({ agentId: item.agentId, agent, agents });
   const kept = control.notes.get(item.id);
   const noted = kept === undefined ? undefined : inboxNoteReading(kept, agent, connected);
   // Note that the note is let go once the agent is back, since what it said no longer stands, and only that note, never one a later send left meanwhile.
@@ -356,18 +355,13 @@ function AnswerCard({
   return (
     <div ref={box}>
       <AgentComposer
-        agentId={item.agentId}
-        status={agent?.status ?? AGENT_STATUS.COMPLETED}
+        {...agentBox}
+        // Note that an empty box's Send stays Send, or reads Got it, and never Stop, because an empty Send here settles a notice or says what an answer lacks.
         stoppable={false}
-        steers={agent?.status === AGENT_STATUS.RUNNING}
+        // Note that the box runs none of the `/` list's commands, because a reply reaches the agent wrapped as a thread's message (`inboxThreadMessage`), so `/compact` would go as words, and a `/clear` would take Send from a new thread.
+        onClear={undefined}
         composer={composer}
-        model={model}
-        models={agents.models}
-        modelsFailed={agents.modelsFailed}
-        readModels={agents.readModels}
         usage={undefined}
-        owner={owner}
-        servers={servers}
         onStop={neverStops}
         followsUp
         keywords={keywords}
