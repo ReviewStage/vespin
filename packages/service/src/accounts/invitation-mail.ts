@@ -176,10 +176,10 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** How the letter names the role an invitee joins as. */
+/** How the letter names the role an invitee joins as: an admin alone, since a member is what joining makes anyone. */
 const ROLE_WORDS = {
-  [INVITATION_ROLE.MEMBER]: "a member",
-  [INVITATION_ROLE.ADMIN]: "an admin",
+  [INVITATION_ROLE.MEMBER]: "",
+  [INVITATION_ROLE.ADMIN]: " as an admin",
 } as const satisfies Record<WorkspaceInvitation["role"], string>;
 
 /** The day an invitation expires, in words that name no time zone, since the reader's is unknown. */
@@ -228,7 +228,7 @@ function invitationEmail(letter: InvitationLetter) {
   const subject = `You're invited to join ${workspaceName} on ${PRODUCT_NAME}`;
   const preheader = `${inviterLabel} invited you to join ${workspaceName} on ${PRODUCT_NAME}.`;
   const heading = `Join ${workspaceName} on ${PRODUCT_NAME}`;
-  const byline = `${inviterLabel} invited you as ${ROLE_WORDS[role]}.`;
+  const byline = `${inviterLabel} invited you${ROLE_WORDS[role]}.`;
   const expiry = `Expires ${EXPIRY_DAY.format(Date.parse(expiresAt))}.`;
   const footnote = `Sent to ${email}. Not expecting it? You can ignore this email.`;
   const font = EMAIL_STYLE.FONT;

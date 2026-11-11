@@ -109,6 +109,7 @@ import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
 import { REPOSITORIES_EXAMPLE } from "./examples/repositories";
 import { RESIZE_EDGES_EXAMPLE } from "./examples/resize-edges";
+import { RESOURCES_POPOVERS_EXAMPLE } from "./examples/resources-popovers";
 import { REVEALS_EXAMPLE } from "./examples/reveals";
 import { ROLLING_NUMBER_EXAMPLE } from "./examples/rolling-number";
 import { ROVING_KEYS_EXAMPLE } from "./examples/roving-keys";
@@ -193,6 +194,7 @@ export const EXAMPLES: readonly Example[] = [
   COMPOSER_FRAMES_EXAMPLE,
   COMPOSER_FOOTS_EXAMPLE,
   CHIP_POPOVERS_EXAMPLE,
+  RESOURCES_POPOVERS_EXAMPLE,
   CHIPS_EXAMPLE,
   BAR_ITEMS_EXAMPLE,
   CHOICE_BAR_EXAMPLE,

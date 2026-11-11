@@ -76,6 +76,7 @@ import {
   queueDeviceAgentLine,
   queueDeviceAgentRequest,
   withdrawDeviceAgentRequest,
+  withdrawUnclaimedDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
 import { deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
 import { hostRemoved } from "@repo/database/models/host-store";
@@ -340,6 +341,7 @@ function deviceMachineOver(
         linesRead: false,
         transcriptsKept: kept,
         diskSessions: true,
+        permissionModes: device.value.capabilities.includes(DEVICE_CAPABILITY.PERMISSION_MODES),
       };
       return layout;
     });
@@ -699,20 +701,27 @@ function deviceMachineOver(
       Effect.gen(function* () {
         const pin = yield* pinOfSession(session);
         if (Option.isNone(pin)) return RESTORE_OUTCOME.MISSING;
-        if (!(yield* restoresCheckout(pin.value))) return RESTORE_OUTCOME.UNSUPPORTED;
+        // A Mac away or removed is refused by name before its host's release is read, which a removed host has none of.
         yield* refuseAway(pin.value);
+        if (!(yield* restoresCheckout(pin.value))) return RESTORE_OUTCOME.UNSUPPORTED;
         const id = randomUUID();
         yield* queued(pin.value, {
           id,
           kind: DEVICE_AGENT_LINE_KIND.RESTORE,
           payload: encodeRestorePayload(snapshot),
         });
+        // Note that a line the Mac has not taken by the time the wait ends is withdrawn, because a Mac
+        // back later would otherwise put the files back under whatever the agent has done since.
         const settled = yield* heldUntil(
           exitOfLine(pin.value, id),
           (exit) => exit !== null,
           deviceTopics(pin.value.userId),
           MAC_MACHINE.POLL,
           MAC_MACHINE.RESTORE_WAIT,
+        ).pipe(
+          Effect.ensuring(
+            Effect.ignore(stored(withdrawUnclaimedDeviceAgentLine(pin.value.userId, id))),
+          ),
         );
         const exit = Option.match(settled, { onNone: () => null, onSome: ({ read }) => read });
         if (exit === 0) return RESTORE_OUTCOME.RESTORED;

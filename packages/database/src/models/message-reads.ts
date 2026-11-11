@@ -13,6 +13,7 @@ import {
 } from "@repo/wire";
 import {
   readStoredUIMessages,
+  SESSION_CLEARED_PART,
   type StoredUIMessage,
   UNREGISTERED_TOOL_PART,
 } from "@repo/wire/ui-messages";
@@ -1056,6 +1057,38 @@ export function turnStoppedUnderReached(
   key: string,
 ): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
   return Effect.map(findTurnStoppedUnder({ conversationId, key }), (rows) => rows.length > 0);
+}
+
+const findSessionClearedMark = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.userId, userId),
+            eq(messages.conversationId, conversationId),
+            sql`${messages.parts} @> ${JSON.stringify([{ type: SESSION_CLEARED_PART }])}::jsonb`,
+          ),
+        )
+        .limit(1),
+    ),
+});
+
+/**
+ * Whether the account's conversation holds the mark of a session let go
+ * (`/clear`, `markSessionCleared`): past it, the conversation's harness
+ * session is its own, never the one a continued or forked agent started
+ * from.
+ */
+export function holdsSessionClearedMark(target: {
+  readonly userId: string;
+  readonly conversationId: string;
+}): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
+  return Effect.map(findSessionClearedMark(target), (rows) => rows.length > 0);
 }
 
 /**

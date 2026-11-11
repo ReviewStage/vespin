@@ -1107,6 +1107,14 @@ export class HostedAgentClient {
     );
   }
 
+  /** Starts one agent's harness on a fresh session in the same agent, answering it as it then stands. */
+  clear(agentId: string): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.agents.clear, { id: agentId }, { as: AGENT_NOT_FOUND_RENAMES }),
+      unansweredBare,
+    );
+  }
+
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
@@ -1124,7 +1132,11 @@ export class HostedAgentClient {
         params: { id: agentId },
         body: { messageId, ...(restoreFiles ? { restoreFiles: true } : undefined) },
       },
-      { as: AGENT_NOT_FOUND_RENAMES, deadline: HOSTED_DEADLINE.STEER },
+      {
+        as: AGENT_NOT_FOUND_RENAMES,
+        // A rewind that puts the files back waits on the restore, two minutes on a Mac, past the steer's bound.
+        deadline: restoreFiles ? HOSTED_DEADLINE.REWIND_FILES : HOSTED_DEADLINE.STEER,
+      },
     );
   }
 

@@ -23,20 +23,12 @@ import { createTask, deleteTask } from "../task-store.js";
  * a member reads on the plan's list and on the version, and a version shown
  * before that was kept reads as shown by no one named.
  *
- * A coding agent on no task shows its pages on itself, and they are read by
- * the agent's rule of who may read it rather than any task's: a member of
- * its workspace who sees the agent reads them, an account of another
- * workspace or one the agent's GitHub access hides it from reads nothing,
- * and a task's pages and an agent's never read as each other's.
- *
  * Synthetic accounts and pages throughout.
  */
 
 const LUKE: PageShower = { kind: PAGE_SHOWER.APP };
 
 const onTask = (taskId: string): PageOwner => ({ kind: PAGE_OWNER.TASK, taskId });
-
-const onAgent = (agentId: string): PageOwner => ({ kind: PAGE_OWNER.AGENT, agentId });
 
 const shownByAgent = (agentId: string): PageShower => ({ kind: PAGE_SHOWER.AGENT, agentId });
 
@@ -214,9 +206,6 @@ it.layer(getTestDB())("a page read by its id", (it) => {
           { pageId: shown.id, title: "Plan", html: "<p>2</p>" },
           LUKE,
         );
-
-        // The agent's own list never holds the task's pages.
-        assert.deepEqual(yield* listPages(owner, onAgent(onIt)), []);
 
         yield* deleteTask(owner, task.id);
 

@@ -25,6 +25,7 @@ import { vi } from "vitest";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import { codexToken } from "./codex-token.js";
 import type { RunnerSelf } from "./launch.js";
+import { CODEX_PIN } from "./pins.js";
 import {
   APPROVAL_BY,
   APPROVAL_DECISION,
@@ -875,6 +876,38 @@ it.effect("ends an idle launch at once on a stop, and on stdin closing, with no 
   }),
 );
 
+it.effect("compacts the thread in a compaction line's place, its words dropped", () =>
+  Effect.gen(function* () {
+    const service = fakeService("turn/completed");
+    const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+    if (started === undefined) throw new Error("the resumed turn has no turn/started");
+    const script: Script = {
+      exchanges: [
+        ...RESUME,
+        {
+          method: "thread/compact/start",
+          reply: [{ id: 3, result: {} }, started, ...RESUMED_TURN_END],
+        },
+      ],
+    };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write({ ...CONFIG, threadId: THREAD });
+    yield* write({
+      type: INPUT_LINE.MESSAGE,
+      uuid: LINE.FIRST,
+      content: [{ type: "text", text: "/compact keep the plan" }],
+      compact: true,
+    });
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "thread/compact/start"), [{ threadId: THREAD }]);
+    assert.deepEqual(received(process, "turn/start"), []);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+  }),
+);
+
 it.effect("starts the next turn for a message Vespin sent just before the turn completed", () =>
   Effect.gen(function* () {
     const service = fakeService("turn/completed");
@@ -1166,7 +1199,8 @@ it.effect(
         `model_providers.chatgpt_backend_plan.auth.args=["${SELF.script}", "codex-token", "${TOKEN_URL}"]`,
         "model_providers.chatgpt_backend_plan.auth.timeout_ms=30000",
         "model_providers.chatgpt_backend_plan.auth.refresh_interval_ms=300000",
-        'model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "0.163.0" }',
+        // The version is the pinned Codex's, which a bump moves (`scripts/bump-agent-pins.mjs`).
+        `model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "${CODEX_PIN.VERSION}" }`,
         'model_providers.chatgpt_backend_plan.wire_api="responses"',
         "model_providers.chatgpt_backend_plan.requires_openai_auth=false",
         "model_providers.chatgpt_backend_plan.supports_websockets=false",

@@ -73,6 +73,7 @@ const WEB = {
   ),
   MAC: byDesign("Reaches the Mac's own shells, loopback, or Terminal, which a tab cannot"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MAC_RESOURCES: byDesign("A tab cannot read the Mac's process table"),
   MENU_BAR: byDesign("A browser has no menu bar to dim"),
   MICROPHONE: byDesign("The browser asks for the microphone and picks its route itself"),
   NOTIFICATIONS: byDesign("The browser's own prompt asks for notifications"),
@@ -282,6 +283,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: panel(IOS.SETTINGS),
 
   [PORT_ACT_KIND.MAC_COMMAND_ANSWER]: desktopOnly(WEB.MAC_COMMAND, IOS.MAC_COMMAND),
+
+  [PORT_ACT_KIND.MAC_RESOURCES_READ]: desktopOnly(WEB.MAC_RESOURCES, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_SHELL_MIRROR]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.MAC_SHELL_OPEN]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),

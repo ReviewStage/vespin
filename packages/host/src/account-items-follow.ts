@@ -97,8 +97,7 @@ function heldAfter(
   const placed: string[] = [];
   for (const stamp of rows.stamps) {
     const item = carried.get(stamp.id);
-    // Note that the stamp's plan is still null on the wire for a desktop that read items of agents with no task, which no agent leaves now.
-    if (item === undefined || stamp.planId === null) continue;
+    if (item === undefined) continue;
     const before = held.get(stamp.id);
     if (before !== undefined && before.planId !== stamp.planId) placed.push(stamp.id);
     next.set(stamp.id, { item, planId: stamp.planId });

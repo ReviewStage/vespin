@@ -50,7 +50,7 @@ import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import type { StoredUIMessage } from "@repo/wire/ui-messages";
+import { COMPACTED_PART, type StoredUIMessage } from "@repo/wire/ui-messages";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, eq } from "drizzle-orm";
 import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
@@ -972,7 +972,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a compaction stamps the agent, and a launch the plan's limit refused with no reset named fails its turn saying so",
+    "a compaction stamps the agent and leaves its notice in the turn, and a launch the plan's limit refused with no reset named fails its turn saying so",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -1013,7 +1013,7 @@ it.layer(SUITE)("the runner events route", (it) => {
 
         yield* post(agent.bearer, events);
         yield* post(agent.bearer, relaunch);
-        const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
+        const { turns: ended, rows } = yield* transcriptOf(agent.target.conversationId);
         const context = yield* readAgentContext(agent.userId, agent.agentId);
 
         const failures = yield* Effect.flatMap(Database, (db) =>
@@ -1032,6 +1032,14 @@ it.layer(SUITE)("the runner events route", (it) => {
           TURN_FAILURE.PLAN_LIMIT,
         );
         assert.notEqual(Option.getOrThrow(context).compactedAt, null);
+        assert.deepEqual(
+          rows.flatMap((row) =>
+            row.parts.flatMap((part) =>
+              part.type === COMPACTED_PART && "data" in part ? [part.data] : [],
+            ),
+          ),
+          [{ tokensBefore: 1000 }],
+        );
         // Only the last turn's kind stands, so the next message says the call's words no longer hold and hands the task again.
         assert.deepEqual(yield* readNativeTurnHanded(agent.target), { spoken: true });
       }),
@@ -1857,6 +1865,8 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             // An interrupted subagent did not do its work: its call settles as an error.
             "output-error",
           ],
+          // The compaction item leaves its notice where it happened.
+          ["data-compacted"],
           ["data-usage-limit"],
         ]);
         const limitNotice = rows.at(-1)?.parts.at(-1);

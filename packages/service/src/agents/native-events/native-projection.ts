@@ -859,6 +859,11 @@ class Fold {
       }
       case NATIVE_MOMENT.COMPACTED:
         this.writes.push({ kind: NATIVE_WRITE.COMPACTED });
+        if (moment.notice !== undefined) {
+          this.#setTurn(
+            this.#tell(this.turn(), { kind: RUN_EVENT.COMPACTED, notice: moment.notice }),
+          );
+        }
         return;
       case NATIVE_MOMENT.COMPACTION_FAILED: {
         this.#context.report(moment.detail);

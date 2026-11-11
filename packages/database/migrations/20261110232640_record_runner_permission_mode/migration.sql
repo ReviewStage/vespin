@@ -1,0 +1,1 @@
+ALTER TABLE "agent_runner_record" ADD COLUMN "permission_mode" text;

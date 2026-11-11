@@ -1,32 +1,25 @@
 /**
- * agent-pages-procedures.ts -- the pages a coding agent on no task showed on itself, as the hosted oRPC router answers them.
+ * agent-pages-procedures.ts -- the pages a coding agent on no task once showed on itself, as the hosted oRPC router still answers a released desktop that asks for them.
  *
- * `GET /api/agents/{id}/pages` is the agent's own pages, each by its newest
- * version, `/api/agents/{id}/pages/{page}/versions/{version}` one
- * version's HTML, answered inside JSON so no page is ever a document of this
- * origin (`@repo/database/models/task-pages`), and `…/versions/{version}/frame`
- * a browser's frame of it, sent on to the sandbox's own site
- * (`../pages/page-frame.ts`). Each reads as the task's own
- * pages read under the task (`../tasks/task-files-procedures.ts`), gated on
- * the agent's rule of who may read it rather than a task's: an agent the
- * account does not reach lists no pages and answers a version as not found,
- * exactly as one that names nothing, and an id that is no UUID names none.
+ * `GET /api/agents/{id}/pages`, `/api/agents/{id}/pages/{page}/versions/{version}`,
+ * and its `/frame` stand only because a released desktop asks them for an
+ * agent page tab a restored window holds. Every page stands on a task, so an
+ * agent holds none: the list answers none and a version is not found, as
+ * for an agent that does not exist, and an id that is no UUID names none.
+ * They go with the answers kept for older desktops.
  */
 
-import { listPages, readPageVersion } from "@repo/database/models/task-pages";
-import { PAGE_OWNER, pageVersionNumberSchema } from "@repo/features/page-wire";
+import { pageVersionNumberSchema } from "@repo/features/page-wire";
 import { unparsedWire } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Effect, Option, Result } from "effect";
+import { Effect, Result } from "effect";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
-  hostedStoreOrUnavailable,
   pathUuid,
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
-import { pageFrameAnswer } from "../pages/page-frame.js";
 
 export interface AgentPagesProcedureSeams {
   resolveUserId: UserIdResolver;
@@ -44,28 +37,21 @@ function pageVersionOf(version: string): Effect.Effect<number, HostedRefusal> {
 export function agentPagesProcedures(seams: AgentPagesProcedureSeams) {
   const member = hosted.agentPages.use(accountMiddleware(seams.resolveUserId));
   return {
-    list: member.list.effect(function* ({ input, context }) {
-      const agentId = yield* pathUuid(input.id);
-      const owner = { kind: PAGE_OWNER.AGENT, agentId } as const;
-      return { pages: yield* hostedStoreOrUnavailable(listPages(context.userId, owner)) };
+    list: member.list.effect(function* ({ input }) {
+      yield* pathUuid(input.id);
+      return { pages: [] };
     }),
-    version: member.version.effect(function* ({ input, context }) {
-      const agentId = yield* pathUuid(input.id);
-      const pageId = yield* pathUuid(input.page);
-      const version = yield* pageVersionOf(input.version);
-      const owner = { kind: PAGE_OWNER.AGENT, agentId } as const;
-      const page = yield* hostedStoreOrUnavailable(
-        readPageVersion(context.userId, owner, pageId, version),
-      );
-      if (Option.isNone(page)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { page: page.value };
+    version: member.version.effect(function* ({ input }) {
+      yield* pathUuid(input.id);
+      yield* pathUuid(input.page);
+      yield* pageVersionOf(input.version);
+      return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }),
-    frame: member.frame.effect(function* ({ input, context }) {
-      const agentId = yield* pathUuid(input.id);
-      const pageId = yield* pathUuid(input.page);
-      const version = yield* pageVersionOf(input.version);
-      const owner = { kind: PAGE_OWNER.AGENT, agentId } as const;
-      return yield* pageFrameAnswer(context.request, context.userId, owner, pageId, version);
+    frame: member.frame.effect(function* ({ input }) {
+      yield* pathUuid(input.id);
+      yield* pathUuid(input.page);
+      yield* pageVersionOf(input.version);
+      return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }),
   };
 }

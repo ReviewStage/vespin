@@ -21,6 +21,7 @@ import {
 import { INTEGRATION_ACTS, INTEGRATION_FOLLOWS, integrationActsContract } from "./integrations.js";
 import type { PortActKind } from "./kinds.js";
 import { MAC_COMMAND_ACTS, macCommandActsContract } from "./mac-commands.js";
+import { macResourcesActsContract } from "./mac-resources.js";
 import { macShellActsContract } from "./mac-shells.js";
 import { macTerminalActsContract } from "./mac-terminals.js";
 import { PORT_FORWARD_ACTS, portForwardActsContract } from "./port-forwards.js";
@@ -77,6 +78,7 @@ export {
   CLI_ACT_KIND,
   INSTALLED_SKILL_ACT_KIND,
   INTEGRATION_ACT_KIND,
+  MAC_RESOURCES_ACT_KIND,
   MAC_SHELL_ACT_KIND,
   MAC_TERMINAL_ACT_KIND,
   type MacShellActKind,
@@ -98,6 +100,12 @@ export {
   isLiveFollow,
 } from "./live-follow.js";
 export { MAC_COMMAND_ACTS } from "./mac-commands.js";
+export {
+  MAC_PROCESS_KIND,
+  type MacProcess,
+  type MacProcessKind,
+  type MacResources,
+} from "./mac-resources.js";
 export { PORT_FORWARD_ACTS } from "./port-forwards.js";
 export {
   type EventPushName,
@@ -153,6 +161,7 @@ export const actContract = {
   ...installedSkillActsContract,
   ...integrationActsContract,
   ...macCommandActsContract,
+  ...macResourcesActsContract,
   ...macShellActsContract,
   ...macTerminalActsContract,
   ...portForwardActsContract,

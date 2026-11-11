@@ -358,10 +358,12 @@ export const APP_SETTING_SCHEMA = {
     visible: accountDrawn,
   }),
   /*
-   * When a sound plays as an agent finishes or asks, and which one. Account
-   * preferences, as Enter's choice is, each riding a part of the snapshot
-   * of its own. The sound's row stands only while one plays at all, and
-   * Settings draws a Play beside it.
+   * When a sound plays as an agent finishes or asks, and which one for each:
+   * a finish, completed or failed, and something new that needs the
+   * account, a question or a command waiting on a Mac, so the two are told
+   * apart by ear. Account preferences, as Enter's choice is, each riding a
+   * part of the snapshot of its own. The sounds' rows stand only while one
+   * plays at all, and Settings draws a Play beside each.
    */
   soundWhen: choiceSetting({
     field: "soundWhen",
@@ -382,7 +384,7 @@ export const APP_SETTING_SCHEMA = {
   completionSound: choiceSetting({
     field: "completionSound",
     id: APP_SETTING_ID.COMPLETION_SOUND,
-    label: "Sound",
+    label: "When an agent finishes",
     values: COMPLETION_SOUNDS,
     token: (sound) => sound,
     optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
@@ -392,6 +394,24 @@ export const APP_SETTING_SCHEMA = {
     section: SETTING_SECTION.NOTIFICATIONS,
     order: 510,
     // Nothing to run per write: an agent's finish reads the choice as it plays.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: (view) =>
+      view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,
+  }),
+  askSound: choiceSetting({
+    field: "askSound",
+    id: APP_SETTING_ID.ASK_SOUND,
+    label: "When something needs you",
+    detail: "A question for you, or a command waiting on your Mac",
+    values: COMPLETION_SOUNDS,
+    token: (sound) => sound,
+    optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    default: COMPLETION_SOUND.KNOCK,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.NOTIFICATIONS,
+    order: 515,
+    // Nothing to run per write: an ask reads the choice as it plays.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: (view) =>
       view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,

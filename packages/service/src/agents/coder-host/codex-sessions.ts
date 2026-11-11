@@ -94,6 +94,7 @@ import {
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
 import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
+import { codexCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import {
   type HarnessLaunch,
@@ -370,6 +371,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     // Note that Codex reads a checkout's skills from `.agents/skills` alone.
     skillRoots: [SKILL_ROOT.AGENTS],
     ahead,
+    commandRoute: codexCommandRoute,
   };
 }
 

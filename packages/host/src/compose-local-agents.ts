@@ -240,6 +240,8 @@ const REREAD = Duration.seconds(2);
 const KILL_GRACE = Duration.seconds(3);
 /** How long making an agent's repository may take, a first clone of a large one or a wait on another launch's clone included, before its launch is given up. */
 const WORKTREE_DEADLINE = Duration.minutes(25);
+/** How long a restore of the worktree may run, as long as the service waits on its line (`MAC_MACHINE.RESTORE_WAIT`). */
+const RESTORE_DEADLINE = Duration.minutes(2);
 /** The exit code a launch is settled with where its worktree could not be made or its runner started. */
 const NOT_STARTED = 1;
 /** How often an agent's GitHub token's age is read off the wall clock, and so how soon one the service did not hand is asked for again, well inside the hour the last one lasts. */
@@ -1066,16 +1068,18 @@ export function composeLocalAgents(
          * The agent's worktree put back to the snapshot a restore line
          * names, by the one restore script both machines run
          * (`@repo/features/checkout-restore`), run as the agent in the
-         * worktree with the snapshot in its variables, after the service
-         * ended the runner. Answers the script's exit code, which the
+         * worktree with the snapshot in its variables, once the agent's
+         * runner has ended, which the service asked first and is waited for
+         * here too, so nothing writes to the worktree as it is put back. Answers the script's exit code, which the
          * service reads the outcome from (the snapshot missing among them),
-         * and 1 where it could not run or the line's payload could not be
+         * and 1 where it could not run, ran past `RESTORE_DEADLINE`, or the line's payload could not be
          * read. Nothing it prints is kept.
          */
         const restored = (agentId: string, payload: unknown) =>
           Effect.gen(function* () {
             const snapshot = decodeRestore(payload);
             if (Option.isNone(snapshot)) return 1;
+            yield* stopped(agentId);
             const layout = deviceAgentLayout(folder, agentId);
             const run = agentOnBox(
               {
@@ -1100,7 +1104,8 @@ export function composeLocalAgents(
                 (handle) => handle.exitCode,
               ),
             ).pipe(
-              Effect.map((code) => Number(code)),
+              Effect.timeoutOption(RESTORE_DEADLINE),
+              Effect.map((code) => (Option.isSome(code) ? Number(code.value) : 1)),
               Effect.orElseSucceed(() => 1),
             );
           });

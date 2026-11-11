@@ -7,7 +7,11 @@ import {
   valueFromJsonText,
   type WireRecord,
 } from "@repo/wire";
-import type { ConnectionLostNotice, UsageLimitNotice } from "@repo/wire/ui-messages";
+import type {
+  CompactedNotice,
+  ConnectionLostNotice,
+  UsageLimitNotice,
+} from "@repo/wire/ui-messages";
 import type { UIMessage } from "ai";
 import type { RunModelUsage, RunStatus, RunUsage, TurnFailure } from "./requests.js";
 import { spokenProse } from "./spoken-prose.js";
@@ -70,6 +74,8 @@ export const RUN_EVENT = {
   CONNECTION_LOST: "connection_lost",
   /** The provider's host answered again, so the notice of the loss says when; the turn goes on. */
   CONNECTION_RESTORED: "connection_restored",
+  /** The harness compacted its session: a lasting notice where it happened. */
+  COMPACTED: "compacted",
 } as const;
 
 /** The kinds of step that count as slow: a whole transcript read, a write the provider carries, or a task call's look into its repository. */
@@ -167,6 +173,7 @@ interface RunEventBase {
 export type RunEventBody =
   | { readonly kind: typeof RUN_EVENT.USAGE_LIMIT_REACHED; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof RUN_EVENT.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
+  | { readonly kind: typeof RUN_EVENT.COMPACTED; readonly notice: CompactedNotice }
   | {
       readonly kind: typeof RUN_EVENT.CONNECTION_RESTORED;
       /** The sequence of the CONNECTION_LOST event whose notice this settles. */

@@ -24,8 +24,6 @@ struct AgentsActivityAttributes: ActivityAttributes {
   struct Agent: Codable, Hashable, Identifiable {
     var id: String
     var title: String
-    /// The current step line; none before the turn's first.
-    var step: String?
     /// When its turn began, in epoch milliseconds.
     var startedAt: Double
 

@@ -44,19 +44,16 @@ function fixtureContentState(now: number): LiveActivityContentState {
       {
         id: "fixture-live-activity-invites",
         title: "Resend expired invites",
-        step: null,
         startedAt: now - FIXTURE_TURN_AGES.INVITES,
       },
       {
         id: "fixture-live-activity-refresh",
         title: "Fix the token refresh",
-        step: "Editing session-store.ts",
         startedAt: now - FIXTURE_TURN_AGES.REFRESH,
       },
       {
         id: "fixture-live-activity-activities",
         title: "Add Live Activities",
-        step: "Running the tests",
         startedAt: now - FIXTURE_TURN_AGES.ACTIVITIES,
       },
     ],
