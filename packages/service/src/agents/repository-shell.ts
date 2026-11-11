@@ -170,7 +170,8 @@ const WORKSPACE_SYNC_SCRIPT = [
 const WORKSPACE_PRUNE_SCRIPT = [
   "set -e",
   `keep="$${SANDBOX_VARIABLE.KEEP}"`,
-  "for git in */*/.git; do",
+  // A repository's name may lead with a dot (`owner/.github`), which `*` never matches.
+  "for git in */*/.git */.[!.]*/.git; do",
   '  [ -d "$git" ] || continue',
   '  folder="$(dirname "$git")"',
   '  if ! printf "%s\\n" "$keep" | grep -qxF "$folder"; then rm -rf "$folder"; fi',
