@@ -6,23 +6,16 @@ import { join } from "node:path";
 import { it } from "@effect/vitest";
 import { Effect, Redacted } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
-import {
-  cloneRepository,
-  type RepositorySandbox,
-  refreshRepository,
-  snapshotRecordOf,
-} from "./repository-shell.js";
+import { cloneRepository, type RepositorySandbox } from "./repository-shell.js";
 
 /**
  * The checkout's scripts as a sandbox's shell runs them, in a real bash over
  * a real git: GitHub's address is pointed at bare repositories in the test's
  * own folder and the sandbox's workspace at another, so nothing leaves the
  * machine. A repository with no commits yet is cloned empty onto its default
- * branch, and its snapshot's checkout refreshes while it stays empty and
- * once its first commit lands; a branch missing from a repository with
- * commits still fails the clone in git's own words; and what a clone or a
- * refresh writes is the group's, though the sandbox's default user runs it
- * at umask 0022. Synthetic repositories throughout.
+ * branch; a branch missing from a repository with commits still fails the
+ * clone in git's own words; and what a clone writes is the group's, though
+ * the sandbox's default user runs it at umask 0022. Synthetic repositories throughout.
  */
 
 const REPOSITORY = "acme/fresh";
@@ -140,30 +133,6 @@ it.effect(
     ),
 );
 
-it.effect(
-  "the snapshot's empty checkout refreshes while the repository has no commits, and takes its first commit once it lands",
-  () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const { root, remote, checkout, sandbox } = yield* world;
-        const confirmed = { fullName: REPOSITORY, defaultBranch: "main", recordedAs: REPOSITORY };
-        yield* cloneRepository(
-          sandbox,
-          { ...confirmed, recordedAs: snapshotRecordOf(REPOSITORY) },
-          TOKEN,
-        );
-
-        yield* refreshRepository(sandbox, confirmed, TOKEN);
-        assert.equal(gitSucceeds(checkout, "rev-parse", "--quiet", "--verify", "HEAD"), false);
-
-        const first = pushFirstCommit(root, remote);
-        yield* refreshRepository(sandbox, confirmed, TOKEN);
-        assert.equal(git(checkout, "rev-parse", "HEAD"), first);
-        assert.equal(git(checkout, "symbolic-ref", "HEAD"), "refs/heads/main");
-      }),
-    ),
-);
-
 /** A commit adding the file named pushed to the bare repository's `main`, from the seed clone, made where it is missing. */
 function pushFile(root: string, remote: string, name: string): void {
   const seed = join(root, "seed");
@@ -182,26 +151,16 @@ function groupWrites(path: string): boolean {
 }
 
 it.effect(
-  "what a clone and a refresh write is the group's, its repository shared with the group, though the sandbox runs them at umask 0022",
+  "what a clone writes is the group's, its repository shared with the group, though the sandbox runs it at umask 0022",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
         const { root, remote, checkout, sandbox } = yield* world;
         pushFile(root, remote, "cloned.txt");
-        const confirmed = { fullName: REPOSITORY, defaultBranch: "main", recordedAs: REPOSITORY };
-        yield* cloneRepository(
-          sandbox,
-          { ...confirmed, recordedAs: snapshotRecordOf(REPOSITORY) },
-          TOKEN,
-        );
-        pushFile(root, remote, "fetched.txt");
 
-        yield* refreshRepository(sandbox, confirmed, TOKEN);
+        yield* cloneRepository(sandbox, { fullName: REPOSITORY, defaultBranch: "main" }, TOKEN);
 
-        assert.deepEqual(
-          [checkout, join(checkout, "cloned.txt"), join(checkout, "fetched.txt")].map(groupWrites),
-          [true, true, true],
-        );
+        assert.deepEqual([checkout, join(checkout, "cloned.txt")].map(groupWrites), [true, true]);
         assert.equal(git(checkout, "config", "--get", "core.sharedRepository"), "group");
       }),
     ),

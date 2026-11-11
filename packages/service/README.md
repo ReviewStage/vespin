@@ -2739,9 +2739,9 @@ schedule runs only on production unless it is enabled on a Preview branch by han
 
 Once a day, at 08:00 UTC, the `base-drive-refresh` schedule calls
 `apps/web/server/routes/maintenance/base-drives.ts` under the same `CRON_SECRET`,
-in a function group of its own (`base-drive-refresh`, 800 seconds). It refills
-every repository's base drive that stands (`src/agents/base-drive-refresh.ts`),
-one after another, each failure logged and passed by for the next day's run.
+in a function group of its own (`base-drive-refresh`, 800 seconds). It fills
+every connected workspace's drive (`src/agents/base-drive-refresh.ts`), one
+after another, each failure logged and passed by for the next day's run.
 
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and

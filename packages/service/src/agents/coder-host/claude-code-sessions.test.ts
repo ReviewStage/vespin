@@ -726,10 +726,6 @@ function ownInstallation(): InstallationFixture {
 const isClone = (run: { readonly env: Readonly<Record<string, string>> }) =>
   Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.URL);
 
-/** Whether a run in the sandbox was a forked checkout's refresh. */
-const isRefresh = (run: { readonly env: Readonly<Record<string, string>> }) =>
-  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REFRESH);
-
 /** Whether a run in the sandbox claimed a workspace drive's folder as the checkout: handed a folder and the repository the checkout records. */
 const isClaim = (run: { readonly env: Readonly<Record<string, string>> }) =>
   Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER) &&
@@ -4163,10 +4159,9 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [
             ownRuns.filter(isUserMade).length,
             ownRuns.filter(isClone).length,
-            ownRuns.filter(isRefresh).length,
             ownRuns.filter(isInstall).length,
           ],
-          [0, 0, 0, 0],
+          [0, 0, 0],
         );
       }),
   );
@@ -4210,12 +4205,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(mountedDrive(api, own)?.forkedFrom, mountedDrive(api, source)?.name);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.deepEqual(
-          [
-            ownRuns.filter(isClone).length,
-            ownRuns.filter(isRefresh).length,
-            ownRuns.filter(isInstall).length,
-          ],
-          [0, 0, 0],
+          [ownRuns.filter(isClone).length, ownRuns.filter(isInstall).length],
+          [0, 0],
         );
       }),
   );

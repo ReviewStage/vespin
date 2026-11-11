@@ -139,13 +139,6 @@ import {
   reopenedOf,
   SANDBOX_ENV,
 } from "../agent-sandbox-open.js";
-import {
-  BASE_DRIVE,
-  BASE_STATE,
-  DRIVE_PNPM_STORE,
-  HAND_INSTALL_TO_AGENT,
-  readOf,
-} from "../base-drive.js";
 import { AgentImage } from "../coder-host/agent-image.js";
 import { CODER } from "../coder-host/bounds.js";
 import {
@@ -191,7 +184,13 @@ import {
   recordedSandboxOpen,
 } from "../sandbox-use.js";
 import { scriptRanIn } from "../script-runs.js";
-import { WORKSPACE_DRIVE, workspaceDriveName, workspaceFolderOf } from "../workspace-drive.js";
+import {
+  DRIVE_STATE,
+  readOf,
+  WORKSPACE_DRIVE,
+  workspaceDriveName,
+  workspaceFolderOf,
+} from "../workspace-drive.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -269,17 +268,35 @@ const LINK_TOOLS_DIRECTORY = `if [ -d ${SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME} ]
  */
 const JOIN_DOCKER_GROUP = `if getent group docker > /dev/null && ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
 
+/** Where pnpm keeps its store for a checkout on the workspace's drive, where an install that ran as the default user put it: the drive's root, the first folder up from the checkout it may write on that drive. */
+const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
+
 /**
  * The workspace's drive's root opened to the store's group on each launch,
  * root's, where pnpm's store stands at it, so `agent`, in the default user's
- * group, may write there, and its pnpm picks that store as the fill's did.
+ * group, may write there, and its pnpm picks that store as that install's did.
  * Note that this is because pnpm keeps its store at the topmost folder of
- * the checkout's drive its user may write, and a fork of a base drive mounts
+ * the checkout's drive its user may write, and a fork of a drive mounts
  * with a root only root writes, so `agent`'s pnpm chose a store under the
  * checkout and, finding the one its `node_modules` names elsewhere, asked to
  * purge it.
  */
 const OPEN_DRIVE_STORE = `if [ -d ${DRIVE_PNPM_STORE} ]; then chgrp --reference=${DRIVE_PNPM_STORE} ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; chmod g+w ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; fi`;
+
+/**
+ * The dependencies another user installed in the agent's checkout handed to
+ * `agent` on each launch, root's: a setup script's, or an install made
+ * before drives held none, both the default user's. Note
+ * that this is because an install chmods what it installed on every run
+ * (pnpm a package's bins, a `prepare` script the hooks it copies), which
+ * only a file's owner may, so `agent`'s own install failed on them. The
+ * checkout's files but its `.git` and pnpm's store on the drive, whose files
+ * `node_modules` links, are made `agent`'s, their group and its writes left
+ * as they stand, so the default user still writes them. It is asked only
+ * where the checkout's `node_modules` is not `agent`'s, so a launch after
+ * the one that handed it walks nothing.
+ */
+const HAND_INSTALL_TO_AGENT = `if [ -d ${CODER.CHECKOUT_PATH}/node_modules ] && [ "$(stat -c %U ${CODER.CHECKOUT_PATH}/node_modules)" != ${AGENT_USER} ]; then find ${CODER.CHECKOUT_PATH} -mindepth 1 -maxdepth 1 ! -name .git -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
 
 /**
  * A checkout marked safe for git in the sandbox and its repository shared
@@ -1162,7 +1179,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
               Effect.map(([found, now]) => readOf(found, now)),
             ),
           ),
-          (each) => each.state === BASE_STATE.READY,
+          (each) => each.state === DRIVE_STATE.READY,
         );
       const fromSource = (drive: SandboxDrive | undefined): CreateAttempt[] =>
         source === undefined
@@ -1179,7 +1196,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         ...fromSource(
           source === undefined
             ? undefined
-            : { fork: { ownedBy: source.sandbox }, at: BASE_DRIVE.MOUNT },
+            : { fork: { ownedBy: source.sandbox }, at: WORKSPACE_DRIVE.MOUNT },
         ),
         ...fromSource(undefined),
         ...(drive === undefined || !driveReady
@@ -1334,7 +1351,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           snapshot !== undefined
             ? [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE]
             : hasRepository(agent)
-              ? [{ ...FROM_IMAGE, drive: { own: true, at: BASE_DRIVE.MOUNT } }, FROM_IMAGE]
+              ? [{ ...FROM_IMAGE, drive: { own: true, at: WORKSPACE_DRIVE.MOUNT } }, FROM_IMAGE]
               : [FROM_IMAGE];
         const opened = yield* openedFromFirst(agent, found.session, attempts, undefined);
         if (Result.isFailure(opened)) return yield* opened.failure;

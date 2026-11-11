@@ -7,7 +7,7 @@
  * gone is deleted and created again under the same name: from the agents'
  * image, or from the snapshot a launch names
  * (`machine/sandbox-machine.ts`), with the drive of its own a launch has it
- * fork (`base-drive.ts`), whose files already hold a checkout.
+ * fork (`workspace-drive.ts`), whose files already hold a checkout.
  * Whichever caller opens it, a message's
  * launch (`machine/sandbox-machine.ts`), the Terminal, or the agent's browser,
  * opens it here, so a sandbox any of them creates is the same sandbox: the

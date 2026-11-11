@@ -12,7 +12,7 @@ import type { FirewallSources } from "./sandbox-firewall.js";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
 
 /**
- * repository-shell.ts -- an agent's checkout of the task's GitHub repository in its session's sandbox: the clone, its refresh, and the commit identity set in it.
+ * repository-shell.ts -- an agent's checkout of the task's GitHub repository in its session's sandbox: the clone, the workspace drive's folders, and the commit identity set in it.
  *
  * A checkout reads the repository through our GitHub App, or the
  * member's own token: the token is set as a header at the sandbox's
@@ -237,36 +237,6 @@ const WORKSPACE_LINK_SCRIPT = [
   'if [ -e "$folder" ] || [ -L "$folder" ]; then exit 0; fi',
   'mkdir -p "$(dirname "$folder")"',
   `ln -s ${SANDBOX_PATH.CHECKOUT} "$folder"`,
-].join("\n");
-
-/**
- * A whole checkout a base drive holds (`base-drive.ts`) brought
- * up to its branch as GitHub has it now: the branch fetched through
- * the credential the caller set at the firewall and checked out at what was
- * fetched, its writes the group's (`GROUP_WRITES`), and the record
- * rewritten under the name the caller keeps. Note
- * that a checkout that is missing, or whose record names another repository
- * than the refresh variable, exits before any fetch, so a sandbox created
- * from the wrong base never reads GitHub on it; and that the empty
- * checkout of a repository with no commits yet, whose remote still names no
- * HEAD, is already as GitHub has it, so its fetch of no branch is no failure.
- */
-const REFRESH_SCRIPT = [
-  "set -e",
-  GROUP_WRITES,
-  LINK_SANDBOX_STATE_FOLDER,
-  "test -d repository/.git",
-  `test "$(cat ${SANDBOX_PATH.CHECKOUT_RECORD} 2>/dev/null)" = "$${SANDBOX_VARIABLE.REFRESH}"`,
-  "cd repository",
-  `if git fetch --quiet origin "$${SANDBOX_VARIABLE.BRANCH}"; then`,
-  `  git checkout --quiet -B "$${SANDBOX_VARIABLE.BRANCH}" FETCH_HEAD`,
-  "else",
-  "  if git rev-parse --quiet --verify HEAD >/dev/null; then exit 1; fi",
-  '  head="$(git ls-remote origin HEAD)"',
-  '  test -z "$head"',
-  "fi",
-  "cd ..",
-  `printf '%s' "$${SANDBOX_VARIABLE.REPOSITORY}" > ${SANDBOX_PATH.CHECKOUT_RECORD}`,
 ].join("\n");
 
 /**
@@ -564,45 +534,6 @@ export const linkWorkspaceFolder = /* @__PURE__ */ Effect.fn("web/linkWorkspaceF
     REPOSITORY_REFUSAL.CHECKOUT_FAILED,
   );
   if (linked.exitCode !== 0) return yield* gitRefusal(linked);
-});
-
-/**
- * What a base drive's checkout records it is of: the repository as GitHub
- * spells it, lower-cased, so a base drive and the refresh of it agree
- * whatever case a row spells the repository in.
- */
-export function snapshotRecordOf(fullName: string): string {
-  return fullName.toLowerCase();
-}
-
-/**
- * The checkout a base drive holds brought up to the branch named,
- * with the token at the firewall for the fetch alone, as for a clone
- * (`underCloneCredential`), and recorded under the name the caller keeps;
- * refused, in git's own words where it said any, where the checkout is not
- * the base drive's of that repository or the fetch failed.
- */
-export const refreshRepository = /* @__PURE__ */ Effect.fn("web/refreshRepository")(function* (
-  sandbox: RepositorySandbox,
-  confirmed: CheckoutRepository,
-  token: Redacted.Redacted,
-  access: GitHubTokenAccess = { kind: GITHUB_ACCESS.APP },
-): Effect.fn.Return<void, RepositoryRefusal> {
-  const refresh = runInSandbox(
-    sandbox,
-    {
-      command: REFRESH_SCRIPT,
-      workingDirectory: SANDBOX_PATH.WORKSPACE,
-      env: {
-        ...COMMAND_ENVIRONMENT,
-        [SANDBOX_VARIABLE.REFRESH]: snapshotRecordOf(confirmed.fullName),
-        [SANDBOX_VARIABLE.REPOSITORY]: confirmed.recordedAs ?? confirmed.fullName,
-        [SANDBOX_VARIABLE.BRANCH]: confirmed.defaultBranch,
-      },
-    },
-    REPOSITORY_REFUSAL.CHECKOUT_FAILED,
-  );
-  yield* underCloneCredential(sandbox, confirmed.fullName, token, access, refresh);
 });
 
 /**
