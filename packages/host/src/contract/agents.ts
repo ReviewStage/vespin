@@ -50,6 +50,7 @@ import {
   agentRenameParamsSchema,
   agentResetCreditsAnswerViewSchema,
   agentResetCreditUseAnswerViewSchema,
+  agentResetCreditUseParamsSchema,
   agentRewindParamsSchema,
   agentRunActionAnswerViewSchema,
   agentRunActionParamsSchema,
@@ -344,7 +345,7 @@ export const AGENT_ACTS = declaredActs({
     unanswered: AGENT_UNANSWERED,
   }),
   AGENTS_USE_RESET_CREDIT: hostAct({
-    input: agentStopParamsSchema,
+    input: agentResetCreditUseParamsSchema,
     output: agentResetCreditUseAnswerViewSchema,
     refusal: "Could not use a reset credit on this system.",
     panelOnly: true,

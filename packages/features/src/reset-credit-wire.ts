@@ -33,6 +33,11 @@ export const resetCreditsAnswerSchema = EffectSchema.Struct({
   available: countedNumber,
 });
 
+/** The limit a spend is for, by the reset its notice showed, in epoch milliseconds: a spend on a wait that has since moved on spends nothing. */
+export const resetCreditUseRequestSchema = EffectSchema.Struct({
+  resetsAt: countedNumber,
+});
+
 /** How the spend went, and whether the agent carries on now. */
 export const resetCreditUseAnswerSchema = EffectSchema.Struct({
   outcome: EffectSchema.Literals(Object.values(RESET_CREDIT_OUTCOME)),

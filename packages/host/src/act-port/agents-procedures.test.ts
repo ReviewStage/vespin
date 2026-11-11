@@ -143,7 +143,7 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   AGENTS_CLEAR: { agentId: AGENT_ID },
   AGENTS_WARM: { agentId: AGENT_ID },
   AGENTS_RESET_CREDITS: { agentId: AGENT_ID },
-  AGENTS_USE_RESET_CREDIT: { agentId: AGENT_ID },
+  AGENTS_USE_RESET_CREDIT: { agentId: AGENT_ID, resetsAt: 1 },
   AGENTS_PORTS: { agentId: AGENT_ID },
   AGENTS_PORT_SHARED: { agentId: AGENT_ID },
   AGENTS_PORT_SHARE: { agentId: AGENT_ID, port: 3000 },

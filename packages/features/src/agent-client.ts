@@ -1180,9 +1180,12 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.agentResetCredits.read, { id: agentId });
   }
 
-  /** One reset credit spent on the limit the agent waits on, at most once for that limit, answering how it went and whether the agent carries on. */
-  useResetCredit(agentId: string) {
-    return hostedCall(this.#hosted.agentResetCredits.use, { id: agentId });
+  /** One reset credit spent on the limit the agent waits on, whose reset its notice showed, at most once for that limit, answering how it went and whether the agent carries on. */
+  useResetCredit(agentId: string, resetsAt: number) {
+    return hostedCall(this.#hosted.agentResetCredits.use, {
+      params: { id: agentId },
+      body: { resetsAt },
+    });
   }
 
   /** Runs one of the agent's repository's run actions in its running sandbox, answering the shell that runs it. */

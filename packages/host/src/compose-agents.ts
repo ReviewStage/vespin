@@ -1045,7 +1045,8 @@ function composed(
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
     AGENTS_RESET_CREDITS: ({ agentId }) => asked(client.resetCredits(agentId)),
-    AGENTS_USE_RESET_CREDIT: ({ agentId }) => asked(client.useResetCredit(agentId)),
+    AGENTS_USE_RESET_CREDIT: ({ agentId, resetsAt }) =>
+      asked(client.useResetCredit(agentId, resetsAt)),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),
     AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),

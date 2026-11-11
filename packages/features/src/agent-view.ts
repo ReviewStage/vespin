@@ -861,6 +861,12 @@ export const agentStopParamsSchema = EffectSchema.Struct({
 /** How many reset credits the plan an agent waits on holds, as the window hears it read (`reset-credit-wire.ts`), or why not. */
 export const agentResetCreditsAnswerViewSchema = answerView(agentResetCreditsContract.read);
 
+/** The agent a reset credit is spent for, and the reset its notice showed. */
+export const agentResetCreditUseParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  resetsAt: EffectSchema.Number,
+});
+
 /** A reset credit spent on the limit an agent waits on, as the window hears it: how it went and whether the agent carries on, or why not. */
 export const agentResetCreditUseAnswerViewSchema = answerView(agentResetCreditsContract.use);
 

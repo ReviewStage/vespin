@@ -85,13 +85,16 @@ const waitOnPlan = /* @__PURE__ */ Effect.fnUntraced(function* (reached: Reached
 });
 
 /**
- * The plan's limit lifted, so the next launch finds room on it, and the
+ * The plan's limit lifted, on the credential saved by the spend (`savedBy`)
+ * alone, so one saved over it since is not marked by a spend it never made,
+ * and so the next launch finds room on it, and the
  * agent's waiting turns handed on now, as the sweep hands them on once the
  * reset passes; answers whether a turn went on.
  */
 const liftedAndResumed = /* @__PURE__ */ Effect.fnUntraced(function* (
   reached: ReachedAgent,
   subscriptionId: string | undefined,
+  savedBy: Date,
 ) {
   const now = yield* DateTime.nowAsDate;
   yield* hostedStoreOrUnavailable(
@@ -101,7 +104,7 @@ const liftedAndResumed = /* @__PURE__ */ Effect.fnUntraced(function* (
       PROVIDER_KEY_KIND.CHATGPT_OAUTH,
       PROVIDER_KEY_STATUS.VERIFIED,
       undefined,
-      now,
+      savedBy,
       now,
       subscriptionId,
     ),
@@ -127,7 +130,9 @@ const agentResetCredits = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * One credit spent on the limit the agent waits on, keyed by it, as the
  * account given, which must be the agent's starter, and the agent carried on
- * where the limit lifted; nothing is spent where it waits on no plan's limit.
+ * where the limit lifted; nothing is spent where it waits on no plan's limit,
+ * or on another than the one whose reset the press saw (`resetsAt`), so a
+ * press on a notice gone stale never spends on a later limit.
  * A spend ChatGPT answered nothing to may have landed, so it is refused as
  * upstream's for a retry, which sends the same key.
  */
@@ -135,21 +140,23 @@ export const spentResetCredit = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   ring: KeyRing,
   agentId: string,
+  resetsAt: number,
 ) {
   const reached = yield* reachedAgentById(userId, agentId);
   if (reached.userId !== reached.agent.userId) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }
   const wait = yield* waitOnPlan(reached);
-  if (Option.isNone(wait)) {
+  if (Option.isNone(wait) || wait.value.waitsUntil.getTime() !== resetsAt) {
     return { outcome: RESET_CREDIT_OUTCOME.NOTHING_TO_RESET, resumed: false };
   }
   const { turnId, waitsUntil, subscriptionId } = wait.value;
   const key = spendKey(turnId, waitsUntil);
+  const savedBy = yield* DateTime.nowAsDate;
   const outcome = yield* consumeResetCredit(userId, ring, subscriptionId, key);
   if (Option.isNone(outcome)) return yield* Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR);
   const resumed = LIFTED.has(outcome.value)
-    ? yield* liftedAndResumed(reached, subscriptionId)
+    ? yield* liftedAndResumed(reached, subscriptionId, savedBy)
     : false;
   return { outcome: outcome.value, resumed };
 });
@@ -170,7 +177,12 @@ export function agentResetCreditsProcedures(seams: AgentResetCreditsProcedureSea
     }),
     /** One credit spent on the limit the agent waits on, and the agent carried on where it lifted. */
     use: keyed.use.effect(function* ({ input, context }) {
-      return yield* spentResetCredit(context.userId, context.ring, input.id);
+      return yield* spentResetCredit(
+        context.userId,
+        context.ring,
+        input.params.id,
+        input.body.resetsAt,
+      );
     }),
   };
 }

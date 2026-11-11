@@ -12,16 +12,23 @@
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
-import { resetCreditsAnswerSchema, resetCreditUseAnswerSchema } from "../reset-credit-wire.js";
+import {
+  resetCreditsAnswerSchema,
+  resetCreditUseAnswerSchema,
+  resetCreditUseRequestSchema,
+} from "../reset-credit-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
-import { declaredProcedure, refuses } from "./base.js";
+import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 
 /** The agent a path names; the service reads an id that is no UUID as naming none. */
 const agentParamsSchema = EffectSchema.Struct({ id: EffectSchema.String });
 
 /** Where the agent's reset credits stand. */
 const RESET_CREDITS_PATH = `${HOSTED_SERVICE_PATH.AGENTS}/{id}/reset-credits` as const;
+
+/** A reset instant and a few keys, so a body past this names no limit. */
+const USE_BODY_BYTES = 256;
 
 /** A route on the agent's plan, refusing as an agent's routes do. */
 const resetCreditsProcedure = declaredProcedure.errors(
@@ -38,9 +45,12 @@ export const agentResetCreditsContract = {
     .meta(openapi({ method: HTTP_METHOD.GET, path: RESET_CREDITS_PATH }))
     .input(agentParamsSchema)
     .output(EffectSchema.flip(resetCreditsAnswerSchema)),
-  /** One credit spent on the limit the agent waits on, at most once for that limit, and the agent carried on where it lifted. */
+  /** One credit spent on the limit the agent waits on, the one whose reset the body names, at most once for that limit, and the agent carried on where it lifted. */
   use: resetCreditsProcedure
-    .meta(openapi({ method: HTTP_METHOD.POST, path: RESET_CREDITS_PATH }))
-    .input(agentParamsSchema)
+    .meta(bodyCap(USE_BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.POST, path: RESET_CREDITS_PATH, inputStructure: "detailed" }),
+    )
+    .input(exactBodyInput(agentParamsSchema, resetCreditUseRequestSchema))
     .output(EffectSchema.flip(resetCreditUseAnswerSchema)),
 };

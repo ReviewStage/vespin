@@ -772,7 +772,7 @@ it.layer(SUITE)("a Codex turn waiting on its ChatGPT plan's limit", (it) => {
         const chatgpt = recordingHttpClient(
           () => answers.shift() ?? jsonResponse({ code: "already_redeemed" }),
         );
-        const spend = spentResetCredit(userId, keyRing(), agent.id).pipe(
+        const spend = spentResetCredit(userId, keyRing(), agent.id, resetsAt).pipe(
           Effect.provide(Layer.merge(chatgpt.layer, reached)),
           Effect.result,
         );
