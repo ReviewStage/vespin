@@ -27,6 +27,7 @@
       }
     ],
     "anti-slop/archive-through-agent-change": "error",
+    "anti-slop/ask-beside-screen": "error",
     "anti-slop/async-press-needs-busy": "error",
     "anti-slop/enforce-delete-with-where": "error",
     "anti-slop/enforce-update-with-where": "error",

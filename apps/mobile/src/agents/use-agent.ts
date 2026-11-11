@@ -9,9 +9,11 @@
  * transcript the host still holds, as one shown lately, draws at once.
  */
 
+import { STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
@@ -20,13 +22,14 @@ import {
   selectFollowedAgent,
   selectTranscript,
 } from "@repo/host/app-state-reads";
-import type { OlderPages } from "@repo/ui-native";
+import { BUZZ, latestStep, NO_TOGGLES, type OlderPages, transcriptItems } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedVideo } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
 const AGENT_MEDIA_PREFIX = "agent";
@@ -55,6 +58,51 @@ export function useAgentPullRequests(agentId: string): readonly AgentPullRequest
     [agentId],
   );
   return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
+}
+
+/**
+ * The agent's latest step (`latestStep`), read off the transcript the host
+ * still holds for it, as one shown lately, and never followed for it, so a
+ * row's preview reads what the app already has, as the panel's card reads
+ * its step from what a tab holds; none where the host holds none.
+ */
+export function useHeldAgentStep(agentId: string, status: AgentStatus): string | undefined {
+  const select = useMemo(
+    () => selectTranscript({ kind: TRANSCRIPT_KIND.AGENT, agentId }),
+    [agentId],
+  );
+  const messages = useQuery({ ...appStateQuery, select }).data?.rows?.messages;
+  return useMemo(() => {
+    if (messages === undefined) return undefined;
+    // Note that the reader and the pull requests are left out, since a step is never a line sent or a card opened.
+    const items = transcriptItems(messages, {
+      writing: agentStillWriting(status),
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: Date.now(),
+      pullRequests: NO_PULL_REQUESTS,
+    });
+    return latestStep(items);
+  }, [messages, status]);
+}
+
+/** An agent row's swipe, as the panel's row menu offers it: Stop while it works, buzzing as it lands or is refused. */
+export function useAgentRowActs(): { readonly stop: (agentId: string) => void } {
+  const acts = useHostActs();
+  const write = useWrite();
+  return useMemo(
+    () => ({
+      stop: (agentId) => {
+        write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
+          refused: (answer) => ("failure" in answer ? STOP_FAILED : undefined),
+          unanswered: STOP_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+    }),
+    [acts, write],
+  );
 }
 
 /**

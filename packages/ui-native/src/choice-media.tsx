@@ -2,6 +2,7 @@
 
 import { SymbolView } from "expo-symbols";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useAccessibilitySize } from "./accessibility.js";
 import { Picture } from "./markdown.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
@@ -39,6 +40,9 @@ const TILE_SYMBOL: Partial<Record<ChoiceMediaKind, SfSymbol>> = {
   [CHOICE_MEDIA.LINK]: "safari",
 };
 
+/** What a page's tile is heard to do, since it opens in the app rather than Safari. */
+const OPENS_PAGE = "Opens the page";
+
 /** The word a page's and an address's tile is named by, before its caption. */
 const TILE_WORD: Partial<Record<ChoiceMediaKind, string>> = {
   [CHOICE_MEDIA.PAGE]: "Page",
@@ -54,6 +58,8 @@ const styles = StyleSheet.create({
     paddingBottom: SPACE.ROW,
   },
   tile: { width: "48%", gap: SPACE.TIGHT },
+  // Note that at an accessibility size a tile takes the row's width, one to a row, so its picture and caption stay legible.
+  wholeTile: { width: "100%", gap: SPACE.TIGHT },
   symbol: {
     width: "100%",
     aspectRatio: TILE_SHAPE,
@@ -71,8 +77,9 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
   return (
     <Pressable
       onPress={() => piece.onOpen?.()}
-      accessibilityRole="link"
+      accessibilityRole={piece.kind === CHOICE_MEDIA.PAGE ? "button" : "link"}
       accessibilityLabel={`${TILE_WORD[piece.kind] ?? ""}: ${piece.title}`}
+      {...(piece.kind === CHOICE_MEDIA.PAGE ? { accessibilityHint: OPENS_PAGE } : {})}
       style={[styles.symbol, { backgroundColor: colors.WELL }]}
     >
       <SymbolView name={symbol} size={MARK_SIZE.LEAD} tintColor={colors.TEXT_MUTED} />
@@ -83,8 +90,9 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
 /** One piece as its tile: a picture opening full screen, a recording in the system's player, or a page's or an address's symbol, its caption under it. */
 function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
   return (
-    <View style={styles.tile}>
+    <View style={large ? styles.wholeTile : styles.tile}>
       {piece.kind === CHOICE_MEDIA.PICTURE ? (
         <Picture source={piece.source} alt={piece.title} shape={TILE_SHAPE} />
       ) : piece.kind === CHOICE_MEDIA.VIDEO ? (
@@ -98,7 +106,7 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
         <SymbolTile piece={piece} />
       )}
       <Text
-        numberOfLines={1}
+        numberOfLines={large ? undefined : 1}
         style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
         accessibilityElementsHidden
       >
@@ -109,8 +117,8 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
 }
 
 /**
- * An option's media, one tile each of one size, two to a row, wrapping
- * under: as the panel draws them, so a choice between designs reads the
+ * An option's media, one tile each of one size, two to a row, or one at an
+ * accessibility size with its whole caption, wrapping under: as the panel draws them, so a choice between designs reads the
  * same on a phone. A picture stands whole in its tile and opens full screen
  * on a press, as a message's does; a recording plays in the system's
  * player, full screen from its controls; a page and an address stand as

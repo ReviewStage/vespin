@@ -1,17 +1,11 @@
-import { effortFor } from "@repo/features/model-effort";
+import { choiceOn, effortFor } from "@repo/features/model-effort";
 import {
   AGENT_FALLBACK_CHOICE,
   type CatalogModel,
   type ModelChoice,
   type ModelProvider,
 } from "@repo/features/models-wire";
-import {
-  choiceOn,
-  offeredModels,
-  providerOf,
-  readModelChoice,
-  unsearchedModels,
-} from "./agent-model.js";
+import { offeredModels, providerOf, readModelChoice, unsearchedModels } from "./agent-model.js";
 
 /**
  * refusal-offer.ts -- the model a turn the model refused offers to continue on: the other harness's, where the reader can run it, else another of the same harness's, and the harness to connect where the other one cannot run.

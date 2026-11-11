@@ -6,7 +6,7 @@ import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-
 import { iosAgentRoute, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
-import { agentName } from "@repo/features/model-label";
+import { agentName, modelLabel } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
 import { subTasksOf, taskFinished } from "@repo/features/task-list-model";
 import {
@@ -35,6 +35,7 @@ import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
 import {
   AGENT_ROW_STATE,
+  AgentPreview,
   AgentRow,
   type AgentRowState,
   BAR_TITLE,
@@ -52,9 +53,11 @@ import {
   type RowAction,
   RowList,
   type RowSubmenu,
+  type RowSwipe,
   Screen,
   SplitView,
   TaskHead,
+  TaskPreview,
   TaskRow,
   useColors,
   WordsRow,
@@ -62,6 +65,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
+import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -116,6 +120,7 @@ const WORDS = {
   MORE: { label: "More", symbol: "ellipsis" },
   NO_TASKS: "No tasks to do",
   UNLISTED_TASK: "Task",
+  STOP: "Stop",
 } as const;
 
 /** The statuses the ⋯ menu's Status offers, in the panel's order. */
@@ -158,47 +163,51 @@ function statusSubmenu(
 }
 
 /**
- * A row's acts, as the panel's row menu offers them on a phone: Mark done
- * behind its trailing swipe, offered on a task not yet done; and in its long
- * press menu, after it, Status, Mark as read or unread, whichever the task
- * is not, Pin or Unpin, likewise, and Open in browser. Rename, Move to
- * section, Delete, priority, and assignee are left to the desktop and the web.
+ * A row's acts, as the panel's row menu offers them on a phone: behind its
+ * trailing swipe Mark done, offered on a task not yet done, which a full
+ * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
+ * the task is not, which a full swipe runs; and in its long press menu,
+ * after those, Mark as read or unread, likewise, and Open in browser.
+ * Rename, Move to section, Delete, priority, and assignee are left to the
+ * desktop and the web.
  */
 function rowActs(
   task: TaskSummary,
   unread: boolean,
   listing: TasksListing,
 ): {
-  readonly trailingActions: readonly RowAction[];
-  readonly menuSubmenus: readonly RowSubmenu[];
+  readonly trailingActions: readonly RowSwipe[];
+  readonly leadingActions: readonly RowSwipe[];
   readonly menuActions: readonly RowAction[];
 } {
   const pinned = task.pinnedAt !== undefined;
+  const markDone: readonly RowSwipe[] =
+    task.status === TASK_STATUS.DONE
+      ? []
+      : [
+          {
+            label: WORDS.MARK_DONE,
+            symbol: "checkmark.circle",
+            tone: ROW_ACTION_TONE.ACCENT,
+            onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
+          },
+        ];
   return {
-    trailingActions:
-      task.status === TASK_STATUS.DONE
-        ? []
-        : [
-            {
-              label: WORDS.MARK_DONE,
-              symbol: "checkmark.circle",
-              tone: ROW_ACTION_TONE.ACCENT,
-              onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
-            },
-          ],
-    menuSubmenus: [statusSubmenu(task, listing.setStatus)],
+    trailingActions: [...markDone, statusSubmenu(task, listing.setStatus)],
+    leadingActions: [
+      {
+        label: pinned ? WORDS.UNPIN : WORDS.PIN,
+        symbol: pinned ? "pin.slash" : "pin",
+        tone: ROW_ACTION_TONE.ACCENT,
+        onPress: () => listing.pin(task.id, !pinned),
+      },
+    ],
     menuActions: [
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? "envelope.open" : "envelope.badge",
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
-      },
-      {
-        label: pinned ? WORDS.UNPIN : WORDS.PIN,
-        symbol: pinned ? "pin.slash" : "pin",
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => listing.pin(task.id, !pinned),
       },
       {
         label: VERB.OPEN_IN_BROWSER,
@@ -209,6 +218,25 @@ function rowActs(
       },
     ],
   };
+}
+
+/** A task's long press preview, its Overview at a glance: its status, key and repository, its name, what needs the reader, and its agents. */
+function taskPreview(task: TaskSummary, listing: TasksListing) {
+  const glance = listing.glanceOf(task.id);
+  return (
+    <TaskPreview
+      name={task.name}
+      status={task.status ?? TASK_STATUS.TODO}
+      taskKey={keyOf(task, listing.workspace)}
+      repository={task.repository?.split("/").at(-1)}
+      needsYou={glance.waiting}
+      agents={glance.agents.map((agent) => ({
+        id: agent.id,
+        name: agentName(agent),
+        status: agent.status,
+      }))}
+    />
+  );
 }
 
 /** The question Done or Canceled asks first while a task's agents work, as the system's alert: every list of tasks draws it, the Search tab's among them. */
@@ -264,6 +292,7 @@ export function TaskNodeRow({
       taskKey={keyOf(task, listing.workspace)}
       depth={depth}
       {...rowActs(task, look.unread, listing)}
+      preview={taskPreview(task, listing)}
       subRows={
         children.length === 0
           ? undefined
@@ -469,16 +498,53 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** One agent's row, as a task's Agents lists it: its mark, its name, where it runs, its threads that need you, and its pull request's number, which opens its own screen. */
-export function TaskAgentRow({ line }: { readonly line: TaskAgentLine }) {
+/**
+ * An agent row's swipe: Stop while it works, which a full swipe runs. Note
+ * that Archive stays in the agent page's menu, which asks first, as the
+ * phone asks of any archive since it has no Undo to offer after.
+ */
+function agentSwipes(
+  agent: TaskAgentLine["agent"],
+  acts: ReturnType<typeof useAgentRowActs>,
+): readonly RowSwipe[] {
+  if (!agentStillWriting(agent.status)) return [];
+  return [
+    {
+      label: WORDS.STOP,
+      symbol: "stop.circle",
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: () => acts.stop(agent.id),
+    },
+  ];
+}
+
+/**
+ * One agent's row, as a task's Agents lists it: its mark, its name, where it
+ * runs, its threads that need you, and its pull request's number, which
+ * opens its own screen; a swipe stops it while it works, and a long press
+ * lifts its preview, its latest step among it where the app holds its
+ * transcript.
+ */
+export function TaskAgentRow({
+  line,
+  task,
+}: {
+  readonly line: TaskAgentLine;
+  /** The task it works on, which its preview names over it; none where the list does not hold it. */
+  readonly task?: TaskSummary | undefined;
+}) {
   const router = useRouter();
+  const acts = useAgentRowActs();
   const { agent, waiting, pullRequest } = line;
+  const step = useHeldAgentStep(agent.id, agent.status);
+  const name = agentName(agent);
+  const runsOn = agentRunsOnWords(agent);
   return (
     <AgentRow
       id={agent.id}
-      name={agentName(agent)}
+      name={name}
       state={agentState(agent.status)}
-      runsOn={agentRunsOnWords(agent)}
+      runsOn={runsOn}
       waiting={waiting}
       pullRequest={
         pullRequest === undefined
@@ -488,6 +554,19 @@ export function TaskAgentRow({ line }: { readonly line: TaskAgentLine }) {
               state: pullRequest.state,
               onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
             }
+      }
+      trailingActions={agentSwipes(agent, acts)}
+      preview={
+        <AgentPreview
+          name={name}
+          status={agent.status}
+          task={task === undefined ? undefined : { name: task.name, status: task.status }}
+          model={modelLabel(agent.model)}
+          runsOn={runsOn}
+          step={step}
+          waiting={waiting}
+          pullRequest={pullRequest}
+        />
       }
     />
   );
@@ -500,7 +579,7 @@ function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
   return (
     <ListSection title={WORDS.AGENTS} count={overview.agents.length}>
       {overview.agents.map((line) => (
-        <TaskAgentRow key={line.agent.id} line={line} />
+        <TaskAgentRow key={line.agent.id} line={line} task={task} />
       ))}
       <LinkRow
         symbol="plus"
@@ -642,8 +721,8 @@ function TasksStackList() {
           onSelect={(id) => router.push(`/tasks/${encodeURIComponent(id)}`)}
           onRefresh={refreshTasks}
         />
-        <StatusQuestionAsk question={question} />
       </Screen>
+      <StatusQuestionAsk question={question} />
     </>
   );
 }
@@ -685,7 +764,7 @@ function TasksSplitScreen({
             ),
             bar: {
               title: TASKS_TITLE,
-              search: { placeholder: SEARCH_TASKS, onChange: setSearch },
+              search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
             },
           })}
           detail={
@@ -709,9 +788,9 @@ function TasksSplitScreen({
                 }
           }
         />
-        <StatusQuestionAsk question={question} />
-        {sidebar.ask}
       </Screen>
+      <StatusQuestionAsk question={question} />
+      {sidebar.ask}
     </>
   );
 }
@@ -791,8 +870,8 @@ export function TaskScreen() {
         ) : (
           <EmptyState title={READING_TASK} symbol="checklist" />
         )}
-        <StatusQuestionAsk question={question} />
       </Screen>
+      <StatusQuestionAsk question={question} />
     </>
   );
 }

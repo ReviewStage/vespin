@@ -11,12 +11,8 @@ import {
   type TaskOrigin,
 } from "@repo/features/task-wire";
 import { andList } from "@repo/features/words";
-import {
-  type FormerMember,
-  WORKSPACE_ROLE,
-  type WorkspaceMember,
-  type WorkspaceRole,
-} from "@repo/features/workspace-wire";
+import { WORKSPACE_ROLE_WORDS } from "@repo/features/workspace-role";
+import type { FormerMember, WorkspaceMember, WorkspaceRole } from "@repo/features/workspace-wire";
 import { TAB_WORDS } from "./tab-strip-model.js";
 
 /**
@@ -131,11 +127,7 @@ export interface GitHubActor {
 const OPENING_SECTION = "Opening";
 
 /** A member's role in their workspace, in the words a row and a card say it. */
-export const ROLE_WORDS = {
-  [WORKSPACE_ROLE.OWNER]: "Owner",
-  [WORKSPACE_ROLE.ADMIN]: "Admin",
-  [WORKSPACE_ROLE.MEMBER]: "Member",
-} as const satisfies Record<WorkspaceRole, string>;
+export const ROLE_WORDS: Readonly<Record<WorkspaceRole, string>> = WORKSPACE_ROLE_WORDS;
 
 /** The app itself, which is always the same actor. */
 export const APP_ACTOR: Actor = { kind: ACTOR_KIND.APP };

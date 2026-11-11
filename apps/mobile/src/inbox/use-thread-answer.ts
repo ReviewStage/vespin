@@ -70,14 +70,14 @@ interface ThreadHeld {
 const NOTHING_HELD: ThreadHeld = { draft: EMPTY_INBOX_DRAFT, sending: new Map(), note: undefined };
 
 /** What a refused reply says, by why it was refused, in the panel's words. */
-function refusedWords(failure: AgentCallFailure): string {
+export function refusedWords(failure: AgentCallFailure): string {
   if (failure === AGENT_CALL_FAILURE.NOT_FOUND) return "This agent no longer exists.";
   if (failure === AGENT_CALL_FAILURE.UNANSWERED) return "No answer came back. Try again.";
   return "The message could not be sent. Try again.";
 }
 
 /** What a resolve the service did not take says, by what had become of the item, in the panel's words. */
-const NOT_RESOLVED = {
+export const NOT_RESOLVED = {
   [INBOX_STATUS.OPEN]: "The agent changed this item before you resolved it.",
   [INBOX_STATUS.ANSWERED]: "This item was already answered.",
   [INBOX_STATUS.CLOSED]: "This item was already resolved.",

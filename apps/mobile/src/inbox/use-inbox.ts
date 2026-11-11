@@ -9,6 +9,7 @@
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
 
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
@@ -23,6 +24,7 @@ import {
   MINE,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
 import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
@@ -41,6 +43,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
 import { cachedVideo } from "../cached-media.js";
@@ -49,7 +52,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite } from "../use-write.js";
-import { useSendsDrawn } from "./use-thread-answer.js";
+import { NOT_RESOLVED, refusedWords, useSendsDrawn } from "./use-thread-answer.js";
 
 /** What a thread's videos are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
@@ -206,11 +209,13 @@ function refused(what: string): (error: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
-/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, its reminder set or cleared, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
+/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, its reminder set or cleared, an open one resolved from its row, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
 export function useInboxActs(): {
   readonly mark: (itemId: string, unread: boolean) => void;
   /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
   readonly remind: (itemId: string, until: number | null) => void;
+  /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused. */
+  readonly resolve: (item: InboxItem) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshTasks: () => Promise<void>;
@@ -236,6 +241,29 @@ export function useInboxActs(): {
           retry: true,
           went: BUZZ.SUCCESS,
         });
+      },
+      resolve: (item) => {
+        // Note that one key stands for the press, so Try again resolves the thread once.
+        const clientKey = randomUUID();
+        write(
+          () =>
+            acts[ACT_KIND.AGENTS_INBOX_CLOSE]({
+              itemId: item.id,
+              revision: item.revision,
+              clientKey,
+            }),
+          {
+            refused: (answer) =>
+              "failure" in answer
+                ? refusedWords(answer.failure)
+                : answer.taken
+                  ? undefined
+                  : NOT_RESOLVED[answer.item.status],
+            unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+            retry: true,
+            went: BUZZ.SUCCESS,
+          },
+        );
       },
       markAll: (itemIds) => {
         if (itemIds.length === 0) return;

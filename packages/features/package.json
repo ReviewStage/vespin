@@ -227,6 +227,7 @@
     "./description-diff": "./src/description-diff.js",
     "./dictation-keywords": "./src/dictation-keywords.js",
     "./workspace-role": "./src/workspace-role.js",
+    "./workspace-settings-words": "./src/workspace-settings-words.js",
     "./integration-health": "./src/integration-health.js",
     "./failure-remedy": "./src/failure-remedy.js",
     "./integration-sign-in": "./src/integration-sign-in.js",

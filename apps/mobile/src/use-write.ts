@@ -146,3 +146,20 @@ export function useWrite(): Write {
   );
   return write;
 }
+
+/**
+ * Sends `act` through `write` for a press that says its refusal in place
+ * with `@repo/ui-native`'s `useAsyncAction`: answers the words to say, the
+ * host's own or the offline hint, or none once it went.
+ */
+export function refusalOf(
+  write: Write,
+  act: () => PromiseLike<unknown>,
+): Promise<string | undefined> {
+  const said: { words?: string } = {};
+  return write(act, {
+    inPlace: (words) => {
+      said.words = words;
+    },
+  }).then(() => said.words);
+}
