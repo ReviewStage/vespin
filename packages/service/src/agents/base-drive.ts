@@ -20,15 +20,14 @@
  * filled, or was left unfinished by a fill that failed or was cut off, which
  * no agent forks. Nothing keys it to the image or the branch: the tools are
  * the image's at every boot, and each agent fetches the default branch and
- * installs on its own fork (`refreshAgentCheckout`). Note that the name is
+ * installs on its own fork. Note that the name is
  * apart from the base snapshots' (`agent-base-`) that came before, which are
  * left as they stand for any open still reading them.
  *
- * A launch fills it past its answer where its fork found none, where a fill
- * left it unfinished past its grace, or where the agent's fast-forward from
- * it moved a lockfile (`lockfileMoved`), which its install would no longer
- * match; a refill mounts the drive as it stands, fetches the default branch
- * over its checkout, and installs again. Once a day the scheduled refresh
+ * No launch forks or fills it any more: a new agent forks its workspace's
+ * drive instead (`workspace-drive.ts`). A refill mounts the drive as it
+ * stands, fetches the default branch over its checkout, and installs again.
+ * Once a day the scheduled refresh
  * (`base-drive-refresh.ts`) refills every base drive that stands the same
  * way, so each agent's own fetch stays small, and installs again only where
  * that fetch moved a lockfile. An agent's delete deletes only the fork it
@@ -82,9 +81,6 @@ const LOCKFILES = ["pnpm-lock.yaml", "package-lock.json"] as const;
 /** The variable the lockfile diff reads the base's commit from, so no commit is written into a command. */
 const BASE_COMMIT_VARIABLE = "APP_BASE_COMMIT";
 
-/** The lockfile diff's exit where the lockfiles differ, as `git diff --quiet` exits. */
-const DIFFERS_EXIT = 1;
-
 /** Where pnpm keeps its store for a checkout on the drive, as the fill installs: the drive's root, the first folder up from the checkout it may write on that drive. */
 export const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
 
@@ -131,7 +127,7 @@ const INSTALL_SCRIPT = `sudo -n -u ${AGENT_USER} -H bash -c '${GROUP_WRITES}; cd
  */
 const READY_FOR_AGENT = `sudo -n bash -c 'set -e; ${OPEN_DRIVE_ROOT}; ${HAND_INSTALL_TO_AGENT}'`;
 
-/** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits `DIFFERS_EXIT` where they do. */
+/** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits nonzero where they do. */
 const LOCKFILE_DIFF_SCRIPT = `git diff --quiet "$${BASE_COMMIT_VARIABLE}" HEAD -- ${LOCKFILES.join(" ")}`;
 
 /** What a fill clones through: a read token for the one repository, and whose it is. */
@@ -265,7 +261,7 @@ const readiedForAgent = Effect.fn("web/readyDriveForAgent")(function* (sandbox: 
 });
 
 /** The commit the checkout stands at; none where git could not say, as for a sandbox that holds no checkout. */
-export const checkoutCommit = (sandbox: RepositorySandbox) =>
+const checkoutCommit = (sandbox: RepositorySandbox) =>
   Effect.map(
     runInSandbox(
       sandbox,
@@ -276,26 +272,6 @@ export const checkoutCommit = (sandbox: RepositorySandbox) =>
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     ),
     (ran) => (ran.exitCode === 0 ? ran.stdout.trim() : undefined),
-  );
-
-/**
- * Whether the checkout's lockfiles moved since the base's commit given, as
- * a fast-forward from a base drive's fork finds them: the base's install no
- * longer matches the default branch, so the base is filled again. A diff git
- * could not make reads as no move.
- */
-export const lockfileMoved = (sandbox: RepositorySandbox, since: string) =>
-  Effect.map(
-    runInSandbox(
-      sandbox,
-      {
-        command: LOCKFILE_DIFF_SCRIPT,
-        workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
-        env: { [BASE_COMMIT_VARIABLE]: since },
-      },
-      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
-    ),
-    (ran) => ran.exitCode === DIFFERS_EXIT,
   );
 
 /**

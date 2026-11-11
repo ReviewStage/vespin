@@ -144,7 +144,6 @@ import {
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
 import { AGENT_TAG, agentSandboxName, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
-import { BASE_DRIVE } from "../base-drive.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -159,6 +158,7 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
+import { WORKSPACE_DRIVE, workspaceDriveName } from "../workspace-drive.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { turnPayerOf } from "./agent-runtime-choice.js";
@@ -730,21 +730,41 @@ const isClone = (run: { readonly env: Readonly<Record<string, string>> }) =>
 const isRefresh = (run: { readonly env: Readonly<Record<string, string>> }) =>
   Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REFRESH);
 
+/** Whether a run in the sandbox claimed a workspace drive's folder as the checkout: handed a folder and the repository the checkout records. */
+const isClaim = (run: { readonly env: Readonly<Record<string, string>> }) =>
+  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER) &&
+  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY);
+
+/** Whether a run in the sandbox linked a workspace drive's folder to a checkout cloned beside it: handed a folder alone. */
+const isLink = (run: { readonly env: Readonly<Record<string, string>> }) =>
+  Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER) &&
+  !Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY) &&
+  !Object.hasOwn(run.env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.URL);
+
+/** How the claim exits where the fork holds no checkout in the repository's folder. */
+const NOT_HELD_EXIT = 3;
+
+/** The Relay repository's folder on its workspace's drive: `owner/name`, lower-cased. */
+const RELAY_FOLDER = "acme/relay";
+
 /** Whether a run in the sandbox was the install. */
 const isInstall = (run: { readonly args: readonly string[] }) =>
   run.args.some((arg) => arg.includes("pnpm install"));
 
-/** Every sandbox a base drive's fill created, deleted or not. */
-const baseFills = (api: ReturnType<typeof runnerSandboxApi>) =>
-  api.sandboxes.filter((each) => each.name.startsWith(BASE_DRIVE.NAME_PREFIX));
-
-/** The base drive standing, where one does. */
-const baseDrive = (api: ReturnType<typeof runnerSandboxApi>) =>
-  api.drives.find((each) => !each.deleted && each.name.startsWith(BASE_DRIVE.NAME_PREFIX));
+/** The agent's workspace's drive standing, as a fill that ended well leaves it, with no sandbox under its name. */
+const filledWorkspaceDrive = (api: ReturnType<typeof runnerSandboxApi>, agent: Agent) => {
+  const drive = {
+    id: `drv_${randomUUID()}`,
+    name: workspaceDriveName(agent.organizationId),
+    deleted: false,
+  };
+  api.drives.push(drive);
+  return drive;
+};
 
 /** The drive a sandbox mounts at the workspace, and the drive it was forked from, where it was. */
 const mountedDrive = (api: ReturnType<typeof runnerSandboxApi>, sandbox: FakeSandbox | undefined) =>
-  api.mountedAt(sandbox, BASE_DRIVE.MOUNT);
+  api.mountedAt(sandbox, WORKSPACE_DRIVE.MOUNT);
 
 /** Whether a run in the sandbox made the agent's user, as `@vercel/sandbox` makes one. */
 const isUserMade = (run: { readonly args: readonly string[] }) =>
@@ -3843,7 +3863,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
         ).pipe(Effect.provide(kept.layer));
-        // The launch, then the base drive's fill, whose clone is refused too.
         yield* kept.run;
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal((yield* newestTurn(agent)).status, TURN_STATUS.FAILED);
@@ -3875,7 +3894,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start on a repository with no base drive clones it whole from the image alone, then fills the base drive past the answer apart from the launch",
+    "a Start in a workspace with no drive yet is created from the image alone and clones its repository whole, filling no drive",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3887,28 +3906,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
         ).pipe(Effect.provide(kept.layer));
-        const launched = api.commands.length;
-        const filledWithLaunch = baseDrive(api);
         yield* kept.run;
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(launched, 1);
-        assert.equal(filledWithLaunch, undefined);
+        assert.equal(api.commands.length, 1);
         const own = sandboxOfAgent(api, agent);
         assert.deepEqual(
           [own?.image, own?.sourceSnapshotId, mountedDrive(api, own)],
           [IMAGE, undefined, undefined],
         );
-        assert.ok(api.runs.some((run) => run.session === own?.currentSessionId && isClone(run)));
-        // The fill mounted the base drive, and its sandbox is gone once it filled it.
-        const [fill] = baseFills(api);
-        assert.deepEqual([mountedDrive(api, fill), fill?.deleted], [baseDrive(api), true]);
-        // The base drive holds no credential: the token stood at its firewall for the clone alone.
+        const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
+        assert.equal(ownRuns.filter(isClone).length, 1);
+        assert.deepEqual(api.drives, [], "no drive was made or filled");
         const visible = JSON.stringify([api.commands, api.runs, api.sandboxes]);
         assert.equal(visible.includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
       }),
   );
-
   it.effect(
     "a repository agent's new sandbox starts its workspace's cloud setup after its checkout without waiting on it, the scripts written to files and the setup script given the workspace's variables, and none of the runner's credentials, and records how each script exited once the run ends past the answer",
     () =>
@@ -4005,53 +4018,43 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "the next agent on the repository boots from the image on its own fork of the base drive, makes its user, fetches only its branch under its write token written once ahead of it, installs nothing, clones nothing, and launches with its write token standing",
+    "a Start boots from the image on its own fork of its workspace's drive, makes its user, claims its repository's folder there at the default branch under its write token written once ahead of it, clones and installs nothing, and launches with its write token standing",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
-        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const next = yield* anotherAgent(userId, agent);
+        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        const drive = filledWorkspaceDrive(api, agent);
 
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(next, "Fix it again."),
-        ).pipe(Effect.provide(kept.layer));
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const own = sandboxOfAgent(api, next);
+        const own = sandboxOfAgent(api, agent);
         assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
-        assert.equal(mountedDrive(api, own)?.forkedFrom, baseDrive(api)?.name);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.equal(ownRuns.filter(isClone).length, 0);
         assert.equal(ownRuns.filter(isUserMade).length, 1);
-        const refresh = ownRuns.findIndex(isRefresh);
-        assert.equal(
-          ownRuns[refresh]?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH],
-          RELAY.defaultBranch,
-        );
-        assert.equal(
-          ownRuns[refresh]?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY],
-          RELAY_FULL_NAME,
-        );
         assert.equal(ownRuns.filter(isInstall).length, 0);
-        assert.equal(api.commands.length, 2);
-        assert.equal(baseFills(api).length, 1, "the base was not filled again");
+        const claims = ownRuns.filter(isClaim);
+        assert.deepEqual(
+          claims.map((run) => [
+            run.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER],
+            run.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH],
+            run.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.REPOSITORY],
+          ]),
+          [[RELAY_FOLDER, RELAY.defaultBranch, RELAY_FULL_NAME]],
+        );
+        assert.equal(api.commands.length, 1);
         const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
         const ownPolicies = api.policies.filter((each) => each.session === own?.currentSessionId);
         assert.ok(JSON.stringify(ownPolicies.at(-1)?.policy).includes(writeHeader));
         // The fetch ran under one write, the agent's own credential on GitHub's API host as well as git's.
-        const beforeFetch = api.policies
-          .slice(0, ownRuns[refresh]?.policiesBefore)
+        const beforeClaim = api.policies
+          .slice(0, claims[0]?.policiesBefore)
           .filter((each) => each.session === own?.currentSessionId);
-        assert.equal(beforeFetch.length, 1);
-        const firstWrite = beforeFetch[0]?.policy as
+        assert.equal(beforeClaim.length, 1);
+        const firstWrite = beforeClaim[0]?.policy as
           | { readonly allow?: Readonly<Record<string, unknown>> }
           | undefined;
         assert.ok(
@@ -4061,109 +4064,68 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a Start whose workspace's drive holds no checkout of its repository clones it whole on the fork and links it at its folder",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        const drive = filledWorkspaceDrive(api, agent);
+        let claiming = false;
+        api.hooks.onRun = async (env) => {
+          claiming = isClaim({ env });
+        };
+        api.hooks.runExit = () => (claiming ? NOT_HELD_EXIT : 0);
+
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal((yield* newestTurn(agent)).status === TURN_STATUS.FAILED, false);
+        const own = sandboxOfAgent(api, agent);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
+        const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
+        const steps = ownRuns.flatMap((run) =>
+          isClaim(run) ? ["claim"] : isClone(run) ? ["clone"] : isLink(run) ? ["link"] : [],
+        );
+        assert.deepEqual(steps, ["claim", "clone", "link"]);
+        assert.equal(
+          ownRuns.find(isLink)?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER],
+          RELAY_FOLDER,
+        );
+        assert.equal(api.commands.length, 1);
+      }),
+  );
+  it.effect(
     "a message after a drive agent's stopped sandbox's snapshot expired mounts the drive its first open forked in the fresh sandbox from the image",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const next = yield* anotherAgent(userId, agent);
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(next, "Fix it again."),
-        ).pipe(Effect.provide(kept.layer));
+        filledWorkspaceDrive(api, agent);
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const expired = sandboxOfAgent(api, next);
+        const expired = sandboxOfAgent(api, agent);
         const drive = mountedDrive(api, expired);
         assert.ok(expired !== undefined && drive !== undefined);
-        yield* runnerTook(next.id);
+        yield* runnerTook(agent.id);
         yield* runnerEnded({
-          target: { userId, conversationId: next.conversationId },
+          target: { userId, conversationId: agent.conversationId },
           sessionId: opened.sessionId,
           sequence: 0,
         }).pipe(Effect.provide(api.layer));
         api.idleStop();
         expired.snapshotExpired = true;
 
-        const sent = yield* sentAndDelivered(sessions, opened.sessionId, next, "Now the emails.");
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        const fresh = sandboxOfAgent(api, next);
+        const fresh = sandboxOfAgent(api, agent);
         assert.ok(fresh !== undefined && fresh !== expired);
         assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [IMAGE, undefined]);
         assert.equal(mountedDrive(api, fresh), drive);
       }),
   );
-
-  it.effect(
-    "an agent whose fast-forward from the base drive moved a lockfile has the base filled again past the answer",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const base = baseDrive(api);
-        api.hooks.runExit = (args) =>
-          args.some((arg) => arg.includes("git diff --quiet")) ? 1 : 0;
-        const next = yield* anotherAgent(userId, agent);
-
-        yield* deliveredOpen(sessions, yield* writtenLine(next, "Fix it again.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-
-        assert.equal(mountedDrive(api, sandboxOfAgent(api, next))?.forkedFrom, base?.name);
-        assert.equal(baseFills(api).length, 2);
-        assert.equal(baseDrive(api), base, "the refill mounted the drive standing");
-      }),
-  );
-
-  it.effect(
-    "an agent whose base drive is gone is created from the image alone and clones, and the base is filled again past the answer",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
-        const gone = baseDrive(api);
-        assert.ok(gone !== undefined);
-        gone.deleted = true;
-        const next = yield* anotherAgent(userId, agent);
-
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(next, "Fix it again."),
-        ).pipe(Effect.provide(kept.layer));
-        yield* kept.run;
-
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const own = sandboxOfAgent(api, next);
-        assert.deepEqual([own?.image, mountedDrive(api, own)], [IMAGE, undefined]);
-        assert.ok(api.runs.some((run) => run.session === own?.currentSessionId && isClone(run)));
-        assert.equal(baseFills(api).length, 2);
-        assert.ok(baseDrive(api) !== undefined);
-      }),
-  );
-
   it.effect(
     "an agent continued from another is created from its source's stopped sandbox's snapshot, and makes no user and clones, fetches, and installs nothing",
     () =>
@@ -4209,19 +4171,15 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
 
-  /** An agent continued from one that runs on a fork of the base drive, its sandbox stopped on a snapshot, the snapshot gone where `gone` says. */
+  /** An agent continued from one that runs on a fork of its workspace's drive, its sandbox stopped on a snapshot, the snapshot gone where `gone` says. */
   const continuedFromDrive = (gone: boolean) =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
       const api = runnerSandboxApi();
-      const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+      const { userId, agent: onDrive, sessions } = yield* repositoryAgent(api, ownInstallation());
+      const drive = filledWorkspaceDrive(api, onDrive);
       const kept = keptAfterResponse();
-      yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-        Effect.provide(kept.layer),
-      );
-      yield* kept.run;
-      const onDrive = yield* anotherAgent(userId, agent);
-      yield* deliveredOpen(sessions, yield* writtenLine(onDrive, "Fix it again.")).pipe(
+      yield* deliveredOpen(sessions, yield* writtenLine(onDrive, "Fix the relay.")).pipe(
         Effect.provide(kept.layer),
       );
       const source = sandboxOfAgent(api, onDrive);
@@ -4239,7 +4197,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         Effect.provide(kept.layer),
       );
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-      return { api, source, own: sandboxOfAgent(api, continued) };
+      return { api, drive, source, own: sandboxOfAgent(api, continued) };
     });
 
   it.effect(
@@ -4263,13 +4221,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent continued from one on a drive whose snapshot is gone forks the base drive, leaving none of the source's drive it forked first",
+    "an agent continued from one on a drive whose snapshot is gone forks its workspace's drive, leaving none of the source's drive it forked first",
     () =>
       Effect.gen(function* () {
-        const { api, own } = yield* continuedFromDrive(true);
+        const { api, drive, own } = yield* continuedFromDrive(true);
 
         assert.equal(own?.sourceSnapshotId, undefined);
-        assert.equal(mountedDrive(api, own)?.forkedFrom, baseDrive(api)?.name);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
       }),
   );
 
@@ -4368,32 +4326,26 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent started on another branch is created from the image and clones its branch, passing the base drive by",
+    "an agent started on another branch claims its repository's folder on its workspace's drive at that branch",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
         const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const kept = keptAfterResponse();
-        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
-        yield* kept.run;
+        const drive = filledWorkspaceDrive(api, agent);
         const onBranch = yield* anotherAgent(userId, agent, "relay-fix");
 
-        const opened = yield* deliveredOpen(sessions, yield* writtenLine(onBranch, "Go on.")).pipe(
-          Effect.provide(kept.layer),
-        );
-        yield* kept.run;
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(onBranch, "Go on."));
 
-        const own = sandboxOfAgent(api, onBranch);
-        assert.equal(own?.image, IMAGE);
-        const clone = api.runs.find((run) => run.session === own?.currentSessionId && isClone(run));
-        assert.equal(clone?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH], "relay-fix");
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.deepEqual([own?.sourceSnapshotId, mountedDrive(api, own)], [undefined, undefined]);
-        assert.equal(baseFills(api).length, 1);
+        const own = sandboxOfAgent(api, onBranch);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
+        const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
+        assert.equal(ownRuns.filter(isClone).length, 0);
+        assert.equal(
+          ownRuns.find(isClaim)?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH],
+          "relay-fix",
+        );
       }),
   );
 

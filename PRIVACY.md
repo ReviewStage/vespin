@@ -71,12 +71,13 @@ Through your workspace's GitHub App installation, we access repository
 contents, pull requests, code diffs, review comments, checks, and issues for
 repositories where the App is installed. A cloud agent works on a checkout of
 the repository in its own Vercel Sandbox: on a drive of its own where it was
-forked from its repository's default-branch drive or from the drive of the agent
-it was continued from, and in the sandbox otherwise; an agent on your own
-machine keeps its work there. A workspace
-repository's default branch may be kept on a drive cloud agents start from.
-Each workspace also keeps one drive holding the default branch of every
-repository it connects, kept for its cloud agents to start from: those its
+forked from its workspace's drive or from the drive of the agent it was
+continued from, and in the sandbox otherwise; an agent on your own machine
+keeps its work there. A workspace repository's default branch may also be kept
+on a drive cloud agents start from. Each workspace keeps one drive holding the
+default branch of every repository it connects, kept for its cloud agents to
+start from, and each new cloud agent forks it, so an agent's sandbox holds those
+repositories beside its own checkout at `/workspace/repository`: those its
 installation grants and those a member added on their own token alike, the
 latter cloned with that member's token.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
@@ -441,7 +442,7 @@ checkout on a drive of its own, and a copy of each workspace repository's
 default branch, with its dependencies installed, on a drive its agents start
 from, and one drive per workspace holding the default branch of every
 repository it connects, member-token ones included, kept for its cloud agents
-to start from.
+to start from, which each new cloud agent forks.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not

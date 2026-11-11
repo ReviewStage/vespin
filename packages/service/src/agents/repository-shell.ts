@@ -178,6 +178,64 @@ const WORKSPACE_PRUNE_SCRIPT = [
   "done",
 ].join("\n");
 
+/** How the claim of a workspace drive's folder exits where the fork holds no checkout there to claim. */
+const NOT_HELD_EXIT = 3;
+
+/**
+ * The agent's own checkout claimed from a fresh fork of its workspace's
+ * drive (`workspace-drive.ts`): the picked repository's folder moved to
+ * where the agent's checkout stands, a link left at the folder pointing
+ * back to it, the branch asked for fetched into its remote-tracking ref and
+ * checked out tracking it, the branch added to the remote's fetched ones
+ * where the drive's clone of the default branch alone left it out, its writes the group's (`GROUP_WRITES`), and the
+ * checkout recorded under the name the caller keeps. Note that the
+ * checkout is moved rather than linked to, because a harness started in a
+ * linked folder reads its working directory as the folder linked to,
+ * which no reader of the checkout's path knows; that a fork with no
+ * checkout in the folder exits `NOT_HELD_EXIT` before anything moves, so
+ * the caller clones instead; and that the empty checkout of a repository
+ * with no commits yet, whose remote still names no HEAD, is already as
+ * GitHub has it, as a refresh finds it (`REFRESH_SCRIPT`).
+ */
+const WORKSPACE_CLAIM_SCRIPT = [
+  "set -e",
+  GROUP_WRITES,
+  LINK_SANDBOX_STATE_FOLDER,
+  `folder="$${SANDBOX_VARIABLE.FOLDER}"`,
+  `if [ -L "$folder" ] || [ ! -d "$folder/.git" ]; then exit ${NOT_HELD_EXIT}; fi`,
+  "rm -rf repository",
+  'mv "$folder" repository',
+  `ln -s ${SANDBOX_PATH.CHECKOUT} "$folder"`,
+  "cd repository",
+  `branch="$${SANDBOX_VARIABLE.BRANCH}"`,
+  'refspec="+refs/heads/$branch:refs/remotes/origin/$branch"',
+  'if ! git config --get-all remote.origin.fetch | grep -qxF "$refspec"; then git remote set-branches --add origin "$branch"; fi',
+  'if git fetch --quiet origin "$refspec"; then',
+  '  git checkout --quiet -B "$branch" --track "origin/$branch"',
+  "else",
+  "  if git rev-parse --quiet --verify HEAD >/dev/null; then exit 1; fi",
+  '  head="$(git ls-remote origin HEAD)"',
+  '  test -z "$head"',
+  "fi",
+  "cd ..",
+  `mkdir -p ${SANDBOX_STATE_FOLDER}`,
+  `printf '%s' "$${SANDBOX_VARIABLE.REPOSITORY}" > ${SANDBOX_PATH.CHECKOUT_RECORD}`,
+].join("\n");
+
+/**
+ * The link a claim leaves (`WORKSPACE_CLAIM_SCRIPT`) made for a checkout
+ * cloned on a fork that held none to claim, so the agent's repository
+ * stands at its folder among the drive's others too; nothing where the
+ * folder holds something already.
+ */
+const WORKSPACE_LINK_SCRIPT = [
+  "set -e",
+  `folder="$${SANDBOX_VARIABLE.FOLDER}"`,
+  'if [ -e "$folder" ] || [ -L "$folder" ]; then exit 0; fi',
+  'mkdir -p "$(dirname "$folder")"',
+  `ln -s ${SANDBOX_PATH.CHECKOUT} "$folder"`,
+].join("\n");
+
 /**
  * A whole checkout a base drive holds (`base-drive.ts`) brought
  * up to its branch as GitHub has it now: the branch fetched through
@@ -304,7 +362,8 @@ export function runInSandbox(
  * the policy would otherwise carry the read token on past the run. Where
  * the firewall carries a credential for the repository already
  * (`RepositoryFirewall`'s `carries`), as an agent's sandbox does from its
- * first write, the run goes through that one and nothing is written.
+ * first write, the run goes through that one and nothing is written. Answers
+ * the exit the run ended on: 0, or another the caller accepts as no failure.
  */
 const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential")(function* (
   sandbox: RepositorySandbox,
@@ -312,7 +371,8 @@ const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential
   token: Redacted.Redacted,
   access: GitHubTokenAccess,
   run: Effect.Effect<CommandRun, RepositoryRefusal>,
-): Effect.fn.Return<void, RepositoryRefusal> {
+  accepted: readonly number[] = [0],
+): Effect.fn.Return<number, RepositoryRefusal> {
   const firewall = sandbox.firewall;
   if (firewall === undefined)
     return yield* new RepositoryRefusal({ reason: REPOSITORY_REFUSAL.NO_FIREWALL });
@@ -336,7 +396,8 @@ const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential
   ).pipe(Effect.exit);
   if (!carried) yield* withdrawn;
   const ran = yield* ended;
-  if (ran.exitCode !== 0) return yield* gitRefusal(ran);
+  if (!accepted.includes(ran.exitCode)) return yield* gitRefusal(ran);
+  return ran.exitCode;
 });
 
 /**
@@ -447,6 +508,60 @@ export const prunedWorkspaceFolders = /* @__PURE__ */ Effect.fn("web/pruneWorksp
     if (pruned.exitCode !== 0) return yield* gitRefusal(pruned);
   },
 );
+
+/**
+ * The agent's own checkout claimed from the picked repository's folder on a
+ * fresh fork of its workspace's drive and brought to the branch given
+ * (`WORKSPACE_CLAIM_SCRIPT`), through the credential standing at the
+ * firewall or the token given for the fetch alone (`underCloneCredential`);
+ * answers whether it was claimed, false where the fork holds no checkout in
+ * the folder, and refuses in git's words where the fetch failed.
+ */
+export const claimWorkspaceCheckout = /* @__PURE__ */ Effect.fn("web/claimWorkspaceCheckout")(
+  function* (
+    sandbox: RepositorySandbox,
+    confirmed: CheckoutRepository & { readonly folder: string },
+    token: Redacted.Redacted,
+    access: GitHubTokenAccess,
+  ): Effect.fn.Return<boolean, RepositoryRefusal> {
+    const claim = runInSandbox(
+      sandbox,
+      {
+        command: WORKSPACE_CLAIM_SCRIPT,
+        workingDirectory: SANDBOX_PATH.WORKSPACE,
+        env: {
+          ...COMMAND_ENVIRONMENT,
+          [SANDBOX_VARIABLE.FOLDER]: confirmed.folder,
+          [SANDBOX_VARIABLE.REPOSITORY]: confirmed.recordedAs ?? confirmed.fullName,
+          [SANDBOX_VARIABLE.BRANCH]: confirmed.defaultBranch,
+        },
+      },
+      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+    );
+    const exit = yield* underCloneCredential(sandbox, confirmed.fullName, token, access, claim, [
+      0,
+      NOT_HELD_EXIT,
+    ]);
+    return exit === 0;
+  },
+);
+
+/** The link to the agent's checkout made at the folder named under the workspace (`WORKSPACE_LINK_SCRIPT`), or the refusal that stopped it. */
+export const linkWorkspaceFolder = /* @__PURE__ */ Effect.fn("web/linkWorkspaceFolder")(function* (
+  sandbox: RepositorySandbox,
+  folder: string,
+): Effect.fn.Return<void, RepositoryRefusal> {
+  const linked = yield* runInSandbox(
+    sandbox,
+    {
+      command: WORKSPACE_LINK_SCRIPT,
+      workingDirectory: SANDBOX_PATH.WORKSPACE,
+      env: { ...COMMAND_ENVIRONMENT, [SANDBOX_VARIABLE.FOLDER]: folder },
+    },
+    REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+  );
+  if (linked.exitCode !== 0) return yield* gitRefusal(linked);
+});
 
 /**
  * What a base drive's checkout records it is of: the repository as GitHub
