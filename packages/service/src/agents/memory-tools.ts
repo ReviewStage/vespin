@@ -311,18 +311,9 @@ function agentMemory(
   );
 }
 
-/**
- * Where an agent's search recalls from, refusing nothing. Note that a turn
- * that cannot be read still searches, its recalls logged under the agent
- * alone, because logging a recall must never fail the search.
- */
+/** Where an agent's search recalls from (`recallSource`), refusing nothing. */
 const recallProvenance = (agent: Agent): Effect.Effect<MemoryProvenance, never, DatabaseServices> =>
-  Effect.map(
-    Effect.catch(recallSource(agent), (failure) =>
-      Effect.as(logStoreFailure(failure), { agentId: agent.id, messageId: null }),
-    ),
-    (source) => ({ refusal: undefined, source }),
-  );
+  Effect.map(recallSource(agent), (source) => ({ refusal: undefined, source }));
 
 /** One call of `save_memory` from a coding agent, refused on a turn whose words are no member's, and kept as from the agent and its turn's line (`rememberProvenance`). */
 export function runAgentRemember(

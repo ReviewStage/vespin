@@ -44,6 +44,7 @@ import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL } from "@repo/features/agent-t
 import { automationRun } from "@repo/features/model-label";
 import { toolPartName } from "@repo/wire/ui-messages";
 import { Effect } from "effect";
+import { logStoreFailure } from "../http/store-failure.js";
 import { CODER_TOOL_SET, RETIRED_CODER_TOOL } from "./coder-host/tool-set.js";
 
 /** Why a turn may keep no memory, in words the model can act on. */
@@ -183,9 +184,15 @@ export function rememberProvenance(
   });
 }
 
-/** Where the memories the agent recalls in its turn under way are recalled from. */
-export function recallSource(
-  agent: Agent,
-): Effect.Effect<MemorySource, StoreFailure, DatabaseServices> {
-  return Effect.map(turnUnderWay(agent), (turn) => sourceOf(agent, turn));
+/**
+ * Where the memories the agent recalls in its turn under way are recalled
+ * from, by its search or as the turn opens. It never fails: a turn that
+ * cannot be read is logged for the operator and names the agent alone,
+ * because logging a recall must never cost the recall itself.
+ */
+export function recallSource(agent: Agent): Effect.Effect<MemorySource, never, DatabaseServices> {
+  return Effect.catch(
+    Effect.map(turnUnderWay(agent), (turn) => sourceOf(agent, turn)),
+    (failure) => Effect.as(logStoreFailure(failure), { agentId: agent.id, messageId: null }),
+  );
 }
