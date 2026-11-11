@@ -1,5 +1,4 @@
 import { useCallback, useRef } from "react";
-import { REPLAY_LEFT_OUT } from "../../session-replay-marks.js";
 import { useMotionHeld } from "../../use-motion-held.js";
 import { useOnBeat } from "../time/time-clock.js";
 
@@ -18,10 +17,7 @@ import { useOnBeat } from "../time/time-clock.js";
  * the beat and is twice as dear again at 120Hz. Reduced motion and a capture
  * run hold it (`useMotionHeld`) on its resting frame, chosen to show the
  * chase mid-lap rather than its first, so a still mark always lights four
- * cells and reads as working. The screen
- * recording leaves it out (`REPLAY_LEFT_OUT`), because each step rewrites
- * four of its attributes, which the recorder would otherwise take down and
- * send twenty times a second for every mark on screen. The mark itself
+ * cells and reads as working. The mark itself
  * is decorative; the seat it stands in names it. Its side is 16px unless a
  * container sets `--ui-working-mark-size`.
  *
@@ -132,7 +128,7 @@ export function WorkingMark(): React.JSX.Element {
   const held = useMotionHeld();
   return (
     <svg
-      className={`ui-working-mark ${REPLAY_LEFT_OUT} [&[viewBox]]:block [&[viewBox]]:size-working-mark [&[viewBox]]:flex-none [&[viewBox]]:fill-current`}
+      className="ui-working-mark [&[viewBox]]:block [&[viewBox]]:size-working-mark [&[viewBox]]:flex-none [&[viewBox]]:fill-current"
       width={SIDE}
       height={SIDE}
       viewBox={`0 0 ${SIDE} ${SIDE}`}

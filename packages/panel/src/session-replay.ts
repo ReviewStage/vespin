@@ -16,26 +16,25 @@
  * (`withoutWithheldSheets`). What leaves is layout, pointer
  * positions, the app's own labels, headings, buttons, and menu words, and
  * asterisks of the right length for every other word. A surface is otherwise
- * recorded whole, its masked words in their places. What the masking cannot
- * reach is blocked with the library's fixed `ph-no-capture` class, on the
- * element that draws it and nothing round it, each named where it is drawn:
- * a picture or a video, which no masking of words reaches, such as the
- * feedback dialog's screenshots, a picture set, ⌃Tab's previews, and a
- * page's thumbnail; a frame of a page's own HTML; a diagram; the lines of
- * code and of a diff, whose colors draw the code's shape; a field a person
- * types into, a task's title and the editor its document is edited in among
- * them, whose masked value would still record the rhythm of the typing; a
- * secret's field; and a Terminal tab's screen and a cloud Browser tab's live
- * view. Those last two draw their words on a canvas, which the text masking
- * cannot reach, so their block is their only line, and canvas recording is
- * held off by name rather than by the library's default.
+ * recorded whole, its masked words in their places. Nothing visible is
+ * blocked whole, so a recording has no empty boxes standing in for parts
+ * of the window: a picture, a video, and a diagram leave with their address
+ * masked like any other attribute, so they draw empty in their places; a
+ * page's frame is of another origin, whose document the recorder cannot
+ * read; and a Terminal tab's screen and a cloud Browser tab's live view draw
+ * on a canvas, whose recording is held off by name rather than by the
+ * library's default. What leaves past that is the shape of masked words:
+ * the colors of masked code, and the rhythm of masked typing. The library's
+ * `ph-no-capture` block (`REPLAY_LEFT_OUT`) is kept for the two things the
+ * masking cannot reach and no one sees: a file input's value and a
+ * diagram's layout while it is drawn.
  *
  * `PRIVACY.md` says, in a policy's plain terms, that a recording shows how
  * the window is used and masks what a person types and anything sensitive
- * before it leaves, and that has to stay true: the masking and those blocks
- * are the whole of what decides it. Every shell that
- * records (the desktop's panel window, `apps/desktop/src/renderer/session-replay.ts`,
- * and the web app's tab, `apps/web/src/app/web-session-replay.ts`) records
+ * before it leaves, and that has to stay true: the masking is the whole
+ * of what decides it. Every shell that records (the desktop's panel window,
+ * `apps/desktop/src/renderer/session-replay.ts`, and the web app's tab,
+ * `apps/web/src/app/web-session-replay.ts`) records
  * through `sessionReplay` here, so the masking is stated once and no shell can
  * record under any other.
  *
@@ -116,8 +115,7 @@ const LAYOUT_DATA = `
  * a color, or a path, and never a person's words. Note that an element's own
  * style leaves whole, so nothing may write a person's words into one: the one
  * style built from a config, a chart's series colors (`@repo/ui/chart`), is
- * drawn from a module's constants, and only on the admin page, which the
- * recording leaves out. Names are lowercase, since the recorder hands an SVG
+ * drawn from a module's constants, and only on the admin page. Names are lowercase, since the recorder hands an SVG
  * attribute over in the case it was written.
  */
 const LAYOUT = new Set([
@@ -223,6 +221,13 @@ const LAYOUT = new Set([
   "rr_open_mode",
 ]);
 
+/**
+ * The most asterisks a masked attribute leaves as, since its length lays
+ * nothing out: a picture's `data:` address is megabytes, which would
+ * otherwise leave as megabytes of asterisks.
+ */
+const MASKED_ATTRIBUTE_MOST = 16;
+
 /** Where a link's address is layout rather than a destination: a stylesheet's, and an icon's symbol. */
 const LAYOUT_HREFS = new Set(["link", "use"]);
 
@@ -261,7 +266,8 @@ function laysOut(name: string, value: string, element: Element | undefined): boo
  * reach them); every other text is masked as the recorder masks it by
  * itself, each character but a space an asterisk; every input masked,
  * every attribute but those the replay lays out by (`LAYOUT`) asterisked,
- * every comment in the markup left out, since the
+ * at most `MASKED_ATTRIBUTE_MOST` long, a picture's address among them, so a
+ * picture draws empty; every comment in the markup left out, since the
  * recorder copies a comment's words as they stand and no masking reaches
  * one, autocapture off, since a click event carries the text of what was
  * clicked, and canvas recording off, since a canvas carries its words as
@@ -283,7 +289,7 @@ function laysOut(name: string, value: string, element: Element | undefined): boo
  * because the project's setting would otherwise decide; and that the
  * recorder masks no radio's, checkbox's, or file input's value at all,
  * whatever this says, so those are kept out where they are drawn
- * (`@repo/ui/session-replay-marks`, and the file picker's `ph-no-capture`).
+ * (`@repo/ui/session-replay-marks`, and the file picker's `REPLAY_LEFT_OUT`).
  * The canvas option is set here rather than left to the library's default
  * on the same terms, because the library reads it before the remote
  * configuration and a project that switched canvas recording on would
@@ -306,7 +312,9 @@ const SESSION_REPLAY_MASKING = {
     maskTextFn: (text: string, element?: HTMLElement | null): string =>
       showsInReplay(element) ? text : text.replace(/\S/g, "*"),
     maskAttributeFn: (name: string, value: string, element?: Element): string =>
-      laysOut(name.toLowerCase(), value, element) ? value : "*".repeat(value.length),
+      laysOut(name.toLowerCase(), value, element)
+        ? value
+        : "*".repeat(Math.min(value.length, MASKED_ATTRIBUTE_MOST)),
     slimDOMOptions: { comment: true },
     recordHeaders: false,
     recordBody: false,

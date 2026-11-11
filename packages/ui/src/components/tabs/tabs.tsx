@@ -85,7 +85,7 @@ import { type TabMove, useTabDrag } from "./use-tab-drag.js";
  * held, so a card takes no stop; the pointer resting on it chooses it, and a
  * press picks it, on the press itself where the switcher's chord makes the
  * release a right-click (`pickOnPress`). The still is a picture of the
- * window, so the session recording leaves it out by its class.
+ * window, whose address the session recording masks, so it draws empty there.
  *
  * Its words are text, which the session recording masks with the rest.
  */
@@ -707,7 +707,7 @@ export function TabCard({
       }}
       onContextMenu={pickOnPress ? (event) => event.preventDefault() : undefined}
     >
-      <div className="ui-tab-card-preview ph-no-capture flex h-[110px] items-center justify-center mb-0.5 border border-solid border-border rounded-ui-6 bg-surface overflow-hidden group-data-[here=true]/card:opacity-55">
+      <div className="ui-tab-card-preview flex h-[110px] items-center justify-center mb-0.5 border border-solid border-border rounded-ui-6 bg-surface overflow-hidden group-data-[here=true]/card:opacity-55">
         {still === undefined ? (
           <span className="ui-tab-card-glyph inline-flex text-muted-foreground [--ui-glyph-size:28px] [&_:is(svg,img)]:size-[28px]">
             {icon}

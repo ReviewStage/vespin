@@ -33,6 +33,7 @@ import {
   Text,
   useConfirmDialog,
 } from "@repo/ui";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -53,12 +54,7 @@ import { useAnnounceShown } from "../use-announce-shown.js";
  *
  * The token stands in the open field alone, is sent once as it is pasted or on Enter, and is
  * cleared as soon as the service keeps it; the service never answers one.
- * The dialog is kept out of the screen recording, which masks a field's
- * characters but not their count, as Settings › Agents' keys are.
  */
-
-/** The class PostHog's recorder leaves out of a recording, element and children alike. */
-const NO_CAPTURE = "ph-no-capture";
 
 /** What the token's paste says: its steps, its field, and the check while a save is out. */
 const PASTE_WORDS = {
@@ -130,11 +126,11 @@ export function TokenFacts({ token }: { token: GitHubTokenSummary }): React.JSX.
     <SettingsFacts>
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
         <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-          {token.hint}
+          <ReplayMask>{token.hint}</ReplayMask>
         </Text>
         {"\u00a0·\u00a0"}
         <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.LABEL}>
-          {token.login}
+          <ReplayMask>{token.login}</ReplayMask>
         </Text>
         {FACT_BREAK}
       </Text>
@@ -316,13 +312,11 @@ export function GitHubTokenDialog({
       onExited={onExited}
       actions={<DialogActions onDone={onClose} />}
     >
-      <div className={NO_CAPTURE}>
-        {token === null ? (
-          <GitHubTokenPaste field={field} onSave={save} />
-        ) : (
-          <SavedToken token={token} />
-        )}
-      </div>
+      {token === null ? (
+        <GitHubTokenPaste field={field} onSave={save} />
+      ) : (
+        <SavedToken token={token} />
+      )}
     </Dialog>
   );
 }

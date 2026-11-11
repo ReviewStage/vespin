@@ -26,8 +26,7 @@ import type { PageThumbFrame } from "../page-thumb/page-thumb.js";
  * hidden over a quiet ground, because the blank document it loads through is
  * light only and would flash in a dark window. The frame loads only once it
  * nears the screen where the caller asks, so a long transcript loads the
- * pages it is read past, not every page it holds. What the page draws is the
- * task's, so the frame is left out of the screen recording.
+ * pages it is read past, not every page it holds.
  *
  * It draws no controls of its own. The row each caller draws above it opens
  * the page in its tab, and the tab fills the window from the panel's own
@@ -125,7 +124,7 @@ export function PageEmbed({
   const load = useLoaded(frame.src);
   return (
     <div
-      className="ui-page-embed ph-no-capture bg-muted data-[loaded=true]:bg-transparent"
+      className="ui-page-embed bg-muted data-[loaded=true]:bg-transparent"
       data-loaded={String(load.loaded)}
     >
       <LiveFrame

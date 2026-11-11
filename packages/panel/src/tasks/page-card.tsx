@@ -34,8 +34,7 @@ import { useOpenPlace } from "./use-open-link.js";
  * scaled down to the card's (tasks.css), so the developer sees what a page is before opening it. The frame
  * is the pointer's preview and nothing more: it takes no pointer, so the
  * card stays standing while the pointer crosses it, no focus, and no part
- * in what is read aloud, and it is left out of the screen recording as the
- * tab's is. Until the page has loaded the frame's place is held, at the
+ * in what is read aloud. Until the page has loaded the frame's place is held, at the
  * page's shape, in a quiet ground, so the card is placed once at its size.
  */
 

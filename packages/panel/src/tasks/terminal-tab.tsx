@@ -52,9 +52,8 @@ import { useWindowAccount } from "./window-account.js";
  * its key, and the title bar says the rest (`terminal-model.ts`). The tab
  * keeps its terminal while it is hidden (`terminal-session.ts`).
  *
- * The screen is left out of the screen recording, because the shell's
- * own words are drawn on a canvas the text masking cannot reach, and a
- * shell prints whatever its commands print; the bar over it records masked.
+ * The screen draws on a canvas, which the screen recording leaves blank;
+ * the bar over it records masked.
  */
 
 /**

@@ -378,7 +378,7 @@ function title(container: HTMLElement): HTMLElement {
   return text;
 }
 
-test("a click into a section opens the whole text in place, the caret where the click landed, under a block the recording does not capture", () => {
+test("a click into a section opens the whole text in place, the caret where the click landed", () => {
   const { container } = mount();
   const goal = block(container, "Goal");
 
@@ -388,7 +388,6 @@ test("a click into a section opens the whole text in place, the caret where the 
 
   assert.equal(open().markdown, BODY);
   assert.deepEqual(open().placement, { x: 120, y: 48 });
-  assert.match(open().className, /\bph-no-capture\b/u, "the text is left out of the recording");
   assert.equal(title(container).textContent, DOCUMENT_NAME, "the title stays over the text");
 });
 

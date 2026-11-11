@@ -107,23 +107,20 @@ Review places a module and a component alike under this rule.
   sandbox's disk until the next recording clears them, and whose WebM the
   service keeps beside the transcript the call is written to as it keeps a
   screenshot (`packages/service/src/agents/browser/browser-tool.ts`), shown and
-  deleted on the same terms; the model is never handed the video, the
-  transcript's player is left out of session replay, and none of it goes into a
-  trace, a counted event, or a fixture. An agent may also
+  deleted on the same terms; the model is never handed the video, and none of
+  it goes into a trace, a counted event, or a fixture. An agent may also
   post such a recording, or any WebM it recorded in its sandbox, to a thread in
   one of its workspace's channels
   (`packages/service/src/agents/coder-host/inbox-image.ts`), kept beside the
   thread's message, up to 4 MB, as a picture posted there is, shown to whoever
-  may read that thread and deleted with it; the thread's player is left out of
-  session replay, and none of it goes into a trace, a counted event, or a
-  fixture. Such a recording may also be added to its
+  may read that thread and deleted with it, and none of it goes into a trace,
+  a counted event, or a fixture. Such a recording may also be added to its
   task's plan, from the file viewer's Add to plan or an agent's `edit_plan`,
   at most ten to a plan, kept beside the plan as its pictures are
   (`packages/database/src/models/plan-attachments.ts`), shown to the members
   who can open the task and deleted with the plan; `look_at_picture` refuses
   it (`packages/service/src/tasks/picture-look.ts`), so no model is handed it,
-  the plan's player is left out of session replay, and none of it goes into a
-  trace, a counted event, or a fixture. And Sentry's SDKs run
+  and none of it goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's

@@ -20,11 +20,8 @@ import { PICTURE_STATE, type PictureState } from "@repo/ui/picture-read";
  * time stands in the box it was read in, the gone picture's glyph, a short
  * line, and Retry where the spinner stood. A gone picture
  * is plain words, never a `role="img"` named by its alt, which would hide the
- * "not available" beside it and leave an empty alt with no name at all. The block is left out
- * of the screen recording (`ph-no-capture`), because a picture can hold
- * words and the recording carries none (`session-replay.ts`), and because a
- * `data:` address is megabytes of attribute a recording has no use for even
- * masked. A video an agent recorded plays in its place instead
+ * "not available" beside it and leave an empty alt with no name at all. The screen recording masks a
+ * picture's address, so it draws empty there (`session-replay.ts`). A video an agent recorded plays in its place instead
  * (`@repo/ui`'s `VideoPlayer`), with the player's own controls, Full screen
  * among them, since a press on a video plays it; what a press on a picture
  * opens is its Expand. Nothing here knows whose picture it is; the place
@@ -36,8 +33,7 @@ import { PICTURE_STATE, type PictureState } from "@repo/ui/picture-read";
  * column's, standing apart from the words around it. A place that stands it
  * otherwise, in a row or under a version's mark, says so in its own sheet.
  */
-export const PICTURE_BLOCK_CLASS =
-  "picture-block ph-no-capture my-block-gap block w-fit max-w-full";
+export const PICTURE_BLOCK_CLASS = "picture-block my-block-gap block w-fit max-w-full";
 
 /** The frame, `@repo/ui`'s Card, hugging the picture. */
 export const PICTURE_FRAME_CLASS = "picture-frame w-fit max-w-full";

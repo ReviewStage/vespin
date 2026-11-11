@@ -422,12 +422,6 @@ function bytes(text: string): Uint8Array {
   return Uint8Array.from(text, (character) => character.charCodeAt(0));
 }
 
-test("the tab's screen is left out of the screen recording", async () => {
-  const tab = await mount();
-  const screen = tab.container.querySelector(".terminal-tab-screen");
-  assert.ok(screen?.closest(".ph-no-capture"));
-});
-
 test("shown, the tab has its agent's files mirrored and a shell opened in the mirror at the size its screen fits, and attaches to it; hidden and shown again, it keeps its port and asks nothing more", async () => {
   const tab = await mount();
   assert.deepEqual(tab.kinds(), ["macShell.mirror", "macShell.open", "macShell.attach"]);
@@ -785,7 +779,7 @@ function findTally(): string | null | undefined {
 
 test("⌘F finds in the shell's scrollback, which the terminal draws on a canvas, from the newest match up, every match counted and stepped through", async () => {
   vi.useFakeTimers();
-  const tab = await mount(true, true);
+  await mount(true, true);
   const port = main.post(MADE);
   port.say({ type: "state", state: "attached" });
   port.say({ type: "output", data: bytes("alpha beta\r\nalpha gamma\r\n") });
@@ -806,10 +800,6 @@ test("⌘F finds in the shell's scrollback, which the terminal draws on a canvas
   });
   await act(async () => vi.advanceTimersByTimeAsync(100));
   assert.equal(findTally(), "2 of 2");
-  // What the find draws over the matches stands inside the tab, which the recording leaves out whole.
-  for (const drawn of tab.container.querySelectorAll('[class*="xterm-decoration"]')) {
-    assert.ok(drawn.closest(".ph-no-capture"));
-  }
   typeFind("delta");
   await act(async () => vi.advanceTimersByTimeAsync(100));
   assert.equal(findTally(), "No results");

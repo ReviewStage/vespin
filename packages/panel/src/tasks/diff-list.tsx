@@ -14,7 +14,6 @@ import {
   useHintRest,
   usePressAway,
 } from "@repo/ui";
-import { REPLAY_LEFT_OUT } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquarePlusIcon } from "lucide-react";
@@ -71,9 +70,6 @@ import { CHANGES_WORDS } from "./changes-model.js";
  * the selection, as stage-cli offers one; the press opens the comment on
  * those lines and lets the selection go. A press anywhere else, or a
  * scroll, lets the offer go, since it stands where the selection stood.
- * The scroller the list is drawn into is left out of the screen recording
- * (`ph-no-capture`), since the lines' colors draw the code's shape; the
- * headers and notes stand in its slots, so they go with it.
  */
 
 /** A note drawn in a file of the list, a review thread's under its line or what stands above the file's first hunk: where it stands, and what it says. */
@@ -405,7 +401,6 @@ export function PierreDiffList({
     const element = host.current;
     if (module === undefined || element === null) return undefined;
     drawn.current = latest.current;
-    element.classList.add(REPLAY_LEFT_OUT);
     const mounted = module.mountList(element, latest.current);
     handle.current = mounted;
     door.current = { reveal: (path) => mounted.reveal(path) };

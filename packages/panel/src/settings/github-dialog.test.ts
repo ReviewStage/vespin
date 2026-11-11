@@ -11,6 +11,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
 import type { SettingsLink } from "@repo/settings/settings-views";
+import { showsInReplay } from "@repo/ui/session-replay-marks";
 import { holdExits } from "@repo/ui/testing/held-exits";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -28,7 +29,7 @@ import { AccountSection } from "./account-section.js";
  * a bridge answering as the host would, the token held on app state and each
  * write's answer laid there: the row offers Add with no token and
  * Manage with one, drawn as its hint, login, and expiry; a pasted token is
- * sent once from an unrecorded password field; Disconnect asks first; a refused
+ * sent once from a password field; Disconnect asks first; a refused
  * save says why in a short label. Synthetic tokens.
  */
 
@@ -178,14 +179,13 @@ async function paste(token: string): Promise<void> {
   await settle();
 }
 
-test("with no token the row offers Add, and a token pasted into the unrecorded field is sent once and drawn as the service's facts on the row", async () => {
+test("with no token the row offers Add, and a token pasted into the field is sent once and drawn as the service's facts on the row", async () => {
   await mountAndOpen();
   assert.equal(dialog().querySelector("h2")?.textContent, "Personal access token");
   assert.match(dialog().textContent ?? "", /Create a classic token with repo tickedOpen GitHub/u);
 
   const input = tokenField() ?? assert.fail("no token field");
   assert.equal(input.type, "password");
-  assert.ok(input.closest(".ph-no-capture"), "the field is kept out of the recording");
   await paste(PASTED);
 
   assert.deepEqual(
@@ -249,6 +249,11 @@ test("a saved token's Manage opens it with Disconnect, which asks at the dialog'
   stored = KEPT;
   await mountAndOpen();
   assert.equal(tokenField() === null, true);
+  // The dialog shows its own words in the screen recording, so the token's facts are masked again inside it.
+  const drawnAt = (words: string) =>
+    [...dialog().querySelectorAll("*")].findLast((node) => node.textContent === words);
+  assert.equal(showsInReplay(drawnAt("ghp_…wxyz")), false, "the hint is masked");
+  assert.equal(showsInReplay(drawnAt("octo-member")), false, "the login is masked");
   const asked = () => dialog().querySelector<HTMLElement>('[role="group"]');
 
   // Note that the press is made from Disconnect holding focus, as a pointer's or a key's press is.

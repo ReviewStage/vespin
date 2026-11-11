@@ -151,9 +151,9 @@ function adminOpen(): boolean {
   return document.querySelector('[role="radiogroup"][aria-label="Admin sections"]') !== null;
 }
 
-/** Whether the Admin place stands drawn, its views under the recording's block, rather than its loading frame. */
+/** Whether the Admin place stands drawn, its views rather than its loading frame. */
 function adminStands(): boolean {
-  return document.querySelector(".desktop-main .ph-no-capture") !== null;
+  return document.querySelector(".desktop-main .admin-place") !== null;
 }
 
 /** Whether the Admin place stands waiting on the account's access, its loading frame up. */
