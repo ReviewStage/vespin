@@ -172,8 +172,9 @@ here once, so a screen gets them by composing these pieces.
 - **Settings** come from `accessibility.ts`, one store per setting shared by
   every component: `useReduceMotion` (a custom motion is left out, as Jump to
   latest's scroll), `useReduceTransparency` (`GlassBar` and Jump to latest
-  stand solid on `SURFACE` inside `CHIP_EDGE_STRONG`), `useIncreaseContrast`
-  (`useColors` gives the quiet inks the body's, the hairline the strong edge,
+  stand solid on `SURFACE` inside a `TEXT_MUTED` edge, which holds 3:1 where
+  the brand's strong edge does not), `useIncreaseContrast` (`useColors`
+  gives the quiet inks the body's, the hairline the quiet ink,
   and danger the words' ink). Bold Text and Button Shapes need nothing of
   ours: SwiftUI's text styles and React Native's system face take Bold Text,
   and the system's buttons draw their own shapes.
@@ -189,7 +190,9 @@ here once, so a screen gets them by composing these pieces.
   A group header, a page's heading, and a message's writer line are headings;
   a glyph its words already say is hidden. What happens out of the reader's
   sight is told with `useAnnounced`: an agent's change of state,
-  a held call, and a send refused (`AskNote`).
+  a held call, and a send refused (`AskNote`). A line of Markdown offers
+  each chip and link it holds as one of its VoiceOver actions ("Open …"),
+  since iOS never lists a view standing in a paragraph as its own element.
 - **Contrast.** Words stand in an ink that holds WCAG's 4.5:1 on the ground
   they stand on (danger's words in `DANGER_TEXT`, a filled button's in
   `ON_ACCENT`), checked against `@repo/brand`'s table, which

@@ -677,7 +677,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
  * centered over the list's foot, standing only once the reader has scrolled
  * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
  * reader turned on Reduce Transparency, it is drawn solid on the surface's
- * ground inside the strong edge rather than a hand-drawn copy of glass.
+ * ground inside the quiet ink rather than a hand-drawn copy of glass.
  */
 function JumpToLatest({
   bottom,
@@ -711,7 +711,7 @@ function JumpToLatest({
             styles.jumpFace,
             {
               backgroundColor: colors.SURFACE,
-              borderColor: colors.CHIP_EDGE_STRONG,
+              borderColor: colors.TEXT_MUTED,
               borderWidth: StyleSheet.hairlineWidth,
             },
           ]}

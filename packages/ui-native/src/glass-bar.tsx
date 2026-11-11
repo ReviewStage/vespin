@@ -60,7 +60,7 @@ function SolidBar({ children }: { readonly children: ReactNode }) {
         styles.bar,
         {
           backgroundColor: colors.SURFACE,
-          borderColor: colors.CHIP_EDGE_STRONG,
+          borderColor: colors.TEXT_MUTED,
           borderWidth: StyleSheet.hairlineWidth,
         },
       ]}
@@ -79,7 +79,7 @@ function SolidBar({ children }: { readonly children: ReactNode }) {
  * the bar sits above the tab bar rather than under it. Note that where
  * Liquid Glass is unavailable, before iOS 26, or the reader turned on Reduce
  * Transparency, the bar is drawn solid on the surface's ground inside the
- * strong edge rather than a hand-drawn copy of glass, so nothing scrolls
+ * quiet ink rather than a hand-drawn copy of glass, so nothing scrolls
  * through behind its words.
  */
 export function GlassBar({
