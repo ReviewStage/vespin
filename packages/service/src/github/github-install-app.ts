@@ -63,6 +63,7 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import { Effect, Layer, Option } from "effect";
 import { type HttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { type BaseDriveFills, filledInBackground } from "../agents/base-drive-refresh.js";
 import { sessionCredential } from "../auth/session-credential.js";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { hostedNotFoundRoute, type SessionUserIdResolver } from "../http/http-effect.js";
@@ -117,6 +118,8 @@ const LANDED_ON_LINK = {
 /** The session read the callback asks whose browser GitHub returned. */
 export interface GitHubInstallSeams {
   readonly resolveSessionUserId: SessionUserIdResolver;
+  /** Where the deployment fills a connected workspace's base drives, what a fill runs through; none where it fills none on a connect. */
+  readonly drives?: BaseDriveFills;
 }
 
 /** A browser is sent on with 303, so a POST GitHub might one day send becomes the GET the page is. */
@@ -265,6 +268,10 @@ const connectInstallation = /* @__PURE__ */ Effect.fn("web/connectInstallation")
   // Note that a connect repeated for an installation the workspace holds links it as before, which is no new connection, so what it holds is read first.
   const held = yield* installationsOfWorkspace(organizationId);
   const linked = yield* linkInstallationAs(userId, organizationId, installation.value);
+  // Note that every link fills the drives its repositories lack, a repeated connect among them, which finds them standing.
+  if (linked === LINK_OUTCOME.LINKED && seams.drives !== undefined) {
+    yield* filledInBackground(seams.drives, { workspaceId: organizationId, userId });
+  }
   if (
     linked === LINK_OUTCOME.LINKED &&
     !held.some((each) => each.installationId === installationId)

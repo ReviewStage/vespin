@@ -5,6 +5,7 @@ import {
   type GitHubInstallationStatus,
 } from "@repo/database/github-installation-vocabulary";
 import { listAgentsOnBranches } from "@repo/database/models/agent-store";
+import { baseDriveWorkspaceOfInstallation } from "@repo/database/models/base-drive-repositories";
 import {
   noteGitHubRepository,
   type RepositorySighting,
@@ -12,13 +13,14 @@ import {
 import type { Sandbox } from "@repo/sandbox";
 import { EXCESS_KEYS, HTTP_METHOD, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Clock, Effect, Layer, Redacted, Result, Schema } from "effect";
+import { Clock, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import {
   type HttpClient,
   HttpRouter,
   HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
+import { type BaseDriveFills, filledInBackground } from "../agents/base-drive-refresh.js";
 import { agentPublished } from "../agents/coder-host/published.js";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import { cadenceOrUnavailable } from "../automations/automation-cadence.js";
@@ -82,10 +84,14 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * suspended and brought back keeps its members and its tasks. GitHub never
  * redelivers a failed delivery on its own, so a status one missed is mended
  * by the next read of the installation from GitHub (`github-app.ts`). Its
- * `installation_repositories` deliveries, a repository given or taken, are
- * answered and ignored, because no repository of an installation is held:
- * the chip lists them from GitHub each time it opens, and every start checks
- * its repository there (`github-procedures.ts`, `workspace-repository.ts`).
+ * `installation_repositories` deliveries, a repository given or taken, move
+ * nothing held, because no repository of an installation is held: the chip
+ * lists them from GitHub each time it opens, and every start checks its
+ * repository there (`github-procedures.ts`, `workspace-repository.ts`). But
+ * a repository given, or an installation made or brought back, has its
+ * workspace's base drives filled past the answer where none stands
+ * (`base-drive-refresh.ts`), so the first agent on a repository just
+ * connected forks one rather than cloning.
  *
  * A user revoking their authorization of the App, which GitHub also sends
  * without subscribing (`github_app_authorization`), drops that GitHub user's
@@ -129,6 +135,8 @@ const WEBHOOK_EVENT = {
   STATUS: "status",
   /** The App installed, removed, suspended, or brought back on an account. */
   INSTALLATION: "installation",
+  /** Repositories given to an installation or taken from it. */
+  INSTALLATION_REPOSITORIES: "installation_repositories",
   /** A user revoked their authorization of the App. */
   APP_AUTHORIZATION: "github_app_authorization",
   /** A repository created, renamed, transferred, or otherwise changed. */
@@ -149,6 +157,12 @@ const INSTALLATION_ACTION_STATUS: ReadonlyMap<string, GitHubInstallationStatus> 
   ["deleted", GITHUB_INSTALLATION_STATUS.DELETED],
   ["suspend", GITHUB_INSTALLATION_STATUS.SUSPENDED],
   ["unsuspend", GITHUB_INSTALLATION_STATUS.ACTIVE],
+]);
+
+/** The actions, by event, after which an installation may grant repositories that have no base drive yet. */
+const DRIVES_WANTED_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  [WEBHOOK_EVENT.INSTALLATION, new Set(["created", "unsuspend"])],
+  [WEBHOOK_EVENT.INSTALLATION_REPOSITORIES, new Set(["added"])],
 ]);
 
 /** A pull request's actions that change what a task's row says of it: where it stands, its merge queue among it, its title, or its size. */
@@ -370,6 +384,31 @@ function installationTarget(
     : { installationId: read.success.installation.id, status };
 }
 
+/** The installation a delivery says may now grant repositories with no base drive yet; nothing for any other event or action. */
+function installationGranting(event: string, payload: UnparsedWireValue): number | undefined {
+  const actions = DRIVES_WANTED_ACTIONS.get(event);
+  if (actions === undefined) return undefined;
+  const read = readDelivery(InstallationDeliverySchema, payload);
+  if (Result.isFailure(read) || !actions.has(read.success.action)) return undefined;
+  return read.success.installation.id;
+}
+
+/**
+ * The base drives of the workspace the installation stands for filled past
+ * the answer (`filledInBackground`), where the deployment fills them and the
+ * installation is linked to a workspace; a workspace the store could not
+ * read is logged and left to the hourly refresh.
+ */
+const drivesFilledFor = (drives: BaseDriveFills | undefined, installationId: number) =>
+  Effect.gen(function* () {
+    if (drives === undefined) return;
+    const workspace = yield* Effect.orElseSucceed(
+      baseDriveWorkspaceOfInstallation(installationId),
+      () => Option.none(),
+    );
+    if (Option.isSome(workspace)) yield* filledInBackground(drives, workspace.value);
+  });
+
 /** The GitHub user whose authorization a delivery says was revoked; nothing for any other action. */
 function revokedAuthorization(payload: UnparsedWireValue): number | undefined {
   const read = readDelivery(AuthorizationDeliverySchema, payload);
@@ -410,7 +449,9 @@ const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgai
 
 /** POST: one delivery, its signature confirmed before anything of it is read. */
 const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
-  function* (): Effect.fn.Return<
+  function* (
+    drives: BaseDriveFills | undefined,
+  ): Effect.fn.Return<
     HttpServerResponse.HttpServerResponse,
     HostedRefusal,
     | HttpServerRequest.HttpServerRequest
@@ -434,11 +475,13 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
     const event = request.headers[DELIVERY_HEADER.EVENT] ?? "";
     if (event === WEBHOOK_EVENT.PING) return hostedJsonResponse(200, { read: 0 });
     const payload = yield* parseJsonBytes(body);
-    if (event === WEBHOOK_EVENT.INSTALLATION) {
-      const moved = installationTarget(payload);
+    if (event === WEBHOOK_EVENT.INSTALLATION || event === WEBHOOK_EVENT.INSTALLATION_REPOSITORIES) {
+      const moved = event === WEBHOOK_EVENT.INSTALLATION ? installationTarget(payload) : undefined;
       if (moved !== undefined) {
         yield* hostedStoreOrUnavailable(setInstallationStatus(moved.installationId, moved.status));
       }
+      const granting = installationGranting(event, payload);
+      if (granting !== undefined) yield* drivesFilledFor(drives, granting);
       return hostedJsonResponse(200, { read: 0 });
     }
     if (event === WEBHOOK_EVENT.APP_AUTHORIZATION) {
@@ -482,12 +525,21 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
   Effect.provideService(GitHubBackground, true),
 );
 
+/** What the group is made with: where the deployment fills base drives, what a fill runs through; none where it fills none on a connect. */
+interface GitHubWebhookAppOptions {
+  readonly drives?: BaseDriveFills;
+}
+
 /** The group: the one delivery path, and the hosted vocabulary's own refusal for any other. */
-export function githubWebhookApp(): WebRoutes<
-  HostedEnvironment | DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
-> {
+export function githubWebhookApp(
+  options: GitHubWebhookAppOptions = {},
+): WebRoutes<HostedEnvironment | DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox> {
   return Layer.mergeAll(
-    HttpRouter.add(ANY_METHOD, GITHUB_WEBHOOK_PATH, hostedRefusing(deliveryEndpoint())),
+    HttpRouter.add(
+      ANY_METHOD,
+      GITHUB_WEBHOOK_PATH,
+      hostedRefusing(deliveryEndpoint(options.drives)),
+    ),
     hostedNotFoundRoute,
   );
 }

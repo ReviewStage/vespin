@@ -189,7 +189,7 @@ function baseSpanAttributes(state: BaseDriveRead["state"], reason: BaseWanted | 
 }
 
 /** The base drive as it stands for a launch, which its span records. */
-export const readBaseDrive = (of: BaseDriveOf) =>
+export const readBaseDrive = (of: Pick<BaseDriveOf, "workspaceId" | "fullName">) =>
   Effect.all([
     Effect.flatMap(Sandbox, (sandbox) => sandbox.get(baseDriveName(of))),
     Clock.currentTimeMillis,

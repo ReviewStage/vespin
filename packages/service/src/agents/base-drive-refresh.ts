@@ -11,9 +11,11 @@
  * drive within the hour and its first agent forks it rather than cloning.
  * One that stands is refilled on the run at `REFILL_HOUR_UTC` alone: the
  * default branch fetched over its checkout, and an install only where that
- * moved a lockfile, so each agent's own fetch stays small. Note that a fill
- * whose sandbox was created and that then failed leaves its drive standing
- * (`filledDrive`), so it is tried again once a day rather than every hour. A repository its installation no
+ * moved a lockfile, so each agent's own fetch stays small. One a fill left
+ * unfinished, failed or cut off by its function's deadline, is filled again
+ * on any run. The same fill of a workspace's missing drives runs past the
+ * answer as its installation is connected or given repositories
+ * (`filledInBackground`), so the hourly run is the backstop. A repository its installation no
  * longer reaches is passed by. The drives are filled a few at once, each
  * kept from the rest: one that fails is logged by its kind and the rest go
  * on, and the next run tries it again.
@@ -27,15 +29,19 @@ import {
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { causeKind } from "@repo/runtime/effect";
 import { Sandbox } from "@repo/sandbox";
-import { Cause, Effect, Option } from "effect";
+import { Cause, Effect, type Layer, Option } from "effect";
 import { GitHubApp } from "../github/github-app.js";
+import { GitHubBackground } from "../github/github-rate-gate.js";
+import { afterResponse } from "../http/after-response.js";
 import { BASE_DRIVE_REFRESH } from "../maintenance/maintenance-bounds.js";
 import {
+  BASE_STATE,
   BASE_WANTED,
   type BaseDriveOf,
   type BaseRefill,
   baseDriveName,
   fillBaseDrive,
+  readBaseDrive,
 } from "./base-drive.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import {
@@ -87,10 +93,11 @@ const refreshedOne = (
 ) =>
   Effect.gen(function* () {
     const api = yield* Sandbox;
-    const stands = yield* api.driveStands(
-      baseDriveName({ workspaceId: workspace.workspaceId, fullName }),
-    );
-    if (stands && !refillStanding) return REFRESH_OUTCOME.PASSED;
+    const named = { workspaceId: workspace.workspaceId, fullName };
+    const stands = yield* api.driveStands(baseDriveName(named));
+    // Note that a drive a fill left unfinished, as one a request's deadline cut off, is filled again on any run.
+    const unfinished = stands && (yield* readBaseDrive(named)).state === BASE_STATE.WANTED;
+    if (stands && !unfinished && !refillStanding) return REFRESH_OUTCOME.PASSED;
     const reached = yield* (yield* GitHubApp).repositoryReadToken(
       workspace.workspaceId,
       fullName,
@@ -105,7 +112,12 @@ const refreshedOne = (
       fullName: repository.fullName,
       defaultBranch: repository.defaultBranch,
     };
-    const refill: BaseRefill = stands ? BASE_WANTED.SCHEDULED : BASE_WANTED.MISSING;
+    // An unfinished drive names no reason of its own: the fill reads it as unfinished.
+    const refill: BaseRefill | undefined = !stands
+      ? BASE_WANTED.MISSING
+      : unfinished
+        ? undefined
+        : BASE_WANTED.SCHEDULED;
     const context = yield* Effect.context<DatabaseServices>();
     yield* fillBaseDrive(
       of,
@@ -120,7 +132,7 @@ const refreshedOne = (
         ),
       refill,
     );
-    return stands ? REFRESH_OUTCOME.REFILLED : REFRESH_OUTCOME.FILLED;
+    return stands && !unfinished ? REFRESH_OUTCOME.REFILLED : REFRESH_OUTCOME.FILLED;
   });
 
 /** Whether a run at the instant given is the day's one that refills every base drive that stands. */
@@ -130,40 +142,95 @@ export function refillsStanding(nowMillis: number): boolean {
   );
 }
 
+/** A workspace's repositories as its installations grant them, each filled where its drive stands not and refilled where it stands and `refillStanding` asks it, a few at once; each outcome, a failure logged and counted as none. */
+const refreshedWorkspace = (
+  run: SandboxRunner,
+  image: string,
+  workspace: BaseDriveWorkspace,
+  refillStanding: boolean,
+) =>
+  Effect.gen(function* () {
+    const listed = yield* (yield* GitHubApp)
+      .workspaceRepositories(workspace.workspaceId)
+      .pipe(Effect.catchCause(loggedFailure("a workspace's repository listing")));
+    if (listed === undefined) return [undefined];
+    return yield* Effect.forEach(
+      Option.getOrElse(listed, () => []),
+      (repository) =>
+        refreshedOne(run, image, workspace, repository.fullName, refillStanding).pipe(
+          Effect.catchCause(loggedFailure("a base drive's fill")),
+        ),
+      { concurrency: FILL_CONCURRENCY },
+    );
+  });
+
+/** What a run's outcomes come to, in counts alone. */
+function countsOf(outcomes: readonly (RefreshOutcome | undefined)[]): BaseDriveRefresh {
+  const counts = { filled: 0, refilled: 0, passed: 0, failed: 0 };
+  for (const outcome of outcomes) {
+    if (outcome === undefined) counts.failed += 1;
+    else counts[outcome] += 1;
+  }
+  return counts;
+}
+
+/**
+ * A base drive filled for each of the workspace's repositories that has
+ * none, as a workspace's installation is connected or given repositories;
+ * what it did, each fill's failure logged.
+ */
+const fillWorkspaceDrives = Effect.fn("web/fillWorkspaceDrives")(function* (
+  run: SandboxRunner,
+  workspace: BaseDriveWorkspace,
+) {
+  const image = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.reference);
+  const filled = countsOf(yield* refreshedWorkspace(run, image, workspace, false));
+  yield* Effect.logInfo(
+    `a connected workspace's base drives: ${filled.filled} filled, ${filled.passed} passed by, ${filled.failed} failed`,
+  );
+  return filled;
+});
+
+/** What a route that fills a connected workspace's drives is handed: the edge's runner a fill's checkout runs through, and the agents' image the function ships. */
+export interface BaseDriveFills {
+  readonly run: SandboxRunner;
+  readonly image: Layer.Layer<AgentImage>;
+}
+
+/**
+ * The workspace's base drives filled past the request's answer
+ * (`fillWorkspaceDrives`), as its installation is connected or given
+ * repositories, so its first agents fork them rather than cloning; what it
+ * asks GitHub waits in the background lane, since no member waits on it.
+ */
+export const filledInBackground = (fills: BaseDriveFills, workspace: BaseDriveWorkspace) =>
+  Effect.gen(function* () {
+    // Note that a route reached with no sandboxes, as in a test of its other work, fills nothing.
+    const sandbox = yield* Effect.serviceOption(Sandbox);
+    if (Option.isNone(sandbox)) return;
+    yield* afterResponse(
+      "A connected workspace's base drives",
+      fillWorkspaceDrives(fills.run, workspace).pipe(
+        Effect.provide(fills.image),
+        Effect.provideService(GitHubBackground, true),
+        Effect.provideService(Sandbox, sandbox.value),
+      ),
+    );
+  });
+
 /** Every connected repository's base drive filled where none stands, and refilled where one does and `refillStanding` asks it; what the run did. */
 export const refreshBaseDrives = Effect.fn("web/refreshBaseDrives")(function* (
   run: SandboxRunner,
   refillStanding: boolean,
 ) {
   const image = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.reference);
-  const github = yield* GitHubApp;
-  const counts = { filled: 0, refilled: 0, passed: 0, failed: 0 };
-  const jobs: { readonly workspace: BaseDriveWorkspace; readonly fullName: string }[] = [];
+  const outcomes: (RefreshOutcome | undefined)[] = [];
   for (const workspace of yield* listBaseDriveWorkspaces()) {
-    const listed = yield* github
-      .workspaceRepositories(workspace.workspaceId)
-      .pipe(Effect.catchCause(loggedFailure("a workspace's repository listing")));
-    if (listed === undefined) counts.failed += 1;
-    else
-      for (const each of Option.getOrElse(listed, () => [])) {
-        jobs.push({ workspace, fullName: each.fullName });
-      }
+    outcomes.push(...(yield* refreshedWorkspace(run, image, workspace, refillStanding)));
   }
-  const outcomes: readonly (RefreshOutcome | undefined)[] = yield* Effect.forEach(
-    jobs,
-    (job) =>
-      refreshedOne(run, image, job.workspace, job.fullName, refillStanding).pipe(
-        Effect.catchCause(loggedFailure("a base drive's fill")),
-      ),
-    { concurrency: FILL_CONCURRENCY },
-  );
-  for (const outcome of outcomes) {
-    if (outcome === undefined) counts.failed += 1;
-    else counts[outcome] += 1;
-  }
-  const refreshed: BaseDriveRefresh = counts;
+  const refreshed = countsOf(outcomes);
   yield* Effect.logInfo(
-    `base drives refreshed: ${counts.filled} filled, ${counts.refilled} refilled, ${counts.passed} passed by, ${counts.failed} failed`,
+    `base drives refreshed: ${refreshed.filled} filled, ${refreshed.refilled} refilled, ${refreshed.passed} passed by, ${refreshed.failed} failed`,
   );
   return refreshed;
 });

@@ -41,7 +41,10 @@ import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { afterEach, vi } from "vitest";
+import { baseDriveName } from "../agents/base-drive.js";
+import { AgentImage } from "../agents/coder-host/agent-image.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
+import { keptAfterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
@@ -55,6 +58,7 @@ import {
 import { recordingHarness } from "../testing/native-harness-fake.js";
 import { GITHUB_PROVIDER_ID, GitHubApp } from "./github-app.js";
 import { LINK_OUTCOME } from "./github-installations.js";
+import { GitHubBackground } from "./github-rate-gate.js";
 import { githubWebhookApp } from "./github-webhook-app.js";
 
 /** What every case runs over: the store, and sandboxes kept in memory. */
@@ -161,17 +165,31 @@ interface Answer {
 /** The native harnesses the webhook's wakes reach, writing down each with the account it acted for. */
 const HARNESS = recordingHarness();
 
-/** The group over the test's database, the GitHub given, and the secret given (and any other values held), answering one request. */
+/** The agents' image a fill opens its sandbox from. */
+const IMAGE = Layer.succeed(AgentImage, {
+  reference: Effect.succeed("agent-image:fixture"),
+  runner: Effect.succeed([]),
+});
+
+/** Where a case watches the group fill base drives: its sandboxes, and the work it kept past the answer. */
+interface Filling {
+  readonly sandbox: ReturnType<typeof memorySandbox>;
+  readonly after: ReturnType<typeof keptAfterResponse>;
+}
+
+/** The group over the test's database, the GitHub given, and the secret given (and any other values held), answering one request; filling base drives where `filling` watches them. */
 const answer = (
   github: FakeGitHub,
   secret: string | undefined,
   request: Request,
   held: Partial<HostedEnvironmentValues> = {},
+  filling?: Filling,
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
     const services = Layer.mergeAll(
-      memorySandbox().layer,
+      filling === undefined ? memorySandbox().layer : filling.sandbox.layer,
+      filling === undefined ? Layer.empty : filling.after.layer,
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -180,7 +198,11 @@ const answer = (
       HARNESS.layer,
     );
     const { handler, dispose } = HttpRouter.toWebHandler(
-      githubWebhookApp().pipe(HttpRouter.provideRequest(services)),
+      githubWebhookApp(
+        filling === undefined
+          ? {}
+          : { drives: { run: (effect) => Effect.runPromise(effect), image: IMAGE } },
+      ).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
     const response = yield* Effect.promise(() => handler(request));
@@ -390,6 +412,46 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         assert.deepEqual(suspended, [{ login, active: false }]);
         assert.deepEqual(unsuspended, [{ login, active: true }]);
         assert.deepEqual(deleted, [{ login, active: false }]);
+      }),
+  );
+
+  it.effect(
+    "repositories added to an installation have its workspace's base drives filled past the answer",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const installation = installationOfRelay();
+        const github = githubReaching([installation]);
+        const { id: workspaceId } = yield* (yield* fakeWorkspaceSeams).createOrganization({
+          name: "Acme",
+          slug: `acme-${randomUUID()}`,
+          userId: owner,
+          metadata: {},
+        });
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+        const filling = { sandbox: memorySandbox(), after: keptAfterResponse() };
+        const added = {
+          action: "added",
+          installation: { id: installation.id },
+          repositories_added: [{ full_name: RELAY_FULL_NAME }],
+        };
+
+        const answered = yield* answer(
+          github,
+          SECRET,
+          delivery("installation_repositories", added),
+          {},
+          filling,
+        );
+        yield* filling.after.run.pipe(
+          Effect.provide(github.layer),
+          Effect.provideService(GitHubBackground, true),
+        );
+
+        const drive = baseDriveName({ workspaceId, fullName: RELAY_FULL_NAME });
+        assert.deepEqual(answered, { status: 200, body: { read: 0 } });
+        assert.deepEqual([...filling.sandbox.state.drives.keys()], [drive]);
+        assert.deepEqual(filling.sandbox.state.deleted, [drive]);
       }),
   );
 

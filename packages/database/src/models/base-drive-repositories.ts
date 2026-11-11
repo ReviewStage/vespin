@@ -1,5 +1,5 @@
 /**
- * base-drive-repositories.ts -- every workspace a base drive may stand in, read across accounts for the scheduled refresh alone.
+ * base-drive-repositories.ts -- every workspace a base drive may stand in, read across accounts for the scheduled refresh and an installation's webhook alone.
  *
  * A workspace's repository has a base drive
  * (`packages/service/src/agents/base-drive.ts`) for every repository its
@@ -13,7 +13,7 @@
 import { GITHUB_INSTALLATION_STATUS } from "@repo/features/github-installation-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { Schema } from "effect";
+import { type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { member } from "../schemas/auth.js";
@@ -52,4 +52,32 @@ const findBaseDriveWorkspaces = SqlSchema.findAll({
 /** Every workspace with an active GitHub installation, of every account, for the scheduled refresh alone. */
 export function listBaseDriveWorkspaces(): AgentStoreEffect<readonly BaseDriveWorkspace[]> {
   return findBaseDriveWorkspaces(undefined);
+}
+
+const findBaseDriveWorkspaceOfInstallation = SqlSchema.findOneOption({
+  Request: Schema.Number,
+  Result: BaseDriveWorkspaceSchema,
+  execute: (installationId) =>
+    Database.use((db) =>
+      db
+        .select({ workspaceId: member.organizationId, userId: member.userId })
+        .from(githubInstallation)
+        .innerJoin(member, eq(member.organizationId, githubInstallation.organizationId))
+        .where(
+          and(
+            eq(githubInstallation.installationId, installationId),
+            eq(githubInstallation.status, GITHUB_INSTALLATION_STATUS.ACTIVE),
+            eq(member.role, WORKSPACE_ROLE.OWNER),
+          ),
+        )
+        .orderBy(asc(member.createdAt))
+        .limit(1),
+    ),
+});
+
+/** The workspace an active installation stands for, with the account of its first owner; none where the installation is linked to none or is not active. */
+export function baseDriveWorkspaceOfInstallation(
+  installationId: number,
+): AgentStoreEffect<Option.Option<BaseDriveWorkspace>> {
+  return findBaseDriveWorkspaceOfInstallation(installationId);
 }
