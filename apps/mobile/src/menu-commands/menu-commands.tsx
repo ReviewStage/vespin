@@ -270,9 +270,11 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     }
   };
 
-  // Note that the listener reads the newest `act` through a ref, so it is added once rather than at every render.
+  // Note that the listener reads the newest committed `act` through a ref, so it is added once rather than at every render.
   const latest = useRef(act);
-  latest.current = act;
+  useEffect(() => {
+    latest.current = act;
+  });
   useEffect(() => {
     const listening = menuCommandsModule?.addListener("onCommand", ({ command }) =>
       latest.current(command),
