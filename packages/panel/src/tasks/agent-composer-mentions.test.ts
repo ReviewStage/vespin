@@ -1444,7 +1444,9 @@ test("a page's address pasted in the app's own scheme is called by the name the 
   const { container, sent } = await box(planPage([]));
   const page = encodeMention({ kind: MENTION_KIND.PAGE, taskId: TASK_ID, pageId: PAGE.id }, PLACE);
   const agent = encodeMention({ kind: MENTION_KIND.AGENT, agentId: STORE_AGENT.id }, PLACE);
-  const file = "https://github.com/acme/relay/blob/HEAD/apps/web/rollout-store.ts";
+  // A file's page at a commit keeps that commit, so its chip opens the code it was pasted at.
+  const file =
+    "https://github.com/acme/relay/blob/3f9c2e1d5b7a4c6e8f0a2b4c6d8e0f1a3b5c7d9e/apps/web/rollout-store.ts";
   const thread = "https://vespin.dev/acme/inbox/e4519584-9b91-4c47-8ba4-e7b0e636f625";
 
   typeInComposer(container, "Build ");

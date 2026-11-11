@@ -1179,17 +1179,16 @@ function byTaskId(words: string, taskIdOf: NumberedTaskIdOf): string {
  * The target a pasted address's mention is laid in with: the mention's own,
  * written under the place (`encodeMention`), so either scheme and an old
  * form read the same; but the address as pasted where that would name
- * another thing, a person's page of another workspace than the place's, or
- * a file or a folder where the place knows no repository to write it of.
+ * another thing: a person's page of another workspace than the place's, and
+ * a file's or a folder's GitHub page, whose revision the mention keeps only
+ * with lines, so a page at a commit stays at that commit.
  */
 function pastedTarget(mention: Mention, address: string, place: MentionPlace): string {
-  if (mention.kind === MENTION_KIND.PERSON) {
-    return readLink(address)?.workspace === place.workspace
-      ? encodeMention(mention, place)
-      : address;
+  if (mention.kind === MENTION_KIND.FILE || mention.kind === MENTION_KIND.FOLDER) return address;
+  if (mention.kind === MENTION_KIND.PERSON && readLink(address)?.workspace !== place.workspace) {
+    return address;
   }
-  const paged = mention.kind === MENTION_KIND.FILE || mention.kind === MENTION_KIND.FOLDER;
-  return paged && place.repository === null ? address : encodeMention(mention, place);
+  return encodeMention(mention, place);
 }
 
 /**
