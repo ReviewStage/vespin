@@ -400,8 +400,8 @@ function liveReminderFor(readerId: string): { remindAt: SQL; snoozedUntil: SQL }
 /**
  * The member an item waits on: the member its agent addressed it to, or,
  * where it names none, its task's assignee while a member of its workspace,
- * or the member who started its agent where the task has nobody assigned,
- * is assigned to a member who left, or the agent works on no task. A
+ * or the member who started its agent where the task has nobody assigned
+ * or is assigned to a member who left. A
  * scalar read rather than a join, because `returning` projects it too and
  * joins nothing, and every name is qualified, because it is nested in reads
  * that join the task themselves.
@@ -614,7 +614,7 @@ function itemAgentSeenBy(userId: string): SQL {
   return sql`(${isNull(inboxItem.agentId)} or ${seen})`;
 }
 
-/** The condition that the account is a member of the workspace of the item a statement reads, an item of an agent with no task as much as one on a task, and sees the agent that posted it: what an agent's own reads of its items keep, under the member who started it, as it acts as itself (`agentReachableBy`). What a member reads keeps `itemVisibleTo`. */
+/** The condition that the account is a member of the workspace of the item a statement reads, and sees the agent that posted it: what an agent's own reads of its items keep, under the member who started it, as it acts as itself (`agentReachableBy`). What a member reads keeps `itemVisibleTo`. */
 function itemReachableBy(userId: string): SQL {
   return sql`(${workspaceReachableBy(userId, ITEM_WORKSPACE)} and ${itemAgentSeenBy(userId)})`;
 }
@@ -635,7 +635,7 @@ function itemVisibleTo(userId: string): SQL {
       .from(task)
       .where(and(eq(task.id, inboxItem.taskId), taskReachableBy(userId))),
   );
-  return sql`(${itemReachableBy(userId)} and (${inboxItem.taskId} is null or ${taskReached}))`;
+  return sql`(${itemReachableBy(userId)} and ${taskReached})`;
 }
 
 /** The step a link names the agent's workspace by: its slug, or its id where it has none, as a description's picture names it. */
@@ -667,7 +667,7 @@ const lockAgent = SqlSchema.findOneOption({
 
 const PostWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   organizationId: Schema.String,
   agentId: Schema.String,
   key: Schema.String,
@@ -750,7 +750,7 @@ function insertMessage(
 
 const MessageFileWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   organizationId: Schema.String,
   itemId: Schema.String,
   name: Schema.String,
@@ -1232,7 +1232,7 @@ function toDoCount(userId: string): SQL<number> {
 
 /**
  * The settled items still unread that wait on the reader (`WAITS_ON`) in
- * their workspaces, a task's or an agent's with no task, among those they
+ * their workspaces, among those they
  * may read (`itemVisibleTo`): what To do lists beside the open items, so
  * their read marks and new messages on those items move the account's
  * cursor as an open item's change does. Note that who it waits on is
@@ -1241,8 +1241,8 @@ function toDoCount(userId: string): SQL<number> {
  * reader's own index (`inbox_item_user_status_updated`) and the assignee's
  * by the task's, where a `coalesce` would read every settled item of their
  * workspaces on each look; an item addressed to someone waits on them
- * alone, one whose task's assignee left on its starter, as `WAITS_ON` reads
- * it, and one with no task, which joins no assignee, on its starter.
+ * alone, and one whose task's assignee left on its starter, as `WAITS_ON` reads
+ * it.
  */
 function accountUnreadSettled(userId: string) {
   const assigneeLeft = notExists(
@@ -1805,7 +1805,7 @@ const findItemHome = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, itemId: Schema.String }),
   Result: Schema.Struct({
     agentId: Schema.String,
-    planId: Schema.NullOr(Schema.String),
+    planId: Schema.String,
     workspaceId: Schema.String,
   }),
   execute: ({ userId, itemId }) =>
@@ -1836,7 +1836,7 @@ const findItemScope = SqlSchema.findOne({
   Request: Schema.Struct({ itemId: Schema.String }),
   Result: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
     organizationId: Schema.String,
   }),
   execute: ({ itemId }) =>
@@ -2601,7 +2601,7 @@ export function taskInboxItems(
   );
 }
 
-/** One agent's items as any member of its workspace reads them, an agent with no task as much as one on a task: every open one, then the latest settled. */
+/** One agent's items as any member of its workspace reads them: every open one, then the latest settled. */
 export function memberAgentInboxItems(
   userId: string,
   agentId: string,
@@ -2614,8 +2614,7 @@ export function memberAgentInboxItems(
 }
 
 /**
- * Every item of one workspace the member may read, a task's or an agent's
- * with no task, any member's agents' alike: every open one, then the latest
+ * Every item of one workspace the member may read, any member's agents' alike: every open one, then the latest
  * settled as many as an agent's own read is told (`MAX_SETTLED_TOLD`), what
  * an outside agent acting for the member reads of their inbox
  * (`member-mcp/inbox.ts`). Note that it is handed no member's key, since
@@ -3593,7 +3592,7 @@ const findStartedThread = SqlSchema.findOneOption({
 const insertStartedItem = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
     organizationId: Schema.String,
     agentId: Schema.String,
     key: Schema.String,

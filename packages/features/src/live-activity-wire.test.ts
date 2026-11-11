@@ -18,10 +18,9 @@ describe("liveActivityContentStateSchema", () => {
         {
           id: "agent-1",
           title: "Fix the refresh",
-          step: "Editing session-store.ts",
           startedAt: 1_762_794_528_000,
         },
-        { id: "agent-2", title: "Resend invites", step: null, startedAt: 1_762_794_000_000 },
+        { id: "agent-2", title: "Resend invites", startedAt: 1_762_794_000_000 },
       ],
     });
     expect(JSON.parse(JSON.stringify(encoded))).toStrictEqual({
@@ -31,10 +30,9 @@ describe("liveActivityContentStateSchema", () => {
         {
           id: "agent-1",
           title: "Fix the refresh",
-          step: "Editing session-store.ts",
           startedAt: 1762794528000,
         },
-        { id: "agent-2", title: "Resend invites", step: null, startedAt: 1762794000000 },
+        { id: "agent-2", title: "Resend invites", startedAt: 1762794000000 },
       ],
     });
   });

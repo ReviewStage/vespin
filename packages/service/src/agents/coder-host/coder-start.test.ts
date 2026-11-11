@@ -61,12 +61,11 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
- * coder-start.test.ts -- an agent started in a workspace with no task, as an automation's run starts one, and one started on a task.
+ * coder-start.test.ts -- an agent started on a task, by hand or as an automation's run starts one.
  *
- * The Start opens one agent on no task, in the workspace named, on the
- * repository named, handed the task, and a retry under its key is that
- * agent and opens nothing again; a member who did not make the workspace
- * starts one as well, an account outside it starts nothing, and a
+ * The Start opens one agent on the task, on its repository, handed the
+ * prompt, and a retry under its key is that agent and opens nothing again;
+ * a member who did not make the task starts one as well, an account outside it starts nothing, and a
  * repository the workspace's installation does not reach is refused before
  * the harness is asked, and a Start whose session never opened leaves no agent. An agent started on a task moves it into progress from the
  * backlog or to do, and on a task stored in pilot mode it is a coder. The

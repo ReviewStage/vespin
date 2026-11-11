@@ -3,28 +3,38 @@ import {
   BLOCK_LIST_ELEMENT,
   BlockList,
   BlockListItem,
+  BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
+  COMPOSER_LOOK,
   CornerCount,
   FoldingButton,
+  IconButton,
   POPOVER_ALIGN,
   PopoverPanel,
+  Tooltip,
 } from "@repo/ui";
 import { GLYPH, MessageSquarePlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { type ReactNode, useId, useRef } from "react";
-import { CommentEditor } from "./comment-editor.js";
+import { type ReactNode, type RefObject, useId, useMemo, useRef } from "react";
+import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
+import { MessageBox, useMessageBox } from "./message-box.js";
 import { PENDING_WORDS } from "./pending-comments.js";
-import { ACTS_AT_END_CLASS } from "./pull-request-look.js";
 
 /**
  * review-panel.tsx -- a review the member finishes: the Review press, its count of pending comments at the corner, and the Finish your review panel it opens, the Pull request tab's and a page's alike.
  *
  * The panel says where the review goes, lists the pending comments it
- * holds, takes an optional summary comment, and ends with Discard, while
- * a review is held, then Cancel and the send. What the review says of a
- * pull request (Comment, Approve, Request changes) stands between the
- * summary and the note where the caller offers it; a page offers none.
+ * holds, offers what the review says of a pull request (Comment, Approve,
+ * Request changes) where the caller offers it, a page offering none, and
+ * ends in the optional summary, written in the composer's own box
+ * (`MessageBox`) as every comment is, so it takes `@` where the review's
+ * comments do, a page's, and none where they go to GitHub, whose owner
+ * stands it under no `@` list. The review's presses stand in the box's
+ * foot, as every comment's do: Discard, while a review is held, a trash at
+ * the foot's start where a message box keeps its +, then a quiet Cancel and
+ * the send, in words, since it sends the whole review, and takes a press
+ * with no summary written. Why the last send did not land stands under it.
  * Escape closes it, Enter in the summary sends, a press outside or the
  * focus leaving it closes it with its words kept, and a review on its way,
  * or a question or a menu opened over the window from inside it, holds it
@@ -82,13 +92,15 @@ interface ReviewDraft {
   readonly setBody: (body: string) => void;
   /** Whether the summary may not be sent as it stands, past what a comment carries. */
   readonly over: boolean;
+  /** The most a summary carries, as a comment where the review goes does. */
+  readonly maxLength: number;
   readonly submit: () => void;
 }
 
 /**
- * The panel: its head and lead, the pending comments, the summary,
- * `choices` where the caller offers them, `note` where the last send did not
- * land, then Discard, Cancel, and the send.
+ * The panel: its head and lead, the pending comments, `choices` where the
+ * caller offers them, the summary's box with Discard, Cancel, and the send
+ * in its foot, and `note` where the last send did not land.
  */
 function ReviewPanel({
   open,
@@ -117,7 +129,30 @@ function ReviewPanel({
   onClose: () => void;
   onLeave: (left: EventTarget | null) => void;
 }): React.JSX.Element {
-  const field = useRef<HTMLElement>(null);
+  const box = useMessageBox({
+    draft: draft.body,
+    setDraft: draft.setBody,
+    placeholder: words.placeholder,
+    label: words.body,
+    maxLength: draft.maxLength,
+    onSubmit: () => {
+      if (!sending) draft.submit();
+    },
+    held: sending,
+    takesFiles: false,
+    focus: true,
+    focusedByOwner: true,
+  });
+  // Note that the field is read as the panel asks for it, once the panel stands, because the panel hands the focus before an effect of its owner could find the words; where the editor lands later, the words take the focus themselves.
+  const { room } = box;
+  const field = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        return room.current?.querySelector<HTMLElement>(EDITOR_ROOT_SELECTOR) ?? null;
+      },
+    }),
+    [room],
+  );
   return (
     <PopoverPanel
       open={open}
@@ -139,44 +174,40 @@ function ReviewPanel({
           ))}
         </BlockList>
       )}
-      <CommentEditor
-        label={words.body}
-        placeholder={words.placeholder}
-        value={draft.body}
-        onChange={draft.setBody}
-        busy={sending}
-        focus
-        fieldRef={field}
-        onSubmit={() => {
-          if (!sending) draft.submit();
+      {choices}
+      <MessageBox
+        box={box}
+        look={COMPOSER_LOOK.INPUT}
+        className="review-summary"
+        tools={
+          onDiscard === undefined ? undefined : (
+            <Tooltip label={REVIEW_PANEL_WORDS.DISCARD}>
+              <IconButton
+                variant={BUTTON_VARIANT.DANGER_QUIET}
+                size={BUTTON_SIZE.COMPACT}
+                icon={<GLYPH.DELETE />}
+                label={REVIEW_PANEL_WORDS.DISCARD}
+                disabled={sending}
+                onClick={onDiscard}
+              />
+            </Tooltip>
+          )
+        }
+        beforeSend={
+          <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onClose}>
+            <ReplayUnmask>{REVIEW_PANEL_WORDS.CANCEL}</ReplayUnmask>
+          </Button>
+        }
+        // Note that the summary is optional, so the send takes a press with none written, and only words past what a comment carries hold it.
+        send={{
+          label: words.send,
+          inWords: true,
+          empty: draft.over,
+          busy: sending,
+          busyLabel: words.sending,
         }}
       />
-      {choices}
       {note}
-      <ReplayUnmask>
-        <div className={ACTS_AT_END_CLASS}>
-          {onDiscard === undefined ? null : (
-            <Button
-              variant={BUTTON_VARIANT.DANGER_OUTLINE}
-              icon={<GLYPH.DELETE />}
-              disabled={sending}
-              onClick={onDiscard}
-            >
-              {REVIEW_PANEL_WORDS.DISCARD}
-            </Button>
-          )}
-          <Button onClick={onClose}>{REVIEW_PANEL_WORDS.CANCEL}</Button>
-          <Button
-            variant={BUTTON_VARIANT.PRIMARY}
-            disabled={draft.over}
-            busy={sending}
-            busyLabel={words.sending}
-            onClick={draft.submit}
-          >
-            {words.send}
-          </Button>
-        </div>
-      </ReplayUnmask>
     </PopoverPanel>
   );
 }

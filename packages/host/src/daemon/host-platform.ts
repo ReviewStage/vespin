@@ -51,7 +51,7 @@ const CLAUDE_CODE_SANDBOXED = "IS_SANDBOX";
 interface HostPlatformOptions {
   /** The OS the host runs on, which names its platform, its name, and its check for unsaved work. */
   readonly os: HostOs;
-  /** The folder the host's release is installed in (a version folder of `~/.local/share/vespin-host`), under which the runner's bundle stands. */
+  /** The folder the host's release is installed in (a version folder of `~/.local/share/vespin-host`, or the app's `Contents/Resources/host`), under which the runner's bundle stands. */
   readonly installFolder: string;
   /** The Node the host itself runs on, which every runner runs on too. */
   readonly node: string;
@@ -89,9 +89,11 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
     deviceName: options.os.deviceName(),
     deviceMachine: options.os.machine(),
     devicePlatform: options.os.platform,
-    // Note that a host lets go of an archived agent's folder (`discard`), and a Mac alone runs an agent on its starter's own token on its own GitHub sign-in, the machine its member signs in at themselves.
+    // Note that a host lets go of an archived agent's folder (`discard`), runs an agent in the mode its launch names, and puts a worktree back on a rewind (`restore-checkout`), and a Mac alone runs an agent on its starter's own token on its own GitHub sign-in, the machine its member signs in at themselves.
     deviceCapabilities: [
       DEVICE_CAPABILITY.DISCARD,
+      DEVICE_CAPABILITY.PERMISSION_MODES,
+      DEVICE_CAPABILITY.RESTORE_CHECKOUT,
       ...(options.os.platform === DEVICE_PLATFORM.DARWIN ? [DEVICE_CAPABILITY.GITHUB_SIGN_IN] : []),
     ],
     deviceArch: options.arch,

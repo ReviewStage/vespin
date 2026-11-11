@@ -15,6 +15,17 @@
  * that same install, which the desktop app starts and stops through launchd
  * (`apps/desktop/src/main/native/this-mac-host.ts`).
  *
+ * The same bundle also ships inside the desktop app, its `lib/` under
+ * `Contents/Resources/host`, run on the Node the app carries by the
+ * LaunchAgent the app registers through `SMAppService`, whose plist starts
+ * it as `run --bundled`. A bundled daemon keeps the account install's state
+ * root (`DARWIN_HOST.stateRoot`), so the box's record and its agents'
+ * folders carry over, but updates with the app rather than itself, and once
+ * its box is removed it rests as a refused one does: the app owns the
+ * bundle, the plist and the registration, so the daemon touches none of
+ * them, and the app removes what else the host left with
+ * `@repo/host/daemon`'s `uninstallBundledHost`.
+ *
  * `run` is the command the service runs. A box that never connected says
  * so and watches its state folder until a connect writes its record
  * (`hostDeviceWhen`), rather than exiting for its service to start it
@@ -55,6 +66,7 @@ import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
   NodeChildProcessSpawner,
@@ -87,7 +99,7 @@ import {
   readHostDevice,
 } from "@repo/host/daemon";
 import { Environment, reporterLayer } from "@repo/host/effect";
-import { reportToStderr } from "@repo/host/node";
+import { armedWatchLayer, reportToStderr } from "@repo/host/node";
 import { ConfigProvider, Duration, Effect, Exit, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -137,8 +149,8 @@ const UNINSTALL_UNIT = "vespin-host-uninstall";
 
 const COMMAND = { RUN: "run", CONNECT: "connect", LEAVE: "leave", VERSION: "version" } as const;
 
-/** The release's own folder: this bundle stands in its `lib/`. */
-const installFolder = path.resolve(path.dirname(process.argv[1] ?? "."), "..");
+/** The release's own folder, the app's `Contents/Resources/host` for a bundled one: this bundle stands in its `lib/`, whichever way its Node was started. */
+const installFolder = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 /**
  * The account install's releases, where this release's own real path
@@ -185,7 +197,9 @@ const runtime: HostRuntime | undefined =
 
 const nodeServices = Layer.mergeAll(
   NodeChildProcessSpawner.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
+    ),
   ),
   FetchHttpClient.layer,
   reporterLayer(reportToStderr),
@@ -203,8 +217,8 @@ const arch = ({ os: hostOs }: HostRuntime) =>
       : Effect.succeed(read);
   });
 
-/** The daemon on the box's record, a wait until a connect writes one, or a rest while the service refuses it; it ends once the daemon switched to a newer release. */
-const follow = (runtime: HostRuntime) =>
+/** The daemon on the box's record, a wait until a connect writes one, or a rest while the service refuses it; it ends once the daemon switched to one of the releases given, or was removed from an account install. */
+const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
   Effect.gen(function* () {
     const { stateRoot } = runtime;
     const device = yield* readHostDevice(stateRoot);
@@ -238,12 +252,12 @@ const follow = (runtime: HostRuntime) =>
       device: device.value,
       version: VERSION,
       platform,
-      releases: accountReleases(),
+      releases,
     });
     if (ended === HOST_DAEMON_END.REMOVED) {
       reportToStderr(`${PRODUCT_NAME} host: every agent it ran is stopped.`);
-      // Note that only the account install removes itself, since a run of any other build has no install to remove, and rests as a refused box does.
-      return accountReleases() === undefined ? undefined : ended;
+      // Note that only the account install removes itself, since a bundled or any other run has no install of its own to remove, and rests as a refused box does.
+      return releases === undefined ? undefined : ended;
     }
     return ended;
   }).pipe(Effect.repeat({ until: (ended) => ended !== undefined }));
@@ -364,11 +378,18 @@ const removeItself = (service: HostService | undefined) =>
     }
   });
 
-/** `vespin-host run`: the daemon, resting while the service refuses the box's secret, until it switched to a newer release, which its service is asked to start at once, or the box was removed, which it removes itself from. */
-const run = (runtime: HostRuntime) =>
+/**
+ * `vespin-host run`: the daemon, resting while the service refuses the box's
+ * secret, until it switched to a newer release, which its service is asked
+ * to start at once, or the box was removed, which it removes itself from.
+ * `run --bundled`, the app's own LaunchAgent, is handed no releases, so it
+ * does neither and runs until launchd stops it.
+ */
+const run = (runtime: HostRuntime, bundled: boolean) =>
   Effect.gen(function* () {
+    if (bundled) return yield* Effect.as(follow(runtime, undefined), 0);
     const service = yield* serviceRunning(runtime);
-    const ended = yield* follow(runtime);
+    const ended = yield* follow(runtime, accountReleases());
     if (ended === HOST_DAEMON_END.UPDATED) yield* restartAsked(service);
     if (ended === HOST_DAEMON_END.REMOVED) yield* removeItself(service);
     return 0;
@@ -479,7 +500,10 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
       ),
     ).pipe(Effect.as(1));
   }
-  if (command === COMMAND.RUN) return run(runtime);
+  if (command === COMMAND.RUN) {
+    const { values } = parseArgs({ args: [...rest], options: { bundled: { type: "boolean" } } });
+    return run(runtime, values.bundled === true);
+  }
   if (command === COMMAND.LEAVE) return leave(runtime);
   if (command === COMMAND.CONNECT) {
     const { values } = parseArgs({
@@ -496,7 +520,7 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
   }
   return Effect.sync(() =>
     process.stderr.write(
-      "usage: vespin-host run | connect [--origin <url>] [--name <name>] | version | uninstall\n",
+      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | version | uninstall\n",
     ),
   ).pipe(Effect.as(CONNECT_EXIT.USAGE));
 }

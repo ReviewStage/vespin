@@ -113,6 +113,7 @@ const FIXTURE_FIRST: Workspace = {
   experiments: [
     chosen(EXPERIMENT.DESCRIPTIONS, true, FIXTURE_PERSON.ADA, "2026-09-01T09:00:00Z"),
     chosen(EXPERIMENT.MEMORY, true, FIXTURE_PERSON.ADA, "2026-09-01T09:00:00Z"),
+    chosen(EXPERIMENT.REWIND_FILES, true, FIXTURE_PERSON.ADA, "2026-11-10T09:00:00Z"),
   ],
 };
 const FIXTURE_TEAM: Workspace = {

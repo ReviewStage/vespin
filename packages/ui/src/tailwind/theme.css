@@ -869,6 +869,7 @@
   --spacing-menu-label: calc(var(--ui-row-inset) + var(--ui-menu-glyph) + var(--ui-icon-gap));
   --spacing-submenu-reach: calc(100% + 9px - var(--ui-submenu-shift, 0px));
   --spacing-submenu: 200px; /* off-scale: a submenu's width */
+  --spacing-submenu-hinted: 280px; /* off-scale: a submenu whose rows wear a hint under their names */
   --spacing-ui-32: var(--ui-space-32);
   --spacing-disclosure-row: 36px; /* off-scale: a file row's height */
   /* A place in a column standing tall enough for a face. */
@@ -1102,6 +1103,11 @@
     var(--ui-popover-room, 100vh)
   );
   --spacing-popover-narrow: var(--ui-popover-width-narrow);
+  /* The Resources popover's card, a table of three columns wide, and a
+     process's name stepped in a short way for each process above it
+     (`--resource-depth`), so a deep tree still leaves its names room. */
+  --spacing-popover-wide: var(--ui-popover-width-wide);
+  --spacing-resource-nest: calc(var(--resource-depth, 0) * var(--ui-space-12));
   --spacing-page-versions-end: calc(var(--ui-control-gap) - var(--ui-space-2));
   --spacing-image-diff-side: 200px; /* off-scale: a side's least before two stop fitting to a row */
   --spacing-snippet-pending: calc(var(--snippet-rows) * var(--snippet-row));
@@ -1121,14 +1127,12 @@
   );
   --spacing-chapter-rail: min(calc(var(--ui-space-64) * 4), 40%);
   --spacing-review-badge: 10px; /* off-scale: a standing's disc at a face's corner */
-  /* A pull request's conversation (`agent-pull-request-tab.tsx`): the
-     words' field growing from a few lines' height; a branch's chip at its
-     widest; a label's dot in its GitHub color (`--label-dot`); a line
+  /* A pull request's conversation (`agent-pull-request-tab.tsx`): a
+     branch's chip at its widest; a label's dot in its GitHub color (`--label-dot`); a line
      comment's measure; a boxed entry's inset, its hairline counted
      (`--boxed-inset`); a check's glyph and a deployment's door; and the
      annotation card's measure and columns, which its sheet sets
      (`.annotation-card`). */
-  --spacing-comment-editor: calc(3lh + 2 * var(--ui-space-6));
   --spacing-branch-chip: 22rem; /* off-scale: a branch's name before it is cut */
   --spacing-branch-base: min(22rem, 50%); /* off-scale: the base's, at most half its row */
   --spacing-label-dot: 10px; /* off-scale: a label's swatch */

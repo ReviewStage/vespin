@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "473bbb0d-2e50-43a5-a266-596629ef928c",
-  "prevIds": ["914788ca-3602-46d0-a63f-719d02537a05"],
+  "id": "47072cf9-6e70-4101-a184-d185fe77cfd7",
+  "prevIds": ["1ac778b5-7c48-4bc2-82e8-955235cc4308"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -595,6 +595,12 @@
     {
       "isRlsEnabled": false,
       "name": "workspace_install_script",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace_repository_run_action",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1867,7 +1873,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -2604,6 +2610,19 @@
       "generated": null,
       "identity": null,
       "name": "fingerprint",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_runner_record"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "permission_mode",
       "entityType": "columns",
       "schema": "public",
       "table": "agent_runner_record"
@@ -7859,7 +7878,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -9365,6 +9384,19 @@
       "table": "account_preference"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_permission_mode",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_preference"
+    },
+    {
       "type": "boolean",
       "typeSchema": null,
       "notNull": false,
@@ -9412,6 +9444,19 @@
       "generated": null,
       "identity": null,
       "name": "completion_sound",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_preference"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "ask_sound",
       "entityType": "columns",
       "schema": "public",
       "table": "account_preference"
@@ -11515,6 +11560,45 @@
       "table": "turns"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "snapshot_commit",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "turns"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "snapshot_head",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "turns"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "snapshot_branch",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "turns"
+    },
+    {
       "type": "bigint",
       "typeSchema": null,
       "notNull": true,
@@ -11998,7 +12082,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -12670,6 +12754,110 @@
       "entityType": "columns",
       "schema": "public",
       "table": "workspace_install_script"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "repository",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "position",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "label",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "command",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
     },
     {
       "type": "uuid",
@@ -15061,34 +15249,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "organization_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "updated_at",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": "\"status\" = 'open' and \"task_id\" is null",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "inbox_item_org_open_taskless_updated",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "inbox_item"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -16428,6 +16588,41 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "workspace_former_slug"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "lower(\"repository\")",
+          "isExpression": true,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "position",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "workspace_repository_run_action_repository_position",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
     },
     {
       "nameExplicit": true,
@@ -18879,6 +19074,19 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
+      "name": "workspace_repository_run_action_P0faN6yIRwp7_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["organization_id"],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "workspace_repository_setup_organization_id_organization_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -19718,6 +19926,14 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
+      "name": "workspace_repository_run_action_pkey",
+      "schema": "public",
+      "table": "workspace_repository_run_action",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
       "name": "workspace_repository_setup_pkey",
       "schema": "public",
       "table": "workspace_repository_setup",
@@ -19870,6 +20086,13 @@
       "table": "attachment"
     },
     {
+      "value": "\"inbox_item_id\" is null or \"task_id\" is not null",
+      "name": "attachment_inbox_file_task",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "attachment"
+    },
+    {
       "value": "\"mp4_bytes\" is null or (\"content_type\" = 'video/webm' and octet_length(\"mp4_bytes\") <= 4000000)",
       "name": "attachment_mp4_copy",
       "entityType": "checks",
@@ -19945,13 +20168,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "task_block"
-    },
-    {
-      "value": "\"task_id\" is not null or \"agent_id\" is not null",
-      "name": "task_page_version_owner",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "task_page_version"
     }
   ],
   "renames": []

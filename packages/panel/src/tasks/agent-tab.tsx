@@ -7,6 +7,7 @@ import {
   agentRows,
   callUsageLimit,
   delegates,
+  followUpsWords,
   isTodos,
   messageWords,
   nativeSubagent,
@@ -51,6 +52,7 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
+import type { TasksView } from "@repo/features/tasks-view";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
@@ -79,13 +81,14 @@ import {
 } from "@repo/features/turn-rows";
 import { replyFromWords } from "@repo/features/words";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { AGENT_ENTER } from "@repo/settings";
+import { AGENT_ENTER, EXPERIMENT } from "@repo/settings";
 import {
   ANNOUNCE,
   announce,
   BUTTON_VARIANT,
   Button,
   CodeCard,
+  CompactedLine,
   ConnectionLostNotice,
   DisclosureChevron,
   DocumentIcon,
@@ -99,6 +102,7 @@ import {
   MESSAGE_LINE_INSET,
   MessageHead,
   MessageLine,
+  NewSessionLine,
   OneLine,
   STATUS_TONE,
   SUBJECT_FIT,
@@ -168,12 +172,14 @@ import { appPlatform } from "../app-platform.js";
 import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
+import { useAgentArchive } from "../desktop/agent-archive.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
+import { appStateQuery, selectAppSettingsView, selectListedTasks } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import {
   type AgentApprovalsControl,
   type AgentModeControl,
@@ -210,6 +216,7 @@ import {
   finishedReplyLead,
   githubLineOf,
   isWakeupLine,
+  lastTurnEnding,
   lineSender,
   macOwnerOf,
   messageSender,
@@ -299,7 +306,7 @@ import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
+import { type AgentThreads, ThreadsDock, type TurnDone } from "./threads-dock.js";
 import {
   MacOwnerProvider,
   TranscriptNote,
@@ -314,6 +321,7 @@ import {
   TranscriptWords,
 } from "./transcript-blocks.js";
 import { drawnMessageWords, drawnRowsWords } from "./transcript-copy.js";
+import { TurnFilesOn, TurnFilesRow } from "./turn-files.js";
 import { keptPieces, PIECE_ROWS, pieceKey, type TurnPiece, turnPieces } from "./turn-pieces.js";
 import {
   UndeliveredLines,
@@ -881,6 +889,18 @@ function TodosDock({
 /** Every task's pull requests the window's task list carries. */
 const selectTaskPullRequests = (state: AppStateSnapshot) => state.tasks.taskPullRequests;
 
+/** The workspace the agent works in, as the list names it on the agent or on its task; none before the list lands. */
+function workspaceOfAgent(
+  view: TasksView,
+  agentId: string,
+  taskId: string | null,
+): string | undefined {
+  return (
+    view.taskAgents?.find((listed) => listed.id === agentId)?.workspaceId ??
+    view.tasks.find((task) => task.id === taskId)?.workspaceId
+  );
+}
+
 /** Every pull request the agent opened, pinned over the box under the to-do list for as long as one stands, whether the agent works or has ended: the one it stands on as its tab read it, and the others its task's list names it as having opened (`dockedPullRequests`); nothing before it opened one. */
 function PublishedDock({
   published,
@@ -1180,6 +1200,10 @@ function AgentPartView({
       return <UsageLimitNotice notice={part.notice} />;
     case AGENT_PART.CONNECTION_LOST:
       return <ConnectionLostNotice notice={part.notice} />;
+    case AGENT_PART.COMPACTED:
+      return <CompactedLine notice={part.notice} />;
+    case AGENT_PART.SESSION_CLEARED:
+      return <NewSessionLine />;
     case AGENT_PART.TEXT:
       // The agent's words alone may be replied to, never a call's output or a thought.
       return (
@@ -1578,11 +1602,21 @@ const NO_ARRIVED: readonly ArrivedLine[] = [];
  * turn's words, which stand on no bubble. A turn still running
  * offers no Copy, because its words are not yet whole.
  */
-function TurnFoot({ workedFor, copy }: { workedFor: ReactNode; copy: ReactNode }): ReactNode {
+function TurnFoot({
+  workedFor,
+  copy,
+  files,
+}: {
+  workedFor: ReactNode;
+  copy: ReactNode;
+  /** The files the turn changed, over its line (`turn-files.tsx`); none while the turn runs. */
+  files: ReactNode;
+}): ReactNode {
   if (workedFor === null && copy === null) return null;
   return (
     // Note that the room above is the row's rather than the worked line's, because the buttons are taller than the words and centering them would push the words down.
     <div className="agent-turn-foot mt-tight-gap" data-turn-foot="">
+      {files}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
         inset={MESSAGE_LINE_INSET.FLUSH}
@@ -1833,6 +1867,7 @@ export function AgentMessage({
   const foot = (
     <TurnFoot
       workedFor={workedFor}
+      files={moving ? null : <TurnFilesRow message={message} />}
       copy={
         copyable || (forks && forkOffered) ? (
           <CopyMessageAction
@@ -2814,6 +2849,7 @@ function AgentTabView({
   counts,
   delegationStarts,
   onStop,
+  onClear,
   onRetry,
   onUnarchive,
   onOpenSubagent,
@@ -2830,6 +2866,7 @@ function AgentTabView({
   endPress,
   endTrail,
   closedRemedy,
+  sendsEmpty = false,
   continuedNote,
   continuable = false,
   onMoveToCloud,
@@ -2869,6 +2906,8 @@ function AgentTabView({
   /** When each of its running workers began, as their rows count from it; none while the tab is off screen. */
   delegationStarts: ReadonlyMap<string, number> | undefined;
   onStop: () => Promise<boolean>;
+  /** Starts the agent's harness on a fresh session (`/clear`). */
+  onClear: () => Promise<boolean>;
   /** A failed launch's Retry on the GitHub sign-in card: sends again the lines it lost, answering whether the service took it. */
   onRetry: () => Promise<boolean>;
   /** Brings the agent back from the archive; present exactly while it is archived, when no message is sent. */
@@ -2896,6 +2935,8 @@ function AgentTabView({
   endTrail?: ReactNode;
   /** What mends the box once it closed for good (`continue-agent.tsx`). */
   closedRemedy?: ReactNode;
+  /** Whether Send stands with the box empty, as while follow-ups are ticked in the bar over it, which a send carries alone. */
+  sendsEmpty?: boolean;
   /** What stands in the box's place once another agent continued this one (`ContinuedComposerNote`); none while none has. */
   continuedNote?: ReactNode;
   /** Whether the tab offers Continue somewhere, or another agent continued this one, so the end line tells no one to start a new one. */
@@ -2932,14 +2973,25 @@ function AgentTabView({
   // reads them, and a page that moved no rewind point must draw no message again.
   const pending = composer.sent.length > 0;
   const going = useKept(composer.going, sameSet);
+  // The files go back only while the agent's workspace has the experiment on.
+  const selectWorkspace = useCallback(
+    (state: AppStateSnapshot) => workspaceOfAgent(selectListedTasks(state), agent.id, agent.planId),
+    [agent.id, agent.planId],
+  );
+  const workspaceId = useQuery({ ...appStateQuery, select: selectWorkspace }).data;
+  const restores = useWorkspaceExperiment(workspaceId, EXPERIMENT.REWIND_FILES);
   const points = useKept(
-    useMemo(() => rewindPoints(kept, pending, readerId, going), [kept, pending, readerId, going]),
+    useMemo(
+      () => rewindPoints(kept, pending, readerId, going, restores),
+      [kept, pending, readerId, going, restores],
+    ),
     (a, b) =>
       sameSet(a.editable, b.editable) &&
       sameEntries(a.revertsAt, b.revertsAt) &&
       sameSet(a.followed, b.followed) &&
       sameEntries(a.revertTakes, b.revertTakes) &&
-      sameEntries(a.editTakes, b.editTakes),
+      sameEntries(a.editTakes, b.editTakes) &&
+      sameSet(a.restorable, b.restorable),
   );
   const editorNow = { agentId: agent.id, keywords, skills };
   const editorProps = useRef(editorNow);
@@ -3097,84 +3149,86 @@ function AgentTabView({
             <MentionedServers value={mentioned}>
               <UndeliveredLines value={marks}>
                 <RewindProvider value={rewind}>
-                  <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
-                    <AutomationsWanted wanted={automationLines}>
-                      <ApprovalsProvider asks={approvals.asks}>
-                        <AgentTranscriptView
-                          messages={lines}
-                          brief={agent.brief}
-                          briefSender={starter === undefined ? undefined : starterActor}
-                          origin={origin}
-                          readerId={readerId}
-                          agentId={agent.id}
-                          taskId={agent.planId ?? undefined}
-                          replay={replay}
-                          delegation={{
-                            models,
-                            own: { model: agent.model, effort: agent.effort },
-                            starts:
-                              delegationStarts &&
-                              workerStarts(delegationStarts, transcript.subagents),
-                            onOpen: openSubagent,
-                            onOpenTarget: openTarget,
-                            cards,
-                            standings: transcript.subagents,
-                          }}
-                          reading={transcript.reading || holding}
-                          holding={holding}
-                          failed={transcript.failed}
-                          failedWith={transcript.failedWith}
-                          working={standing.working}
-                          phase={standing.phase}
-                          waitsUntil={standing.waitsUntil}
-                          turnId={standing.turnId ?? agent.turnId}
-                          // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
-                          startedAt={
-                            !counts
-                              ? undefined
-                              : composer.rewinding
-                                ? composer.rewoundAt
-                                : (agentWorkingSince(lines) ?? startedAt)
-                          }
-                          ended={
-                            // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
-                            transcript.pages === 0 || standing.working
-                              ? undefined
-                              : endLineParts(
-                                  standing.status,
-                                  standing.failure,
-                                  starter,
-                                  continuable,
-                                  transcript.hostLost,
-                                  transcript.launchStopped === undefined
-                                    ? undefined
-                                    : {
-                                        step: transcript.launchStopped,
-                                        runtime: agent.runtime,
-                                        unstarted: transcript.launchUnstarted,
-                                      },
-                                )
-                          }
-                          endReason={endLineReason(standing.failure, starter)}
-                          keyProvider={keyProvider}
-                          onOpenApiKeys={
-                            onOpenApiKeys === undefined
-                              ? undefined
-                              : () => onOpenApiKeys(keyProvider)
-                          }
-                          endPress={endPress}
-                          endTrail={endTrail}
-                          signIn={signIn}
-                          onRetry={transcript.onRetry}
-                          onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
-                          olderFailed={transcript.olderFailed}
-                          overComposer
-                          bringIn={bringIn}
-                          approvals={mode === undefined ? undefined : approvals}
-                        />
-                      </ApprovalsProvider>
-                    </AutomationsWanted>
-                  </ReplyDoorProvider>
+                  <TurnFilesOn value={restores}>
+                    <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
+                      <AutomationsWanted wanted={automationLines}>
+                        <ApprovalsProvider asks={approvals.asks}>
+                          <AgentTranscriptView
+                            messages={lines}
+                            brief={agent.brief}
+                            briefSender={starter === undefined ? undefined : starterActor}
+                            origin={origin}
+                            readerId={readerId}
+                            agentId={agent.id}
+                            taskId={agent.planId}
+                            replay={replay}
+                            delegation={{
+                              models,
+                              own: { model: agent.model, effort: agent.effort },
+                              starts:
+                                delegationStarts &&
+                                workerStarts(delegationStarts, transcript.subagents),
+                              onOpen: openSubagent,
+                              onOpenTarget: openTarget,
+                              cards,
+                              standings: transcript.subagents,
+                            }}
+                            reading={transcript.reading || holding}
+                            holding={holding}
+                            failed={transcript.failed}
+                            failedWith={transcript.failedWith}
+                            working={standing.working}
+                            phase={standing.phase}
+                            waitsUntil={standing.waitsUntil}
+                            turnId={standing.turnId ?? agent.turnId}
+                            // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
+                            startedAt={
+                              !counts
+                                ? undefined
+                                : composer.rewinding
+                                  ? composer.rewoundAt
+                                  : (agentWorkingSince(lines) ?? startedAt)
+                            }
+                            ended={
+                              // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
+                              transcript.pages === 0 || standing.working
+                                ? undefined
+                                : endLineParts(
+                                    standing.status,
+                                    standing.failure,
+                                    starter,
+                                    continuable,
+                                    transcript.hostLost,
+                                    transcript.launchStopped === undefined
+                                      ? undefined
+                                      : {
+                                          step: transcript.launchStopped,
+                                          runtime: agent.runtime,
+                                          unstarted: transcript.launchUnstarted,
+                                        },
+                                  )
+                            }
+                            endReason={endLineReason(standing.failure, starter)}
+                            keyProvider={keyProvider}
+                            onOpenApiKeys={
+                              onOpenApiKeys === undefined
+                                ? undefined
+                                : () => onOpenApiKeys(keyProvider)
+                            }
+                            endPress={endPress}
+                            endTrail={endTrail}
+                            signIn={signIn}
+                            onRetry={transcript.onRetry}
+                            onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
+                            olderFailed={transcript.olderFailed}
+                            overComposer
+                            bringIn={bringIn}
+                            approvals={mode === undefined ? undefined : approvals}
+                          />
+                        </ApprovalsProvider>
+                      </AutomationsWanted>
+                    </ReplyDoorProvider>
+                  </TurnFilesOn>
                 </RewindProvider>
               </UndeliveredLines>
             </MentionedServers>
@@ -3240,6 +3294,8 @@ function AgentTabView({
               </>
             )}
             onStop={onStop}
+            // Note that only an agent on a harness has a session to clear, and only one the reader controls.
+            onClear={agent.runtime === undefined || !controlsQueue ? undefined : onClear}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
             followsUp
@@ -3247,6 +3303,7 @@ function AgentTabView({
             skills={skills}
             replyDoor={replyDoor}
             closedRemedy={closedRemedy}
+            sendsEmpty={sendsEmpty}
             queueing={
               agent.runtime === undefined || !controlsQueue
                 ? undefined
@@ -3301,6 +3358,9 @@ type AgentTabProps = AgentTabDoors &
 
 /** Nothing to retry on a tab whose agent is not made yet. */
 const NO_RETRY = () => undefined;
+
+/** No follow-up ticked. */
+const NO_TICKS: readonly number[] = [];
 
 /**
  * The tab of an agent New task or a Start is still starting, before the
@@ -3437,7 +3497,22 @@ function AgentTabBody({
     },
     [messageSent, onMessage],
   );
+  // With Done and follow-ups on, an agent whose last turn ended done offers its follow-ups in the bar over its box, the ticked ones going out with the box's next send.
+  const endsTurns = threads?.turnEnd === true && !agentStillWriting(agent.status);
+  const turnEnding = useMemo(
+    () => (endsTurns ? lastTurnEnding(messages) : undefined),
+    [endsTurns, messages],
+  );
+  const [ticks, setTicks] = useState<{ readonly at: string; readonly ticked: readonly number[] }>();
+  const ticked =
+    turnEnding !== undefined && ticks?.at === turnEnding.messageId ? ticks.ticked : NO_TICKS;
+  const lead =
+    turnEnding === undefined
+      ? undefined
+      : followUpsWords(turnEnding.followUps.filter((_, at) => ticked.includes(at)));
   const composer = useAgentComposer({
+    lead,
+    onLeadSent: () => setTicks(undefined),
     agentId: agent.id,
     taskId: agent.planId,
     messages: transcript.messages,
@@ -3568,6 +3643,25 @@ function AgentTabBody({
   const otherModel = endLineOffersOtherModel(ending);
   // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is an archived task's note.
   const triesAgain = endLineOffersTryAgain(ending) && control.onUnarchive === undefined;
+  const archive = useAgentArchive(agent, control, shown);
+  const doneThreads = useMemo(() => {
+    if (threads === undefined || turnEnding === undefined) return threads;
+    const onTick = (at: number) =>
+      setTicks({
+        at: turnEnding.messageId,
+        ticked: ticked.includes(at) ? ticked.filter((each) => each !== at) : [...ticked, at],
+      });
+    const done: TurnDone = {
+      followUps: turnEnding.followUps,
+      ticked,
+      onTick,
+      archive:
+        agent.archivedAt === undefined
+          ? { onSelect: archive.action.onSelect, busy: archive.reading }
+          : undefined,
+    };
+    return { ...threads, done };
+  }, [threads, turnEnding, ticked, agent.archivedAt, archive.action.onSelect, archive.reading]);
   // How the messages are named moves only when the agent's place or the messages read do, not with each page.
   const readIds = useKept(
     messages.map((message) => message.id),
@@ -3597,7 +3691,8 @@ function AgentTabBody({
         mode={mode}
         approvals={approvals}
         published={published}
-        threads={threads}
+        threads={doneThreads}
+        sendsEmpty={lead !== undefined}
         doors={{
           openGitHub,
           copy: copyWithToast,
@@ -3608,6 +3703,7 @@ function AgentTabBody({
         counts={shown}
         delegationStarts={shown ? transcript.delegations : undefined}
         onStop={() => control.onStop(agent.id)}
+        onClear={() => control.onClear(agent.id)}
         onRetry={() => control.onRetry(agent.id, RETRY_LINE)}
         onUnarchive={unarchive}
         onOpenSubagent={onOpenSubagent}
@@ -3665,6 +3761,7 @@ function AgentTabBody({
         }
         closedRemedy={<ContinueAgent agentId={agent.id} control={control} carry={carry} />}
       />
+      {archive.dialog}
     </MessagePlaceProvider>
   );
 }
@@ -3765,7 +3862,7 @@ export function AgentSubagentTab({
               phase={workerWorkingPhase(status)}
               startedAt={shown ? transcript.runStartedAt : undefined}
               ended={transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)}
-              failureAbout={{ agentId, taskId: owner?.planId ?? undefined, callId }}
+              failureAbout={{ agentId, taskId: owner?.planId, callId }}
               onRetry={transcript.onRetry}
               onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
               olderFailed={transcript.olderFailed}

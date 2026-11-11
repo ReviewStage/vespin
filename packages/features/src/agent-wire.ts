@@ -288,6 +288,8 @@ export const LOCAL_AGENT_REFUSAL = {
   NOT_OWNER: "not-owner",
   /** The repository is reached on the starter's own GitHub token, and the device's host is a build from before it runs such an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
   GITHUB_SIGN_IN: "github-sign-in",
+  /** The agent's mode asks before it acts, and the device's host is a build from before it runs an agent in a mode (`DEVICE_CAPABILITY.PERMISSION_MODES`), which would run it with full access. */
+  PERMISSION_MODES: "permission-modes",
 } as const;
 
 export type LocalAgentRefusal = (typeof LOCAL_AGENT_REFUSAL)[keyof typeof LOCAL_AGENT_REFUSAL];
@@ -1005,6 +1007,8 @@ export const agentQueueAnswerSchema = EffectSchema.Struct({ queue: agentQueueSch
  */
 export const agentRewindRequestSchema = EffectSchema.Struct({
   messageId: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
+  /** Whether the agent's files go back too, to the snapshot its runner took before the turn the line opened; the conversation alone where absent. */
+  restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /**
@@ -1212,14 +1216,11 @@ export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
 /**
  * One agent as the tabs draw it: the task it works on, its title, what it
  * runs on, when it started, where it stands, which turn that is, and when
- * that run began. The task is null for an agent an automation started with
- * no task, which only a read naming that agent answers: a task's list holds
- * the task's own, so a build that predates agents with no task never meets
- * one.
+ * that run began.
  */
 export const agentSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  planId: EffectSchema.NullOr(wireUuidSchema),
+  planId: wireUuidSchema,
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -1481,13 +1482,12 @@ const agentOriginSchema = EffectSchema.Struct({
 export type AgentOrigin = typeof agentOriginSchema.Type;
 
 /**
- * One agent as its own page reads it, which is how an agent an automation
- * started with no task is read, having no task's tab to stand in: the
- * summary the tabs draw, the automation whose run started it or none, the
+ * One agent as a read of it by its id answers it, as a link to it or a row
+ * naming it alone reads it: the summary the tabs draw, the automation whose run started it or none, the
  * run that did where one did, the workspace it belongs to, and the
  * repository it works in, null for one with none, and the branch its
  * checkout stood on as its last turn ended, as the member MCP server's
- * `read_agent` answers it. An agent on a plan reads so too, by the same id.
+ * `read_agent` answers it.
  */
 const agentPageSchema = EffectSchema.Struct({
   ...agentSummarySchema.fields,
@@ -1502,7 +1502,7 @@ const agentPageSchema = EffectSchema.Struct({
 
 export type AgentPage = typeof agentPageSchema.Type;
 
-/** One agent read by its id (GET), on a task or with none. */
+/** One agent read by its id (GET). */
 export const agentPageAnswerSchema = EffectSchema.Struct({ agent: agentPageSchema });
 
 /** The task's agents (GET), in the order they were started. */
@@ -1589,7 +1589,7 @@ export const agentPullRequestAnswerSchema = EffectSchema.Struct({
 export type AgentPullRequestAnswer = typeof agentPullRequestAnswerSchema.Type;
 
 /**
- * One agent as the task list carries it, on a plan or with none: the agent
+ * One agent as the task list carries it: the agent
  * as the tabs draw it, with the workspace it belongs to and the repository
  * it works in, its own, which its plan's no longer names once the plan's
  * repository moved, so its page reads its files and skills where it works.
@@ -2062,10 +2062,10 @@ const reviewTeamSchema = EffectSchema.Struct({
 
 export type PullRequestReviewTeam = typeof reviewTeamSchema.Type;
 
-/** The agent whose pull request one of a stack is: its id, and its plan's, null for an agent on none. */
+/** The agent whose pull request one of a stack is: its id, and its task's. */
 const stackAgentSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  taskId: EffectSchema.NullOr(wireUuidSchema),
+  taskId: wireUuidSchema,
 });
 
 /**
@@ -2578,6 +2578,14 @@ const agentTranscriptMessageSchema = EffectSchema.Struct({
   arrivedIn: EffectSchema.optionalKey(
     EffectSchema.Struct({ journalId: EffectSchema.String, afterStep: countedNumber }),
   ),
+  /**
+   * Whether a rewind to just before one of the developer's lines can put
+   * the agent's files back too: its runner recorded the checkout before the
+   * turn the line opened. Absent where it recorded none, on a line that
+   * awaits its turn or arrived inside one, on every other row, and from a
+   * service older than it.
+   */
+  filesRestorable: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /** Epoch milliseconds the turn began, as a working line counts it: its start, or its queueing where its harness has not started it; absent on the developer's rows, and from a service older than it. */
   startedAt: EffectSchema.optionalKey(countedNumber),
   /** Epoch milliseconds the turn answered or ended; absent while it is still written, on the developer's rows, and from a service older than it. */

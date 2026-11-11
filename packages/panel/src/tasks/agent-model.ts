@@ -5,7 +5,14 @@ import {
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
-import { AGENT_PART, type AgentPart, agentParts, messageWords } from "@repo/features/agent-parts";
+import {
+  AGENT_PART,
+  type AgentPart,
+  agentParts,
+  endTurnOf,
+  endTurnSummary,
+  messageWords,
+} from "@repo/features/agent-parts";
 import {
   ACTION,
   credentialMissingWords,
@@ -772,6 +779,8 @@ export function chooseFailureNote(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
     case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
     case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
+    // Note that a model change asks no files back, so never meets a rewind's refusal.
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
       return MODEL_CHANGE_FAILED;
   }
 }
@@ -2024,7 +2033,8 @@ const SENTENCE_END = /[.!?](?=\s|$)/u;
 /**
  * What a turn that finished replied, as a reader hears it: its newest
  * reply's last stretch of words, after the turn's last call, cut to its
- * first sentence, or to its first words where that runs on. Nothing where
+ * first sentence, or to its first words where that runs on; the summary of
+ * its `end_turn`, where it ended with one. Nothing where
  * there is no reply, or no words follow its last call, as a turn that ended
  * on a call.
  */
@@ -2037,7 +2047,9 @@ export function finishedReplyLead(
   const parts = agentParts(reply);
   const lastCall = parts.findLastIndex((part) => part.kind === AGENT_PART.TOOL);
   const last = parts.slice(lastCall + 1).findLast((part) => part.kind === AGENT_PART.TEXT);
-  const words = last?.kind === AGENT_PART.TEXT ? plainWords(last.text) : "";
+  // Note that a turn ended with `end_turn` replied in its summary, whatever it wrote around the call.
+  const said = endTurnSummary(parts) ?? (last?.kind === AGENT_PART.TEXT ? last.text : "");
+  const words = plainWords(said);
   if (words === "") return undefined;
   const end = SENTENCE_END.exec(words);
   const sentence = end === null ? words : words.slice(0, end.index + 1);
@@ -2045,6 +2057,22 @@ export function finishedReplyLead(
   const lead =
     cut.length <= REPLY_LEAD_WORDS ? sentence : `${cut.slice(0, REPLY_LEAD_WORDS).join(" ")}…`;
   return { messageId: reply.id, lead };
+}
+
+/**
+ * The follow-ups of the newest turn, where it ended with an `end_turn` that
+ * was taken: the turn's message, which ticks are kept against so a later
+ * turn starts with none ticked, and what it offered; none where the newest
+ * turn ended another way.
+ */
+export function lastTurnEnding(
+  messages: readonly AgentTranscriptMessage[],
+): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
+  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next.
+  const last = messages.findLast((message) => message.arrivedIn === undefined);
+  if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
+  const ending = endTurnOf(agentParts(last));
+  return ending === undefined ? undefined : { messageId: last.id, followUps: ending.followUps };
 }
 
 /** Where a line the developer sent stands, before the service's row for it lands. */
@@ -2086,6 +2114,8 @@ export interface SentLine {
   readonly rewinds?: string | undefined;
   /** Whether the agent was already taken back to just before that line, which is gone, so the line's Retry only sends. */
   readonly rewound?: boolean | undefined;
+  /** Whether the agent's files go back too as it is taken back before that line, to the snapshot its runner took before the line's turn. */
+  readonly restoresFiles?: boolean | undefined;
   /** Whether the service answered that the agent took it; until it does, a row read back may still be withdrawn. */
   readonly taken?: boolean | undefined;
 }

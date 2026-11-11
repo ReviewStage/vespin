@@ -64,6 +64,9 @@ export const MESSAGE_NOT_SENT = "The message could not be sent.";
 /** What the toast says when the service did not stop an agent. */
 export const STOP_FAILED = "The agent could not be stopped. Try again.";
 
+/** What the toast says when the service did not start an agent's harness on a fresh session (`/clear`). */
+export const CLEAR_FAILED = "A new session could not be started. Try again once the agent is idle.";
+
 /** What the toast says when the agent a Stop answered still reads at work: it found no turn open to cancel, and no runner gone quiet to settle. */
 export const STOP_NOTHING_YET = "There's nothing to stop yet. Try again once the agent is working.";
 
@@ -132,6 +135,9 @@ export function localAgentRefusalWords(
       return `This task runs on ${device?.name ?? "another member's device"}. Only ${device?.owner ?? "its owner"} can start agents on it.`;
     case LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN:
       return `${name} runs an older vespin-host, which can't work in a repository reached on your own GitHub token. Update its host, ${RUN_IN_CLOUD}.`;
+    // Note that the way out is the machine's own update or Full access, since the cloud is not where this agent's mode was the question.
+    case LOCAL_AGENT_REFUSAL.PERMISSION_MODES:
+      return `${name} runs an older version of ${PRODUCT_NAME}, which would run this agent without asking. Update ${PRODUCT_NAME} on this machine to use Ask for approval, or switch this agent to Full access.`;
     case undefined:
       return `${name} couldn't take this agent. Try again, ${RUN_IN_CLOUD}.`;
   }
@@ -242,8 +248,9 @@ export function startFailureWords(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
     case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
     case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
-    // Note that a Start never names a permission mode, so never meets its refusal.
+    // Note that a Start never names a permission mode, so never meets its refusal, and asks no files back.
     case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
       return "The agent could not be started.";
     case AGENT_CALL_FAILURE.AGENT_RETIRED:
       return START_RETIRED;
@@ -271,6 +278,10 @@ export function startFailureWords(failure: AgentCallFailure): string {
   }
 }
 
+/** Said under an agent's box when a rewind asked its files back and no snapshot of them stands for that point. */
+const FILES_NOT_RESTORED =
+  "The agent's files could not be restored: no snapshot of them stands for this point. Nothing was rewound.";
+
 /** What a message that did not reach the agent says, by why, where only the words are drawn, as an Inbox answer's are, so a refusal trying again mends says so. */
 export function messageFailureWords(failure: AgentCallFailure): string {
   switch (failure) {
@@ -296,6 +307,9 @@ export function messageFailureWords(failure: AgentCallFailure): string {
       return MESSAGE_RETIRED;
     case AGENT_CALL_FAILURE.DEVICE_REMOVED:
       return HOST_REMOVED;
+    // A rewind asked the files back where no snapshot of them stands any more; the conversation was left whole.
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
+      return FILES_NOT_RESTORED;
     case AGENT_CALL_FAILURE.GITHUB_UNANSWERED:
       return `${SHARED_FAILURE_NOTE[failure]} Try again.`;
     case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:

@@ -21,9 +21,13 @@ import {
   type WireValue,
 } from "@repo/wire";
 import {
+  COMPACTED_PART,
   CONNECTION_LOST_PART,
+  type CompactedNotice,
+  CompactedNoticeSchema,
   type ConnectionLostNotice,
   ConnectionLostNoticeSchema,
+  SESSION_CLEARED_PART,
   USAGE_LIMIT_PART,
   UsageLimitAnswerSchema,
   type UsageLimitNotice,
@@ -53,6 +57,10 @@ import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./t
 export const AGENT_PART = {
   USAGE_LIMIT: USAGE_LIMIT_PART,
   CONNECTION_LOST: CONNECTION_LOST_PART,
+  /** Where the harness compacted its session. */
+  COMPACTED: COMPACTED_PART,
+  /** Where the agent's harness was started on a fresh session (`/clear`). */
+  SESSION_CLEARED: SESSION_CLEARED_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -75,6 +83,8 @@ export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string
 export type AgentPart =
   | { readonly kind: typeof AGENT_PART.USAGE_LIMIT; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof AGENT_PART.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
+  | { readonly kind: typeof AGENT_PART.COMPACTED; readonly notice: CompactedNotice }
+  | { readonly kind: typeof AGENT_PART.SESSION_CLEARED }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -130,6 +140,13 @@ export function agentPart(part: WireValue): AgentPart {
       ? { kind: AGENT_PART.CONNECTION_LOST, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
+  if (part.type === AGENT_PART.COMPACTED) {
+    const notice = Schema.decodeUnknownOption(CompactedNoticeSchema)(part.data);
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.COMPACTED, notice: notice.value }
+      : { kind: AGENT_PART.OTHER };
+  }
+  if (part.type === AGENT_PART.SESSION_CLEARED) return { kind: AGENT_PART.SESSION_CLEARED };
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
   if (part.type.startsWith(TOOL_PART_TYPE_PREFIX)) {
     // A native harness's call is read as the call of the same kind, which draws it (`native-tool-calls.ts`).
@@ -282,7 +299,12 @@ const AGENT_READING: RowReading<AgentPart> = {
     return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
   },
   part: (part) => {
-    if (part.kind === AGENT_PART.USAGE_LIMIT || part.kind === AGENT_PART.CONNECTION_LOST) {
+    if (
+      part.kind === AGENT_PART.USAGE_LIMIT ||
+      part.kind === AGENT_PART.CONNECTION_LOST ||
+      part.kind === AGENT_PART.COMPACTED ||
+      part.kind === AGENT_PART.SESSION_CLEARED
+    ) {
       return ROW_PART.NOTICE;
     }
     if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;
@@ -446,6 +468,57 @@ function afterStepOf(line: AgentTranscriptMessage): number {
   return line.arrivedIn?.afterStep ?? 0;
 }
 
+/** How a turn ended where it ended with `end_turn`: the summary its developer reads as its reply, and the follow-ups it offered, at most three. */
+export interface TurnEnding {
+  readonly summary: string;
+  readonly followUps: readonly string[];
+}
+
+/**
+ * A turn's last `end_turn`, where that call was taken: its summary, which is
+ * what its developer reads as the turn's reply, and its follow-ups; none where
+ * the turn ended no other way than in its own words, or the call was refused
+ * or has not answered.
+ */
+export function endTurnOf(parts: readonly AgentPart[]): TurnEnding | undefined {
+  // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
+  const ended = parts.findLast(
+    (part) => part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.END_TURN,
+  );
+  if (
+    ended?.kind !== AGENT_PART.TOOL ||
+    ended.state !== TOOL_STATE.OUTPUT_AVAILABLE ||
+    // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
+    !isRecord(ended.output) ||
+    ended.output.status !== ACTION_RESULT_STATUS.ACCEPTED ||
+    !isRecord(ended.input)
+  ) {
+    return undefined;
+  }
+  const { summary, followUps } = ended.input;
+  if (!isWireString(summary) || summary.trim() === "") return undefined;
+  const offered = Array.isArray(followUps)
+    ? followUps.flatMap((each) => (isWireString(each) && each.trim() !== "" ? [each.trim()] : []))
+    : [];
+  // Note that the tool takes a follow-up twice, and one offered twice is one to tick.
+  return { summary: summary.trim(), followUps: [...new Set(offered)] };
+}
+
+/** The summary of a turn's last `end_turn` that was taken (`endTurnOf`), its reply. */
+export function endTurnSummary(parts: readonly AgentPart[]): string | undefined {
+  return endTurnOf(parts)?.summary;
+}
+
+/** What a message carries of the follow-ups ticked to send, under the developer's own words. */
+export const FOLLOW_UPS_HEAD = "Follow-ups:";
+
+/** The follow-ups ticked, as the lines a message sends them in; none where none is ticked. */
+export function followUpsWords(chosen: readonly string[]): string | undefined {
+  return chosen.length === 0
+    ? undefined
+    : [FOLLOW_UPS_HEAD, ...chosen.map((each) => `- ${each}`)].join("\n");
+}
+
 /**
  * One of the agent's turns as the rows every transcript draws, folded as
  * `turn-rows.ts` folds a turn. A step boundary and a part
@@ -463,9 +536,18 @@ export function agentRows(
   moving: boolean,
   { workers = NO_WORKERS, arrived = [] }: AgentTurnPlace = {},
 ): readonly TurnRow<AgentPart>[] {
-  const parts = drawnParts(message, arrived);
+  const drawn = drawnParts(message, arrived);
+  // Note that a turn that ended with `end_turn` reads its summary as its reply, and the words it wrote on the way as notes, which fold away with its work.
+  const summary = moving ? undefined : endTurnSummary(drawn);
+  const reply: AgentPart | undefined =
+    summary === undefined ? undefined : { kind: AGENT_PART.TEXT, text: summary };
+  const parts = reply === undefined ? drawn : [...drawn, reply];
   const reading: RowReading<AgentPart> = {
     ...AGENT_READING,
+    part: (part) =>
+      reply !== undefined && part.kind === AGENT_PART.TEXT && part !== reply
+        ? ROW_PART.NOTE
+        : AGENT_READING.part(part),
     running: (part) =>
       AGENT_READING.running(part) ||
       (part.kind === AGENT_PART.TOOL && workers.get(part.callId) === TOOL_STATE.INPUT_AVAILABLE),
@@ -558,9 +640,11 @@ export function turnStretches(rows: readonly TurnRow<AgentPart>[]): readonly Tur
   return stretches;
 }
 
-/** A message's words: its text parts, one paragraph each, which is what a copy of a turn carries and what the developer's line reads as. */
+/** A message's words: the summary of the turn's `end_turn` where it ended with one, which is its reply, or else its text parts, one paragraph each; what a copy of a turn carries and what the developer's line reads as. */
 export function messageWords(message: AgentTranscriptMessage): string {
-  return agentParts(message)
-    .flatMap((part) => (part.kind === AGENT_PART.TEXT ? [part.text] : []))
-    .join("\n\n");
+  const parts = agentParts(message);
+  return (
+    endTurnSummary(parts) ??
+    parts.flatMap((part) => (part.kind === AGENT_PART.TEXT ? [part.text] : [])).join("\n\n")
+  );
 }

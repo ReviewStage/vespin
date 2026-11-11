@@ -31,10 +31,12 @@
  * Left out, beside the harness's own shell, files, todos, waiting,
  * subagents, skills, and web reads: the retired runtime's `connection_search` and
  * `connection_execute`, since each integration the agent is handed is an
- * MCP server of its own beside ours (`../workspace-mcp/app.ts`). Waiting is
- * the harness's own only where it has a wakeup: `schedule_wakeup` is served
- * to the harness that has none (`gates.ts`'s `WAKEUP`), and the scheduled
- * sweep delivers it (`../../maintenance/wakeup-sweep.ts`).
+ * MCP server of its own beside ours (`../workspace-mcp/app.ts`). Waiting
+ * is ours on every harness: `schedule_wakeup` books it, and the scheduled
+ * sweep delivers it (`../../maintenance/wakeup-sweep.ts`), so a waiting
+ * agent's sandbox stops as any idle one does; Claude Code's own
+ * `ScheduleWakeup` is denied its CLI (`@repo/agent-runner`'s
+ * `CLAUDE_CODE_TOOLS`).
  *
  * Two things the retired runtime's tool files kept in the session's own state are kept
  * otherwise here, since the server keeps no session: a call's id, which the
@@ -142,6 +144,7 @@ import {
   EDIT_DESCRIPTION_TOOL,
   requestedNotes,
 } from "../coder-host/description-edit.js";
+import { END_TURN_TOOL, runEndTurn } from "../coder-host/end-turn-tool.js";
 import { INBOX_TOOLS } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
@@ -573,8 +576,10 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
-  // A wakeup booked for later, on a harness with no wakeup of its own.
-  agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup, { gate: TOOL_GATE.WAKEUP }),
+  // A wakeup booked for later.
+  agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
+  // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
+  agentTool(END_TURN_TOOL, runEndTurn, { gate: TOOL_GATE.TURN_END }),
 ] as const;
 
 /** The name of a tool the catalog serves. */

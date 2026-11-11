@@ -329,7 +329,10 @@ const WORK: AgentTranscriptMessage = {
     toolPart(
       "apply_patch",
       "fixture-patch",
-      { patchText: "*** Begin Patch\n*** Add File: src/members/invite.ts\n*** End Patch" },
+      {
+        patchText:
+          "*** Begin Patch\n*** Add File: src/members/invite.ts\n+export const INVITE_TTL_DAYS = 7;\n+export function inviteByEmail(email: string) {\n+  return pending(email, INVITE_TTL_DAYS);\n+}\n*** End Patch",
+      },
       { output: "Done." },
     ),
     toolPart(
@@ -472,7 +475,7 @@ const LONG_MESSAGES: readonly AgentTranscriptMessage[] = [
         "fixture-pending-patch",
         {
           patchText:
-            "*** Begin Patch\n*** Update File: src/members/list.ts\n*** Update File: src/workspaces/access.ts\n*** End Patch",
+            '*** Begin Patch\n*** Update File: src/members/list.ts\n@@\n-  return rows;\n+  return rows.filter((row) => row.state !== "pending");\n*** Update File: src/workspaces/access.ts\n@@\n-  if (membership === undefined) return false;\n+  if (membership === undefined || membership.state === "pending") return false;\n*** End Patch',
         },
         { output: "Done." },
       ),
@@ -510,7 +513,10 @@ const LONG_MESSAGES: readonly AgentTranscriptMessage[] = [
       toolPart(
         "apply_patch",
         "fixture-race-patch",
-        { patchText: "*** Begin Patch\n*** Update File: src/members/invite.ts\n*** End Patch" },
+        {
+          patchText:
+            "*** Begin Patch\n*** Update File: src/members/invite.ts\n@@\n-  return pending(email, INVITE_TTL_DAYS);\n+  const link = pending(email, INVITE_TTL_DAYS);\n+  return { ...link, acceptedAt: null };\n*** End Patch",
+        },
         { output: "Done." },
       ),
       toolPart(
@@ -549,7 +555,10 @@ const LONG_MESSAGES: readonly AgentTranscriptMessage[] = [
       toolPart(
         "apply_patch",
         "fixture-label-patch",
-        { patchText: "*** Begin Patch\n*** Update File: src/pages/invite.tsx\n*** End Patch" },
+        {
+          patchText:
+            "*** Begin Patch\n*** Update File: src/pages/invite.tsx\n@@\n-  return pending(email, INVITE_TTL_DAYS);\n+  const link = pending(email, INVITE_TTL_DAYS);\n+  return { ...link, acceptedAt: null };\n*** End Patch",
+        },
         { output: "Done." },
       ),
       toolPart(

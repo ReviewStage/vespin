@@ -1,7 +1,8 @@
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
-import { BUTTON_VARIANT, Button, TEXT_ELEMENT, TEXT_VARIANT, Text } from "@repo/ui";
+import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "@repo/ui";
 import { useRef, useState } from "react";
 import { CommentEditor, overCommentBound } from "./comment-editor.js";
+import { REPLY_VARIANT } from "./comment-variant.js";
 import {
   PullRequestWriteNote,
   type PullRequestWrites,
@@ -18,7 +19,8 @@ import {
  * its words go and the tab reads the conversation again, so the comment
  * stands in it; GitHub's refusal stands under the box in its own words,
  * with the sign-in offered where GitHub would not take the member's, and
- * the words written stay for another try. The words are held by the tab
+ * the words written stay for another try. The box stands as a thread's
+ * reply does, its round Comment in its foot. The words are held by the tab
  * (`usePullRequestComment`) rather than the box, so a read of the
  * conversation that fails, which takes the box away until Retry, loses
  * nothing written.
@@ -47,7 +49,7 @@ export function usePullRequestComment(agentId: string, onWritten: ReadAgain): Pu
   return { writes, body, setBody };
 }
 
-/** The box: its heading, the words written as they are drawn, GitHub's answer where it did not take the last one, and Comment, which Enter in the words presses too. */
+/** The box: its heading, the words written as they are drawn, with Comment in their foot, which Enter in the words presses too, and GitHub's answer where it did not take the last one. */
 export function PullRequestCommentBox({
   comment,
 }: {
@@ -75,6 +77,7 @@ export function PullRequestCommentBox({
         {COMMENT_WORDS.TITLE}
       </Text>
       <CommentEditor
+        variant={REPLY_VARIANT.REPLY}
         label={COMMENT_WORDS.FIELD}
         placeholder={COMMENT_WORDS.PLACEHOLDER}
         value={body}
@@ -84,19 +87,16 @@ export function PullRequestCommentBox({
         // Note that Esc lets go of the box and keeps its words, so it never reaches the window, which would leave the task.
         onCancel={() => field.current?.blur()}
         fieldRef={field}
+        send={{
+          label: COMMENT_WORDS.SEND,
+          empty: blank,
+          held: false,
+          onSend: send,
+          busy: sending,
+          busyLabel: COMMENT_WORDS.SENDING,
+        }}
       />
       <PullRequestWriteNote writes={writes} className="pull-request-comment-note" />
-      <div className="pull-request-comment-foot flex justify-end">
-        <Button
-          variant={BUTTON_VARIANT.PRIMARY}
-          disabled={blank}
-          busy={sending}
-          busyLabel={COMMENT_WORDS.SENDING}
-          onClick={send}
-        >
-          {COMMENT_WORDS.SEND}
-        </Button>
-      </div>
     </section>
   );
 }

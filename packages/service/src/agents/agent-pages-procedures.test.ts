@@ -8,12 +8,7 @@ import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
-import {
-  PAGE_OWNER,
-  PAGE_SHOWER,
-  taskPagesAnswerSchema,
-  taskPageVersionAnswerSchema,
-} from "@repo/features/page-wire";
+import { PAGE_OWNER, PAGE_SHOWER, taskPagesAnswerSchema } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { type Context, Effect, Option, Result } from "effect";
@@ -23,12 +18,12 @@ import type { WebServices } from "../runtime.js";
 import { agentPagesProcedures } from "./agent-pages-procedures.js";
 
 /**
- * The pages a coding agent on no task showed on itself, answered by the
+ * The pages a released desktop still asks an agent for, answered by the
  * hosted oRPC router the way the web route answers them, over a real
- * dialect: a member of the agent's workspace lists them and reads a version's
- * HTML, while an account of another workspace lists none and reads no
- * version, exactly as for an agent that does not exist, and a version the
- * page never had, or a path that names no UUID, is refused.
+ * dialect: every page stands on a task, so a member of the agent's workspace
+ * lists none and reads no version, even of a page the agent showed on its
+ * task, and a path that names no UUID, or a version that is no whole
+ * number, is refused.
  *
  * Synthetic accounts, bearers, workspaces, agents, and pages throughout.
  */
@@ -83,17 +78,16 @@ function readOk<S extends Parameters<typeof readEither>[0]>(schema: S, answered:
 
 it.layer(getTestDB())("an agent's own pages over HTTP", (it) => {
   it.effect(
-    "a member lists an agent's pages and reads a version, and another workspace's account reads nothing of them",
+    "a member lists none of an agent's pages and reads no version, even of one it showed on its task",
     () =>
       Effect.gen(function* () {
         const starter = yield* openAccount;
         const teammate = yield* openAccount;
-        const outsider = yield* openAccount;
         const workspace = yield* openWorkspace(starter);
         yield* joinWorkspace(workspace, teammate);
-        yield* openWorkspace(outsider);
+        const taskId = (yield* createTask(starter, { organizationId: workspace })).id;
         const started = yield* createAgent(starter, {
-          taskId: (yield* createTask(starter, { organizationId: workspace })).id,
+          taskId,
           descriptionSnapshot: null,
           prompt: "Chart the funnel",
           idempotencyKey: randomUUID(),
@@ -103,42 +97,25 @@ it.layer(getTestDB())("an agent's own pages over HTTP", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
         const agentId = Option.getOrThrow(started).agent.id;
-        const shower = { kind: PAGE_SHOWER.AGENT, agentId } as const;
-        const owner = { kind: PAGE_OWNER.AGENT, agentId } as const;
         const chart = Option.getOrThrow(
-          yield* writePage(starter, owner, { title: "Funnel", html: "<h1>One</h1>" }, shower),
+          yield* writePage(
+            starter,
+            { kind: PAGE_OWNER.TASK, taskId },
+            { title: "Funnel", html: "<h1>One</h1>" },
+            { kind: PAGE_SHOWER.AGENT, agentId },
+          ),
         );
-        yield* writePage(
-          starter,
-          owner,
-          { pageId: chart.id, title: "Funnel by week", html: "<h1>Two</h1>" },
-          shower,
-        );
-        const bearers = new Map(
-          [starter, teammate, outsider].map((id) => [`Bearer ${id}`, id] as const),
-        );
+        const bearers = new Map([starter, teammate].map((id) => [`Bearer ${id}`, id] as const));
         const ask = (userId: string, path: string) => answer(bearers, get(userId, path));
-
-        const listed = readOk(taskPagesAnswerSchema, yield* ask(teammate, pagesPath(agentId)));
-        const first = readOk(
-          taskPageVersionAnswerSchema,
-          yield* ask(teammate, versionPath(agentId, chart.id, "1")),
-        );
-
-        assert.deepEqual(
-          listed.pages.map(({ id, title, version, shownBy }) => ({ id, title, version, shownBy })),
-          [{ id: chart.id, title: "Funnel by week", version: 2, shownBy: shower }],
-        );
-        assert.deepEqual([first.page.title, first.page.html], ["Funnel", "<h1>One</h1>"]);
-        assert.deepEqual(readOk(taskPagesAnswerSchema, yield* ask(outsider, pagesPath(agentId))), {
-          pages: [],
-        });
         const notFound = {
           status: HOSTED_HTTP_STATUS.NOT_FOUND,
           body: { error: HOSTED_API_ERROR.NOT_FOUND },
         };
-        assert.deepEqual(yield* ask(outsider, versionPath(agentId, chart.id, "1")), notFound);
-        assert.deepEqual(yield* ask(teammate, versionPath(agentId, chart.id, "3")), notFound);
+
+        assert.deepEqual(readOk(taskPagesAnswerSchema, yield* ask(teammate, pagesPath(agentId))), {
+          pages: [],
+        });
+        assert.deepEqual(yield* ask(teammate, versionPath(agentId, chart.id, "1")), notFound);
         assert.deepEqual(yield* ask(teammate, versionPath("not-a-uuid", chart.id, "1")), notFound);
         assert.equal(
           (yield* ask(teammate, versionPath(agentId, chart.id, "zero"))).status,

@@ -98,10 +98,9 @@ export const AGENT: AgentSummary = {
   turnId: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
 };
 
-/** The agent as its own page reads it, with no task, as an automation's run leaves one. */
+/** The agent as its own page reads it, with the automation whose run started it. */
 export const PAGE: AgentPage = {
   ...AGENT,
-  planId: null,
   automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
   workspaceId: "workspace-1",
   repository: "acme/relay",
@@ -586,6 +585,11 @@ function fakeService() {
         asked.push(`rewind:${agentId}:${messageId}`);
         return { agent: AGENT };
       }),
+    clear: (agentId) =>
+      Effect.sync(() => {
+        asked.push(`clear:${agentId}`);
+        return { agent: AGENT };
+      }),
     warm: () => Effect.succeed({ warm: true as const }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
@@ -762,7 +766,7 @@ function fakeService() {
     inboxItemHome: (itemId) =>
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
-        return { agentId: ITEM.agentId, planId: null, workspaceId: "workspace-1" };
+        return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {

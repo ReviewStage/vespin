@@ -660,7 +660,7 @@ const viewCommand = Command.make("view", { agent: agentArgument }, ({ agent: id 
               : `#${pullRequest.number} ${pullRequest.state}  ${pullRequest.url}`,
           ],
           ["Checks", pullRequest === null ? "none" : pullRequest.checks],
-          ["Task", agent.planId ?? "none"],
+          ["Task", agent.planId],
           ["Id", agent.id],
         ]),
         ...(checks.length === 0

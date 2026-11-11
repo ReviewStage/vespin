@@ -1,10 +1,9 @@
 /**
- * page.ts -- `vespin page list` and `page show`: the pages agents showed on a task, or that an agent on no task showed on itself, and one version of one printed as its HTML.
+ * page.ts -- `vespin page list` and `page show`: the pages agents showed on a task, and one version of one printed as its HTML.
  *
- * A page stands on a task (`taskFiles.pages` and `taskFiles.page`) or on a
- * coding agent with no task (`agentPages.list` and `agentPages.version`), so
- * each command names its owner with `--task` or `--agent`. `show` reads the
- * newest version unless `--version` names one, found off the owner's list.
+ * A page stands on a task (`taskFiles.pages` and `taskFiles.page`), which
+ * each command names with `--task`. `show` reads the newest version unless
+ * `--version` names one, found off the task's list.
  */
 
 import { CLI_EXIT } from "@repo/features/cli-exit";
@@ -16,60 +15,23 @@ import { answer, CommandFailed, columns } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveTaskId } from "../tasks.js";
 
-/** What a page stands on, as the flags named it: a task, or an agent on no task. */
-type PageOwnerFlag = { readonly task: string } | { readonly agent: string };
-
 const taskFlag = Flag.String("task").pipe(
-  Flag.optional,
   Flag.withDescription("The task the page stands on, by its id, its number, or its key"),
 );
 
-const agentFlag = Flag.String("agent").pipe(
-  Flag.optional,
-  Flag.withDescription("The agent on no task that showed the page on itself, by its id"),
-);
-
-/** The owner the flags name, exactly one of them, or a usage failure. */
-function ownerOf(task: Option.Option<string>, agent: Option.Option<string>) {
-  if (Option.isSome(task) === Option.isSome(agent)) {
-    return Effect.fail(
-      new CommandFailed({
-        exit: CLI_EXIT.USAGE,
-        message: "Name the page's owner with --task or --agent, one of them.",
-      }),
-    );
-  }
-  return Effect.succeed<PageOwnerFlag>(
-    Option.isSome(task) ? { task: task.value } : { agent: Option.getOrThrow(agent) },
-  );
-}
-
-/** The owner's pages, each by its newest version, the most recently written first. */
-const pagesOf = Effect.fnUntraced(function* (owner: PageOwnerFlag) {
+/** The task's pages, each by its newest version, the most recently written first. */
+const pagesOf = Effect.fnUntraced(function* (task: string) {
   const { hosted } = yield* session;
-  if ("agent" in owner) {
-    const { pages } = yield* askService(hosted.agentPages.list, { id: owner.agent });
-    return pages;
-  }
-  const id = yield* resolveTaskId(owner.task);
+  const id = yield* resolveTaskId(task);
   const { pages } = yield* askService(hosted.taskFiles.pages, { id });
   return pages;
 });
 
-/** One version of one of the owner's pages, with its HTML. */
-const versionOf = Effect.fnUntraced(function* (
-  owner: PageOwnerFlag,
-  page: string,
-  version: number,
-) {
+/** One version of one of the task's pages, with its HTML. */
+const versionOf = Effect.fnUntraced(function* (task: string, page: string, version: number) {
   const { hosted } = yield* session;
-  const named = { page, version: String(version) };
-  if ("agent" in owner) {
-    const read = yield* askService(hosted.agentPages.version, { id: owner.agent, ...named });
-    return read.page;
-  }
-  const id = yield* resolveTaskId(owner.task);
-  const read = yield* askService(hosted.taskFiles.page, { id, ...named });
+  const id = yield* resolveTaskId(task);
+  const read = yield* askService(hosted.taskFiles.page, { id, page, version: String(version) });
   return read.page;
 });
 
@@ -79,10 +41,9 @@ function shownByOf(line: PageLine): string {
   return line.shownBy.kind === PAGE_SHOWER.AGENT ? `agent ${line.shownBy.agentId}` : PRODUCT_NAME;
 }
 
-const listCommand = Command.make("list", { task: taskFlag, agent: agentFlag }, ({ task, agent }) =>
+const listCommand = Command.make("list", { task: taskFlag }, ({ task }) =>
   Effect.gen(function* () {
-    const owner = yield* ownerOf(task, agent);
-    const pages = yield* pagesOf(owner);
+    const pages = yield* pagesOf(task);
     yield* answer({
       json: { pages },
       lines:
@@ -101,10 +62,9 @@ const listCommand = Command.make("list", { task: taskFlag, agent: agentFlag }, (
     });
   }),
 ).pipe(
-  Command.withDescription("List the pages agents showed on a task, or an agent showed on itself"),
+  Command.withDescription("List the pages agents showed on a task"),
   Command.withExamples([
     { command: "vespin page list --task ACME-42", description: "A task's pages" },
-    { command: "vespin page list --agent <agent-id>", description: "An agent's own pages" },
   ]),
 );
 
@@ -115,22 +75,20 @@ const showCommand = Command.make(
       Argument.withDescription("The page's id, as page list prints it"),
     ),
     task: taskFlag,
-    agent: agentFlag,
     version: Flag.Int("version").pipe(
       Flag.optional,
       Flag.withDescription("The version to read (default: the newest)"),
     ),
   },
-  ({ page, task, agent, version }) =>
+  ({ page, task, version }) =>
     Effect.gen(function* () {
-      const owner = yield* ownerOf(task, agent);
-      const pages = yield* pagesOf(owner);
+      const pages = yield* pagesOf(task);
       const line = pages.find((each) => each.id === page);
       if (line === undefined) {
         return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: `No page ${page}.` });
       }
       const read: PageVersion = yield* versionOf(
-        owner,
+        task,
         page,
         Option.getOrElse(version, () => line.version),
       );

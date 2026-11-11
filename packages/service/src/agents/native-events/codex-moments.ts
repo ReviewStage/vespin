@@ -543,8 +543,9 @@ function itemCompletedMoments(params: unknown): readonly NativeMoment[] {
         },
         onNone: () => [],
       });
+    // Note that the item is the report of the fold the transcript draws, since the thread's own notification says it again.
     case ITEM.COMPACTION:
-      return [{ kind: NATIVE_MOMENT.COMPACTED }];
+      return [{ kind: NATIVE_MOMENT.COMPACTED, notice: { tokensBefore: null } }];
     default: {
       const threads = spawnedThreads(type, whole);
       return Option.match(callOf(type, whole), {

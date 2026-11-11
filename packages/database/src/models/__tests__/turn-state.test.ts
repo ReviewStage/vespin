@@ -272,6 +272,46 @@ it.layer(getTestDB())("a turn's one record", (it) => {
       }),
   );
 
+  it.effect(
+    "a line taken with the checkout its runner recorded before the turn writes that checkout on the turn, and one taken without leaves it",
+    () =>
+      Effect.gen(function* () {
+        const { target } = yield* openAgent;
+        const writer = yield* storeWriter({ tools: {} });
+        yield* sent(target, "first");
+        const [opened] = yield* turnsOf(target);
+        assert.ok(opened !== undefined);
+        yield* started(target, opened.id, 1);
+        const snapshot = {
+          commit: "0123456789abcdef0123456789abcdef01234567",
+          head: "89abcdef0123456789abcdef0123456789abcdef",
+          branch: "feat/invitations",
+        };
+        yield* writer.takeAwaitingLine(target, {
+          clientId: sentLineId("first"),
+          turnId: opened.id,
+          snapshot,
+        });
+        yield* sent(target, "steer");
+        yield* writer.takeAwaitingLine(target, {
+          clientId: sentLineId("steer"),
+          turnId: opened.id,
+        });
+
+        const [row] = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({
+              commit: turns.snapshotCommit,
+              head: turns.snapshotHead,
+              branch: turns.snapshotBranch,
+            })
+            .from(turns)
+            .where(eq(turns.id, opened.id)),
+        );
+        assert.deepEqual(row, snapshot);
+      }),
+  );
+
   it.effect("a line's own turn reads by its client id, and none for a line no send wrote", () =>
     Effect.gen(function* () {
       const { target } = yield* openAgent;
@@ -330,6 +370,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           sandboxName,
           firstSequence: 1,
           fingerprint: null,
+          permissionMode: null,
           sandboxSessionId: `sbx-${randomUUID()}`,
           commandId: `cmd-${randomUUID()}`,
         });

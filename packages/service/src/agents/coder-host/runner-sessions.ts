@@ -144,6 +144,7 @@ import {
   readNativeRewind,
 } from "@repo/database/models/conversation-rewind";
 import { deviceAgentAwaitsUpdate } from "@repo/database/models/device-agent-store";
+import { holdsSessionClearedMark } from "@repo/database/models/message-reads";
 import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import {
   claimRuntimeSession,
@@ -171,6 +172,7 @@ import {
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
+import { leadingCommand } from "@repo/features/slash-command";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
@@ -247,6 +249,7 @@ import { agentFailureSaid, agentLogIds, keptFailureWords, runningLogId } from ".
 import { CODER, CODER_REFUSAL } from "./bounds.js";
 import { agentFirewallSources, CheckoutRefused, type CheckoutServices } from "./checkout.js";
 import { contextWindowOf } from "./context.js";
+import { COMMAND_ROUTE, type CommandRoute, routeBesideReplay } from "./harness-commands.js";
 import { nativeSkillFiles } from "./native-skills.js";
 import { permissionModeOf } from "./permission-mode.js";
 import { restartReplayOf } from "./replay.js";
@@ -353,6 +356,8 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
   readonly skillRoots: readonly string[];
   /** What goes ahead of a message to a runner already running. */
   readonly ahead: (agent: Agent) => Effect.Effect<HarnessAhead, E | LaunchRefused, RunnerServices>;
+  /** How a message opening with the command named is handed to the harness (`harness-commands.ts`). */
+  readonly commandRoute: (name: string) => CommandRoute;
 }
 
 /** How many hex characters of a launch's fingerprint its record keeps. */
@@ -424,6 +429,30 @@ interface RunnerMessage {
   readonly files: readonly SandboxFile[];
   readonly turn: SessionTurn;
   readonly timeZone: string | undefined;
+}
+
+/**
+ * A message line's blocks as its route hands them: the turn's words ahead
+ * of the developer's, as every message goes; after them, so the harness
+ * reads the line as words rather than a command; or the developer's alone,
+ * for the harness to run as its own command or, marked, as the session's
+ * compaction (`harness-commands.ts`).
+ */
+function routedContent(
+  route: CommandRoute,
+  ahead: readonly ContentBlock[],
+  content: readonly ContentBlock[],
+): { readonly content: readonly ContentBlock[]; readonly compact?: true } {
+  switch (route) {
+    case COMMAND_ROUTE.WORDS:
+      return { content: [...ahead, ...content] };
+    case COMMAND_ROUTE.ESCAPED:
+      return { content: [...content, ...ahead] };
+    case COMMAND_ROUTE.BARE:
+      return { content };
+    case COMMAND_ROUTE.COMPACT:
+      return { content, compact: true };
+  }
 }
 
 /** The bytes a line carries beside a replay ahead of it: the turn's words, the developer's, and each picture or document counted as a file (`fileBlocksBytes`). */
@@ -656,7 +685,7 @@ function recordOf(found: FoundPlace, userId: string, agentId: string) {
  * machine; none on a Mac, nor in a deployment with no ring, under which
  * none could have been set.
  */
-function workspaceEnvironmentOf(agent: Agent, machine: AgentMachineKind) {
+export function workspaceEnvironmentOf(agent: Agent, machine: AgentMachineKind) {
   return Effect.gen(function* () {
     if (machine !== AGENT_MACHINE.VERCEL) return {};
     const keys = (yield* HostedEnvironment).providerKeyEncryptionKeys;
@@ -857,7 +886,8 @@ function namedOutcome(failure: { readonly _tag: string }): boolean {
     (failure.planRefusal !== undefined ||
       failure.keyRefusal !== undefined ||
       failure.deviceRemoved === true ||
-      failure.deviceAway === true)
+      failure.deviceAway === true ||
+      failure.modesUnsupported === true)
   );
 }
 
@@ -1201,6 +1231,7 @@ export const runnerSessions = <
               const mark: RunnerMark = {
                 firstSequence: made.firstSequence,
                 fingerprint: made.fingerprint,
+                permissionMode: permissionModeOf(agent),
                 ...(layout.linesRead ? { linesRead: true } : undefined),
               };
               const config = { ...made.config, ...(trace === undefined ? undefined : { trace }) };
@@ -1310,6 +1341,15 @@ export const runnerSessions = <
       };
     };
 
+    /** How the line's command, where its words open with one, reaches the harness; as words where a replay rides ahead of it, which must reach the session. */
+    const commandRouteOf = (content: readonly ContentBlock[], replaying: boolean): CommandRoute => {
+      const first = content.find((block) => block.type === "text");
+      const command = first === undefined ? undefined : leadingCommand(first.text);
+      if (command === undefined) return COMMAND_ROUTE.WORDS;
+      const route = harness.commandRoute(command.name);
+      return replaying ? routeBesideReplay(route) : route;
+    };
+
     /**
      * The message line with the turn's own words ahead of the developer's
      * (`turn-message.ts`), composed on what the harness's session has handed
@@ -1367,13 +1407,16 @@ export const runnerSessions = <
         const words = [replay, opened.text].filter((part) => part !== undefined);
         const ahead: readonly ContentBlock[] =
           words.length === 0 ? [] : [{ type: "text", text: words.join("\n\n") }];
+        const route = commandRouteOf(content, replay !== undefined);
+        // Note that a line the harness takes as its own command never reads the turn's words, so the session is not told it was handed them.
+        const read = route !== COMMAND_ROUTE.BARE && route !== COMMAND_ROUTE.COMPACT;
         const next: TurnHanded = {
-          ...opened.handed,
+          ...(read ? opened.handed : handed),
           experiments:
             fresh && Option.isNone(pending) ? experiments : (handed.experiments ?? experiments),
         };
         return {
-          line: { ...sent.line, content: [...ahead, ...content] },
+          line: { ...sent.line, ...routedContent(route, ahead, content) },
           handed: handedValue(next),
           taken: recordNativeTurnHanded(target, next),
         };
@@ -1432,7 +1475,9 @@ export const runnerSessions = <
         if (Option.isNone(read)) return false;
         const standing = read.value;
         return (
-          opened.descriptionsOn !== standing.descriptionsOn || opened.memoryOn !== standing.memoryOn
+          opened.descriptionsOn !== standing.descriptionsOn ||
+          opened.memoryOn !== standing.memoryOn ||
+          (opened.turnEndOn ?? false) !== standing.turnEndOn
         );
       });
 
@@ -1486,6 +1531,9 @@ export const runnerSessions = <
             : undefined),
           ...(failure instanceof LaunchRefused && failure.deviceAway === true
             ? { runtimeRefusal: RUNTIME_REFUSAL.DEVICE_AWAY }
+            : undefined),
+          ...(failure instanceof LaunchRefused && failure.modesUnsupported === true
+            ? { runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED }
             : undefined),
         } as const,
       );
@@ -1544,6 +1592,8 @@ export const runnerSessions = <
         }
         const source = agent.startedFrom?.session;
         if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
+        // A session let go (`/clear`) leaves the agent a fresh one of its own, never its source's again.
+        if (yield* holdsSessionClearedMark({ userId, conversationId })) return {};
         const held = yield* holdsSession(userId, conversationId, source);
         if (!held) return {} satisfies ResumedSession;
         const cut = agent.startedFrom?.cutBefore;
@@ -2324,6 +2374,32 @@ export const runnerSessions = <
         );
 
     /**
+     * A turn's delivery whose launch its plan's usage limit refused, with
+     * the reset named, as `turnPayerOf` chooses the plan that resets soonest
+     * where no payer has room and no API key is kept: the conversation's
+     * queued turns held until then (`holdQueuedTurns`), their lines kept for
+     * the launch the sweep's release delivers them to (`resumeWaitedTurns`),
+     * as a running turn the limit cut short waits; answers whether any was
+     * held. Any other refusal holds nothing, and the turn fails as before.
+     */
+    const heldForReset = (agent: Agent, failure: { readonly _tag: string }) =>
+      Effect.gen(function* () {
+        if (
+          !(failure instanceof LaunchRefused) ||
+          failure.planRefusal !== PLAN_REFUSAL.LIMIT_REACHED ||
+          failure.planResetsAt === undefined
+        ) {
+          return false;
+        }
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        const held = yield* writer.holdQueuedTurns(
+          { userId, conversationId: agent.conversationId },
+          new Date(failure.planResetsAt),
+        );
+        return Result.isSuccess(held) && held.success.length > 0;
+      });
+
+    /**
      * A message to the session for the agent its conversation is, as `send`
      * hands it on: held behind the agent's runner lease, or queued at once
      * where the lease is another call's, as `send` says.
@@ -2354,6 +2430,21 @@ export const runnerSessions = <
         if (Option.isSome(found) && found.value.agentId !== agent.id) {
           return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
         }
+        // A runner launched in another mode than the agent's now would take the message on the mode
+        // it has, so the message waits on the lease, under which a warm runner on a changed mode is
+        // launched again first (`staleWarm`), rather than being queued for it at once.
+        const recorded = Option.isSome(found) ? found.value.runner : undefined;
+        if (
+          recorded !== undefined &&
+          (recorded.mark.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS) !==
+            permissionModeOf(agent)
+        ) {
+          return yield* holdingRunner(
+            agent.id,
+            sendHolding(sessionId, message, layout, sent, handsOn),
+            CODER.RUNNER_LEASE.SEND_WAIT,
+          );
+        }
         // The harness's lines are read as `sendHolding` reads them, so a plan refused now refuses
         // the message, and go ahead of it for a recorded runner's launch; with none recorded, the
         // message alone is queued for whichever launch runs, its words composed on whether that
@@ -2364,7 +2455,6 @@ export const runnerSessions = <
         // call holding the lease leaves up reads it, and where none is, the turn's delivery
         // launches one (`deliverTurn`).
         const ahead = yield* harness.ahead(agent);
-        const recorded = Option.isSome(found) ? found.value.runner : undefined;
         const from =
           recorded === undefined ? yield* resumedSessionOf(agent, layout, false) : undefined;
         const opened = yield* openedLine(
@@ -2607,9 +2697,10 @@ export const runnerSessions = <
 
       // A queued turn's delivery, from its queue's consumer (`turn-delivery.ts`): taken up only where
       // no other call holds the runner lease, which is at work on the runner and is tried again
-      // after; a launch that cannot succeed is written as the agent's failed turn, as a Start's is,
-      // and one that may yet, its store or its machine unreachable, fails for the queue to deliver
-      // the turn again.
+      // after; a launch its plan's limit refused, with the reset named, holds the turn until then
+      // (`heldForReset`); any other launch that cannot succeed is written as the agent's failed
+      // turn, as a Start's is, and one that may yet, its store or its machine unreachable, fails
+      // for the queue to deliver the turn again.
       deliverTurn: (sessionId, conversationId) =>
         Effect.gen(function* () {
           // Note that only an agent gone is unreached; a store that could not be read fails, for the queue to deliver the turn again.
@@ -2629,7 +2720,14 @@ export const runnerSessions = <
             Effect.catchIf(
               (failure) => !mayTakeAgain(failure),
               (failure) =>
-                Effect.as(launchFailed(agent.value, sessionId)(failure), TURN_HANDOVER.FAILED),
+                Effect.flatMap(heldForReset(agent.value, failure), (held) =>
+                  held
+                    ? Effect.succeed(TURN_HANDOVER.WAITING)
+                    : Effect.as(
+                        launchFailed(agent.value, sessionId)(failure),
+                        TURN_HANDOVER.FAILED,
+                      ),
+                ),
             ),
             Effect.annotateLogs(agentLogIds(agent.value, sessionId)),
           );

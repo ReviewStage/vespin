@@ -29,6 +29,7 @@
  */
 
 import type { IncomingHttpHeaders } from "node:http";
+import { CLIENT_HEADER } from "@repo/features/client-identity";
 import {
   LIVE_SOCKET,
   type LiveSocketAnswer,
@@ -67,11 +68,23 @@ function askOf(frame: VoiceFrame): LiveSocketAsk | undefined {
   return Result.isSuccess(read) ? read.success : undefined;
 }
 
-/** The headers every ask is sent with: the upgrade's own credential, and nothing else. */
-function credentialHeaders(credential: RelayCredential): Headers {
-  return "bearer" in credential
-    ? new Headers({ [CREDENTIAL_HEADER.AUTHORIZATION]: credential.bearer })
-    : new Headers(credential.page);
+/** The headers every ask is sent with: the upgrade's own credential, and the client its address named (`client-identity.ts`), as the poll's own request would carry them. */
+function askHeaders(credential: RelayCredential, named: URLSearchParams): Headers {
+  const headers =
+    "bearer" in credential
+      ? new Headers({ [CREDENTIAL_HEADER.AUTHORIZATION]: credential.bearer })
+      : new Headers(credential.page);
+  for (const header of Object.values(CLIENT_HEADER)) {
+    const value = named.get(header);
+    if (value !== null) headers.set(header, value);
+  }
+  return headers;
+}
+
+/** An upgrade admitted: its credential, and the client its address named. */
+interface AdmittedUpgrade {
+  readonly credential: RelayCredential;
+  readonly named: URLSearchParams;
 }
 
 /** What answers every ask on a socket: the hosted router's fetch over the instance's services, at the deployment's own origin. */
@@ -119,10 +132,11 @@ export function answerLiveSocket(
   socket: VoiceSocket,
   credential: RelayCredential,
   answerer: LiveSocketAnswerer,
+  named: URLSearchParams = new URLSearchParams(),
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     const asks = yield* FiberSet.make<void>();
-    const headers = credentialHeaders(credential);
+    const headers = askHeaders(credential, named);
     while (true) {
       const frame = yield* socket.next;
       if (Option.isNone(frame)) return;
@@ -140,15 +154,16 @@ export function answerLiveSocket(
   });
 }
 
-/** Whether an upgrade is this service's to take, read from its address and headers alone, against the deployment's own origins: refused, or the credential it carries. */
+/** Whether an upgrade is this service's to take, read from its address and headers alone, against the deployment's own origins: refused, or the credential it carries and the client its address names. */
 function admitLiveSocketUpgrade(
   url: string | undefined,
   headers: IncomingHttpHeaders,
   ownOrigins: ReadonlySet<string>,
-): { readonly status: number } | RelayCredential {
+): { readonly status: number } | AdmittedUpgrade {
   const address = new URL(url ?? "/", "http://localhost");
   if (address.pathname !== LIVE_SOCKET.PATH) return { status: RELAY_UPGRADE_STATUS.NOT_FOUND };
-  return relayCredential(headers, ownOrigins);
+  const credential = relayCredential(headers, ownOrigins);
+  return "status" in credential ? credential : { credential, named: address.searchParams };
 }
 
 /** The HTTP face of the live socket at its path (`relayServer`). */
@@ -189,13 +204,14 @@ export function standLiveSocket(
       server: options.server,
       sockets: { maxPayload: MAXIMUM_FRAME_BYTES },
       admit: (request) => admitLiveSocketUpgrade(request.url, request.headers, options.ownOrigins),
-      accept: (credential): Effect.Effect<{ readonly status: number } | RelayCredential> =>
-        Effect.match(options.resolveUserId(credential), {
+      accept: (admitted): Effect.Effect<{ readonly status: number } | AdmittedUpgrade> =>
+        Effect.match(options.resolveUserId(admitted.credential), {
           onFailure: () => ({ status: RELAY_UPGRADE_STATUS.SERVICE_UNAVAILABLE }),
           onSuccess: (account) =>
-            Option.isNone(account) ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : credential,
+            Option.isNone(account) ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : admitted,
         }),
-      relay: (credential, socket) => answerLiveSocket(socket, credential, answerer),
+      relay: (admitted, socket) =>
+        answerLiveSocket(socket, admitted.credential, answerer, admitted.named),
     });
   });
 }

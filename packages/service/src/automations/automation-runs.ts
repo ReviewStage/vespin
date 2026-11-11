@@ -67,7 +67,7 @@ import type { ModelChoiceRefused } from "../providers/model-catalog.js";
  * automation-runs.ts -- one queued automation run acted on: its guards read, its coding agent started as the deployment acting for the owner, and the run settled.
  *
  * A run is a Start with a prompt, on the one path a Start takes
- * (`coder-host/start.ts`), in the automation's workspace on no task: the
+ * (`coder-host/start.ts`), on a task of the run's own: the
  * owner's membership of the workspace, the reach of the automation's
  * repository through the workspace's installation, and the model are
  * checked exactly as they are for the developer's own Start, and the agent
@@ -696,7 +696,7 @@ const runTaskOf = Effect.fnUntraced(function* (
  * the start's refusal in one fixed word. The agent starts on the run's
  * task (`runTaskOf`), in the repository a GitHub event named and the first
  * of the automation's repositories otherwise, or in none where it has none,
- * handed the run's prompt as an agent on no task is. Where
+ * handed the run's prompt in the description's place. Where
  * the run is a same-agent automation's that holds `adopting` (no agent yet,
  * or a gone one), the agent it starts is kept as the automation's from then
  * on, where no other run or edit kept another first, and the run says it

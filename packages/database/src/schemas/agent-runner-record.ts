@@ -1,3 +1,4 @@
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { bigint, index, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { agentTable } from "./agent.js";
 import { user } from "./auth.js";
@@ -33,6 +34,8 @@ export const agentRunnerRecord = pgTable(
     firstSequence: bigint("first_sequence", { mode: "number" }).notNull(),
     /** A digest of what the launch was started with that a warm runner cannot take up later; null where the launch's record names none. */
     fingerprint: text("fingerprint"),
+    /** The permission mode the launch ran its agent in (`AGENT_PERMISSION_MODE`); null for a launch from before the column. */
+    permissionMode: text("permission_mode").$type<AgentPermissionMode>(),
     /** The sandbox session the runner was started in; null while none runs. */
     sandboxSessionId: text("sandbox_session_id"),
     /** The runner's command in that session; null while none runs. */

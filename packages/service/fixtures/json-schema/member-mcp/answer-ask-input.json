@@ -63,7 +63,7 @@
         ],
         "additionalProperties": false
       },
-      "maxItems": 8,
+      "maxItems": 50,
       "description": "The fields the member fills, for submitted: each by its field's label, with words, a number, one of a select's options, or true or false, as its type asks; every required field filled."
     },
     "steps": {
@@ -72,7 +72,7 @@
         "type": "integer",
         "minimum": 0
       },
-      "maxItems": 8,
+      "maxItems": 50,
       "description": "The steps of a do the member did, by their places from 0: every one for done."
     },
     "note": {

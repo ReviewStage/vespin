@@ -155,7 +155,7 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_COMMENTS: "/api/live/task-comments",
   /** One task's Browser tabs under `?id=`, the agent's pointer on each among them, sealed for following over Neon Realtime (GET), or with `?poll=true` their rows inline; or `not-found`. */
   LIVE_TASK_BROWSER_TABS: "/api/live/task-browser-tabs",
-  /** One coding agent's Browser tabs under `?id=`, on a task or on none, on the terms a task's are. */
+  /** One coding agent's Browser tabs under `?id=`, on the terms a task's are. */
   LIVE_AGENT_BROWSER_TABS: "/api/live/agent-browser-tabs",
   /** One agent's transcript under `?id=`, or one of its workers' under `&call=`, sealed for following over Neon Realtime (GET): what its pages are read from, or `not-found` or `unavailable`. */
   LIVE_AGENT_TRANSCRIPT: "/api/live/agent-transcript",
@@ -163,7 +163,7 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_INBOX: "/api/live/task-inbox",
   /** One agent's inbox under `?id=`, sealed for following over Neon Realtime (GET), as a task's is. */
   LIVE_AGENT_INBOX: "/api/live/agent-inbox",
-  /** The task list sealed for following over Neon Realtime (GET): its tasks and every agent of them and with no task, or `unavailable`. `task-list-live.ts` declares the answer. */
+  /** The task list sealed for following over Neon Realtime (GET): its tasks and every agent of them, or `unavailable`. `task-list-live.ts` declares the answer. */
   LIVE_TASKS: "/api/live/tasks",
   /** A workspace's automations under `?workspaceId=`, sealed for following over Neon Realtime (GET), or `unavailable`. `automation-live.ts` declares the answer. */
   LIVE_AUTOMATIONS: "/api/live/automations",
@@ -194,7 +194,7 @@ export const HOSTED_SERVICE_PATH = {
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, sealed for following over Neon Realtime (GET), or its row inline where polled, none for an account that stored nothing. `account-preferences-live.ts` declares the answer. */
   LIVE_ACCOUNT_PREFERENCES: "/api/live/account-preferences",
   /**
-   * A workspace's agents, on a task or with none, newest started first and
+   * A workspace's agents, on any task, newest started first and
    * the archived ones left out unless the query asks for them, narrowed to
    * one repository where the query names one (GET), what an automation's
    * Same agent and an `@` list's agents are chosen from; the plan list's
@@ -440,6 +440,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SANDBOX_SETUP_INSTALL: "/api/workspaces/sandbox-setup/install",
   /** A repository's setup script saved by an owner or admin (PUT), answering the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_REPOSITORY: "/api/workspaces/sandbox-setup/repository",
+  /** A repository's run actions saved, its whole list in order, by an owner or admin, an empty list removing it (PUT) (`workspace-sandbox-setup-wire.ts`). */
+  WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS: "/api/workspaces/sandbox-setup/run-actions",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */

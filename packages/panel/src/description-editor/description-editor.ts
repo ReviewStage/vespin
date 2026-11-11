@@ -12,9 +12,10 @@ import type { Node as PmNode } from "@tiptap/pm/model";
 import { Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { enterSends, modEnterSends } from "../enter-sends.js";
-import { codeTitles } from "./code-title.js";
+import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
 import {
+  type CodeHeaderDrawer,
   DESCRIPTION_PLACEHOLDER,
   type DescriptionEditorHandle,
   type DescriptionEditorPictures,
@@ -299,14 +300,15 @@ function linkLook(namesMention: ((target: string) => boolean) | undefined) {
  * What the text may hold, read and written as the editor reads and writes
  * it: the mention among the rest, drawn by the panel where it can draw one,
  * a link naming one in a chip's light look where the panel says which,
- * every other link a plain one, and a task item's box drawn by the panel
- * where it draws one.
+ * every other link a plain one, and a task item's box and a code block's
+ * header drawn by the panel where it draws them.
  */
 export function markdownExtensions(
   drawMention?: MentionDrawer | undefined,
   namesMention?: ((target: string) => boolean) | undefined,
   pictures?: DescriptionEditorPictures | undefined,
   drawTaskBox?: TaskBoxDrawer | undefined,
+  drawCodeHeader?: CodeHeaderDrawer | undefined,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
@@ -317,7 +319,7 @@ export function markdownExtensions(
     link: { openOnClick: false },
   });
   return [
-    blockRulesOutOfCells(withoutTipTapChords(kit)),
+    blockRulesOutOfCells(withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader))),
     blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
     blockRulesOutOfCells(withoutTipTapChords(DocumentHeading)),
@@ -532,6 +534,7 @@ export function mountDescriptionEditor(
     mentions,
     drawDiagram,
     drawTaskBox,
+    drawCodeHeader,
     pictures,
     anchors,
     format,
@@ -542,6 +545,7 @@ export function mountDescriptionEditor(
     mentions?.namesMention,
     pictures,
     drawTaskBox,
+    drawCodeHeader,
   );
   const manager = documentManager(extensions);
   // Filled once the editor is built, since a block's source is known by the node it opened as.
@@ -578,7 +582,6 @@ export function mountDescriptionEditor(
       ...extensions,
       Placeholder.configure({ placeholder: placeholderOf(placeholder, blocks !== undefined) }),
       commentAnchorMark,
-      codeTitles,
       ...(drawDiagram === undefined ? [] : [diagramPreview(drawDiagram)]),
       ...formatReports(format),
     ],

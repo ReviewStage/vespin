@@ -12,6 +12,7 @@
  * write of it from interleaving with another's.
  */
 
+import { agentPermissionModeSchema } from "@repo/features/agent-approval-wire";
 import { and, eq } from "drizzle-orm";
 import type { Effect, Option } from "effect";
 import { Schema } from "effect";
@@ -26,13 +27,14 @@ const AgentRunnerRecordSchema = Schema.Struct({
   sandboxName: Schema.String,
   firstSequence: Schema.Number,
   fingerprint: Schema.NullOr(Schema.String),
+  permissionMode: Schema.NullOr(agentPermissionModeSchema),
   sandboxSessionId: Schema.NullOr(Schema.String),
   commandId: Schema.NullOr(Schema.String),
 });
 
 /**
  * A session's record: the agent and sandbox it was written for, its launch's
- * first event number and fingerprint, and the sandbox session and command
+ * first event number, fingerprint, and permission mode, and the sandbox session and command
  * its runner runs as, both null while none runs.
  */
 export type AgentRunnerRecord = typeof AgentRunnerRecordSchema.Type;
@@ -54,6 +56,7 @@ const findRecord = SqlSchema.findOneOption({
           sandboxName: agentRunnerRecord.sandboxName,
           firstSequence: agentRunnerRecord.firstSequence,
           fingerprint: agentRunnerRecord.fingerprint,
+          permissionMode: agentRunnerRecord.permissionMode,
           sandboxSessionId: agentRunnerRecord.sandboxSessionId,
           commandId: agentRunnerRecord.commandId,
         })

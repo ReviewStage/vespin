@@ -2,13 +2,23 @@
 #
 # Run by `scripts/simulator-screenshots.sh` after `background.yaml` and the
 # push. Notification Center is pulled down from the top of the screen, since
-# the banner may have gone by the time Maestro's driver answers.
+# the banner may have gone by the time Maestro's driver answers. Note that
+# Notification Center opens a notification as the Lock Screen does, on a
+# swipe to the right: a tap there only hints at the swipe, and leaves the
+# app closed. Where the swipe stops short of opening it, its Open stands.
 appId: dev.vespin.ios
 ---
 - swipe:
     start: 30%, 0%
     end: 30%, 70%
-- tapOn: ".*Who can withdraw an invite.*"
+- waitForAnimationToEnd
+- swipe:
+    from:
+      text: ".*Who can withdraw an invite.*"
+    direction: RIGHT
+- tapOn:
+    id: "swipe-action-button-identifier"
+    optional: true
 - extendedWaitUntil:
     visible: "The member who sent it"
     timeout: 15000

@@ -141,6 +141,7 @@ export function PersonSectionFrame({
   noun,
   tone,
   fold,
+  standing,
   children,
 }: {
   label?: string | undefined;
@@ -152,6 +153,8 @@ export function PersonSectionFrame({
   tone?: StatusTone | undefined;
   /** How the section folds; left out, its rows always stand. */
   fold?: GroupFold | undefined;
+  /** What a folded section leaves standing under its head: a note its reader must still see. */
+  standing?: ReactNode;
   children: ReactNode;
 }): React.JSX.Element {
   return (
@@ -172,6 +175,7 @@ export function PersonSectionFrame({
               }
         }
         fold={fold}
+        standing={standing}
       >
         {children}
       </GroupHeader>

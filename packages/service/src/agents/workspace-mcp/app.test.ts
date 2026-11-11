@@ -14,7 +14,7 @@ import {
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { user } from "@repo/database/schemas/auth";
+import { organization, user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
@@ -402,6 +402,7 @@ const AGENT_TOOLS = [
   "save_memory",
   "search_memory",
   "schedule_wakeup",
+  "end_turn",
 ] as const;
 
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
@@ -644,12 +645,13 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "tools/list names every Vespin tool the agent's harness has no equal of, each with its catalog entry's schema, and none the harness has, its wakeup among them",
+    "tools/list names every Vespin tool the agent's harness has no equal of, each with its catalog entry's schema, and none the harness has",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
         const agent = yield* agentWithBearer;
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.MEMORY);
+        yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.TURN_END);
         yield* descriptionsOn(agent.userId);
         const client = yield* connected(fetch, agent.bearer);
 
@@ -657,16 +659,12 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         yield* Effect.promise(() => client.close());
 
         const names = listed.tools.map((tool) => tool.name);
-        // A Claude Code agent waits with its CLI's own `ScheduleWakeup`, so ours is left off its list.
-        assert.deepEqual(
-          [...names].sort(),
-          SERVED_TOOLS.filter((name) => name !== "schedule_wakeup").sort(),
-        );
+        assert.deepEqual([...names].sort(), [...SERVED_TOOLS].sort());
         for (const native of HARNESS_TOOLS) assert.ok(!names.includes(native), native);
         const standingOn = {
           agent: Option.none(),
           open: new Set<ToolGate>(),
-          experiments: { descriptionsOn: true, memoryOn: true },
+          experiments: { descriptionsOn: true, memoryOn: true, turnEndOn: true },
         };
         for (const tool of listed.tools) {
           const served = isServedTool(tool.name) ? TOOL_CATALOG.get(tool.name) : undefined;
@@ -711,10 +709,10 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         return agent;
       }),
-      withheld: ["browser", "run_on_mac", "list_ports", "share_port", "schedule_wakeup"],
+      withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
     },
   ])(
-    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory and the description's tools where its starter has Memory and Task descriptions off",
+    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, and the turn's end tools where its starter has Memory, Task descriptions, and Done and follow-ups off",
     ({ agent: made, withheld }) =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -730,6 +728,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "search_memory",
           "edit_description",
           "look_at_picture",
+          "end_turn",
         ];
         assert.deepEqual(
           listed.tools.map((tool) => tool.name).sort(),
@@ -1220,8 +1219,12 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         yield* Effect.promise(() => client.close());
 
-        // The agent's preview host is its id without dashes under the page sandbox's domain.
-        const host = `${agent.agentId.replaceAll("-", "")}.vespin.page`;
+        // The agent's preview host is its workspace's slug, its task's number, and its id's head, under the page sandbox's domain.
+        const [workspace] = yield* (yield* Database)
+          .select({ slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, agent.organizationId));
+        const host = `${workspace?.slug}-1-${agent.agentId.slice(0, 6)}.vespin.page`;
         assert.deepEqual(firstJson(share), {
           status: "accepted",
           port: 3000,

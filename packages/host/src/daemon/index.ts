@@ -1,5 +1,5 @@
 /**
- * index.ts -- a host's door (`@repo/host/daemon`): what a host's daemon (`apps/host`) composes on every OS, each OS's description, the platform, the box's device record, its connect with a code and its leave, the service that runs it, and the daemon run on them, kept out of the main barrel and every door a browser loads.
+ * index.ts -- a host's door (`@repo/host/daemon`): what a host's daemon (`apps/host`) composes on every OS, each OS's description, the platform, the box's device record, its connect with a code, its leave, the uninstall of the host the app ships, the service that runs it, and the daemon run on them, kept out of the main barrel and every door a browser loads.
  */
 
 export { hostDeviceWhen, readHostDevice, writeHostDevice } from "../host-device-record.js";
@@ -19,4 +19,5 @@ export {
 } from "./host-pairing.js";
 export { hostPlatform } from "./host-platform.js";
 export { HOST_SERVICE, type HostService, hostServiceOf } from "./host-service.js";
+export { uninstallBundledHost } from "./host-uninstall.js";
 export type { HostReleases } from "./host-update.js";

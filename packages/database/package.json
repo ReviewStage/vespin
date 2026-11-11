@@ -84,6 +84,7 @@
     "./models/agent-wakeups": "./src/models/agent-wakeups.js",
     "./models/agent-sandboxes": "./src/models/agent-sandboxes.js",
     "./models/conversation-rewind": "./src/models/conversation-rewind.js",
+    "./models/dispatch-claim": "./src/models/dispatch-claim.js",
     "./models/conversation-delete": "./src/models/conversation-delete.js",
     "./models/sync-log": "./src/models/sync-log.js",
     "./models/workspace-seams": "./src/models/workspace-seams.js",

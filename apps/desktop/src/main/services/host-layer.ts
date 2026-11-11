@@ -29,7 +29,7 @@ import {
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
-import { mirrorPlatform } from "@repo/host/node";
+import { armedWatchLayer, mirrorPlatform } from "@repo/host/node";
 import { ConfigProvider, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { net } from "electron";
@@ -109,7 +109,7 @@ export function hostAssemblyLayerFor(
       Layer.provideMerge(hostKernelLayer, seams),
       Layer.provideMerge(
         NodeChildProcessSpawner.layer,
-        Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
+        Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
       ),
       FetchHttpClient.layer,
     ),

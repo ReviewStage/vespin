@@ -3,8 +3,8 @@
  *
  * Each procedure is a door over the one operation (`agent-browser-tabs.ts`),
  * which the member MCP server's browser tab tools run too.
- * `GET /api/agents/{id}/browser-tabs` lists one agent's tabs, on a task or
- * on none, and `GET /api/plans/{id}/browser-tabs` a task's, every one of
+ * `GET /api/agents/{id}/browser-tabs` lists one agent's tabs, and
+ * `GET /api/plans/{id}/browser-tabs` a task's, every one of
  * its agents' together, each with the coding agent whose browser holds it,
  * and the member driving it while their takeover stands. `POST
  * /api/agents/{id}/browser-tabs/{tab}/driver`, or the same under

@@ -117,7 +117,6 @@ import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-m
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
 import { modelChoiceSchema } from "@repo/features/models-wire";
-import { PAGE_OWNER } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   PULL_REQUEST_CHAPTERS_STATE,
@@ -608,15 +607,13 @@ const readAsMember = <R, RRead>(
     return yield* read(memberCaller(member, workspace.value));
   });
 
-/** The workspace of the task, the agent, or the agent with no task a page stands on, as the member reaches it. */
+/** The workspace of the task a page stands on, as the member reaches it. */
 const pageWorkspace = (userId: string, pageId: string) =>
-  Effect.flatMap(readPageById(userId, pageId, undefined), (found) => {
-    if (Option.isNone(found)) return Effect.succeed(Option.none<string>());
-    const { owner } = found.value;
-    return owner.kind === PAGE_OWNER.TASK
-      ? readTaskWorkspace(userId, owner.taskId)
-      : agentWorkspace(userId, { id: owner.agentId });
-  });
+  Effect.flatMap(readPageById(userId, pageId, undefined), (found) =>
+    Option.isNone(found)
+      ? Effect.succeed(Option.none<string>())
+      : readTaskWorkspace(userId, found.value.taskId),
+  );
 
 /** A list's input: the workspace it is about, by its slug, where the member has more than one. */
 const WORKSPACE_INPUT = Schema.optionalKey(
@@ -738,12 +735,12 @@ const ListAgentsInputSchema = Schema.Struct({
 const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_AGENTS,
   description:
-    "List the coding agents of a workspace the member belongs to, on any task or none and " +
+    "List the coding agents of a workspace the member belongs to, on any task and " +
     "started by any member: each with its id, its title (how the member sees it named), the " +
     "model and effort it runs on with the model's name to say it by, its status " +
     `(${Object.values(AGENT_STATUS).join(", ")}) and why where it failed, its repository and the ` +
     "branch its sandbox is on if a turn has ended, one line of what it last did, its task (id " +
-    "and name; null for an agent on no task), and whether it is archived; the newest started " +
+    "and name; null for one the member cannot open), and whether it is archived; the newest started " +
     "first, at most " +
     `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand, which offset ` +
     "reads the next page by. Pass words to search by words of an agent's title or its task's " +
@@ -856,11 +853,10 @@ const ReadPageInputSchema = Schema.Struct({
 const MEMBER_READ_PAGE_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_PAGE,
   description:
-    "Read a page an agent showed, by the page's id, on a task the member can open or on an " +
-    "agent of theirs with no task, in whichever of the member's workspaces it stands: its " +
+    "Read a page an agent showed, by the page's id, on a task the member can open, in " +
+    "whichever of the member's workspaces it stands: its " +
     "title, the version read (the newest unless you name one) and the newest there is, its " +
-    "task, or, for a page an agent on no task showed on itself, that agent, " +
-    `and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
+    `task, and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
     "how many were left out.",
   input: ReadPageInputSchema,
   annotations: READ_ONLY,
@@ -2015,8 +2011,7 @@ const UpdateAgentInputSchema = Schema.Struct({
   pinned: Schema.optionalKey(
     describeWire(
       Schema.Boolean,
-      "Whether the member keeps it pinned in their sidebar, the pin theirs alone; an agent on " +
-        "a task or on none alike.",
+      "Whether the member keeps it pinned in their sidebar, the pin theirs alone.",
     ),
   ),
   archived: Schema.optionalKey(
@@ -4432,8 +4427,8 @@ const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
   description:
     "Make an automation in a workspace the member belongs to, as their own automations page " +
     `would: each time its trigger fires, ${PRODUCT_NAME} starts an agent on its prompt, in its ` +
-    "repositories or in none, on the member's keys and connections, with no task and no one " +
-    "watching, or hands the run to the one agent named. It is on as it is made, runs as the " +
+    "repositories or in none, on the member's keys and connections, on a task of its own with no " +
+    "one watching, or hands the run to the one agent named. It is on as it is made, runs as the " +
     "member, and the desktop shows it as one they made. It works in the repositories named, " +
     `or in none where you name none. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
     `integration installed on the workspace first. ${WEBHOOK_WORDS} ${WORKSPACE_WORDS} Make ` +

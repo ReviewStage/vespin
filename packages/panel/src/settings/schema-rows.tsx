@@ -78,6 +78,7 @@ function SchemaChoiceRow({
   options,
   search,
   faces,
+  icons,
   action,
 }: {
   id: string;
@@ -89,6 +90,8 @@ function SchemaChoiceRow({
   options: readonly SettingOption[];
   /** What an option's token shows beside its words, where it shows anything. */
   faces: ((token: string) => React.ReactNode) | undefined;
+  /** The glyph an option's token leads with, where it leads with one. */
+  icons: ((token: string) => React.ReactNode) | undefined;
   /** The searchable menu's empty field words, for a set long enough to search. */
   search: string | undefined;
   /** A control of the row's own beside the pop-up, where its section hands one. */
@@ -101,11 +104,11 @@ function SchemaChoiceRow({
       labelReplayUnmasked
       detail={detail}
       value={value}
-      options={
-        faces === undefined
-          ? options
-          : options.map((option) => ({ ...option, faces: faces(option.value) }))
-      }
+      options={options.map((option) => ({
+        ...option,
+        ...(faces === undefined ? undefined : { faces: faces(option.value) }),
+        ...(icons === undefined ? undefined : { icon: icons(option.value) }),
+      }))}
       // A token the set does not hold, or the one already stored, is not written, so a stale menu or a repeat pick writes nothing.
       parse={(token) =>
         token !== value && options.some((option) => option.value === token) ? token : undefined
@@ -124,8 +127,9 @@ function SchemaChoiceRow({
  * section, whether it is drawn right now, what its control offers, and the
  * line drawn under its label are the entry's own answers. A page component that decided any of it for itself would
  * be a second record of the same fact, and the two would drift. What the
- * section may add is a choice's faces, read at run time from what the
- * schema cannot know, such as the account's own picture, a control
+ * section may add is a choice's faces or glyphs, read at run time from what the
+ * schema cannot know, such as the account's own picture or a permission
+ * mode's glyph, a control
  * beside a choice's pop-up that acts on its value, such as a sound's Play,
  * and what a toggle's turn asks of the platform in the press itself, such as
  * a browser's leave to post notifications.
@@ -135,6 +139,7 @@ export function SchemaSettingRows({
   section = SETTING_SECTION.MAIN,
   view,
   faces,
+  icons,
   actions,
   onTurned,
 }: {
@@ -143,6 +148,8 @@ export function SchemaSettingRows({
   view: SettingsRowsInput;
   /** What each of a choice's options shows beside its words, by the setting it stores and its token; none where its options are words alone. */
   faces?: ((field: AppSettingField, token: string) => React.ReactNode) | undefined;
+  /** The glyph each of a choice's options leads with, by the setting it stores and its token; none where its options are words alone. */
+  icons?: ((field: AppSettingField, token: string) => React.ReactNode) | undefined;
   /** The control a choice's row draws beside its pop-up, by the setting it stores; none where its pop-up stands alone. */
   actions?: ((field: AppSettingField) => React.ReactNode) | undefined;
   /** What a toggle's turn does beside its write, in the press itself, by the setting it stores; none where the write is all. */
@@ -176,6 +183,7 @@ export function SchemaSettingRows({
         options={control.options}
         search={control.search}
         faces={faces === undefined ? undefined : (token) => faces(field, token)}
+        icons={icons === undefined ? undefined : (token) => icons(field, token)}
         action={actions?.(field)}
       />,
     ];

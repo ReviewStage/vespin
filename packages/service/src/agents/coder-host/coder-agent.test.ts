@@ -68,17 +68,6 @@ test("a Claude Code agent is told of Claude Code's own tools and never of Vespin
         }
       }
     }
-    const watching = coderInstructions(
-      "Acme/Relay",
-      brief,
-      TASK_ADDRESS,
-      standingFor("Acme/Relay"),
-      undefined,
-      null,
-      false,
-      CODER_HARNESS.CLAUDE_CODE,
-    );
-    assert.ok(watching.includes("wait with ScheduleWakeup"), brief);
   }
 });
 
@@ -204,15 +193,7 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
     "`delegate`",
     "task_wait",
   ];
-  const CLAUDE_CODES = [
-    "TaskCreate",
-    "WebSearch",
-    "WebFetch",
-    "Skill tool",
-    "Agent tool",
-    "Bash",
-    "ScheduleWakeup",
-  ];
+  const CLAUDE_CODES = ["TaskCreate", "WebSearch", "WebFetch", "Skill tool", "Agent tool", "Bash"];
   const CODEXES = [
     "`apply_patch`",
     "`update_plan`",
@@ -255,26 +236,30 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
         }
       }
     }
-    // A Codex agent waits on its checks with our wakeup, since Codex has none of its own, and never on a watch.
-    for (const memberToken of [false, true]) {
-      const waiting = coderInstructions(
-        "Acme/Relay",
-        brief,
-        TASK_ADDRESS,
-        standingFor("Acme/Relay", { wakeup: true }),
-        undefined,
-        null,
-        memberToken,
-        CODER_HARNESS.CODEX,
-      );
-      assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), brief);
-      // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
-      assert.equal(
-        waiting.includes(`call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``),
-        !memberToken,
-        brief,
-      );
-      assert.ok(!waiting.includes("--watch --fail-fast"), brief);
+    // An agent on either harness waits on its checks with our wakeup, never the CLI's, which its launch denies, nor a watch.
+    for (const harness of Object.values(CODER_HARNESS)) {
+      for (const memberToken of [false, true]) {
+        const waiting = coderInstructions(
+          "Acme/Relay",
+          brief,
+          TASK_ADDRESS,
+          standingFor("Acme/Relay"),
+          undefined,
+          null,
+          memberToken,
+          harness,
+        );
+        const label = `${brief} ${harness} ${memberToken ? "token" : "app"}`;
+        assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), label);
+        // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
+        assert.equal(
+          waiting.includes(`call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``),
+          !memberToken,
+          label,
+        );
+        assert.ok(!waiting.includes("ScheduleWakeup"), label);
+        assert.ok(!waiting.includes("--watch --fail-fast"), label);
+      }
     }
   }
 });
@@ -570,6 +555,24 @@ test("with Memory off the instructions say nothing of the workspace's memory; wi
     const end = on.indexOf("## What your messages are", start);
     assert.ok(start > 0 && end > start, brief);
     assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.SEARCH_MEMORY}\``), brief);
+    assert.equal(on.slice(0, start) + on.slice(end), off, brief);
+  }
+});
+
+test("with Done and follow-ups off the instructions say nothing of ending a turn; with it on they add its section before the one on messages, and nothing else", () => {
+  for (const brief of Object.values(AGENT_BRIEF)) {
+    const off = coderInstructions("Acme/Relay", brief, TASK_LINK, standingFor("Acme/Relay"));
+    const on = coderInstructions(
+      "Acme/Relay",
+      brief,
+      TASK_LINK,
+      standingFor("Acme/Relay", { turnEnd: true }),
+    );
+    assert.ok(!off.includes(`\`${AGENT_TOOL.END_TURN}\``), brief);
+    const start = on.indexOf("## Ending a turn\n\n");
+    const end = on.indexOf("## What your messages are", start);
+    assert.ok(start > 0 && end > start, brief);
+    assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.END_TURN}\``), brief);
     assert.equal(on.slice(0, start) + on.slice(end), off, brief);
   }
 });

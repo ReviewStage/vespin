@@ -42,7 +42,6 @@ import {
   ChoiceBar,
   COMMENT_PIN_LOOK,
   COMMENT_PIN_STANDS,
-  COMPOSER_LOOK,
   CONFIRM_LOSS,
   Comment,
   type CommentAuthor,
@@ -152,7 +151,8 @@ import { centerWithin } from "../scroll-within.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { attachmentChips } from "./attached-file-chips.js";
-import { CommentMenu } from "./comment-menu.js";
+import { CommentMenu, CommentTools } from "./comment-menu.js";
+import { REPLY_LOOK, REPLY_VARIANT, type ReplyVariant } from "./comment-variant.js";
 import {
   CommentFiles,
   useCommentFileChips,
@@ -836,7 +836,7 @@ function CommentEntry({
                 <ReplayUnmask>{COMMENT_WORDS.EDITED}</ReplayUnmask>
               </Text>
             )}
-            <div className="comment-tools">
+            <CommentTools>
               {first ? (
                 <Tooltip label={settle ? COMMENT_WORDS.RESOLVE : COMMENT_WORDS.REOPEN}>
                   <IconButton
@@ -850,7 +850,7 @@ function CommentEntry({
                 </Tooltip>
               ) : null}
               <CommentMenu groups={groups} />
-            </div>
+            </CommentTools>
             <ConfirmDialog
               open
               confirm={deleting}
@@ -970,7 +970,7 @@ function CommentEditField({
   return (
     <MessageBox
       box={box}
-      look={COMPOSER_LOOK.BARE}
+      look={REPLY_LOOK[REPLY_VARIANT.EDIT]}
       className="comment-field comment-editing"
       data-variant={REPLY_VARIANT.EDIT}
       beforeSend={
@@ -1290,7 +1290,7 @@ function ReplyField({
   return (
     <MessageBox
       box={box}
-      look={variant === REPLY_VARIANT.FIRST ? COMPOSER_LOOK.BARE : COMPOSER_LOOK.CARD}
+      look={REPLY_LOOK[variant]}
       className="comment-field"
       data-variant={variant}
       // Note that held files and files still being read, and a dictation whose words land once heard, hold the field, so a press away keeps a thread being started; typed words are kept as its draft and hold nothing.
@@ -1401,11 +1401,6 @@ function carried(send: Pick<CommentSend, "words" | "attachments">): boolean {
 function sameFiles(was: readonly AgentAttachment[], now: readonly AgentAttachment[]): boolean {
   return was.length === now.length && was.every((file, at) => file === now[at]);
 }
-
-/** How a comment's field stands: as a thread's first comment, the card itself, as a reply under its comments, or as a comment's words edited in their place (`CommentEditField`). */
-const REPLY_VARIANT = { FIRST: "first", REPLY: "reply", EDIT: "edit" } as const;
-
-type ReplyVariant = (typeof REPLY_VARIANT)[keyof typeof REPLY_VARIANT];
 
 /** Over a thread whose words were deleted: that they were, and what they said. */
 function GoneQuote({
@@ -3449,7 +3444,7 @@ function PinPreview({
   words,
   files = NO_PREVIEW_FILES,
 }: {
-  head: Pick<Parameters<typeof Comment>[0], "author" | "nameRef" | "at" | "now" | "trailing">;
+  head: Pick<Parameters<typeof Comment>[0], "author" | "nameRef" | "status" | "at" | "now">;
   words: string;
   files?: readonly Pick<FileChip, "name" | "mediaType">[] | undefined;
 }): React.JSX.Element {
@@ -3532,7 +3527,8 @@ function heldWords(comment: HeldComment): string {
 
 /**
  * A comment held in the reader's review, drawn as a posted comment is, in
- * their name: Pending where its time would stand, and its ⋯ at the head's
+ * their name: Pending right after the name, where its time would stand,
+ * whether or not its ⋯ is shown, and its ⋯ at the head's
  * end with Edit, which opens its words in place in a posted comment's edit
  * field, and Delete, which takes it out of the review at once with Undo.
  * Where it stands apart from its element, in the Review panel, its quote line
@@ -3602,15 +3598,13 @@ export function PendingPageComment({
       <Comment
         author={author}
         nameRef={nameRef}
+        status={<PendingWords />}
         trailing={
-          <>
-            <PendingWords />
-            {editing === undefined ? (
-              <div className="comment-tools">
-                <CommentMenu groups={groups} />
-              </div>
-            ) : null}
-          </>
+          editing === undefined ? (
+            <CommentTools>
+              <CommentMenu groups={groups} />
+            </CommentTools>
+          ) : undefined
         }
       >
         {title === undefined ? null : (
@@ -3677,7 +3671,7 @@ function HeldPin({
       preview={
         first === undefined ? null : (
           <PinPreview
-            head={{ author, nameRef, trailing: <PendingWords /> }}
+            head={{ author, nameRef, status: <PendingWords /> }}
             words={heldWords(first)}
             files={first.attachments}
           />
@@ -3726,7 +3720,7 @@ function DraftPin({
       onHover={onHint}
       preview={
         <PinPreview
-          head={{ author, nameRef, trailing: <DraftWords /> }}
+          head={{ author, nameRef, status: <DraftWords /> }}
           words={words}
           files={files}
         />

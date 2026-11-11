@@ -295,10 +295,13 @@ export const PRODUCT_EXPERIMENT = {
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   SEVERAL_REPOSITORIES: "several-repositories",
   DESCRIPTIONS: "descriptions",
+  REWIND_FILES: "rewind-files",
+  TURN_END: "turn-end",
   /** Renamed to Task descriptions, so no build sends it now; kept because a web tab served before the rename still may, and one unread value refuses the batch. */
   PLANS: "plans",
   /** Removed with Chat on the right, so no build sends it now; kept because an older build's batch still may, and one unread value refuses the batch. */
   CHAT_ON_THE_RIGHT: "chat-on-the-right",
+  RUN_ACTIONS: "run-actions",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];

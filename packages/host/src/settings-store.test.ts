@@ -4,6 +4,7 @@ import path from "node:path";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import {
@@ -195,6 +196,8 @@ const SAMPLE_VALUE = {
   agentEnter: AGENT_ENTER.QUEUE,
   // You with our bot as co-author is the default, so the bot alone is the choice that has to survive a reopen.
   commitAuthor: COMMIT_AUTHOR.APP,
+  // Full access is the default, so Ask for approval is the choice that has to survive a reopen.
+  agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
   // Not yet is the default, so finished is the state that has to survive a reopen.
   setupFinished: true,
   // Not yet started is the default, so a place midway through a team's setup is the state that has to survive a reopen.
@@ -203,6 +206,8 @@ const SAMPLE_VALUE = {
   soundWhen: SOUND_WHEN.BACKGROUND,
   // The chime is the default, so another sound is the choice that has to survive a reopen.
   completionSound: COMPLETION_SOUND.QUACK,
+  // The knock is the ask's default, so another sound is the choice that has to survive a reopen.
+  askSound: COMPLETION_SOUND.QUESTION,
   // Off is the default, so a notification turned on is the choice that has to survive a reopen.
   turnNotifications: true,
   // Unanswered is the default, so answers given in setup's survey are the state that has to survive a reopen.

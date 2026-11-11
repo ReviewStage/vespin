@@ -117,6 +117,8 @@ export interface ServiceReachState {
   readonly reachable: boolean;
   /** When an attempt was last answered, in the clock's milliseconds; when the reach was first kept, before any was. */
   readonly answeredAt: number;
+  /** Set where the service's last answer refused this build as older than it serves (426, `host-upgrade-needed`), until an answer of any other status. */
+  readonly updateNeeded?: true;
 }
 
 /**
@@ -262,8 +264,13 @@ function toldReach(
   );
 }
 
-/** An attempt the service answered, with any status. */
-const heardAnswer = toldReach((_, now) => ({ reachable: true, answeredAt: now }));
+/** An attempt the service answered, with any status: a 426 says this build is older than the service serves, and any other that it is not. */
+const heardAnswer = (status: number) =>
+  toldReach((_, now) => ({
+    reachable: true,
+    answeredAt: now,
+    ...(status === HTTP_STATUS.UPGRADE_REQUIRED ? { updateNeeded: true } : undefined),
+  }));
 
 /** An attempt that ended with no answer, which says the service is unreachable only once nothing was answered for `SILENCE_BEFORE_UNREACHABLE`. */
 const heardNoAnswer = toldReach((state, now) =>
@@ -353,7 +360,7 @@ export function accountCall(options: AccountCallOptions): AccountCallEffects {
   ): Effect.Effect<Answer, CallTransportError, HttpClient.HttpClient> {
     return withinDeadline(
       Effect.flatMap(
-        Effect.tap(requested(request, authorization), () => heardAnswer),
+        Effect.tap(requested(request, authorization), (answer) => heardAnswer(answer.status)),
         read,
       ),
     ).pipe(Effect.tapError(() => heardNoAnswer));

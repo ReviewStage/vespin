@@ -157,17 +157,24 @@ runs on an `ios-vX.Y.Z` tag, whose version must match `version` in
 `apps/mobile/app.config.ts`, and on a manual dispatch. Both upload: TestFlight is itself
 the rehearsal, since a build reaches no tester until it is added to a group.
 
-The run generates the native project with `expo prebuild`, archives it with automatic
-signing through an App Store Connect API key of its own, and exports
-it with `xcodebuild -exportArchive` and `apps/mobile/release/ExportOptions.plist`, whose
-destination is upload. Its build number is `<run number>.<run attempt>`, so a re-run
-uploads a build App Store Connect has not seen. The build carries
-`aps-environment: production`.
+The run generates the native project with `expo prebuild` and archives it signed to run
+locally: an ad-hoc signature, which needs no certificate and never reaches the account,
+but keeps each target's entitlements for the export to read. It then exports the archive
+with `xcodebuild -exportArchive` and `apps/mobile/release/ExportOptions.plist` through an
+App Store Connect API key of its own, which signs the app and its two extensions with
+Apple's cloud-managed distribution certificate: once to a local `.ipa` it checks, then
+again to upload. The archive is never signed automatically, since a runner's keychain
+starts empty and automatic signing would create an Apple Development certificate on every
+run until the team reaches Apple's cap, and never unsigned, since an unsigned archive
+carries no entitlements to export. Its build number is `<run number>.<run attempt>`, so a
+re-run uploads a build App Store Connect has not seen. The build carries
+`aps-environment: production`, which the run checks in the exported app.
 
 It needs an App Store Connect API key apart from the Mac release's, whose role is
-**Admin**, because automatic signing creates the distribution certificate and profile on
-the first run, and only an Admin key may: the access to cloud-managed distribution
-certificates App Store Connect offers an App Manager is given to people, never to a key.
+**Admin**, because the export creates the App Store profiles on the first run and signs
+through the cloud-managed distribution certificate, and only an Admin key may: the access
+to cloud-managed distribution certificates App Store Connect offers an App Manager is
+given to people, never to a key.
 The Developer role the Mac's notarization key holds cannot upload at all. Create it under
 **Users and Access → Integrations**, download its `.p8` at once, and set it as three
 secrets, beside the repository **variable** `APPLE_TEAM_ID`, the paid team's

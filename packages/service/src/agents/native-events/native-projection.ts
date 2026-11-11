@@ -1,3 +1,4 @@
+import type { CheckoutSnapshot } from "@repo/agent-runner/protocol";
 import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
 import { CLAUDE_CODE_UNRECORDED_TOOL, UNKNOWN_TOOL } from "@repo/features/agent-tools";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -235,6 +236,8 @@ export type NativeWrite =
       readonly kind: typeof NATIVE_WRITE.TAKE_LINE;
       readonly turnId: string;
       readonly clientId: string;
+      /** The checkout as it stood before the turn, where the runner recorded it, for the turn's row. */
+      readonly snapshot?: CheckoutSnapshot | undefined;
     }
   | { readonly kind: typeof NATIVE_WRITE.SESSION; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_WRITE.TRANSCRIPT_BROKEN; readonly sessionId: string }
@@ -781,6 +784,7 @@ class Fold {
           kind: NATIVE_WRITE.TAKE_LINE,
           turnId: turn.id,
           clientId: moment.clientId,
+          ...(moment.snapshot === undefined ? undefined : { snapshot: moment.snapshot }),
         });
         return;
       }
@@ -855,6 +859,11 @@ class Fold {
       }
       case NATIVE_MOMENT.COMPACTED:
         this.writes.push({ kind: NATIVE_WRITE.COMPACTED });
+        if (moment.notice !== undefined) {
+          this.#setTurn(
+            this.#tell(this.turn(), { kind: RUN_EVENT.COMPACTED, notice: moment.notice }),
+          );
+        }
         return;
       case NATIVE_MOMENT.COMPACTION_FAILED: {
         this.#context.report(moment.detail);

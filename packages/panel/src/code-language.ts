@@ -1,5 +1,5 @@
 /**
- * code-language.ts -- a fenced block's language as a reader says it, by the name its header shows, wherever the window draws one: a transcript's code card, a note's, and the description's editor's frame.
+ * code-language.ts -- a fenced block's language as a reader says it, by the name its header shows, wherever the window draws one: a transcript's code card, a note's, and the description's editor's frame; and the languages a block open in the editor may be set to.
  */
 
 /** What a block whose fence names no language is labeled. */
@@ -54,4 +54,32 @@ export function codeLanguage(language: string): {
 export function codeTitle(language: string): string {
   const { id, name } = codeLanguage(language);
   return name ?? (id === "" ? PLAIN_LANGUAGE : id);
+}
+
+/** A language a block open in the editor may be set to: the id its fence is written with, and the name its header shows. */
+export interface CodeLanguageChoice {
+  readonly id: string;
+  readonly name: string;
+}
+
+/** What the choice of no language is called, which a fence writes as none. */
+const PLAIN_CHOICE_NAME = "Plain text";
+
+/**
+ * The languages a block may be set to: none first, then each language this
+ * file names once, by the first extension it is written with, in the order
+ * named above.
+ */
+export const CODE_LANGUAGE_CHOICES: readonly CodeLanguageChoice[] = [
+  { id: "", name: PLAIN_CHOICE_NAME },
+  ...Object.entries(LANGUAGE_NAMES)
+    .filter(([, name], at, all) => all.findIndex(([, first]) => first === name) === at)
+    .map(([id, name]) => ({ id, name })),
+];
+
+/** The choice a fence's language stands for, by its extension, so a fence written ```typescript stands checked as TypeScript; none for one this file names no choice for. */
+export function codeLanguageChoice(language: string): CodeLanguageChoice | undefined {
+  const { id, name } = codeLanguage(language);
+  if (id === "") return CODE_LANGUAGE_CHOICES[0];
+  return CODE_LANGUAGE_CHOICES.find((choice) => choice.id !== "" && choice.name === name);
 }

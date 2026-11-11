@@ -22,7 +22,9 @@ import {
   type DescriptionEditorProps,
   type EditorAnchor,
   type EditorAnchors,
+  type EditorCodeBlock,
   type EditorDiagram,
+  type EditorDrawing,
   type EditorTaskBox,
   type Finish,
   type HeadingsChange,
@@ -33,6 +35,7 @@ import {
 } from "../description-editor/contract.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { type OwnBlock, useBlockPicker } from "./block-picker.js";
+import { EditorCodeHeader } from "./code-fence-heading.js";
 import type { EditorPictures } from "./editor-pictures.js";
 import { type MentionDoors, MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
 import { MENTION_MENU_SIDE, type MentionSource, useMentionPicker } from "./mention-picker.js";
@@ -251,6 +254,7 @@ export function MarkdownEditor({
   const chips = useEditorDrawings<DrawnMention>();
   const previews = useEditorDrawings<EditorDiagram>();
   const taskBoxes = useEditorDrawings<EditorTaskBox>();
+  const codeHeaders = useEditorDrawings<EditorCodeBlock>();
   // Note that a finish or a leaving waits for a picture still being kept, since only the open editor can lay in its address; it goes once none is.
   const held = useRef<(() => void) | undefined>(undefined);
   const sending = pictures?.sending === true;
@@ -342,6 +346,7 @@ export function MarkdownEditor({
           },
     drawDiagram: diagrams ? previews.draw : undefined,
     drawTaskBox: taskBoxes.draw,
+    drawCodeHeader: codeHeaders.keep,
     pictures: pictures?.pictures,
     format: toolbar.doors,
     blocks: { onTrigger: blocks.onTrigger, onKey: blocks.onKey },
@@ -385,6 +390,9 @@ export function MarkdownEditor({
           each.key,
         ),
       )}
+      {codeHeaders.drawn.map((each) =>
+        createPortal(<EditorCodeHeader block={each.what} />, each.element, each.key),
+      )}
       {taskBoxes.drawn.map((each) =>
         createPortal(
           <Checkbox
@@ -413,25 +421,43 @@ interface DrawnInEditor<A> {
   readonly key: number;
 }
 
-/** What the editor holds as drawn, and the door the editor asks to draw one through. */
+/** What the editor holds as drawn, the door the editor asks to draw one through, and the door to one it draws again as it changes. */
 interface EditorDrawings<A> {
   readonly drawn: readonly DrawnInEditor<A>[];
   readonly draw: (element: HTMLElement, what: A) => () => void;
+  readonly keep: (element: HTMLElement, what: A) => EditorDrawing<A>;
 }
 
 /**
- * What the editor asks the panel to draw, a mention, a diagram, or a task
- * item's box, each drawn into its own element while it stands, as the
- * composer draws its chips.
+ * What the editor asks the panel to draw, a mention, a diagram, a task
+ * item's box, or a code block's header, each drawn into its own element
+ * while it stands, as the composer draws its chips; one it keeps is drawn
+ * again in place as its subject changes.
  */
 function useEditorDrawings<A>(): EditorDrawings<A> {
   const [drawn, setDrawn] = useState<readonly DrawnInEditor<A>[]>([]);
   const counted = useRef(0);
-  const draw = (element: HTMLElement, what: A) => {
+  const draw = (element: HTMLElement, what: A): number => {
     counted.current += 1;
     const key = counted.current;
     setDrawn((was) => [...was, { element, what, key }]);
-    return () => setDrawn((was) => was.filter((each) => each.key !== key));
+    return key;
   };
-  return { drawn, draw };
+  const undraw = (key: number) => setDrawn((was) => was.filter((each) => each.key !== key));
+  return {
+    drawn,
+    draw: (element, what) => {
+      const key = draw(element, what);
+      return () => undraw(key);
+    },
+    // Note that a drawing kept is drawn again under its own key, so what it holds open, a menu, stays open.
+    keep: (element, what) => {
+      const key = draw(element, what);
+      return {
+        redraw: (next) =>
+          setDrawn((was) => was.map((each) => (each.key === key ? { ...each, what: next } : each))),
+        undraw: () => undraw(key),
+      };
+    },
+  };
 }

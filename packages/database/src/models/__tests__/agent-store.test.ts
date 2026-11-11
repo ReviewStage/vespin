@@ -113,9 +113,8 @@ import { type LineSender, storeWriter } from "../writer.js";
  * The workers a coding agent's conversation delegated to, over a real
  * dialect: every delegation its conversation recorded by a kept call, oldest
  * first, each on the pair it recorded, and none of another account's. And
- * a turn Anthropic refused Fast for, as its usage reads it. And an agent
- * with no task, which its workspace's members reach and no one else does,
- * and the workspace's agents listed for its members alone. And what sent
+ * a turn Anthropic refused Fast for, as its usage reads it. And the
+ * workspace's agents listed for its members alone. And what sent
  * each of the developer's lines to an agent, read by the agent's account.
  * And where in a turn under way each line arrived, as the turn took it in.
  * And the turn each ask the voice handed on ran in, as its binding names it.
@@ -257,7 +256,7 @@ it.layer(getTestDB())("the coding-agent store's line senders", (it) => {
           name: "Nightly triage",
         });
         const byGitHub = yield* line("github", { kind: MESSAGE_SENDER.GITHUB, login: "octocat" });
-        // The sending agent is the teammate's, on no task, which the owner's line still names.
+        // The sending agent is the teammate's, on a task of their own, which the owner's line still names.
         const sender = yield* workspaceAgent(teammate, yield* openWorkspace(teammate));
         const byAgent = yield* line("agent", {
           kind: MESSAGE_SENDER.AGENT,
@@ -760,7 +759,11 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
       Effect.gen(function* () {
         const starter = yield* openAccount;
         const workspace = yield* openWorkspace(starter);
-        const { agentId, conversationId } = yield* workspaceAgent(starter, workspace);
+        const { id: taskId } = yield* createTask(starter, {
+          organizationId: workspace,
+          name: "Flaky tests",
+        });
+        const { agentId, conversationId } = yield* workspaceAgent(starter, workspace, { taskId });
         const byApp = { by: AGENT_ARCHIVER.APP, userId: starter, reason: "Run finished" } as const;
         const db = yield* Database;
         const [read] = yield* db
@@ -797,7 +800,7 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
         const reopened = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
         yield* pullRequest(PULL_REQUEST_STATE.MERGED);
         // A question it posted after the read, which moves no line of its conversation either.
-        const asked = yield* openInboxItem(starter, workspace, null, agentId, true);
+        const asked = yield* openInboxItem(starter, workspace, taskId, agentId, true);
         const waiting = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
         yield* db
           .update(inboxItem)

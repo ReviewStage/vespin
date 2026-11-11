@@ -197,7 +197,15 @@ test("an experiment is found by its name, what it brings, and what other apps ca
     ["Bring your own machine"],
     "the page it holds",
   );
-  const experiments = ["Task descriptions", "Bring your own machine", "Skills", "Memory"];
+  const experiments = [
+    "Rewind restores files",
+    "Done and follow-ups",
+    "Run actions",
+    "Task descriptions",
+    "Bring your own machine",
+    "Skills",
+    "Memory",
+  ];
   for (const query of ["beta", "labs"]) {
     assert.deepEqual(experimentalFound(query, true), experiments, query);
   }

@@ -30,6 +30,11 @@ import { INPUT_LINE } from "@repo/agent-runner/protocol";
 import type { DeviceAgentClaimedLine, DeviceAgentDevice, DeviceAgentUpdate } from "@repo/features";
 import { CHECKOUT_IDENTITY_SCRIPT } from "@repo/features/checkout-identity";
 import {
+  CHECKOUT_RESTORE_EXIT,
+  CHECKOUT_RESTORE_SCRIPT,
+  CHECKOUT_RESTORE_VARIABLE,
+} from "@repo/features/checkout-restore";
+import {
   DEVICE_AGENT_LINE_KIND,
   DEVICE_ARCH,
   DEVICE_GITHUB_ACCESS,
@@ -155,6 +160,8 @@ const followingDevice = (
     readonly signInUnreached?: boolean;
     /** Whether the device's switch is on, as it stands and each time it changes; on where not given. */
     readonly switchedOn?: Stream.Stream<boolean>;
+    /** How the restore script exits, as a restore line runs it; well where none is named. */
+    readonly restoreExits?: number;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -200,6 +207,8 @@ const followingDevice = (
         return { stdout: "/usr/bin:/bin", exitCode: 0 };
       if (program === "/bin/bash" && args[1] === REACH_CHECK)
         return { exitCode: options.signInUnreached === true ? 128 : 0 };
+      if (program === "/bin/bash" && args[1] === CHECKOUT_RESTORE_SCRIPT)
+        return { exitCode: options.restoreExits ?? 0 };
       if (program === "/bin/bash" && args[1] === "exit 0")
         return {
           exitCode: options.worktreeFails === true ? 1 : 0,
@@ -257,7 +266,14 @@ const followingDevice = (
           options.claim === undefined ? Effect.succeed(LAUNCH) : options.claim(token),
           (answer) =>
             Effect.sync(() => {
-              if (answer !== undefined && "line" in answer) service.held.add(answer.line.id);
+              // Note that the service holds the device to its launches alone, as its beat's answer names them.
+              if (
+                answer !== undefined &&
+                "line" in answer &&
+                answer.line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH
+              ) {
+                service.held.add(answer.line.id);
+              }
             }),
         ),
       lineStep: () => Effect.succeed(true),
@@ -1043,4 +1059,47 @@ it.effect(
       assert.ok(said.every((each) => each?.update !== HOST_UPDATE.UPDATING));
       assert.equal(yield* current, `versions/${RUNNING}`);
     }).pipe(Effect.scoped, Effect.provide(NODE)),
+);
+
+it.effect(
+  "a restore line runs the restore script in the agent's worktree with the snapshot in its variables, and is settled with the script's exit",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const snapshot = {
+          commit: "0123456789abcdef0123456789abcdef01234567",
+          head: "89abcdef0123456789abcdef0123456789abcdef",
+          branch: "feat/invitations",
+        };
+        const restore: DeviceAgentLine = {
+          id: GONE_LINE_ID,
+          agentId: AGENT_ID,
+          seq: 1,
+          kind: DEVICE_AGENT_LINE_KIND.RESTORE,
+          payload: snapshot,
+        };
+        const { settled, spawned } = yield* followingDevice(() => Effect.void, {
+          lines: [restore],
+          claim: () => Effect.succeed({ line: restore }),
+          restoreExits: CHECKOUT_RESTORE_EXIT.MISSING,
+        });
+        yield* until(() => settled.some((each) => each.id === GONE_LINE_ID));
+
+        const ran = spawned.find((each) => each.args[1] === CHECKOUT_RESTORE_SCRIPT);
+        assert.ok(ran, "the restore script ran");
+        assert.equal(ran.cwd, LAYOUT.checkoutPath);
+        assert.deepEqual(
+          {
+            commit: ran.env?.[CHECKOUT_RESTORE_VARIABLE.COMMIT],
+            head: ran.env?.[CHECKOUT_RESTORE_VARIABLE.HEAD],
+            branch: ran.env?.[CHECKOUT_RESTORE_VARIABLE.BRANCH],
+          },
+          snapshot,
+        );
+        assert.deepEqual(
+          settled.filter((each) => each.id === GONE_LINE_ID),
+          [{ id: GONE_LINE_ID, exitCode: CHECKOUT_RESTORE_EXIT.MISSING }],
+        );
+      }).pipe(Effect.provide(NODE)),
+    ),
 );

@@ -34,7 +34,7 @@
     },
     "pinned": {
       "type": "boolean",
-      "description": "Whether the member keeps it pinned in their sidebar, the pin theirs alone; an agent on a task or on none alike."
+      "description": "Whether the member keeps it pinned in their sidebar, the pin theirs alone."
     },
     "disabledServers": {
       "type": "array",

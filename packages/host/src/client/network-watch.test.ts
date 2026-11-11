@@ -107,15 +107,24 @@ it.effect(
       yield* SubscriptionRef.set(reach, { reachable: false, answeredAt: 0 });
       yield* SubscriptionRef.set(machine, false);
       yield* Effect.yieldNow;
-      assert.deepEqual(state.snapshot().network, { online: false, reachable: false });
+      assert.deepEqual(state.snapshot().network, {
+        online: false,
+        reachable: false,
+      });
 
       yield* SubscriptionRef.set(machine, true);
       yield* Effect.yieldNow;
       assert.equal(regained.times, 0, "the network back while the service still does not answer");
 
-      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 12_000 });
+      yield* SubscriptionRef.set(reach, {
+        reachable: true,
+        answeredAt: 12_000,
+      });
       yield* Effect.yieldNow;
-      assert.deepEqual(state.snapshot().network, { online: true, reachable: true });
+      assert.deepEqual(state.snapshot().network, {
+        online: true,
+        reachable: true,
+      });
       assert.equal(regained.times, 1);
       yield* Scope.close(scope, Exit.void);
     }),
@@ -146,7 +155,10 @@ it.effect(
       yield* TestClock.adjust("1 minute");
       yield* send(reach);
       yield* Effect.yieldNow;
-      assert.deepEqual(state.snapshot().network, { online: true, reachable: false });
+      assert.deepEqual(state.snapshot().network, {
+        online: true,
+        reachable: false,
+      });
 
       yield* send(reach);
       while (asked < 3) yield* Effect.yieldNow;
@@ -155,7 +167,26 @@ it.effect(
       while (reReads.length === 0) yield* Effect.yieldNow;
 
       assert.deepEqual(reReads, [{ fault: "network", errorName: "TimeoutError" }]);
-      assert.deepEqual(state.snapshot().network, { online: true, reachable: true });
+      assert.deepEqual(state.snapshot().network, {
+        online: true,
+        reachable: true,
+      });
+      yield* Scope.close(scope, Exit.void);
+    }),
+);
+
+it.effect(
+  "the service refusing this build as too old reaches the document, and clears with its next answer",
+  () =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.make();
+      const { reach, state } = yield* watched(scope);
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1, updateNeeded: true });
+      yield* Effect.yieldNow;
+      assert.equal(state.snapshot().network.updateNeeded, true);
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 2 });
+      yield* Effect.yieldNow;
+      assert.equal(state.snapshot().network.updateNeeded, undefined);
       yield* Scope.close(scope, Exit.void);
     }),
 );

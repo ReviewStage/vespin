@@ -74,7 +74,6 @@ import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wi
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
-import { PAGE_OWNER, type PageOwner } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
@@ -435,7 +434,7 @@ export const START_AGENT_REFUSAL = {
     "Not started: no agent of your workspace has that id to start from; " +
     `${AGENT_TOOL.LIST_AGENTS} names them.`,
   SOURCE_OTHER_TASK:
-    "Not started: that agent works on another task than the taskId named, or on none; leave " +
+    "Not started: that agent works on another task than the taskId named; leave " +
     "taskId out to start where it works.",
   FROM_WITH_PROMPT:
     "Not started: an agent started from another is handed that agent's brief, transcript, and " +
@@ -487,6 +486,7 @@ const LOCAL_AGENT_REFUSAL_WORDS = {
   [LOCAL_AGENT_REFUSAL.PREPARING]: `Not started: the device it would run on is still getting ready for local agents, downloading Claude Code, Codex, and GitHub's CLI. Try again in a few minutes, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. Ask the member to turn Bring your own machine off and on in Settings › Machines on that Mac, or to restart vespin-host on that Linux server, to try again, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN]: `Not started: the repository is reached on the member's own GitHub token, and the device it would run on has a vespin-host too old to work in such a repository on its own GitHub sign-in. Ask the member to update that host, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+  [LOCAL_AGENT_REFUSAL.PERMISSION_MODES]: `Not started: the agent's permission mode asks before it acts, and the device it would run on has a vespin-host too old to ask, which would run it with full access. Ask the member to update ${PRODUCT_NAME} on that machine, or to switch the agent to Full access.`,
 } as const satisfies Record<
   Exclude<LocalAgentRefusal, typeof LOCAL_AGENT_REFUSAL.NOT_OWNER>,
   string
@@ -791,15 +791,6 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
           "for the task you work on.",
       ),
     ),
-    repository: Schema.optionalKey(
-      describeWire(
-        Schema.NullOr(githubRepositoryFullNameSchema),
-        "Where you work on no task and name none, the GitHub repository of the task made for the " +
-          "agent, as owner/name, which the workspace's GitHub installation must reach; null for " +
-          "none. Leave it out for the repository you work in, if any. A task's agent works in the " +
-          "task's own.",
-      ),
-    ),
     prompt: Schema.optionalKey(describeWire(START_PROMPT, START_WORDS[wordsOf(on)].prompt)),
     note: Schema.optionalKey(describeWire(START_PROMPT, START_WORDS[wordsOf(on)].note)),
     images: Schema.optionalKey(
@@ -895,8 +886,7 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
             ),
           ),
         }),
-        "Another agent of your workspace to take over from, on its own task, or on no " +
-          "task where it has none: the new " +
+        "Another agent of your workspace to take over from, on its own task: the new " +
           `agent is handed its brief and its transcript (with ${PRODUCT_NAME}'s summary of the steps that ` +
           "do not fit) and a copy of its work, runs on its model unless you name one, and hears " +
           "the note after them; it takes no prompt and no branch. Without messageId it continues " +
@@ -989,12 +979,15 @@ const UPDATE_TASK_CALL = Schema.Struct({
 
 const readTaskUpdate = Schema.decodeUnknownResult(UPDATE_TASK_CALL);
 /**
- * A start as a call carries it: one the app made under the tool's earlier words
+ * A start as a call carries it: the coding agent's input, and the repository
+ * of the task a member's call makes, which the member's own tool names
+ * (`member-mcp/tools.ts`). One the app made under the tool's earlier words
  * names its prompt `task`, and one made before `create_task` may name a
  * `newTask`, which is read only to be refused with where to go now.
  */
 const START_AGENT_CALL = Schema.Struct({
   ...START_AGENT_INPUT.fields,
+  repository: Schema.optionalKey(Schema.NullOr(githubRepositoryFullNameSchema)),
   task: Schema.optionalKey(START_PROMPT),
   newTask: Schema.optionalKey(Schema.Unknown),
 });
@@ -1005,13 +998,13 @@ const readStart = Schema.decodeUnknownResult(START_AGENT_CALL);
 export const LIST_AGENTS_TOOL = {
   name: AGENT_TOOL.LIST_AGENTS,
   description:
-    "List the agents of your workspace, on any task or none and started by any member, " +
+    "List the agents of your workspace, on any task and started by any member, " +
     "yourself left out: each with its id, its title (how the developer sees it named), the model " +
     "and effort it runs on with the model's name to say it by, its status (starting, running, " +
     "completed, failed, canceled) and why where it failed, its repository and the branch its " +
     "sandbox is on if a turn " +
     "has ended, one line of what it last did, its task (id and name; null for " +
-    "an agent on no task) and whether that is the task you work on, and whether the agent is " +
+    "one you cannot open) and whether that is the task you work on, and whether the agent is " +
     "archived. The agents " +
     "that matter to you come first: the agent that started you and the agents you started, " +
     "then those on your task; then the rest of the workspace, the newest started first, at most " +
@@ -1067,12 +1060,6 @@ const START_HANDED_WORDS = {
     "images.",
 } as const;
 
-/** Why a start on no task needs a prompt, said only where a task would otherwise hand its description. */
-const NEW_TASK_PROMPT_WORDS = {
-  on: "; it needs a prompt, since that task has no description to hand it",
-  off: "",
-} as const;
-
 /** `start_agent` in the words of the workspace's experiments: its name, its words, and its input schema. */
 export function startAgentToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
@@ -1091,10 +1078,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "out, for any part of that task's work, even one that runs apart from yours, so its " +
     "branch, pull request, and transcript stand under that task; name another task only for " +
     "work unrelated to it, or where the developer asked for that, and for work that should " +
-    `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. Where you work ` +
-    "on no task, taskId left out starts it on a new task made for it, named as its agent is, " +
-    "assigned to the member you work for, in the repository you work in or the one repository " +
-    `names${NEW_TASK_PROMPT_WORDS[words]}. ` +
+    `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. ` +
     "This one call carries everything the agent is told as " +
     "it starts, and the agent sets to work on it at once, so never follow it with a message to " +
     "the agent it started; message it only when there is something new to say. Its checkout is " +
@@ -1202,8 +1186,7 @@ export const READ_PAGE_TOOL = {
   description:
     "Read a page an agent showed in your workspace, by its id: its title, the version read " +
     "(the newest unless you name one) and the newest there is, its task and whether that is " +
-    "the task you work on, or, for a page an agent on no task showed on itself, that agent " +
-    "and whether it is you, and its HTML as it " +
+    "the task you work on, and its HTML as it " +
     "stands, cut on a line at " +
     `${READ_PAGE_CHARS} characters with how many were left out. Read a page the developer ` +
     "pointed you at, or one another agent showed, before you build on it or revise it; to " +
@@ -1332,8 +1315,7 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
   pinned: Schema.optionalKey(
     describeWire(
       Schema.Boolean,
-      "Whether the developer you work for keeps it pinned in their sidebar, the pin theirs alone; " +
-        "an agent on a task or on none alike.",
+      "Whether the developer you work for keeps it pinned in their sidebar, the pin theirs alone.",
     ),
   ),
   disabledServers: Schema.optionalKey(
@@ -3223,37 +3205,25 @@ function pageCut(html: string): PageCut {
 
 /**
  * What a page read says it stands on, where that is of the caller's
- * workspace: its task, by name, and whether it is the caller's own, or the
- * coding agent on no task that showed it, by name, and whether that is the
- * caller; nothing for an owner of another workspace.
+ * workspace: its task, by name, and whether it is the caller's own; nothing
+ * for a task of another workspace.
  */
-type PageStanding =
-  | {
-      readonly task: { readonly id: string; readonly name: string | null };
-      readonly isYourTask: boolean;
-    }
-  | { readonly agent: { readonly id: string; readonly name: string }; readonly isYours: boolean };
+interface PageStanding {
+  readonly task: { readonly id: string; readonly name: string | null };
+  readonly isYourTask: boolean;
+}
 
-const pageStandingOf = (caller: AgentCaller, owner: PageOwner) =>
+const pageStandingOf = (caller: AgentCaller, taskId: string) =>
   Effect.gen(function* () {
-    const userId = callerUserId(caller);
-    if (owner.kind === PAGE_OWNER.TASK) {
-      if (!(yield* taskOfCallerWorkspace(caller, owner.taskId))) return Option.none<PageStanding>();
-      const names = yield* taskNamesOf(userId, [owner.taskId]);
-      return Option.some<PageStanding>({
-        task: { id: owner.taskId, name: names.get(owner.taskId)?.name ?? null },
-        isYourTask: owner.taskId === callerTask(caller),
-      });
-    }
-    const found = yield* workspaceAgentOf(caller, owner.agentId);
-    if (Option.isNone(found)) return Option.none<PageStanding>();
+    if (!(yield* taskOfCallerWorkspace(caller, taskId))) return Option.none<PageStanding>();
+    const names = yield* taskNamesOf(callerUserId(caller), [taskId]);
     return Option.some<PageStanding>({
-      agent: { id: owner.agentId, name: agentName(found.value.agent) },
-      isYours: callerAgent(caller)?.id === owner.agentId,
+      task: { id: taskId, name: names.get(taskId)?.name ?? null },
+      isYourTask: taskId === callerTask(caller),
     });
   });
 
-/** One call of `read_page`: a version of a page of the caller's workspace, on a task or on an agent with no task, its HTML cut to the bound, or why there is none. */
+/** One call of `read_page`: a version of a page on a task of the caller's workspace, its HTML cut to the bound, or why there is none. */
 export function runReadPage(
   call: AgentReadCall,
   input: UnparsedWireValue,
@@ -3272,9 +3242,9 @@ export function runReadPage(
       const userId = callerUserId(caller);
       const found = yield* readPageById(userId, asked.success.pageId, asked.success.version);
       if (Option.isNone(found)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
-      const { owner, page, newestVersion } = found.value;
+      const { taskId, page, newestVersion } = found.value;
       // A page of another workspace, even one the member is also in, is none of the caller's.
-      const standing = yield* pageStandingOf(caller, owner);
+      const standing = yield* pageStandingOf(caller, taskId);
       if (Option.isNone(standing)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
       const cut = pageCut(page.html);
       return {
