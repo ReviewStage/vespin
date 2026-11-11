@@ -130,16 +130,16 @@ beforeAll(() => {
 
 afterEach(async () => {
   // Note that a page mounts its own root as its module loads and is never
-  // unmounted, so the answer to a press still on its way is let land here,
-  // inside act, rather than drawing once jsdom has gone.
-  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+  // unmounted, so each test waits out its press's answer, and whatever it
+  // left to draw is flushed here, inside act, rather than once jsdom has gone.
+  await act(async () => {});
   vi.restoreAllMocks();
   document.body.replaceChildren();
   sent = [];
   leaves = 0;
 });
 
-test("a client that is not trusted is named with its account, scopes, and redirect, and Allow alone accepts", async () => {
+test("a client that is not trusted is named with its account, scopes, and redirect, and Allow alone accepts and follows the server", async () => {
   const page = await openPage("consent", `/consent.html?${signedAuthorization()}`);
 
   await titled(page, "Acme Notes wants to use your Vespin account");
@@ -156,7 +156,8 @@ test("a client that is not trusted is named with its account, scopes, and redire
 
   await act(async () => buttonNamed(page, "Allow").click());
 
-  await vi.waitFor(() => expect(postedTo(PATH.CONSENT)).toHaveLength(1));
+  await vi.waitFor(() => expect(leaves).toBe(1));
+  expect(postedTo(PATH.CONSENT)).toHaveLength(1);
   expect(postedTo(PATH.CONSENT)[0]?.body).toMatchObject({
     accept: true,
     oauth_query: expect.stringContaining("client_id=acme-notes"),
