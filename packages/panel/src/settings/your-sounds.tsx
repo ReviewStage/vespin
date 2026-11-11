@@ -162,7 +162,13 @@ function useSlot(
 ): Slot {
   const field = FIELD_OF_SLOT[slot];
   const token = CLIP_SOUND_OF_SLOT[slot];
-  const write = useSettingRowWrite(field, (value: string) => settingFromOption(field, value, view));
+  // Note that a pick of one of the account's own sounds writes here rather than through the row's write, so a refusal toasts, as no tick or line under the row says it.
+  const write = useSettingRowWrite(
+    field,
+    (value: string) => settingFromOption(field, value, view),
+    undefined,
+    true,
+  );
   const { mutate: sendChoice } = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
   const chosen = chosenSound(sounds, slot)?.id;
@@ -182,8 +188,11 @@ function useSlot(
           actions: {
             thing: SOUND_WORDS.THING,
             rows: SOUND_ACTS,
-            onPick: (act: string) =>
-              act === SOUND_ACT.RENAME ? manage.rename(sound) : manage.remove(sound),
+            onPick: (act: string) => {
+              if (act === SOUND_ACT.RENAME) return manage.rename(sound);
+              if (act === SOUND_ACT.REMOVE) return manage.remove(sound);
+              throw new Error(`Unknown sound act: ${act}`);
+            },
           },
         })),
         chosen,

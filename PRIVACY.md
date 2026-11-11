@@ -224,7 +224,7 @@ unless you untick it, your name and email.
 
 ### Notifications
 
-If you turn on Show a notification in Settings › Account › Sounds, the Mac
+If you turn on Show a notification in Settings › Preferences › Notifications, the Mac
 app, or the web app where your browser allows it, asks your system to show a
 notification while Vespin is in the background when an agent you started
 finishes, or when an Inbox item asks you something, including one on a task
@@ -236,7 +236,7 @@ settings, outside Vespin. Showing one sends nothing to us or anyone else. It is 
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
 
-If you add your own sounds in Settings › Account › Sounds, to play when an
+If you add your own sounds in Settings › Preferences › Notifications, to play when an
 agent finishes or something needs you, we keep **each sound's audio and the
 name you give it** with your account: its bytes, its audio type, a
 fingerprint of them (SHA-256) that tells your other signed-in apps when it

@@ -66,18 +66,21 @@ export const CLIP_SOUND_OF_SLOT = {
 /** The hash of the clip the player holds for each of the account's two sounds, so a hash the live read answers again fetches nothing. */
 const loaded = new Map<SoundClipSlot, string>();
 
+/** The hash each of the account's two sounds was last asked to load, so a fetch that answers after a newer ask hands the player nothing. */
+const wanted = new Map<SoundClipSlot, string>();
+
 /**
  * A picked file read as a sound of the account's own: its type sniffed from
  * its own bytes, within the bytes a request can carry, and decoded by Web
  * Audio, which proves the window can play it.
  */
 export async function clipOfFile(file: File): Promise<ClipRead> {
+  // Note that a file past the bound is refused by its size alone, so it is never read whole only to be refused.
+  if (file.size > SOUND_CLIP_BOUNDS.MAX_BYTES)
+    return { refusal: CLIP_REFUSAL.TOO_LARGE(file.name) };
   const bytes = new Uint8Array(await file.arrayBuffer());
   const type = sniffAudioType(bytes);
   if (type === undefined) return { refusal: CLIP_REFUSAL.KIND(file.name) };
-  if (bytes.length > SOUND_CLIP_BOUNDS.MAX_BYTES) {
-    return { refusal: CLIP_REFUSAL.TOO_LARGE(file.name) };
-  }
   if ((await soundClipSeconds(bytes)) === undefined) {
     return { refusal: CLIP_REFUSAL.UNREADABLE(file.name) };
   }
@@ -87,12 +90,14 @@ export async function clipOfFile(file: File): Promise<ClipRead> {
 /** The clip one of the account's two sounds now plays, handed to the player at once under its hash, so the live read's move fetches nothing. */
 export function clipLoaded(slot: SoundClipSlot, sha256: string, bytes: Uint8Array): Promise<void> {
   loaded.set(slot, sha256);
+  wanted.set(slot, sha256);
   return setCustomSoundClip(CLIP_SOUND_OF_SLOT[slot], bytes);
 }
 
 /** One of the account's two sounds' clips let go from the player, as it plays none. */
 function clipLetGo(slot: SoundClipSlot): Promise<void> {
   loaded.delete(slot);
+  wanted.delete(slot);
   return setCustomSoundClip(CLIP_SOUND_OF_SLOT[slot], undefined);
 }
 
@@ -106,10 +111,22 @@ export async function soundBytes(
   return Result.isFailure(bytes) ? undefined : { sha256: answer.clip.sha256, bytes: bytes.success };
 }
 
-/** Fetches the sound one of the account's two sounds plays and hands it to the player, where it is still the one `sha256` names. */
+/**
+ * Fetches the sound one of the account's two sounds plays and hands it to
+ * the player, where it is still the one `sha256` names and still the one
+ * last asked for. Note that a fetch that fails, or answers other bytes,
+ * lets go of the clip the player held for an earlier sound, so the slot
+ * plays Chime rather than a sound no longer chosen; it is fetched again
+ * once the live read moves or the window opens anew.
+ */
 async function loadClip(slot: SoundClipSlot, id: string, sha256: string): Promise<void> {
+  wanted.set(slot, sha256);
   const read = await soundBytes(id);
-  if (read === undefined || read.sha256 !== sha256) return;
+  if (wanted.get(slot) !== sha256) return;
+  if (read === undefined || read.sha256 !== sha256) {
+    if (loaded.has(slot)) await clipLetGo(slot);
+    return;
+  }
   await clipLoaded(slot, sha256, read.bytes);
 }
 
