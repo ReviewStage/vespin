@@ -93,8 +93,10 @@ export function DeviceGlyph({
 
 /** Where a device offered stands now; one a service before beats said nothing of is online, as it listed only those, and one the presence read does not name, though it is the account's own, is gone. */
 function offerStanding(device: MacOffer, book: PresenceBook): DeviceStanding {
-  if (device.seenAt === undefined) return DEVICE_STANDING.ONLINE;
-  return presenceStanding(book, device.deviceId) ?? DEVICE_STANDING.OFFLINE;
+  return (
+    presenceStanding(book, device.deviceId) ??
+    (device.seenAt === undefined ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE)
+  );
 }
 
 /** What each standing is called. */

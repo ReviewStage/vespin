@@ -276,7 +276,6 @@ export const deviceSync = defineSyncTable(device, {
     device.setupFailure,
     device.updateFailure,
     device.secretHash,
-    device.createdAt,
     device.lastSeenAt,
   ],
   log: LOG.EVERY,
