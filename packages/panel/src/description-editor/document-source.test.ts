@@ -245,13 +245,27 @@ test("an empty task item left at the end of a checklist is saved as a checkbox t
   assert.equal(reopened.handedOver(), "- [x] testing here\n- [ ] then\n");
 });
 
-test("an empty numbered item, as an agent writes one under a heading, opens as a line the caret stands in, and what is typed there is saved in it", () => {
-  const { editor, handedOver } = opened("## Beats\n\n1.\n");
+test.each([
+  { shape: "alone", markdown: "## Beats\n\n1.\n", saved: "## Beats\n\n1. Hook\n" },
+  {
+    shape: "over a nested list",
+    markdown: "## Beats\n\n1.\n   1. Cut\n",
+    saved: "## Beats\n\n1. Hook\n   1. Cut\n",
+  },
+])(
+  "an empty numbered item $shape, as an agent writes one under a heading, opens as a line the caret stands in, and what is typed there is saved in it",
+  ({ markdown, saved }) => {
+    const { editor, handedOver } = opened(markdown);
+    const { doc } = editor.state;
+    const list = doc.child(0).nodeSize;
 
-  typedAtEnd(editor, "Hook");
+    // Note that the caret goes to the first line it can stand in from inside the item, as a click on it or ↓ into it does.
+    editor.commands.setTextSelection(Selection.near(doc.resolve(list + 2)).from);
+    editor.commands.insertContent("Hook");
 
-  assert.equal(handedOver(), "## Beats\n\n1. Hook\n");
-});
+    assert.equal(handedOver(), saved);
+  },
+);
 
 /** A blank line left before "One.", another between it and "Two." typed under it, and a third after. */
 function blankLinesAround(editor: Editor): void {

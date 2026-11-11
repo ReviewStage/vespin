@@ -140,19 +140,22 @@ const DocumentParagraph = Paragraph.extend({
   },
 });
 
-/** A numbered item as read, given an empty line for its words where it holds nothing. */
+/** A numbered item as read, given an empty line for its words where it opens on none: holding nothing, or only a list nested under it. */
 function withWordsLine(item: JSONContent): JSONContent {
-  const empty = item.type === "listItem" && (item.content ?? []).length === 0;
-  return empty ? { ...item, content: [{ type: "paragraph" }] } : item;
+  const content = item.content ?? [];
+  const worded = item.type !== "listItem" || content[0]?.type === "paragraph";
+  return worded ? item : { ...item, content: [{ type: "paragraph" }, ...content] };
 }
 
 /**
  * A numbered list whose empty item opens as an empty line to type on. Note
  * that TipTap's own reads an item with no words (`1.`, as an agent leaves
- * one under a heading) as an item holding nothing, which the schema does
- * not allow, so the document opened invalid, with no line in the item for
- * the caret: a click or ↓ left it on the line above, and what was typed went
- * there. A bulleted item already opens with its empty line.
+ * one under a heading) as an item with no line for its words, which the
+ * schema does not allow, so the document opened invalid, with no line in the
+ * item for the caret: a click or ↓ left it on the line above, and what was
+ * typed went there. A bulleted item already opens with its empty line. This
+ * is TipTap's own fix waiting upstream (ueberdosis/tiptap#8466), so it goes
+ * once a TipTap carrying that fix is installed.
  */
 const DocumentOrderedList = OrderedList.extend({
   parseMarkdown(token, helpers) {
