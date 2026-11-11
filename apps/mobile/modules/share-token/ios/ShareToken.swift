@@ -1,7 +1,7 @@
 // ShareToken.swift -- the one Keychain item the app and its share extension share: the account's current access token and when it stops being worth sending, which the share sheet starts a task with.
 //
 // The app writes it on sign-in and on every renewal, and deletes it on
-// sign-out (`ShareTokenModule.swift`, `src/host/share-token-account.ts`).
+// sign-out (`ShareTokenModule.swift`, `@repo/host`'s `issued-token-account-source.ts`).
 // The share extension only reads it, and reads a token past its expiry as
 // none, so a dead token never goes out. It holds the access token alone,
 // never the refresh token, which rotates on every use, so a second process

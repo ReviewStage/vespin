@@ -22,6 +22,12 @@ export {
   NOT_ON_THIS_PLATFORM,
 } from "../host-concerns.js";
 export {
+  type IssuedToken,
+  type IssuedTokenSink,
+  issuedTokenAccountSourceLayer,
+  type KeepIssuedToken,
+} from "../issued-token-account-source.js";
+export {
   OAUTH_ACCOUNT_CLIENT,
   type OAuthAccountClient,
   oauthAccountSourceLayer,

@@ -23,6 +23,7 @@ private enum Words {
   static let done = "Done"
   static let starting = "Starting…"
   static let started = "Started. It's in Tasks in Vespin."
+  static let agentRefused = "The task is in Vespin, but its agent didn't start. Open it in Vespin to start one."
   static let kept = "Open Vespin to start it. New task opens with this draft."
   static let notKept = "This draft couldn't be saved. Try again, or copy it into Vespin."
   static let signedOut = "Open Vespin and sign in to start tasks from here."
@@ -32,10 +33,10 @@ private enum Words {
 @MainActor
 final class ShareSheetModel: ObservableObject {
   enum Standing {
-    case drafting, starting, started, kept, notKept
+    case drafting, starting, started, agentRefused, kept, notKept
 
-    /// Whether the sheet is done with its words: the task started, or the draft kept for New task.
-    var settled: Bool { self == .started || self == .kept }
+    /// Whether the sheet is done with its words: the task made, or the draft kept for New task.
+    var settled: Bool { self == .started || self == .agentRefused || self == .kept }
   }
 
   let snapshot: ShareSnapshot?
@@ -69,11 +70,16 @@ final class ShareSheetModel: ObservableObject {
       accountId: snapshot.accountId, prompt: words, workspaceId: workspaceId, repository: repository)
     if let service = snapshot.service, let token = ShareToken.read() {
       standing = .starting
-      if await ShareStart.start(
+      switch await ShareStart.start(
         draft, service: service, token: token, idempotencyKey: idempotencyKey)
       {
+      case .started:
         standing = .started
         return
+      case .agentRefused:
+        standing = .agentRefused
+        return
+      case .notStarted: break
       }
     }
     standing = AppGroupFiles.keep(draft) ? .kept : .notKept
@@ -126,6 +132,7 @@ struct ShareSheet: View {
       case .drafting: EmptyView()
       case .starting: Text(Words.starting)
       case .started: Text(Words.started)
+      case .agentRefused: Text(Words.agentRefused)
       case .kept: Text(Words.kept)
       case .notKept: Text(Words.notKept).foregroundStyle(.red)
       }
@@ -155,6 +162,7 @@ struct ShareSheet: View {
     if !model.standing.settled {
       ToolbarItem(placement: .cancellationAction) {
         Button(Words.cancel, action: cancel)
+          .disabled(model.standing == .starting)
       }
       ToolbarItem(placement: .confirmationAction) {
         Button(Words.start) { Task { await model.start() } }

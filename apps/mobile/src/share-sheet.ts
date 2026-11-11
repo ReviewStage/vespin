@@ -4,7 +4,7 @@
  * The extension runs with no host, so it reads what New task would offer,
  * and where its Start is sent, from the snapshot the app writes
  * (`@repo/features/ios-share-wire`) whenever what it holds changes. Where it
- * can't start the task itself (`src/host/share-token-account.ts`), it keeps
+ * can't start the task itself (`@repo/host`'s `issued-token-account-source.ts`), it keeps
  * what the member wrote as a draft
  * the app opens New task on, prefilled, each time it comes forward with an
  * account signed in and no update holding the app; until then it stays. A draft kept under another account is dropped. A

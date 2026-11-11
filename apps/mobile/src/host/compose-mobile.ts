@@ -67,6 +67,8 @@ import {
   hostKernelLayer,
   hostStandingLayer,
   IdSource,
+  issuedTokenAccountSourceLayer,
+  type KeepIssuedToken,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
   RunMode,
@@ -85,7 +87,13 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
 import { inProcessChannel } from "./in-process-channel.js";
-import { type KeepShareToken, sharingAccountSourceLayer } from "./share-token-account.js";
+
+/**
+ * How long the share sheet sends a token after it is issued: ten minutes
+ * short of the hour the service's access tokens last (`accessTokenExpiresIn`
+ * in `packages/service/src/auth/auth.ts`), so one nearly lapsed is not sent.
+ */
+const SHARE_TOKEN_LIFETIME_MS = 50 * 60 * 1000;
 
 /**
  * The service the app talks to: production's, or the Preview a build names
@@ -125,8 +133,8 @@ export interface DeviceSeams {
   readonly cipher: SecretCipherSeam;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
-  /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-account.ts`). */
-  readonly keepShareToken: KeepShareToken;
+  /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-module.ts`). */
+  readonly keepShareToken: KeepIssuedToken;
 }
 
 /** What the app hands the composition. */
@@ -398,10 +406,10 @@ export function composeMobile(
       Path.layer,
       httpClient,
       Layer.provide(
-        sharingAccountSourceLayer(
-          oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS),
-          device.keepShareToken,
-        ),
+        issuedTokenAccountSourceLayer(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), {
+          keep: device.keepShareToken,
+          lifetimeMs: SHARE_TOKEN_LIFETIME_MS,
+        }),
         accountSeams(device),
       ),
     ),

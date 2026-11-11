@@ -8,7 +8,9 @@
 // The request follows no redirect, so the token never reaches another
 // address, and is given up whole after `limit`, however slowly an answer
 // trickles in. A redirect, a refusal, or no answer in time is reported as not
-// started, and the sheet keeps the draft for New task instead. One sheet
+// started, and the sheet keeps the draft for New task instead. A task made
+// whose agent the service refused (`agentRefusal` beside a success) is
+// reported as made without its agent, so no draft makes it twice. One sheet
 // sends every try under one idempotency key, so a second press after an
 // answer that never came is the same request, never a second task.
 
@@ -31,6 +33,9 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate {
 }
 
 enum ShareStart {
+  /// What a start came to: the task and its agent started, the task made with its agent refused, or nothing made that the sheet knows of.
+  enum Outcome { case started, agentRefused, notStarted }
+
   /// The path New task's start is sent to (`HOSTED_SERVICE_PATH.TASKS`).
   private static let path = "/api/plans"
   /// How long the sheet waits on the service, in all, before it keeps the draft instead.
@@ -38,38 +43,39 @@ enum ShareStart {
   /// A session that keeps no cookies or cache of its own.
   private static let session = URLSession(configuration: .ephemeral)
 
-  /// Starts `draft` as a task with its agent on the words, under `token` and `idempotencyKey`; whether the service took it in time.
+  /// Starts `draft` as a task with its agent on the words, under `token` and `idempotencyKey`; what came of it in time.
   static func start(_ draft: ShareDraft, service: ShareService, token: String, idempotencyKey: String)
-    async -> Bool
+    async -> Outcome
   {
     let agent: [String: Any] = ["idempotencyKey": idempotencyKey, "prompt": draft.prompt]
     var body: [String: Any] = ["planning": false, "agent": agent]
     if let workspaceId = draft.workspaceId { body["workspaceId"] = workspaceId }
     if let repository = draft.repository { body["repository"] = repository }
-    guard let data = try? JSONSerialization.data(withJSONObject: body) else { return false }
+    guard let data = try? JSONSerialization.data(withJSONObject: body) else { return .notStarted }
     var request = URLRequest(url: service.origin.appendingPathComponent(path))
     request.httpMethod = "POST"
     request.httpBody = data
     for (name, value) in service.headers { request.setValue(value, forHTTPHeaderField: name) }
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    return await withTaskGroup(of: Bool.self) { group in
+    return await withTaskGroup(of: Outcome.self) { group in
       group.addTask { await send(request) }
       group.addTask {
         try? await Task.sleep(for: limit)
-        return false
+        return .notStarted
       }
-      let first = await group.next() ?? false
+      let first = await group.next() ?? .notStarted
       group.cancelAll()
       return first
     }
   }
 
-  /// Whether the service answered `request` with success, following no redirect.
-  private static func send(_ request: URLRequest) async -> Bool {
-    guard let (_, response) = try? await session.data(for: request, delegate: NoRedirects()),
-      let status = (response as? HTTPURLResponse)?.statusCode
-    else { return false }
-    return (200..<300).contains(status)
+  /// What the service answered `request`, following no redirect: a success whose answer names an `agentRefusal` made the task alone.
+  private static func send(_ request: URLRequest) async -> Outcome {
+    guard let (data, response) = try? await session.data(for: request, delegate: NoRedirects()),
+      let status = (response as? HTTPURLResponse)?.statusCode, (200..<300).contains(status)
+    else { return .notStarted }
+    let answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    return answer?["agentRefusal"] == nil ? .started : .agentRefused
   }
 }

@@ -224,7 +224,7 @@ workspace the phone works in, each workspace, and the repositories each
 reaches, and where Start is sent. Start sends the task as New task does
 (`share-extension/ShareStart.swift`), under the account's current access
 token, which the app keeps in one Keychain item it and the extension alone
-share (`modules/share-token/`, written from `src/host/share-token-account.ts`
+share (`modules/share-token/`, written through `@repo/host`'s `issued-token-account-source.ts`
 on every sign-in and renewal and deleted on sign-out; the Keychain group is
 each target's `VespinShareKeychainGroup`). The refresh token never leaves the
 app, since it rotates on every use. With no token, a stale one, or no answer,
