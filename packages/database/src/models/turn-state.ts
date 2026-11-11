@@ -681,15 +681,11 @@ const releaseWaited = SqlSchema.findAll({
     ),
 });
 
-/** The running and queued turns no Stop was asked of that wait on a limit's reset, of the account's agents its ChatGPT plan named pays for, their wait cleared now. */
+/** The running and queued turns no Stop was asked of that wait on a limit's reset, of the account's agents its ChatGPT plans pay for, their wait cleared now. */
 const releasePlanWaits = SqlSchema.findAll({
-  Request: Schema.Struct({
-    userId: Schema.String,
-    subscriptionId: Schema.String,
-    first: Schema.Boolean,
-  }),
+  Request: Schema.Struct({ userId: Schema.String }),
   Result: WaitedTurnSchema,
-  execute: ({ userId, subscriptionId, first }) =>
+  execute: ({ userId }) =>
     Database.use((db) =>
       db
         .update(turns)
@@ -708,13 +704,6 @@ const releasePlanWaits = SqlSchema.findAll({
                   and(
                     eq(agentTable.userId, userId),
                     eq(agentTable.payer, AGENT_PAYER.CHATGPT_SUBSCRIPTION),
-                    // Note that an agent naming no subscription runs on the account's first of its kind.
-                    first
-                      ? or(
-                          eq(agentTable.subscriptionId, subscriptionId),
-                          isNull(agentTable.subscriptionId),
-                        )
-                      : eq(agentTable.subscriptionId, subscriptionId),
                   ),
                 ),
             ),
@@ -1289,19 +1278,14 @@ export function releaseWaitedTurns(
 }
 
 /**
- * The waiting turns of the account's agents its ChatGPT plan `subscriptionId`
- * pays for (`first` where it is the account's first, which an agent naming
- * none runs on), their wait cleared before the reset, as a reset credit spent
- * on the plan lifts its limit: answers them for a launch now, as the sweep's
- * release does, and none where none waited, so of two releases at once only
- * one hands a turn on.
+ * The waiting turns of the account's agents its ChatGPT plans pay for, their
+ * wait cleared before the reset, as a reset credit spent on one of its plans
+ * gives them room: answers them for a launch now, as the sweep's release
+ * does, whose payer choice finds the plan with room, and none where none
+ * waited, so of two releases at once only one hands a turn on.
  */
-export function releasePlanWaitedTurns(
-  userId: string,
-  subscriptionId: string,
-  first: boolean,
-): TurnStateEffect<readonly WaitedTurn[]> {
-  return releasePlanWaits({ userId, subscriptionId, first });
+export function releasePlanWaitedTurns(userId: string): TurnStateEffect<readonly WaitedTurn[]> {
+  return releasePlanWaits({ userId });
 }
 
 /** Settles the turn a rewind keeps as its conversation's first, its work dropped, with no Stop or failure on it. */

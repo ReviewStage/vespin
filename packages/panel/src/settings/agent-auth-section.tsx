@@ -1025,11 +1025,14 @@ function AddPress({
 function PlanFix({
   provider,
   plan,
+  name,
   offer,
   onOpen,
 }: {
   provider: ProviderKeyProvider;
   plan: SubscriptionKeySummary;
+  /** The plan's name, which its Use reset names it by. */
+  name: string;
   /** The plan's reset credit offered at its limit, where it holds one. */
   offer: ResetCreditOffer | undefined;
   onOpen: () => void;
@@ -1042,6 +1045,7 @@ function PlanFix({
         variant={BUTTON_VARIANT.OUTLINE}
         busy={offer.busy}
         busyLabel={WORDS.USING_RESET}
+        label={`${WORDS.USE_RESET} on ${name}`}
         onClick={offer.use}
       >
         {WORDS.USE_RESET}
@@ -1207,6 +1211,7 @@ function PlanRow({
             <PlanFix
               provider={provider}
               plan={plan}
+              name={name}
               offer={offer}
               onOpen={() => onOpen(STEPS.REPLACE)}
             />

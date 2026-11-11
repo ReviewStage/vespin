@@ -6,8 +6,8 @@
  * notice mint one key per confirmed press and send it again on a retry, so
  * ChatGPT spends one credit however often the press is sent. Where the
  * plan's limit no longer stands, its status is lifted on the credential the
- * spend was made with, the turns of the agents it pays for that wait on a
- * reset are handed on as the minute sweep hands them on, and its usage is
+ * spend was made with, the turns of the account's agents its ChatGPT plans
+ * pay for that wait on a reset are handed on as the minute sweep hands them on, and its usage is
  * read again so its count moves. The access token goes to ChatGPT alone and
  * is never logged.
  */
@@ -109,7 +109,12 @@ export const spentResetCredit = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (plan === undefined) return Option.none<ResetCreditOutcome>();
   const savedBy = yield* DateTime.nowAsDate;
   const outcome = yield* consumed(userId, ring, subscriptionId, idempotencyKey);
-  if (Option.isNone(outcome) || !LIFTED.has(outcome.value)) return outcome;
+  if (Option.isNone(outcome)) return outcome;
+  if (!LIFTED.has(outcome.value)) {
+    // Note that a plan answered as holding no credit is read again, so the count it shows moves too.
+    yield* rereadPlanUsage(userId, ring, plan);
+    return outcome;
+  }
   const now = yield* DateTime.nowAsDate;
   // Note that the status is written only where the credential is the one the spend was made with (`savedBy`).
   yield* hostedStoreOrUnavailable(
@@ -124,9 +129,7 @@ export const spentResetCredit = /* @__PURE__ */ Effect.fnUntraced(function* (
       subscriptionId,
     ),
   );
-  const released = yield* hostedStoreOrUnavailable(
-    releasePlanWaitedTurns(userId, subscriptionId, plans[0]?.id === subscriptionId),
-  );
+  const released = yield* hostedStoreOrUnavailable(releasePlanWaitedTurns(userId));
   yield* hostedStoreOrUnavailable(handWaitedTurnsOn(released));
   yield* rereadPlanUsage(userId, ring, plan);
   return outcome;
