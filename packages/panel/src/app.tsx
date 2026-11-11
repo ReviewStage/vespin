@@ -87,6 +87,7 @@ import { settingsRowsInput, shownSettingsView } from "./settings/settings-rows.j
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { landOnSettingsRow } from "./settings-search.js";
 import { SHELL_ROOM } from "./shell-room.js";
+import { useSoundClipLoaded } from "./sound-clip.js";
 import { ShellRoomContext, useStageRoom } from "./stage-room.js";
 import { useSteadyDoor } from "./steady-door.js";
 import { useTaskRoute } from "./task-route.js";
@@ -614,6 +615,8 @@ function AppWindow(): React.JSX.Element {
   );
   // A chime main heard news for plays here, in the one window it was pushed to (`agent-notices.ts`'s `heard`).
   useEffect(() => appBridge().onChime(playCompletionSound), []);
+  // The account's own clip is held by the player wherever it plays, the web tab's notices included, as a sound it chose (`sound-clip.ts`).
+  useSoundClipLoaded();
   // A link place loaded at its own address, or landed on with no step saved, is read by its route and opened as its link is (`places/link-places.ts`).
   useLinkDestinationLandings(openLink);
   // Where the window has stood, for back and forward, from the moment it

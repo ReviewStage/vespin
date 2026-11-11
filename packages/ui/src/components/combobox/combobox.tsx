@@ -23,6 +23,8 @@ import {
 } from "../../shadcn/combobox.js";
 import { INPUT_CONTROL, INPUT_FIELD } from "../../shadcn/input.js";
 import { ANNOUNCE, useAnnounce } from "../announcer/announcer.js";
+import { BUTTON_LIGHT, BUTTON_SIZE } from "../button/button.js";
+import { MoreButton } from "../more-button/more-button.js";
 import { OneLine } from "../one-line/one-line.js";
 import { SCROLL_FADE, type ScrollFade, scrollFadeMarks } from "../scroll-area/scroll-area.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
@@ -158,6 +160,22 @@ export interface ComboboxOption {
   readonly current?: boolean | undefined;
   /** The card hung beside the option while the pointer rests on it, as a row of ⌘K hangs its agent's; none hangs nothing. */
   readonly card?: ReactNode;
+  /** A ⋯ before its end, opening the acts on its thing while a press on the option still chooses it; none draws no ⋯. */
+  readonly more?: ComboboxOptionMore | undefined;
+}
+
+/**
+ * An option's ⋯: what it acts on, which names it, whether the acts it opens
+ * stand open, and what a press on it does. It stands before the check, as a
+ * list row's ⋯ stands at the row's end, shown as the option is highlighted
+ * or the pointer rests on it, and while its acts stand open, its room kept
+ * whether it shows or not (`combobox.css`, over `row-menu.css`).
+ */
+export interface ComboboxOptionMore {
+  /** What it acts on, as a sentence opens with it: "Sound" names it "Sound actions". */
+  readonly thing: string;
+  readonly expanded: boolean;
+  readonly onPress: () => void;
 }
 
 /** A run of options under a heading, or under none. */
@@ -194,6 +212,9 @@ export function ComboboxOptionItem({
   place?: VirtualRowPlace | undefined;
 } & ComboboxOptionEngineProps): React.JSX.Element {
   const under = option.detailUnder === true && option.detail !== undefined;
+  const more = option.more;
+  // Note that an option with a ⋯ keeps its end's room though it is not chosen, so the ⋯ of every such option stands in one column.
+  const ended = option.opens === true || option.current === true || more !== undefined;
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the field or the engine reads the keys and names this option active.
     <div
@@ -209,6 +230,8 @@ export function ComboboxOptionItem({
         option.disabled === true ? undefined : pulseOnPress(engine.onClick, PRESS_PULSE.QUIET)
       }
       {...(option.replayMasked === true ? REPLAY_MASKED : undefined)}
+      data-row-menu={more === undefined ? undefined : ""}
+      data-menu-open={more?.expanded === true ? "true" : undefined}
       className={cn("ui-combobox-option", COMBOBOX_ITEM, under && COMBOBOX_ITEM_TALL)}
       style={place?.style}
     >
@@ -258,15 +281,44 @@ export function ComboboxOptionItem({
           {option.hint}
         </span>
       )}
-      {option.opens === true || option.current === true ? (
+      {/* Note that a press on the ⋯ never chooses the option, and the list keeps it from taking the focus from the field. */}
+      {more === undefined ? null : (
+        <span
+          className={cn(
+            "ui-row-more ui-combobox-option-more",
+            (option.detail === undefined || under) && option.hint === undefined && "ml-auto",
+          )}
+        >
+          <MoreButton
+            thing={more.thing}
+            size={BUTTON_SIZE.COMPACT}
+            lights={BUTTON_LIGHT.GLYPH}
+            tabbable={false}
+            aria-haspopup="menu"
+            aria-expanded={more.expanded}
+            onClick={(event) => {
+              event.stopPropagation();
+              more.onPress();
+            }}
+          />
+        </span>
+      )}
+      {ended ? (
         <span
           className={cn(
             "ui-combobox-option-end",
             COMBOBOX_ITEM_END,
-            (option.detail === undefined || under) && option.hint === undefined && "ml-auto",
+            (option.detail === undefined || under) &&
+              option.hint === undefined &&
+              more === undefined &&
+              "ml-auto",
           )}
         >
-          {option.opens === true ? <ChevronRightIcon /> : <CheckIcon />}
+          {option.opens === true ? (
+            <ChevronRightIcon />
+          ) : option.current === true ? (
+            <CheckIcon />
+          ) : null}
         </span>
       ) : null}
     </div>
