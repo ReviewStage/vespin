@@ -260,7 +260,7 @@ export function AccountSection({
                 disabled={signOut.running}
                 onClick={deletion.ask}
               >
-                Delete account
+                Delete
               </Button>
             )}
           </SettingsRow>

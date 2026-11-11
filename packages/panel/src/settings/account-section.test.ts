@@ -148,10 +148,10 @@ const workspaceOf = (name: string, role: Workspace["role"], memberCount: number)
   memberCount,
 });
 
-const deleteButton = (within: ParentNode) =>
-  [...within.querySelectorAll("button")].find(
-    (candidate) => candidate.textContent === "Delete account",
-  ) ?? assert.fail("a Delete account button stands");
+/** The row's Delete, or the question's Delete account where `within` is its dialog. */
+const deleteButton = (within: ParentNode, words = "Delete") =>
+  [...within.querySelectorAll("button")].find((candidate) => candidate.textContent === words) ??
+  assert.fail(`a ${words} button stands`);
 
 test("Delete account names the workspaces the account owns and is the only member of as going with it", async () => {
   const container = document.createElement("div");
@@ -247,7 +247,7 @@ test.each([
 
   const dialog =
     document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("no question");
-  await act(async () => deleteButton(dialog).click());
+  await act(async () => deleteButton(dialog, "Delete account").click());
 
   const said = dialog.textContent ?? "";
   assert.match(said, says);
