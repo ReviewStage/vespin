@@ -23,9 +23,10 @@ appId: dev.vespin.ios
 # (`SettingsForm`); the words field's return key types a new line.
 - hideKeyboard
 # The repository's menu offers what the workspace's GitHub reaches. Note
-# that the row is pressed by its words with its value, "Repository,
-# ada/relay", because its section's heading is named "Repository" too.
-- tapOn: "Repository, .*"
+# that the menu is opened from the value its row shows, "ada/relay", since
+# the system's menu picker in a form opens from its value alone, never from
+# a press on its row's words.
+- tapOn: "ada/relay"
 - assertVisible: "ada/ledger"
 - waitForAnimationToEnd
 - takeScreenshot: new-task-repositories
@@ -49,7 +50,8 @@ appId: dev.vespin.ios
 - assertVisible: "Describe the task"
 - inputText: "Audit the invite emails for broken links."
 - hideKeyboard
-- tapOn: "Relation, .*"
+# The relation's menu is opened from its value, "None" until one is picked.
+- tapOn: "None"
 - tapOn: "Blocked by"
 - waitForAnimationToEnd
 - assertVisible: "Task, .*"
