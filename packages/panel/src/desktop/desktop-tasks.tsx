@@ -35,7 +35,7 @@ import {
 } from "@repo/ui";
 import { DescriptionCommentsProvider } from "@repo/ui/description-comments";
 import { GLYPH } from "@repo/ui/icons";
-import { pullRequestAgentOf, repositoryPullRequestOf } from "@repo/ui/pull-request-link";
+import { pullRequestAgentOf } from "@repo/ui/pull-request-link";
 import {
   agentOfTab,
   agentTab,
@@ -751,14 +751,7 @@ function DescriptionDocument({
   const pullRequestCard = (url: string) => {
     const owned = [...agents.pullRequests].map(([agentId, each]) => ({ agentId, url: each.url }));
     // A page under an agent's pull request, as its files, is still that pull request, as its press says.
-    const number = repositoryPullRequestOf(url, opened?.repository);
-
-    const owner =
-      pullRequestAgentOf(url, owned) ??
-      (number === undefined
-        ? undefined
-        : owned.find((each) => repositoryPullRequestOf(each.url, opened?.repository) === number)
-            ?.agentId);
+    const owner = pullRequestAgentOf(url, owned);
 
     if (owner === undefined) return undefined;
     const agentId = changesTabOf(agents, owner, tasks.sidePanel.changes).changes;

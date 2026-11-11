@@ -62,6 +62,17 @@ describe("markdownBlocks", () => {
     });
   });
 
+  it("draws a link the panel would not open, one past 2,048 characters, as a link to nowhere", () => {
+    const [paragraph] = markdownBlocks(
+      `[the log](https://example.com/${"a".repeat(2_048)})`,
+      READING,
+    );
+
+    expect(paragraph).toMatchObject({
+      runs: [{ kind: MARKDOWN_RUN.LINK, target: { kind: LINK_TARGET.NONE } }],
+    });
+  });
+
   it("routes a task's chip to its place in the app", () => {
     const [paragraph] = markdownBlocks(
       "[@Teammate invitations](https://vespin.dev/acme/task/42)",

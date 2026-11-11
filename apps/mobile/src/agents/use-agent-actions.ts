@@ -73,8 +73,8 @@ export interface AgentActions {
   readonly clearNote: () => void;
 }
 
-/** The menu of the agent `agentId` names, whose address on vespin.dev is `address`. */
-export function useAgentActions(agentId: string, address: string): AgentActions {
+/** The menu of the agent `agentId` names, whose address on vespin.dev is `address`, none before its workspace is known. */
+export function useAgentActions(agentId: string, address: string | undefined): AgentActions {
   const acts = useHostActs();
   const write = useWrite();
   const agent = useFollowedAgent(agentId);
@@ -105,6 +105,8 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
     pinned,
     copyLink: () => {
       setNote(undefined);
+
+      if (address === undefined) return;
       setStringAsync(address)
         .then(() => buzz(BUZZ.SUCCESS))
         .catch((cause: unknown) => {

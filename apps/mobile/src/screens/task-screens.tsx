@@ -3,13 +3,14 @@
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
   readLink,
+  taskLinkStep,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
@@ -172,7 +173,10 @@ function openOnWeb(destination: LinkDestination, workspace: Workspace | undefine
 function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
   if (workspace === undefined) return;
   shareLink(
-    linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, workspace.slug ?? workspace.id),
+    linkOf(
+      { kind: LINK_DESTINATION.TASK, planId: taskLinkStep(task) },
+      workspace.slug ?? workspace.id,
+    ),
   );
 }
 
@@ -975,7 +979,7 @@ function OverviewPage({
 
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
-    if (related.has(id)) router.push(`/tasks/${encodeURIComponent(id)}`);
+    if (related.has(id)) router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }));
     else if (agents.has(id)) router.push(iosAgentRoute(id));
   };
 
@@ -1044,7 +1048,7 @@ function TasksStackList(words: TasksSearch) {
           listing={listing}
           look={LIST_LOOK.PLAIN}
           search={search}
-          onSelect={(id) => router.push(`/tasks/${encodeURIComponent(id)}`)}
+          onSelect={(id) => router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }))}
           onRefresh={refreshTasks}
         />
       </Screen>

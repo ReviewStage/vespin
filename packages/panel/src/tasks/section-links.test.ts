@@ -401,6 +401,24 @@ test("a mention of a file as its page on GitHub opens its tab, at the lines it p
   assert.deepEqual(onGitHub, ["https://github.com/acme/other/blob/HEAD/other.ts"]);
 });
 
+test("where no File tab opens it, a mention of a file as its page on GitHub, written in http, opens that page", () => {
+  const page = "http://github.com/acme/relay/blob/HEAD/apps/web/session-store.ts";
+
+  const task: Task = {
+    ...TASK,
+    repository: PLACE.repository,
+    document: { body: `## Goal\nMove [@session-store.ts](${page}).`, assumptions: [] },
+  };
+
+  const onWeb: string[] = [];
+  fakeAppPlatform({ ...QUIET_PANEL, openWeb: (url) => onWeb.push(url) });
+  const container = drawnFiles(undefined, task);
+
+  act(() => chipNamed(container, "session-store.ts").click());
+
+  assert.deepEqual(onWeb, [page]);
+});
+
 test("a heading the description bears twice: a mention of the second opens the second, and each ⋯ copies its own", async () => {
   const task: Task = {
     ...TASK,

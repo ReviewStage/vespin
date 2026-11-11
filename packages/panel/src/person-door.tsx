@@ -1,3 +1,4 @@
+import { GITHUB_ORIGIN } from "@repo/features/link-grammar";
 import { ACTOR_KIND, type Actor, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { createContext, useContext, useEffect } from "react";
 import { appPlatform } from "./app-platform.js";
@@ -47,9 +48,6 @@ export function usePreloadedPerson(userId: string): void {
   const { workspaceId } = useMemberDirectory();
   useEffect(() => preload?.(userId, workspaceId), [preload, userId, workspaceId]);
 }
-
-/** GitHub's own address, which a GitHub account's page stands under. */
-const GITHUB_ORIGIN = "https://github.com";
 
 /** What an App's bot's login ends with, which its App's slug comes before. */
 const BOT_SUFFIX = "[bot]";

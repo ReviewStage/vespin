@@ -20,7 +20,13 @@
 
 import { type InboxListed, inboxMemberName, inboxPreview } from "./inbox-list-model.js";
 import { iosAppRouteOf, iosPullRequestRoute } from "./ios-app-links.js";
-import { LINK_DESTINATION, type LinkDestination, linkOf, readLink } from "./link-grammar.js";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  linkWorkspaceStep,
+  readLink,
+} from "./link-grammar.js";
 import { cardTitle } from "./plain-words.js";
 import { TASK_STATUS_WORDS } from "./task-standing-words.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -67,13 +73,6 @@ export interface ContinuedActivity {
 export interface SpotlightChanges {
   readonly index: readonly SpotlightItem[];
   readonly remove: readonly string[];
-}
-
-/** The step a workspace's links are written under: its slug, else its id, else the id itself before the workspaces are read. */
-function linkWorkspaceStep(workspaceId: string, workspaces: readonly Workspace[]): string {
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
-
-  return workspace?.slug ?? workspace?.id ?? workspaceId;
 }
 
 /** An agent's place, under its task where it is known, as the agent's page writes its address. */

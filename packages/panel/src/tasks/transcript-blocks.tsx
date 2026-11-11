@@ -7,6 +7,7 @@ import { descriptionAttachmentOf } from "@repo/features/description-attachment-l
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
+import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
@@ -735,11 +736,11 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
 
 /** A file's address on GitHub, at its line, which its link carries for the reader's link menu; the press opens its File tab. */
 function fileAddress(repository: string, path: string, line: number | undefined): string {
-  const page = new URL(`https://github.com/${repository}/blob/HEAD/${path}`);
+  const file = { kind: GITHUB_PAGE.FILE, repository, ref: GITHUB_DEFAULT_BRANCH, path } as const;
 
-  if (line !== undefined) page.hash = `L${line}`;
-
-  return page.href;
+  return gitHubPageLink(
+    line === undefined ? file : { ...file, lines: { startLine: line, endLine: line } },
+  );
 }
 
 /**

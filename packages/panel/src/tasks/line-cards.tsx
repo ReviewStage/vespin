@@ -5,7 +5,7 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import { threadLineTitle } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { GITHUB_PAGE, gitHubPageLink, LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import {
   DISCLOSURE_FILL,
   type EventNote,
@@ -326,7 +326,11 @@ function pullRequestPage(line: GitHubLineMetadata): string {
 
   if (reviewed || line.number === undefined) return line.url;
 
-  return `https://github.com/${line.repository}/pull/${line.number}`;
+  return gitHubPageLink({
+    kind: GITHUB_PAGE.PULL_REQUEST,
+    repository: line.repository,
+    number: line.number,
+  });
 }
 
 /** A picture drawer that draws none, each picture standing as its link, where no agent's transcript is drawn to read it as. */
