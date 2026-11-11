@@ -251,15 +251,6 @@ test("the account's menu opens Keyboard shortcuts and the changelog, each closin
   assert.deepEqual(sent, [{ kind: ACT_KIND.UPDATE_OPEN_CHANGELOG }]);
 });
 
-test("in a browser, which is no installed app, the account's menu offers no Keyboard shortcuts, since no page lists them there", async () => {
-  handCapabilities(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP));
-  const button = mount(DEAN);
-  await stateArrived();
-  act(() => button.click());
-
-  assert.deepEqual(accountMenuLines().slice(2, 4), ["Changelog", "Contact us"]);
-});
-
 test("Contact us flies out its own menu beside the account's, which stands whole behind it", async () => {
   const button = mount(DEAN);
   await stateArrived();

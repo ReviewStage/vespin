@@ -778,17 +778,9 @@ async function settle(): Promise<void> {
   });
 }
 
-test("⌘/ is offered in the installed app, where Keyboard shortcuts is a page, and not in a browser, where it is none", async () => {
+test("⌘/ is offered in a browser, where its own chords are listed, and opens Keyboard shortcuts in one step", async () => {
   handCapabilities(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP));
   // Note that a command is asked once, so the document it is offered by is in the client from the first frame.
-  await writeHandedAppState();
-  mount(false);
-  await settle();
-  assert.equal(runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS), false);
-  act(() => root?.unmount());
-  document.body.innerHTML = "";
-
-  handCapabilities(DESKTOP_CAPABILITIES);
   await writeHandedAppState();
   const tabs: PanelTab[] = [];
   mount(false, {}, PANEL_TAB.TASKS, (tab) => tabs.push(tab));

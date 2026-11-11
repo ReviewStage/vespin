@@ -20,6 +20,7 @@ import {
   type AppCommand,
   COMMAND_KEY,
   type CommandKey,
+  installBrowserChords,
   installCommandKey,
 } from "@repo/settings/shortcuts";
 import type { SessionReplayWord } from "./session-replay.js";
@@ -72,6 +73,13 @@ export interface AppPlatform {
    * Linux. A shell on a Mac, the Mac app always, leaves this out, for ⌘.
    */
   commandKey?: CommandKey;
+  /**
+   * Whether the window is a browser's tab, whose browser keeps ⌘N, ⌘T, ⌘W,
+   * and ⇧⌘T for its own windows and tabs, so the commands those reach in the
+   * Mac app are drawn and pressed with their `browser` chords
+   * (`@repo/settings/shortcuts`). The Mac app leaves this out.
+   */
+  browserTab?: true;
   /** Hears each command chosen from the shell's menu, until the returned function is called. */
   onMenuCommand(listener: (command: AppCommand) => void): () => void;
   /** Counts one surface event. */
@@ -158,10 +166,12 @@ let installed: AppPlatform | undefined;
 export function installAppPlatform(platform: AppPlatform): () => void {
   installed = platform;
   const restoreCommandKey = installCommandKey(platform.commandKey ?? COMMAND_KEY.META);
+  const restoreBrowserChords = installBrowserChords(platform.browserTab === true);
   return () => {
     if (installed !== platform) return;
     installed = undefined;
     restoreCommandKey();
+    restoreBrowserChords();
   };
 }
 
