@@ -1,6 +1,3 @@
-import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { PRODUCT_NAME } from "@repo/features/product-name";
-import { formatInstant } from "@repo/features/time-format";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   SETTINGS_PAGE as SCHEMA_SETTINGS_PAGE,
@@ -10,7 +7,7 @@ import {
 import { BUTTON_VARIANT, Button, SettingsRow, SettingsSection } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
-import { appStateQuery, selectAccess, selectAccount } from "../use-app-state.js";
+import { appStateQuery, supportAccessStanding } from "../use-app-state.js";
 import { SchemaSettingRows } from "./schema-rows.js";
 import type { SettingsWrites } from "./writes.js";
 
@@ -23,9 +20,6 @@ import type { SettingsWrites } from "./writes.js";
  * access and written through the host under the account's own session.
  */
 
-/** What granting means, said beside the row while no grant stands. */
-const SUPPORT_ACCESS_MEANING = `Let the ${PRODUCT_NAME} team sign in as you to help.`;
-
 /**
  * The member's grant of support access: whether it stands and until when,
  * and the one press that turns it, granting it for seven days or revoking
@@ -36,25 +30,18 @@ const SUPPORT_ACCESS_MEANING = `Let the ${PRODUCT_NAME} team sign in as you to h
  * ends that sign-in.
  */
 function SupportAccessRow(): React.JSX.Element {
-  const access = useQuery({ ...appStateQuery, select: selectAccess }).data;
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
-  const until = access?.supportAccessUntil;
-  const granted = until !== undefined && until > Date.now();
-  const impersonated = account?.status === ACCOUNT_STATUS.SIGNED_IN && account.impersonated;
+  const standing = useQuery({
+    ...appStateQuery,
+    select: (state) => supportAccessStanding(state, Date.now()),
+  }).data;
   const supportAccess = useMutation(pressMutation(ACT_KIND.ACCOUNT_SUPPORT_ACCESS));
+  const granted = standing?.granted === true;
   const press = {
     busy: supportAccess.isPending,
     onPress: () => supportAccess.mutate({ grant: !granted }),
   };
   return (
-    <SettingsRow
-      label="Support access"
-      description={
-        granted
-          ? `The ${PRODUCT_NAME} team can sign in as you until ${formatInstant(until)}.`
-          : SUPPORT_ACCESS_MEANING
-      }
-    >
+    <SettingsRow label="Support access" description={standing?.words}>
       {() =>
         granted ? (
           <Button
@@ -65,7 +52,7 @@ function SupportAccessRow(): React.JSX.Element {
           >
             Revoke
           </Button>
-        ) : impersonated || access === undefined || access.pending === true ? null : (
+        ) : standing?.grantable === true ? (
           <Button
             variant={BUTTON_VARIANT.OUTLINE}
             busy={press.busy}
@@ -74,7 +61,7 @@ function SupportAccessRow(): React.JSX.Element {
           >
             Grant for 7 days
           </Button>
-        )
+        ) : null
       }
     </SettingsRow>
   );

@@ -1,9 +1,12 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { andList } from "@repo/features/words";
 import { workspaceInvitationSchema } from "@repo/features/workspace-invitation-wire";
 import {
   formerMemberSchema,
   WORKSPACE_BOUNDS,
+  WORKSPACE_ROLE,
   WORKSPACE_SLUG_PROBLEM,
+  type Workspace,
   type WorkspaceSlugProblem,
   workspaceMemberSchema,
 } from "@repo/features/workspace-wire";
@@ -37,6 +40,48 @@ export const ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL =
  */
 export const ACCOUNT_DELETE_UNCONFIRMED_REFUSAL =
   "Couldn't confirm whether the account was deleted. Check your connection, then try again." as const;
+
+/**
+ * What a refused delete tells the person to do, as the panel's Account page
+ * and the iOS app's both say it. Note that Better Auth deletes an account
+ * only within a day of its sign-in, and the host refuses a delete past that
+ * in its own sentence (`ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL`), which a
+ * retry alone never gets past, so only that refusal says to sign in again.
+ * A deletion the host could not confirm (`ACCOUNT_DELETE_UNCONFIRMED_REFUSAL`)
+ * may already have happened, so it says so in the host's words rather than
+ * that it failed; anything else, such as a service that did not answer,
+ * says to try again.
+ */
+export function accountDeleteRefusalWords(error: unknown): string {
+  const said = error instanceof Error ? error.message : undefined;
+  if (said === ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL) {
+    return "The account could not be deleted. Sign out and back in, then delete it again.";
+  }
+  if (said === ACCOUNT_DELETE_UNCONFIRMED_REFUSAL) return ACCOUNT_DELETE_UNCONFIRMED_REFUSAL;
+  return "The account could not be deleted. Try again.";
+}
+
+/**
+ * What the account's delete asks after its warning about the workspaces that
+ * go with the account, the ones it owns and is the only member of, as
+ * Better Auth deletes them (`auth-policy.ts`'s `accountDeletion`): their
+ * names where the list is read whole, and nothing where it names none;
+ * while it is unread, or its read failed, the rule itself, since a question
+ * saying nothing then would read as though nothing else goes. Note that a
+ * list from a service before member counts names none.
+ */
+export function accountDeleteWorkspacesWords(
+  workspaces: readonly Workspace[] | undefined,
+  listKnown: boolean,
+): string | undefined {
+  if (workspaces === undefined || !listKnown) {
+    return "Workspaces you own and are the only member of are also deleted, with everything in them.";
+  }
+  const names = workspaces
+    .filter(({ role, memberCount }) => role === WORKSPACE_ROLE.OWNER && memberCount === 1)
+    .map(({ name }) => name);
+  return names.length > 0 ? `Also deleted, with everything in them: ${andList(names)}.` : undefined;
+}
 
 /**
  * What a workspace act whose role does not allow it is refused with, in place
