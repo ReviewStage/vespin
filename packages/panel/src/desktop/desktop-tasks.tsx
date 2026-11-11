@@ -9,6 +9,7 @@ import type {
   TaskBlockRequest,
   TaskCreateRelationKind,
   TaskStanding,
+  TaskSummary,
 } from "@repo/features/task-wire";
 import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -71,6 +72,7 @@ import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { startCloudDraft, useCloudBrowserTabs } from "../tasks/cloud-browser-tabs.js";
 import {
   DescriptionBody,
+  DescriptionBodySkeleton,
   type DescriptionRoom,
   type SectionLinks,
   type TitleRename,
@@ -547,7 +549,15 @@ function DescriptionDocument({
   // The task as the list names it, its owner, agents, and pull requests
   // among it, which its card and its banner read. Held above the states
   // with no document for the same reason.
-  const opened = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  // The task as its description was read, which only the description and what it names draw from.
+  const read = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  // The task the page stands on: as read, or, while its description is read, as the list holds it, so its bars, its
+  // tabs, and its agents draw at once rather than wait on the description.
+  const opened: TaskSummary | undefined =
+    read ??
+    (region.kind === DOCUMENT_REGION.READING
+      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
+      : undefined);
   const listedOpen =
     opened === undefined
       ? undefined
@@ -1064,7 +1074,8 @@ function DescriptionDocument({
   // task, so another task's groups start as they open and no draft of this one's stands there.
   const descriptionHead = useCallback(
     (room: DescriptionRoom) =>
-      opened === undefined ? (
+      // Note that the sub-tasks and relations are the description's to name, so while it is read the agents stand alone.
+      read === undefined ? (
         <Fragment key={openedId}>
           {planAgents}
           {planPages}
@@ -1072,7 +1083,7 @@ function DescriptionDocument({
       ) : (
         <PlanHead
           key={openedId}
-          task={opened}
+          task={read}
           tasks={tasks}
           door={relations}
           room={room}
@@ -1081,7 +1092,7 @@ function DescriptionDocument({
           onOpenTask={openTask}
         />
       ),
-    [openedId, opened, tasks, relations, openTask, planAgents, planPages],
+    [openedId, read, tasks, relations, openTask, planAgents, planPages],
   );
   // A row in a transcript that opens a tab hangs that tab's card, read as
   // the tab reads it, so an agent, a subagent, or a file is previewed alike wherever named.
@@ -1131,7 +1142,7 @@ function DescriptionDocument({
     return heldTaskMentions(
       opened,
       workspace,
-      opened.document.body,
+      read?.document.body,
       { pages, agents, readAgents: readMentionAgents },
       {
         onOpenTask: openMention,
@@ -1143,6 +1154,7 @@ function DescriptionDocument({
     );
   }, [
     opened,
+    read,
     workspace,
     pages,
     agents,
@@ -1153,7 +1165,8 @@ function DescriptionDocument({
     agentLookDoor,
     pullRequestCardDoor,
   ]);
-  if (region.kind === DOCUMENT_REGION.READING) {
+  // Note that a task the list does not hold, as a link may open, waits on its description, which alone names it.
+  if (region.kind === DOCUMENT_REGION.READING && opened === undefined) {
     return (
       <TaskPageSkeleton
         drawing={drawing}
@@ -1162,7 +1175,7 @@ function DescriptionDocument({
     );
   }
   if (
-    region.kind !== DOCUMENT_REGION.READY ||
+    opened === undefined ||
     workspace === undefined ||
     cards === undefined ||
     mentions === undefined ||
@@ -1206,7 +1219,7 @@ function DescriptionDocument({
       </>
     );
   }
-  const { task } = region;
+  const task = opened;
   const listed = listedOpen ?? task;
   // The panel holds the keys while the focus went into it last, or while it
   // fills the window over this column; shut, it hands them back.
@@ -1249,24 +1262,28 @@ function DescriptionDocument({
     >
       {/* The way back to the agents stays pinned at the card's top left, over the details as they scroll. */}
       {detailsWide ? <div className="task-details-back">{detailsLead}</div> : null}
-      <DescriptionBody
-        task={task}
-        reader={reader}
-        agents={editAgents}
-        onShowHistory={showHistory}
-        onPreloadHistory={preloadHistory}
-        edit={descriptionEdit}
-        // The title renames as the chip's field does, so a refusal is said beside it.
-        onRename={renameDoor}
-        onDraftName={draftNameDoor}
-        rename={titleRename}
-        looks={looks}
-        sectionLinks={sectionLinks}
-        standing={standing}
-        head={descriptionHead}
-        titleActions={!phone}
-        shown={overviewShown}
-      />
+      {read === undefined ? (
+        <DescriptionBodySkeleton name={task.name} head={descriptionHead} />
+      ) : (
+        <DescriptionBody
+          task={read}
+          reader={reader}
+          agents={editAgents}
+          onShowHistory={showHistory}
+          onPreloadHistory={preloadHistory}
+          edit={descriptionEdit}
+          // The title renames as the chip's field does, so a refusal is said beside it.
+          onRename={renameDoor}
+          onDraftName={draftNameDoor}
+          rename={titleRename}
+          looks={looks}
+          sectionLinks={sectionLinks}
+          standing={standing}
+          head={descriptionHead}
+          titleActions={!phone}
+          shown={overviewShown}
+        />
+      )}
     </Fill>
   );
   const pane = taskPaneOf({ open: sidePanel.open, column: tab });

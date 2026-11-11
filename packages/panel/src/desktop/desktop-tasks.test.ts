@@ -251,6 +251,43 @@ function markupOf(element: ReactElement): string {
   return markup;
 }
 
+test("a listed task draws its name and the column's tab from its row while its description is still read, which alone waits", () => {
+  const page = document.createElement("div");
+  page.innerHTML = markupOf(
+    windowRouter().provide(
+      withQueryClient(
+        createElement(DesktopTasks, {
+          looks: NO_LOOKS,
+          tasks: tasksControl({
+            page: TASKS_PAGE.DOCUMENT,
+            tasks: [TASK],
+            activeTaskId: TASK.id,
+            region: { kind: DOCUMENT_REGION.READING },
+            workspaces: [
+              { id: TASK.workspaceId, name: "Personal", role: WORKSPACE_ROLE.OWNER, github: null },
+            ],
+          }),
+        }),
+      ),
+    ),
+  );
+  const reading = [...page.querySelectorAll('[role="status"]')].map((each) => each.textContent);
+  assert.ok(
+    [...page.querySelectorAll("h1, h2")].some((each) => each.textContent === TASK.name),
+    "the task's title is drawn from its row",
+  );
+  assert.ok(page.querySelector('[role="tablist"]'), "the column's tabs stand");
+  assert.deepEqual(
+    reading.filter((words) => words?.includes("task")),
+    [],
+    "the page does not wait on the task as a whole",
+  );
+  assert.ok(
+    reading.some((words) => words?.includes("description")),
+    "the description alone says it is read",
+  );
+});
+
 test("a task with no agent tab draws a new agent's draft", () => {
   const DRAFT_ID = "draft-1";
   const drawn = () => {
