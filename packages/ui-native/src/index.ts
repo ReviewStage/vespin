@@ -21,8 +21,10 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
+  SCOPE_LOOK,
   type Scope,
-  ScopePills,
+  type ScopeLook,
+  ScopePicker,
   StatusChip,
 } from "./button.js";
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";

@@ -59,8 +59,9 @@ import {
   previewMessages,
   ROW_ACTION_TONE,
   RowList,
+  SCOPE_LOOK,
   type Scope,
-  ScopePills,
+  ScopePicker,
   Screen,
   SplitView,
   THREAD_MEDIA,
@@ -102,6 +103,9 @@ const INBOX_TITLE = "Inbox";
 
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
+
+/** What the scopes' control is heard as by VoiceOver, before the scope chosen. */
+const SCOPE_LABEL = "Filter";
 
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
@@ -625,7 +629,7 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
   return { show, search, setSearch, listing, acts, scopes, menu, remind };
 }
 
-// A compact window: the list under the scope pills, the account's photo
+// A compact window: the list under its scopes' segmented control, the account's photo
 // opening Settings and the workspace switcher beside it at the bar's leading
 // edge, and its search and its ⋯ menu as round
 // glass buttons at its trailing one, each row pushing its thread as the Stack's
@@ -663,7 +667,7 @@ function InboxStackList(words: InboxSearch) {
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
       <Screen>
-        <ScopePills scopes={scopes}>
+        <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
           {listing.listed.length === 0 ? (
             <InboxEmpty
               show={show}
@@ -683,7 +687,7 @@ function InboxStackList(words: InboxSearch) {
               onResolve={acts.resolve}
             />
           )}
-        </ScopePills>
+        </ScopePicker>
       </Screen>
       {remind.sheet}
     </>
@@ -691,8 +695,8 @@ function InboxStackList(words: InboxSearch) {
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
-// under its scope pills with its search and ⋯ menu in its bar and the
-// selected thread beside it, and, where the window is wide enough for three
+// under its scopes' menu picker, since the column cuts segments short, with
+// its search and ⋯ menu in its bar and the selected thread beside it, and, where the window is wide enough for three
 // columns, the app sidebar before them, as Mail stands its mailboxes, a
 // mailbox's mail, and a message. The Stack's header steps aside, since the
 // split view draws each column's navigation bar itself.
@@ -718,7 +722,7 @@ function InboxSplitScreen({
         <SplitView
           {...sidebar.columns({
             view: (
-              <ScopePills scopes={scopes}>
+              <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
                 {listing.listed.length === 0 ? (
                   <InboxEmpty
                     show={show}
@@ -739,7 +743,7 @@ function InboxSplitScreen({
                     onResolve={acts.resolve}
                   />
                 )}
-              </ScopePills>
+              </ScopePicker>
             ),
             bar: {
               title: INBOX_TITLE,
