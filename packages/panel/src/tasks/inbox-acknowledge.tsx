@@ -50,13 +50,13 @@ import {
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
 
 /** What a toast says of a nod the service did not take on a notice still open: its agent changed it since it was shown. */
-const CHANGED = "The agent changed this item before you acknowledged it.";
+const CHANGED = "The agent changed this item before you pressed Got it.";
 
 /** What a Got it's Undo says where the service did not take it back. */
 const ACKNOWLEDGE_UNTAKEN = {
-  unreached: "Could not undo acknowledging.",
+  unreached: "Could not undo Got it.",
   told: "Can't undo: the agent was already told.",
-  movedOn: "Can't undo: it changed since you acknowledged it.",
+  movedOn: "Can't undo: it changed since you pressed Got it.",
 } as const;
 
 /** Acknowledges the notices given, at once, with Undo; one already on its way is passed over. */
@@ -75,8 +75,8 @@ type NodAnswer = AgentInboxAnsweredView | { readonly failure: AgentCallFailure }
 function acknowledgedWords(items: readonly InboxItem[]): string {
   const [only] = items;
   return items.length === 1 && only !== undefined
-    ? `Acknowledged “${cardTitle(only.title)}”`
-    : `${countWords(items.length, TERM.INBOX_ITEM)} acknowledged`;
+    ? `Got it: “${cardTitle(only.title)}”`
+    : `Got it: ${countWords(items.length, TERM.INBOX_ITEM)}`;
 }
 
 /** Why the service did not take one nod, in a toast's words; none where it took it, or where the notice was settled first, which is what the press asked. */

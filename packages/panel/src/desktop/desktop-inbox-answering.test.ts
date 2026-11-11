@@ -912,8 +912,8 @@ test("a nod on a notice the agent posted over first is not taken: the notice sta
   await settle();
   assert.equal(sendWords(itemPane(page)), "Got it", "the notice stands open, to nod to again");
   assert.deepEqual(standingToastWords(), [
-    "Acknowledged “Alert at 80%?”",
-    "The agent changed this item before you acknowledged it.",
+    "Got it: “Alert at 80%?”",
+    "The agent changed this item before you pressed Got it.",
   ]);
 });
 

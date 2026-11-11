@@ -207,20 +207,20 @@ test("Mark all as read acknowledges the reader's notices, read or not or their r
     `acknowledged:${U}@${MOVED_ON}`,
     `all:${TASK.workspaceId}:${X},${Z}`,
   ]);
-  assert.deepEqual(hook.toasts(), ["4 items acknowledged"]);
+  assert.deepEqual(hook.toasts(), ["Got it: 4 items"]);
   const nodOnY = hook.sent.find((each) => each.words === `acknowledged:${Y}@1`);
   await hook.sent.find((each) => each.words === `acknowledged:${Z}@1`)?.answer();
   await nodOnY?.answer(true);
   await hook.sent.find((each) => each.words === `acknowledged:${V}@1`)?.answer();
   await hook.sent.find((each) => each.words === `acknowledged:${U}@${MOVED_ON}`)?.answer();
-  assert.deepEqual(hook.toasts(), ["4 items acknowledged", "2 items acknowledged, 2 could not be"]);
+  assert.deepEqual(hook.toasts(), ["Got it: 4 items", "Got it: 2 items, 2 could not be sent"]);
 });
 
 test("Undo after marking a notice read takes its Got it back at the service by its key, leaving the read mark", async () => {
   const hook = marks();
   hook.mark(notice(item(Y, true)), false);
   await settle();
-  assert.deepEqual(hook.toasts(), ["Acknowledged “Alert at 80%?”"]);
+  assert.deepEqual(hook.toasts(), ["Got it: “Alert at 80%?”"]);
   await act(() => undoLast());
   assert.deepEqual(hook.tookBack, [`taken back:${Y}`]);
   assert.deepEqual(

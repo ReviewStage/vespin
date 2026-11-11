@@ -183,7 +183,7 @@ const SENT_WORDS = {
   [INBOX_REPLY.DONE]: "done",
   [INBOX_REPLY.NOT_DONE]: "couldn't do it",
   [INBOX_REPLY.SUBMITTED]: "submitted",
-  [INBOX_REPLY.ACKNOWLEDGED]: "acknowledged",
+  [INBOX_REPLY.ACKNOWLEDGED]: "got it",
 } as const satisfies Record<InboxReplyKind, string>;
 
 /**
