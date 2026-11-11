@@ -1,6 +1,7 @@
 import { runtimeModelRule, runtimeModels } from "@repo/features/agent-runtime-models";
 import type { AgentPayer, AgentUsage } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { PERMISSION_MODE_LABEL } from "@repo/settings";
 import {
   CHIP_LOOK,
   Chip,
@@ -14,7 +15,7 @@ import type { Actor } from "@repo/ui/actor-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
 import { HarnessMark } from "../harness-marks.js";
-import { type AgentModeControl, MODE_GLYPH, MODE_WORDS, modeShown } from "./agent-approvals.js";
+import { type AgentModeControl, MODE_GLYPH, modeShown } from "./agent-approvals.js";
 import { choiceLabel, paidByOf, providerOf } from "./agent-model.js";
 import { payerLastLine, usePayerPlan } from "./agent-payer.js";
 import { ModelLabel } from "./model-label.js";
@@ -118,7 +119,8 @@ export function AgentModelChip({
   const shown = modeShown(permissions);
   const ModeGlyph = shown === undefined ? undefined : MODE_GLYPH[shown];
   const modelWords = choiceLabel(model.choice, models ?? []).trim();
-  const label = shown === undefined ? modelWords : `${modelWords} · ${MODE_WORDS[shown].label}`;
+  const label =
+    shown === undefined ? modelWords : `${modelWords} · ${PERMISSION_MODE_LABEL[shown]}`;
   // Note that who pays decides Fast on Codex, which runs a fast version on an OpenAI API key alone.
   const paidBy = payer ?? usage?.payer;
   const paying = paidByOf(payer, usage, model.runtime);

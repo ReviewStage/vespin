@@ -1,4 +1,5 @@
 import { storedAgentChoice } from "@repo/features/account-preferences-live";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { contextWindowSchema } from "@repo/features/agent-wire";
 import {
   CHAPTERS_PICK_LIST,
@@ -20,6 +21,7 @@ import {
   experimentChoicesFrom,
   experimentOn,
   NO_EXPERIMENTS,
+  PERMISSION_MODE_LIST,
   PULL_REQUEST_OPEN_LIST,
   type PullRequestOpen,
   SOUND_WHEN_LIST,
@@ -77,7 +79,7 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
  * The experiments part is the one patch: its keys are merged over what
  * stood, so a Mac that knows fewer experiments never erases another's.
  * `preferences` is the shared part; the link choice, the pull request choice, Enter's choice, the
- * commit author, setup finished, the setup place, when and which sound plays,
+ * commit author, a new agent's permission mode, setup finished, the setup place, when and which sound plays,
  * whether a notification is posted, and the survey's answers are parts of
  * their own, which a build that predates them never sends.
  */
@@ -87,6 +89,7 @@ export interface AccountPreferencesWrite {
   pullRequestOpen?: PullRequestOpen;
   agentEnter?: AgentEnter;
   commitAuthor?: CommitAuthor;
+  agentPermissionMode?: AgentPermissionMode;
   setupFinished?: boolean;
   setupPlace?: string;
   soundWhen?: SoundWhen;
@@ -108,6 +111,7 @@ const PREFERENCE_COLUMNS = {
   pullRequestOpen: accountPreference.pullRequestOpen,
   agentEnter: accountPreference.agentEnter,
   commitAuthor: accountPreference.commitAuthor,
+  agentPermissionMode: accountPreference.agentPermissionMode,
   setupFinished: accountPreference.setupFinished,
   setupPlace: accountPreference.setupPlace,
   soundWhen: accountPreference.soundWhen,
@@ -128,6 +132,7 @@ const PreferenceRowSchema = Schema.Struct({
   pullRequestOpen: Schema.NullOr(Schema.String),
   agentEnter: Schema.NullOr(Schema.String),
   commitAuthor: Schema.NullOr(Schema.String),
+  agentPermissionMode: Schema.NullOr(Schema.String),
   setupFinished: Schema.NullOr(Schema.Boolean),
   setupPlace: Schema.NullOr(Schema.String),
   soundWhen: Schema.NullOr(Schema.String),
@@ -158,6 +163,7 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
         ...(row.pullRequestOpen ? { pullRequestOpen: row.pullRequestOpen } : undefined),
         ...(row.agentEnter ? { agentEnter: row.agentEnter } : undefined),
         ...(row.commitAuthor ? { commitAuthor: row.commitAuthor } : undefined),
+        ...(row.agentPermissionMode ? { agentPermissionMode: row.agentPermissionMode } : undefined),
         ...(row.setupFinished === null ? undefined : { setupFinished: row.setupFinished }),
         ...(row.setupPlace ? { setupPlace: row.setupPlace } : undefined),
         ...(row.soundWhen ? { soundWhen: row.soundWhen } : undefined),
@@ -277,6 +283,7 @@ const PreferenceWriteSchema = Schema.Struct({
   pullRequestOpen: Schema.optionalKey(Schema.Literals(PULL_REQUEST_OPEN_LIST)),
   agentEnter: Schema.optionalKey(Schema.Literals(AGENT_ENTER_LIST)),
   commitAuthor: Schema.optionalKey(Schema.Literals(COMMIT_AUTHOR_LIST)),
+  agentPermissionMode: Schema.optionalKey(Schema.Literals(PERMISSION_MODE_LIST)),
   setupFinished: Schema.optionalKey(Schema.Boolean),
   setupPlace: Schema.optionalKey(Schema.String),
   soundWhen: Schema.optionalKey(Schema.Literals(SOUND_WHEN_LIST)),
@@ -309,6 +316,9 @@ function writtenColumns(write: PreferenceWrite) {
       : { pullRequestOpen: write.pullRequestOpen }),
     ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
     ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
+    ...(write.agentPermissionMode === undefined
+      ? undefined
+      : { agentPermissionMode: write.agentPermissionMode }),
     ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),
     ...(write.setupPlace === undefined ? undefined : { setupPlace: write.setupPlace }),
     ...(write.soundWhen === undefined ? undefined : { soundWhen: write.soundWhen }),
@@ -386,6 +396,9 @@ export function writeAccountPreferences(
         : { pullRequestOpen: write.pullRequestOpen }),
       ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
       ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
+      ...(write.agentPermissionMode === undefined
+        ? undefined
+        : { agentPermissionMode: write.agentPermissionMode }),
       ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),
       ...(write.setupPlace === undefined ? undefined : { setupPlace: write.setupPlace }),
       ...(write.soundWhen === undefined ? undefined : { soundWhen: write.soundWhen }),

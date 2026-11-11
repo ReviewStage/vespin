@@ -71,6 +71,12 @@ export {
   type SurveyRole,
 } from "./onboarding-survey.js";
 export {
+  isPermissionMode,
+  PERMISSION_MODE_HINT,
+  PERMISSION_MODE_LABEL,
+  PERMISSION_MODE_LIST,
+} from "./permission-mode.js";
+export {
   isPullRequestOpen,
   PULL_REQUEST_OPEN,
   PULL_REQUEST_OPEN_DEFAULT,

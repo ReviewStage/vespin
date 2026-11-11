@@ -1,4 +1,5 @@
 import {
+  AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
   agentPermissionModeSchema,
 } from "@repo/features/agent-approval-wire";
@@ -321,6 +322,8 @@ export type NewAgent = AgentPlace & {
   readonly machine?: AgentMachineKind | undefined;
   /** The account's Mac a local agent is pinned to; none for one in a sandbox. */
   readonly deviceId?: string | undefined;
+  /** How its tool calls are answered from its first turn; full access where none is named. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
 };
 
 /** A repository a Start names for the agent beside its own: `owner/name` as reached, and the branch its checkout is cloned at, none for its default branch. */
@@ -687,6 +690,7 @@ const insertAgent = SqlSchema.findOne({
     kind: Schema.Literals(Object.values(AGENT_KIND)),
     machine: Schema.Literals(Object.values(AGENT_MACHINE)),
     deviceId: Schema.NullOr(Schema.String),
+    permissionMode: agentPermissionModeSchema,
     now: Schema.Date,
   }),
   Result: CommittedAgentRowSchema,
@@ -720,6 +724,7 @@ const insertAgent = SqlSchema.findOne({
           kind: write.kind,
           machine: write.machine,
           deviceId: write.deviceId,
+          permissionMode: write.permissionMode,
           idempotencyKey: write.idempotencyKey,
           createdAt: write.now,
         })
@@ -2256,6 +2261,7 @@ export function createAgent(
           kind: AGENT_KIND.CODER,
           machine: started.machine ?? AGENT_MACHINE.VERCEL,
           deviceId: started.deviceId ?? null,
+          permissionMode: started.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS,
           now,
         }).pipe(
           // An insert that returned no row is the database breaking its own contract, not an outcome.

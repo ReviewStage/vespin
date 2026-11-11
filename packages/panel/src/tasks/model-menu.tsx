@@ -9,6 +9,7 @@ import {
 } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
+import { PERMISSION_MODE_LABEL } from "@repo/settings";
 import {
   ErrorState,
   type FootRow,
@@ -29,7 +30,6 @@ import {
   MODE_GLYPH,
   MODE_GROUP,
   MODE_QUESTION,
-  MODE_WORDS,
   MODES,
   modeMenuRows,
 } from "./agent-approvals.js";
@@ -314,7 +314,7 @@ export function ModelMenu(props: {
         id: FOOT_ROW.PERMISSIONS,
         label: MODE_GROUP,
         icon: <Glyph />,
-        detail: MODE_WORDS[control.mode].label,
+        detail: PERMISSION_MODE_LABEL[control.mode],
         submenu: {
           label: MODE_GROUP,
           heading: MODE_QUESTION,

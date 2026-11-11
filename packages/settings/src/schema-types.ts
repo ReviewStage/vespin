@@ -67,6 +67,8 @@ export const SETTING_SECTION = {
   MICROPHONE: "microphone",
   /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */
   AGENTS: "agents",
+  /** How a new agent's actions are approved, under the default model's rows in Settings › Agents' New agents group. */
+  NEW_AGENTS: "new-agents",
   /** Whether and which sound plays, and whether a notification is posted, as an agent finishes, a group of its own on Preferences, under Agents. */
   NOTIFICATIONS: "notifications",
 } as const;
@@ -133,6 +135,8 @@ export interface SettingsVisibility {
 export interface SettingOption {
   value: string;
   label: string;
+  /** What the option does, said under its name; none where its name says it. */
+  hint?: string | undefined;
 }
 
 /**

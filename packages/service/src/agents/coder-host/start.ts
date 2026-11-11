@@ -30,6 +30,7 @@ import {
 } from "@repo/database/models/writer";
 import type { StoredAutomationOrigin, StoredStartedFrom } from "@repo/database/schemas/agent";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import {
   firstMessageText,
   type NoteFiles,
@@ -117,6 +118,7 @@ import {
   markedUnconnected,
 } from "./agent-runtime-choice.js";
 import type { NativeRuntime } from "./native-runtime.js";
+import { startingPermissionMode } from "./permission-mode.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { failedCallRefusal } from "./runtime-sessions.js";
 import { agentLineSender } from "./steer.js";
@@ -307,13 +309,19 @@ export const accountModelChoices = (userId: string) =>
 /**
  * The account's choices as `accountModelChoices` reads them, with its
  * stored credentials they were decided from, which a Start decides its
- * payer from too rather than reading them again. Its preferences, its
+ * payer from too rather than reading them again, and its Default
+ * permissions, which a new agent starts on. Its preferences, its
  * credentials, and the catalog are read together.
  */
 const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
 ): Effect.fn.Return<
-  { readonly choices: AccountModelChoices; readonly keys: AccountKeyRows },
+  {
+    readonly choices: AccountModelChoices;
+    readonly keys: AccountKeyRows;
+    /** The account's Default permissions; none where it never chose. */
+    readonly permissionMode: AgentPermissionMode | undefined;
+  },
   HostedRefusal,
   DatabaseServices | ModelCatalog
 > {
@@ -337,7 +345,11 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
     markedUnconnected(userId, offeredToAccount(read, fastOffer), keys),
   );
   const stored = preferences?.agent;
-  return { choices: { offered, defaultChoice: stored ?? agentFallbackChoice(offered) }, keys };
+  return {
+    choices: { offered, defaultChoice: stored ?? agentFallbackChoice(offered) },
+    keys,
+    permissionMode: preferences?.preferences.agentPermissionMode,
+  };
 });
 
 /**
@@ -355,16 +367,20 @@ const acceptedChoiceRead = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   named: ModelChoice | undefined,
 ): Effect.fn.Return<
-  { readonly choice: ModelChoice; readonly keys: AccountKeyRows },
+  {
+    readonly choice: ModelChoice;
+    readonly keys: AccountKeyRows;
+    readonly permissionMode: AgentPermissionMode | undefined;
+  },
   HostedRefusal | ModelChoiceRefused,
   DatabaseServices | ModelCatalog
 > {
-  const { choices, keys } = yield* modelChoicesRead(userId);
+  const { choices, keys, permissionMode } = yield* modelChoicesRead(userId);
   const { offered, defaultChoice } = choices;
   const choice = yield* Effect.fromResult(
     validateModelChoice(offered, named ?? defaultChoice),
   ).pipe(Effect.mapError((reason) => new ModelChoiceRefused({ reason, offered })));
-  return { choice, keys };
+  return { choice, keys, permissionMode };
 });
 
 /** Where a Start lands, read as the account: the workspace whose installation reads the repository, the repository, none for a blank Start on a task with none, the task where there is one, the account that may move it where that is the account asking, and the store's place for the agent with what it is handed. */
@@ -925,7 +941,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     (model, keys) => startRuntimeOf(userId, model, keys),
     (fitter, noteFiles) => landingOf(userId, ask, fitter, noteFiles, ask.landed),
   );
-  const { choice, keys } = read;
+  const { choice, keys, permissionMode } = read;
   // An automation's agent reaches through the workspace's installation alone; a Start by hand, on the starter's token too.
   // Note that a task started with its agent reached the repository a moment ago, in the same
   // request and as the same member, so that reach stands rather than a second round of GitHub reads.
@@ -992,6 +1008,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       payer: runtime.payer,
       machine: placed.machine,
       deviceId: placed.deviceId,
+      permissionMode: startingPermissionMode(runtime.runtime, permissionMode, member === undefined),
       githubAccess: reached?.access,
       startBranch: branch,
       extraRepositories: extras,
