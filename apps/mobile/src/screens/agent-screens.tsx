@@ -246,6 +246,7 @@ function AgentComposerBar({
       sendable={composer.sendable}
       onSend={composer.send}
       addMenu={addMenu}
+      onDropPictures={composer.dropPictures}
       onStop={composer.stop}
       stopping={composer.stopping}
       head={head}

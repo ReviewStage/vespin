@@ -9,8 +9,9 @@
  * gate opening with no act of the app's, its read marks, its reminders, its
  * retry, its pictures, and a thread's answer, reply, and resolve; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
- * mark, rename, and delete, and a task's description, pages, and comment
- * threads followed, with a reply on a thread; an agent's page: a message sent or
+ * mark, rename, and delete, a task dragged into a section on an iPad, and a
+ * task's description, pages, and comment threads followed, with a reply on a
+ * thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
  * permission mode, and MCP servers changed, the account's integrations
  * followed for those servers, its task's skills read for a `/`, and the
@@ -337,7 +338,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MARK_READ]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_WRITE_SECTION]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_WRITE_SECTION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: panel(IOS.COMPOSER),
   [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: panel(IOS.TASKS),

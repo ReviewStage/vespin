@@ -21,6 +21,12 @@ import {
   inAgentListOrder,
 } from "@repo/features/task-agents-model";
 import { ASSIGNED_TO, NO_REPOSITORY, TASKS_HEAD_WORDS } from "@repo/features/task-list-model";
+import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
+import {
+  NO_TASK_SECTIONS,
+  SECTION_WRITE_FAILED_NOTE,
+  sectionOfTask,
+} from "@repo/features/task-sections-model";
 import {
   searchedTasks,
   type TaskRowLook,
@@ -249,6 +255,10 @@ export interface TasksListing {
   readonly markRead: (taskId: string, unread: boolean) => void;
   /** Pins a task to the list's Pinned group, or unpins it. */
   readonly pin: (taskId: string, pinned: boolean) => void;
+  /** The section the member keeps a task in, as the stored entries hold it, a pinned task's among them; none where it is in none. */
+  readonly sectionOf: (taskId: string) => string | undefined;
+  /** Puts a task in one of the member's sections, or under null in none, as the panel's Move to section does, answering whether the service took it. */
+  readonly place: (taskId: string, sectionId: string | null) => Promise<boolean>;
   readonly rename: TaskWrites["rename"];
   /** Asks first whether to delete a task for good, as the panel's Permanently delete does. */
   readonly askDelete: (task: TaskSummary) => void;
@@ -340,6 +350,18 @@ export function useTasksListing(search: string): ReadListing {
         went: BUZZ.SELECTION,
       });
     };
+    // Note that the host draws the move on the list the moment it is asked, and puts it back where the service refused it, which the failure notice says.
+    const place = (taskId: string, sectionId: string | null) =>
+      write(
+        () =>
+          acts[ACT_KIND.TASKS_WRITE_SECTION]({
+            writes: [{ kind: TASK_SECTION_WRITE.PLACE, taskId, sectionId }],
+          }),
+        {
+          refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
+          went: BUZZ.SUCCESS,
+        },
+      );
     const agentsWorking = agentsWorkingIn(view, tasks);
     // Note that the agents are grouped by task once, since every row's preview reads its own.
     const byTask = agentsByTask(view);
@@ -356,6 +378,8 @@ export function useTasksListing(search: string): ReadListing {
       agentsWorking,
       markRead,
       pin,
+      place,
+      sectionOf: (taskId: string) => sectionOfTask(view?.taskSections ?? NO_TASK_SECTIONS, taskId),
       rename,
       glanceOf,
     };

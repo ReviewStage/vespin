@@ -33,6 +33,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { AgentTile, FailedMark, TaskStatusMark, ToneGlyph, WorkingMark } from "./marks.js";
@@ -188,6 +189,7 @@ function PullRequestLink({
       onPress={pullRequest.onPress}
       modifiers={[
         buttonStyle("borderless"),
+        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         accessibilityValue(PULL_REQUEST_STATE_LABEL[pullRequest.state]),
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}

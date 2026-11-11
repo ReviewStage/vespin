@@ -24,6 +24,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
+import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -118,6 +119,8 @@ type ListSectionProps = {
   readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
+  /** Called with the link a row dragged onto the header carries (`RowFrame`'s `link`), such as a task's to move it into the section; the header takes no drop where none is given. */
+  readonly onDropLink?: ((url: string) => void) | undefined;
   readonly children: ReactNode;
 };
 
@@ -184,7 +187,8 @@ function GroupHeader({
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
  * caption. A foldable section folds in place on a press of its header, its
- * chevron turning to say so; it opens unfolded.
+ * chevron turning to say so; it opens unfolded. A header given `onDropLink`
+ * takes a row dragged onto it, on an iPad, and hands on the row's link.
  */
 export function ListSection({
   title,
@@ -192,6 +196,7 @@ export function ListSection({
   mark,
   foldable = false,
   footer,
+  onDropLink,
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
@@ -199,7 +204,7 @@ export function ListSection({
     title === undefined ? undefined : (
       <GroupHeader title={title} count={count} mark={mark} folded={foldable ? folded : undefined} />
     );
-  const header =
+  const pressable =
     label === undefined || !foldable ? (
       label
     ) : (
@@ -208,6 +213,7 @@ export function ListSection({
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
+          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
           accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
           accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
           accessibilityHint(FOLD_HINT),
@@ -215,6 +221,12 @@ export function ListSection({
       >
         {label}
       </Button>
+    );
+  const header =
+    pressable === undefined || onDropLink === undefined ? (
+      pressable
+    ) : (
+      <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
     );
   return (
     <Section

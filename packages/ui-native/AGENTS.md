@@ -11,7 +11,9 @@ builds a control of its own.
   task on one line, its sub-tasks folded under the panel's chevron), each
   row's acts behind a swipe from either edge, a full swipe running the
   first, and in its long press menu, which lifts the row's preview
-  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open, a
+  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
+  and a row's link, which an iPad drags out of it (`interactions.ts`, the
+  hover, drag, and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's

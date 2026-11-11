@@ -43,13 +43,13 @@ import { taskKey } from "./workspace-key.js";
 const PINNED_HEAD = "Pinned";
 
 /** What a group of the tree stands for: Pinned, one of the member's sections, or a repository under My tasks. */
-const TASK_TREE_GROUP = {
+export const TASK_TREE_GROUP = {
   PINNED: "pinned",
   SECTION: "section",
   REPOSITORY: "repository",
 } as const;
 
-type TaskTreeGroupKind = (typeof TASK_TREE_GROUP)[keyof typeof TASK_TREE_GROUP];
+export type TaskTreeGroupKind = (typeof TASK_TREE_GROUP)[keyof typeof TASK_TREE_GROUP];
 
 /** One list of the tree: its kind, a key it is told apart by, its heading, and its rows in order, child tasks nested. */
 export interface TaskTreeGroup {

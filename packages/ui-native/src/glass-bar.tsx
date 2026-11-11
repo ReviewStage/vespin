@@ -1,7 +1,7 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
 import { Host, HStack, VStack } from "@expo/ui/swift-ui";
-import { padding } from "@expo/ui/swift-ui/modifiers";
+import { type ModifierConfig, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { Keyboard, type LayoutChangeEvent, StyleSheet, View } from "react-native";
@@ -108,21 +108,28 @@ function SolidBar({ children }: { readonly children: ReactNode }) {
 export function GlassBar({
   children,
   head,
+  modifiers = [],
 }: {
   readonly children: ReactNode;
   /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
   readonly head?: ReactNode;
+  /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
+  readonly modifiers?: readonly ModifierConfig[];
 }) {
   const keyboard = useKeyboardHeight() > 0;
   const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-  const row = <HStack spacing={BAR_ROW_SPACING}>{children}</HStack>;
+  const row = (
+    <HStack spacing={BAR_ROW_SPACING} modifiers={head === undefined ? [...modifiers] : []}>
+      {children}
+    </HStack>
+  );
   const content = (
     <Host matchContents={{ vertical: true }} style={styles.content}>
       {head === undefined ? (
         row
       ) : (
-        <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers]}>
           <VStack alignment="leading" modifiers={[padding(BAR_HEAD_INSET)]}>
             {head}
           </VStack>

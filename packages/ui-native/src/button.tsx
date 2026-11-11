@@ -15,6 +15,7 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  contentShape,
   controlSize,
   disabled as disabledModifier,
   fixedSize,
@@ -30,6 +31,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import type { Glyph } from "./glyph.js";
+import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { Avatar, TaskStatusMark, ToneGlyph } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
@@ -188,6 +190,8 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
       onPress={onPress}
       modifiers={[
         buttonStyle("plain"),
+        contentShape(shapes.capsule(), "hoverEffect"),
+        hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
         ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
