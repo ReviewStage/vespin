@@ -1,6 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { archiveThroughAgentChangeRule } from "./rules/archive-through-agent-change.ts";
+import { askBesideScreenRule } from "./rules/ask-beside-screen.ts";
 import { asyncPressNeedsBusyRule } from "./rules/async-press-needs-busy.ts";
 import { enforceDeleteWithWhereRule } from "./rules/enforce-delete-with-where.ts";
 import { enforceUpdateWithWhereRule } from "./rules/enforce-update-with-where.ts";
@@ -36,7 +37,7 @@ import { skeletonThroughComponentsRule } from "./rules/skeleton-through-componen
 
 /**
  * Oxlint rules that catch code or tests that silently do nothing or wipe data,
- * and the design system's guards against controls and headings built outside `@repo/ui`, and the iOS app's against controls built outside `@repo/ui-native`,
+ * and the design system's guards against controls and headings built outside `@repo/ui`, and the iOS app's against controls built outside `@repo/ui-native` and an ask drawn inside a screen's host,
  * forms the browser checks with its own bubble, loading skeletons that copy the surface they stand for, buttons that wait on a press without saying so, buttons that open a page, placeholders that end in an ellipsis,
  * popovers that close on a press through a listener of their own, view choices stored by hand rather than through `useKept`, a follow
  * opened beside the live reads' queries, a vendored
@@ -47,6 +48,7 @@ const antiSlopPlugin = eslintCompatPlugin({
   meta: { name: "anti-slop" },
   rules: {
     "archive-through-agent-change": archiveThroughAgentChangeRule,
+    "ask-beside-screen": askBesideScreenRule,
     "async-press-needs-busy": asyncPressNeedsBusyRule,
     "enforce-delete-with-where": enforceDeleteWithWhereRule,
     "enforce-update-with-where": enforceUpdateWithWhereRule,

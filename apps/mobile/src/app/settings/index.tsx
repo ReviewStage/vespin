@@ -1,4 +1,4 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in, notifications and when this phone takes them, About, and the pages still kept on vespin.dev.
+// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, About, and the pages still kept on vespin.dev.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -49,6 +49,7 @@ import {
   usePushDeviceKey,
   usePushDeviceStanding,
 } from "../../push-device.js";
+import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { useSurfaceOpen } from "../../surface-open.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -64,17 +65,14 @@ const NOTIFICATION_STEP = {
 
 /**
  * The pages still kept on vespin.dev, in the panel's order, each opened in
- * Safari under the chosen workspace, where the member is signed in. The
- * Workspace and Agents pages stand here until the app draws them itself;
- * this Mac's, its sounds, its updates, the command, and Appearance are left
- * off the phone by design, since the phone has none of them and follows the
- * system's light and dark.
+ * Safari under the chosen workspace, where the member is signed in, until
+ * the app draws them itself. This Mac's, its sounds, its updates, the
+ * command, and Appearance are left off the phone by design, since the phone
+ * has none of them and follows the system's light and dark.
  */
 const WEB_PAGES = [
-  SETTINGS_VIEW.WORKSPACE,
   SETTINGS_VIEW.ENVIRONMENT,
   SETTINGS_VIEW.MEMORY,
-  SETTINGS_VIEW.AGENTS,
   SETTINGS_VIEW.HOSTS,
   SETTINGS_VIEW.INTEGRATIONS,
   SETTINGS_VIEW.MCP,
@@ -102,7 +100,7 @@ export default function SettingsScreen() {
   useSurfaceOpen(PRODUCT_SURFACE.SETTINGS);
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const { chosen, choose } = useChosenWorkspace(workspaces);
+  const { chosen } = useChosenWorkspace(workspaces);
   const notifications = useNotificationPermission();
   const device = usePushDeviceKey();
   const push = usePushDeviceStanding(device);
@@ -129,17 +127,17 @@ export default function SettingsScreen() {
                 email={account.email}
                 picture={account.pictureUrl}
                 detail={`Signed in with ${SOCIAL_PROVIDER_LABEL[account.provider]}`}
-                onPress={() => router.push("/settings/account")}
+                onPress={() => router.push(SETTINGS_ROUTE.ACCOUNT)}
               />
             </ListSection>
           ) : null}
-          {workspaces.length === 0 ? null : (
-            <ListSection title="Workspace">
-              <PickRows
-                label="Workspace"
-                options={workspaces.map(({ id, name }) => ({ id, label: name }))}
-                picked={chosen?.id}
-                onPick={choose}
+          {chosen === undefined ? null : (
+            <ListSection title={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE]}>
+              <PushRow
+                label={chosen.name}
+                goes={PUSH_ROW_GOES.PAGE}
+                onPress={() => router.push(SETTINGS_ROUTE.WORKSPACE)}
+                testId="settings-workspace"
               />
             </ListSection>
           )}
@@ -179,6 +177,14 @@ export default function SettingsScreen() {
               />
             </ListSection>
           )}
+          <ListSection>
+            <PushRow
+              label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS]}
+              symbol="sparkles"
+              goes={PUSH_ROW_GOES.PAGE}
+              onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
+            />
+          </ListSection>
           <ListSection title="About">
             <ValueRow label="Version" value={buildWords()} />
             <PushRow

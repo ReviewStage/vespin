@@ -7,6 +7,7 @@ import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
+  type AccessibilityActionEvent,
   ActivityIndicator,
   Image,
   Modal,
@@ -289,6 +290,75 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
   }
 }
 
+/** What opens from a line of words: each chip and link that goes anywhere, by the words it is heard as. */
+type LineOpening = { readonly name: string; readonly label: string; readonly onOpen: () => void };
+
+/** What a line's custom action says before what it opens. */
+const OPEN_WORD = "Open";
+
+/**
+ * Each chip and link in a line that opens somewhere, in the order they
+ * stand. Note that iOS lists only a paragraph's words to VoiceOver, never a
+ * view standing in it, so a chip is never its own element; it is offered as
+ * one of the line's actions instead, named by what it opens.
+ */
+function lineOpenings(runs: readonly MarkdownRun[], drawing: Drawing): readonly LineOpening[] {
+  const openings: LineOpening[] = [];
+  collectOpenings(runs, drawing, openings);
+  return openings;
+}
+
+/** Adds each chip and link in `runs` that opens somewhere to `openings`, a link's own first and then any its words hold. */
+function collectOpenings(
+  runs: readonly MarkdownRun[],
+  drawing: Drawing,
+  openings: LineOpening[],
+): void {
+  for (const run of runs) {
+    if (run.kind === MARKDOWN_RUN.CHIP) {
+      const onOpen = open(run.chip.target, drawing);
+      if (onOpen !== undefined) {
+        openings.push({
+          name: `open-${openings.length}`,
+          label: `${OPEN_WORD} ${run.chip.heard}`,
+          onOpen,
+        });
+      }
+    } else if (run.kind === MARKDOWN_RUN.LINK) {
+      const onOpen = open(run.target, drawing);
+      const words = heardLine(run.runs) ?? runsText(run.runs);
+      if (onOpen !== undefined && words !== "") {
+        openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
+      }
+      collectOpenings(run.runs, drawing, openings);
+    }
+  }
+}
+
+/** A run's plain words, as a link's text is heard. */
+function runText(run: MarkdownRun): string {
+  switch (run.kind) {
+    case MARKDOWN_RUN.WORDS:
+    case MARKDOWN_RUN.CODE:
+      return run.text;
+    case MARKDOWN_RUN.LINK:
+      return runsText(run.runs);
+    case MARKDOWN_RUN.CHIP:
+      return run.chip.heard;
+    case MARKDOWN_RUN.BREAK:
+      return " ";
+    default: {
+      const unknown: never = run;
+      throw new Error(`A run of no kind a line draws: ${JSON.stringify(unknown)}`);
+    }
+  }
+}
+
+/** Runs' plain words, joined. */
+function runsText(runs: readonly MarkdownRun[]): string {
+  return runs.map(runText).join("");
+}
+
 /** A line of words: a paragraph's, a heading's, or a table cell's. */
 function Line({
   runs,
@@ -302,10 +372,20 @@ function Line({
   /** Whether the line is heard as a heading. */
   readonly heading?: boolean | undefined;
 }) {
+  const openings = lineOpenings(runs, drawing);
+  const actions =
+    openings.length === 0
+      ? {}
+      : {
+          accessibilityActions: openings.map(({ name, label }) => ({ name, label })),
+          onAccessibilityAction: (event: AccessibilityActionEvent) =>
+            openings.find((opening) => opening.name === event.nativeEvent.actionName)?.onOpen(),
+        };
   return (
     <Text
       accessibilityLabel={heardLine(runs)}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
+      {...actions}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
     >
       <Runs runs={runs} drawing={drawing} />

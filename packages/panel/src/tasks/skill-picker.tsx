@@ -1,5 +1,11 @@
+import {
+  holdsSlashWord,
+  matchingSkills,
+  SKILL_LIST_NOTE,
+  type SkillOption,
+  type SkillsRead,
+} from "@repo/features/skill-mention";
 import { isSlashCommand, type SlashCommand } from "@repo/features/slash-command";
-import { noMatchWords, TERM } from "@repo/features/words";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
   ALIGN,
@@ -18,7 +24,6 @@ import {
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
-import { holdsSlashWord, matchingSkills, type SkillOption } from "@repo/ui/skill-mention";
 import {
   type ReactNode,
   type RefObject,
@@ -77,9 +82,6 @@ import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-re
  * the message lists the skills alone, as before.
  */
 
-/** The skills the composer offers, the repository's and the installed ones, as it reads them: the skills, or why they were not read. */
-export type SkillsRead = { readonly skills: readonly SkillOption[] } | { readonly unread: string };
-
 /** Reads the task's repository's skills; asked the first time a `/` is typed. */
 export type SkillSource = () => Promise<SkillsRead>;
 
@@ -101,15 +103,15 @@ type Entry =
 
 /** What the list says where it has no row to offer. */
 const SKILL_MENU_NOTE = {
-  READING: "Reading skills…",
-  NONE: "No skills yet",
+  READING: SKILL_LIST_NOTE.READING,
+  NONE: SKILL_LIST_NOTE.NONE,
   /** Where a skill comes from, naming the page one is installed on by its link. */
   noneHint: (page: ReactNode) => (
     <>
       Install one in {page} settings, or add one at {".agents/skills/<name>/SKILL.md"}
     </>
   ),
-  NO_MATCH: noMatchWords(TERM.SKILL),
+  NO_MATCH: SKILL_LIST_NOTE.NO_MATCH,
 } as const;
 
 /** The list's own name, which its listbox is read by: its skills, or its commands and skills. */

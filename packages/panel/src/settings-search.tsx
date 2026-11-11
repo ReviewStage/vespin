@@ -1,4 +1,5 @@
 import { PRODUCT_SEARCH_SURFACE, PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
+import { integrationLines } from "@repo/features/integration-search";
 import { INTEGRATION_NAME, INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
 import { searchHit } from "@repo/features/search-score";
 import { type MatchRange, searchTokens } from "@repo/features/search-tokens";
@@ -62,7 +63,6 @@ import {
   Stack,
   useComboboxField,
 } from "@repo/ui";
-import { integrationLines } from "@repo/ui/integration-search";
 import { land } from "@repo/ui/landed";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";

@@ -3,6 +3,7 @@
 import { useVideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { useAccessibilitySize } from "./accessibility.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -12,6 +13,9 @@ const CANNOT_PLAY = "This video can't play here.";
 
 /** What the system's player stands as to a flow that drives the app, once it has read the video's file and can play it. */
 const VIDEO_PLAYER_ID = "video-player";
+
+/** What Open in Safari is heard to do. */
+const OPENS_IN_SAFARI = "Opens the video in Safari";
 
 /** What opens a video the player cannot play where it plays. */
 const OPEN_IN_SAFARI = "Open in Safari";
@@ -25,6 +29,8 @@ const styles = StyleSheet.create({
     gap: SPACE.TIGHT,
   },
   spinner: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+  // Note that at an accessibility size an unplayable well grows with its words rather than holding the film's shape, which would cut them off.
+  grown: { aspectRatio: undefined, minHeight: 120, overflow: "visible" },
 });
 
 type VideoProps = {
@@ -50,6 +56,7 @@ type VideoProps = {
  */
 export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
   const shaped = shape === undefined ? undefined : { aspectRatio: shape };
   const player = useVideoPlayer(source ?? null);
   const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
@@ -64,7 +71,13 @@ export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
     const offers = failed && onOpenElsewhere !== undefined;
     return (
       <View
-        style={[styles.frame, shaped, styles.unplayable, { backgroundColor: colors.WELL }]}
+        style={[
+          styles.frame,
+          shaped,
+          styles.unplayable,
+          failed && large ? styles.grown : null,
+          { backgroundColor: colors.WELL },
+        ]}
         accessible={!offers}
         accessibilityLabel={offers ? undefined : failed ? `${label}. ${CANNOT_PLAY}` : label}
       >
@@ -78,7 +91,12 @@ export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
           </Text>
         ) : null}
         {offers ? (
-          <Pressable onPress={onOpenElsewhere} accessibilityRole="link" hitSlop={SPACE.ROW}>
+          <Pressable
+            onPress={onOpenElsewhere}
+            accessibilityRole="link"
+            accessibilityHint={OPENS_IN_SAFARI}
+            hitSlop={SPACE.ROW}
+          >
             <Text
               style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.ACCENT_TEXT }}
             >

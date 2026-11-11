@@ -6,6 +6,7 @@ import {
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -65,6 +66,9 @@ import {
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 /** What the bar's ⋯ menu offers beside the merge. */
 const MENU_WORDS = {
@@ -190,8 +194,11 @@ function PullRequestToolbar({
   const chooses =
     methods.length > 1 &&
     (action === MERGE_ACTION.MERGE || action === MERGE_ACTION.ENABLE_AUTO_MERGE);
+  // Note that a regular window stands these in the bottom bar, since an iPad's top bar gives its middle to the tabs and folds whatever else stands right of them into its overflow, the merge among it.
+  const bottom = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   return (
-    <Stack.Toolbar placement="right">
+    <Stack.Toolbar placement={bottom ? "bottom" : "right"}>
+      {bottom ? <Stack.Toolbar.Spacer /> : null}
       {press === undefined ? null : (
         <Stack.Toolbar.Button
           variant={press.prominent ? "prominent" : "plain"}
@@ -268,6 +275,20 @@ export function PullRequestScreen() {
   const title = pullRequest?.title ?? listed?.title;
   const state = pullRequest?.state ?? listed?.state;
   const url = pullRequest?.url ?? listed?.url;
+  useScreenActivity((workspaces) =>
+    agent === undefined || title === undefined
+      ? undefined
+      : pullRequestActivity(
+          {
+            agentId: id,
+            workspaceId: agent.workspaceId,
+            taskId: agent.planId,
+            number: key.number,
+            title,
+          },
+          workspaces,
+        ),
+  );
   const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
   const bar = (
     <>

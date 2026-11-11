@@ -1,4 +1,4 @@
-# settings.yaml -- Settings on the Inbox fixture: its list, the phone registered with its pushes working and its "Notify me" picked, About, and the Account page with Delete account's question.
+# settings.yaml -- Settings on the Inbox fixture: its list, the phone registered with its pushes working and its "Notify me" picked, About, the Account page with Delete account's question, the Workspace page with its members and invitation, and the Agents page.
 #
 # Launched on the host's Inbox fixture with notifications allowed, so the
 # phone names itself by the fixture's synthetic token, which the fixture
@@ -59,3 +59,49 @@ appId: dev.vespin.ios
 - tapOn: "Cancel"
 - waitForAnimationToEnd
 - assertVisible: "Share usage data"
+# The Workspace page, from a fresh launch: the workspace's name, its
+# members with their roles and the reader's own badge, and its pending
+# invitation, which the fixture stages (`@repo/host/fixture-inbox`).
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn: "Settings"
+- waitForAnimationToEnd
+- tapOn:
+    id: "settings-workspace"
+- waitForAnimationToEnd
+- assertVisible: "Grace Hopper"
+- assertVisible: "Alan Turing"
+- takeScreenshot: settings-workspace
+- scrollUntilVisible:
+    element: "katherine@example.com"
+- waitForAnimationToEnd
+- takeScreenshot: settings-workspace-invitations
+# Inviting asks for the address in the system's alert, its acts naming the role.
+- tapOn: "Invite"
+- waitForAnimationToEnd
+- assertVisible: "Invite as member"
+- takeScreenshot: settings-workspace-invite
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# The Agents page, from a fresh launch: the default model and effort, then
+# default permissions, follow-up behavior, and the commit author.
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn: "Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Agents"
+- tapOn: "Agents"
+- waitForAnimationToEnd
+- assertVisible: "Default permissions"
+- takeScreenshot: settings-agents
+- scrollUntilVisible:
+    element: "Commit author"
+- waitForAnimationToEnd
+- takeScreenshot: settings-agents-more

@@ -11,19 +11,21 @@ import {
   font,
   foregroundStyle,
   frame,
+  listSectionMargins,
   listStyle,
   monospacedDigit,
-  navigationBarTitleDisplayMode,
-  navigationTitle,
+  onGeometryChange,
   refreshable,
   scrollContentBackground,
+  scrollDismissesKeyboard,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
 import { ToneGlyph } from "./marks.js";
+import { RowOpenContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The fold chevron's size, a little under the header's words. */
@@ -46,8 +48,6 @@ type RowListProps = {
   readonly selected?: string | undefined;
   /** Called with the id of the row a person picked. */
   readonly onSelect?: ((id: string) => void) | undefined;
-  /** The title a split view's sidebar heads its column with, small and inline as every screen's title stands. */
-  readonly title?: string | undefined;
   /** What a pull down the list reads again, its spinner standing until it settles; none where a pull reads nothing. */
   readonly onRefresh?: (() => Promise<void>) | undefined;
   readonly children: ReactNode;
@@ -67,10 +67,15 @@ function listGround(colors: BrandColors, look: ListLook): string {
 /**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
- * the row should not stand selected on the way back.
+ * the row should not stand selected on the way back. A plain list wider than
+ * the reading width, such as a pull request's page across an iPad, centers
+ * its sections in it, as iOS's readable content guide does, while the list
+ * still scrolls from either edge.
  */
-export function RowList({ look, selected, onSelect, title, onRefresh, children }: RowListProps) {
+export function RowList({ look, selected, onSelect, onRefresh, children }: RowListProps) {
   const colors = useColors();
+  const [width, setWidth] = useState(0);
+  const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
   return (
     <List
       selection={selected === undefined ? [] : [selected]}
@@ -82,13 +87,14 @@ export function RowList({ look, selected, onSelect, title, onRefresh, children }
         listStyle(look),
         scrollContentBackground("hidden"),
         background(listGround(colors, look)),
-        ...(title === undefined
-          ? []
-          : [navigationTitle(title), navigationBarTitleDisplayMode("inline")]),
+        onGeometryChange(({ width: next }) => setWidth(next)),
+        ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
+        // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
+        scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
-      {children}
+      <RowOpenContext value={onSelect}>{children}</RowOpenContext>
     </List>
   );
 }

@@ -53,6 +53,7 @@ import { type Agent, readAgent } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { hasOpenTurn } from "@repo/database/models/turn-state";
 import { AGENT_SANDBOX_STATE } from "@repo/database/schemas/agent-sandbox";
+import { CLOUD_SETUP_SCRIPT } from "@repo/features/workspace-sandbox-setup-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import { isSandboxError, Sandbox, type SandboxError, type SandboxService } from "@repo/sandbox";
 import { send } from "@vercel/queue";
@@ -74,6 +75,7 @@ import { SESSION_TAG } from "./agent-sandbox-open.js";
 import {
   ARCHIVE_SCRIPT,
   type ArchiveScript,
+  type ArchiveScriptRan,
   archiveScriptOf,
   archiveScriptRun,
 } from "./archive-script.js";
@@ -81,6 +83,7 @@ import { deletedBaseDrive } from "./base-drive.js";
 import { holdingRunner, holdingRunnerIfFree } from "./coder-host/runner-lease.js";
 import { discardedOrLogged } from "./device-discard.js";
 import { SANDBOX_RELEASE } from "./sandbox-release-bounds.js";
+import { scriptRanIn } from "./script-runs.js";
 
 const ARCHIVE_DELETE = {
   /**
@@ -115,12 +118,13 @@ export interface SessionSandboxesService {
   /**
    * Runs the archive script in the session's newest sandbox, resumed first
    * where it stopped, within its bounds (`archive-script.ts`), logging how it
-   * ended; fails only where the sandbox refused a call.
+   * ended; answers when it started and how it exited, or nothing where it
+   * did not exit, and fails only where the sandbox refused a call.
    */
   readonly archiveFor: (
     sessionId: string,
     archive: ArchiveScript,
-  ) => Effect.Effect<void, SandboxError>;
+  ) => Effect.Effect<ArchiveScriptRan | undefined, SandboxError>;
 }
 
 export class SessionSandboxes extends Context.Service<SessionSandboxes, SessionSandboxesService>()(
@@ -174,7 +178,8 @@ function describeDeleteFailure(failure: {
 
 /**
  * One archived agent's repository's archive script run in its sandbox, where
- * its workspace keeps one and the agent is still archived; one that failed,
+ * its workspace keeps one and the agent is still archived, and recorded as
+ * that script's last run where it ran (`script-runs.ts`); one that failed,
  * could not run, or ran past its bounds is logged. Note that the script runs
  * holding the agent's runner lease, because a release backs off from a lease
  * another call holds (`consumeSandboxRelease`), so a sandbox already unused
@@ -189,7 +194,9 @@ const archiveScriptRanWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function
   const archive = yield* archiveScriptOf(current.value);
   if (archive === undefined) return;
   const sandboxes = yield* SessionSandboxes;
-  yield* holdingRunner(agent.id, sandboxes.archiveFor(sessionId, archive));
+  const ran = yield* holdingRunner(agent.id, sandboxes.archiveFor(sessionId, archive));
+  if (ran === undefined) return;
+  yield* scriptRanIn(current.value, CLOUD_SETUP_SCRIPT.ARCHIVE, ran.exitCode, ran.ranAt);
 });
 
 /**

@@ -26,6 +26,7 @@ import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/cr
 import {
   AGENT_PERMISSION_MODE,
   type AgentPendingApproval,
+  type AgentPermissionMode,
   APPROVAL_STATUS_OF_ANSWER,
 } from "@repo/features/agent-approval-wire";
 import {
@@ -59,16 +60,41 @@ import {
   type InboxMessage,
 } from "@repo/features/inbox-wire";
 import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
+import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
+import {
+  INTEGRATION_PROVIDER,
+  INTEGRATION_PROVIDER_LIST,
+  INTEGRATION_STATUS,
+} from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { MODEL_PROVIDER, type ModelChoice, type ModelsAnswer } from "@repo/features/models-wire";
+import {
+  MODEL_PROVIDER,
+  MODEL_SPEED,
+  MODEL_SPEED_SUFFIX,
+  type ModelsAnswer,
+} from "@repo/features/models-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
-import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
+import {
+  TASK_PRIORITY,
+  TASK_SKILL_SOURCE,
+  TASK_STATUS,
+  type Task,
+  type TaskSummary,
+} from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import {
+  INVITATION_ROLE,
+  type WorkspaceInvitation,
+} from "@repo/features/workspace-invitation-wire";
+import {
+  WORKSPACE_ROLE,
+  type Workspace,
+  type WorkspaceMembersAnswer,
+} from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
@@ -853,6 +879,36 @@ const FIXTURE_WORKSPACE: Workspace = {
   ],
 };
 
+/** The fixture workspace's people, as Settings › Workspace lists them: the account, its owner, an admin, and a member. */
+const MEMBERS: WorkspaceMembersAnswer = {
+  members: [
+    { userId: ADA.userId, name: ADA.name, email: "ada@example.com", role: WORKSPACE_ROLE.OWNER },
+    {
+      userId: "user-grace",
+      name: "Grace Hopper",
+      email: "grace@example.com",
+      role: WORKSPACE_ROLE.ADMIN,
+    },
+    {
+      userId: "user-alan",
+      name: "Alan Turing",
+      email: "alan@example.com",
+      role: WORKSPACE_ROLE.MEMBER,
+    },
+  ],
+};
+
+/** The fixture workspace's one pending invitation, a week from running out. */
+const INVITATIONS: readonly WorkspaceInvitation[] = [
+  {
+    id: "invitation-katherine",
+    email: "katherine@example.com",
+    role: INVITATION_ROLE.MEMBER,
+    expiresAt: new Date(LANDED + 7 * DAY).toISOString(),
+    acceptUrl: "https://vespin.dev/accept-invitation/invitation-katherine",
+  },
+];
+
 /**
  * A team the fixture's account is a member of beside its own, where a list
  * names none, so the iOS app's workspace switcher has another to list and
@@ -1202,6 +1258,12 @@ const MODELS: ModelsAnswer = {
       efforts: ["low", "medium", "high", "xhigh", "max"],
     },
     {
+      id: `${MODEL}${MODEL_SPEED_SUFFIX[MODEL_SPEED.FAST]}`,
+      name: "Claude Opus 5.5 Fast",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["low", "medium", "high", "xhigh", "max"],
+    },
+    {
       id: "anthropic/claude-sonnet-5.5",
       name: "Claude Sonnet 5.5",
       provider: MODEL_PROVIDER.ANTHROPIC,
@@ -1212,6 +1274,70 @@ const MODELS: ModelsAnswer = {
       name: "GPT-6.1 Sol",
       provider: MODEL_PROVIDER.OPENAI,
       efforts: ["low", "medium", "high", "xhigh"],
+    },
+  ],
+};
+
+/** The account's integrations: GitHub, Linear, and two Notion accounts connected, Sentry's sign-in lapsed, and every other one offered and not connected. */
+const INTEGRATIONS: IntegrationStatusesAnswer = {
+  // SAFETY: every provider is listed, each standing disconnected but the four named after.
+  integrations: {
+    ...Object.fromEntries(
+      INTEGRATION_PROVIDER_LIST.map((provider) => [provider, INTEGRATION_STATUS.DISCONNECTED]),
+    ),
+    [INTEGRATION_PROVIDER.GITHUB]: INTEGRATION_STATUS.CONNECTED,
+    [INTEGRATION_PROVIDER.LINEAR]: INTEGRATION_STATUS.CONNECTED,
+    [INTEGRATION_PROVIDER.NOTION]: INTEGRATION_STATUS.CONNECTED,
+    [INTEGRATION_PROVIDER.SENTRY]: INTEGRATION_STATUS.EXPIRED,
+  } as IntegrationStatusesAnswer["integrations"],
+  accounts: [
+    {
+      provider: INTEGRATION_PROVIDER.LINEAR,
+      connection: "linear",
+      status: INTEGRATION_STATUS.CONNECTED,
+    },
+    {
+      provider: INTEGRATION_PROVIDER.NOTION,
+      connection: "notion",
+      label: "Relay",
+      status: INTEGRATION_STATUS.CONNECTED,
+    },
+    {
+      provider: INTEGRATION_PROVIDER.NOTION,
+      connection: "notion-2",
+      label: "Personal",
+      status: INTEGRATION_STATUS.CONNECTED,
+    },
+    {
+      provider: INTEGRATION_PROVIDER.SENTRY,
+      connection: "sentry",
+      status: INTEGRATION_STATUS.EXPIRED,
+    },
+  ],
+};
+
+/** The skills the invitations task's repository keeps, as the service finds them. */
+const SKILLS = {
+  repository: "ada/relay",
+  branch: "main",
+  skills: [
+    {
+      name: "release-notes",
+      description: "Write the release's notes from the merged pull requests",
+      source: TASK_SKILL_SOURCE.REPOSITORY,
+      path: ".agents/skills/release-notes/SKILL.md",
+    },
+    {
+      name: "migrate",
+      description: "Add a Drizzle migration and its test",
+      source: TASK_SKILL_SOURCE.REPOSITORY,
+      path: ".agents/skills/migrate/SKILL.md",
+    },
+    {
+      name: "review",
+      description: "Review the branch's changes before a pull request",
+      source: TASK_SKILL_SOURCE.REPOSITORY,
+      path: ".agents/skills/review/SKILL.md",
     },
   ],
 };
@@ -1262,6 +1388,9 @@ export function inboxAppState(
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
+    [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
+    [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
+    [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
     ),
@@ -1303,34 +1432,117 @@ export function inboxRemindersAppState(
   };
 }
 
-/** The models and efforts a fixture run chose for its agents, by agent. */
-export type AgentChoices = ReadonlyMap<string, ModelChoice>;
+/**
+ * What a fixture run changed of one of its agents: its model and effort, its
+ * permission mode, the servers switched off, its name, and the reader's pin.
+ */
+export interface AgentChange {
+  readonly model?: string;
+  readonly effort?: string;
+  readonly permissionMode?: AgentPermissionMode;
+  readonly disabledServers?: readonly string[];
+  readonly title?: string;
+  readonly pinned?: boolean;
+}
 
-/** Whether the agent stands on the choice the run made for it, or the run made none. */
-function onChoice(
-  agent: NonNullable<TasksView["taskAgents"]>[number],
+/** What a fixture run changed of its agents, by agent. */
+export type AgentChoices = ReadonlyMap<string, AgentChange>;
+
+/** The change an act a fixture run takes makes to its agent, or none for an act that changes none. */
+export function agentChangeOf(
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): { readonly agentId: string; readonly change: AgentChange } | undefined {
+  // SAFETY: each payload below is the kind's, which its guard names.
+  switch (kind) {
+    case ACT_KIND.AGENTS_CHOOSE: {
+      const { agentId, model, effort } = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHOOSE>;
+      return { agentId, change: { model, effort } };
+    }
+    case ACT_KIND.AGENTS_PERMISSION_MODE: {
+      const { agentId, permissionMode } = payload as PortActPayload<
+        typeof ACT_KIND.AGENTS_PERMISSION_MODE
+      >;
+      return { agentId, change: { permissionMode } };
+    }
+    case ACT_KIND.AGENTS_SERVERS: {
+      const { agentId, disabledServers } = payload as PortActPayload<
+        typeof ACT_KIND.AGENTS_SERVERS
+      >;
+      return { agentId, change: { disabledServers } };
+    }
+    case ACT_KIND.AGENTS_RENAME: {
+      const { agentId, title } = payload as PortActPayload<typeof ACT_KIND.AGENTS_RENAME>;
+      return { agentId, change: { title } };
+    }
+    case ACT_KIND.AGENTS_PIN: {
+      const { agentId, pinned } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PIN>;
+      return { agentId, change: { pinned } };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** One agent with the run's change to it laid over, the pin left to the list's pins. */
+function changedAgent<A extends AgentSummary>(agent: A, change: AgentChange): A {
+  const { pinned: _pinned, ...fields } = change;
+  return { ...agent, ...fields };
+}
+
+/** Whether every field of the change already stands on the agent. */
+function standsOn(agent: AgentSummary, change: AgentChange): boolean {
+  const { pinned: _pinned, ...fields } = change;
+  return Object.entries(fields).every(([key, value]) => {
+    const held: unknown = Reflect.get(agent, key);
+    return Array.isArray(value) && Array.isArray(held)
+      ? value.length === held.length && value.every((each, at) => each === held[at])
+      : held === value;
+  });
+}
+
+/** The reader's pins with each pin the run set or took off laid over, by the agent's task. */
+function pinnedAgents(
+  pins: NonNullable<TasksView["taskAgentPins"]>,
+  agents: NonNullable<TasksView["taskAgents"]>,
   choices: AgentChoices,
-): boolean {
-  const choice = choices.get(agent.id);
-  return choice === undefined || (choice.model === agent.model && choice.effort === agent.effort);
+): NonNullable<TasksView["taskAgentPins"]> {
+  const kept = pins.filter(({ agentId }) => choices.get(agentId)?.pinned !== false);
+  const added = agents
+    .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
+    .map(({ id, planId }) => ({ agentId: id, taskId: planId, pinnedAt: LANDED }));
+  return [...kept, ...added];
+}
+
+/** Whether the reader's pins already stand as the run left them. */
+function pinsStand(pins: NonNullable<TasksView["taskAgentPins"]>, choices: AgentChoices): boolean {
+  return [...choices].every(
+    ([agentId, change]) =>
+      change.pinned === undefined || pins.some((pin) => pin.agentId === agentId) === change.pinned,
+  );
 }
 
 /**
- * The list with each agent the run chose a model for on that choice, as the
- * host draws a change the moment it is asked; the list handed in where every
- * agent already stands on its choice, so laying it again changes nothing.
+ * The list with each agent the run changed standing as it changed it, its
+ * model, its mode, its servers, its name, and the reader's pin, as the host
+ * draws a change the moment it is asked; the list handed in where every
+ * agent already stands so, so laying it again changes nothing.
  */
 export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
   const agents = list.taskAgents ?? [];
-  if (agents.every((agent) => onChoice(agent, choices))) return list;
+  const pins = list.taskAgentPins ?? [];
+  const agentsStand = agents.every((agent) => {
+    const change = choices.get(agent.id);
+    return change === undefined || standsOn(agent, change);
+  });
+  if (agentsStand && pinsStand(pins, choices)) return list;
   return {
     ...list,
     taskAgents: agents.map((agent) => {
-      const choice = choices.get(agent.id);
-      return choice === undefined
-        ? agent
-        : { ...agent, model: choice.model, effort: choice.effort };
+      const change = choices.get(agent.id);
+      return change === undefined ? agent : changedAgent(agent, change);
     }),
+    taskAgentPins: pinnedAgents(pins, agents, choices),
   };
 }
 
@@ -1423,12 +1635,40 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
   },
-  // Note that a change of model is taken as the service takes one, answered with the agent on it; the iOS run lays it over the list itself (`chosenTasksView`).
+  // Note that a change of model, of permission mode, of servers, of name, or of pin is taken as the service takes one, answered with the agent as it then stands; the iOS run lays it over the list itself (`chosenTasksView`).
   [ACT_KIND.AGENTS_CHOOSE]: ({ agentId, model, effort }) => {
     const held = stagedAgent(agentId);
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     return { agent: { ...held, model, effort } };
   },
+  [ACT_KIND.AGENTS_PERMISSION_MODE]: ({ agentId, permissionMode }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, permissionMode } };
+  },
+  [ACT_KIND.AGENTS_SERVERS]: ({ agentId, disabledServers }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, disabledServers } };
+  },
+  [ACT_KIND.AGENTS_RENAME]: ({ agentId, title }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, title } };
+  },
+  [ACT_KIND.AGENTS_PIN]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: held };
+  },
+  // Note that an archive is taken as the service takes one, though nothing here moves, so the agent stays on its task's list.
+  [ACT_KIND.AGENTS_ARCHIVE]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, archivedAt: LANDED } };
+  },
+  // The invitations task's repository's skills, as the service finds them.
+  [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
     agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),

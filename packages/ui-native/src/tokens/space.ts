@@ -12,6 +12,14 @@ export const SPACE = {
   PAGE: 20,
 } as const;
 
+/**
+ * The widest a column of words reads well at, in points, near the readable
+ * width iOS's own apps keep: a transcript in an iPad's or an unfolded Duo's
+ * wide window centers its rows in it rather than running a line across the
+ * whole screen.
+ */
+export const READING_WIDTH = 720;
+
 /** The sizes the marks are drawn at, in points. */
 export const MARK_SIZE = {
   /** The unread dot, in the row's margin. */
@@ -29,6 +37,9 @@ export const MARK_SIZE = {
   /** The account's photo in a bar, inside the round glass the bar's other buttons stand in. */
   BAR_FACE: 32,
 } as const;
+
+/** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
+export const PRESS_SIZE = 44;
 
 /** How round the bordered pieces stand: a card, such as an ask's or a pull request's, and a tag. */
 export const RADIUS = {

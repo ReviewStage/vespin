@@ -1,8 +1,7 @@
-import { PRODUCT_NAME } from "@repo/features/product-name";
-import { TASK_FILE_REFUSAL, type TaskFileRefusal } from "@repo/features/task-wire";
+import { SKILLS_UNANSWERED, type SkillsRead, skillsReadOf } from "@repo/features/skill-mention";
 import type { TasksSkillsAnswer } from "@repo/features/tasks-view";
 import { keepIdentity } from "@repo/wire";
-import type { SkillSource, SkillsRead } from "./skill-picker.js";
+import type { SkillSource } from "./skill-picker.js";
 
 /**
  * repository-skills.ts -- the skills of the open task's repository a `/` in an agent's box offers, drawn at once as last read and read again behind.
@@ -17,23 +16,6 @@ import type { SkillSource, SkillsRead } from "./skill-picker.js";
  * refused, leaves the skills last read standing where there are any;
  * where there are none it says why, in the list's own words.
  */
-
-/** Why a repository's skills were not read, in the list's words. */
-const SKILLS_REFUSAL_LINE = {
-  [TASK_FILE_REFUSAL.NO_REPOSITORY]: "This task has no repository.",
-  [TASK_FILE_REFUSAL.NOT_REACHABLE]: `${PRODUCT_NAME}'s GitHub App no longer reaches this task's repository.`,
-  [TASK_FILE_REFUSAL.UNAVAILABLE]: "GitHub could not be read.",
-  [TASK_FILE_REFUSAL.SECRET]: "This repository's skills could not be read.",
-  [TASK_FILE_REFUSAL.MISSING]: "This repository's skills could not be read.",
-  [TASK_FILE_REFUSAL.NOT_TEXT]: "This repository's skills could not be read.",
-} as const satisfies Record<TaskFileRefusal, string>;
-
-/** The service's answer as the list reads it: the skills, or why there are none to offer. */
-function skillsReadOf(answer: TasksSkillsAnswer): SkillsRead {
-  if ("skills" in answer) return { skills: answer.skills.skills };
-  if (!("refusal" in answer)) return { unread: SKILLS_REFUSAL_LINE[TASK_FILE_REFUSAL.UNAVAILABLE] };
-  return { unread: SKILLS_REFUSAL_LINE[answer.refusal] };
-}
 
 /**
  * A source over the read given: each ask reads again, asks made at once
@@ -51,6 +33,6 @@ export function keptSkills(read: () => Promise<TasksSkillsAnswer>): SkillSource 
   return () =>
     read().then(
       (answer) => settle(skillsReadOf(answer)),
-      () => settle({ unread: SKILLS_REFUSAL_LINE[TASK_FILE_REFUSAL.UNAVAILABLE] }),
+      () => settle({ unread: SKILLS_UNANSWERED }),
     );
 }

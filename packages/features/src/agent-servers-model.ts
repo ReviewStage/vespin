@@ -1,5 +1,7 @@
-import { CONNECTION_HEALTH, type ConnectionHealth } from "@repo/features/integration-health";
-import { SIGN_IN, type SignIn, signInLine } from "@repo/features/integration-sign-in";
+import { CONNECTION_HEALTH, type ConnectionHealth } from "./integration-health.js";
+import type { IntegrationStatusesAnswer } from "./integration-live.js";
+import { integrationFound } from "./integration-search.js";
+import { SIGN_IN, type SignIn, signInLine } from "./integration-sign-in.js";
 import {
   INTEGRATION_NAME,
   INTEGRATION_PROVIDER_LIST,
@@ -8,10 +10,10 @@ import {
   type IntegrationProvider,
   type IntegrationStatus,
   integrationAccountNames,
-} from "@repo/features/integration-wire";
-import { searchTokens } from "@repo/features/search-tokens";
-import { MCP_SERVER_LABEL, readFailedWords, VERB } from "@repo/features/words";
-import { integrationFound } from "./integration-search.js";
+  integrationConnectionOf,
+} from "./integration-wire.js";
+import { searchTokens } from "./search-tokens.js";
+import { MCP_SERVER_LABEL, readFailedWords, VERB } from "./words.js";
 
 /**
  * agent-servers-model.ts -- what the MCP servers popover at an agent's composer says of each server: whether this agent has it on, or how to connect it; which section it stands under; and what a search of it finds.
@@ -318,6 +320,50 @@ export function namedServers(input: {
           }));
     return servers.filter((server) => input.standing(input.statusOf(server.connection)));
   });
+}
+
+/** Where every server stands as a read of the account's integrations holds it: each provider's word, then each account's over it, by the server's name. */
+export function serverStandings(
+  answer: IntegrationStatusesAnswer,
+): ReadonlyMap<string, IntegrationStatus> {
+  return new Map([
+    ...INTEGRATION_PROVIDER_LIST.map(
+      (provider) => [provider, answer.integrations[provider]] as const,
+    ),
+    ...(answer.accounts ?? []).map((account) => [account.connection, account.status] as const),
+  ]);
+}
+
+/** A connected server an agent is handed, and whether this agent has it on. */
+export interface HandedServer extends NamedServer {
+  readonly on: boolean;
+}
+
+/**
+ * The connected servers of a read of the account's integrations, in the
+ * provider list's order, each account at a provider named as `serverName`
+ * names it, with whether the agent, which switched `disabled` off, has it
+ * on: what a surface that offers no sign-in lists, such as the phone's,
+ * where a server is connected in Settings.
+ */
+export function handedServers(
+  answer: IntegrationStatusesAnswer,
+  disabled: readonly string[],
+): readonly HandedServer[] {
+  const standing = serverStandings(answer);
+  const accounts = answer.accounts ?? [];
+  return namedServers({
+    statusOf: (server) => standing.get(server),
+    accountsOf: (provider) =>
+      accounts
+        .filter((account) => account.provider === provider)
+        .toSorted(
+          (a, b) =>
+            (integrationConnectionOf(a.connection)?.place ?? 0) -
+            (integrationConnectionOf(b.connection)?.place ?? 0),
+        ),
+    standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
+  }).map((server) => ({ ...server, on: !disabled.includes(server.connection) }));
 }
 
 /**

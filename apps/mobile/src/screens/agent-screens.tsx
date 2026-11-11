@@ -1,8 +1,13 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, a page it showed, opened whole, and the sheet that changes its model and effort.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, a page it showed, opened whole, and the sheet of its options: its model, effort, Fast, permission mode, and MCP servers.
 
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
@@ -14,8 +19,10 @@ import {
 } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
-import { VERB } from "@repo/features/words";
+import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
+import { PERMISSION_MODE_WORDS } from "@repo/settings";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   AgentHead,
   AgentTranscript,
@@ -23,16 +30,21 @@ import {
   AttachedPictures,
   BAR_TITLE,
   Composer,
+  type ComposerMenu,
   ConfirmAsk,
-  DOCK_ROOM,
   GlassDock,
   HeldCallBanner,
+  HintPickRows,
   ListSection,
   MenuPickRow,
   NO_TOGGLES,
   QueuedLines,
+  RenameAsk,
   Screen,
   SettingsForm,
+  type SfSymbol,
+  SkillSuggestions,
+  SwitchRow,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
   type TranscriptItem,
@@ -52,13 +64,17 @@ import {
   useOlderPages,
   useTranscriptRetry,
 } from "../agents/use-agent.js";
+import { useAgentActions } from "../agents/use-agent-actions.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
 import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
-import { useAgentModelPick } from "../agents/use-agent-model.js";
+import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
+import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
+import { useAgentServers } from "../agents/use-agent-servers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where the list holds no title for it yet. */
@@ -71,17 +87,48 @@ const TRANSCRIPT_WORDS = {
   RETRY: "Try again",
 } as const;
 
-/** What the page's menu opens the model picker with. */
-const CHANGE_MODEL = "Change model";
+/** What the page's ⋯ menu offers, beside Open in browser, as the panel's agent menu words them. */
+const MENU_WORDS = {
+  MORE: "More",
+  COPY_LINK: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+  RENAME: "Rename",
+  PIN: "Pin",
+  UNPIN: "Unpin",
+  ARCHIVE: "Archive",
+} as const;
 
-/** The model sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
-const MODEL_WORDS = {
-  TITLE: "Model",
+/** What the + offers beside the options: the photo picker, and the sheet of every option. */
+const ADD_WORDS = {
+  PHOTOS: "Photos",
+  OPTIONS: "Options",
+} as const;
+
+/** What Rename asks, as the system's alert asks for a name. */
+const RENAME_WORDS = {
+  TITLE: "Rename agent",
+  ACT: "Rename",
+  PLACEHOLDER: "Agent name",
+} as const;
+
+/** The options sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
+const OPTIONS_WORDS = {
+  TITLE: "Options",
   MODEL: "Model",
   EFFORT: "Effort",
+  FAST: "Fast",
   DONE: "Done",
   APPLIES: "Takes effect from the agent's next step.",
+  READING_SERVERS: "Reading your MCP servers",
+  NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
+  MORE_SERVERS: "Connect another in Settings.",
 } as const;
+
+/** The SF Symbol each permission mode wears, the closest to the panel's glyph: a hand, a shield round a check, a shield round a "!". */
+const MODE_SYMBOL = {
+  [AGENT_PERMISSION_MODE.ASK]: "hand.raised",
+  [AGENT_PERMISSION_MODE.AUTO]: "checkmark.shield",
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: "exclamationmark.shield",
+} as const satisfies Record<AgentPermissionMode, SfSymbol>;
 
 /** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
 const MERGE_WORD = "Merge";
@@ -153,17 +200,31 @@ function CardMergeAsk({
 function AgentComposerBar({
   composer,
   banner,
+  addMenu,
+  note,
 }: {
   readonly composer: AgentComposer;
   readonly banner: AgentApprovals["banner"];
+  readonly addMenu: ComposerMenu;
+  /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
+  readonly note: string | undefined;
 }) {
+  const said = composer.note ?? note;
   const head =
     banner === undefined &&
     composer.queued.length === 0 &&
     composer.paused === undefined &&
     composer.attached.length === 0 &&
-    composer.note === undefined ? undefined : (
+    composer.skills === undefined &&
+    said === undefined ? undefined : (
       <>
+        {composer.skills === undefined ? null : (
+          <SkillSuggestions
+            skills={composer.skills.skills}
+            empty={composer.skills.empty}
+            onPick={composer.skills.pick}
+          />
+        )}
         {banner === undefined ? null : (
           <HeldCallBanner {...banner} denies={composer.sendQueues ? undefined : DENIES_WAITING} />
         )}
@@ -174,7 +235,7 @@ function AgentComposerBar({
           onDelete={composer.remove}
         />
         <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
-        {composer.note === undefined ? null : <AskNote words={composer.note} />}
+        {said === undefined ? null : <AskNote words={said} />}
       </>
     );
   return (
@@ -184,7 +245,7 @@ function AgentComposerBar({
       onWords={composer.onWords}
       sendable={composer.sendable}
       onSend={composer.send}
-      onAdd={composer.attach}
+      addMenu={addMenu}
       onStop={composer.stop}
       stopping={composer.stopping}
       head={head}
@@ -193,12 +254,63 @@ function AgentComposerBar({
 }
 
 /**
+ * What the composer's + opens, as the panel's + and model chip offer them,
+ * the less frequent of them in one native menu rather than chips along the
+ * field: Photos, then Options, the sheet of every option, then the agent's
+ * permission mode as a menu of its modes where its harness takes one, and
+ * Fast as a switch where its model has a fast version.
+ */
+function agentAddMenu(
+  composer: AgentComposer,
+  mode: AgentMode | undefined,
+  pick: AgentModelPick,
+  openOptions: (() => void) | undefined,
+): ComposerMenu {
+  return {
+    actions: [
+      { label: ADD_WORDS.PHOTOS, symbol: "photo.on.rectangle", onPress: composer.attach },
+      ...(openOptions === undefined
+        ? []
+        : [
+            {
+              label: ADD_WORDS.OPTIONS,
+              symbol: "slider.horizontal.3" as const,
+              onPress: openOptions,
+            },
+          ]),
+    ],
+    submenus:
+      mode === undefined
+        ? []
+        : [
+            {
+              label: PERMISSION_MODE_WORDS.GROUP,
+              symbol: MODE_SYMBOL[mode.mode],
+              choices: mode.modes.map((option) => ({
+                label: option.label,
+                on: option.id === mode.mode,
+                onPress: () => mode.choose(option.id),
+              })),
+              actions: [],
+            },
+          ],
+    switches:
+      pick.fast === undefined
+        ? []
+        : [{ label: OPTIONS_WORDS.FAST, on: pick.fast.on, onPress: pick.fast.toggle }],
+  };
+}
+
+/**
  * One agent's page: the system's header naming the agent in the ink, as
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
- * a menu that opens it in the browser, over its transcript as one lazy list,
- * its head where the agent stands and the model it runs on, which opens
- * the model sheet, as the menu's Change model does. The transcript
+ * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
+ * browser, Rename, typed in the system's alert, Pin or Unpin, Options, and
+ * Archive, asked first, which goes back once the agent is archived. Under
+ * it, its transcript as one lazy list, its head where the agent stands and
+ * the model it runs on, which opens the options sheet, as the menu's
+ * Options and the composer's + do. The transcript
  * is held live while the page is in focus, so a turn under way draws as it
  * moves, and its older pages are read as the reader scrolls up to them; one
  * that could not be read offers Try again. Each call opens in place, and
@@ -211,7 +323,9 @@ function AgentComposerBar({
  * that a message sent now denies it where Send would not queue it, and a
  * follow-up, with the photos the + attaches, steers the turn under way or
  * waits behind it as the member's Follow-up behavior says, and Stop stands
- * in Send's place while the agent works.
+ * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
+ * Photos, Options, the permission mode, and Fast. A `/` typed offers the
+ * task's skills over the field.
  */
 export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
@@ -257,11 +371,31 @@ export function AgentScreen() {
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
   const title = cardTitle(agent?.title ?? transcript?.word?.title ?? UNTITLED_AGENT);
+  useScreenActivity((workspaces) =>
+    agent === undefined
+      ? undefined
+      : agentActivity(
+          {
+            id,
+            title,
+            workspaceId: agent.workspaceId,
+            taskId: agent.planId,
+          },
+          workspaces,
+        ),
+  );
   const failed = held?.failed === true || transcript?.failure !== undefined;
-  const changeModel =
+  const openOptions =
     agent === undefined
       ? undefined
       : () => router.push({ pathname: "/agent-model", params: { agent: id } });
+  const mode = useAgentMode(id);
+  const pick = useAgentModelPick(id);
+  const actions = useAgentActions(id, address);
+  // Whether Rename's alert, or Archive's question, stands over the page.
+  const [renaming, setRenaming] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const addMenu = agentAddMenu(composer, mode, pick, openOptions);
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
       pathname: "/tasks/agent/[id]/page",
@@ -276,26 +410,66 @@ export function AgentScreen() {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel="More">
-          <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
-            {VERB.OPEN_IN_BROWSER}
-          </Stack.Toolbar.MenuAction>
-          {changeModel === undefined ? null : (
-            <Stack.Toolbar.MenuAction icon="cpu" onPress={changeModel}>
-              {CHANGE_MODEL}
+        <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
+          <Stack.Toolbar.Menu inline>
+            <Stack.Toolbar.MenuAction icon="link" onPress={actions.copyLink}>
+              {MENU_WORDS.COPY_LINK}
             </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
+              {VERB.OPEN_IN_BROWSER}
+            </Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
+          {agent === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction icon="pencil" onPress={() => setRenaming(true)}>
+                {MENU_WORDS.RENAME}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction
+                icon={actions.pinned ? "pin.slash" : "pin"}
+                onPress={actions.pin}
+              >
+                {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          )}
+          {openOptions === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction icon="slider.horizontal.3" onPress={openOptions}>
+                {ADD_WORDS.OPTIONS}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          )}
+          {agent === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction
+                icon="archivebox"
+                destructive
+                onPress={() => setArchiving(true)}
+              >
+                {MENU_WORDS.ARCHIVE}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
           )}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
-      <GlassDock bar={<AgentComposerBar composer={composer} banner={approvals.banner} />}>
+      <GlassDock
+        bar={
+          <AgentComposerBar
+            composer={composer}
+            banner={approvals.banner}
+            addMenu={addMenu}
+            note={actions.note ?? mode?.note ?? pick.note}
+          />
+        }
+      >
         <AgentTranscript
           items={items}
           head={
             <AgentHead
               model={agent === undefined ? undefined : modelLabel(agent.model)}
               status={status}
-              onModel={changeModel}
+              onModel={openOptions}
             />
           }
           empty={{
@@ -324,12 +498,37 @@ export function AgentScreen() {
               ? []
               : [{ label: MERGE_WORD, onPress: () => setMerging(item.number) }]
           }
-          footRoom={DOCK_ROOM}
         />
       </GlassDock>
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}
+      <RenameAsk
+        title={RENAME_WORDS.TITLE}
+        act={RENAME_WORDS.ACT}
+        name={actions.title}
+        placeholder={RENAME_WORDS.PLACEHOLDER}
+        presented={renaming}
+        onRename={(name) => {
+          setRenaming(false);
+          actions.rename(name);
+        }}
+        onDismiss={() => setRenaming(false)}
+      />
+      <ConfirmAsk
+        title={actions.archiveQuestion.title}
+        message={actions.archiveQuestion.message}
+        act={actions.archiveQuestion.act}
+        destructive
+        presented={archiving}
+        onAct={() => {
+          setArchiving(false);
+          actions.archive(() => {
+            if (router.canGoBack()) router.back();
+          });
+        }}
+        onDismiss={() => setArchiving(false)}
+      />
     </>
   );
 }
@@ -360,22 +559,36 @@ export function AgentPageScreen() {
 }
 
 /**
- * The agent's model and effort, as the panel's chip changes them, in a
- * sheet over its page: the models New agent offers that its harness runs,
- * and the efforts the model lists, each pick sent at once and drawn on the
- * agent as it is asked, a change taking effect from its next step; one the
- * service refused reads back, and says why under the rows. Done closes it.
+ * The agent's options, as the panel's model chip and + menu change them, in
+ * a sheet over its page, each change sent at once and drawn on the agent as
+ * it is asked, one the service refused reading back and saying why under its
+ * section: its model, effort, and Fast, which take effect from its next
+ * step, the models New agent offers that its harness runs and the efforts
+ * the model lists, Fast only where the model has a fast version; its
+ * permission mode, each with what it does, where its harness takes one,
+ * which takes effect from its next turn; and the connected MCP servers it is
+ * handed, each with its switch, a server connected in Settings. Done closes
+ * it.
  */
-export function AgentModelScreen({ agentId }: { readonly agentId: string }) {
+export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
   const router = useRouter();
   const pick = useAgentModelPick(agentId);
+  const mode = useAgentMode(agentId);
+  const servers = useAgentServers(agentId);
+  const serversFooter =
+    servers.note ??
+    (!servers.read
+      ? OPTIONS_WORDS.READING_SERVERS
+      : servers.servers.length === 0
+        ? OPTIONS_WORDS.NO_SERVERS
+        : OPTIONS_WORDS.MORE_SERVERS);
   return (
     <>
       <Stack.Screen
         options={{
           headerShown: true,
-          title: MODEL_WORDS.TITLE,
+          title: OPTIONS_WORDS.TITLE,
           headerTintColor: colors.ACCENT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
@@ -384,26 +597,60 @@ export function AgentModelScreen({ agentId }: { readonly agentId: string }) {
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button onPress={() => router.back()}>
-          {MODEL_WORDS.DONE}
+          {OPTIONS_WORDS.DONE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note ?? MODEL_WORDS.APPLIES}>
+          <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
             <MenuPickRow
-              label={MODEL_WORDS.MODEL}
+              label={OPTIONS_WORDS.MODEL}
               options={pick.models}
               picked={pick.model}
               onPick={pick.pickModel}
             />
             {pick.efforts.length <= 1 ? null : (
               <MenuPickRow
-                label={MODEL_WORDS.EFFORT}
+                label={OPTIONS_WORDS.EFFORT}
                 options={pick.efforts}
                 picked={pick.effort}
                 onPick={pick.pickEffort}
               />
             )}
+            {pick.fast === undefined ? null : (
+              <SwitchRow
+                label={OPTIONS_WORDS.FAST}
+                on={pick.fast.on}
+                onSwitch={pick.fast.toggle}
+                testId="options-fast"
+              />
+            )}
+          </ListSection>
+          {mode === undefined ? null : (
+            <ListSection
+              title={PERMISSION_MODE_WORDS.GROUP}
+              footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
+            >
+              <HintPickRows
+                label={PERMISSION_MODE_WORDS.QUESTION}
+                options={mode.modes}
+                picked={mode.mode}
+                onPick={(picked) => {
+                  const chosen = mode.modes.find((option) => option.id === picked);
+                  if (chosen !== undefined) mode.choose(chosen.id);
+                }}
+              />
+            </ListSection>
+          )}
+          <ListSection title={MCP_SERVER_LABEL.many} footer={serversFooter}>
+            {servers.servers.map((server) => (
+              <SwitchRow
+                key={server.connection}
+                label={server.name}
+                on={server.on}
+                onSwitch={(on) => servers.toggle(server.connection, on)}
+              />
+            ))}
           </ListSection>
         </SettingsForm>
       </Screen>

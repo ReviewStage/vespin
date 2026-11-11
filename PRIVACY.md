@@ -300,6 +300,22 @@ key in the macOS Keychain and deleted when you sign out. Your sign-in
 tokens are kept encrypted the same way. Transcripts and pictures you
 open are held in memory only.
 
+### Spotlight and Handoff on your iPhone
+
+While you are signed in to the Vespin iOS app, it adds the tasks and Inbox
+threads of the workspace you work in to your iPhone's or iPad's Spotlight
+index, so a search on your device finds them: each task's name, status, and
+workspace, each thread's title and its latest words as the Inbox shows them,
+and each one's vespin.dev link. The index stays on your device, where it is
+readable only while the device is unlocked, and the app sends none of it to
+us. It changes as your lists do, the app takes a workspace's items out when
+you choose another, and it empties the index when you sign out.
+
+While you look at a thread, task, agent, or pull request, the app tells iOS
+its title and its vespin.dev link, so Handoff can offer it on your other
+devices signed in to the same Apple Account. iOS hands them to those devices
+directly, and the app does not offer them to Siri suggestions or to search.
+
 ## 3\. Legal basis for processing
 
 We process your personal information on the following legal bases, as
