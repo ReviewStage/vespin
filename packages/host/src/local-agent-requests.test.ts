@@ -89,7 +89,8 @@ const stagedRepository = Effect.gen(function* () {
   git(["add", "-A"]);
   git(["commit", "--quiet", "-m", "first"]);
   const commit = git(["rev-parse", "HEAD"]);
-  yield* fileSystem.writeFileString(`${layout.checkoutPath}/notes.txt`, "two\n");
+  // Note that the change is a different size, because git trusts a file whose size and times match its index entry, and an edit of the same size in the same second as the commit can match them.
+  yield* fileSystem.writeFileString(`${layout.checkoutPath}/notes.txt`, "one\ntwo\n");
   yield* fileSystem.writeFileString(`${layout.checkoutPath}/fresh.txt`, "new\n");
   return { layout, commit };
 });
@@ -160,7 +161,7 @@ describe("answeredLocalAgentRequest", () => {
         if (diffed.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return;
         assert.equal(diffed.exit, 0);
         assert.ok(diffed.diff.includes("diff --git a/notes.txt b/notes.txt"), diffed.diff);
-        assert.ok(diffed.diff.includes("\n-one\n+two\n"), diffed.diff);
+        assert.ok(diffed.diff.includes("\n one\n+two\n"), diffed.diff);
         assert.ok(diffed.diff.includes("diff --git a/fresh.txt b/fresh.txt"), diffed.diff);
         assert.deepStrictEqual(missing, {
           kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
