@@ -16,9 +16,9 @@
  * automations in every workspace, since the automations cascade with the user
  * row while their schedules at Vercel would go on firing. After the delete,
  * every grant is revoked at Vercel Connect, as a Disconnect revokes one, a
- * revoke that fails logged by its word, every sign-in token is revoked at the
- * provider that issued it, each under a deadline and a failure logged
- * (`auth/sign-in-revocation.ts`), each schedule is deleted at Vercel, a failure
+ * revoke that fails logged by its word, and beside them every sign-in token
+ * is revoked at the provider that issued it, each under a deadline and a
+ * failure logged (`auth/sign-in-revocation.ts`); then each schedule is deleted at Vercel, a failure
  * logged, and the onboarding contact Resend keeps under the account's
  * address is deleted (`onboarding-events.ts`). A sandbox left behind expires
  * with its snapshot (`@repo/sandbox`'s retention), and a deleted workspace's
@@ -90,11 +90,20 @@ export const beforeAccountDeletion = /* @__PURE__ */ Effect.fn("web/beforeAccoun
   },
 );
 
-/** What the deletion settles once Better Auth has deleted the account. */
+/**
+ * What the deletion settles once Better Auth has deleted the account. Note
+ * that the sign-in tokens are revoked beside the Connect grants rather than
+ * after them, because Connect's revoke runs under no deadline of ours, and
+ * a slow one would otherwise hold back the providers' own until the
+ * function's time ran out with the tokens already gone from our rows.
+ */
 export const afterAccountDeletion = /* @__PURE__ */ Effect.fn("web/afterAccountDeletion")(
   function* (userId: string, pending: AccountDeletionPending) {
-    yield* revokeIntegrationGrants(userId, pending.grants);
-    yield* (yield* SignInRevocation).revoke(pending.signIns);
+    const signIns = yield* SignInRevocation;
+    yield* Effect.all(
+      [revokeIntegrationGrants(userId, pending.grants), signIns.revoke(pending.signIns)],
+      { concurrency: "unbounded", discard: true },
+    );
     yield* schedulesForgotten(pending.schedules);
     if (pending.email !== undefined) yield* onboardingForgotten(pending.email);
   },
