@@ -451,17 +451,13 @@ function ListView({
   readonly block: Extract<MarkdownBlock, { kind: typeof MARKDOWN_BLOCK.LIST }>;
   readonly drawing: Drawing;
 }) {
+  const indent = PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT;
   return (
     <View style={styles.flow}>
       {block.items.map((item, at) => (
-        <View
-          key={at}
-          style={[
-            styles.itemBody,
-            { paddingLeft: PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT },
-          ]}
-        >
-          <View style={styles.marker}>
+        <View key={at} style={[styles.itemBody, { paddingLeft: indent }]}>
+          {/* Note that an empty item's marker stands in the flow, pulled back into the margin, since an item with no words would otherwise take no height and the next item would draw over its marker. */}
+          <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
             <Marker
               checked={item.checked}
               number={block.start === undefined ? undefined : block.start + at}
