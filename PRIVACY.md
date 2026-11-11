@@ -74,10 +74,9 @@ the repository in its own Vercel Sandbox: on a drive of its own where it was
 forked from its workspace's drive or from the drive of the agent it was
 continued from, and in the sandbox otherwise; an agent on your own machine
 keeps its work there. A workspace repository's default branch may also be kept
-on a drive cloud agents start from. Each workspace keeps one drive holding the
-default branch of every repository it connects, kept for its cloud agents to
-start from, and each new cloud agent forks it, so an agent's sandbox holds those
-repositories beside its own checkout at `/workspace/repository`: those its
+on a drive of its own. Each workspace keeps one drive holding the default branch
+of every repository it connects, which each new cloud agent forks, so an
+agent's sandbox holds those repositories beside its own checkout: those its
 installation grants and those a member added on their own token alike, the
 latter cloned with that member's token.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
@@ -439,10 +438,9 @@ Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
 Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
 checkout on a drive of its own, and a copy of each workspace repository's
-default branch, with its dependencies installed, on a drive its agents start
-from, and one drive per workspace holding the default branch of every
-repository it connects, member-token ones included, kept for its cloud agents
-to start from, which each new cloud agent forks.
+default branch, with its dependencies installed, on a drive of its own, and one
+drive per workspace holding the default branch of every repository it connects,
+member-token ones included, which each new cloud agent forks.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
