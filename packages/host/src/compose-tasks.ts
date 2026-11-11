@@ -2337,7 +2337,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         const read = yield* readParams(
           tasksPageParamsSchema,
           params,
-          "reading a page names a task or an agent, the page, and its version",
+          "reading a page names its task, the page, and its version",
         );
         return carried<TasksPageAnswer>(yield* pageRead(read));
       }),
