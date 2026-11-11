@@ -242,6 +242,8 @@ export const PAGE_PICK_SCRIPT = `(() => {
   const stop = () => {
     pick.on = false;
     mark("hovered", null);
+    // Note that the pointer may rest where it was, on an element marked, so that element is told again.
+    tellOver(told.at);
   };
 
   const target = (event) => (event.target instanceof Element ? event.target : null);
@@ -256,7 +258,7 @@ export const PAGE_PICK_SCRIPT = `(() => {
     }
   };
 
-  const told = { marks: [], said: "[]", selected: "", queued: false, settle: undefined, over: null };
+  const told = { marks: [], said: "[]", selected: "", queued: false, settle: undefined, over: null, at: null };
 
   // The words a thread quotes, found in its element's text as one string, as a range; none where they stand there no more.
   // Note that both are read with each run of whitespace as one space, because a selection's words are the page as drawn, its source's line breaks and indents run together, and a quote cut to its bound ends in an ellipsis the page never held.
@@ -393,11 +395,14 @@ export const PAGE_PICK_SCRIPT = `(() => {
 
   addEventListener("pointerover", (event) => {
     if (pick.on) mark("hovered", target(event));
-    tellOver(target(event));
+    told.at = target(event);
+    tellOver(told.at);
   }, true);
   // Note that the pointer leaving the page for the window around it is over nothing marked.
   addEventListener("pointerout", (event) => {
-    if (event.relatedTarget === null) tellOver(null);
+    if (event.relatedTarget !== null) return;
+    told.at = null;
+    tellOver(null);
   }, true);
 
   for (const name of PRESSES) {
@@ -440,6 +445,8 @@ export const PAGE_PICK_SCRIPT = `(() => {
       told.said = "";
       tell();
       tint();
+      // Note that an element newly marked under a pointer resting on it is told, as one the pointer arrives on is.
+      tellOver(told.at);
     } else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.SHOW)} && typeof ask.path === "string") {
       const element = find(ask.path);
       mark("shown", element);
