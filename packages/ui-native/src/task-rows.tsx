@@ -60,9 +60,8 @@ const OPENS_PULL_REQUEST = "Opens the pull request";
 /** What an agent's line says of its state, as the panel's agent mark is heard. */
 const AGENT_STATE_WORDS = { WORKING: "Working", FAILED: "Failed" } as const;
 
-/** How a press-through row's words read: the accent for an act, the attention ink for what waits on you, or the body's ink for a place. */
+/** How a press-through row's words read: the attention ink for what waits on you, or the body's ink for a place or an act, as the panel's quiet New agent and New sub-task stand. */
 export const LINK_ROW_TONE = {
-  ACCENT: "accent",
   PLAIN: "plain",
   ATTENTION: "attention",
 } as const;
@@ -71,7 +70,6 @@ export type LinkRowTone = (typeof LINK_ROW_TONE)[keyof typeof LINK_ROW_TONE];
 
 /** The ink a press-through row's words and glyph stand in. */
 function linkInk(colors: BrandColors, tone: LinkRowTone): string {
-  if (tone === LINK_ROW_TONE.ACCENT) return colors.ACCENT_TEXT;
   if (tone === LINK_ROW_TONE.ATTENTION) return colors.ATTENTION;
   return colors.TEXT_BODY;
 }
@@ -288,12 +286,10 @@ type RelationRowProps = {
   readonly status: TaskStatus | undefined;
   /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks". */
   readonly relation: string;
-  /** Whether the relation holds the task up, a blocker not yet finished, which reads in the attention ink. */
-  readonly holding?: boolean | undefined;
 };
 
 /** A task related to the one shown: its status ring and name, and at the line's end how it stands to this one. */
-export function RelationRow({ id, name, status, relation, holding = false }: RelationRowProps) {
+export function RelationRow({ id, name, status, relation }: RelationRowProps) {
   const colors = useColors();
   const row: ReactElement = (
     <RowHead
@@ -308,7 +304,7 @@ export function RelationRow({ id, name, status, relation, holding = false }: Rel
       }
       title={name}
       ink={colors.TEXT_BODY}
-      end={<EndWords words={relation} ink={holding ? colors.ATTENTION : undefined} />}
+      end={<EndWords words={relation} />}
     />
   );
   return (

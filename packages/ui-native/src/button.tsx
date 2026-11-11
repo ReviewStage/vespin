@@ -1,4 +1,4 @@
-// button.tsx -- the app's buttons, chips, and pills: the system's own buttons in the brand's accent, and the small capsules a person picks among or reads a task's fields on.
+// button.tsx -- the app's buttons, chips, and pills: the system's own buttons, a filled one in the brand's accent and the rest in the ink, and the small capsules a person picks among or reads a task's fields on.
 
 import {
   HStack,
@@ -82,7 +82,8 @@ const FILLED_LOOKS: ReadonlySet<ButtonLook> = new Set([
 
 /**
  * A button, filled in the accent unless it says otherwise: a primary act is
- * one of the few things drawn in copper. Note that a filled button's words
+ * one of the few things drawn in copper, so a bordered or plain one stands
+ * in the ink, as the panel's quiet buttons do. Note that a filled button's words
  * stand in the brand's ink on the accent rather than the system's white,
  * since white on the dark theme's lighter copper reads at under 3:1, where
  * the brand's dark ink holds WCAG's 4.5:1.
@@ -101,7 +102,7 @@ export function Button(props: ButtonProps) {
       modifiers={[
         buttonStyle(look),
         controlSize(size),
-        ...(accent ? [tint(colors.ACCENT)] : []),
+        ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
         ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
       ]}

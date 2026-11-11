@@ -18,7 +18,7 @@ export function TabStack() {
   return (
     <Stack
       screenOptions={{
-        headerTintColor: colors.ACCENT,
+        headerTintColor: colors.TEXT,
         headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,

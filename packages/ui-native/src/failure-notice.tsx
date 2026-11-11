@@ -133,7 +133,7 @@ function NoticeBody({
             onPress={onRetry}
             modifiers={[
               buttonStyle("borderless"),
-              tint(colors.ACCENT),
+              tint(colors.TEXT),
               font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
               fixedSize(),
               accessibilityIdentifier("failure-notice-retry"),
