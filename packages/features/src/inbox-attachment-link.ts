@@ -65,7 +65,7 @@ export const INBOX_PICTURE_IN_WORDS =
  * opening is.
  */
 const PICTURE_CLOSE =
-  /[ \t]*(?:"(?:\\.|[^"\\\n]){0,1000}"[ \t]*|'(?:\\.|[^'\\\n]){0,1000}'[ \t]*)?\)/uy;
+  /[ \t]{0,100}(?:"(?:\\.|[^"\\\n]){0,1000}"[ \t]{0,100}|'(?:\\.|[^'\\\n]){0,1000}'[ \t]{0,100})?\)/uy;
 
 /** A destination that names a scheme, `https:`, `data:`, or our own, and so no file in the agent's sandbox. */
 const SCHEMED = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
