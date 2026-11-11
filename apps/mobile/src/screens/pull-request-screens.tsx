@@ -6,6 +6,7 @@ import {
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -65,6 +66,7 @@ import {
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useScreenActivity } from "../system-activity/use-system-activity.js";
 
 /** What the bar's ⋯ menu offers beside the merge. */
 const MENU_WORDS = {
@@ -268,6 +270,20 @@ export function PullRequestScreen() {
   const title = pullRequest?.title ?? listed?.title;
   const state = pullRequest?.state ?? listed?.state;
   const url = pullRequest?.url ?? listed?.url;
+  useScreenActivity((workspaces) =>
+    agent === undefined || title === undefined
+      ? undefined
+      : pullRequestActivity(
+          {
+            agentId: id,
+            workspaceId: agent.workspaceId,
+            taskId: agent.planId,
+            number: key.number,
+            title,
+          },
+          workspaces,
+        ),
+  );
   const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
   const bar = (
     <>

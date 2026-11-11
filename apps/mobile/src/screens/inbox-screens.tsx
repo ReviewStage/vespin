@@ -33,6 +33,7 @@ import {
   type InboxItem,
   inboxWaitsOn,
 } from "@repo/features/inbox-wire";
+import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
@@ -82,6 +83,7 @@ import { openInSafari, useOpenLink } from "../open-link.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { switcherTitle, useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -376,6 +378,7 @@ function ThreadDetail({
   };
   const sources = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
+  useScreenActivity((all) => threadActivity(listed, all));
   const answer = useThreadAnswer(listed);
   const remind = useRemindSheet();
   const inStack = place.inStack;

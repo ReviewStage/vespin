@@ -4,6 +4,7 @@ import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import { taskActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
@@ -69,6 +70,7 @@ import { openInSafari, useOpenLink } from "../open-link.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import {
   type StatusQuestion,
   type TaskAgentLine,
@@ -643,6 +645,7 @@ function OverviewPage({
   const router = useRouter();
   const openLink = useOpenLink();
   const { task, document } = overview;
+  useScreenActivity((workspaces) => taskActivity(task, workspaces));
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
     select: selectWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS),
