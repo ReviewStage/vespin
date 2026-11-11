@@ -46,8 +46,10 @@ import { chipSubmenu } from "./standing-submenus.js";
  *
  * Two groups stand under the byline, ahead of the Agents, each the shape
  * every group of the head takes, a `GroupHeader` over a list
- * (`related-tasks.tsx`), and each drawn only while it holds a row, so a
- * task with neither draws no empty heads. Sub-tasks, by the list-tree
+ * (`related-tasks.tsx`). Sub-tasks stands on every task, an empty head
+ * where it has none, which folds nothing until it holds a row or a draft,
+ * so its + is where a first sub-task starts as it is where every later one
+ * does; Task relations stands only while it holds a row. Sub-tasks, by the list-tree
  * glyph, counts how many of the task's own sub-tasks are finished of all of
  * them in a badge, as a sub-task row with sub-tasks of its own and a Board
  * card count theirs, and nests theirs under each to any depth, folded until opened, as
@@ -305,8 +307,8 @@ function blockTasks(
 }
 
 /**
- * The open task's Sub-tasks and Task relations groups at the head of its description,
- * each only while it holds a row; nothing for a task with neither. Its
+ * The open task's Sub-tasks group at the head of its description, and its
+ * Task relations group while it holds a row. Its
  * relations change through the task list's doors, and each group's + adds
  * one through the add menu's `door`.
  */
@@ -327,7 +329,7 @@ export function PlanRelations({
   room: DescriptionRoom;
   /** Opens a row's task, as the description's head opens a task. */
   onOpenTask: (taskId: string) => void;
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [subTasksOpen, setSubTasksOpen] = useState(true);
   // Note that + opens a folded group before its draft, so a draft never stands where it cannot be seen.
@@ -379,51 +381,55 @@ export function PlanRelations({
       };
     }),
   );
-  const subTasksShown = subTasks.length > 0 || quick.shown;
-  if (!subTasksShown && relations.length === 0) return null;
+  // Note that an empty Sub-tasks folds nothing, since a fold over no rows would hide nothing.
+  const subTasksHeld = subTasks.length > 0 || quick.shown;
   return (
     // Note that the groups are pulled out by a row's inset on each side, so their marks stand on the title's edge, as the Agents group's do.
     <div className="plan-relations -mx-row-inset mb-block-gap flex flex-col gap-block-gap">
-      {!subTasksShown ? null : (
-        <ReplayUnmask>
-          <GroupHeader
-            heading={GROUP_HEADING.NONE}
-            label={GROUP_WORDS.SUB_TASKS}
-            glyph={<GLYPH.SUB_TASK />}
-            mark={
-              count.total === 0 ? undefined : (
-                <ProgressCount
-                  done={count.finished}
-                  total={count.total}
-                  label={`${count.finished} of ${count.total} sub-tasks finished`}
-                  look={PROGRESS_COUNT_LOOK.BADGE}
-                />
-              )
-            }
-            fold={{ open: subTasksOpen || quick.drafting, onOpenChange: setSubTasksOpen }}
-            actions={
-              <>
-                <RelationAdd
-                  task={task}
-                  door={door}
-                  kind={TASK_RELATION_KIND.SUB_TASK}
-                  label={ADD_WORDS.LINK_SUB_TASK}
-                  icon={<LinkIcon />}
-                />
-                <GroupAction>
-                  <Tooltip label={ADD_WORDS.NEW_SUB_TASK}>
-                    <IconButton
-                      icon={<PlusIcon />}
-                      label={ADD_WORDS.NEW_SUB_TASK}
-                      size={BUTTON_SIZE.COMPACT}
-                      onClick={newSubTask}
-                    />
-                  </Tooltip>
-                </GroupAction>
-              </>
-            }
-            actionsShown={GROUP_ACTIONS.AT_REST}
-          >
+      <ReplayUnmask>
+        <GroupHeader
+          heading={GROUP_HEADING.NONE}
+          label={GROUP_WORDS.SUB_TASKS}
+          glyph={<GLYPH.SUB_TASK />}
+          mark={
+            count.total === 0 ? undefined : (
+              <ProgressCount
+                done={count.finished}
+                total={count.total}
+                label={`${count.finished} of ${count.total} sub-tasks finished`}
+                look={PROGRESS_COUNT_LOOK.BADGE}
+              />
+            )
+          }
+          fold={
+            subTasksHeld
+              ? { open: subTasksOpen || quick.drafting, onOpenChange: setSubTasksOpen }
+              : undefined
+          }
+          actions={
+            <>
+              <RelationAdd
+                task={task}
+                door={door}
+                kind={TASK_RELATION_KIND.SUB_TASK}
+                label={ADD_WORDS.LINK_SUB_TASK}
+                icon={<LinkIcon />}
+              />
+              <GroupAction>
+                <Tooltip label={ADD_WORDS.NEW_SUB_TASK}>
+                  <IconButton
+                    icon={<PlusIcon />}
+                    label={ADD_WORDS.NEW_SUB_TASK}
+                    size={BUTTON_SIZE.COMPACT}
+                    onClick={newSubTask}
+                  />
+                </Tooltip>
+              </GroupAction>
+            </>
+          }
+          actionsShown={GROUP_ACTIONS.AT_REST}
+        >
+          {subTasksHeld ? (
             <RelatedTasks
               tasks={tasks}
               label={GROUP_WORDS.SUB_TASKS}
@@ -432,9 +438,9 @@ export function PlanRelations({
               room={room}
               onOpenTask={onOpenTask}
             />
-          </GroupHeader>
-        </ReplayUnmask>
-      )}
+          ) : null}
+        </GroupHeader>
+      </ReplayUnmask>
       {relations.length === 0 ? null : (
         <ReplayUnmask>
           <GroupHeader

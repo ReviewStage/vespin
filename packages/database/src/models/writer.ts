@@ -45,11 +45,13 @@ import {
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import {
+  COMPACTED_PART,
   CONNECTION_LOST_PART,
   type ConnectionLostNotice,
   isSettledToolPartState,
   isStoredToolPart,
   readStoredUIMessages,
+  SESSION_CLEARED_PART,
   type StoredToolPart,
   type StoredUIMessage,
   TOOL_PART_STATE,
@@ -102,11 +104,14 @@ import {
   carryTurn,
   dropAwaitingNothing,
   endTurn,
+  holdQueuedTurns,
   holdTurn,
   queueTurn,
+  recordTurnSnapshot,
   requeueUntaken,
   startTurn,
   stopTurn,
+  type TurnCheckoutSnapshot,
 } from "./turn-state.js";
 
 /**
@@ -480,9 +485,14 @@ type LostLinesResent = Result.Result<
  * client id of the row it was written under, which the runner was handed
  * with the line.
  */
+/** The line a turn took, by its words or its client id, with the checkout as the runner recorded it before the turn where the line opened one (`turn-state.ts`'s `TurnCheckoutSnapshot`). */
 type AwaitingLineTake =
   | { readonly text: string; readonly turnId: string }
-  | { readonly clientId: string; readonly turnId: string };
+  | {
+      readonly clientId: string;
+      readonly turnId: string;
+      readonly snapshot?: TurnCheckoutSnapshot | undefined;
+    };
 
 /**
  * The longest the hand-over to the runtime inside an awaiting line's write may
@@ -606,6 +616,24 @@ export interface StoreWriter {
     target: ConversationTarget,
     hold: { readonly turnId: string; readonly until: Date },
   ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
+  /**
+   * Holds the conversation's queued turns open until the usage limit that
+   * refused their launch resets, as a turn no payer can launch now waits for
+   * it (`turn-state.ts`'s `holdQueuedTurns`); answers the turns held.
+   */
+  holdQueuedTurns(
+    target: ConversationTarget,
+    until: Date,
+  ): Write<Result.Result<readonly string[], typeof NO_CONVERSATION>>;
+  /**
+   * Writes the mark where a coding agent's harness was let go of its
+   * session, the next message opening a fresh one (`/clear`): one finished
+   * row of no turn's, after every row written before it, so the transcript
+   * draws it between the messages the old session held and the new one's.
+   */
+  markSessionCleared(
+    target: ConversationTarget,
+  ): Write<Result.Result<void, typeof NO_CONVERSATION>>;
 }
 
 /** The plan's turn origin for each origin the brain's stream names: each is written as reported. */
@@ -1746,6 +1774,25 @@ const connectionLost = /* @__PURE__ */ Effect.fnUntraced(function* (
   ]);
 });
 
+/** A compaction stays among the journal's parts where it happened. */
+const compacted = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.COMPACTED }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  const id = String(event.sequence);
+  if (row.parts.some((part) => part.type === COMPACTED_PART && part.id === id)) {
+    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  }
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  return yield* amendJournal(context, event.turnId, row, [
+    ...row.parts,
+    { type: COMPACTED_PART, id, data: event.notice },
+  ]);
+});
+
 /** The host answered again: the loss's notice says when, so it reads as a wait that ended rather than one still on. */
 const connectionRestored = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
@@ -1768,6 +1815,24 @@ const connectionRestored = /* @__PURE__ */ Effect.fnUntraced(function* (
     row,
     row.parts.map((part) => (part === lost ? restored : part)),
   );
+});
+
+/** The mark of a session let go, as `markSessionCleared` says. */
+const sessionCleared = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+): Effect.fn.Return<void, StoreFailure, DatabaseServices> {
+  const id = randomUUID();
+  yield* insertMessage(context, {
+    clientId: id,
+    turnId: undefined,
+    message: {
+      id,
+      role: MESSAGE_ROLE.ASSISTANT,
+      metadata: MODEL_AUTHORED,
+      parts: [{ type: SESSION_CLEARED_PART, data: { at: context.now.getTime() } }],
+    },
+    finishedAt: context.now,
+  });
 });
 
 function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResult> {
@@ -1794,6 +1859,8 @@ function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResul
       return connectionLost(context, event);
     case RUN_EVENT.CONNECTION_RESTORED:
       return connectionRestored(context, event);
+    case RUN_EVENT.COMPACTED:
+      return compacted(context, event);
     // The rest of the stream is the relay's, about a run's moments rather
     // than the record.
     case RUN_EVENT.SLOW_STEP:
@@ -2573,6 +2640,10 @@ const takeAwaitingLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   take: AwaitingLineTake,
 ): Effect.fn.Return<AwaitingLineTaken, StoreFailure, DatabaseServices> {
   if (Option.isNone(yield* turnRow(context, take.turnId))) return Result.fail(NO_TURN);
+  // The checkout the runner recorded before the turn is the turn's, whichever lines it took.
+  if ("snapshot" in take && take.snapshot !== undefined) {
+    yield* recordTurnSnapshot(context.target, take.turnId, take.snapshot);
+  }
   const awaiting = yield* findAwaitingLines({ conversationId: context.target.conversationId });
   const runAmong = (lines: typeof awaiting) =>
     "clientId" in take
@@ -2891,6 +2962,12 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
       underConversation(target, (context) =>
         Effect.map(holdTurn(context.target, hold), Result.succeed),
       ),
+    holdQueuedTurns: (target, until) =>
+      underConversation(target, (context) =>
+        Effect.map(holdQueuedTurns(context.target, until), Result.succeed),
+      ),
+    markSessionCleared: (target) =>
+      underConversation(target, (context) => Effect.map(sessionCleared(context), Result.succeed)),
   };
 
   return Effect.flatMap(toolsRefusingUnknownOutcome(tools), (refusing) =>

@@ -108,11 +108,9 @@ function beingFound(choice: InboxChoice): boolean {
   return !("taskId" in choice) && choice.opened !== true;
 }
 
-/** The item `itemId` where the service says it stands: under its task, or by its id alone, missing, where the service names none, as no item of an agent on no task stands now. */
+/** The item `itemId` under the task the service says it stands on. */
 function choiceAt(itemId: string, home: InboxItemHome): InboxChoice {
-  return home.planId === null
-    ? { itemId, opened: true }
-    : { taskId: home.planId, itemAgentId: home.agentId, itemId, opened: true };
+  return { taskId: home.planId, itemAgentId: home.agentId, itemId, opened: true };
 }
 
 /** The item `itemId` where nothing the window chose holds it: where the service says it stands, or missing where it says nothing, waiting on it meanwhile. */

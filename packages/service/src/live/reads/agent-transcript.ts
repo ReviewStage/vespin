@@ -270,6 +270,7 @@ function windowOf(target: ConversationTarget, reached: SQL, past: MessageCursor 
         turnUsage: turns.usage,
         turnFailure: turns.failure,
         turnFastRefused: outerJoined(turns.fastRefused),
+        turnSnapshotCommit: outerJoined(turns.snapshotCommit),
         seq: asNumber(sql`${messages.seq}`),
         partCount: sql<number>`(
         select count(*)::int from jsonb_array_elements(${messages.parts}) as held(value)

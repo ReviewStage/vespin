@@ -495,7 +495,7 @@ export interface AgentsControl {
   /** Stops one agent, answering whether the service took the Stop, which the task list then carries; a refusal is said in a toast. */
   onStop: (agentId: string) => Promise<boolean>;
   /** Takes one agent back to just before one of the developer's lines, stopping it first. */
-  onRewind: (agentId: string, messageId: string) => Promise<AgentActAnswer>;
+  onRewind: (agentId: string, messageId: string, restoreFiles?: boolean) => Promise<AgentActAnswer>;
   /** Sends one agent a message under the key the composer made. */
   onMessage: MessageSender;
   /**
@@ -1531,8 +1531,12 @@ export function useAgents(input: {
   };
 
   const onRewind = useCallback(
-    (agentId: string, messageId: string): Promise<AgentActAnswer> =>
-      sendRewind({ agentId, messageId }).catch(agentUnreached),
+    (agentId: string, messageId: string, restoreFiles = false): Promise<AgentActAnswer> =>
+      sendRewind({
+        agentId,
+        messageId,
+        ...(restoreFiles ? { restoreFiles: true } : undefined),
+      }).catch(agentUnreached),
     [sendRewind],
   );
 

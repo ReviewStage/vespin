@@ -85,6 +85,7 @@ import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import {
+  clearedAgentById,
   deletedAgent,
   resumedAgentSandbox,
   rewoundAgentById,
@@ -553,10 +554,19 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       yield* warmedAgent(context.userId, input.id);
       return { warm: true as const };
     }),
+    /** The agent's harness started on a fresh session in the same agent (`agent-lifecycle.ts`), answered as it then stands. */
+    clear: signedIn.clear.effect(function* ({ input, context }) {
+      return { agent: yield* clearedAgentById(writer, context.userId, input.id) };
+    }),
     /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {
       return {
-        agent: yield* rewoundAgentById(context.userId, input.params.id, input.body.messageId),
+        agent: yield* rewoundAgentById(
+          context.userId,
+          input.params.id,
+          input.body.messageId,
+          input.body.restoreFiles === true,
+        ),
       };
     }),
     /**

@@ -1,3 +1,5 @@
+import { rmSync } from "node:fs";
+import { dirname } from "node:path";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
@@ -480,6 +482,48 @@ describe("a host waiting on its record", () => {
         yield* writeHostDevice(stateRoot, DEVICE);
         yield* untilEnded(waiting);
       }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+  );
+
+  it.effect(
+    "a box whose state folder is removed as its watch is laid watches the folder made again",
+    () => {
+      // Each folder a watch is laid on, the state folder removed after the check that finds it standing and before its watch, once.
+      const watched: string[] = [];
+      let removing: string | undefined;
+      const removedAsWatched = Layer.succeed(FileSystem.WatchBackend, {
+        register: (folder) => {
+          watched.push(folder);
+          if (folder === removing) {
+            removing = undefined;
+            rmSync(folder, { recursive: true });
+          }
+          return Option.none();
+        },
+      });
+      return Effect.gen(function* () {
+        const { stateRoot } = yield* box;
+        const fileSystem = yield* FileSystem.FileSystem;
+        yield* fileSystem.makeDirectory(stateRoot, { recursive: true });
+        removing = stateRoot;
+        const waiting = yield* hostDeviceWhen(stateRoot, Option.isSome).pipe(Effect.forkScoped);
+        // Note that the record is written only once the state folder's watch has been laid and failed, which the wait following the folder above it, or ending, says.
+        yield* Effect.yieldNow.pipe(
+          Effect.repeat({
+            until: () => watched.includes(dirname(stateRoot)) || waiting.pollUnsafe() !== undefined,
+          }),
+        );
+        yield* writeHostDevice(stateRoot, DEVICE);
+        yield* untilEnded(waiting);
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          Layer.mergeAll(
+            NodeFileSystem.layer.pipe(Layer.provide(removedAsWatched)),
+            NodePath.layer,
+          ),
+        ),
+      );
+    },
   );
 });
 

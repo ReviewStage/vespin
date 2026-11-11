@@ -91,6 +91,7 @@ export interface AccountPreferencesWrite {
   setupPlace?: string;
   soundWhen?: SoundWhen;
   completionSound?: CompletionSound;
+  askSound?: CompletionSound;
   turnNotifications?: boolean;
   onboardingSurvey?: string;
   agent?: ModelChoice;
@@ -111,6 +112,7 @@ const PREFERENCE_COLUMNS = {
   setupPlace: accountPreference.setupPlace,
   soundWhen: accountPreference.soundWhen,
   completionSound: accountPreference.completionSound,
+  askSound: accountPreference.askSound,
   turnNotifications: accountPreference.turnNotifications,
   onboardingSurvey: accountPreference.onboardingSurvey,
   agentModel: accountPreference.agentModel,
@@ -130,6 +132,7 @@ const PreferenceRowSchema = Schema.Struct({
   setupPlace: Schema.NullOr(Schema.String),
   soundWhen: Schema.NullOr(Schema.String),
   completionSound: Schema.NullOr(Schema.String),
+  askSound: Schema.NullOr(Schema.String),
   turnNotifications: Schema.NullOr(Schema.Boolean),
   onboardingSurvey: Schema.NullOr(Schema.String),
   agentModel: Schema.NullOr(Schema.String),
@@ -159,6 +162,7 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
         ...(row.setupPlace ? { setupPlace: row.setupPlace } : undefined),
         ...(row.soundWhen ? { soundWhen: row.soundWhen } : undefined),
         ...(row.completionSound ? { completionSound: row.completionSound } : undefined),
+        ...(row.askSound ? { askSound: row.askSound } : undefined),
         ...(row.turnNotifications === null
           ? undefined
           : { turnNotifications: row.turnNotifications }),
@@ -277,6 +281,7 @@ const PreferenceWriteSchema = Schema.Struct({
   setupPlace: Schema.optionalKey(Schema.String),
   soundWhen: Schema.optionalKey(Schema.Literals(SOUND_WHEN_LIST)),
   completionSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
+  askSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
   turnNotifications: Schema.optionalKey(Schema.Boolean),
   onboardingSurvey: Schema.optionalKey(Schema.String),
   agent: Schema.optionalKey(
@@ -310,6 +315,7 @@ function writtenColumns(write: PreferenceWrite) {
     ...(write.completionSound === undefined
       ? undefined
       : { completionSound: write.completionSound }),
+    ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
     ...(write.turnNotifications === undefined
       ? undefined
       : { turnNotifications: write.turnNotifications }),
@@ -386,6 +392,7 @@ export function writeAccountPreferences(
       ...(write.completionSound === undefined
         ? undefined
         : { completionSound: write.completionSound }),
+      ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
       ...(write.turnNotifications === undefined
         ? undefined
         : { turnNotifications: write.turnNotifications }),

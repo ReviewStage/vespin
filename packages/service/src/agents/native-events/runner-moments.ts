@@ -72,7 +72,24 @@ export function withoutNul(value: WireValue): WireValue {
 export const PICTURE_STAND_IN = "[image]";
 
 const readType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
-const readAccepted = Schema.decodeUnknownOption(Schema.Struct({ uuid: Schema.String }));
+const readAccepted = Schema.decodeUnknownOption(
+  Schema.Struct({ uuid: Schema.String, snapshot: Schema.optionalKey(Schema.Unknown) }),
+);
+/** A commit as git names it, which the runner checked the snapshot's against before it posted them. */
+const CommitSchema = Schema.String.check(Schema.isPattern(/^[0-9a-f]{40,64}$/u));
+/**
+ * The checkout the runner recorded before the turn, as its ACCEPTED carries
+ * it, read apart from the line so one spelled wrong is left out rather than
+ * dropping the line. Note that the branch is bounded by nothing but the
+ * event's own size, since git bounds a ref's name by no length of its own.
+ */
+const readSnapshot = Schema.decodeUnknownOption(
+  Schema.Struct({
+    commit: CommitSchema,
+    head: Schema.optionalKey(CommitSchema),
+    branch: Schema.optionalKey(Schema.String),
+  }),
+);
 const readConnectionLost = Schema.decodeUnknownOption(Schema.Struct({ host: Schema.String }));
 const readConnectionRestored = Schema.decodeUnknownOption(
   Schema.Struct({ host: Schema.String, carryOn: Schema.Boolean }),
@@ -155,8 +172,15 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
     case RUNNER_EVENT.ACCEPTED:
       return Option.some(
         Option.match(readAccepted(message), {
-          onSome: ({ uuid }): readonly NativeMoment[] => [
-            { kind: NATIVE_MOMENT.LINE_ACCEPTED, clientId: uuid },
+          onSome: ({ uuid, snapshot }): readonly NativeMoment[] => [
+            {
+              kind: NATIVE_MOMENT.LINE_ACCEPTED,
+              clientId: uuid,
+              ...Option.match(readSnapshot(snapshot), {
+                onSome: (read) => ({ snapshot: read }),
+                onNone: () => undefined,
+              }),
+            },
           ],
           onNone: () => [],
         }),

@@ -30,7 +30,10 @@
  * IDLE and keeps the launch up (`RUNNER_WARM`) for the service's next message,
  * until the service or its host retires it or its warm window ends it as
  * `idled`; a `warm` line runs that window again from now, and such a launch is
- * warm from its start too. One interrupted
+ * warm from its start too. A message line marked `compact` compacts the
+ * thread in its place (`thread/compact/start`) once no turn runs, the turn
+ * app-server runs for it taken up from its `turn/started` and over at its
+ * `turn/completed` by the same rule. One interrupted
  * after the service's stop ends the launch as `stopped`; a
  * failed turn, or one interrupted without a stop, as `failed`, with the
  * turn's error, so it shows as interrupted and Continue resumes the thread. A
@@ -152,6 +155,7 @@ import {
   makeApprovals,
   settleAsk,
 } from "./approvals.js";
+import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import type {
   ApprovalsReviewer,
@@ -185,6 +189,7 @@ import {
   APPROVAL_DECISION,
   type ApprovalBy,
   type ApprovalDecision,
+  type CheckoutSnapshot,
   CODEX_EFFORT,
   CODEX_ERROR_INFO,
   CODEX_PLAN_BACKEND,
@@ -303,9 +308,11 @@ const METHOD = {
   THREAD_FORK: "thread/fork",
   THREAD_TURNS_LIST: "thread/turns/list",
   THREAD_REVERT: "thread/revert",
+  THREAD_COMPACT_START: "thread/compact/start",
   TURN_START: "turn/start",
   TURN_STEER: "turn/steer",
   TURN_INTERRUPT: "turn/interrupt",
+  TURN_STARTED: "turn/started",
   TURN_COMPLETED: "turn/completed",
   ITEM_STARTED: "item/started",
   ITEM_COMPLETED: "item/completed",
@@ -324,6 +331,7 @@ const SIGNAL = {
   LINE: "line",
   INPUT_CLOSED: "input_closed",
   MESSAGE_TAKEN: "message_taken",
+  TURN_STARTED: "turn_started",
   TURN_COMPLETED: "turn_completed",
   /** The provider's host was probed after a turn failed to reach it: it answered, or never did within the bound (`reconnect.ts`). */
   PROBED: "probed",
@@ -335,6 +343,7 @@ type Signal =
   | { readonly kind: typeof SIGNAL.LINE; readonly text: string }
   | { readonly kind: typeof SIGNAL.INPUT_CLOSED }
   | { readonly kind: typeof SIGNAL.MESSAGE_TAKEN; readonly clientId: string }
+  | { readonly kind: typeof SIGNAL.TURN_STARTED; readonly turnId: string }
   | {
       readonly kind: typeof SIGNAL.TURN_COMPLETED;
       readonly turnId: string;
@@ -378,6 +387,8 @@ interface Outgoing {
   readonly clientId: string;
   readonly input: readonly UserInput[];
   readonly lines: readonly string[];
+  /** The checkout as it stood before the turn this message started (`checkout-snapshot.ts`); none for a steer, or where it could not be recorded. */
+  readonly snapshot?: CheckoutSnapshot | undefined;
 }
 
 /** The fields of an answer the controller reads. */
@@ -885,6 +896,8 @@ interface CodexLaunch {
   readonly sent: Map<string, Outgoing>;
   /** Messages for the next turn. */
   waiting: Outgoing[];
+  /** A compaction the service asked for while a turn ran, started once none runs. */
+  compactNext: Outgoing | undefined;
   /** The service's lines this launch has said app-server took, each said once. */
   readonly accepted: Set<string>;
   /** The credential app-server runs on. */
@@ -897,6 +910,15 @@ interface CodexLaunch {
   effort: CodexEffort | undefined;
   /** The service tier the next turn names (`turnTierOf`); null for the standard one. */
   tier: ServiceTier | null;
+  /**
+   * Whether the agent's turn is under way, as the service holds it: opened
+   * by the turn a message starts, and over at the completion that leaves
+   * no message unanswered (the end-of-run rule above). A turn started
+   * while it is under way, for a steer the last turn could not take, is a
+   * continuation of the same turn of the service's, so it records no
+   * checkout: the one recorded as the turn opened stands.
+   */
+  open: boolean;
   /** The thread's rollout as the store mirrors it, where the config names the store. */
   readonly mirror: RolloutMirror | undefined;
   /** The provider's host, as app-server reaches it, which a lost connection is probed for. */
@@ -907,6 +929,8 @@ interface CodexLaunch {
   carriedOnAt: number | undefined;
   /** How many items the thread has started but the service's own messages, which say nothing of the model. */
   readonly heard: { count: number };
+  /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
+  readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
 }
 
 /**
@@ -1116,6 +1140,12 @@ function listenerFor(
             : undefined;
           if (requestId === undefined) return;
           yield* settleAsk(seen.approvals, requestId, APPROVAL_DECISION.DENY, APPROVAL_BY.ABORTED);
+          return;
+        }
+        if (notification.method === METHOD.TURN_STARTED) {
+          const { threadId, turn } = notification.params;
+          if (threadId !== seen.threadId) return;
+          yield* Queue.offer(seen.signals, { kind: SIGNAL.TURN_STARTED, turnId: turn.id });
           return;
         }
         if (notification.method === METHOD.TURN_COMPLETED) {
@@ -1338,7 +1368,9 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
  * Says each of the service's lines a message carries was taken by app-server, as
  * Claude Code's launch says a line was handed to the SDK, so the service ties the
  * line to the turn that runs it. A line said once is not said again when a
- * message is sent again in the next turn.
+ * message is sent again in the next turn. The checkout recorded before the
+ * turn is said with the line that opened it alone, the first of a merged
+ * message, since that is the line the turn stands under.
  */
 const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   launch: CodexLaunch,
@@ -1347,7 +1379,12 @@ const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   for (const uuid of outgoing.lines) {
     if (launch.accepted.has(uuid)) continue;
     launch.accepted.add(uuid);
-    yield* launch.context.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
+    const opening = uuid === outgoing.lines[0] ? outgoing.snapshot : undefined;
+    yield* launch.context.sink.emit({
+      type: RUNNER_EVENT.ACCEPTED,
+      uuid,
+      ...(opening === undefined ? undefined : { snapshot: opening }),
+    });
   }
 });
 
@@ -1356,7 +1393,7 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   launch: CodexLaunch,
   messages: readonly Outgoing[],
 ) {
-  const outgoing: Outgoing =
+  const merged: Outgoing =
     messages.length === 1 && messages[0] !== undefined
       ? messages[0]
       : {
@@ -1364,6 +1401,12 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
           input: messages.flatMap((message) => message.input),
           lines: messages.flatMap((message) => message.lines),
         };
+  // The checkout is recorded before app-server can touch it, under the first line the turn takes,
+  // where the turn opens the agent's; a turn continuing one under way leaves the opening record standing.
+  const first = merged.lines[0];
+  const snapshot = launch.open || first === undefined ? undefined : yield* launch.snapshot(first);
+  launch.open = true;
+  const outgoing: Outgoing = { ...merged, snapshot };
   const answer = decodeTurnAnswer(
     yield* launch.server.request(METHOD.TURN_START, {
       threadId: launch.threadId,
@@ -1391,6 +1434,28 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   yield* accepted(launch, outgoing);
 });
 
+/**
+ * The turn a compaction runs as, until app-server names it: the thread's
+ * compaction answers no turn of its own, and its `turn/started` names the
+ * turn the launch then runs.
+ */
+const COMPACTION_TURN = "";
+
+/**
+ * Compacts the thread in the message's place, a turn app-server runs of
+ * its own, which takes no words; the line is said taken once app-server
+ * took the ask. Note that it is never among the messages a turn was
+ * handed (`sent`), because no message item ever names it.
+ */
+const startCompaction = Effect.fn("agent-runner/codex/startCompaction")(function* (
+  launch: CodexLaunch,
+  outgoing: Outgoing,
+) {
+  yield* launch.server.request(METHOD.THREAD_COMPACT_START, { threadId: launch.threadId });
+  launch.state = { kind: LAUNCH_STATE.TURN, id: COMPACTION_TURN, stopping: false };
+  yield* accepted(launch, outgoing);
+});
+
 /** One of the service's lines, acted on; answers the launch's outcome where the line ends it. */
 const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
   launch: CodexLaunch,
@@ -1412,6 +1477,12 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
       const uuid = value.uuid ?? randomUUID();
       const outgoing: Outgoing = { clientId: uuid, input: userInput(value.content), lines: [uuid] };
       const { state } = launch;
+      // A compaction waits for a turn running, or a host being probed, to be over, as app-server compacts no thread at work.
+      if (value.compact === true) {
+        if (state.kind === LAUNCH_STATE.IDLE) yield* startCompaction(launch, outgoing);
+        else launch.compactNext = outgoing;
+        return undefined;
+      }
       if (state.kind === LAUNCH_STATE.IDLE) {
         yield* startTurn(launch, [outgoing]);
         return undefined;
@@ -1548,6 +1619,13 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
     if (done !== undefined) return done;
   }
   if (launch.state.kind !== LAUNCH_STATE.IDLE) return undefined;
+  launch.open = false;
+  const compaction = launch.compactNext;
+  if (compaction !== undefined) {
+    launch.compactNext = undefined;
+    yield* startCompaction(launch, compaction);
+    return undefined;
+  }
   if (launch.context.config.warm !== true) return ended(RUNNER_END.TURN_ENDED);
   // The agent's turn is over: the launch stays warm for the service's next message
   // rather than ending.
@@ -1638,6 +1716,11 @@ function takeSignal(
     case SIGNAL.MESSAGE_TAKEN:
       launch.sent.delete(signal.clientId);
       return Effect.succeed(undefined);
+    case SIGNAL.TURN_STARTED:
+      if (launch.state.kind === LAUNCH_STATE.TURN && launch.state.id === COMPACTION_TURN) {
+        launch.state = { ...launch.state, id: signal.turnId };
+      }
+      return Effect.succeed(undefined);
     case SIGNAL.TURN_COMPLETED:
       return takeTurnCompleted(launch, signal);
     case SIGNAL.PROBED:
@@ -1723,6 +1806,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   context: LaunchContext<CodexConfig>,
 ) {
   const { config } = context;
+  const snapshots = yield* CheckoutSnapshots;
   const backend = planBackendOf(context);
   if (backend === undefined) {
     return ended(RUNNER_END.FAILED, "the plan's backend is not one this runner knows");
@@ -1824,6 +1908,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     state: { kind: LAUNCH_STATE.IDLE, warm: config.warm === true },
     sent: new Map(),
     waiting: [],
+    compactNext: undefined,
     accepted: new Set(),
     auth,
     permissions,
@@ -1831,11 +1916,16 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     model: config.model,
     effort: config.effort,
     tier: serviceTierOf(config.fast, config.ultrafast),
+    open: false,
     mirror,
     providerHost: provider.host,
     probeTarget: probeTargetOf(context.env, provider),
     carriedOnAt: undefined,
     heard,
+    snapshot: (lineId) =>
+      config.agentId === undefined
+        ? Effect.succeed(undefined)
+        : snapshots.take(config.cwd, config.agentId, lineId),
   };
 
   // The service's lines join the signals in a loop of their own, so a line is

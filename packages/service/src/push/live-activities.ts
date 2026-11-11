@@ -6,8 +6,10 @@
  * (`refreshLiveActivity`): its content state is read afresh, how many of
  * their own unarchived agents have a turn running, how many threads wait on
  * them as their badge counts them (`inboxWaitingCount`), and up to three of
- * the running agents, the newest turn first, each with its name, the step
- * line its running turn's journal last wrote, and when the turn started.
+ * the running agents, the newest turn first, each with its name and when its
+ * turn started. Note that no agent's current step is carried: it changed
+ * more often than Apple's push budget allows, so it stood stale, and it put
+ * the work's words on a locked phone.
  * Each phone that registered its tokens is then pushed what it lacks: a
  * push-to-start to its push-to-start token where agents run and no activity
  * stands, an update to the standing activity's token where its state moved,
@@ -18,8 +20,8 @@
  * a post or an ask on a thread that waits on them and the thread settling
  * (`inbox-pushes.ts`), and the scheduled sweep once a minute for a batch of
  * the members with an activity standing (`refreshLiveActivities`), which
- * carries a running agent's newest step line, sends what the throttle held
- * back, and tries again a start or an end Apple did not take.
+ * sends what the throttle held back, and tries again a start or an end
+ * Apple did not take.
  *
  * Refreshes of one member run at once, often on different instances, so
  * none acts on what it read alone: a push-to-start is claimed in the store
@@ -69,7 +71,6 @@ import {
   recordLiveActivityPushed,
   releaseLiveActivityStart,
 } from "@repo/database/models/live-activity-store";
-import { newestJournalsOfReached } from "@repo/database/models/message-reads";
 import {
   LIVE_ACTIVITY_ATTRIBUTES_TYPE,
   LIVE_ACTIVITY_BOUNDS,
@@ -77,21 +78,9 @@ import {
   type LiveActivityContentState,
 } from "@repo/features/live-activity-wire";
 import { agentName } from "@repo/features/model-label";
-import { plainWords } from "@repo/features/plain-words";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
-import { toolCallView } from "@repo/features/tool-call-model";
-import { callLine } from "@repo/features/turn-rows";
 import { causeKind } from "@repo/runtime/effect";
-import type { WireValue } from "@repo/wire";
-import {
-  isStoredToolPart,
-  type StoredToolPart,
-  type StoredUIMessage,
-  storedToolName,
-} from "@repo/wire/ui-messages";
-import { isTextUIPart } from "ai";
 import { Cause, Clock, Duration, Effect, Option } from "effect";
-import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { inboxWaitingCount } from "../inbox/inbox-store.js";
 import {
   APNS_DELIVERY,
@@ -132,9 +121,6 @@ export const LIVE_ACTIVITY_PUSH = {
   SWEEP_BUDGET: Duration.seconds(60),
 } as const;
 
-/** How many of a journal's newest parts its step line is looked for in, so a long turn's whole journal is never read for its last line. */
-const STEP_TAIL_PARTS = 16;
-
 /** The state an end to a phone set to never take a push carries: nothing of what ran after it was set so. */
 const NOTHING_SHOWN: LiveActivityContentState = { running: 0, waiting: 0, agents: [] };
 
@@ -151,52 +137,20 @@ function epochSeconds(ms: number): number {
   return Math.floor(ms / 1000);
 }
 
-/** A call said as its row's line says it, a file by its name alone: "Edited session-store.ts", "Ran pnpm test". */
-function callStep(part: StoredToolPart): string {
-  // SAFETY: a stored part's input is the JSON the row carried, which the call's view reads as wire.
-  const input = part.input as WireValue;
-  const view = toolCallView({ tool: storedToolName(part), input, output: undefined });
-  const file = view.files?.[0];
-  const subject = file === undefined ? view.subject : file.slice(file.lastIndexOf("/") + 1);
-  const line = callLine(view.kind, subject, view.description);
-  return line.subject === undefined || line.subject === ""
-    ? line.verb
-    : `${line.verb} ${line.subject}`;
-}
-
-/** The step line a running turn's journal last wrote: its last call, or its last words on one line; none before either. */
-function stepOf(journal: StoredUIMessage): string | null {
-  for (const part of [...journal.parts].reverse()) {
-    if (isStoredToolPart(part)) return clipped(callStep(part), LIVE_ACTIVITY_BOUNDS.MAX_STEP_CHARS);
-    if (isTextUIPart(part) && part.text.trim() !== "") {
-      return clipped(plainWords(part.text), LIVE_ACTIVITY_BOUNDS.MAX_STEP_CHARS);
-    }
-  }
-  return null;
-}
-
-/** The running agents the activity lists, the newest turn first, each named with its step line; an agent gone meanwhile is left out. */
+/** The running agents the activity lists, the newest turn first; an agent gone meanwhile is left out. */
 function listedAgents(userId: string, running: readonly RunningAgentTurn[]) {
   return Effect.gen(function* () {
     const shown = running.slice(0, LIVE_ACTIVITY_BOUNDS.MAX_AGENTS);
-    // Note that the journals are read by conversations of the member's own agents alone, which the query above admitted.
-    const journals = yield* newestJournalsOfReached(
-      shown.map((each) => each.conversationId),
-      CODER_TOOL_SET,
-      STEP_TAIL_PARTS,
-    );
     const listed = yield* Effect.forEach(shown, (turn) =>
       Effect.map(
         readAgent(userId, turn.agentId),
-        Option.map((agent): LiveActivityAgent => {
-          const journal = journals.get(turn.conversationId);
-          return {
+        Option.map(
+          (agent): LiveActivityAgent => ({
             id: agent.id,
             title: clipped(agentName(agent), LIVE_ACTIVITY_BOUNDS.MAX_TITLE_CHARS),
-            step: journal?.turnId === turn.turnId ? stepOf(journal.message) : null,
             startedAt: turn.startedAt.getTime(),
-          };
-        }),
+          }),
+        ),
       ),
     );
     return listed.flatMap((each) => (Option.isSome(each) ? [each.value] : []));
@@ -464,9 +418,8 @@ export function refreshLiveActivity(
 /**
  * The scheduled sweep's refresh: a batch of the members with an activity
  * standing on a phone, the longest unswept first, each refreshed as
- * routine, so a running agent's step line reaches it, an update the
- * throttle held back goes, and a start or an end Apple did not take is
- * tried again; how many members it took. A member is taken only while
+ * routine, so an update the throttle held back goes, and a start or an
+ * end Apple did not take is tried again; how many members it took. A member is taken only while
  * `LIVE_ACTIVITY_PUSH.SWEEP_BUDGET` lasts, and a refresh that fails or dies
  * is logged and dropped, as the next minute's tries again.
  */

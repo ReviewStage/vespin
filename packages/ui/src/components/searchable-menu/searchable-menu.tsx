@@ -168,6 +168,8 @@ export interface MenuRow {
   terms?: readonly string[];
   /** Muted words after the label: the effort a model runs at, an owner, "(Fast)", where an agent stands. */
   detail?: React.ReactNode;
+  /** Whether the detail stands under the label, wrapping, as a permission mode's hint does, rather than after it. */
+  detailUnder?: boolean | undefined;
   /** The heading the row stands under, with the rows beside it that share it, and which a search matches; none stands under no heading. */
   section?: string | undefined;
   /** The shortcut that does what picking the row does, printed muted at the row's end. */
@@ -198,6 +200,8 @@ interface Section<Row extends MenuRow> {
 interface Submenu {
   /** What the rows are, for assistive technology. */
   label: string;
+  /** A heading drawn over the rows, which names them to a reader too: the question a permission mode answers. */
+  heading?: string | undefined;
   rows: readonly MenuRow[];
   /** The id of the row chosen now, drawn checked. */
   value: string | undefined;
@@ -341,10 +345,12 @@ const HEADING = "ui-searchable-menu-heading px-row-inset pt-ui-8 pb-ui-4";
  * row's and its near edge a gap off the menu's own; it turns to the menu's
  * other side where its room ends before it does, is pushed back over the
  * menu (`--ui-submenu-shift`) where neither side holds it, and stands up
- * from the row's foot where its room's bottom would cut it.
+ * from the row's foot where its room's bottom would cut it. One whose rows
+ * say what each does under its name stands wider, so a hint reads in a line
+ * or two.
  */
 const SUBMENU =
-  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
+  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[hinted]:w-submenu-hinted data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
 
 /** The row a submenu stands beside, which holds it. */
 const BRANCH = "ui-searchable-menu-branch relative";
@@ -492,6 +498,7 @@ function optionGroups(
         : { lead: row.faces, leadWidth: COMBOBOX_LEAD.FACES }),
       detail: rowWords(row, unmasked, row.detail),
       detailWords: typeof row.detail === "string" ? row.detail : undefined,
+      detailUnder: row.detailUnder,
       hint: rowWords(row, unmasked, rowHint(row)),
       replayMasked: row.replayMasked,
       disabled: row.disabled !== undefined,
@@ -526,6 +533,7 @@ function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
     icon: row.icon,
     detail: rowWords(row, unmasked, row.detail),
     detailWords: typeof row.detail === "string" ? row.detail : undefined,
+    detailUnder: row.detailUnder,
     hint: rowWords(row, unmasked, rowHint(row)),
     replayMasked: row.replayMasked,
     card: row.card,
@@ -887,7 +895,8 @@ export function SearchableMenu(
   };
   /** The submenu of the row at `index`, listed or pinned, opened beside it, or in a sheet's place. */
   const openSubmenu = (index: number) => {
-    setPlace(SUBMENU_FIRST_PLACE);
+    // Note that a submenu already open on this row keeps where it was placed, because a press on a row its hover opened changes nothing the placing reads.
+    if (openAt !== index) setPlace(SUBMENU_FIRST_PLACE);
     setSubmenu({ moved: undefined });
     const pinned = index >= matches.length;
     const row = pinned ? foot[index - matches.length] : matches[index];
@@ -1037,7 +1046,13 @@ export function SearchableMenu(
         ref={sheet ? list : undefined}
         id={submenuId}
         label={shown.label}
-        groups={[{ options: submenuOptions(shown, unmasked) }]}
+        groups={[
+          {
+            label: shown.heading,
+            replayUnmasked: unmasked,
+            options: submenuOptions(shown, unmasked),
+          },
+        ]}
         active={subAt}
         onActiveChange={(moved) => setSubmenu({ moved })}
         onChoose={(_index, option) => pickIn(shown, option.id)}
@@ -1057,6 +1072,7 @@ export function SearchableMenu(
       inset={MENU_SURFACE_INSET.NONE}
       data-side={place.side}
       data-stand={place.stand}
+      data-hinted={shown.rows.some((row) => row.detailUnder === true) ? "" : undefined}
       style={cssCustomProperties({ "--ui-submenu-shift": `${place.shift}px` })}
       onMouseDown={(event) => event.preventDefault()}
     >

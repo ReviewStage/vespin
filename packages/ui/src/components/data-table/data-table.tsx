@@ -18,7 +18,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { PRESS_PULSE, pulseOnPress, pulsePress } from "../../press-pulse.js";
+import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import {
   Table,
   TableBody,
@@ -34,6 +34,7 @@ import { usePageScroll } from "../page-frame/page-scroll.js";
 import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { sizeWhileShown } from "../virtual-rows/virtual-rows.js";
+import { SortHeading } from "./sort-heading.js";
 
 /**
  * data-table.tsx -- rows of records under headings that line up their columns, sorted by TanStack Table, in a flush Card that scrolls sideways on its own.
@@ -147,10 +148,6 @@ const ROW = "transition-[background-color] duration-(--ui-duration-hover) ease-p
 /** A row that opens something: lit under the pointer, and pressed with the web's pointing hand but a Mac list's arrow on the desktop. */
 const PRESSABLE_ROW = "cursor-press hover:bg-muted";
 
-/** A sortable heading's press: its words alone, in the heading's own type and ink, its ring a little off them. */
-const SORT_BUTTON =
-  "m-0 inline-flex items-baseline border-0 bg-transparent p-0 text-inherit [font:inherit] cursor-press outline-offset-2";
-
 /** The elements a press inside a row answers for itself. */
 const OWN_CONTROL = "a, button, input, select, textarea, label, [role='button']";
 
@@ -224,22 +221,9 @@ function DataTableHeading<Row extends RowData>({
   }
   return (
     <TableHead className={CELL_KIND} data-kind={kind} aria-sort={direction}>
-      <button
-        type="button"
-        className={SORT_BUTTON}
-        onClick={pulseOnPress(header.column.getToggleSortingHandler())}
-      >
-        <Text
-          as={TEXT_ELEMENT.SPAN}
-          variant={TEXT_VARIANT.LABEL}
-          tone={direction === undefined ? TEXT_TONE.MUTED : TEXT_TONE.DEFAULT}
-        >
-          <FlexRender header={header} />
-          {direction ? (
-            <span aria-hidden="true">{direction === SORT_DIRECTION.ASCENDING ? " ▲" : " ▼"}</span>
-          ) : null}
-        </Text>
-      </button>
+      <SortHeading direction={direction} onPress={header.column.getToggleSortingHandler()}>
+        <FlexRender header={header} />
+      </SortHeading>
     </TableHead>
   );
 }

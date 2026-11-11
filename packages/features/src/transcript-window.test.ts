@@ -90,6 +90,31 @@ test("a window followed by cursor joins an answer past the cursor by message id:
   ]);
 });
 
+test("a line whose turn's runner recorded the checkout before it reads as one the files can go back at, and one that arrived inside a turn does not", () => {
+  const opened = { ...row("line-1", 1, 1), turnSnapshotCommit: "0123456789abcdef" };
+  const steered = {
+    ...row("line-2", 2, 1),
+    journalId: "reply-1",
+    afterStep: 1,
+    turnSnapshotCommit: "0123456789abcdef",
+  };
+  const unrecorded = { ...row("line-3", 3, 1), turnSnapshotCommit: null };
+
+  const drawn = windowMessagesOf(
+    [opened, steered, unrecorded],
+    [part("line-1", 0, "a"), part("line-2", 0, "b"), part("line-3", 0, "c")],
+  );
+
+  assert.deepEqual(
+    drawn.map((message) => [message.id, message.filesRestorable]),
+    [
+      ["line-1", true],
+      ["line-2", undefined],
+      ["line-3", undefined],
+    ],
+  );
+});
+
 test("a line whose row names its sender `luke`, as an earlier build stored the app's, is drawn as sent by the app", () => {
   const drawn = windowMessagesOf(
     [{ ...row("wake", 1, 1), sender: "luke" }],
