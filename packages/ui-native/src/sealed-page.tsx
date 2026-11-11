@@ -8,7 +8,7 @@ import {
 } from "@repo/features/page-theme";
 import { sealedPageDocument } from "@repo/features/sealed-page";
 import { useMemo } from "react";
-import { Linking, StyleSheet, useColorScheme } from "react-native";
+import { Linking, StyleSheet, useColorScheme, useWindowDimensions } from "react-native";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -34,7 +34,7 @@ const PAGE_INSET = "16px";
 const styles = StyleSheet.create({ page: { flex: 1 } });
 
 /** The theme a page reads, in the brand's colors for the window's scheme, as the panel hands a page its own. */
-function themeOf(colors: BrandColors, dark: boolean): PageTheme {
+function themeOf(colors: BrandColors, dark: boolean, fontScale: number): PageTheme {
   const [chart1, chart2, chart3, chart4, chart5] = CHART_INKS;
   const variables: Record<PageThemeVariable, string> = {
     [PAGE_THEME_VARIABLE.BACKGROUND]: colors.GROUND,
@@ -56,7 +56,8 @@ function themeOf(colors: BrandColors, dark: boolean): PageTheme {
     [PAGE_THEME_VARIABLE.CHART_5]: chart5,
     [PAGE_THEME_VARIABLE.FONT_SANS]: FONT.SANS,
     [PAGE_THEME_VARIABLE.FONT_MONO]: FONT.MONO,
-    [PAGE_THEME_VARIABLE.TEXT_SIZE]: `${String(TEXT_SIZE.BODY)}px`,
+    // Note that the page's words follow the reader's text size, as the app's own do, since a web view takes no Dynamic Type of its own.
+    [PAGE_THEME_VARIABLE.TEXT_SIZE]: `${String(Math.round(TEXT_SIZE.BODY * fontScale))}px`,
     [PAGE_THEME_VARIABLE.TEXT_LEADING]: "1.5",
     [PAGE_THEME_VARIABLE.RADIUS]: "10px",
     [PAGE_THEME_VARIABLE.READING_WIDTH]: "100%",
@@ -100,15 +101,16 @@ type SealedPageProps = {
  * handed in with the policy that seals it (`@repo/features/sealed-page`),
  * so it fetches, frames, and loads nothing, and stays where it was handed
  * in; its scripts run, so a chart draws and a table sorts. It reads the
- * brand's theme in the window's scheme, and is drawn anew as the scheme
- * flips.
+ * brand's theme in the window's scheme at the reader's text size, and is
+ * drawn anew as either changes.
  */
 export function SealedPage({ html, title }: SealedPageProps) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
+  const { fontScale } = useWindowDimensions();
   const document = useMemo(
-    () => sealedPageDocument(html, themeOf(colors, dark)),
-    [html, colors, dark],
+    () => sealedPageDocument(html, themeOf(colors, dark, fontScale)),
+    [html, colors, dark, fontScale],
   );
   return (
     <WebView
