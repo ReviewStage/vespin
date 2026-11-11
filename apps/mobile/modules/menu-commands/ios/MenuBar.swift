@@ -114,6 +114,7 @@ enum MenuBar {
     self.subject = subject
     self.enabled = Set(enabled)
     self.toggled = Set(toggled)
+    NSLog("VESPIN-MENU subject=%@ enabled=%@ toggled=%@", subject, enabled.joined(separator: ","), toggled.joined(separator: ","))
     guard #available(iOS 26.0, *) else { return }
     UIMainMenuSystem.shared.setNeedsRebuild()
     UIMainMenuSystem.shared.setNeedsRevalidate()
