@@ -1649,7 +1649,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
               { type: "text", text: "Read the spec." },
               {
                 type: "text",
-                text: `[Spec v2.pdf (application/pdf) was attached: it is at ${firstPath} in your sandbox, read it from there]`,
+                text: `[Spec v2.pdf (application/pdf) was attached: it is at ${firstPath}, read it from there]`,
               },
               { type: "image", source: { type: "base64", media_type: "image/png", data: png } },
             ],
@@ -1657,7 +1657,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
               { type: "text", text: "And this one." },
               {
                 type: "text",
-                text: `[../../etc/notes.pdf (application/pdf) was attached: it is at ${laterPath} in your sandbox, read it from there]`,
+                text: `[../../etc/notes.pdf (application/pdf) was attached: it is at ${laterPath}, read it from there]`,
               },
               { type: "image", source: { type: "base64", media_type: "image/png", data: png } },
             ],
