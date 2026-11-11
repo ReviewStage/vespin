@@ -339,6 +339,9 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   );
 }
 
+/** No task list read yet. */
+const NO_TASKS: readonly TaskSummary[] = [];
+
 /** No relation picked, beside each kind New task may start its task in. */
 const NO_RELATION = "none";
 
@@ -378,22 +381,22 @@ interface RelationPick {
  * another is picked.
  */
 function useRelationPick(
+  listed: readonly TaskSummary[],
   workspaceId: string | undefined,
   parent: string | undefined,
 ): RelationPick {
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const [kind, setKind] = useState<string>(
     parent === undefined ? NO_RELATION : TASK_CREATE_RELATION_KIND.SUB_TASK_OF,
   );
   const [picked, setPicked] = useState<string | undefined>(parent);
   const tasks = useMemo(
     () =>
-      (view?.tasks ?? []).filter(
+      listed.filter(
         (task) =>
           task.workspaceId === workspaceId &&
           (task.id === parent || task.status === undefined || !isTaskSettled(task.status)),
       ),
-    [view, workspaceId, parent],
+    [listed, workspaceId, parent],
   );
   const taskId = picked ?? tasks[0]?.id;
   return {
@@ -438,15 +441,20 @@ function RelationSection({ pick }: { readonly pick: RelationPick }) {
  * in; File for later before it files the task in the Backlog under its
  * words with no agent, offered on words alone, since pictures go only with
  * an agent's start. A task's New sub-task opens it as a sub-task of
- * `parent`.
+ * `parent`, in the parent's workspace, which a task opened by a link may
+ * hold apart from the one the app works in, since a tree stands in one.
  */
 export function NewTaskScreen({ parent }: { readonly parent?: string | undefined }) {
   const [prompt, setPrompt] = useState("");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const workspace = useChosenWorkspace(workspaces).chosen;
+  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const listed = view?.tasks ?? NO_TASKS;
+  const chosen = useChosenWorkspace(workspaces).chosen;
+  const parentIn = listed.find((task) => task.id === parent)?.workspaceId;
+  const workspace = workspaces.find((each) => each.id === parentIn) ?? chosen;
   const repository = useRepositoryPick(workspace);
-  const relation = useRelationPick(workspace?.id, parent);
+  const relation = useRelationPick(listed, workspace?.id, parent);
   const pick = useModelPick();
   const startTask = useStartTask(workspace?.id);
   const fileTask = useFileTask(workspace?.id);
