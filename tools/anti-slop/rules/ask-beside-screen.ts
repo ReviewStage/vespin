@@ -10,6 +10,9 @@ const PRESENTED_TAG = /(?:Ask|Sheet)$/u;
 /** A presented element held in a name, a member read off a hook (`remind.sheet`, `sidebar.ask`) or a variable (`archiveAsk`, `sheet`), by the name's end; `task` and `basket` are not. */
 const PRESENTED_NAME = /^(?:ask|sheet)$|[a-z0-9](?:Ask|Sheet)$/u;
 
+/** Calls that answer a scalar of what they are handed, so nothing handed them is drawn: `disabled={Boolean(remind.sheet)}`. */
+const SCALAR_CALLS: ReadonlySet<string> = new Set(["Boolean", "Number", "String"]);
+
 /** The name a JSX tag is written with, where it is a plain identifier. */
 function tagName(name: ESTree.JSXElementName): string | undefined {
   return name.type === "JSXIdentifier" ? name.name : undefined;
@@ -83,6 +86,7 @@ export const askBesideScreenRule = defineRule({
           }
           return;
         case "CallExpression":
+          if (node.callee.type === "Identifier" && SCALAR_CALLS.has(node.callee.name)) return;
           for (const argument of node.arguments) reportWithin(argument);
           return;
         case "SpreadElement":
