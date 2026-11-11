@@ -29,13 +29,17 @@ export function heldStill(): boolean {
 
 /**
  * Draws `draw` on every frame while `canvas` is on screen, with the seconds
- * since the page opened, or once at zero where motion is held still. Answers
- * the loop's stop.
+ * since the page opened, or at zero where motion is held still, again each
+ * time its box changes size. Answers the loop's stop.
  */
 export function paintLoop(canvas: HTMLCanvasElement, draw: (seconds: number) => void): () => void {
   if (heldStill()) {
     draw(0);
-    return () => undefined;
+    // Note that a still canvas draws again when its box changes, because one hidden at load, or resized since, would otherwise keep a blank or stretched frame.
+    if (typeof ResizeObserver !== "function") return () => undefined;
+    const sized = new ResizeObserver(() => draw(0));
+    sized.observe(canvas);
+    return () => sized.disconnect();
   }
   let shown = true;
   let frame = 0;

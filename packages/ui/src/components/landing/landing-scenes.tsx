@@ -1,10 +1,13 @@
 import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import { type ReactNode, type RefObject, useRef } from "react";
 import {
+  CheckCheckIcon,
   CheckIcon,
   GLYPH,
+  HistoryIcon,
   ICON_SIZE,
   InboxIcon,
   ListTodoIcon,
@@ -20,10 +23,16 @@ import {
   PlusIcon,
   SearchIcon,
   SidebarIcon,
+  SidePanelIcon,
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
-import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
+import {
+  MARK_PROVIDER,
+  type MarkProvider,
+  PROVIDER_MARK_SIZE,
+  ProviderMark,
+} from "../../marks/provider-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
@@ -41,14 +50,14 @@ import { ComposerBody } from "../composer-frame/composer-body.js";
 import { ComposerFoot } from "../composer-frame/composer-foot.js";
 import { ComposerFrame } from "../composer-frame/composer-frame.js";
 import { Disclosure, DisclosureBody, DisclosureSummary } from "../disclosure/disclosure.js";
+import { EmptyState } from "../empty-state/empty-state.js";
 import { FoldingButton } from "../folding-button/folding-button.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
-import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
+import { GROUP_HEADING, GROUP_LOOK, GroupHeader } from "../group-header/group-header.js";
 import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { INLINE_REF_FIT, type InlineRefFit } from "../inline-ref/inline-ref-fit.js";
 import { LineRow } from "../line-button/line-button.js";
 import {
-  LIST_DENSITY,
   LIST_ROW_CURRENT,
   LIST_ROW_CURRENT_LOOK,
   LIST_ROW_INK,
@@ -62,16 +71,25 @@ import { MessageFrame } from "../message/message.js";
 import { MessageHead } from "../message/message-head.js";
 import { MoreButton } from "../more-button/more-button.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
-import { PROGRESS_COUNT_LOOK, ProgressCount } from "../progress-ring/progress-ring.js";
-import { SearchField } from "../search-field/search-field.js";
 import {
+  PROGRESS_COUNT_LOOK,
+  PROGRESS_RING_TONE,
+  ProgressCount,
+  ProgressRing,
+} from "../progress-ring/progress-ring.js";
+import { SearchField } from "../search-field/search-field.js";
+import { SettingsOrderedRows } from "../settings-ordered-rows/settings-ordered-rows.js";
+import {
+  SETTINGS_ROW_CONTROLS,
   SETTINGS_ROW_STATE,
   SettingsRow,
   SettingsRowMark,
   SettingsRowStateLine,
+  SettingsRowUsage,
 } from "../settings-row/settings-row.js";
 import { SETTINGS_SECTION_FRAME, SettingsSection } from "../settings-section/settings-section.js";
 import { Shimmer } from "../shimmer/shimmer.js";
+import { Shortcut } from "../shortcut/shortcut.js";
 import { Switch } from "../switch/switch.js";
 import { TABS_GROUND, Tab, Tabs } from "../tabs/tabs.js";
 import { TEXT_ELEMENT, TEXT_TONE, Text } from "../text/text.js";
@@ -81,13 +99,16 @@ import { TIME_LOOK, Time } from "../time/time.js";
 import { Toolbar } from "../toolbar/toolbar.js";
 import { TOOLBAR_INSET, TOOLBAR_LOOK } from "../toolbar/toolbar-frame.js";
 import { UnreadMark } from "../unread-mark/unread-mark.js";
+import type { UsageMeterRow } from "../usage-meters/usage-meters.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 import {
   agentFace,
   DESKTOP_PLACE,
   DesktopSidebar,
   MEMBER,
+  MemberFace,
   SidePanelToggle,
+  useMemberPicture,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
 import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-story.js";
@@ -100,7 +121,7 @@ import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-sto
  * the desktop's, the phone at the site's on a phone. The Inbox answers an
  * agent's question in the draft under it; a task's page shows its agent's
  * log, folded calls and all, starting another agent and trading messages
- * with it, the plan's sub-tasks beside it; an automation's page fires a run;
+ * with it, then its Overview of sub-tasks and agents; an automation's page fires a run;
  * the phone holds the same Inbox; and Settings › Agents connects Claude on
  * its plan and Codex on an API key. None is pressed: each plays its story on a clock that
  * runs only while it is on screen (`landing-story.ts`). On a page too narrow
@@ -113,11 +134,12 @@ const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
- * rest), and the step a narrow page's crop opens on.
+ * rest), and the steps a narrow page's crop opens and closes on.
  */
 const STORY = {
-  INBOX: { STEPS: 7, LAST: 5, NARROW_FROM: 2 },
-  AGENTS: { STEPS: 7, LAST: 5, NARROW_FROM: 3 },
+  INBOX: { STEPS: 7, LAST: 5, NARROW_FROM: 2, NARROW_LAST: 5 },
+  // Note that a narrow page's crop stops before the Overview, because its crop is the log's.
+  AGENTS: { STEPS: 9, LAST: 7, NARROW_FROM: 3, NARROW_LAST: 5 },
 } as const;
 
 /** The step a window's `story` draws: all of it on a wide page, from its telling moment on a narrow one. */
@@ -126,8 +148,12 @@ function useWindowStory(
   story: (typeof STORY)[keyof typeof STORY],
   beat: number,
 ): number {
-  const from = useNarrowPage(ref) ? story.NARROW_FROM : 0;
-  return Math.min(useStory(ref, story.STEPS - from, beat) + from, story.LAST);
+  const narrow = useNarrowPage(ref);
+  const from = narrow ? story.NARROW_FROM : 0;
+  return Math.min(
+    useStory(ref, story.STEPS - from, beat) + from,
+    narrow ? story.NARROW_LAST : story.LAST,
+  );
 }
 
 /** The scenes the landing plays, by the feature each shows. */
@@ -445,6 +471,7 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
  */
 function QuestionThread({ step }: { step: number }): React.JSX.Element {
   const sent = step >= 5;
+  const memberPicture = useMemberPicture();
   return (
     <div className="ui-landing-thread">
       <header className="ui-landing-subject">
@@ -464,14 +491,18 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
         </li>
         {sent ? (
           <li className="ui-landing-comment ui-landing-enter">
-            <Comment author={{ name: MEMBER }} at={STORY_NOW} now={STORY_NOW}>
+            <Comment
+              author={{ name: MEMBER, picture: memberPicture }}
+              at={STORY_NOW}
+              now={STORY_NOW}
+            >
               <AskChoices picked readOnly />
               <Text>{QUESTION.NOTE}</Text>
             </Comment>
           </li>
         ) : null}
         <li className="ui-landing-comment">
-          <Comment author={{ name: MEMBER }} nameRef="You">
+          <Comment author={{ name: MEMBER, picture: memberPicture }} nameRef="You">
             {sent ? (
               <ReplyComposer placeholder="Reply" sendable={false} />
             ) : (
@@ -492,22 +523,20 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
       <DesktopSidebar place={DESKTOP_PLACE.INBOX} />
       <div className="ui-landing-main ui-landing-inbox">
         <nav className="ui-landing-inbox-list" aria-label="Inbox">
-          <Toolbar
-            title="Inbox"
-            end={TOOLBAR_INSET.COLUMN}
-            actions={
-              <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
-            }
-          />
+          <Toolbar end={TOOLBAR_INSET.COLUMN} />
           <div className="ui-landing-sheet-start">
-            <search className="ui-landing-search">
-              <SearchField
-                label="Search inbox"
-                placeholder="Search inbox"
-                value=""
-                onChange={still}
-              />
-            </search>
+            <div className="ui-landing-inbox-head">
+              <search className="ui-landing-inbox-search">
+                <SearchField
+                  label="Search inbox"
+                  placeholder="Search inbox"
+                  value=""
+                  onChange={still}
+                />
+              </search>
+              <IconButton icon={<CheckCheckIcon />} label="Mark all as read" onClick={still} />
+              <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
+            </div>
             <div className="ui-landing-rows">
               <List label="Inbox items">
                 {inboxItems(step).map((item) => (
@@ -527,17 +556,16 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
             {open ? (
               <QuestionThread step={step} />
             ) : (
-              <div className="ui-landing-empty">
-                <GlyphSlot size={ICON_SIZE.LARGE}>
-                  <InboxIcon />
-                </GlyphSlot>
-                <Text tone={TEXT_TONE.MUTED}>Choose an item</Text>
-              </div>
+              <EmptyState icon={<InboxIcon />}>
+                Choose an item, or step with{" "}
+                <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].chord} spoken />{" "}
+                <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].chord} spoken />
+              </EmptyState>
             )}
           </div>
         </section>
       </div>
-      <SidePanelToggle />
+      {open ? <SidePanelToggle /> : null}
     </div>
   );
 }
@@ -594,13 +622,16 @@ function ReceivedMessage({ sender, words }: { sender: string; words: string }): 
 
 const ACCEPT_PAGE = "Accept page";
 const INVITE_EMAILS = "Invite emails";
+const TASK_NAME = "Teammate invitations";
 
-/** A sub-task of the plan beside the log. */
+/** The step the task's name is pressed on, its Overview taking the page from the log. */
+const OVERVIEW_FROM = 6;
+
+/** A sub-task in the task's Overview. */
 type SubTask = {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus;
-  readonly key: string;
 };
 
 /** The sub-tasks at `step`, each stepping toward done as the story goes. */
@@ -608,15 +639,10 @@ function subTasks(step: number): readonly SubTask[] {
   const at = (from: number, to: number): TaskStatus =>
     step >= to ? TASK_STATUS.DONE : step >= from ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.TODO;
   return [
-    { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE, key: "ACME-54" },
-    {
-      id: "endpoints",
-      name: "Invite and accept endpoints",
-      status: TASK_STATUS.DONE,
-      key: "ACME-55",
-    },
-    { id: "accept", name: ACCEPT_PAGE, status: at(1, 4), key: "ACME-56" },
-    { id: "emails", name: "Invite emails through Postmark", status: at(0, 9), key: "ACME-57" },
+    { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE },
+    { id: "endpoints", name: "Invite and accept endpoints", status: TASK_STATUS.DONE },
+    { id: "accept", name: ACCEPT_PAGE, status: at(1, 4) },
+    { id: "emails", name: "Invite emails through Postmark", status: at(0, 9) },
   ];
 }
 
@@ -635,7 +661,7 @@ function TaskTabs({ step }: { step: number }): React.JSX.Element {
           />
         ) : null}
       </Tabs>
-      <IconButton icon={<PlusIcon />} label="Open a tab" onClick={still} />
+      <IconButton icon={<PlusIcon />} label="New agent" onClick={still} />
     </span>
   );
 }
@@ -740,6 +766,11 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
                     Opus 5.5 <span className="ui-landing-effort">High</span>
                   </ChipName>
                 </Chip>
+                <IconButton
+                  icon={<ProgressRing share={0.38} tone={PROGRESS_RING_TONE.MUTED} />}
+                  label="Context usage"
+                  onClick={still}
+                />
                 <IconButton icon={<MicrophoneIcon />} label="Dictate" onClick={still} />
               </>
             }
@@ -750,98 +781,108 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
   );
 }
 
-/** The side panel at `step`: the plan's tab, with its sub-tasks and agents. */
-function PlanPanel({ step }: { step: number }): React.JSX.Element {
+/** The task's Overview at `step`: its name and description over its sub-tasks and its agents. */
+function TaskOverview({ step }: { step: number }): React.JSX.Element {
   const tasks = subTasks(step);
   const done = tasks.filter((task) => task.status === TASK_STATUS.DONE).length;
   return (
-    <aside className="ui-landing-side">
-      <div className="ui-landing-side-bar">
-        <Tabs label="Panel" ground={TABS_GROUND.FRAME}>
-          <Tab
-            icon={<TaskStatusMark status={TASK_STATUS.IN_PROGRESS} />}
-            label="Teammate invitations"
-            selected
-            onSelect={still}
-          />
-          <Tab icon={<InboxIcon />} label="Inbox" selected={false} onSelect={still} />
-        </Tabs>
-      </div>
-      <div className="ui-landing-side-sheet">
+    <section className="ui-landing-overview" aria-label="Overview">
+      <div className="ui-landing-overview-page">
+        <Text as={TEXT_ELEMENT.H2} variant={TEXT_VARIANT.TITLE}>
+          {TASK_NAME}
+        </Text>
+        <Text tone={TEXT_TONE.MUTED}>
+          Let an admin invite a teammate by email, and let them accept from a link that signs them
+          into the workspace.
+        </Text>
         <GroupHeader
           heading={GROUP_HEADING.NONE}
-          glyph={<GLYPH.SUB_TASK />}
+          look={GROUP_LOOK.SECTION}
           label="Sub-tasks"
           mark={
             <ProgressCount
               done={done}
               total={tasks.length}
-              label="sub-tasks done"
+              label={`${done} of ${tasks.length} sub-tasks finished`}
               look={PROGRESS_COUNT_LOOK.BADGE}
             />
           }
-        />
-        <List label="Sub-tasks" density={LIST_DENSITY.DENSE}>
-          {tasks.map((task) => (
-            <ListRow
-              key={task.id}
-              motionKey={task.id}
-              density={LIST_DENSITY.DENSE}
-              leading={<TaskStatusMark status={task.status} />}
-              title={task.name}
-              meta={task.key}
-              onPress={still}
-            />
-          ))}
-        </List>
+          actions={<IconButton icon={<PlusIcon />} label="New sub-task" onClick={still} />}
+        >
+          <List label="Sub-tasks">
+            {tasks.map((task) => (
+              <ListRow
+                key={task.id}
+                motionKey={task.id}
+                leading={<TaskStatusMark status={task.status} />}
+                title={task.name}
+                onPress={still}
+              />
+            ))}
+          </List>
+        </GroupHeader>
         <GroupHeader
           heading={GROUP_HEADING.NONE}
-          glyph={<GLYPH.AGENT />}
+          look={GROUP_LOOK.SECTION}
           label="Agents"
-          count={{ value: step >= 1 ? 2 : 1, noun: "agents" }}
-        />
-        <List label="Agents" density={LIST_DENSITY.DENSE}>
-          <ListRow
-            density={LIST_DENSITY.DENSE}
-            leading={<WorkingMark />}
-            title={INVITE_EMAILS}
-            meta="Opus 5.5"
-            onPress={still}
-          />
-          {step >= 1 ? (
+          actions={<IconButton icon={<PlusIcon />} label="New agent" onClick={still} />}
+        >
+          <List label="Agents">
             <ListRow
-              density={LIST_DENSITY.DENSE}
-              leading={step >= 4 ? agentFace(ACCEPT_PAGE, AVATAR_SIZE.ROW) : <WorkingMark />}
+              leading={<WorkingMark />}
+              title={INVITE_EMAILS}
+              meta="Opus 5.5"
+              onPress={still}
+            />
+            <ListRow
+              leading={agentFace(ACCEPT_PAGE, AVATAR_SIZE.ROW)}
               title={ACCEPT_PAGE}
               meta="Sonnet 5.5"
               onPress={still}
             />
-          ) : null}
-        </List>
+          </List>
+        </GroupHeader>
       </div>
-    </aside>
+    </section>
   );
 }
 
-/** The task's page at `step`: its tabs, the agent's log over its foot, and the plan beside it. */
+/** The task's own bar across its page: its status and name, which open its Overview in place of its agents. */
+function TaskTopbar({ overview }: { overview: boolean }): React.JSX.Element {
+  const mark = <TaskStatusMark status={TASK_STATUS.IN_PROGRESS} />;
+  return (
+    <Toolbar
+      start={TOOLBAR_INSET.COLUMN}
+      title={TASK_NAME}
+      titlePress={{ open: overview, label: "Overview", icon: mark, onPress: still }}
+    />
+  );
+}
+
+/** The task's page at `step`: its bar over the agents' tabs and the log, then, pressed, its Overview. */
 function TaskPage({ step }: { step: number }): React.JSX.Element {
+  const overview = step >= OVERVIEW_FROM;
   return (
     <div className="ui-landing-app">
       <DesktopSidebar place={DESKTOP_PLACE.TASK} openTask="invites" />
       <div className="ui-landing-main ui-landing-task">
-        <section className="ui-landing-agent-log">
-          <Toolbar
-            start={TOOLBAR_INSET.COLUMN}
-            look={TOOLBAR_LOOK.TABS}
-            title={<TaskTabs step={step} />}
-            actions={<MoreButton thing="agent" onClick={still} />}
-          />
-          <div className="ui-landing-sheet-start ui-landing-log-sheet">
-            <AgentLog step={step} />
-            <AgentFoot step={step} />
-          </div>
-        </section>
-        <PlanPanel step={step} />
+        <TaskTopbar overview={overview} />
+        {overview ? (
+          <TaskOverview step={step} />
+        ) : (
+          <section className="ui-landing-agent-log">
+            <Toolbar
+              start={TOOLBAR_INSET.COLUMN}
+              look={TOOLBAR_LOOK.TABS}
+              title={<TaskTabs step={step} />}
+              actions={<IconButton icon={<HistoryIcon />} label="History" onClick={still} />}
+            />
+            <div className="ui-landing-sheet-start ui-landing-log-sheet">
+              <AgentLog step={step} />
+              <AgentFoot step={step} />
+            </div>
+          </section>
+        )}
       </div>
       <SidePanelToggle />
     </div>
@@ -853,7 +894,7 @@ function AgentsScene(): React.JSX.Element {
   const step = useWindowStory(ref, STORY.AGENTS, BEAT.AGENTS);
   return (
     <div ref={ref} className="ui-landing-scene">
-      <DesktopWindow label="A task's agent starting another agent, and the two trading messages">
+      <DesktopWindow label="A task's agent starting another agent and the two trading messages, then the task's Overview of its sub-tasks and agents">
         <TaskPage step={step} />
       </DesktopWindow>
     </div>
@@ -917,6 +958,7 @@ function AutomationBar(): React.JSX.Element {
             </Button>
             <Switch checked label="Turn off Nightly flaky-test sweep" onChange={still} />
             <MoreButton thing="Automation" onClick={still} />
+            <IconButton icon={<SidePanelIcon />} label="Hide runs" onClick={still} />
           </>
         }
       />
@@ -1026,7 +1068,6 @@ function AutomationPage({ step }: { step: number }): React.JSX.Element {
         <IconButton icon={<SidebarIcon />} label="Show sidebar" onClick={still} />
         <IconButton icon={<ComposeIcon />} label="New task" onClick={still} />
       </span>
-      <SidePanelToggle />
     </div>
   );
 }
@@ -1051,7 +1092,13 @@ function PhoneInbox(): React.JSX.Element {
         look={TOOLBAR_LOOK.PHONE}
         start={TOOLBAR_INSET.COLUMN}
         end={TOOLBAR_INSET.COLUMN}
-        lead={<IconButton icon={<ComposeIcon />} label="New task" onClick={still} />}
+        lead={
+          <IconButton
+            icon={<MemberFace size={AVATAR_SIZE.ACCOUNT} />}
+            label="Account"
+            onClick={still}
+          />
+        }
         title={
           <Text as={TEXT_ELEMENT.H1} variant={TEXT_VARIANT.TOOLBAR_TITLE}>
             Inbox
@@ -1109,33 +1156,94 @@ function DevicesScene(): React.JSX.Element {
   );
 }
 
-/** A harness's row in Settings › Agents: its mark, its name, the credential it connects with, and the step of the story it connects at. */
-type KeyRow = {
+/** A credential under a harness in Settings › Agents: its provider's mark, its name, and its usage windows, or none for a key, which says Ready. */
+type KeyCredential = {
+  readonly id: string;
+  readonly name: string;
+  readonly mark: MarkProvider;
+  readonly usage?: readonly UsageMeterRow[];
+};
+
+/** A harness's card in Settings › Agents: its mark and name over its credentials, which connect at `at`. */
+type KeyHarness = {
   readonly id: string;
   readonly name: string;
   readonly mark: ReactNode;
-  readonly connected: string;
+  readonly credentials: readonly KeyCredential[];
   readonly at: number;
 };
 
-const KEY_ROWS: readonly KeyRow[] = [
-  {
-    id: "claude",
-    name: "Claude",
-    mark: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
-    connected: "Claude plan",
-    at: 0,
-  },
-  {
-    id: "codex",
-    name: "Codex",
-    mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
-    connected: "OpenAI API key",
-    at: 2,
-  },
+/** How much of its windows the Claude plan has used at each step, as the turns it runs use them. */
+const CLAUDE_USE = [
+  { session: 18, week: 41 },
+  { session: 26, week: 43 },
+  { session: 34, week: 44 },
+  { session: 42, week: 46 },
+  { session: 49, week: 47 },
+] as const;
+
+/** The two harnesses at `step`: Claude's plan using its windows, and Codex's API key arriving on the second step. */
+function keyHarnesses(step: number): readonly KeyHarness[] {
+  const use = CLAUDE_USE[step % CLAUDE_USE.length] ?? CLAUDE_USE[0];
+  return [
+    {
+      id: "claude",
+      name: "Claude",
+      mark: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
+      at: 0,
+      credentials: [
+        {
+          id: "claude-plan",
+          name: "Claude plan",
+          mark: MARK_PROVIDER.CLAUDE,
+          usage: [
+            { label: "5-hour", usedPercent: use.session },
+            { label: "Weekly", usedPercent: use.week },
+          ],
+        },
+      ],
+    },
+    {
+      id: "codex",
+      name: "Codex",
+      // Note that Codex is marked by ChatGPT's mark, because its own picture is a file the app serves and the landing does not.
+      mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
+      at: 2,
+      credentials: [{ id: "codex-key", name: "API key", mark: MARK_PROVIDER.CHATGPT }],
+    },
+  ];
+}
+
+/** Every meter on the page, which each plan's meters line up with as one table. */
+const KEY_METERS: readonly UsageMeterRow[] = [
+  { label: "5-hour", usedPercent: 100 },
+  { label: "Weekly", usedPercent: 100 },
 ];
 
+/** One credential's row: its mark, its name, its meters or Ready, and its ⋯. */
+function KeyCredentialRow({ credential }: { credential: KeyCredential }): React.JSX.Element {
+  return (
+    <SettingsRow
+      leading={<ProviderMark provider={credential.mark} size={PROVIDER_MARK_SIZE.ROW} />}
+      label={credential.name}
+      description={
+        credential.usage === undefined ? (
+          <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>Ready</SettingsRowStateLine>
+        ) : (
+          <SettingsRowUsage rows={credential.usage} alignWith={KEY_METERS} />
+        )
+      }
+      controls={SETTINGS_ROW_CONTROLS.BESIDE}
+      end={() => <MoreButton thing={credential.name} onClick={still} />}
+    />
+  );
+}
+
 /**
+ * Settings › Agents as the app draws it: a card for each harness, its mark,
+ * its name, and Add over the plans and keys it runs on. Claude's plan uses
+ * its windows as the story runs, and Codex's API key arrives.
+ *
  * Note that the section stands in no device, so it is made a picture here as
  * a device makes its screen one: a reader is told what it shows, and its rows
  * are inert, since none of them is ever pressed.
@@ -1148,35 +1256,37 @@ function KeysScene(): React.JSX.Element {
       ref={ref}
       className="ui-landing-scene ui-landing-keys"
       role="img"
-      aria-label="Settings › Agents: Claude connected on its Claude plan, and Codex connecting with an OpenAI API key"
+      aria-label="Settings › Agents: Claude on its Claude plan, its usage meters filling, and Codex on an OpenAI API key"
       {...DESKTOP_SURFACE}
     >
-      <div inert>
-        <SettingsSection title="Agents">
-          {KEY_ROWS.map((row) => {
-            const connected = step >= row.at;
-            return (
+      <div className="ui-landing-keys-cards" inert>
+        {keyHarnesses(step).map((harness) => {
+          const credentials = step >= harness.at ? harness.credentials : [];
+          return (
+            <SettingsSection key={harness.id}>
               <SettingsRow
-                key={row.id}
-                leading={<SettingsRowMark>{row.mark}</SettingsRowMark>}
-                label={row.name}
-                description={
-                  <SettingsRowStateLine
-                    state={connected ? SETTINGS_ROW_STATE.CONNECTED : SETTINGS_ROW_STATE.PLAIN}
-                  >
-                    {connected ? row.connected : "Not connected"}
-                  </SettingsRowStateLine>
-                }
+                leading={<SettingsRowMark>{harness.mark}</SettingsRowMark>}
+                label={harness.name}
+                controls={SETTINGS_ROW_CONTROLS.BESIDE}
               >
                 {() => (
                   <Button variant={BUTTON_VARIANT.OUTLINE} onClick={still}>
-                    {connected ? "Manage" : "Connect"}
+                    Add
                   </Button>
                 )}
               </SettingsRow>
-            );
-          })}
-        </SettingsSection>
+              {credentials.length === 0 ? null : (
+                <SettingsOrderedRows
+                  label={harness.name}
+                  rows={credentials.map((credential) => ({
+                    key: credential.id,
+                    row: <KeyCredentialRow credential={credential} />,
+                  }))}
+                />
+              )}
+            </SettingsSection>
+          );
+        })}
       </div>
     </div>
   );

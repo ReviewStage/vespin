@@ -712,8 +712,19 @@
     padding: 51px 12px 12px;
   }
 
+  /* The workspace's switcher, New task at its end, as the panel's row
+     stands (`sidebar-workspace`). */
   .ui-landing-workspace {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-control-gap);
     padding-bottom: var(--ui-block-gap);
+  }
+
+  .ui-landing-workspace > :first-child {
+    flex: 1;
+    min-width: 0;
   }
 
   .ui-landing-workspace-ref {
@@ -762,8 +773,7 @@
   .ui-landing-inbox-list,
   .ui-landing-inbox-thread,
   .ui-landing-agent-log,
-  .ui-landing-automation,
-  .ui-landing-side {
+  .ui-landing-automation {
     position: relative;
     display: grid;
     grid-template-rows: 50px minmax(0, 1fr);
@@ -776,17 +786,18 @@
     grid-template-columns: 320px minmax(0, 1fr);
   }
 
+  /* A task's page: its own bar across it, over the agents' column or, its
+     name pressed, its Overview. */
   .ui-landing-task {
-    grid-template-columns: minmax(0, 1fr) 400px;
-    gap: 8px;
+    grid-template-rows: 50px minmax(0, 1fr);
   }
 
-  /* The sheet the columns' content stands on, under their bars; the side
-     panel's is the well. */
+  /* The sheet the columns' content stands on, under their bars; the
+     Overview's, under the task's bar, is the whole of its row. */
   .ui-landing-inbox::before,
   .ui-landing-agent-log::before,
   .ui-landing-automation::before,
-  .ui-landing-side::before {
+  .ui-landing-overview::before {
     content: "";
     position: absolute;
     inset: 50px 0 0;
@@ -797,8 +808,26 @@
       0 1px 2px var(--ui-color-shadow-soft);
   }
 
-  .ui-landing-side::before {
-    background: var(--ui-color-well);
+  .ui-landing-overview {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .ui-landing-overview::before {
+    inset: 0;
+  }
+
+  /* The Overview's page: the task's name and description over its
+     sub-tasks and its agents, at a reading width. */
+  .ui-landing-overview-page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-section-gap);
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 40px var(--ui-space-24);
   }
 
   .ui-landing-sheet-start,
@@ -808,6 +837,13 @@
     overflow: hidden;
   }
 
+  /* The thread's pane is a column, so the empty state fills it and stands
+     a little above its middle, as the window's Inbox draws it. */
+  .ui-landing-inbox-thread > .ui-landing-sheet-end {
+    display: flex;
+    flex-direction: column;
+  }
+
   .ui-landing-inbox-list > .ui-landing-sheet-start {
     border-right: 1px solid var(--ui-color-border);
   }
@@ -815,6 +851,21 @@
   .ui-landing-search {
     display: block;
     padding: 8px var(--ui-space-12) var(--ui-row-inset);
+  }
+
+  /* The Inbox's head over its list: the search, then Mark all as read and
+     View options at its end, as the window's Inbox stands
+     (`inbox-head-row`). */
+  .ui-landing-inbox-head {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-control-gap);
+    padding: 8px var(--ui-space-12) var(--ui-row-inset);
+  }
+
+  .ui-landing-inbox-search {
+    flex: 1;
+    min-width: 0;
   }
 
   .ui-landing-rows {
@@ -839,16 +890,6 @@
   .ui-landing-line-glyph > svg {
     width: 12px;
     height: 12px;
-  }
-
-  .ui-landing-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--ui-control-gap);
-    height: 100%;
-    color: var(--ui-color-text-muted);
   }
 
   /* The thread: its subject over the comments, a line joining their faces,
@@ -919,8 +960,8 @@
     color: var(--ui-color-text-muted);
   }
 
-  /* A task's page: its tabs on the frame, the agent's log over its foot,
-     and the side panel's plan on the well beside it. */
+  /* A task's agents: their tabs on the frame, the agent's log over its
+     foot. */
   .ui-landing-tabs {
     display: flex;
     align-items: center;
@@ -1004,22 +1045,6 @@
 
   .ui-landing-effort {
     color: var(--ui-color-text-muted);
-  }
-
-  .ui-landing-side-bar {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .ui-landing-side-sheet {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: var(--ui-control-gap);
-    min-height: 0;
-    overflow: hidden;
-    padding: var(--ui-section-gap) var(--ui-space-12);
   }
 
   /* An automation's page, its sidebar folded: its toolbar on the frame
@@ -1135,6 +1160,12 @@
     max-width: 520px;
     margin: 0 auto;
     background: transparent;
+  }
+
+  /* Settings › Agents' cards, one per harness, a card's gap apart. */
+  .ui-landing-keys-cards {
+    display: grid;
+    gap: var(--ui-space-16);
   }
 
   /* Under the Pinned line (`docs/DESIGN.md`), the room beside the words is
@@ -1295,7 +1326,7 @@
        and its answer, the next one rising from the foot. */
     .ui-landing-stage[data-scene="agents"] {
       --ui-landing-crop-x: 268;
-      --ui-landing-crop-y: 0;
+      --ui-landing-crop-y: 50;
       --ui-landing-crop-w: 420;
       --ui-landing-crop-h: 345;
     }
