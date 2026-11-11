@@ -135,26 +135,21 @@ export function useAgentMedia(
   return sources;
 }
 
-/** Where a page stands: the task it was shown on, or the agent on no task that showed it. */
-export type PagePlace = { readonly taskId: string } | { readonly agentId: string };
-
 /** How a page's read stands: on its way, read with its HTML, or not answered. */
 export type PageRead =
   | { readonly reading: true }
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
-/** One version of a page the agent showed, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac. */
-export function usePageHtml(place: PagePlace, pageId: string, version: number): PageRead {
+/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known. */
+export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageRead {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
-  const taskId = "taskId" in place ? place.taskId : undefined;
-  const agentId = "agentId" in place ? place.agentId : undefined;
   useEffect(() => {
     let current = true;
     setRead({ reading: true });
-    const where = taskId === undefined ? { agentId: agentId ?? "" } : { taskId };
-    acts[ACT_KIND.TASKS_PAGE_HTML]({ ...where, pageId, version }).then(
+    if (taskId === undefined) return;
+    acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, version }).then(
       (answer) => {
         if (!current) return;
         setRead(
@@ -171,6 +166,6 @@ export function usePageHtml(place: PagePlace, pageId: string, version: number): 
     return () => {
       current = false;
     };
-  }, [acts, taskId, agentId, pageId, version]);
+  }, [acts, taskId, pageId, version]);
   return read;
 }
