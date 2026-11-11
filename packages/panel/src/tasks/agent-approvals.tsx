@@ -19,8 +19,10 @@ import {
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
 import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { providerOf } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
+import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   PERMISSION_MODE_HINT,
   PERMISSION_MODE_LABEL,
@@ -46,6 +48,7 @@ import {
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { useQuery } from "@tanstack/react-query";
 import {
   createContext,
   type ReactNode,
@@ -58,6 +61,7 @@ import {
 import type { AgentActAnswer, Unreached } from "../act.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
+import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
 
@@ -78,7 +82,13 @@ import type { HeldCall } from "./transcript-blocks.js";
  * started with. Off Full access the model chip wears the mode's glyph
  * before the model's name, so a mode that asks is seen at rest. The host
  * draws a change on the agent's row at once and takes it back where the
- * service refused it, which the composer says under its bar. Claude Code
+ * service refused it, which the composer says under its bar. A new
+ * agent's menu offers the same row before it starts, on New task's box and
+ * a draft agent's, a fork's and a continue's among them
+ * (`useNewAgentPermissionMode`): it opens on the member's Default
+ * permissions, a pick goes with the Start, so the first launch already runs
+ * on it, and it writes no setting, as the Codex app's chip sets the mode of
+ * the thread it starts; its submenu says nothing of a next turn. Claude Code
  * and Codex agents each ask in their own harness's terms, which these words
  * and hints, Codex's own, fit both; an agent on neither asks nothing, so no
  * other is offered a mode.
@@ -157,11 +167,13 @@ function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMod
   return agent.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS;
 }
 
-/** The mode chip's control: the mode it shows, a change, and why the last did not take. */
+/** The mode chip's control: the mode it shows, a change, when a change reaches the agent, and why the last did not take. */
 export interface AgentModeControl {
   readonly mode: AgentPermissionMode;
-  /** Changes the agent's mode from its next turn. */
+  /** Changes the agent's mode: from its next turn for a running agent, from its first for a new one. */
   readonly choose: (mode: AgentPermissionMode) => void;
+  /** When a change reaches the agent, said under the Permissions submenu: from its next turn for a running agent; nothing for a new one, whose first launch runs on it. */
+  readonly applies: string | undefined;
   /** Why the last change did not take, said under the composer's bar; nothing while none failed. */
   readonly note: string | undefined;
 }
@@ -206,7 +218,38 @@ export function useAgentPermissionMode(input: {
   return {
     mode: modeOf(agent),
     choose,
+    applies: MODE_APPLIES,
     note: note?.agentId === agent.id ? note.words : undefined,
+  };
+}
+
+/** The member's Default permissions, which a new agent starts on where its menu picks none: full access until the settings are read, as the service's own default is. */
+const selectDefaultMode = (state: AppStateSnapshot): AgentPermissionMode =>
+  selectAppSettingsView(state)?.agentPermissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS;
+
+/**
+ * The Permissions row of a new agent's menu: the mode picked on it, else
+ * the member's Default permissions, for a model whose harness takes a mode,
+ * a Claude model's Claude Code or a GPT model's Codex; none before a model
+ * is chosen, or for one on neither. Note that a pick is the new agent's
+ * alone, sent with its Start, and writes no setting.
+ */
+export function useNewAgentPermissionMode(input: {
+  /** The catalog id of the model the agent would start on; none before one is chosen. */
+  model: string | undefined;
+  /** The mode picked on the row; none while the agent would start on the member's default. */
+  picked: AgentPermissionMode | undefined;
+  choose: (mode: AgentPermissionMode) => void;
+}): AgentModeControl | undefined {
+  const fallback =
+    useQuery({ ...appStateQuery, select: selectDefaultMode }).data ??
+    AGENT_PERMISSION_MODE.FULL_ACCESS;
+  if (input.model === undefined || providerOf(input.model) === undefined) return undefined;
+  return {
+    mode: input.picked ?? fallback,
+    choose: input.choose,
+    applies: undefined,
+    note: undefined,
   };
 }
 

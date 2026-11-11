@@ -9,6 +9,7 @@
  */
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { localAgentRefusalWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
@@ -94,7 +95,9 @@ const NO_WORKSPACES: readonly Workspace[] = [];
  * same again (`new-task-composer.tsx`), its prompt, the files attached,
  * the model picked on its chip, none where the chip was left on the
  * account's default, so the service runs the default it holds at the start,
- * and the MCP servers its + menu switched off, none by default.
+ * the MCP servers its + menu switched off, none by default, and the mode its
+ * Permissions row picked, none where left on the member's Default
+ * permissions, which the service reads at the start as it does the model's.
  */
 export interface NewTaskAgent {
   readonly idempotencyKey: string;
@@ -102,11 +105,13 @@ export interface NewTaskAgent {
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
   readonly disabledServers: readonly string[];
+  /** The mode the agent starts in, as the chip's Permissions row picked it; none for the member's Default permissions. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
   /** The repositories the agent works in beside the task's, `owner/name`, which the card's repository chip picks after the task's own; none where left out. */
   readonly alsoRepositories?: readonly string[] | undefined;
 }
 
-/** The agent a task's start starts on it, as the act carries it: the card's key, the prompt, the files where any, the chip's model where one was picked, the servers switched off where any, and the repositories beside the task's where any. */
+/** The agent a task's start starts on it, as the act carries it: the card's key, the prompt, the files where any, the chip's model where one was picked, the servers switched off where any, the mode where one was picked, and the repositories beside the task's where any. */
 function agentRequest(handed: NewTaskAgent) {
   const also = handed.alsoRepositories ?? [];
   return {
@@ -117,6 +122,9 @@ function agentRequest(handed: NewTaskAgent) {
     ...(handed.disabledServers.length === 0
       ? undefined
       : { disabledServers: handed.disabledServers }),
+    ...(handed.permissionMode === undefined
+      ? undefined
+      : { permissionMode: handed.permissionMode }),
     ...(also.length === 0
       ? undefined
       : { alsoRepositories: also.map((repository) => ({ repository })) }),

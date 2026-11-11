@@ -41,7 +41,8 @@ import { RUNNER_ANSWER, type RunnerAnswer } from "./coder-host/runtime-sessions.
  * reaches it from its next turn; an answer is written to the agent's runner
  * and settles its ask, by a member who controls the agent alone; and an ask
  * that no longer waits is refused with how it stands, writing nothing. A
- * new Claude Code agent starts on its starter's Default permissions.
+ * new Claude Code agent starts on the mode its Start names, else on its
+ * starter's Default permissions.
  * Synthetic accounts, agents, and calls throughout; the store is PGlite.
  */
 
@@ -127,21 +128,30 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
   );
 
   it.effect(
-    "a member's Default permissions is the mode their new Claude Code agent starts on",
+    "a new Claude Code agent starts on the mode its Start names, else on its member's Default permissions",
     () =>
       Effect.gen(function* () {
         const opened = yield* openTask({ agentSessions: fakeAgentSessions() });
-        const start = () =>
-          opened.ask(startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID() }));
+        const start = (body: { readonly permissionMode?: string } = {}) =>
+          opened.ask(
+            startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID(), ...body }),
+          );
         const before = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
         yield* writeAccountPreferences(opened.owner, {
           agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
         });
         const after = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
+        const named = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* start({ permissionMode: AGENT_PERMISSION_MODE.AUTO }),
+        );
 
         // Full access is the default, and is said by saying nothing.
         assert.equal(before.agent.permissionMode, undefined);
         assert.equal(after.agent.permissionMode, AGENT_PERMISSION_MODE.ASK);
+        // A mode the Start names wins over the default, which it leaves as it was.
+        assert.equal(named.agent.permissionMode, AGENT_PERMISSION_MODE.AUTO);
       }),
   );
 

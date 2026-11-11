@@ -8,7 +8,8 @@
  * `launchFingerprint`). Claude Code and Codex each ask in their own terms
  * (`@repo/agent-runner`'s `PERMISSION_MODE`); an agent on neither has no
  * runner to ask, so a mode that asks is refused for it. A new agent starts
- * on its starter's Default permissions where its harness takes that mode
+ * on the mode its Start names, as a new-agent menu picked it, else on its
+ * starter's Default permissions, where its harness takes that mode
  * (`startingPermissionMode`).
  */
 
@@ -46,9 +47,10 @@ export function launchPermissionMode(
 }
 
 /**
- * The mode a new agent starts on: its starter's default where its harness
- * takes that mode, full access otherwise, and on an automation's agent,
- * whose turns no member watches to answer an ask.
+ * The mode a new agent starts on: the one its Start names, else its
+ * starter's default, where its harness takes that mode; full access
+ * otherwise, and on an automation's agent, whose turns no member watches
+ * to answer an ask.
  */
 export function startingPermissionMode(
   runtime: ConversationRuntime,
