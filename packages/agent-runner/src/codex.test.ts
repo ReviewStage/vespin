@@ -1358,23 +1358,20 @@ it.effect(
 );
 
 /** The sleep turn's command, as app-server asks to run it outside the sandbox. */
-const COMMAND_ASK_PARAMS = {
-  kind: "command",
-  threadId: THREAD,
-  turnId: "00000000-0000-4000-8000-000000000006",
-  itemId: "call_9_0",
-  startedAtMs: 1792520831000,
-  environmentId: null,
-  reason: "Install the dependencies over the network",
-  command: "/bin/bash -lc 'sleep 600'",
-  cwd: "/srv/agent-probe-repo",
-  proposedExecpolicyAmendment: ["sleep"],
-};
-
 const COMMAND_ASK: RecordedMessage = {
   id: 41,
   method: "item/commandExecution/requestApproval",
-  params: COMMAND_ASK_PARAMS,
+  params: {
+    kind: "command",
+    threadId: THREAD,
+    turnId: "00000000-0000-4000-8000-000000000006",
+    itemId: "call_9_0",
+    startedAtMs: 1792520831000,
+    environmentId: null,
+    reason: "Install the dependencies over the network",
+    command: "/bin/bash -lc 'sleep 600'",
+    cwd: "/srv/agent-probe-repo",
+  },
 };
 
 /** An MCP server's form, which app-server hands the client under approval `on-request`. */
@@ -1430,8 +1427,6 @@ it.effect(
       assert.equal(asked.toolName, "commandExecution");
       assert.equal(asked.description, "Install the dependencies over the network");
       assert.equal(asked.input.command, "/bin/bash -lc 'sleep 600'");
-      // Codex's proposed amendment is the prefix Always allow keeps past the launch, never handed back as one.
-      assert.deepEqual(asked.commandPrefix, ["sleep"]);
       yield* write({
         type: INPUT_LINE.APPROVAL,
         requestId: asked.requestId,
@@ -1472,45 +1467,6 @@ it.effect(
         excludeTmpdirEnvVar: false,
         excludeSlashTmp: false,
       });
-    }),
-);
-
-it.effect(
-  "accepts once, unasked, a command one of the starter's always-allowed commands starts, and asks of a compound one",
-  () =>
-    Effect.gen(function* () {
-      const compound: RecordedMessage = {
-        ...COMMAND_ASK,
-        id: 43,
-        params: { ...COMMAND_ASK_PARAMS, command: "/bin/bash -lc 'sleep 600 && rm -rf /'" },
-      };
-      const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
-      const { spawned, write, run } = yield* launch(
-        [sleepTurnAsking(COMMAND_ASK, compound)],
-        service,
-      );
-      yield* write({
-        ...CONFIG,
-        permissionMode: PERMISSION_MODE.ASK,
-        allowedCommands: [["sleep"]],
-      });
-      yield* write(message("Run sleep 600.", LINE.FIRST));
-      yield* service.seen;
-      const [process] = spawned;
-      assert.ok(process !== undefined);
-      assert.deepEqual(yield* Queue.take(process.answers), {
-        id: 41,
-        result: { decision: "accept" },
-      });
-      yield* write({ type: INPUT_LINE.STOP });
-
-      assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
-      assert.deepEqual(
-        posted(service, RUNNER_EVENT.APPROVAL_REQUESTED).map((each) =>
-          each.type === RUNNER_EVENT.APPROVAL_REQUESTED ? each.input.command : undefined,
-        ),
-        ["/bin/bash -lc 'sleep 600 && rm -rf /'"],
-      );
     }),
 );
 

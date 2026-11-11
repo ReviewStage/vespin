@@ -103,13 +103,7 @@
  * allow its `acceptForSession`, which keeps the rule in the session rather
  * than writing one into `CODEX_HOME`, Deny or a message sent meanwhile its
  * `decline`, and a launch's end its `cancel`; app-server settling an ask
- * itself (`serverRequest/resolved`) withdraws it. A command ask carries
- * the prefix Codex proposed as its exec-policy amendment, which the member's
- * Always allow keeps on their list past the launch; and a command one of the
- * launch's always-allowed commands covers is accepted once, unposted
- * (`codex-command-match.ts`), never as an amendment, which Codex would write
- * into `CODEX_HOME`, nor as a rule, which would run it outside the sandbox.
- * Under Approve for me
+ * itself (`serverRequest/resolved`) withdraws it. Under Approve for me
  * Codex's automatic review answers them in the member's place, and a
  * command it denies or could not review says why at the end of its output
  * (`reviewNotes`). An MCP server's elicitation, which Codex declines itself
@@ -146,7 +140,6 @@ import {
   settleAsk,
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
-import { commandAllowed, proposedPrefix } from "./codex-command-match.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import type {
   ApprovalsReviewer,
@@ -852,9 +845,6 @@ const ApprovalAskSchema = Schema.Struct({
   command: Schema.optionalKey(Schema.NullOr(Schema.String)),
   cwd: Schema.optionalKey(Schema.NullOr(Schema.String)),
   grantRoot: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  kind: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  networkApprovalContext: Schema.optionalKey(Schema.Unknown),
-  proposedExecpolicyAmendment: Schema.optionalKey(Schema.Unknown),
 });
 const decodeApprovalAsk = Schema.decodeUnknownOption(ApprovalAskSchema);
 const decodeResolved = Schema.decodeUnknownOption(
@@ -892,19 +882,11 @@ function codexDecisionOf(
   }
 }
 
-/** The command approvals a listed command may settle: a command Codex runs, as an older app-server names every one by naming none. */
-const COMMAND_KIND: ReadonlySet<string | null | undefined> = new Set(["command", null, undefined]);
-
 /**
  * One approval request, posted as the ask on the item that made it and held
  * for the member's answer, under an id of the runner's own, since
  * app-server's restart with each launch; `asked` keeps which ask each of
- * app-server's ids stands for until it settles. A command one of the
- * launch's always-allowed commands covers (`codex-command-match.ts`) is
- * accepted once, unposted, and never as an exec-policy amendment, which
- * Codex would write into its home; a network approval or input to a running
- * command is always the member's. A command ask carries the prefix Codex
- * proposed as its amendment, which the member's Always allow keeps.
+ * app-server's ids stands for until it settles.
  */
 function servedAsk(
   seen: ThreadSeen,
@@ -917,18 +899,7 @@ function servedAsk(
       new AppServerRequestFailed({ detail: "the approval request is unreadable" }),
     );
   }
-  const { itemId, reason, command, cwd, grantRoot, kind, networkApprovalContext } = params.value;
-  const commandAsk =
-    request.method === METHOD.COMMAND_APPROVAL &&
-    COMMAND_KIND.has(kind) &&
-    (networkApprovalContext === undefined || networkApprovalContext === null);
-  const allowed = seen.context.config.allowedCommands ?? [];
-  if (commandAsk && typeof command === "string" && commandAllowed(command, allowed)) {
-    return Effect.succeed({ decision: "accept" });
-  }
-  const commandPrefix = commandAsk
-    ? proposedPrefix(params.value.proposedExecpolicyAmendment)
-    : undefined;
+  const { itemId, reason, command, cwd, grantRoot } = params.value;
   const { toolName, title } = APPROVAL_ASK[request.method];
   const requestId = randomUUID();
   const input = Object.fromEntries(
@@ -942,7 +913,6 @@ function servedAsk(
     title,
     ...(typeof reason === "string" && reason !== "" ? { description: reason } : undefined),
     input: cutInput(input),
-    ...(commandPrefix === undefined ? undefined : { commandPrefix }),
   };
   const key = String(request.id);
   return Effect.sync(() => asked.set(key, requestId)).pipe(

@@ -3,12 +3,12 @@
  *
  * A prefix is the command's leading arguments as tokens (`["pnpm","test"]`,
  * shown as `pnpm test *`), which the harness itself proposes as an ask's
- * rule (Claude Code's Bash suggestion, Codex's exec-policy amendment) or a
+ * rule (Claude Code's Bash suggestion) or a
  * member types in Settings. Each token is one argument with nothing a shell
  * reads as more than a word: no whitespace, quote, escape, glob, operator,
  * redirection, substitution, or comment, so a prefix can only name the
  * start of one simple command and is written into a harness's rule
- * (`Bash(pnpm test *)`, a Codex `prefix_rule`) as it stands. A prefix that
+ * (`Bash(pnpm test *)`) as it stands. A prefix that
  * breaks the rule is not kept, and its ask's Always allow stays the
  * session's alone.
  */
