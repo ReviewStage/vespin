@@ -61,7 +61,7 @@ import {
 import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { MODEL_PROVIDER, type ModelsAnswer } from "@repo/features/models-wire";
+import { MODEL_PROVIDER, type ModelChoice, type ModelsAnswer } from "@repo/features/models-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
@@ -1182,19 +1182,19 @@ const MODELS: ModelsAnswer = {
   models: [
     {
       id: MODEL,
-      name: "Anthropic Claude Opus 5.5",
+      name: "Claude Opus 5.5",
       provider: MODEL_PROVIDER.ANTHROPIC,
       efforts: ["low", "medium", "high", "xhigh", "max"],
     },
     {
       id: "anthropic/claude-sonnet-5.5",
-      name: "Anthropic Claude Sonnet 5.5",
+      name: "Claude Sonnet 5.5",
       provider: MODEL_PROVIDER.ANTHROPIC,
       efforts: ["low", "medium", "high"],
     },
     {
       id: "openai/gpt-6.1-sol",
-      name: "OpenAI GPT-6.1 Sol",
+      name: "GPT-6.1 Sol",
       provider: MODEL_PROVIDER.OPENAI,
       efforts: ["low", "medium", "high", "xhigh"],
     },
@@ -1288,6 +1288,37 @@ export function inboxRemindersAppState(
   };
 }
 
+/** The models and efforts a fixture run chose for its agents, by agent. */
+export type AgentChoices = ReadonlyMap<string, ModelChoice>;
+
+/** Whether the agent stands on the choice the run made for it, or the run made none. */
+function onChoice(
+  agent: NonNullable<TasksView["taskAgents"]>[number],
+  choices: AgentChoices,
+): boolean {
+  const choice = choices.get(agent.id);
+  return choice === undefined || (choice.model === agent.model && choice.effort === agent.effort);
+}
+
+/**
+ * The list with each agent the run chose a model for on that choice, as the
+ * host draws a change the moment it is asked; the list handed in where every
+ * agent already stands on its choice, so laying it again changes nothing.
+ */
+export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
+  const agents = list.taskAgents ?? [];
+  if (agents.every((agent) => onChoice(agent, choices))) return list;
+  return {
+    ...list,
+    taskAgents: agents.map((agent) => {
+      const choice = choices.get(agent.id);
+      return choice === undefined
+        ? agent
+        : { ...agent, model: choice.model, effort: choice.effort };
+    }),
+  };
+}
+
 /* ----- The act door ----- */
 
 /** One staged item by its id, in whichever task's inbox holds it. */
@@ -1376,6 +1407,12 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     const held = stagedAgent(agentId);
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
+  },
+  // Note that a change of model is taken as the service takes one, answered with the agent on it; the iOS run lays it over the list itself (`chosenTasksView`).
+  [ACT_KIND.AGENTS_CHOOSE]: ({ agentId, model, effort }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, model, effort } };
   },
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({

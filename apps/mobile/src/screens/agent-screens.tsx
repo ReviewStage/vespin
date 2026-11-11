@@ -1,4 +1,4 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, and a page it showed, opened whole.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, a page it showed, opened whole, and the sheet that changes its model and effort.
 
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
@@ -27,10 +27,13 @@ import {
   EmptyState,
   GlassDock,
   HeldCallBanner,
+  ListSection,
+  MenuPickRow,
   NO_TOGGLES,
   QueuedLines,
   Screen,
   SealedPage,
+  SettingsForm,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
   type TranscriptItem,
@@ -53,6 +56,7 @@ import {
 } from "../agents/use-agent.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
 import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
+import { useAgentModelPick } from "../agents/use-agent-model.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
@@ -69,6 +73,18 @@ const TRANSCRIPT_WORDS = {
   READING: "Reading the transcript",
   FAILED: "The transcript could not be read.",
   RETRY: "Try again",
+} as const;
+
+/** What the page's menu opens the model picker with. */
+const CHANGE_MODEL = "Change model";
+
+/** The model sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
+const MODEL_WORDS = {
+  TITLE: "Model",
+  MODEL: "Model",
+  EFFORT: "Effort",
+  DONE: "Done",
+  APPLIES: "Takes effect from the agent's next step.",
 } as const;
 
 /** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
@@ -191,7 +207,8 @@ function AgentComposerBar({
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
  * a menu that opens it on vespin.dev, over its transcript as one lazy list,
- * its head where the agent stands and the model it runs on. The transcript
+ * its head where the agent stands and the model it runs on, which opens
+ * the model sheet, as the menu's Change model does. The transcript
  * is held live while the page is in focus, so a turn under way draws as it
  * moves, and its older pages are read as the reader scrolls up to them; one
  * that could not be read offers Try again. Each call opens in place, and
@@ -251,6 +268,10 @@ export function AgentScreen() {
   const media = useAgentMedia(id, mediaIds);
   const title = cardTitle(agent?.title ?? transcript?.word?.title ?? UNTITLED_AGENT);
   const failed = held?.failed === true || transcript?.failure !== undefined;
+  const changeModel =
+    agent === undefined
+      ? undefined
+      : () => router.push({ pathname: "/agent-model", params: { agent: id } });
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
       pathname: "/tasks/agent/[id]/page",
@@ -269,6 +290,11 @@ export function AgentScreen() {
           <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
             {OPEN_ON_WEB}
           </Stack.Toolbar.MenuAction>
+          {changeModel === undefined ? null : (
+            <Stack.Toolbar.MenuAction icon="cpu" onPress={changeModel}>
+              {CHANGE_MODEL}
+            </Stack.Toolbar.MenuAction>
+          )}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
@@ -279,6 +305,7 @@ export function AgentScreen() {
             <AgentHead
               model={agent === undefined ? undefined : modelLabel(agent.model)}
               status={status}
+              onModel={changeModel}
             />
           }
           empty={{
@@ -350,6 +377,58 @@ export function AgentPageScreen() {
           />
         </Screen>
       )}
+    </>
+  );
+}
+
+/**
+ * The agent's model and effort, as the panel's chip changes them, in a
+ * sheet over its page: the models New agent offers that its harness runs,
+ * and the efforts the model lists, each pick sent at once and drawn on the
+ * agent as it is asked, a change taking effect from its next step; one the
+ * service refused reads back, and says why under the rows. Done closes it.
+ */
+export function AgentModelScreen({ agentId }: { readonly agentId: string }) {
+  const colors = useColors();
+  const router = useRouter();
+  const pick = useAgentModelPick(agentId);
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: MODEL_WORDS.TITLE,
+          headerTintColor: colors.ACCENT,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.SIDEBAR },
+        }}
+      />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button onPress={() => router.back()}>
+          {MODEL_WORDS.DONE}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
+      <Screen>
+        <SettingsForm>
+          <ListSection footer={pick.note ?? MODEL_WORDS.APPLIES}>
+            <MenuPickRow
+              label={MODEL_WORDS.MODEL}
+              options={pick.models}
+              picked={pick.model}
+              onPick={pick.pickModel}
+            />
+            {pick.efforts.length <= 1 ? null : (
+              <MenuPickRow
+                label={MODEL_WORDS.EFFORT}
+                options={pick.efforts}
+                picked={pick.effort}
+                onPick={pick.pickEffort}
+              />
+            )}
+          </ListSection>
+        </SettingsForm>
+      </Screen>
     </>
   );
 }

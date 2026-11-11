@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and over the composer, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, and its held call allowed; then an agent whose transcript stands empty.
+# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and over the composer, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, and its model changed from the page's menu; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -128,6 +128,29 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-allowed
+# The page's menu opens the model sheet, as the panel's chip opens its menu:
+# the model and effort the agent runs on, each a menu of what its harness
+# runs, Opus 5.5 to start; a pick is drawn on the agent at once, as the
+# fixture lays it, and takes effect from its next step.
+- tapOn: "More"
+- tapOn: "Change model"
+- assertVisible: "Takes effect from the agent's next step."
+- assertVisible: ".*Opus 5.5.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-model
+- tapOn: "Model.*"
+- assertVisible: ".*Sonnet 5.5"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-model-menu
+- tapOn: ".*Sonnet 5.5"
+- assertVisible: "Effort.*"
+- assertNotVisible: ".*Opus 5.5.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-model-picked
+- tapOn: "Done"
 # An agent whose transcript is not read yet, or could not be: the fixture
 # holds none for this id, so the list stands empty and its empty state, which
 # is SwiftUI's, stands in the rows' place in a host of its own, rather than

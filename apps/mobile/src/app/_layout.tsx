@@ -1,4 +1,4 @@
-// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, and the New task and New agent sheets once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
+// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, and an agent's model sheet once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
 
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
@@ -18,7 +18,7 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
- * the sheets that start a task or an agent while an account is signed in, and the sign-in screen otherwise, so a
+ * the sheets that start a task or an agent or change an agent's model while an account is signed in, and the sign-in screen otherwise, so a
  * sign-out anywhere, Settings' or a refused renewal's, lands on it and a
  * sign-in lands on the Inbox. A fixture run stands signed in as its
  * profile's account. While the service refuses this build as older than it
@@ -53,6 +53,7 @@ function GuardedScreens() {
         <Stack.Screen name="settings" options={{ presentation: "modal", title: "Settings" }} />
         <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
         <Stack.Screen name="start-agent" options={{ presentation: "modal", title: "New agent" }} />
+        <Stack.Screen name="agent-model" options={{ presentation: "modal", title: "Model" }} />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn && !updateNeeded}>
         <Stack.Screen name="sign-in" />

@@ -748,44 +748,6 @@ export function endLineOffersTryAgain(input: {
   return !mendedByNewAgent(input.failure) && !MENDED_BY_CHOICE.has(input.failure);
 }
 
-/** Said under an agent's box when the model or effort its chip chose could not be changed. */
-const MODEL_CHANGE_FAILED = "The model could not be changed. Try again.";
-
-/** What a change of an agent's model that did not take says under its box. */
-export function chooseFailureNote(failure: AgentCallFailure): string {
-  switch (failure) {
-    case AGENT_CALL_FAILURE.NOT_FOUND:
-      return "This agent no longer exists.";
-    case AGENT_CALL_FAILURE.INVALID_CHOICE:
-      return "That model isn't offered any more. Choose another.";
-    case AGENT_CALL_FAILURE.UNANSWERED:
-    case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
-    case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
-    case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
-    case AGENT_CALL_FAILURE.NO_REPOSITORY:
-    case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
-    case AGENT_CALL_FAILURE.GITHUB_UNANSWERED:
-    case AGENT_CALL_FAILURE.MESSAGE_TOO_LONG:
-    case AGENT_CALL_FAILURE.AGENT_NOT_READY:
-    case AGENT_CALL_FAILURE.AGENT_RETIRED:
-    case AGENT_CALL_FAILURE.DEVICE_REMOVED:
-    case AGENT_CALL_FAILURE.NOT_PERMITTED:
-    case AGENT_CALL_FAILURE.NATIVE_AGENT_NOT_HERE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_SIGNED_OUT:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_UNREACHABLE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_INELIGIBLE:
-    case AGENT_CALL_FAILURE.AGENT_CREDENTIAL_MISSING:
-    case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
-    case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
-    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
-    case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
-    // Note that a model change asks no files back, so never meets a rewind's refusal.
-    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
-      return MODEL_CHANGE_FAILED;
-  }
-}
-
 /** What the toast says when a Start the developer left the task behind did not start; the task's own note says why. */
 export const START_FAILED_AWAY = "The agent could not be started.";
 
