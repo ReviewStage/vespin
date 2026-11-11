@@ -4,7 +4,7 @@ import { ContentUnavailableView } from "@expo/ui/swift-ui";
 import { Button } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 
-type EmptyStateProps = {
+export type EmptyStateProps = {
   readonly title: string;
   readonly symbol: SfSymbol;
   readonly description?: string | undefined;

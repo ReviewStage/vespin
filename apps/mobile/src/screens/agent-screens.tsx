@@ -269,12 +269,10 @@ export function AgentScreen() {
               status={status}
             />
           }
-          empty={
-            <EmptyState
-              title={failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING}
-              symbol={failed ? "exclamationmark.triangle" : "text.bubble"}
-            />
-          }
+          empty={{
+            title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
+            symbol: failed ? "exclamationmark.triangle" : "text.bubble",
+          }}
           repository={agent?.repository}
           onOpenLink={openLink}
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
