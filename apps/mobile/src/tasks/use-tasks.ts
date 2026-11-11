@@ -202,17 +202,26 @@ export interface TaskGlance {
   readonly agents: readonly ListedAgent[];
 }
 
+/** The agents not archived, by the task they work on, read once for every row. */
+function agentsByTask(view: TasksView | undefined): ReadonlyMap<string, readonly ListedAgent[]> {
+  const byTask = new Map<string, ListedAgent[]>();
+  for (const agent of view?.taskAgents ?? []) {
+    if (agent.archivedAt !== undefined) continue;
+    const onTask = byTask.get(agent.planId);
+    if (onTask === undefined) byTask.set(agent.planId, [agent]);
+    else onTask.push(agent);
+  }
+  return byTask;
+}
+
 /** A task's agents not archived, in the order its Overview lists them: those waiting on the reader first. */
 function taskAgentsInOrder(
-  view: TasksView | undefined,
+  byTask: ReadonlyMap<string, readonly ListedAgent[]>,
   taskId: string,
   waitingByAgent: ReadonlyMap<string, number>,
 ): readonly ListedAgent[] {
-  const onTask = (view?.taskAgents ?? []).filter(
-    (agent) => agent.planId === taskId && agent.archivedAt === undefined,
-  );
   return inAgentListOrder(
-    onTask,
+    byTask.get(taskId) ?? [],
     (agent) => agent,
     (agent) => (waitingByAgent.get(agent.id) ?? 0) > 0,
   );
@@ -264,9 +273,11 @@ export function useTasksListing(search: string): TasksListing {
       );
     };
     const agentsWorking = agentsWorkingIn(view, tasks);
+    // Note that the agents are grouped by task once, since every row's preview reads its own.
+    const byTask = agentsByTask(view);
     const glanceOf = (taskId: string): TaskGlance => ({
       waiting: waiting.byTask.get(taskId) ?? 0,
-      agents: taskAgentsInOrder(view, taskId, waiting.byAgent),
+      agents: taskAgentsInOrder(byTask, taskId, waiting.byAgent),
     });
     return { tree, found, workspace, lookOf, setStatus, agentsWorking, markRead, pin, glanceOf };
   }, [acts, listed, held, view, workspace, readerId, waiting, search]);
@@ -344,7 +355,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   });
   return useMemo(() => {
     if (task === undefined) return undefined;
-    const agents = taskAgentsInOrder(view, task.id, waiting.byAgent).map((agent) =>
+    const agents = taskAgentsInOrder(agentsByTask(view), task.id, waiting.byAgent).map((agent) =>
       agentLine(agent, waiting.byAgent, view),
     );
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);

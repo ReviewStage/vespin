@@ -221,6 +221,7 @@ function AgentStateMark({ status }: { readonly status: AgentStatus }) {
 /** One agent among a task's preview's: its tile, its name, and its mark and the word for where it stands. */
 function PreviewAgentRow({ agent }: { readonly agent: PreviewAgent }) {
   const colors = useColors();
+  const words = agentStateWords(agent.status);
   return (
     <HStack spacing={SPACE.TIGHT + 2} alignment="center">
       <AgentTile name={agent.name} size={MARK_SIZE.WRITER} />
@@ -234,7 +235,7 @@ function PreviewAgentRow({ agent }: { readonly agent: PreviewAgent }) {
         {agent.name}
       </Text>
       <AgentStateMark status={agent.status} />
-      <PreviewLine words={agentStateWords(agent.status) ?? ""} />
+      {words === undefined ? null : <PreviewLine words={words} />}
     </HStack>
   );
 }

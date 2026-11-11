@@ -290,6 +290,12 @@ export function rowPlacement(colors: BrandColors) {
   ];
 }
 
+/** Whether a full swipe from an edge runs its first act: never where that act is destructive, such as Archive, which then waits for its button's tap, nor where it is a menu. */
+function fullSwipes(swipes: readonly RowSwipe[]): boolean {
+  const first = swipes[0];
+  return first !== undefined && !isSubmenu(first) && first.tone !== ROW_ACTION_TONE.DESTRUCTIVE;
+}
+
 /** A swipe's piece as SwiftUI draws it behind the row: an act's button, or a menu's, in the muted ink. */
 function swipeButton(swipe: RowSwipe, colors: BrandColors) {
   return isSubmenu(swipe) ? rowSubmenu(swipe, colors.TEXT_MUTED) : actionButton(swipe, colors);
@@ -300,7 +306,8 @@ function swipeButton(swipe: RowSwipe, colors: BrandColors) {
  * ground behind it rather than a card's, its insets, which stand the unread
  * dot in the margin, and its hairline, which starts under the words rather
  * than the mark. Its acts stand twice, as the system's own rows carry them:
- * behind a swipe from either edge, a full swipe running the first, and in
+ * behind a swipe from either edge, a full swipe running the first unless it
+ * is destructive, and in
  * the menu a long press opens, the trailing ones first, so a person who
  * never swipes still finds them; that menu then holds its submenus and the
  * acts only it offers. A row with a preview lifts it over the menu, which
@@ -369,12 +376,12 @@ export function RowFrame({
     <SwipeActions modifiers={frameModifiers}>
       {menu}
       {trailingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="trailing" allowsFullSwipe>
+        <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
           {trailingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="leading" allowsFullSwipe>
+        <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
           {leadingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
