@@ -97,9 +97,9 @@ const STATE_OF_STATUS = new Map<string | undefined, SandboxState>([
 ]);
 
 /**
- * How a run action is stopped, as Conductor stops its scripts: TERM to its
- * process group, then KILL where any of it still runs once the grace is
- * past, asked after every poll so a stop that took returns at once.
+ * How a run action is stopped: TERM to its process group, then KILL where
+ * any of it still runs once the grace is past, asked after every poll so a
+ * stop that took returns at once.
  */
 const RUN_ACTION_STOP = {
   GRACE: Duration.seconds(5),

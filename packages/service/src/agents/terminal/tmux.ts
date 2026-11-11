@@ -17,11 +17,10 @@
  * A run action is one such session too, started for the action
  * (`startRunAction`), named for its label and marked with its id, but its
  * process is the action's command itself, run by a login shell that reads
- * no input, rather than an interactive shell the command is typed into, as
- * Conductor runs its scripts. tmux makes that process the leader of a
- * process group of its own, so a stop signals the action and everything it
- * started (`signalRunAction`), and nothing a developer runs beside it is
- * ever mistaken for it. Its window keeps the pane once the command ends
+ * no input, rather than an interactive shell the command is typed into.
+ * tmux makes that process the leader of a process group of its own, so a
+ * stop signals the action and everything it started (`signalRunAction`),
+ * and nothing a developer runs beside it is ever mistaken for it. Its window keeps the pane once the command ends
  * (`remain-on-exit`), so the tab goes on showing what it printed and the list
  * says how it exited; pressing the action again runs it anew in that same
  * pane (`rerunAction`). A run action's tab attaches read-only
