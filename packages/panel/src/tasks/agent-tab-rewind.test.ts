@@ -74,7 +74,11 @@ const EDITED: AgentTranscriptMessage = {
       type: "tool-apply_patch",
       toolCallId: "call-edit",
       state: "output-available",
-      input: { patchText: "*** Update File: src/tile.css\n@@\n-light\n+dark\n+darker" },
+      // Note that Claude Code names a file by its absolute path in the checkout.
+      input: {
+        patchText:
+          "*** Update File: /workspace/repository/src/tile.css\n@@\n-light\n+dark\n+darker",
+      },
       output: "ok",
     },
   ],

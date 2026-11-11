@@ -1267,8 +1267,9 @@ function chippedLine(
  * The chip a call's row names what it read or wrote by: the first file's,
  * of the task's repository, with its hover card, or the website chip of the
  * page it fetched; nothing where it names neither, or the place knows no
- * repository, or the path is no file of it, as an absolute one or one that
- * climbs out is not, and the row says its subject as words.
+ * repository, or the path is no file of it, as an absolute one through no
+ * checkout or one that climbs out is not, and the row says its subject as
+ * words.
  */
 function calledChip(
   kind: CallKind,
