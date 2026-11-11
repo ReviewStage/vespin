@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { agentDefaultOf } from "@repo/features/account-preferences-live";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, MEMORY_SAVE_FAILURE } from "@repo/features/agent-view";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   AGENT_DEFAULT_CHOICE,
   AGENT_FALLBACK_CHOICE,
@@ -224,6 +224,63 @@ it.effect(
       assert.deepEqual(yield* Fiber.join(refused), { failure: AGENT_CALL_FAILURE.NOT_PERMITTED });
       yield* settled;
       assert.deepEqual(shown(), [OTHER_MEMORY.id], "put back once the service refused it");
+    }),
+);
+
+/** The words of the workspace's memories as the host last told them; none where it told none. */
+function memoryTextsOf(told: WireValue | undefined): readonly string[] | undefined {
+  const read = isRecord(told) ? told[WORKSPACE_ID] : undefined;
+  const rows = isRecord(read) ? read.rows : undefined;
+  return Array.isArray(rows)
+    ? rows.flatMap((row) => (isRecord(row) && typeof row.text === "string" ? [row.text] : []))
+    : undefined;
+}
+
+it.effect(
+  "an edit draws its memory's new words before the service answers and keeps the words it answered, and a refused edit puts back the words it drew over",
+  () =>
+    Effect.gen(function* () {
+      const harness = yield* subject();
+      const { acts, live, answerSaves } = harness;
+      const shown = () => memoryTextsOf(harness.memories().at(-1));
+      yield* acts.MEMORIES_FOLLOW.hold({ workspaceId: WORKSPACE_ID });
+      yield* settled;
+      live.memories.set({ memories: [memoryRow(MEMORY)] }, ["9100"]);
+      yield* nextPoll;
+      assert.deepEqual(shown(), [MEMORY.text]);
+
+      const corrected = "The store tests run on Postgres.";
+      const answering = yield* Deferred.make<void>();
+      answerSaves(
+        {
+          outcome: MEMORY_SAVED.CORRECTED,
+          memory: { ...MEMORY, text: corrected, updatedAt: MEMORY.updatedAt + 1 },
+        },
+        Deferred.await(answering),
+      );
+      const saving = yield* Effect.forkChild(
+        acts.MEMORIES_SAVE({ workspaceId: WORKSPACE_ID, text: corrected, replaces: MEMORY.id }),
+      );
+      yield* settled;
+      assert.deepEqual(shown(), [corrected], "drawn before the service answers");
+      yield* Deferred.succeed(answering, undefined);
+      yield* Fiber.join(saving);
+      yield* settled;
+      assert.deepEqual(shown(), [corrected], "kept once the service answered");
+
+      const refusing = yield* Deferred.make<void>();
+      answerSaves({ failure: MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL }, Deferred.await(refusing));
+      const refused = yield* Effect.forkChild(
+        acts.MEMORIES_SAVE({ workspaceId: WORKSPACE_ID, text: "token=…", replaces: MEMORY.id }),
+      );
+      yield* settled;
+      assert.deepEqual(shown(), ["token=…"]);
+      yield* Deferred.succeed(refusing, undefined);
+      assert.deepEqual(yield* Fiber.join(refused), {
+        failure: MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL,
+      });
+      yield* settled;
+      assert.deepEqual(shown(), [corrected], "put back once the service refused it");
     }),
 );
 

@@ -80,6 +80,8 @@ import {
   type LiveActivityTokenParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
+  type MemorySaveAnswerView,
+  type MemorySaveParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
   type ProviderKeySaveParams,
@@ -577,6 +579,13 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.account.forgetMemory, {
       query: { [MEMORY_QUERY.WORKSPACE_ID]: params.workspaceId, [MEMORY_QUERY.ID]: params.id },
     });
+  }
+
+  /** A memory kept in the member's own words, or corrected in place where it names the memory it replaces, answering what the keep came to. */
+  saveMemory(
+    params: MemorySaveParams,
+  ): Effect.Effect<MemorySaveAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.saveMemory, params);
   }
 
   /** One of the account's own sounds' clips, its bytes in base64, or null where it keeps no such sound. */

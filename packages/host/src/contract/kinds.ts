@@ -76,12 +76,15 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * window while it holds the stream open, and one forgotten for good. The
    * hold's stream carries nothing: what it holds reaches the panel on app
    * state (`LIVE_READ.MEMORIES`), and a forget is drawn there the moment it
-   * is asked, answering the memories as the service then keeps them.
+   * is asked, answering the memories as the service then keeps them. A
+   * save keeps one in the reader's own words, or corrects one in place
+   * where it names the memory it replaces, drawn there at once too.
    */
   MEMORIES_FOLLOW: "memories.follow",
   /** A workspace's held memories, which the panel reads on app state, asked again at once, as Try again asks. */
   MEMORIES_RETRY: "memories.retry",
   MEMORIES_FORGET: "memories.forget",
+  MEMORIES_SAVE: "memories.save",
   /**
    * Settings › Preferences › Notifications: the sounds the account keeps of
    * its own, one's clip read so the window's player can play it, one added
@@ -924,6 +927,7 @@ export const PORT_ACT_USE = {
   MEMORIES_FOLLOW: ACT_USE.READ,
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,
+  MEMORIES_SAVE: ACT_USE.WRITE,
   SOUND_READ: ACT_USE.FETCH,
   SOUND_ADD: ACT_USE.WRITE,
   SOUND_RENAME: ACT_USE.WRITE,

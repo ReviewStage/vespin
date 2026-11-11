@@ -1,5 +1,12 @@
+import { MEMORY_SAVE_FAILURE, type MemorySaveAnswerView } from "@repo/features/agent-view";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { markdownTree } from "@repo/features/markdown-tree";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import {
+  MEMORY_BOUNDS,
+  MEMORY_RECALL_WINDOW_DAYS,
+  type MemorySummary,
+} from "@repo/features/memory-wire";
+import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -14,6 +21,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
+  Badge,
   BUTTON_VARIANT,
   Button,
   CardPress,
@@ -26,13 +34,18 @@ import {
   type CommentSkeletonLine,
   ConfirmDialog,
   CornerDot,
+  DIALOG_TONE,
+  Dialog,
+  DialogActions,
   EmptyState,
+  FormField,
   GAP,
   IconButton,
   Inline,
   LIST_MOTION_WAY,
   ListMotion,
   MoreButton,
+  PlusIcon,
   SELECT_BOX_PLACE,
   SETTINGS_SECTION_FRAME,
   SearchField,
@@ -43,13 +56,23 @@ import {
   SettingsLine,
   SettingsSection,
   SkeletonRegion,
+  STATUS_TONE,
   Stack,
   selectionMenu,
+  TEXT_AREA_SUBMIT,
+  TEXT_ELEMENT,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
+  TextArea,
+  TIME_LOOK,
+  Time,
   Tooltip,
   TrashIcon,
   useConfirmDialog,
   useLeaving,
   useMenu,
+  useMinute,
   usePageScroll,
   VisuallyHidden,
 } from "@repo/ui";
@@ -71,17 +94,21 @@ import {
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useIsMutating, useMutation, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useId, useMemo, useRef, useState } from "react";
-import { sendAct } from "../act.js";
+import { actFailureWords, sendAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, ActorRef, commentAuthor } from "../actor-ref.js";
-import { sameAnswer, useConfirmAct } from "../confirm-act.js";
+import { ANSWER_ACCEPTED, sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
+import { useFormDialog } from "../desktop/use-form-dialog.js";
 import { confirmFailure } from "../failure-report.js";
 import { memoriesQuery, memoriesRetryMutation } from "../live-reads.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { PEOPLE_FILTER_WORDS } from "../member-rows.js";
-import { ReadFailed } from "./marks.js";
+import { linkChip } from "../tasks/mention-chip.js";
+import { useMentionDoors } from "../tasks/task-mentions.js";
+import { useOpenPlace } from "../tasks/use-open-link.js";
+import { ReadFailed, replayMaskedError } from "./marks.js";
 
 /**
  * memory-page.tsx -- Settings › Memory: the facts and conventions the workspace's coding agents kept, found by search and by whose they are, and forgotten one at a time or several at once.
@@ -100,14 +127,26 @@ import { ReadFailed } from "./marks.js";
  * the workspace as one; a chip under the search says each one kept, its ×
  * lifting it, beside a Clear.
  *
+ * The memories agents use stand first: most recalled in the last thirty
+ * days, then most recently kept or corrected, as a caption under the search
+ * says, so what no agent reaches sinks to the foot, where it is pruned.
+ *
  * Each memory reads as a note: its keeper's face and name, the name the
  * panel's person chip hanging their card, when it was last kept, and its
  * words whole at any width, drawn as the notes are, since a memory is
- * Markdown (`pnpm db:generate` in backticks). It opens nothing, so a plain
- * press on it only marks where a run of ⇧-clicks starts. Its ⋯ and a
- * right-click offer Copy words and Delete, which stands unavailable, saying
- * who may, on a memory the reader may not delete: its words are theirs, or
- * they own or administer the workspace.
+ * Markdown (`pnpm db:generate` in backticks). Under its words a line says
+ * New on one kept in the last week, Unused on one older than the recall
+ * window that no agent was handed in it, the task its words came from as
+ * that task's mention chip, which opens the agent's transcript at the line
+ * that kept them where one did, and how often agents were handed it and
+ * when last. It opens nothing, so a plain press on it only marks where a
+ * run of ⇧-clicks starts. Its ⋯ and a right-click offer Edit, Copy words,
+ * and Delete to a reader who may change it: its words are theirs, or they
+ * own or administer the workspace. To any other reader Edit stands nowhere
+ * and Delete stands unavailable, saying who may. Edit opens the memory's
+ * words in a card that saves them in place (`ACT_KIND.MEMORIES_SAVE`
+ * naming the memory it replaces), drawn at once over the list; Add memory,
+ * beside the Filter, opens the same card empty and keeps a new one.
  *
  * Memories are chosen together as the Tasks page's rows are (#5761): the box
  * in a row's gutter under the pointer, X, ⌘- and ⇧-clicks, ⌘A, and Esc. A
@@ -143,9 +182,58 @@ const KEPT_BY = "Saved by";
 
 /** What the selection's acts and a row's menu say. */
 const MEMORY_ACT = {
+  EDIT: "Edit",
   FORGET: "Delete",
   COPY: "Copy text",
 } as const;
+
+/** What the button that keeps a new memory says. */
+const ADD_MEMORY = "Add memory";
+
+/** What the editor's card says: its title as it edits or adds, its field, and its act. */
+const EDITOR_WORDS = {
+  EDIT_TITLE: "Edit memory",
+  ADD_TITLE: "Add memory",
+  FIELD: "Memory",
+  PLACEHOLDER: "A fact or convention your agents should carry into later tasks",
+  SAVE: "Save",
+  SAVING: "Saving",
+} as const;
+
+/** What a save that came to no answer says. */
+const SAVE_FAILED = "The memory could not be saved. Try again.";
+
+/** What a save the service refused says, by why. */
+const SAVE_REFUSAL = {
+  [MEMORY_SAVE_FAILURE.MEMORY_OFF]: "Turn on Memory in Settings › Experimental to save a memory.",
+  [MEMORY_SAVE_FAILURE.NOT_FOUND]: "This memory no longer exists.",
+  [MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL]:
+    "That looks like it holds a credential, which a memory never keeps.",
+  [MEMORY_SAVE_FAILURE.MEMORY_FULL]: `This workspace holds ${MEMORY_BOUNDS.MAX_MEMORIES.toLocaleString("en-US")} memories, the most it can. Delete one first.`,
+  [MEMORY_SAVE_FAILURE.UNANSWERED]: SAVE_FAILED,
+  // Note that a save is always a POST, so the method refused is never the window's; it reads as no answer.
+  [MEMORY_SAVE_FAILURE.METHOD_NOT_ALLOWED]: SAVE_FAILED,
+} as const satisfies Record<(typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE], string>;
+
+/** One day, in milliseconds. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** How long a memory reads as New after it was kept. */
+const NEW_FOR_MS = 7 * DAY_MS;
+
+/** How far back a memory's recalls are counted, as the service counts them. */
+const RECALL_WINDOW_MS = MEMORY_RECALL_WINDOW_DAYS * DAY_MS;
+
+/** What a memory's line says of how agents use it. */
+const USE_WORDS = {
+  NEW: "New",
+  UNUSED: "Unused",
+  NOT_YET: "Not recalled yet",
+  NEVER: "Never recalled",
+} as const;
+
+/** What the caption under the search says the order is. */
+const ORDER_WORDS = `most recalled in the last ${MEMORY_RECALL_WINDOW_DAYS} days first`;
 
 /** The key the Kept by filter keeps everyone who left the workspace under, together. */
 const FORMER_KEY = "former";
@@ -235,6 +323,96 @@ function forgetterOf(memory: MemorySummary, actor: Actor): string {
     : `Only ${keeper}, or an owner or admin`;
 }
 
+/** The memories as the page orders them: most recalled in the recall window first, then most recently kept or corrected, as the service lists them. */
+function byUse(memories: readonly MemorySummary[]): readonly MemorySummary[] {
+  return [...memories].sort(
+    (one, other) => other.recalls30d - one.recalls30d || other.updatedAt - one.updatedAt,
+  );
+}
+
+/** Where a memory's words came from, as a reader who may open its task sees it. */
+type MemorySource = NonNullable<MemorySummary["source"]>;
+
+/**
+ * The task a memory's words came from, as that task's mention chip, the one
+ * a description draws; its press opens the agent's transcript at the line
+ * that kept them where one did, and the task otherwise.
+ */
+function SourceChip({
+  source,
+  workspaceStep,
+}: {
+  source: MemorySource;
+  /** The step the workspace's links name it by: its slug, or its id where none traveled. */
+  workspaceStep: string;
+}): React.JSX.Element | null {
+  const { agentId, messageId, taskId, taskName } = source;
+  const doors = useMentionDoors();
+  const openPlace = useOpenPlace();
+  const opened = useMemo(
+    () =>
+      messageId === null || openPlace === undefined
+        ? doors
+        : {
+            ...doors,
+            onOpenTask: () =>
+              openPlace({ kind: LINK_DESTINATION.MESSAGE, planId: taskId, agentId, messageId }),
+          },
+    [doors, openPlace, agentId, messageId, taskId],
+  );
+  const target = encodeMention(
+    { kind: MENTION_KIND.TASK, taskId },
+    { workspace: workspaceStep, repository: null },
+  );
+  const chip = linkChip(target, `@${taskName}`, opened);
+  return chip === undefined ? null : <span className={LIFTED}>{chip}</span>;
+}
+
+/** How often agents were handed a memory, and when last: in the recall window, before it, or never. */
+function RecallWords({ memory, fresh }: { memory: MemorySummary; fresh: boolean }): ReactNode {
+  const last = memory.lastRecalledAt;
+  if (last === null) return fresh ? USE_WORDS.NOT_YET : USE_WORDS.NEVER;
+  const when = <Time at={last} look={TIME_LOOK.AGO} hint={false} />;
+  // Note that a memory handed out only before the window counts none in it, so the line says when it last was.
+  if (memory.recalls30d === 0) return <>Last recalled {when}</>;
+  return (
+    <>
+      Recalled {memory.recalls30d}× · last {when}
+    </>
+  );
+}
+
+/** The line under a memory's words: New or Unused, the task its words came from, and how agents use it. */
+function MemoryUseLine({
+  memory,
+  workspaceStep,
+}: {
+  memory: MemorySummary;
+  workspaceStep: string;
+}): React.JSX.Element {
+  const now = useMinute();
+  const age = now - memory.createdAt;
+  const fresh = age < NEW_FOR_MS;
+  const unused = !fresh && age > RECALL_WINDOW_MS && memory.recalls30d === 0;
+  return (
+    <Inline gap={GAP.ICON} className="memory-use">
+      {fresh ? <Badge tone={STATUS_TONE.WORKING}>{USE_WORDS.NEW}</Badge> : null}
+      {unused ? <Badge tone={STATUS_TONE.ATTENTION}>{USE_WORDS.UNUSED}</Badge> : null}
+      {memory.source === null ? null : (
+        <SourceChip source={memory.source} workspaceStep={workspaceStep} />
+      )}
+      <Text
+        variant={TEXT_VARIANT.CAPTION}
+        tone={TEXT_TONE.MUTED}
+        as={TEXT_ELEMENT.SPAN}
+        className="memory-recalls"
+      >
+        <RecallWords memory={memory} fresh={fresh} />
+      </Text>
+    </Inline>
+  );
+}
+
 /** One memory with whose words it holds, as the members the panel reads name them. */
 interface ShownMemory {
   readonly memory: MemorySummary;
@@ -271,6 +449,8 @@ function MemoryRow({
   found,
   locked,
   chosen,
+  workspaceStep,
+  onEdit,
   onForget,
   onCopy,
 }: {
@@ -283,13 +463,22 @@ function MemoryRow({
   locked: boolean;
   /** The selection the row stands in among several, whose acts its menu offers; none otherwise. */
   chosen: ChosenMemories | undefined;
+  /** The step the workspace's links name it by, which the source task's chip is written under. */
+  workspaceStep: string;
+  onEdit: () => void;
   onForget: () => void;
   onCopy: () => void;
 }): React.JSX.Element {
   const { memory, actor } = shown;
   const menu = useMenu(true);
   const own: readonly (readonly MenuEntry[])[] = [
-    [{ label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onSelect: onCopy }],
+    [
+      // Note that Edit stands only where the reader may change the memory's words, who may also delete it, as `forgettable` says.
+      ...(memory.forgettable
+        ? [{ label: MEMORY_ACT.EDIT, icon: <GLYPH.RENAME />, onSelect: onEdit }]
+        : []),
+      { label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onSelect: onCopy },
+    ],
     [
       {
         label: MEMORY_ACT.FORGET,
@@ -328,9 +517,12 @@ function MemoryRow({
             </span>
           }
         >
-          <div className={MEMORY_WORDS}>
-            <MarkdownMessage words={memory.text} className="memory-text" found={found} />
-          </div>
+          <Stack gap={GAP.TIGHT}>
+            <div className={MEMORY_WORDS}>
+              <MarkdownMessage words={memory.text} className="memory-text" found={found} />
+            </div>
+            <MemoryUseLine memory={memory} workspaceStep={workspaceStep} />
+          </Stack>
         </Comment>
       </div>
       {menu.drawn === undefined ? null : (
@@ -571,17 +763,121 @@ function memoriesForgetMutation(workspaceId: string) {
   });
 }
 
+/** A save's answer as the editor's act reads it: taken, or refused in the service's own words. */
+function saveAnswered(answer: MemorySaveAnswerView): ActionResult {
+  return "failure" in answer
+    ? { status: ACTION_RESULT_STATUS.REJECTED, reason: SAVE_REFUSAL[answer.failure] }
+    : ANSWER_ACCEPTED;
+}
+
+/**
+ * The card a memory's words are edited in, or a new one's typed: the words
+ * in a note at most `MEMORY_BOUNDS.MAX_CHARS` long, saved through the one
+ * save act, naming the memory it replaces where it edits one. A refusal
+ * stands in the card in the service's words while the words stay typed.
+ * Note that the host draws an edit's words over the list the moment they
+ * are sent, so the list shows them whether or not the read has carried
+ * them yet.
+ */
+function useMemoryEditor(workspaceId: string, listed: ReadonlySet<string>) {
+  const [editing, setEditing] = useState<MemorySummary | undefined>(undefined);
+  const [text, setText] = useState("");
+  const saving = useMutation({
+    mutationKey: [ACT_KIND.MEMORIES_SAVE, workspaceId],
+    mutationFn: (save: { readonly text: string; readonly replaces: string | undefined }) =>
+      sendAct(ACT_KIND.MEMORIES_SAVE, {
+        workspaceId,
+        text: save.text,
+        ...(save.replaces === undefined ? {} : { replaces: save.replaces }),
+      }),
+  });
+  const words = text.trim();
+  const act = useConfirmAct(saving, {
+    send: () => saving.mutateAsync({ text: words, replaces: editing?.id }),
+    answered: saveAnswered,
+    failed: (error) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(error) }),
+  });
+  // Note that an edit's question goes with its memory, so one deleted meanwhile puts the card away.
+  const confirm = useConfirmDialog(
+    { subject: editing === undefined || listed.has(editing.id), surfaceOpen: true },
+    act,
+    confirmFailure(FAILURE_SURFACE.MEMORY_SAVE),
+  );
+  const form = useFormDialog(
+    confirm,
+    words !== "" && text.length <= MEMORY_BOUNDS.MAX_CHARS && words !== editing?.text,
+  );
+  const open = (memory: MemorySummary | undefined) => {
+    setEditing(memory);
+    setText(memory?.text ?? "");
+    confirm.ask();
+  };
+  const dialog = (
+    <Dialog
+      open={form.open}
+      title={editing === undefined ? EDITOR_WORDS.ADD_TITLE : EDITOR_WORDS.EDIT_TITLE}
+      replayUnmasked
+      busy={form.settling}
+      refused={form.refusal !== undefined}
+      onDismiss={form.dismiss}
+      onExited={() => {
+        setEditing(undefined);
+        setText("");
+      }}
+      actions={
+        <DialogActions
+          onCancel={form.dismiss}
+          act={{
+            verb: EDITOR_WORDS.SAVE,
+            tone: DIALOG_TONE.PRIMARY,
+            running: EDITOR_WORDS.SAVING,
+            ...form.act,
+          }}
+        />
+      }
+    >
+      <FormField
+        label={EDITOR_WORDS.FIELD}
+        error={replayMaskedError(form.refusal)}
+        count={{ length: text.length, limit: MEMORY_BOUNDS.MAX_CHARS }}
+      >
+        {(control) => (
+          // Note that a memory is a member's own words, kept out of a screen recording as the list's are.
+          <ReplayMask>
+            <TextArea
+              field={control}
+              value={text}
+              onChange={setText}
+              grow
+              autoFocus
+              placeholder={EDITOR_WORDS.PLACEHOLDER}
+              maxLength={MEMORY_BOUNDS.MAX_CHARS}
+              busy={form.settling}
+              submitKey={TEXT_AREA_SUBMIT.MOD_ENTER}
+              onSubmit={form.submit}
+            />
+          </ReplayMask>
+        )}
+      </FormField>
+    </Dialog>
+  );
+  return { edit: (memory: MemorySummary) => open(memory), add: () => open(undefined), dialog };
+}
+
 /** The memories as read: the search and the filter, the list, and the bar over what is chosen. */
 function MemoryList({
   readerId,
   memories,
   workspaceId,
+  workspaceStep,
 }: {
   /** The signed-in account, whose own memories read as You and Me. */
   readerId: string | undefined;
   memories: readonly MemorySummary[];
   /** The workspace the memories are kept in, whose forgets every Forget waits out. */
   workspaceId: string;
+  /** The step the workspace's links name it by, which a memory's source task is written under. */
+  workspaceStep: string;
 }): React.JSX.Element {
   const forgets = memoriesForgetMutation(workspaceId);
   const forgettingAll = useMutation(forgets);
@@ -595,7 +891,8 @@ function MemoryList({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [asked, setAsked] = useState<readonly MemorySummary[]>([]);
   const found = searchTokens(query);
-  const all = memories.map((memory): ShownMemory => {
+  const editor = useMemoryEditor(workspaceId, new Set(memories.map((memory) => memory.id)));
+  const all = byUse(memories).map((memory): ShownMemory => {
     // Note that the service names a memory's keeper as nobody only once their account is deleted.
     const actor =
       memory.keptBy === null
@@ -670,8 +967,16 @@ function MemoryList({
               {...(found.length === 0 ? {} : { tally: { count: listed.length } })}
             />
             <KeptByFilter keepers={keepers} kept={kept} onKept={setKept} />
+            <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={editor.add}>
+              {ADD_MEMORY}
+            </Button>
           </div>
           <KeptByChips keepers={keepersOf(all)} kept={kept} onKept={setKept} />
+          {listed.length === 0 ? null : (
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} className="memory-order">
+              {`${countWords(listed.length, TERM.MEMORY)} · ${ORDER_WORDS}`}
+            </Text>
+          )}
         </Stack>
         {listed.length === 0 ? (
           <NothingShown narrowed={found.length > 0 || kept.size > 0} onClear={clear} />
@@ -705,6 +1010,8 @@ function MemoryList({
                     chosen={
                       several !== undefined && standing.has(shown.memory.id) ? several : undefined
                     }
+                    workspaceStep={workspaceStep}
+                    onEdit={() => editor.edit(shown.memory)}
                     onForget={() => askForget([shown.memory])}
                     onCopy={() => copyAll([shown.memory])}
                   />
@@ -727,6 +1034,7 @@ function MemoryList({
         confirm={forgetConfirm}
         question={forgetQuestion(asked, asked.length - forgettable.length)}
       />
+      {editor.dialog}
     </SettingsSection>
   );
 }
@@ -769,7 +1077,12 @@ export function MemorySection({
     // Note that the keepers are read in the workspace Settings shows, which may not be the one the window's tasks stand in.
     <MemberDirectory workspace={workspace} readerId={readerId}>
       <ReplayMask>
-        <MemoryList readerId={readerId} memories={memories.data} workspaceId={workspace.id} />
+        <MemoryList
+          readerId={readerId}
+          memories={memories.data}
+          workspaceId={workspace.id}
+          workspaceStep={workspace.slug ?? workspace.id}
+        />
       </ReplayMask>
     </MemberDirectory>
   ) : memories.isError ? (

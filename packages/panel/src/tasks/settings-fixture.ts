@@ -436,13 +436,45 @@ function memory(
 
 const { ADA, MAYA, THEO } = FIXTURE_PERSON;
 
-/** The workspace's memories, the most recently kept first. */
+/** The Acme task the agents that kept some of the memories work on (`tasks-fixture.ts`). */
+const USAGE_ALERTS = { taskId: "2b8c4e6a-0d3f-4a51-9c79-3e4f5a6b7c82", taskName: "Usage alerts" };
+
+/**
+ * The workspace's memories, the most recently kept first, as the service
+ * lists them: some used by agents often, two kept in the last week, and two
+ * no agent has been handed in thirty days, so the page draws each of its
+ * lines.
+ */
 const MEMORIES: readonly MemorySummary[] = [
-  memory(1, "Migrations are generated with `pnpm db:generate`, never written by hand.", MAYA, 1),
+  memory(1, "Migrations are generated with `pnpm db:generate`, never written by hand.", MAYA, 1, {
+    source: {
+      ...USAGE_ALERTS,
+      agentId: "5d9f3b7c-2e4a-4f6b-8c0d-3e5f7a9b1c2d",
+      messageId: "6e0a4c8d-3f5b-4a7c-9d1e-4f6a8b0c2d3e",
+    },
+    recalls30d: 31,
+    lastRecalledAt: NOW - 2 * HOUR,
+  }),
   memory(2, "Invite links expire after 7 days; an accepted one is never reused.", ADA, 2),
-  memory(3, "Pull requests are reviewed in the morning; one asked after noon waits a day.", ADA, 4),
-  memory(4, "The billing export runs nightly at 02:00 UTC and must finish by 04:00.", THEO, 9),
-  memory(5, "Feature flags live in `src/flags.ts`, one constant per flag.", null, 30),
+  memory(
+    3,
+    "Pull requests are reviewed in the morning; one asked after noon waits a day.",
+    ADA,
+    4,
+    {
+      recalls30d: 6,
+      lastRecalledAt: NOW - DAY,
+    },
+  ),
+  memory(4, "The billing export runs nightly at 02:00 UTC and must finish by 04:00.", THEO, 9, {
+    source: { ...USAGE_ALERTS, agentId: "5d9f3b7c-2e4a-4f6b-8c0d-3e5f7a9b1c2d", messageId: null },
+    recalls30d: 12,
+    lastRecalledAt: NOW - 3 * DAY,
+  }),
+  memory(5, "Staging deploys pause on Fridays after 3 PM Pacific.", ADA, 40, {
+    lastRecalledAt: NOW - 36 * DAY,
+  }),
+  memory(6, "Feature flags live in `src/flags.ts`, one constant per flag.", null, 45),
 ];
 
 /* ----- Admin ----- */

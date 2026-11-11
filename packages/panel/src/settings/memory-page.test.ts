@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -33,7 +33,9 @@ import { MemorySection } from "./memory-page.js";
  * gone; several chosen are forgotten one after another on one question; a
  * forget that fails says so in the dialog and keeps the memory listed;
  * another workspace is held for its own memories; and a read that fails
- * offers to try again. Synthetic workspaces, members, and memories.
+ * offers to try again. The memories agents recall most stand first, one no
+ * agent was handed in the window says so, and Edit saves a memory's words
+ * in place. Synthetic workspaces, members, and memories.
  */
 
 const READER = "user-reader";
@@ -79,6 +81,14 @@ let sent: AnyAct[] = [];
 let readFails = false;
 /** Whether a forget is answered with a failure rather than the memories. */
 let refuseForget = false;
+/** What the test's service answers a save with, by the save. */
+let saveAnswer: (save: {
+  readonly workspaceId: string;
+  readonly text: string;
+  readonly replaces?: string;
+}) => PortActResult<typeof ACT_KIND.MEMORIES_SAVE> = () => ({
+  failure: AGENT_CALL_FAILURE.UNANSWERED,
+});
 /** Whether the host has read nothing yet, so it lays no memories. */
 let readsNothing = false;
 /** Each workspace's memories as the test's host lays them on the document, under the version it last delivered. */
@@ -135,6 +145,8 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       stored = { ...stored, [workspaceId]: after };
       return Promise.resolve(done({ memories: after }));
     }
+    case ACT_KIND.MEMORIES_SAVE:
+      return Promise.resolve(done(saveAnswer(request.payload)));
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
   }
@@ -147,6 +159,7 @@ beforeEach(() => {
   sent = [];
   readFails = false;
   refuseForget = false;
+  saveAnswer = () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED });
   readsNothing = false;
   laid = NO_KEYS_HELD;
   version = 1;
@@ -164,6 +177,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
+  vi.useRealTimers();
 });
 
 async function settle(): Promise<void> {
@@ -501,4 +515,67 @@ test("workspaces that could not be read say so with Retry, which asks for them a
   assert.match(page.textContent ?? "", /Your workspaces could not be read\./u);
   act(() => button(page, "Retry").click());
   assert.equal(retried, 1);
+});
+
+test("the memories agents recalled most in the last 30 days stand first, then the most recently kept", async () => {
+  const pricing: MemorySummary = {
+    ...TESTS,
+    id: "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+    text: "Pricing lives in the billing service.",
+    updatedAt: Date.UTC(2026, 9, 8, 12),
+    recalls30d: 4,
+    lastRecalledAt: Date.UTC(2026, 9, 20, 12),
+  };
+  const flags: MemorySummary = {
+    ...TESTS,
+    id: "3d4e5f6a-7b8c-4d9e-8f0a-2b3c4d5e6f7a",
+    text: "Feature flags live in src/flags.ts.",
+    updatedAt: Date.UTC(2026, 9, 7, 12),
+    recalls30d: 9,
+    lastRecalledAt: Date.UTC(2026, 9, 21, 12),
+  };
+  stored = { [ACME.id]: [DEPLOYS, TESTS, pricing, flags] };
+  const { page } = await mount();
+
+  assert.deepEqual(words(page), [flags.text, pricing.text, DEPLOYS.text, TESTS.text]);
+});
+
+test("a memory older than the recall window that no agent was handed in it reads Unused and Never recalled", async () => {
+  vi.useFakeTimers({ toFake: ["Date"], now: Date.UTC(2026, 10, 20, 12) });
+  const { page } = await mount();
+
+  const said = rowOf(page, DEPLOYS).textContent ?? "";
+  assert.match(said, /Unused/u);
+  assert.match(said, /Never recalled/u);
+});
+
+test("Edit saves the memory's new words in place of the memory it edits", async () => {
+  const corrected = "Deployments go out from main through Vercel.";
+  saveAnswer = (save) => ({
+    outcome: MEMORY_SAVED.CORRECTED,
+    memory: { ...DEPLOYS, text: save.text, updatedAt: Date.UTC(2026, 9, 13, 12) },
+  });
+  const { page } = await mount();
+
+  openMenu(page, DEPLOYS);
+  chooseMenuItem("Edit");
+  const editor = document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("no editor");
+  const field = editor.querySelector("textarea") ?? assert.fail("no field");
+  assert.equal(field.value, DEPLOYS.text);
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+      field,
+      corrected,
+    );
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  act(() => button(editor, "Save").click());
+  await settle();
+
+  assert.deepEqual(
+    sent
+      .filter((request) => request.kind === ACT_KIND.MEMORIES_SAVE)
+      .map((request) => request.payload),
+    [{ workspaceId: ACME.id, text: corrected, replaces: DEPLOYS.id }],
+  );
 });
