@@ -49,7 +49,7 @@ function fileWords(label: string, file: InboxOptionFile, at: number): string {
   return `${label} · ${file.caption ?? `${at + 1}`}`;
 }
 
-/** What an address is called where its agent gave it no words: its host, as a reader knows a site by. Note that the wire admits an https address alone, so it always reads. */
+/** What an address is called where its agent gave it no words: its host, as a reader knows a site by, or the address as written where it does not parse. */
 function addressWords(url: string): string {
   // Note that the wire holds an address to https and no spaces alone, so one the URL parser refuses is named as written rather than throwing in render.
   try {
