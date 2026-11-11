@@ -476,8 +476,8 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           "a launch queued for a runner that would run the mode unasked",
         );
 
-        // From the host release whose runner mirrors them, they are kept at the service, its Codex home
-        // named at its default under the agent's own home, which the runner mirrors from.
+        // From the host release whose runner mirrors them, they are kept at the service, no Codex home
+        // named, since the runner mirrors them from Codex's own default under the machine's home.
         // That release's host also says its runner reads a mode.
         yield* registerDevice(userId, {
           id: deviceId,
@@ -494,10 +494,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.equal(kept.config.permissionMode, PERMISSION_MODE.ASK);
         assert.deepEqual(
           [kept.config.transcriptsUrl, kept.secrets.env.CODEX_HOME],
-          [
-            `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
-            `/Users/fixture/.vespin/agents/${onKept.id}/home/.codex`,
-          ],
+          [`${TRANSCRIPTS_URL}${FIRST_LAUNCH}`, undefined],
         );
       }),
   );

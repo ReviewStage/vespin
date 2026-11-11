@@ -43,7 +43,7 @@ export interface StepsBehind {
   readonly stepBack: () => boolean;
 }
 
-/** Whether the side panel stands over a routed place, an Inbox item or an agent's page, or the plan of the task bound, if any. */
+/** Whether the side panel stands over a routed place, an Inbox item, or the plan of the task bound, if any. */
 interface PaneOver {
   readonly routed: boolean;
   readonly taskId: string | undefined;
@@ -78,7 +78,7 @@ export function useNarrowBacks(narrow: boolean): NarrowBacks {
       }
     },
     pane: (over, shut) => {
-      // Note that a phone's panel a link opened over an Inbox item or an agent's page steps back to it shut, where that is the step behind.
+      // Note that a phone's panel a link opened over an Inbox item steps back to it shut, where that is the step behind.
       if (over.routed) {
         const standing = { address: router.history.location.href, side: null };
         if (!narrow || !exits.behind.backTo(standing)) shut();

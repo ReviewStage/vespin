@@ -1,9 +1,5 @@
 import { RUNNER_ENV, RUNNER_PLACE } from "@repo/agent-runner/protocol";
-import {
-  DEVICE_CAPABILITY,
-  DEVICE_PLATFORM,
-  type DeviceArch,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_CAPABILITY, type DeviceArch } from "@repo/features/device-agent-wire";
 import type { LocalAgentClis, LocalAgentPlatformSeam } from "../effect/seams.js";
 import { agentOnBox } from "../local-agent-box.js";
 import { localAgentClis } from "../local-agent-setup.js";
@@ -20,13 +16,13 @@ import type { HostOs } from "./host-os.js";
  * host-platform.ts -- what a host's local agent runners are started with (`LocalAgentPlatform`): each straight on the box, as a child of the host's own process and as its own user, in the agent's own folder, running the runner bundle the host's release carries on the host's own Node, and the pinned Claude Code, Codex, and GitHub CLI the host keeps.
  *
  * A host runs every agent directly, as This Mac and a Linux box alike: the
- * runner starts in the agent's folder with its home and caches there (`local-agent-box.ts`'s `agentOnBox`), with full
+ * runner starts in the agent's folder on the box user's own home (`local-agent-box.ts`'s `agentOnBox`), with full
  * access to whatever the host's user reaches. Each agent gets a worktree of
  * the box's shared clone in its folder (`agentWorktreeScript`). Its
- * harnesses run no sandbox of their own and ask no
- * approval (`RUNNER_PLACE.HOST`), and no login left on the box reaches
- * them, so they run on the sign-ins saved in the account; its GitHub token comes
- * from the service, in gh's config in its home. Claude Code refuses to skip its
+ * harnesses run where its starter says they run on a host
+ * (`RUNNER_PLACE.HOST`), on the logins of Claude Code and Codex signed in on
+ * the box, and its `git` and `gh` reach GitHub on the box user's own
+ * sign-in. Claude Code refuses to skip its
  * permissions as root unless it is told the box is a sandbox of its own, so
  * a host running as root, as a dedicated box's may, tells it so
  * (`IS_SANDBOX`). What differs by OS, the platform it registers as, its
@@ -72,7 +68,6 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
     launch: (runner) =>
       agentOnBox(
         {
-          folder: runner.folder,
           command: runner.node,
           args: [runner.bundle],
           env: runner.env,
@@ -89,13 +84,13 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
     deviceName: options.os.deviceName(),
     deviceMachine: options.os.machine(),
     devicePlatform: options.os.platform,
-    // Note that a host lets go of an archived agent's folder (`discard`), runs an agent in the mode its launch names, puts a worktree back on a rewind (`restore-checkout`), and diffs one between a turn's checkouts (`diff-checkout`), and a Mac alone runs an agent on its starter's own token on its own GitHub sign-in, the machine its member signs in at themselves.
+    // Note that a host lets go of an archived agent's folder (`discard`), runs an agent in the mode its launch names, puts a worktree back on a rewind (`restore-checkout`), diffs one between a turn's checkouts (`diff-checkout`), and runs every agent on its own GitHub sign-in, an agent on its starter's own token among them.
     deviceCapabilities: [
       DEVICE_CAPABILITY.DISCARD,
       DEVICE_CAPABILITY.PERMISSION_MODES,
       DEVICE_CAPABILITY.RESTORE_CHECKOUT,
       DEVICE_CAPABILITY.DIFF_CHECKOUT,
-      ...(options.os.platform === DEVICE_PLATFORM.DARWIN ? [DEVICE_CAPABILITY.GITHUB_SIGN_IN] : []),
+      DEVICE_CAPABILITY.GITHUB_SIGN_IN,
     ],
     deviceArch: options.arch,
     worktreeScript: ({ home, repository, worktree, agentId, branch }) =>

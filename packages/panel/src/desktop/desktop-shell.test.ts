@@ -1326,7 +1326,7 @@ function routedAt(place: Place): string | undefined {
   return place === PLACE.VERSION_HISTORY ? SHELL_AT.VERSION_HISTORY : undefined;
 }
 
-test("the side panel's toggle stands on a plan and on an agent's page, which keeps a panel of its own, and nowhere else the plan's place is taken", async () => {
+test("the side panel's toggle stands on a plan, and nowhere else the plan's place is taken, an agent's page among them", async () => {
   await handBridge();
   const container = document.createElement("div");
   document.body.append(container);
@@ -1347,7 +1347,7 @@ test("the side panel's toggle stands on a plan and on an agent's page, which kee
     [PLACE.HOME]: false,
     [PLACE.OTHER_TASK]: true,
     [PLACE.INBOX]: false,
-    [PLACE.AGENT_PAGE]: true,
+    [PLACE.AGENT_PAGE]: false,
     [PLACE.PERSON_PAGE]: false,
     [PLACE.AUTOMATIONS]: false,
     [PLACE.SIDE_PANEL_FULL_SCREEN]: true,
@@ -1403,7 +1403,7 @@ test("⌘F opens a find over every page that stands in the window, and Settings 
     [PLACE.HOME]: true,
     [PLACE.OTHER_TASK]: true,
     [PLACE.INBOX]: true,
-    // Note that this agent is never read here, and an agent's page finds once its agent is drawn (`desktop-agent-page.test.ts`).
+    // Note that an agent's page only opens its agent on its task, so it holds nothing to find.
     [PLACE.AGENT_PAGE]: false,
     [PLACE.PERSON_PAGE]: true,
     [PLACE.AUTOMATIONS]: true,
@@ -1689,17 +1689,15 @@ test("on a phone's task, which stands over no places bar, a finger swiped in fro
   assert.deepEqual(asked, [SIDEBAR_OVERLAY.OPEN]);
 });
 
-test("on a phone no page draws the title bar's controls over its own head, an agent's page and the Automations list among them, and the panel's chord still answers where its toggle stood", async () => {
+test("on a phone no page draws the title bar's controls over its own head, an Inbox item and the Automations list among them, and the panel's chord still answers where its toggle stood", async () => {
   let toggled = 0;
   const sidePanel = { ...tasksControl().sidePanel, onToggle: () => (toggled += 1) };
-  const agentPage = await mountNarrow({
-    page: TASKS_PAGE.DOCUMENT,
-    agentView: { ...tasksControl().agentView, agentId: "agent-1" },
-    sidePanel,
-  });
-  assert.equal(agentPage.querySelector(".desktop-shell > .title-bar-controls") === null, true);
+  const item = { taskId: DOCUMENT_TASK.id, itemId: "inbox-item-1" };
+  const itemAt = `${SHELL_AT.INBOX}/${item.itemId}`;
+  const inboxItem = await mountNarrow({ at: itemAt, held: item, sidePanel });
+  assert.equal(inboxItem.querySelector(".desktop-shell > .title-bar-controls") === null, true);
   act(() => runAppCommand(APP_COMMAND.TOGGLE_SIDE_PANEL));
-  assert.equal(toggled, 1, "the panel's chord answers on the agent's page");
+  assert.equal(toggled, 1, "the panel's chord answers on the Inbox item");
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
@@ -1712,11 +1710,7 @@ test("on a phone no page draws the title bar's controls over its own head, an ag
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const wide = await mountNarrow(
-    { page: TASKS_PAGE.DOCUMENT, agentView: { ...tasksControl().agentView, agentId: "agent-1" } },
-    {},
-    SHELL_ROOM.WIDE,
-  );
+  const wide = await mountNarrow({ at: itemAt, held: item }, {}, SHELL_ROOM.WIDE);
   assert.ok(wide.querySelector(".desktop-shell > .title-bar-controls"), "a wide window keeps them");
   assert.ok(wide.querySelector('.title-bar-controls[data-edge="end"]'), "and the panel's toggle");
 });

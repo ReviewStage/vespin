@@ -35,10 +35,11 @@ export const SHARED_FILES_DIRECTORY = "/tmp/shared";
  * cache of the user who built the image, whose home the cloud's `agent`
  * does not read. Each Playwright looks in
  * its own package for its browsers only where `PLAYWRIGHT_BROWSERS_PATH` is
- * `0`, so the runner hands both harnesses' commands that (`SANDBOX_TOOL_ENV`),
- * which also has a repository's own Playwright install its browsers in its
- * own `node_modules`, which the agent writes, rather than in a shared folder
- * it may not. `BROWSERS` is where npm's global install puts them, which the
+ * `0`, so the runner hands both harnesses' commands that in the cloud alone
+ * (`SANDBOX_TOOL_ENV`, `launch.ts`'s `toolEnvOf`), which also has a
+ * repository's own Playwright install its browsers in its own
+ * `node_modules`, which the agent writes, rather than in a shared folder it
+ * may not. A host's agents keep the machine's own Playwright settings. `BROWSERS` is where npm's global install puts them, which the
  * image checks and our own browser reads.
  */
 export const PLAYWRIGHT_PIN = {
