@@ -1,10 +1,6 @@
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import {
-  knownTaskSectionIcon,
-  TASK_SECTION_ICON_KIND,
-  type TaskSectionIcon,
-} from "@repo/features/task-section-wire";
+import { knownTaskSectionIcon, type TaskSectionIcon } from "@repo/features/task-section-wire";
 import { momentText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
@@ -25,6 +21,7 @@ import {
   ArrowUpIcon,
   AVATAR_SIZE,
   Badge,
+  BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
   CONFIRM_LOSS,
@@ -32,8 +29,10 @@ import {
   ConfirmDialog,
   GAP,
   GlyphSlot,
+  INLINE_EDIT_LOOK,
   INLINE_REF_LOOK,
   Inline,
+  InlineEdit,
   InlineRef,
   OneLine,
   PlayIcon,
@@ -51,16 +50,16 @@ import {
   SettingsRowsSkeleton,
   SettingsSection,
   TEXT_ELEMENT,
+  TEXT_FONT,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  TextField,
   TIME_LOOK,
   Time,
   TrashIcon,
   useConfirmDialog,
 } from "@repo/ui";
-import { StarIcon, StarOffIcon } from "@repo/ui/icons";
+import { GLYPH, SquareTerminalIcon, StarIcon, StarOffIcon } from "@repo/ui/icons";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
@@ -640,9 +639,6 @@ interface RunActionDraft {
   readonly icon: TaskSectionIcon | undefined;
 }
 
-/** A new action's draft, before anything is typed. */
-const EMPTY_DRAFT: RunActionDraft = { label: "", command: "", icon: undefined };
-
 /** What the run actions' list is called to a reader, which names no repository so a screen recording carries none. */
 const RUN_ACTIONS_LIST = "Run actions";
 
@@ -667,33 +663,6 @@ function writtenOf(action: RunAction): RunActionWritten {
     icon: action.icon === undefined ? undefined : knownTaskSectionIcon(action.icon),
     isDefault: action.isDefault === true,
   };
-}
-
-/** An action as saved, as its row starts editing it. */
-function draftOf(action: RunAction): RunActionDraft {
-  return {
-    label: action.label,
-    command: action.command,
-    icon: action.icon === undefined ? undefined : knownTaskSectionIcon(action.icon),
-  };
-}
-
-/** Whether two icons are one: the same emoji, or the same glyph in the same color. */
-function sameIcon(one: TaskSectionIcon | undefined, other: TaskSectionIcon | undefined): boolean {
-  if (one === undefined || other === undefined) return one === other;
-  if (one.kind === TASK_SECTION_ICON_KIND.EMOJI || other.kind === TASK_SECTION_ICON_KIND.EMOJI) {
-    return (
-      one.kind === other.kind && "emoji" in one && "emoji" in other && one.emoji === other.emoji
-    );
-  }
-  return one.glyph === other.glyph && one.color === other.color;
-}
-
-/** Whether two drafts say the same: label, command, and icon. */
-function sameDraft(one: RunActionDraft, other: RunActionDraft): boolean {
-  return (
-    one.label === other.label && one.command === other.command && sameIcon(one.icon, other.icon)
-  );
 }
 
 /** Whether an action may be saved as typed: a label and a command, each within its bound. */
@@ -778,17 +747,28 @@ function useRunActionOrder(
   return { ordered, move };
 }
 
+/** What a closed row says of its command: the line count where it runs over several, then its lines joined by ⏎, which the row cuts at its edge. */
+function commandSummary(command: string): string {
+  const lines = command.split("\n");
+  const said = lines.map((line) => line.trim()).filter((line) => line !== "");
+  const joined = said.join("  ⏎  ");
+  return lines.length > 1 ? `${lines.length} lines · ${joined}` : joined;
+}
+
 /**
- * One run action's row, edited in place as a script is: its icon's well
- * and its label leading the row, its command under it, colored as Bash with
- * its lines numbered, and Discard and Save at the row's end once any of the
- * three differs from what is saved, ⌘S or ⌘↩ in the command and Enter in the
- * label pressing Save, Escape pressing Discard. A saved action's ⋯ moves it
- * up or down, which a keyboard reaches where the grip's drag does not, makes
- * it the repository's default or lets the default go, and removes it, a
- * removal asking first. An action just added stands the same way, its caret
- * in its label and Cancel at its end, until it is saved, when the saved list
- * draws it in its place. A member reads each with its icon, read-only.
+ * One run action's row, as compact as a subscription's: its icon in the
+ * row's mark column, its label, renamed in place, a Default badge on the
+ * repository's default, and its command under the label as one muted line.
+ * An owner or admin picks an icon from the well, saved as soon as it is
+ * picked, as a section's is; renames it from its ⋯, saved as the rename
+ * ends, as a subscription's name is; and opens Edit command from its ⋯,
+ * which draws the command's numbered editor under the row with Cancel and
+ * Save, ⌘S or ⌘↩ in it pressing Save and Escape Cancel. The ⋯ also moves it
+ * up or down, which a keyboard reaches where the grip's drag does not,
+ * makes it the default or lets the default go, and removes it, a removal
+ * asking first. An action just added stands with its label being typed and
+ * its editor open, Cancel letting it go, until it is saved, when the saved
+ * list draws it in its place. A member reads each, its command under it.
  */
 function RunActionRow({
   saving,
@@ -812,35 +792,54 @@ function RunActionRow({
   /** Moves a saved action one place up (-1) or down (1), as the grip's drag would; none for one just added. */
   onMove?: ((by: -1 | 1) => void) | undefined;
 }): React.JSX.Element {
-  const saved = action === undefined ? EMPTY_DRAFT : draftOf(action);
-  const [edited, setEdited] = useState<RunActionDraft | undefined>(undefined);
-  const [picking, setPicking] = useState(false);
   const busy = saving.isPending;
-  // An edit the saved action now agrees with, its own save's or another's, is let go.
-  if (edited !== undefined && added === undefined && sameDraft(edited, saved) && !busy) {
-    setEdited(undefined);
+  const savedLabel = action?.label ?? "";
+  const savedCommand = action?.command ?? "";
+  const savedIcon = action?.icon === undefined ? undefined : knownTaskSectionIcon(action.icon);
+  const [renaming, setRenaming] = useState(added !== undefined);
+  const [picking, setPicking] = useState(false);
+  // A new action's label and icon, held until its first save; a saved one's are saved as they change.
+  const [newLabel, setNewLabel] = useState("");
+  const [newIcon, setNewIcon] = useState<TaskSectionIcon | undefined>(undefined);
+  // The command being edited, while Edit command stands open; a new action's stands open from the start.
+  const [command, setCommand] = useState<string | undefined>(added === undefined ? undefined : "");
+  const label = action === undefined ? newLabel : savedLabel;
+  const icon = action === undefined ? newIcon : savedIcon;
+  const editing = command !== undefined;
+  // The command a save sent, which closes the editor once what is saved agrees with it.
+  const [sent, setSent] = useState<string | undefined>(undefined);
+  // Note that the editor closes once the read draws the save, not when the save answers, so the old command never shows for a frame between (`ScriptRow`).
+  if (sent !== undefined && sent === savedCommand && !busy) {
+    setSent(undefined);
+    setCommand(undefined);
   }
-  const shown = edited ?? saved;
-  const changed = edited !== undefined && !sameDraft(edited, saved);
-  const editing = changed || added !== undefined;
-  const edit = (patch: Partial<RunActionDraft>) => setEdited({ ...shown, ...patch });
-  const typed = { label: shown.label.trim(), command: shown.command, icon: shown.icon };
+  const standing = () => actions.map(writtenOf);
+  const saveChange = (change: Partial<RunActionWritten>) => {
+    if (action === undefined) return;
+    saving.mutate({
+      repository,
+      actions: standing().map((each) => (each.id === action.id ? { ...each, ...change } : each)),
+    });
+  };
+  const draft = { label, command: command ?? savedCommand, icon };
+  const canSave =
+    editing && runActionSavable(draft) && (action === undefined || command !== savedCommand);
   const save = () => {
-    const standing = actions.map(writtenOf);
+    const typed = { label: label.trim(), command: command ?? savedCommand, icon };
     const next =
       action === undefined
-        ? [...standing, { id: undefined, isDefault: false, ...typed }]
-        : standing.map((each) => (each.id === action.id ? { ...each, ...typed } : each));
+        ? [...standing(), { id: undefined, isDefault: false, ...typed }]
+        : standing().map((each) => (each.id === action.id ? { ...each, ...typed } : each));
+    if (action !== undefined) setSent(typed.command);
     saving.mutate({ repository, actions: next }, { onSuccess: () => added?.onCancel() });
   };
-  const discard = () => {
+  const cancel = () => {
     saving.reset();
-    setEdited(undefined);
+    if (added !== undefined) added.onCancel();
+    else setCommand(undefined);
   };
-  const leave = added === undefined ? discard : added.onCancel;
-  const canSave = runActionSavable(shown);
-  // Note that ⌘S, ⌘↩, and Enter answer only what the row's Save would: an edit that may be saved, with no save already out.
-  const saveKey = editing && canSave && !busy ? save : undefined;
+  // Note that ⌘S and ⌘↩ answer only what the row's Save would: an edit that may be saved, with no save already out.
+  const saveKey = canSave && !busy ? save : undefined;
   const removeAct = useConfirmAct(saving, {
     send: () =>
       saving.mutateAsync({
@@ -865,9 +864,25 @@ function RunActionRow({
       })),
     });
   const place = action === undefined ? -1 : actions.findIndex((each) => each.id === action.id);
-  const menu =
-    manages && action !== undefined
-      ? [
+  const menu = !manages
+    ? []
+    : action === undefined
+      ? [[{ label: "Rename", icon: <GLYPH.RENAME />, onSelect: () => setRenaming(true) }]]
+      : [
+          [
+            {
+              label: "Edit command",
+              icon: <SquareTerminalIcon />,
+              disabled: busy || editing,
+              onSelect: () => setCommand(savedCommand),
+            },
+            {
+              label: "Rename",
+              icon: <GLYPH.RENAME />,
+              disabled: busy,
+              onSelect: () => setRenaming(true),
+            },
+          ],
           [
             {
               label: "Move up",
@@ -881,8 +896,6 @@ function RunActionRow({
               disabled: busy || place === actions.length - 1,
               onSelect: () => onMove?.(1),
             },
-          ],
-          [
             isDefault
               ? {
                   label: "Remove default",
@@ -906,72 +919,107 @@ function RunActionRow({
               onSelect: removal.ask,
             },
           ],
-        ]
-      : [];
+        ];
+  const endRename = (value: string | undefined) => {
+    setRenaming(false);
+    const named = value?.trim();
+    if (named === undefined || named === "" || named === label) return;
+    if (action === undefined) setNewLabel(named);
+    else saveChange({ label: named });
+  };
+  const pickIcon = (next: TaskSectionIcon | undefined) => {
+    if (action === undefined) setNewIcon(next);
+    else saveChange({ icon: next });
+  };
   return (
     <>
       <MenuRow
-        thing={action?.label ?? "New run action"}
+        thing={label === "" ? "New run action" : label}
         actions={menu}
         row={{
-          leading: manages ? (
-            <SectionIconWell
-              icon={shown.icon}
-              title="Run action icon"
-              open={picking}
-              onOpenChange={(open) => setPicking(open)}
-              onIcon={(icon) => edit({ icon })}
-              disabled={busy}
-            />
-          ) : (
-            <SettingsRowMark>{sectionGlyph(shown.icon) ?? <PlayIcon />}</SettingsRowMark>
+          leading: (
+            <SettingsRowMark>
+              {manages ? (
+                <SectionIconWell
+                  icon={icon}
+                  title="Run action icon"
+                  open={picking}
+                  onOpenChange={(open) => setPicking(open)}
+                  onIcon={pickIcon}
+                  variant={BUTTON_VARIANT.QUIET}
+                  size={BUTTON_SIZE.COMPACT}
+                  disabled={busy}
+                />
+              ) : (
+                (sectionGlyph(icon) ?? <PlayIcon />)
+              )}
+            </SettingsRowMark>
           ),
-          label: manages ? (
+          label: (
             <ReplayMask>
-              <TextField
+              <InlineEdit
+                value={label}
                 label="Label"
+                editing={renaming}
+                look={INLINE_EDIT_LOOK.INPUT}
                 placeholder="Dev server"
                 maxLength={WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS}
-                readOnly={busy}
-                autoFocus={added !== undefined}
-                value={shown.label}
-                onChange={(label) => edit({ label })}
-                onEnter={saveKey}
-                onEscape={editing && !busy ? leave : undefined}
-              />
-            </ReplayMask>
-          ) : (
-            <ReplayMask>
-              <OneLine>{shown.label}</OneLine>
+                onEnd={({ value }) => endRename(value)}
+              >
+                {label === "" ? (
+                  <Text
+                    as={TEXT_ELEMENT.SPAN}
+                    variant={TEXT_VARIANT.INHERIT}
+                    tone={TEXT_TONE.MUTED}
+                  >
+                    Untitled action
+                  </Text>
+                ) : (
+                  <OneLine>{label}</OneLine>
+                )}
+              </InlineEdit>
             </ReplayMask>
           ),
           adornment: isDefault ? <Badge>Default</Badge> : undefined,
-          // Note that Discard and Save stay beside the label at any width, the label giving way, since dropping under it would move the editor at a phone's width.
+          description: editing ? undefined : (
+            <ReplayMask>
+              <OneLine words={commandSummary(savedCommand)}>
+                <Text
+                  as={TEXT_ELEMENT.SPAN}
+                  variant={TEXT_VARIANT.INHERIT}
+                  font={TEXT_FONT.MONO}
+                  tone={TEXT_TONE.MUTED}
+                >
+                  {commandSummary(savedCommand)}
+                </Text>
+              </OneLine>
+            </ReplayMask>
+          ),
+          // Note that Cancel and Save stay beside the label at any width, the label giving way, since dropping under it would move the editor at a phone's width.
           controls: SETTINGS_ROW_CONTROLS.BESIDE,
           control: editing ? (
             <EditActions
-              leave={added === undefined ? "Discard" : "Cancel"}
+              leave="Cancel"
               saving={busy}
               canSave={canSave}
-              onLeave={leave}
+              onLeave={cancel}
               onSave={save}
             />
-          ) : manages ? (
-            <SettingsRowControlHold />
           ) : undefined,
-          below: (
+          below: editing ? (
             <ScriptEditor
               label="Command"
-              value={shown.command}
-              onChange={(command) => edit({ command })}
+              value={command}
+              onChange={setCommand}
               placeholder="pnpm dev"
               editable={manages}
               busy={busy}
-              changed={changed}
+              autoFocus={added === undefined}
+              changed={action !== undefined && command !== savedCommand}
               onSave={saveKey}
-              onLeave={editing && !busy ? leave : undefined}
+              onLeave={busy ? undefined : cancel}
             />
-          ),
+          ) : undefined,
         }}
       />
       {manages && action !== undefined ? (
