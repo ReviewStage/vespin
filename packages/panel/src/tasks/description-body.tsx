@@ -630,9 +630,11 @@ function useDrawnUnits(task: Task, drawn: boolean): DrawnUnits | undefined {
  * its scroll, while hidden again.
  */
 function useSectionsDrawn(taskId: string, shown: boolean): boolean {
-  const [shownTask, setShownTask] = useState(shown ? taskId : undefined);
-  if (shown && shownTask !== taskId) setShownTask(taskId);
-  return shown || shownTask === taskId;
+  const [held, setHeld] = useState({ taskId, drawn: shown });
+  // Note that another task starts over, so a task shown, left, and come back to while hidden draws nothing.
+  const drawn = shown || (held.taskId === taskId && held.drawn);
+  if (held.taskId !== taskId || held.drawn !== drawn) setHeld({ taskId, drawn });
+  return drawn;
 }
 
 function unitClass(changed: boolean): string {

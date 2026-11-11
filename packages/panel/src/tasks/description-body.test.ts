@@ -235,8 +235,8 @@ test("a description kept hidden behind another tab draws its title and none of i
   // Note that this catches the sections being parsed while hidden, in the commit that opens an agent's tab over them.
   const container = document.body.appendChild(document.createElement("div"));
   const root = mountRoot(container);
-  const drawShown = (shown: boolean) =>
-    act(() => root.render(withQueryClient(createElement(DescriptionBody, { task: TASK, shown }))));
+  const drawShown = (shown: boolean, task: Task = TASK) =>
+    act(() => root.render(withQueryClient(createElement(DescriptionBody, { task, shown }))));
   const section = () => container.textContent?.includes("Invite a teammate by email.") === true;
 
   drawShown(false);
@@ -247,10 +247,16 @@ test("a description kept hidden behind another tab draws its title and none of i
   const opened = section();
   drawShown(false);
   await settle();
+  const kept = section();
+  drawShown(false, { ...TASK, id: "task-other" });
+  await settle();
+  drawShown(false);
+  await settle();
 
   assert.deepEqual(hidden, [TASK.name, false], "the title stands and no section is drawn");
   assert.equal(opened, true, "the sections are drawn once shown");
-  assert.equal(section(), true, "the sections stay once hidden again");
+  assert.equal(kept, true, "the sections stay once hidden again");
+  assert.equal(section(), false, "a task come back to while hidden, after another, draws none");
 });
 
 test("under its title the description says who created the task and when, then when it was last edited, and a description nobody edited says only who created it", async () => {
