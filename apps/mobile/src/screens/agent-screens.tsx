@@ -42,7 +42,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
-  type PagePlace,
   useAgentMedia,
   useAgentPullRequests,
   useAgentTranscript,
@@ -77,8 +76,8 @@ const PAGE_WORDS = {
   FAILED: "The page could not be read.",
 } as const;
 
-/** The name of the task the agent works on, by its id, as the list holds it; none for an agent on no task, or before the list holds it. */
-function useTaskName(taskId: string | null | undefined): string | undefined {
+/** The name of the task the agent works on, by its id, as the list holds it; none before the agent or the list is read. */
+function useTaskName(taskId: string | undefined): string | undefined {
   const { data } = useQuery({
     ...appStateQuery,
     select: (state) => selectTasks(state).tasks.find(({ id }) => id === taskId)?.name,
@@ -86,16 +85,16 @@ function useTaskName(taskId: string | null | undefined): string | undefined {
   return data;
 }
 
-/** The agent's address on vespin.dev, under its workspace, its task's where it has one. */
+/** The agent's address on vespin.dev, under its workspace and its task, once the agent is read. */
 function useAgentAddress(
   agentId: string,
   workspaceId: string | undefined,
-  taskId: string | null | undefined,
+  taskId: string | undefined,
 ): string {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   const place =
-    taskId === null || taskId === undefined
+    taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
       : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
   return linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
@@ -318,12 +317,8 @@ export function AgentPageScreen() {
   }>();
   const agent = useFollowedAgent(id);
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, page);
-  // Note that a page stands on the agent's task, or on the agent where it works on none.
-  const place: PagePlace =
-    agent?.planId === null || agent?.planId === undefined
-      ? { agentId: id }
-      : { taskId: agent.planId };
-  const read = usePageHtml(place, page, Number(version));
+  // Note that a page stands on the agent's task, read once the agent is.
+  const read = usePageHtml(agent?.planId, page, Number(version));
   const named = "title" in read && read.title !== "" ? read.title : title;
   return (
     <>
