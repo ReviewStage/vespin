@@ -31,7 +31,7 @@ import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sameShape } from "@repo/features/turn-rows";
-import { countWords, selectedWords, TERM } from "@repo/features/words";
+import { CHOOSE_AN_ITEM_WORDS, countWords, selectedWords, TERM } from "@repo/features/words";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   CHIP_LOOK,
@@ -1188,9 +1188,6 @@ export function newTaskAction(onNewTask: (() => void) | undefined): EmptyStateAc
       };
 }
 
-/** What the pane beside a list with items in it says while none is chosen. */
-const CHOOSE_AN_ITEM = "Choose an item";
-
 /**
  * The pane beside the list while nothing is chosen, as a mail app's stands
  * empty: how to choose an item, by a press or by stepping with the keys that
@@ -1224,10 +1221,10 @@ export function InboxPaneEmpty({
     <ReplayUnmask>
       <EmptyState replayUnmasked icon={<InboxIcon />}>
         {coarse ? (
-          CHOOSE_AN_ITEM
+          CHOOSE_AN_ITEM_WORDS
         ) : (
           <>
-            {CHOOSE_AN_ITEM}, or step with{" "}
+            {CHOOSE_AN_ITEM_WORDS}, or step with{" "}
             <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].chord} spoken />{" "}
             <Shortcut chord={APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].chord} spoken />
           </>

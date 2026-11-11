@@ -46,6 +46,7 @@ export const VERB = {
   RETRY: "Retry",
   RECONNECT: "Reconnect",
   OPEN: "Open",
+  OPEN_IN_BROWSER: "Open in browser",
   RESET_TO_DEFAULTS: "Reset to defaults",
 } as const;
 
@@ -164,6 +165,9 @@ export function showMoreWords(count: number): string {
 
 /** What a Terminal tab says beside the agent's name of a shell that ended. */
 export const SHELL_EXITED_WORDS = "exited";
+
+/** What the pane beside the Inbox's list says while none of its items is chosen. */
+export const CHOOSE_AN_ITEM_WORDS = "Choose an item";
 
 /** What the foot of a capped list says once it shows every row, which puts them back. */
 export const SHOW_LESS_WORDS = "Show less";

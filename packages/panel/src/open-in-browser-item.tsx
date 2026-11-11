@@ -5,6 +5,7 @@ import {
   readLink,
 } from "@repo/features/link-grammar";
 import { stayingOnWeb } from "@repo/features/link-open";
+import { VERB } from "@repo/features/words";
 import { GLYPH } from "@repo/ui/icons";
 import { appPlatform } from "./app-platform.js";
 import type { MenuAction } from "./desktop/action-menu.js";
@@ -23,16 +24,13 @@ import type { MenuAction } from "./desktop/action-menu.js";
  * default browser, a browser tab in a tab of its own.
  */
 
-/** What the item says, as its label and to a reader. */
-const OPEN_IN_BROWSER = "Open in browser";
-
 /** A page's place, as a link names it. */
 type PageLinkDestination = Extract<LinkDestination, { kind: typeof LINK_DESTINATION.PAGE }>;
 
 /** Open in browser for a page, by its place and the workspace its link is written under. */
 export function openPageInBrowserItem(place: PageLinkDestination, workspace: string): MenuAction {
   return {
-    label: OPEN_IN_BROWSER,
+    label: VERB.OPEN_IN_BROWSER,
     icon: <GLYPH.OPEN_EXTERNALLY />,
     onSelect: () => appPlatform().openWeb(stayingOnWeb(linkOf(place, workspace))),
   };
