@@ -3,7 +3,7 @@
  *
  * A call's body is the call's input and its answer, each a block of a
  * kind: a command behind its prompt, a patch with its lines marked, words
- * as they are, or JSON. JSON reads as words (`readableBlock`), an answer
+ * as they are, Markdown drawn as a reply is, or JSON. JSON reads as words (`readableBlock`), an answer
  * that only acknowledges the call is left out (`shownOutput`), and an
  * empty one says "No output". What the words say is the caller's decision
  * (`tool-call-model.ts`); how a block of each kind is drawn is each
@@ -20,11 +20,12 @@ export const TOOL_STATE = {
 
 export type ToolState = (typeof TOOL_STATE)[keyof typeof TOOL_STATE];
 
-/** How a block of the body is drawn: a command behind its prompt, a patch with its lines colored, words as they are, or JSON. */
+/** How a block of the body is drawn: a command behind its prompt, a patch with its lines colored, words as they are, Markdown drawn as the agent's own reply is (a memory's words), or JSON. */
 export const TOOL_BLOCK = {
   COMMAND: "command",
   PATCH: "patch",
   TEXT: "text",
+  MARKDOWN: "markdown",
   JSON: "json",
 } as const;
 
