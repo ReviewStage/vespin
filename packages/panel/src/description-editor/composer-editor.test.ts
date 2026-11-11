@@ -172,6 +172,9 @@ test("the words a box opens on stand as they were written, a known skill's /name
   typeInComposer(padded.host, "!");
   pressInComposer(padded.host, "z", { metaKey: true });
   assert.equal(padded.drafts.at(-1), "Fill in `` [`x`](y) `` here", "an edit undone is them again");
+  padded.handle.replace("other");
+  padded.handle.replace("Fill in ``[`x`](y)`` here");
+  assert.equal(padded.drafts.at(-1), "Fill in ``[`x`](y)`` here", "words laid in later are theirs");
 
   typeInComposer(box.host, ", please");
   assert.deepEqual(box.drafts, ["Cut it with /release now\nthen tell me, please"]);

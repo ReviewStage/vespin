@@ -724,6 +724,8 @@ interface ComposerState {
   input: ComposerInput;
   aria: EditorAria;
   emitted: string;
+  /** The words last laid in whole, and how the box reads them, which it hands back as they were given whenever it reads so again. */
+  laid: { readonly reading: string; readonly words: string };
   reported: ComposerTrigger | undefined;
   trigger: ReturnType<typeof triggerAt>;
   mentionReported: ComposerTrigger | undefined;
@@ -919,15 +921,22 @@ function focusedAtCaret(editor: Editor): void {
   editor.view.focus();
 }
 
-/** The words laid in whole, each known skill's `/name` its chip, the caret at their end, and the browser's there too where the box holds the focus. */
+/**
+ * The words laid in whole, each known skill's `/name` its chip, the caret at
+ * their end, and the browser's there too where the box holds the focus. Note
+ * that the box keeps them as given beside its reading of them, which may
+ * spell them otherwise (a code span's padding), so whenever it reads so, as
+ * once they land or after an edit undone, it hands back the words given;
+ * words the bound refused leave the box's own reading.
+ */
 function laidIn(editor: Editor, state: ComposerState, text: string): void {
   const { doc, schema } = editor.state;
-  const tr = editor.state.tr.replaceWith(
-    0,
-    doc.content.size,
-    documentOf(schema, text, state).content,
-  );
+  const laying = documentOf(schema, text, state);
+  state.laid = { reading: textOf(laying), words: text };
+  const tr = editor.state.tr.replaceWith(0, doc.content.size, laying.content);
   commanded(editor, tr.setSelection(TextSelection.atEnd(tr.doc)).setMeta(CHIPPED_META, true));
+  const reading = textOf(editor.state.doc);
+  if (reading !== state.laid.reading) state.laid = { reading, words: reading };
   if (editor.view.hasFocus()) focusedAtCaret(editor);
 }
 
@@ -1112,6 +1121,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     input: COMPOSER_INPUT.EDITABLE,
     aria: {},
     emitted: props.text,
+    laid: { reading: props.text, words: props.text },
     reported: undefined,
     trigger: undefined,
     mentionReported: undefined,
@@ -1138,17 +1148,13 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
   });
   laidIn(editor, state, props.text);
   // Note that the words opened on are the owner's own, so the editor's reading of them, which may spell them otherwise (a code span's padding), is no change to hand back.
-  const opening = textOf(editor.state.doc);
-  // The words handed back when the box reads as it opened again, as after an edit undone: the owner's own where they were laid in whole, which a bound refusing them leaves not.
-  const given =
-    opening === textOf(documentOf(editor.schema, props.text, state)) ? props.text : opening;
-  state.emitted = opening;
+  state.emitted = textOf(editor.state.doc);
   editor.on("transaction", ({ transaction }) => {
     for (const [mark, pos] of state.marks) state.marks.set(mark, transaction.mapping.map(pos));
     const text = textOf(editor.state.doc);
     if (!transaction.docChanged || text === state.emitted) return;
     state.emitted = text;
-    props.onDraft(text === opening ? given : text);
+    props.onDraft(text === state.laid.reading ? state.laid.words : text);
   });
   if (props.focus) editor.view.focus();
   return {
