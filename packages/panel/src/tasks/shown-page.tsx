@@ -77,21 +77,43 @@ function embedHeight(fit: PageFit): PageEmbedHeight {
   return { kind: PAGE_EMBED_HEIGHT.STAND_IN };
 }
 
-/** How the page in `frame` is fitted, from the heights it reports against the frame's own; as it was last fitted in this window, or pending, until it has. */
+/** A page's fit, and the page and version it was heard for. */
+interface HeardFit {
+  readonly pageId: string;
+  readonly version: number;
+  readonly fit: PageFit;
+}
+
+/** How a page's version was last fitted in this window, pending where it never was. */
+function fittedOf(pageId: string, version: number): PageFit {
+  return FITTED.get(pageId)?.get(version) ?? PAGE_FIT_PENDING;
+}
+
+/**
+ * How the page in `frame` is fitted, from the heights it reports against the
+ * frame's own; as it was last fitted in this window, or pending, until it has.
+ * Note that the fit is kept with the page and version it was heard for, so a
+ * frame handed another page or version starts from that one's fit, never
+ * the last one's.
+ */
 function useFrameFit(
   frame: RefObject<HTMLIFrameElement | null>,
   pageId: string,
   version: number,
 ): PageFit {
-  const [fit, setFit] = useState<PageFit>(
-    () => FITTED.get(pageId)?.get(version) ?? PAGE_FIT_PENDING,
-  );
+  const [heard, setHeard] = useState<HeardFit>(() => ({
+    pageId,
+    version,
+    fit: fittedOf(pageId, version),
+  }));
+  const current = heard.pageId === pageId && heard.version === version;
+  const fit = current ? heard.fit : fittedOf(pageId, version);
   useEffect(() => {
-    if (fit.kind === PAGE_FIT.PENDING) return;
+    if (!current || heard.fit.kind === PAGE_FIT.PENDING) return;
     const versions = FITTED.get(pageId) ?? new Map<number, PageFit>();
-    versions.set(version, fit);
+    versions.set(version, heard.fit);
     FITTED.set(pageId, versions);
-  }, [fit, pageId, version]);
+  }, [current, heard, pageId, version]);
   useEffect(() => {
     const hear = (event: MessageEvent) => {
       const framed = frame.current;
@@ -100,11 +122,15 @@ function useFrameFit(
       const size = readSize(event.data);
       if (Option.isNone(size)) return;
       const frameHeight = framed.getBoundingClientRect().height;
-      setFit((last) => pageFitAfter(last, size.value.height, frameHeight));
+      setHeard((last) => {
+        const was =
+          last.pageId === pageId && last.version === version ? last.fit : fittedOf(pageId, version);
+        return { pageId, version, fit: pageFitAfter(was, size.value.height, frameHeight) };
+      });
     };
     window.addEventListener("message", hear);
     return () => window.removeEventListener("message", hear);
-  }, [frame]);
+  }, [frame, pageId, version]);
   return fit;
 }
 
@@ -252,14 +278,5 @@ export function ShownNewestPage({
 }): ReactNode {
   const page = useQuery(pagesQuery(place)).data?.find((each) => each.id === pageId);
   if (page === undefined) return null;
-  // Note that a new version is a frame of its own, so its fit is never the last version's.
-  return (
-    <ShownPage
-      key={page.version}
-      place={place}
-      pageId={page.id}
-      version={page.version}
-      title={page.title}
-    />
-  );
+  return <ShownPage place={place} pageId={page.id} version={page.version} title={page.title} />;
 }
