@@ -1124,7 +1124,7 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
-  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
+  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
   // Note that a reply and a resolve are taken as the service takes them, answered with the item as it then stands, though nothing here moves, so the window draws its own send; the migration's approval is refused.
   [ACT_KIND.AGENTS_INBOX_MESSAGE]: ({ itemId, clientKey, text, answers }) => {

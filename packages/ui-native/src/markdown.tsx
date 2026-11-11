@@ -7,6 +7,7 @@ import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -131,6 +132,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   picture: { width: "100%", borderRadius: 8 },
+  pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
 });
@@ -468,7 +470,8 @@ type PictureProps = {
  * what the system draws at the trailing corner: the clock of the folded
  * iPhone Duo's outer display, beside its rail. Note that a picture
  * still on its way stands as its well at the shape a picture most often
- * is, so the words under it do not jump twice.
+ * is, the system's spinner in it as Photos stands one, so the words under
+ * it do not jump twice and it never reads as an empty box.
  */
 export function Picture({ source, alt }: PictureProps) {
   const colors = useColors();
@@ -479,7 +482,11 @@ export function Picture({ source, alt }: PictureProps) {
   const heard = alt === "" ? "Picture" : alt;
   const well = [styles.picture, { aspectRatio: aspect ?? 16 / 9, backgroundColor: colors.WELL }];
   if (source === undefined) {
-    return <View style={well} accessible accessibilityLabel={heard} />;
+    return (
+      <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
+        <ActivityIndicator color={colors.TEXT_MUTED} />
+      </View>
+    );
   }
   return (
     <>
