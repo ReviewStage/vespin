@@ -467,13 +467,13 @@ function DescriptionDocument({
     agents: tasks.agents,
   });
   // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
-  const descriptionsOn = useWorkspaceExperiment(
+  const shownWorkspaceId =
     region.kind === DOCUMENT_REGION.READY
       ? region.task.workspaceId
       : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
-          tasks.workspace?.id),
-    EXPERIMENT.DESCRIPTIONS,
-  );
+        tasks.workspace?.id);
+  const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
+  const turnEndOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.TURN_END);
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
   const comments = useDescriptionComments(
     useMemo(
@@ -796,14 +796,37 @@ function DescriptionDocument({
   }, [threadsAgent, onThreadsShown]);
   // Note that the dock stands, quiet, while the agent's threads are all settled, the one way into them from its card.
   const { open: boardOpen, settled: boardSettled } = inbox.board;
+  // An ask the bar answers from its row's buttons is sent as the Inbox's Send sends it, with the words drafted on its card.
+  const chooseAnswer = useSteadyDoor((item: InboxItem, label: string) =>
+    inbox.onMessage(item, { ...inbox.draftOf(item), choices: [label] }),
+  );
+  const { sending: inboxSending } = inbox;
   const threads = useMemo(() => {
     if (tabAgent === undefined) return undefined;
     const posted = [...boardOpen, ...boardSettled]
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
-    return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
-  }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
+    return posted.length === 0
+      ? undefined
+      : {
+          waiting,
+          posted,
+          onOpen: openWaitingThread,
+          turnEnd: turnEndOn,
+          onChoose: chooseAnswer,
+          sending: inboxSending,
+        };
+  }, [
+    tabAgent,
+    boardOpen,
+    boardSettled,
+    waitingOf,
+    openWaitingThread,
+    turnEndOn,
+    chooseAnswer,
+    inboxSending,
+  ]);
   const reader = useMemo(() => ({ readerId: tasks.me }), [tasks.me]);
   const editAgents = useMemo(() => ({ control: agents, onOpen: openAgent }), [agents, openAgent]);
   // The task's own menu, as the task's page holds it keyed by the task
