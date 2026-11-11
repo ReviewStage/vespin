@@ -43,8 +43,8 @@ interface WindowSurfaceDependencies {
   microphoneRouteWatcher: () => MicrophoneRouteWatch | undefined;
   recordProductEvent: RecordProductEvent;
   openExternal: (url: string) => Promise<void>;
-  /** Opens System Settings at Login Items (`SMAppService.openSystemSettingsLoginItems()`). */
-  openLoginItems: () => void;
+  /** Opens System Settings at Login Items (`SMAppService.openSystemSettingsLoginItems()`), rejecting where it could not. */
+  openLoginItems: () => Promise<void>;
   /** Writes words to the system's clipboard. */
   copyText: (words: string) => void;
   /** Writes a PNG, its bytes in base64, to the system's clipboard as a picture; answers false where the bytes draw no picture. */

@@ -75,7 +75,7 @@ function fixture() {
       openExternal: async (url) => {
         heard.push(`open:${url}`);
       },
-      openLoginItems: () => heard.push("login items"),
+      openLoginItems: async () => void heard.push("login items"),
       copyText: (words) => heard.push(`copy:${words}`),
       copyRich: ({ html, text }) => heard.push(`copy rich:${html}:${text}`),
       copyImage: (png) => {
