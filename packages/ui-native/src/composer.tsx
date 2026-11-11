@@ -28,6 +28,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BAR_RADIUS, GlassBar } from "./glass-bar.js";
+import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
@@ -82,6 +83,8 @@ type ComposerProps = {
   readonly stopping?: boolean | undefined;
   /** What stands over the field inside the same glass: the messages queued behind the turn, the pictures attached, and what a send that did not go said. */
   readonly head?: ReactNode;
+  /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
+  readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
 };
 
 /** The round button at the field's end: Send, filled with the ink once there is something to send and a faint well until then, or, while nothing is typed, Stop while a turn runs, the system's spinner once it is pressed, else the mic. */
@@ -112,7 +115,14 @@ function SendButton({
   }
   if (empty && onStop !== undefined) {
     return (
-      <Button onPress={onStop} modifiers={[buttonStyle("plain"), accessibilityLabel("Stop")]}>
+      <Button
+        onPress={onStop}
+        modifiers={[
+          buttonStyle("plain"),
+          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+          accessibilityLabel("Stop"),
+        ]}
+      >
         <Image
           systemName="stop.fill"
           size={MARK_SIZE.GLYPH - 2}
@@ -127,7 +137,14 @@ function SendButton({
   }
   if (empty && onDictate !== undefined) {
     return (
-      <Button onPress={onDictate} modifiers={[buttonStyle("plain"), accessibilityLabel("Dictate")]}>
+      <Button
+        onPress={onDictate}
+        modifiers={[
+          buttonStyle("plain"),
+          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+          accessibilityLabel("Dictate"),
+        ]}
+      >
         <Image systemName="mic" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
       </Button>
     );
@@ -137,6 +154,7 @@ function SendButton({
       onPress={() => onSend?.()}
       modifiers={[
         buttonStyle("plain"),
+        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         disabled(empty || onSend === undefined),
         accessibilityLabel("Send"),
       ]}
@@ -233,7 +251,14 @@ function ComposerPieces(props: ComposerProps) {
       {addMenu !== undefined ? (
         <AddMenu menu={addMenu} />
       ) : onAdd === undefined ? null : (
-        <Button onPress={onAdd} modifiers={[buttonStyle("plain"), accessibilityLabel(ADD_LABEL)]}>
+        <Button
+          onPress={onAdd}
+          modifiers={[
+            buttonStyle("plain"),
+            hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+            accessibilityLabel(ADD_LABEL),
+          ]}
+        >
           <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
         </Button>
       )}
@@ -265,12 +290,17 @@ function ComposerPieces(props: ComposerProps) {
  * words, and Send filled with the ink, or the mic while the field is empty
  * where dictation is offered. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
- * it empties on Send. It stands in a React Native bar (`GlassBar`), docked
- * over a compact window's screen (`GlassDock`).
+ * it empties on Send. Pictures dropped on it, on an iPad, go to its
+ * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),
+ * docked over a compact window's screen (`GlassDock`).
  */
 export function Composer(props: ComposerProps) {
+  const { onDropPictures } = props;
   return (
-    <GlassBar head={props.head}>
+    <GlassBar
+      head={props.head}
+      modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
+    >
       <ComposerPieces {...props} />
     </GlassBar>
   );

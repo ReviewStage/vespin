@@ -42,6 +42,7 @@ import { VERB } from "@repo/features/words";
 import { type ReactElement, type ReactNode, useContext, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import {
   Avatar,
   FailedMark,
@@ -150,6 +151,8 @@ type RowActs = {
   readonly menuActions?: readonly RowAction[] | undefined;
   /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
   readonly preview?: ReactElement | undefined;
+  /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
+  readonly link?: string | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -310,7 +313,8 @@ function swipeButton(swipe: RowSwipe, colors: BrandColors) {
  * is destructive, and in
  * the menu a long press opens, the trailing ones first, so a person who
  * never swipes still finds them; that menu then holds its submenus and the
- * acts only it offers. A row with a preview lifts it over the menu, which
+ * acts only it offers. A row with a link is dragged out as it, on an iPad
+ * into another app or onto a section. A row with a preview lifts it over the menu, which
  * then leads with Open. Note that SwiftUI's preview takes no tap of its own,
  * a tap on it closing the menu, so Open is what opens the row from there. A
  * row given what it is heard as reads to VoiceOver as one element, its title
@@ -325,6 +329,7 @@ export function RowFrame({
   menuSubmenus = [],
   menuActions = [],
   preview,
+  link,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
@@ -343,6 +348,7 @@ export function RowFrame({
           accessibilityLabel(heard.label),
           accessibilityValue(heardValue(heard.value)),
         ]),
+    ...(link === undefined ? [] : [dragLink(link)]),
   ];
   if (swiped.length + menuSubmenus.length + menuActions.length === 0 && preview === undefined) {
     return <HStack modifiers={frameModifiers}>{row}</HStack>;
@@ -638,6 +644,7 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       onPress={onPress}
       modifiers={[
         buttonStyle("borderless"),
+        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
       ]}
     >

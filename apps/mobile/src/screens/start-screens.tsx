@@ -207,6 +207,7 @@ function DraftSection({
         pictures={pictures.attached}
         onAdd={pictures.attach}
         onDetach={pictures.detach}
+        onDropPictures={pictures.drop}
         testId={testIds.ATTACH}
       />
     </ListSection>

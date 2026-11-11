@@ -13,6 +13,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
+import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import type { PickOption } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -65,21 +66,31 @@ type AttachRowProps = {
   readonly onDetach: (id: string) => void;
   /** The name a flow finds the + by. */
   readonly testId?: string | undefined;
+  /** Called with the file addresses of pictures dropped on the row from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
+  readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
 };
 
 /**
  * The pictures a sheet sends with its words, as a row under them: the +, as
  * a composer's field leads with it, then each picture attached as the
- * composer's head draws it, a capsule taken off on a press.
+ * composer's head draws it, a capsule taken off on a press. Pictures
+ * dropped on the row, on an iPad, are attached as the + attaches them.
  */
-export function AttachRow({ pictures, onAdd, onDetach, testId }: AttachRowProps) {
+export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }: AttachRowProps) {
   const colors = useColors();
   return (
-    <HStack spacing={SPACE.TIGHT * 2} modifiers={[listRowBackground(colors.SURFACE)]}>
+    <HStack
+      spacing={SPACE.TIGHT * 2}
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
+      ]}
+    >
       <Button
         onPress={onAdd}
         modifiers={[
           buttonStyle("plain"),
+          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
           accessibilityLabel("Add picture"),
           ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ]}

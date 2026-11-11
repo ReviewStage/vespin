@@ -1,5 +1,5 @@
 /**
- * use-attached-pictures.ts -- the pictures a message or a start carries, as an agent's composer and the sheets that start work hold them: picked from the system's photo picker, compressed as they are read, named as the panel names them, held to the service's bounds, and taken off on a press.
+ * use-attached-pictures.ts -- the pictures a message or a start carries, as an agent's composer and the sheets that start work hold them: picked from the system's photo picker or dropped from Photos or Files, compressed as they are read, named as the panel names them, held to the service's bounds, and taken off on a press.
  *
  * A picture is read as a JPEG at `PICTURE_QUALITY`, named "Picture 1",
  * "Picture 2", and on past every picture the holder has, and checked against
@@ -18,6 +18,7 @@ import {
 import { pictureName } from "@repo/features/file-marker";
 import type { AttachedPicture } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
+import { File } from "expo-file-system";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useRef, useState } from "react";
 
@@ -66,6 +67,8 @@ export interface AttachedPictures {
   readonly refusal: string | undefined;
   /** Opens the system's photo picker, adding what is picked. */
   readonly attach: () => void;
+  /** Adds pictures dropped on the holder, by the addresses of the JPEGs the drop kept (`dropPictures`), each file deleted once read, and says how many it could not keep. */
+  readonly drop: (uris: readonly string[], unreadable: number) => void;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
   readonly take: () => readonly HeldPicture[];
@@ -82,6 +85,25 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
   held.current = pictures;
+  // Pictures read as base64, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
+  const add = (contents: readonly (string | null | undefined)[], unreadable = 0) => {
+    const now = held.current;
+    const read = contents.map((base64, index): HeldPicture | string => {
+      const name = nextName(now, index);
+      if (base64 === null || base64 === undefined) return PICTURE_REFUSAL.UNREADABLE(name);
+      return {
+        id: randomUUID(),
+        file: { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: base64 },
+      };
+    });
+    const unread =
+      read.find((each): each is string => typeof each === "string") ??
+      (unreadable > 0 ? PICTURE_REFUSAL.UNREADABLE(nextName(now, read.length)) : undefined);
+    const next = [...now, ...read.filter((each): each is HeldPicture => typeof each !== "string")];
+    held.current = next;
+    setPictures(next);
+    onNote(unread ?? pictureRefusal(next));
+  };
   // Note that the system's photo picker reads only what the member picks, so no permission is asked for first.
   const attach = () => {
     launchImageLibraryAsync({
@@ -93,32 +115,36 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
     })
       .then((picked) => {
         if (picked.canceled) return;
-        const now = held.current;
-        const read = picked.assets.map((asset, index): HeldPicture | string => {
-          const name = nextName(now, index);
-          if (asset.base64 === null || asset.base64 === undefined) {
-            return PICTURE_REFUSAL.UNREADABLE(name);
-          }
-          return {
-            id: randomUUID(),
-            file: { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: asset.base64 },
-          };
-        });
-        const unread = read.find((each): each is string => typeof each === "string");
-        const next = [
-          ...now,
-          ...read.filter((each): each is HeldPicture => typeof each !== "string"),
-        ];
-        setPictures(next);
-        onNote(unread ?? pictureRefusal(next));
+        add(picked.assets.map((asset) => asset.base64));
       })
       .catch((error: unknown) => console.error("The photo picker did not open.", error));
+  };
+  // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
+  const drop = (uris: readonly string[], unreadable: number) => {
+    Promise.all(
+      uris.map((uri) => {
+        const file = new File(uri);
+        return file
+          .base64()
+          .catch(() => undefined)
+          .finally(() => {
+            try {
+              if (file.exists) file.delete();
+            } catch (error: unknown) {
+              console.error("A dropped picture's file was not deleted.", error);
+            }
+          });
+      }),
+    )
+      .then((contents) => add(contents, unreadable))
+      .catch((error: unknown) => console.error("The dropped pictures were not read.", error));
   };
   return {
     attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
     refusal: pictureRefusal(pictures),
     attach,
+    drop,
     detach: (id) => {
       setPictures((held) => held.filter((picture) => picture.id !== id));
       onNote(undefined);

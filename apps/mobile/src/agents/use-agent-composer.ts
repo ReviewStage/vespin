@@ -120,6 +120,8 @@ export interface AgentComposer {
   readonly sendQueues: boolean;
   readonly attached: readonly AttachedPicture[];
   readonly attach: () => void;
+  /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept. */
+  readonly dropPictures: (uris: readonly string[], unreadable: number) => void;
   readonly detach: (id: string) => void;
   /** Stops the turn under way; none while the agent rests. */
   readonly stop: (() => void) | undefined;
@@ -304,6 +306,7 @@ export function useAgentComposer(
     send,
     attached: pictures.attached,
     attach: pictures.attach,
+    dropPictures: pictures.drop,
     detach: pictures.detach,
     stop: writing ? stop : undefined,
     stopping,

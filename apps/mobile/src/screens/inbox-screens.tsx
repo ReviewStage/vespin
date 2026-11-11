@@ -176,6 +176,7 @@ function InboxRows({
  * edge marks it read or unread, and one from the trailing edge resolves it
  * while it stands open, which a full swipe runs, or opens Remind me. A long
  * press lifts its preview, the thread's newest messages, over the same acts.
+ * On an iPad it drags out as its vespin.dev link.
  * The one row every list of Inbox items draws, the Search tab's among them.
  */
 export function InboxRow({
@@ -199,6 +200,8 @@ export function InboxRow({
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const title = cardTitle(item.title);
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
     () =>
@@ -249,6 +252,10 @@ export function InboxRow({
           onPress: () => onMark(item.id, !unread),
         },
       ]}
+      link={linkOf(
+        { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+        workspace?.slug ?? workspace?.id ?? holder.task.workspaceId ?? "",
+      )}
       preview={
         <ThreadPreview
           title={title}

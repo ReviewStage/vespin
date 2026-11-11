@@ -5,7 +5,12 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  readLink,
+} from "@repo/features/link-grammar";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
 import { subTasksOf, taskFinished } from "@repo/features/task-list-model";
@@ -16,6 +21,7 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
+  TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
   type TaskTreeNode,
@@ -293,6 +299,14 @@ export function TaskNodeRow({
       depth={depth}
       {...rowActs(task, look.unread, listing)}
       preview={taskPreview(task, listing)}
+      link={
+        listing.workspace === undefined
+          ? undefined
+          : linkOf(
+              { kind: LINK_DESTINATION.TASK, planId: task.id },
+              listing.workspace.slug ?? listing.workspace.id,
+            )
+      }
       subRows={
         children.length === 0
           ? undefined
@@ -304,7 +318,33 @@ export function TaskNodeRow({
   );
 }
 
-/** One group of the tree as its section: Pinned, a section of the member's, or a repository, folding under its header and count; My tasks heads a repository group the tree draws no heading for. */
+/** The task a link dropped on a group names, by its id or its number, among the tasks the tree lists; none for a link to anything else. */
+function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
+  const place = readLink(url)?.place;
+  if (place?.kind !== LINK_DESTINATION.TASK) return undefined;
+  const listed = [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...tree.sections,
+    ...tree.tasks,
+  ]
+    .flatMap((group) => group.rows)
+    .map(({ task }) => task);
+  return listed.find((task) => task.id === place.planId || String(task.number) === place.planId);
+}
+
+/** What a task dropped on a group's header does there: onto Pinned it is pinned, onto a section it is put in it, and onto a repository group it leaves its section. */
+function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummary) => void {
+  if (group.kind === TASK_TREE_GROUP.PINNED) return (task) => listing.pin(task.id, true);
+  if (group.kind === TASK_TREE_GROUP.SECTION) return (task) => listing.place(task.id, group.key);
+  return (task) => listing.place(task.id, null);
+}
+
+/**
+ * One group of the tree as its section: Pinned, a section of the member's,
+ * or a repository, folding under its header and count; My tasks heads a
+ * repository group the tree draws no heading for. A task's row dragged onto
+ * its header, as an iPad drags, moves the task there (`placeIn`).
+ */
 function GroupSection({
   group,
   listing,
@@ -312,8 +352,17 @@ function GroupSection({
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
 }) {
+  const place = placeIn(group, listing);
   return (
-    <ListSection title={group.title ?? listing.tree.tasksHead} count={group.rows.length} foldable>
+    <ListSection
+      title={group.title ?? listing.tree.tasksHead}
+      count={group.rows.length}
+      foldable
+      onDropLink={(url) => {
+        const task = droppedTask(listing.tree, url);
+        if (task !== undefined) place(task);
+      }}
+    >
       {taskTreeNodes(group.rows).map((node) => (
         <TaskNodeRow key={node.task.id} node={node} listing={listing} />
       ))}
