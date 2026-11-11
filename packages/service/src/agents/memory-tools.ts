@@ -1,5 +1,7 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
+import { logMemoryRecalls } from "@repo/database/models/memory-recall-store";
+import type { MemorySource } from "@repo/database/models/memory-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { MEMORY_BOUNDS, type MemorySummary, memoryIdSchema } from "@repo/features/memory-wire";
 import { EXPERIMENT } from "@repo/settings";
@@ -13,6 +15,7 @@ import {
   WORKSPACE_MEMORY_SAVE,
 } from "../accounts/workspace-memories.js";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../core.js";
+import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { logStoreFailure } from "../http/store-failure.js";
 import {
   type AgentCall,
@@ -21,7 +24,7 @@ import {
   callerWorkspace,
   callerWorkspaceId,
 } from "./agent-tools.js";
-import { rememberRefusal } from "./memory-provenance.js";
+import { type MemoryProvenance, recallSource, rememberProvenance } from "./memory-provenance.js";
 import { EXPERIMENT_OFF_REFUSAL, experimentOnIn } from "./workspace-experiment-on.js";
 
 /**
@@ -47,12 +50,20 @@ import { EXPERIMENT_OFF_REFUSAL, experimentOnIn } from "./workspace-experiment-o
  * neither's words are a member's. Every outcome, a store that
  * cannot be reached included, is a result the model reads, so a memory that
  * fails never fails the turn.
+ *
+ * A coding agent's call carries where it comes from (`MemorySource`): the
+ * agent, and the line that opened its turn (`memory-provenance.ts`). A keep
+ * names them on the memory, and a search logs each memory it answers as
+ * recalled by them (`recordMemoryRecalls`), after the search and never
+ * failing it; a member's own call, through their client or the member MCP
+ * server, carries none, so it names no agent and logs no recall.
  */
 
-/** What a memory call acts in: the agent's workspace, and the member whose words it keeps. */
+/** What a memory call acts in: the agent's workspace, the member whose words it keeps, and, for a coding agent's call, where it comes from. */
 export interface MemoryCall {
   readonly workspaceId: string;
   readonly userId: string;
+  readonly source?: MemorySource;
 }
 
 const REMEMBER_INPUT = Schema.Struct({
@@ -172,7 +183,7 @@ export function runRemember(
   const { text, replaces } = asked.success;
   return orUnavailable(
     Effect.map(
-      saveWorkspaceMemory(call.userId, call.workspaceId, text, replaces),
+      saveWorkspaceMemory(call.userId, call.workspaceId, text, replaces, call.source),
       (answer): WireRecord =>
         answer.kind === WORKSPACE_MEMORY_SAVE.SAVED
           ? {
@@ -185,7 +196,33 @@ export function runRemember(
   );
 }
 
-/** One call of `search_memory` in the call's workspace, by the one search every surface makes (`searchWorkspaceMemories`): its memories the query finds, and how many it holds. */
+/**
+ * Logs each memory named as recalled by the coding agent in `source`, in
+ * the call's workspace, and counts the recall, once the memories are in
+ * hand: a turn's search, and a turn handed memories as it opens. An empty
+ * list logs nothing. It never fails: a store that cannot be reached is
+ * logged for the operator, and the recall goes unlogged.
+ */
+export function recordMemoryRecalls(
+  call: MemoryCall,
+  memoryIds: readonly string[],
+  source: MemorySource,
+): Effect.Effect<void, never, DatabaseServices> {
+  if (memoryIds.length === 0) return Effect.void;
+  return Effect.catch(
+    Effect.andThen(
+      logMemoryRecalls(call.workspaceId, memoryIds, source),
+      recordServerEvent(
+        SERVER_EVENT.MEMORY_RECALL,
+        { userId: call.userId, workspaceId: call.workspaceId },
+        { memories: memoryIds.length },
+      ),
+    ),
+    logStoreFailure,
+  );
+}
+
+/** One call of `search_memory` in the call's workspace, by the one search every surface makes (`searchWorkspaceMemories`): its memories the query finds, and how many it holds, each logged as recalled where a coding agent searched. */
 export function runRecall(
   call: MemoryCall,
   input: UnparsedWireValue,
@@ -193,17 +230,26 @@ export function runRecall(
   const asked = readRecall(input);
   if (Result.isFailure(asked)) return Effect.succeed(rejected(MEMORY_REFUSAL.UNREADABLE_RECALL));
   return orUnavailable(
-    Effect.map(
-      searchWorkspaceMemories(call.userId, call.workspaceId, asked.success.query),
-      (answer): WireRecord =>
-        answer.kind === WORKSPACE_MEMORY.NOT_MEMBER
-          ? rejected(MEMORY_REFUSAL.UNAVAILABLE)
-          : {
-              status: ACTION_RESULT_STATUS.ACCEPTED,
-              memories: answer.memories.map(memoryRecord),
-              total: answer.total,
-            },
-    ),
+    Effect.gen(function* () {
+      const answer = yield* searchWorkspaceMemories(
+        call.userId,
+        call.workspaceId,
+        asked.success.query,
+      );
+      if (answer.kind === WORKSPACE_MEMORY.NOT_MEMBER) return rejected(MEMORY_REFUSAL.UNAVAILABLE);
+      if (call.source !== undefined) {
+        yield* recordMemoryRecalls(
+          call,
+          answer.memories.map((memory) => memory.id),
+          call.source,
+        );
+      }
+      return {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        memories: answer.memories.map(memoryRecord),
+        total: answer.total,
+      };
+    }),
   );
 }
 
@@ -242,7 +288,7 @@ export function runListMemories(
 function agentMemory(
   call: AgentCall,
   run: (memory: MemoryCall) => Effect.Effect<WireRecord, never, DatabaseServices>,
-  refusal?: (agent: Agent) => Effect.Effect<string | undefined, StoreFailure, DatabaseServices>,
+  provenance: (agent: Agent) => Effect.Effect<MemoryProvenance, StoreFailure, DatabaseServices>,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return orUnavailable(
     Effect.gen(function* () {
@@ -250,30 +296,46 @@ function agentMemory(
         return rejected(EXPERIMENT_OFF_REFUSAL);
       }
       const userId = callerUserId(call.caller);
-      // A refusal reads the calling agent's turn; a member's call is their own words, and has none.
+      // Provenance reads the calling agent's turn; a member's call is their own words, and has none.
       const agent = callerAgent(call.caller);
-      const refused =
-        refusal === undefined || agent === undefined ? undefined : yield* refusal(agent);
-      if (refused !== undefined) return rejected(refused);
+      const read = agent === undefined ? undefined : yield* provenance(agent);
+      if (read?.refusal !== undefined) return rejected(read.refusal);
       const workspace = yield* callerWorkspace(call.caller);
       if (Option.isNone(workspace)) return rejected(MEMORY_REFUSAL.UNAVAILABLE);
-      return yield* run({ workspaceId: workspace.value, userId });
+      return yield* run({
+        workspaceId: workspace.value,
+        userId,
+        ...(read === undefined ? undefined : { source: read.source }),
+      });
     }),
   );
 }
 
-/** One call of `save_memory` from a coding agent, refused on a turn whose words are no member's (`rememberRefusal`). */
+/**
+ * Where an agent's search recalls from, refusing nothing. Note that a turn
+ * that cannot be read still searches, its recalls logged under the agent
+ * alone, because logging a recall must never fail the search.
+ */
+const recallProvenance = (agent: Agent): Effect.Effect<MemoryProvenance, never, DatabaseServices> =>
+  Effect.map(
+    Effect.catch(recallSource(agent), (failure) =>
+      Effect.as(logStoreFailure(failure), { agentId: agent.id, messageId: null }),
+    ),
+    (source) => ({ refusal: undefined, source }),
+  );
+
+/** One call of `save_memory` from a coding agent, refused on a turn whose words are no member's, and kept as from the agent and its turn's line (`rememberProvenance`). */
 export function runAgentRemember(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return agentMemory(call, (memory) => runRemember(memory, input), rememberRefusal);
+  return agentMemory(call, (memory) => runRemember(memory, input), rememberProvenance);
 }
 
-/** One call of `search_memory` from a coding agent. */
+/** One call of `search_memory` from a coding agent, each memory it answers logged as recalled by the agent. */
 export function runAgentRecall(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return agentMemory(call, (memory) => runRecall(memory, input));
+  return agentMemory(call, (memory) => runRecall(memory, input), recallProvenance);
 }

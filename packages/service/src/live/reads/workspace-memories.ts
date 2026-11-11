@@ -5,28 +5,69 @@
  * with the name of the member whose words it holds, null once that account
  * is gone, and whether the reader may forget it: its words are theirs, or
  * they own or administer the workspace, as `forgetMemory`'s caller settles
- * it (`WORKSPACE_MEMORIES_READ`). A workspace the reader is no member of is
- * answered as not found.
+ * it (`WORKSPACE_MEMORIES_READ`). Each says too where its words came from,
+ * the agent, the line that opened its turn, and the agent's task, only
+ * where the reader may open that agent and task (`agentVisibleTo`), as
+ * `readMemorySources` says it; and how often agents were handed it in the
+ * last `MEMORY_RECALL_WINDOW_DAYS` days and when last, as
+ * `tallyMemoryRecalls` counts them. A workspace the reader is no member of
+ * is answered as not found.
  *
  * It is woken on the workspace's memory topic by a memory kept, corrected,
- * or forgotten, and on the reader's own by their membership made, ended, or
- * given another role, which decides what they read and may forget. Note
- * that a teammate's rename wakes neither, since a member's row names only
- * their own topic and their workspaces': a keeper's new name shows at the
- * hold's end.
+ * forgotten, or recalled, and on the reader's own by their membership made,
+ * ended, or given another role, which decides what they read and may
+ * forget, or by their own GitHub token moving, which decides which agents'
+ * tasks they may open. Note that a teammate's rename wakes neither, since a
+ * member's row names only their own topic and their workspaces': a keeper's
+ * new name shows at the hold's end, as a task's new name does; and that the
+ * window's edge passing wakes nothing, so a recall that falls out of it is
+ * still counted until the next wake.
  */
 
 import { queryBuilder } from "@repo/database/core/query";
-import { roleAmong, workspaceReachableBy } from "@repo/database/models/workspace-store";
+import {
+  agentVisibleTo,
+  roleAmong,
+  workspaceReachableBy,
+} from "@repo/database/models/workspace-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { member, user } from "@repo/database/schemas/auth";
-import { memory } from "@repo/database/schemas/memory";
+import { memory, memoryRecall } from "@repo/database/schemas/memory";
+import { task } from "@repo/database/schemas/task";
 import { TOPIC } from "@repo/database/sync/notification";
-import { memberSync, memorySync, userSync } from "@repo/database/sync/tables";
+import {
+  agentSync,
+  githubPersonalTokenSync,
+  githubRepositoryReadSync,
+  memberSync,
+  memoryRecallSync,
+  memorySync,
+  taskSync,
+  userSync,
+} from "@repo/database/sync/tables";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
+import { MEMORY_RECALL_WINDOW_DAYS } from "@repo/features/memory-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import { and, eq, exists, or, sql } from "drizzle-orm";
-import { bindLiveRead, liveRowsStatement } from "../live-read-binding.js";
+import { and, eq, exists, gte, or, sql } from "drizzle-orm";
+import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
 import { admitWorkspaceMember } from "./workspace-member.js";
+
+/** The start of the window a memory's recalls are counted over. */
+const RECALL_WINDOW_OPENS = sql`now() - ${sql.raw(`interval '${MEMORY_RECALL_WINDOW_DAYS} days'`)}`;
+
+/** How often the memory was recalled in the window. */
+const RECALLS_IN_WINDOW = sql<number>`(${queryBuilder
+  .select({ recalls: sql`count(*)::int` })
+  .from(memoryRecall)
+  .where(
+    and(eq(memoryRecall.memoryId, memory.id), gte(memoryRecall.recalledAt, RECALL_WINDOW_OPENS)),
+  )})`;
+
+/** When the memory was last recalled, as epoch milliseconds; null where it never was. */
+const LAST_RECALLED_AT = sql<number | null>`floor(extract(epoch from ((${queryBuilder
+  .select({ latest: sql`max(${memoryRecall.recalledAt})` })
+  .from(memoryRecall)
+  .where(eq(memoryRecall.memoryId, memory.id))}) at time zone 'UTC')) * 1000)::float8`;
 
 /** Whether the reader may forget a memory: its words are theirs, or they own or administer the workspace. */
 function forgettableBy(readerId: string, workspaceId: string) {
@@ -47,7 +88,16 @@ function forgettableBy(readerId: string, workspaceId: string) {
 }
 
 export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
-  reads: [memorySync, memberSync, userSync],
+  reads: [
+    memorySync,
+    memoryRecallSync,
+    memberSync,
+    userSync,
+    agentSync,
+    taskSync,
+    githubPersonalTokenSync,
+    githubRepositoryReadSync,
+  ],
   topics: ({ userId, workspaceId }) => [
     [TOPIC.MEMORY, workspaceId],
     [TOPIC.ACCOUNT, userId],
@@ -64,6 +114,15 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
           // Note that the keeper is left-joined, so their name is null once their account is gone, which the column alone does not say.
           keeperName: sql<string | null>`${user.name}`,
           forgettable: forgettableBy(userId, workspaceId),
+          sourceAgentId: outerJoined(agentTable.id),
+          // Note that the line is read only beside an agent the reader may open, so it says nothing of one they may not.
+          sourceMessageId: sql<
+            string | null
+          >`case when ${agentTable.id} is not null then ${memory.messageId} end`,
+          sourceTaskId: outerJoined(task.id),
+          sourceTaskName: outerJoined(task.name),
+          recalls30d: RECALLS_IN_WINDOW,
+          lastRecalledAt: LAST_RECALLED_AT,
         },
         instants: { createdAt: memory.createdAt, updatedAt: memory.updatedAt },
       },
@@ -72,6 +131,8 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
           .select(selection)
           .from(memory)
           .leftJoin(user, eq(user.id, memory.userId))
+          .leftJoin(agentTable, and(eq(agentTable.id, memory.agentId), agentVisibleTo(userId)))
+          .leftJoin(task, eq(task.id, agentTable.taskId))
           .where(
             and(eq(memory.organizationId, workspaceId), workspaceReachableBy(userId, workspaceId)),
           ),
