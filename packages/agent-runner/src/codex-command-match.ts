@@ -1,5 +1,5 @@
 /**
- * command-match.ts -- whether a command a Codex approval request names starts with one of the commands the member always allows, read conservatively: one plain command or nothing.
+ * codex-command-match.ts -- whether a command a Codex approval request names starts with one of the commands the member always allows, read conservatively: one plain command or nothing.
  *
  * Codex takes allow rules only from files in its home or the checkout, and
  * an exec-policy `allow` runs its command outside Codex's sandbox, so the
@@ -11,8 +11,8 @@
  * - The request's `command` is the argv Codex will run, quoted and joined
  *   (`shlex_join`), so it is split back by POSIX quoting; anything else a
  *   shell would read in it, unquoted, refuses the match.
- * - An argv that runs a shell on a script (`bash -lc 'pnpm test'`) is read
- *   as its script, which must be one simple command of plain words: no
+ * - An argv that runs a system shell on a script (`/bin/bash -lc 'pnpm
+ *   test'`) is read as its script, which must be one simple command of plain words: no
  *   quote, escape, operator, redirection, substitution, glob, comment, or
  *   line break, so a compound command or any other shell syntax is never a
  *   match.
@@ -24,8 +24,18 @@
 import { type CommandPrefix, CommandPrefixSchema } from "@repo/wire";
 import { Option, Schema } from "effect";
 
-/** The shells whose `-c` script is read as the command it runs. */
-const SHELLS: ReadonlySet<string> = new Set(["bash", "sh", "zsh"]);
+/**
+ * The shells whose `-c` script is read as the command it runs: each by its
+ * bare name, found on the launch's own PATH, or at a system install's path.
+ * Note that a shell is known by its whole path, never its file name, since a
+ * checkout's own `./tools/bash` would run the script as it pleases.
+ */
+const SHELLS: ReadonlySet<string> = new Set(
+  ["bash", "sh", "zsh"].flatMap((shell) => [
+    shell,
+    ...["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"].map((bin) => `${bin}/${shell}`),
+  ]),
+);
 
 /** The flags that hand a shell its script. */
 const SCRIPT_FLAGS: ReadonlySet<string> = new Set(["-c", "-lc"]);
@@ -117,8 +127,12 @@ function scriptWords(script: string): readonly string[] | undefined {
 /** The plain words the argv runs: a shell's script read as its one command, or the argv itself; none where any is no plain word. */
 function commandWords(argv: readonly string[]): readonly string[] | undefined {
   const [program, flag, script, ...rest] = argv;
-  const shell = program?.split("/").pop();
-  if (shell !== undefined && SHELLS.has(shell) && flag !== undefined && SCRIPT_FLAGS.has(flag)) {
+  if (
+    program !== undefined &&
+    SHELLS.has(program) &&
+    flag !== undefined &&
+    SCRIPT_FLAGS.has(flag)
+  ) {
     return script === undefined || rest.length > 0 ? undefined : scriptWords(script);
   }
   return argv.length > 0 && argv.every(isPlainWord) ? argv : undefined;

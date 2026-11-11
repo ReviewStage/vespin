@@ -44,6 +44,7 @@ describe("an always-allowed command on Codex", () => {
     { command: "env FOO=1 pnpm test", why: "a command run through env" },
     { command: "/bin/bash -lc 'pnpm test' extra", why: "a shell handed more than its script" },
     { command: "/bin/bash -e -c 'pnpm test'", why: "a shell flag before its script" },
+    { command: "./tools/bash -lc 'pnpm test'", why: "a checkout's own program named like a shell" },
     { command: "pnpm test 'a b'", why: "an argument holding a space" },
     { command: "pnpm test 'unclosed", why: "an open quote" },
     { command: "pnpm test;rm", why: "an unquoted operator" },
