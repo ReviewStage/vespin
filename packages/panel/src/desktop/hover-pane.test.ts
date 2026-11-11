@@ -11,11 +11,13 @@ import { PANE_FLOAT, type PaneFloat, useFloatDismiss, useHoverPane } from "./hov
 /**
  * A pane that floats as the sidebar does, drawn through the module's two
  * hooks alone: its toggle opens it, its edge peeks it, and its one row is
- * a choice. A menu it raised stands outside it, through a portal, and the
- * work beside it holds a button of its own.
+ * a choice. A menu it raised stands outside it, through a portal, as does
+ * the card its Resources button hangs while it stands open, and the work
+ * beside it holds a button of its own.
  */
 function Floating({ opensOn }: { opensOn: PaneFloat }): React.JSX.Element {
   const [state, onState] = useState<PaneFloat>(opensOn);
+  const [card, setCard] = useState(false);
   const float = { state, onState };
   const keep = useFloatDismiss(float);
   const pane = useHoverPane(float, {
@@ -46,6 +48,20 @@ function Floating({ opensOn }: { opensOn: PaneFloat }): React.JSX.Element {
         onKeyDown: pane.onKeyDown,
       },
       createElement("button", { type: "button", className: "row", onClick: choose }, "Row"),
+      createElement(
+        "button",
+        {
+          type: "button",
+          className: "resources",
+          "aria-haspopup": "dialog",
+          "aria-expanded": card,
+          onClick: () => setCard(!card),
+        },
+        "Resources",
+      ),
+      card
+        ? createPortal(createElement("div", { role: "dialog", className: "card" }), document.body)
+        : null,
       // A menu the pane raised, drawn outside it through a portal, as the sidebar's are.
       createPortal(createElement("div", { role: "menu", className: "menu" }), document.body),
     ),
@@ -166,6 +182,23 @@ test("a press in a peek leaves it a peek, gone once the pointer leaves, though n
   assert.equal(standing(page), PANE_FLOAT.PEEK, "a menu it raised is no way out");
   pointerCross(menu, work);
   assert.equal(standing(page), PANE_FLOAT.CLOSED, "the menu left for the work leaves the peek");
+});
+
+test("a peek stays while a popup raised from it stands, wherever the pointer leaves it for, and goes once the popup does", async () => {
+  const page = mount();
+  const aside = part(page, "aside");
+  pointerCross(part(page, ".work"), part(page, ".edge"));
+  act(() => part(page, ".resources").click());
+  const card = document.querySelector(".card") ?? assert.fail("the card is drawn");
+  pointerCross(aside, card);
+  // The pointer leaves the card for another app's window, which names no element.
+  act(() => {
+    card.dispatchEvent(new MouseEvent("pointerout", { bubbles: true, relatedTarget: null }));
+  });
+  assert.equal(standing(page), PANE_FLOAT.PEEK, "the card holds the peek it hangs from");
+  // The popup's going is heard as a mutation, which is told after the press.
+  await act(async () => part(page, ".resources").click());
+  assert.equal(standing(page), PANE_FLOAT.CLOSED, "the card gone, the peek goes with it");
 });
 
 test("a pane opened from away holds the keyboard against Tab until Escape hands it back", () => {

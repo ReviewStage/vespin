@@ -1628,7 +1628,8 @@ function useFirstUsableSpan(tasks: TasksControl): void {
  * reaches a row nobody can see, until it floats open over the work
  * (`sidebar-collapse.ts`). A floating sidebar is put away by a choice in it,
  * by Escape, by a press outside, or once the pointer leaves a peek, a press
- * in it or not, though not for a menu it raised (`hover-pane.ts`). Opened
+ * in it or not, though not for a menu it raised, nor while a popup raised
+ * from it, as Resources' card, stands open (`hover-pane.ts`). Opened
  * from away, it takes the keyboard at the row it marks, else at Search,
  * holds it there against Tab, and Escape gives the keyboard back where it
  * was. Floating, it has no edge to drag, since only a pinned sidebar is
