@@ -3352,6 +3352,20 @@ test("Review opens a panel whose choice and words are submitted for the agent as
   );
 });
 
+test("Escape in the review's words closes the panel and hands the focus back to Review, its words kept", async () => {
+  const tab = await draw(controlAnswering());
+  const panel = openReview(tab);
+  writeReview(panel, "Almost.");
+
+  pressInBox(panel, { key: "Escape" }, "Review comment");
+  await settle();
+
+  assert.equal(tab.querySelector('[role="dialog"]'), null, "the panel closes");
+  assert.equal(document.activeElement, reviewPress(tab), "the focus is back on Review");
+  assert.equal(boxWords(openReview(tab), "Review comment"), "Almost.");
+  assert.deepEqual(changes, []);
+});
+
 test("Enter submits the review from its words, while Shift+Enter only adds a line and an input method's Enter sends nothing", async () => {
   const tab = await draw(controlAnswering());
   const panel = openReview(tab);
