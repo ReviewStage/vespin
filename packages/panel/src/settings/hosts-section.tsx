@@ -109,8 +109,8 @@ import { MenuRow } from "./menu-row.js";
  * folders off this Mac. While on it says the host's standing, and offline
  * until the service lists it. A Mac removed from anywhere else reads off,
  * since nothing enrolls it again unasked. A build that only reads This
- * Mac's host (`AppThisMacHost.releasedOnly`) draws the switch locked, saying
- * only the released app runs it, and one whose host is another account's
+ * Mac's host (`AppThisMacHost.releasedOnly`) draws the switch disabled, its
+ * line saying only the released app runs it, and one whose host is another account's
  * says so where turning it on or off is refused. A browser tab has no This
  * Mac, so it draws none.
  *
@@ -355,7 +355,9 @@ function ThisMacRow({
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
-  const description = !on ? (
+  const description = releasedOnly ? (
+    THIS_MAC_WORDS.RELEASED_ONLY
+  ) : !on ? (
     THIS_MAC_WORDS.OFF
   ) : host === undefined ? (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
@@ -378,7 +380,7 @@ function ThisMacRow({
             checked={on}
             label={THIS_MAC_WORDS.SWITCH}
             describedBy={control["aria-describedby"]}
-            locked={releasedOnly ? THIS_MAC_WORDS.RELEASED_ONLY : undefined}
+            disabled={releasedOnly}
             onChange={(next) => onChange(next)}
           />
         )}
