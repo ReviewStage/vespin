@@ -17,7 +17,7 @@ import type { SearchBarCommands } from "react-native-screens";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { SettingsBarButton } from "../settings-button.js";
-import { type TasksListing, useStatusAsk } from "../tasks/use-tasks.js";
+import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxRow } from "./inbox-screens.js";
 import { StatusQuestionAsk, TaskAgentRow, TaskNodeRow } from "./task-screens.js";
@@ -115,9 +115,8 @@ export function SearchScreen() {
     typed.current = query;
   }, [query]);
   const found = useSearchFound(query);
-  // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents.
-  const { setStatus, question } = useStatusAsk(found.listing);
-  const listing: TasksListing = { ...found.listing, setStatus };
+  // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
+  const { listing, status, deletion } = useListingAsks(found.listing);
   const remind = useRemindSheet();
   useFocusEffect(
     useCallback(() => {
@@ -149,7 +148,8 @@ export function SearchScreen() {
         ) : (
           <FoundList found={found} listing={listing} onOpen={open} onRemind={remind.open} />
         )}
-        <StatusQuestionAsk question={question} />
+        <StatusQuestionAsk question={status} />
+        <StatusQuestionAsk question={deletion} />
         {remind.sheet}
       </Screen>
     </>

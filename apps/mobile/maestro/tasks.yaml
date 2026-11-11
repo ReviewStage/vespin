@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press menu, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it and its status changed from its ⋯, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press menu with its Copy link share sheet, Rename alert, and Permanently delete question, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -66,18 +66,51 @@ onFlowComplete:
 - assertNotVisible: "Usage alerts"
 - takeScreenshot: tasks-marked-done
 # A long press on a task offers the panel's row menu: Mark done, Status,
-# Mark as unread, Unpin on a pinned task, and Open in browser. The pinned
-# Weekly digest email's agent is at work.
+# Copy link, Rename, Mark as unread, Unpin on a pinned task, Open in
+# browser, and Permanently delete. The pinned Weekly digest email's agent is
+# at work.
 - scrollUntilVisible:
     element: "Weekly digest email"
     direction: UP
 - waitForAnimationToEnd
 - longPressOn: "Weekly digest email"
 - assertVisible: "Status"
+- assertVisible: "Copy link"
+- assertVisible: "Rename"
 - assertVisible: "Mark as unread"
 - assertVisible: "Unpin"
 - assertVisible: "Open in browser"
+- assertVisible: "Permanently delete"
 - takeScreenshot: tasks-row-menu
+# Rename asks for the name in the system's alert, opened on the task's name,
+# and Cancel keeps it.
+- tapOn: "Rename"
+- assertVisible: "Rename task"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-rename
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# Permanently delete asks first, in the panel's words, and Cancel keeps the
+# task.
+- longPressOn: "Weekly digest email"
+- tapOn: "Permanently delete"
+- assertVisible: "Permanently delete task?"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-delete-ask
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- assertVisible: "Weekly digest email"
+# Copy link raises the system's share sheet on the task's address, whose
+# first row copies it; its close puts it away.
+- longPressOn: "Weekly digest email"
+- tapOn: "Copy link"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-copy-link
+- tapOn:
+    text: "Close"
+    optional: true
+- waitForAnimationToEnd
+- longPressOn: "Weekly digest email"
 # Mark as unread draws the row's dot.
 - tapOn: "Mark as unread"
 - waitForAnimationToEnd
@@ -152,6 +185,52 @@ onFlowComplete:
     direction: UP
 - assertVisible: "Todo"
 - takeScreenshot: task-status-set
+# Its ⋯ holds the panel's acts: Copy link, Rename, New sub-task, Open in
+# browser, and Permanently delete, red and last, which asks first.
+- tapOn: "More"
+- assertVisible: "Copy link"
+- assertVisible: "New sub-task"
+- assertVisible: "Permanently delete"
+- takeScreenshot: task-more-menu
+- tapOn: "Permanently delete"
+- assertVisible: "Permanently delete task?"
+- waitForAnimationToEnd
+- takeScreenshot: task-delete-ask
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# New sub-task under its Sub-tasks opens New task as a sub-task of it, its
+# repository the task's own; Cancel on a sheet with nothing typed closes it.
+- scrollUntilVisible:
+    element: "New sub-task"
+    direction: DOWN
+- tapOn: "New sub-task"
+- assertVisible: "Describe the task"
+- assertVisible: "Relation, Sub-task of"
+- hideKeyboard
+- waitForAnimationToEnd
+- takeScreenshot: new-sub-task
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# Its description's open comment threads stand under it; one opens with its
+# comments and the reply field, a reply typed into it.
+- scrollUntilVisible:
+    element: "Comments"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: task-comments
+- tapOn: "Should an owner be able to resend.*"
+- assertVisible: "Yes: Resend stands beside each expired invite.*"
+- waitForAnimationToEnd
+- takeScreenshot: task-comment-thread
+- tapOn: "Reply"
+- inputText: "Thanks, that covers it."
+- waitForAnimationToEnd
+- takeScreenshot: task-comment-reply
+- tapOn: "Send"
+- waitForAnimationToEnd
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: two
 # columns, or on an iPad three, its groups beside the group's tasks.
 - tapOn: "Tasks"

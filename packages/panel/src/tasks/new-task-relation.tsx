@@ -1,5 +1,5 @@
 import { sameRepository } from "@repo/features/github-repositories-wire";
-import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
@@ -60,12 +60,7 @@ import { TaskKey } from "./task-standing.js";
  */
 
 /** Each kind as the rows, the kind submenu, and the search name it, from the new task's side. */
-const KIND_WORDS = {
-  [TASK_CREATE_RELATION_KIND.SUB_TASK_OF]: "Sub-task of",
-  [TASK_CREATE_RELATION_KIND.PARENT_OF]: "Parent of",
-  [TASK_CREATE_RELATION_KIND.BLOCKED_BY]: "Blocked by",
-  [TASK_CREATE_RELATION_KIND.BLOCKS]: "Blocks",
-} as const satisfies Record<TaskCreateRelationKind, string>;
+const KIND_WORDS = TASK_CREATE_RELATION_WORDS;
 
 /** The kinds in the order the kind submenu and a row's pill stand them, as the add menu stands its own. */
 const KIND_ORDER: readonly TaskCreateRelationKind[] = [

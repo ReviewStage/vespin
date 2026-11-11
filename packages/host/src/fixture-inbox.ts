@@ -43,6 +43,14 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import {
+  DESCRIPTION_COMMENT_ACTION,
+  DESCRIPTION_COMMENT_ACTOR,
+  DESCRIPTION_COMMENT_ENTRY,
+  DESCRIPTION_COMMENT_SCOPE,
+  DESCRIPTION_COMMENT_STATUS,
+  type DescriptionCommentThread,
+} from "@repo/features/description-comment-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
@@ -66,7 +74,11 @@ import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import {
+  COMMENT_SUBJECT,
+  DESCRIPTION_COMMENT_CALL_FAILURE,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
@@ -1068,6 +1080,80 @@ function stagedPages(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ
   return laid;
 }
 
+/** The threads on the reference journey's description: one open, Ada's question and its agent's answer, and one resolved, which its page leaves out. */
+const INVITES_THREADS: readonly DescriptionCommentThread[] = [
+  {
+    id: fixtureId(301),
+    scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
+    quote: "Invites expire after seven days",
+    anchor: { from: 0, to: 31 },
+    section: "Goal",
+    status: DESCRIPTION_COMMENT_STATUS.OPEN,
+    entries: [
+      {
+        id: fixtureId(302),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        words: "Should an owner be able to resend an expired invite from this page?",
+        at: LANDED - 3 * HOUR,
+      },
+      {
+        id: fixtureId(303),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.INVITES },
+        words: "Yes: Resend stands beside each expired invite, and it mints a new link.",
+        at: LANDED - 2 * HOUR,
+      },
+    ],
+    createdAt: LANDED - 3 * HOUR,
+    updatedAt: LANDED - 2 * HOUR,
+    revision: 2,
+  },
+  {
+    id: fixtureId(304),
+    scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
+    quote: "Send the invite email from the workspace's own domain",
+    section: "Goal",
+    status: DESCRIPTION_COMMENT_STATUS.RESOLVED,
+    entries: [
+      {
+        id: fixtureId(305),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        words: "Done in the email template.",
+        at: LANDED - 5 * HOUR,
+      },
+    ],
+    createdAt: LANDED - 5 * HOUR,
+    updatedAt: LANDED - 4 * HOUR,
+    revision: 3,
+  },
+];
+
+/** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
+const STAGED_COMMENTS = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS]
+>();
+
+function stagedComments(
+  state: AppStateSnapshot,
+): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS] {
+  const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
+  const staged = STAGED_COMMENTS.get(held);
+  if (staged !== undefined) return staged;
+  const laid = {
+    ...held,
+    [COMMENT_SUBJECT.DESCRIPTION]: {
+      ...held[COMMENT_SUBJECT.DESCRIPTION],
+      [TASK.INVITES]: { rows: INVITES_THREADS },
+    },
+  };
+  STAGED_COMMENTS.set(held, laid);
+  STAGED_COMMENTS.set(laid, laid);
+  return laid;
+}
+
 /* ----- The window's document ----- */
 
 /**
@@ -1243,6 +1329,7 @@ export function inboxAppState(
     },
     [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
+    [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
@@ -1418,12 +1505,41 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
     agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),
   }),
-  [ACT_KIND.TASKS_START]: ({ agent }) => ({
-    planId: fixtureId(92),
-    agentStart: {
-      agent: agentOn(fixtureId(93), fixtureId(92), agent?.prompt ?? "", AGENT_STATUS.STARTING, 0),
-    },
-  }),
+  // Note that a start with no agent, File for later's, is answered with the task made alone.
+  [ACT_KIND.TASKS_START]: ({ agent }) =>
+    agent === undefined
+      ? { planId: fixtureId(92) }
+      : {
+          planId: fixtureId(92),
+          agentStart: {
+            agent: agentOn(
+              fixtureId(93),
+              fixtureId(92),
+              agent.prompt ?? "",
+              AGENT_STATUS.STARTING,
+              0,
+            ),
+          },
+        },
+  // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
+  [ACT_KIND.TASKS_RENAME]: () => true,
+  [ACT_KIND.TASKS_DELETE]: () => true,
+  // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
+  [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
+    const thread = INVITES_THREADS.find((each) => each.id === threadId);
+    if (planId !== TASK.INVITES || thread === undefined) {
+      return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+    }
+    if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
+    const reply = {
+      id: fixtureId(306),
+      kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+      writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+      words: action.words,
+      at: Date.now(),
+    };
+    return { thread: { ...thread, entries: [...thread.entries, reply] } };
+  },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
-import { TASK_STATUS } from "@repo/features/task-wire";
+import { TASK_BOUNDS, TASK_STATUS } from "@repo/features/task-wire";
 import { test } from "vitest";
-import { SETTLED_STATUS, settleChanges, settledNote, settleOffered } from "./tasks-model.js";
+import {
+  filedTaskOf,
+  SETTLED_STATUS,
+  settleChanges,
+  settledNote,
+  settleOffered,
+} from "./tasks-model.js";
 
 const INVITES = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 
@@ -56,3 +62,27 @@ test("a task already done is offered no Mark done, and one already canceled no C
     false,
   );
 });
+
+test.each([
+  { words: "  Fix the invite expiry  ", filed: { name: "Fix the invite expiry" } },
+  {
+    words: "Fix the invite expiry\n\nLinks expire after a day.",
+    filed: {
+      name: "Fix the invite expiry",
+      brief: "Fix the invite expiry\n\nLinks expire after a day.",
+    },
+  },
+  {
+    words: "x".repeat(TASK_BOUNDS.MAX_NAME_CHARS + 5),
+    filed: {
+      name: "x".repeat(TASK_BOUNDS.MAX_NAME_CHARS),
+      brief: "x".repeat(TASK_BOUNDS.MAX_NAME_CHARS + 5),
+    },
+  },
+  { words: " \n ", filed: undefined },
+])(
+  "File for later names the task by its first line within the name's bound, the rest its brief",
+  ({ words, filed }) => {
+    assert.deepEqual(filedTaskOf(words), filed);
+  },
+);
