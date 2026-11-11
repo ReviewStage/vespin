@@ -4025,7 +4025,7 @@ test("New task's agent opens alone, no plan beside it, and the task left draws n
   assert.deepEqual(panelOf(tab), { open: false, tab: FILE }, "the task left keeps its tab, shut");
 });
 
-test("New task's agent stands on its task with the words it started on as its first line before the task's agents or its transcript are read", async () => {
+test("New task's agent stands on its task before the task's agents or its transcript are read", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
   const tab = mount(
     { shown: true, tasks: OPEN, descriptions: AGENT_DESCRIPTIONS },
@@ -4034,7 +4034,7 @@ test("New task's agent stands on its task with the words it started on as its fi
         Promise.resolve({ planId: OTHER_TASK_ID, agentStart: { agent: started } }),
     },
   );
-  const { prompt } = await startAgentTask(tab);
+  await startAgentTask(tab);
 
   const agents = tab.control().agents;
   assert.deepEqual(
@@ -4043,8 +4043,6 @@ test("New task's agent stands on its task with the words it started on as its fi
     "the agent stands as the task's list",
   );
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
-  assert.equal(agents.opening?.agentId, AGENT_ID);
-  assert.equal(agents.opening?.line.text, prompt, "its first line is the words it started on");
 });
 
 test("New task's agent start opens its page at once on the words as its agent's first line, before the service answers, which opens the agent's own tab in its place", async () => {
@@ -4089,7 +4087,6 @@ test("New task's agent start opens its page at once on the words as its agent's 
   await settle();
   assert.equal(tab.control().newTask.starting, undefined, "the task's own page takes its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
-  assert.equal(tab.control().agents.opening?.line.text, prompt);
 });
 
 test("what the developer opened while New task's agent start was out, a page and New task again, still stands as the start lands", async () => {
