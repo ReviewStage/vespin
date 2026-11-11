@@ -1,4 +1,4 @@
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DEVICE_ARCH } from "@repo/features/device-agent-wire";
@@ -37,16 +37,18 @@ import { app } from "electron";
  *
  * The one `launchctl` call left is for the job the app ran before it
  * carried the host, `dev.vespin.host.standalone`, which `SMAppService` never
- * registered: before the agent is registered, that job is disabled and
- * booted out, its files left where they stand, so two daemons never run on
+ * registered: before the agent is registered, that job is disabled where
+ * its plist stands and booted out where launchd holds it, its files left
+ * where they stand, so two daemons never run on
  * one Mac.
  */
 
 /** The agent's plist, by its name under `Contents/Library/LaunchAgents` (`BUNDLED_HOST.plistPath`). */
 const SERVICE = { type: "agentService", serviceName: "dev.vespin.host.plist" } as const;
 
-/** The job the account install loaded before the app carried the host (`MAC_LABEL` in the install script). */
+/** The job the account install loaded before the app carried the host (`MAC_LABEL` in the install script), and its plist under the home, which launchd loads at login while the job is enabled. */
 const STANDALONE_LABEL = "dev.vespin.host.standalone";
+const STANDALONE_PLIST = ["Library", "LaunchAgents", `${STANDALONE_LABEL}.plist`] as const;
 
 /** The daemon's script inside the bundle, and the arguments the agent's plist starts it with: how its process reads in the process table. */
 const DAEMON_RUN = { script: "host/lib/vespin-host.mjs", args: "run --bundled" } as const;
@@ -67,8 +69,8 @@ const machine = Effect.sync(() => ({
   ...DARWIN_HOST.machine(),
 }));
 
-/** What the command given printed where it exited 0; none where it failed, could not start, or did not answer in time. */
-const output = (command: string, args: readonly string[]) =>
+/** How the command given exited and what it printed; none where it could not start or did not answer in time. */
+const ran = (command: string, args: readonly string[]) =>
   Effect.scoped(
     Effect.gen(function* () {
       const handle = yield* ChildProcess.make(command, [...args]);
@@ -76,12 +78,18 @@ const output = (command: string, args: readonly string[]) =>
         [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
         { concurrency: "unbounded" },
       );
-      return Number(code) === 0 ? Option.some(out) : Option.none<string>();
+      return { code: Number(code), out };
     }),
   ).pipe(
     Effect.timeoutOption(ANSWER_WITHIN),
-    Effect.map(Option.flatten),
-    Effect.orElseSucceed(() => Option.none<string>()),
+    Effect.orElseSucceed(() => Option.none<{ readonly code: number; readonly out: string }>()),
+  );
+
+/** What the command given printed where it exited 0; none where it failed, could not start, or did not answer in time. */
+const output = (command: string, args: readonly string[]) =>
+  Effect.map(
+    ran(command, args),
+    Option.flatMap((done) => (done.code === 0 ? Option.some(done.out) : Option.none())),
   );
 
 interface ThisMacHostFacts {
@@ -101,17 +109,33 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
 
   const status = Effect.sync(() => app.getLoginItemSettings(SERVICE).status);
 
-  /** Whether the standalone job is loaded, as launchctl prints it. */
-  const standaloneLoaded = Effect.map(output("launchctl", ["print", standalone]), Option.isSome);
+  const standalonePlist = path.join(os.homedir(), ...STANDALONE_PLIST);
 
-  // Note that a bootout of a job launchd holds no longer fails, so it is read past and the job read again.
+  /** Whether launchd holds the standalone job, as `launchctl print` exits; none where launchctl could not be asked, which is never read as not. */
+  const standaloneLoaded = Effect.map(
+    ran("launchctl", ["print", standalone]),
+    Option.map((done) => done.code === 0),
+  );
+
+  /**
+   * The standalone job kept from running beside the agent: disabled where
+   * its plist stands or launchd holds it, so login loads it no more, and
+   * booted out where launchd holds it. Note that a bootout of a job launchd
+   * holds no longer fails, so it is read past and the job read again.
+   */
   const standaloneGone = Effect.gen(function* () {
-    if (!(yield* standaloneLoaded)) return Result.succeed<void>(undefined);
-    yield* output("launchctl", ["disable", standalone]);
-    yield* output("launchctl", ["bootout", standalone]);
-    return (yield* standaloneLoaded)
-      ? Result.fail(`launchd still holds ${STANDALONE_LABEL}`)
-      : Result.succeed<void>(undefined);
+    const loaded = yield* standaloneLoaded;
+    if (Option.isNone(loaded))
+      return Result.fail(`could not ask launchd about ${STANDALONE_LABEL}`);
+    if (!loaded.value && !existsSync(standalonePlist)) return Result.succeed<void>(undefined);
+    const disabled = yield* output("launchctl", ["disable", standalone]);
+    if (Option.isNone(disabled)) return Result.fail(`could not disable ${STANDALONE_LABEL}`);
+    if (!loaded.value) return Result.succeed<void>(undefined);
+    yield* ran("launchctl", ["bootout", standalone]);
+    const still = yield* standaloneLoaded;
+    return Option.isSome(still) && !still.value
+      ? Result.succeed<void>(undefined)
+      : Result.fail(`launchd still holds ${STANDALONE_LABEL}`);
   });
 
   /** Whether the agent's daemon still runs, as the process table lists it; a table that could not be read counts as running. */
