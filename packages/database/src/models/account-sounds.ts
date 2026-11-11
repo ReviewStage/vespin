@@ -101,6 +101,18 @@ const deleteChoice = SqlSchema.void({
     ),
 });
 
+const findChoice = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, slot: soundClipSlotSchema }),
+  Result: Schema.Struct({ soundId: Schema.String }),
+  execute: ({ userId, slot }) =>
+    Database.use((db) =>
+      db
+        .select({ soundId: accountSoundChoice.soundId })
+        .from(accountSoundChoice)
+        .where(and(eq(accountSoundChoice.userId, userId), eq(accountSoundChoice.slot, slot))),
+    ),
+});
+
 const renameRow = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...SoundKeySchema.fields, name: Schema.String }),
   Result: SoundRowSchema,
@@ -198,8 +210,8 @@ export function readSoundClip(
 
 /**
  * Which of the account's sounds its `slot` sound plays: `id`, or none to let
- * it go. Answers the sound it now plays; none where `id` names no sound the
- * account keeps, which chooses nothing.
+ * it go. Answers the sound it now plays: where `id` names no sound the
+ * account keeps, which chooses nothing, the one it played before, or none.
  */
 export function chooseSound(
   userId: string,
@@ -214,7 +226,10 @@ export function chooseSound(
           return null;
         }
         const sound = yield* findSound({ userId, id });
-        if (Option.isNone(sound)) return null;
+        if (Option.isNone(sound)) {
+          const standing = yield* findChoice({ userId, slot });
+          return Option.match(standing, { onNone: () => null, onSome: (choice) => choice.soundId });
+        }
         yield* upsertChoice({ userId, slot, soundId: id });
         return id;
       }),

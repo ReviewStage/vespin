@@ -69,6 +69,9 @@ it.layer(getTestDB())("the account sounds store", (it) => {
         const knock = yield* addSound(owner, "Knock", clipOf(2));
         assert.equal(yield* chooseSound(owner, ASK, knock.id), knock.id);
         assert.deepEqual(yield* choicesOf(owner), { [FINISH]: glass.id, [ASK]: knock.id });
+        // A choice naming no sound the account keeps chooses nothing, and answers the standing one.
+        assert.equal(yield* chooseSound(owner, ASK, randomUUID()), knock.id);
+        assert.deepEqual(yield* choicesOf(owner), { [FINISH]: glass.id, [ASK]: knock.id });
 
         const renamed = yield* renameSound(owner, glass.id, "Bell");
         assert.equal(Option.getOrUndefined(renamed)?.name, "Bell");
