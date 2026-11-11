@@ -536,19 +536,40 @@ test("a turn its Mac went offline during ends on Continue in the cloud while Bri
   ]);
 });
 
-test("a message its agent's Mac was offline for says so under the box, whose Continue in the cloud carries the message on in the cloud", async () => {
+test("a message its agent's Mac was offline for says so under the box, whose Continue in the cloud carries that message on in the cloud, though a later one failed too", async () => {
+  let writer: DraftWriter | undefined;
   const tab = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
     ownHost: true,
-    seed: { words: "Review 2112 for production readiness", files: [] },
-    onMessage: () =>
-      Promise.resolve({
-        failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
-        localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
-        refusedDevice: { name: "Studio" },
-      }),
+    seed: {
+      words: "Review 2112 for production readiness",
+      files: [NOTES],
+      onWriter: (each) => {
+        writer = each;
+      },
+    },
+    onMessage: (text) =>
+      Promise.resolve(
+        text === "Review 2112 for production readiness"
+          ? {
+              failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+              localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+              refusedDevice: { name: "Studio" },
+            }
+          : { failure: AGENT_CALL_FAILURE.UNANSWERED },
+      ),
   });
+  act(() => (tab.sendButton() ?? assert.fail("the box offers Send")).click());
+  await settle();
+  // A later message fails with nothing to mend it, which leaves the note of the first.
+  act(() =>
+    writer?.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, (was) => ({
+      ...was,
+      text: "And check the logs",
+    })),
+  );
+  await settle();
   act(() => (tab.sendButton() ?? assert.fail("the box offers Send")).click());
   await settle();
   const note = tab.note() ?? assert.fail("the box says why the message did not go");
@@ -562,7 +583,7 @@ test("a message its agent's Mac was offline for says so under the box, whose Con
     {
       agentId: SOURCE,
       note: "Review 2112 for production readiness",
-      attachments: [],
+      attachments: [NOTES],
       runsOn: { machine: AGENT_MACHINE.VERCEL },
     },
   ]);
