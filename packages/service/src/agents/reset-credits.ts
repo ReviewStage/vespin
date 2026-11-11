@@ -85,17 +85,24 @@ const waitOnPlan = /* @__PURE__ */ Effect.fnUntraced(function* (reached: Reached
 });
 
 /**
- * The plan's limit lifted, on the credential saved by the spend (`savedBy`)
- * alone, so one saved over it since is not marked by a spend it never made,
- * and so the next launch finds room on it, and the
- * agent's waiting turns handed on now, as the sweep hands them on once the
- * reset passes; answers whether a turn went on.
+ * The agent's turns still waiting on the limit the spend lifted, the one
+ * whose reset is `until`, released first, so a spend whose answer comes late
+ * leaves a later wait and its limit standing; then, where one was, the plan's
+ * limit lifted, on the credential saved by the spend (`savedBy`) alone, so one
+ * saved over it since is not marked by a spend it never made, and so the
+ * next launch finds room on it; and the turns handed on now, as the sweep
+ * hands them on once the reset passes. Answers whether a turn went on.
  */
 const liftedAndResumed = /* @__PURE__ */ Effect.fnUntraced(function* (
   reached: ReachedAgent,
   subscriptionId: string | undefined,
+  until: Date,
   savedBy: Date,
 ) {
+  const released = yield* hostedStoreOrUnavailable(
+    releaseConversationWaitedTurns(reached.target, until),
+  );
+  if (released.length === 0) return false;
   const now = yield* DateTime.nowAsDate;
   yield* hostedStoreOrUnavailable(
     setPlanStatus(
@@ -109,9 +116,8 @@ const liftedAndResumed = /* @__PURE__ */ Effect.fnUntraced(function* (
       subscriptionId,
     ),
   );
-  const released = yield* hostedStoreOrUnavailable(releaseConversationWaitedTurns(reached.target));
   yield* hostedStoreOrUnavailable(handWaitedTurnsOn(released));
-  return released.length > 0;
+  return true;
 });
 
 /** How many credits the plan the agent waits on holds, read as the account given: none where it waits on no plan's limit, or ChatGPT did not answer. */
@@ -156,7 +162,7 @@ export const spentResetCredit = /* @__PURE__ */ Effect.fnUntraced(function* (
   const outcome = yield* consumeResetCredit(userId, ring, subscriptionId, key);
   if (Option.isNone(outcome)) return yield* Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR);
   const resumed = LIFTED.has(outcome.value)
-    ? yield* liftedAndResumed(reached, subscriptionId, savedBy)
+    ? yield* liftedAndResumed(reached, subscriptionId, waitsUntil, savedBy)
     : false;
   return { outcome: outcome.value, resumed };
 });

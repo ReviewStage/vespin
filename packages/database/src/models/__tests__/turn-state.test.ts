@@ -316,7 +316,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
   );
 
   it.effect(
-    "a turn held for its limit's reset is released before it once, by its own account alone, and another account's held turn stays held",
+    "a turn held for its limit's reset is released before it once, by its own account and for that reset alone, and another account's held turn stays held",
     () =>
       Effect.gen(function* () {
         const until = new Date((yield* Clock.currentTimeMillis) + Duration.toMillis("2 hours"));
@@ -334,15 +334,20 @@ it.layer(getTestDB())("a turn's one record", (it) => {
         assert.ok(mine !== undefined && theirs !== undefined);
 
         const read = yield* waitingTurnOf(mine.target);
-        const byOther = yield* releaseConversationWaitedTurns({
-          userId: theirs.target.userId,
-          conversationId: mine.target.conversationId,
-        });
-        const first = yield* releaseConversationWaitedTurns(mine.target);
-        const second = yield* releaseConversationWaitedTurns(mine.target);
+        const byOther = yield* releaseConversationWaitedTurns(
+          { userId: theirs.target.userId, conversationId: mine.target.conversationId },
+          until,
+        );
+        const forAnother = yield* releaseConversationWaitedTurns(
+          mine.target,
+          new Date(until.getTime() + 1),
+        );
+        const first = yield* releaseConversationWaitedTurns(mine.target, until);
+        const second = yield* releaseConversationWaitedTurns(mine.target, until);
 
         assert.deepEqual(Option.getOrUndefined(read), { turnId: mine.turnId, waitsUntil: until });
         assert.deepEqual(byOther, []);
+        assert.deepEqual(forAnother, [], "a release for another reset leaves the wait standing");
         assert.deepEqual(
           first.map((turn) => [turn.turnId, turn.status]),
           [[mine.turnId, TURN_STATUS.RUNNING]],

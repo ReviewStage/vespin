@@ -704,11 +704,15 @@ const releaseWaited = SqlSchema.findAll({
     ),
 });
 
-/** The conversation's running and queued turns no Stop was asked of that wait on a limit's reset, their wait cleared now. */
+/** The conversation's running and queued turns no Stop was asked of that wait on the reset given, their wait cleared now. */
 const releaseConversationWaits = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    until: Schema.Date,
+  }),
   Result: WaitedTurnSchema,
-  execute: ({ userId, conversationId }) =>
+  execute: ({ userId, conversationId, until }) =>
     Database.use((db) =>
       db
         .update(turns)
@@ -719,7 +723,7 @@ const releaseConversationWaits = SqlSchema.findAll({
             eq(turns.conversationId, conversationId),
             inArray(turns.status, [TURN_STATUS.RUNNING, TURN_STATUS.QUEUED]),
             isNull(turns.cancelRequestedAt),
-            isNotNull(turns.waitsUntil),
+            eq(turns.waitsUntil, until),
           ),
         )
         .returning({
@@ -1302,17 +1306,20 @@ export function releaseWaitedTurns(
 
 /**
  * The conversation's running and queued turns, no Stop asked of, that wait
- * on a limit's reset, their wait cleared before it, as a reset credit spent
- * on the limit clears it: answers them, for a launch now as the sweep's
- * release has, and none where no turn waited, so of two releases at once
- * only one hands a turn on.
+ * on the limit whose reset is `until`, their wait cleared before it, as a
+ * reset credit spent on that limit clears it: answers them, for a launch now
+ * as the sweep's release has, and none where no turn waits on it any longer,
+ * so of two releases at once only one hands a turn on, and a release late for
+ * its limit leaves a later wait standing.
  */
 export function releaseConversationWaitedTurns(
   target: TurnTarget,
+  until: Date,
 ): TurnStateEffect<readonly WaitedTurn[]> {
   return releaseConversationWaits({
     userId: target.userId,
     conversationId: target.conversationId,
+    until,
   });
 }
 

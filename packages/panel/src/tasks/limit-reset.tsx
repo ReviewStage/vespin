@@ -13,8 +13,10 @@
  * and the agent carries on as at its reset: its turn's wait clears and the
  * notice gives way to its work. The press stays busy until then, so it is
  * never pressed twice. What spent nothing is said in a toast, and a spend the
- * service did not take in the dialog that asked. The service offers credits to the agent's starter alone, so a
- * teammate's transcript draws the notice bare.
+ * service did not take in the dialog that asked. The count is asked again
+ * each minute the offer stands, so one a read failed to answer comes back
+ * without a press. The service offers credits to the agent's starter alone,
+ * so a teammate's transcript draws the notice bare.
  */
 
 import { RESET_CREDIT_OUTCOME } from "@repo/features/reset-credit-wire";
@@ -38,7 +40,7 @@ import { confirmFailure } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { showToast } from "../toast.js";
 
-/** How long a count read stands before the notice asks again, while it stays on screen. */
+/** How long a count read stands before the notice asks again while it stays on screen, so a read that failed is asked again too. */
 const COUNT_STANDS_FOR = Duration.minutes(1);
 
 /** What a spend the service could not take says; a retry sends the same key, so it spends no second credit. */
@@ -87,6 +89,7 @@ export function TranscriptUsageLimitNotice({ notice }: { notice: Notice }): Reac
     queryFn: () => askAct(ACT_KIND.AGENTS_RESET_CREDITS, { agentId }),
     enabled: offered,
     staleTime: Duration.toMillis(COUNT_STANDS_FOR),
+    refetchInterval: offered ? Duration.toMillis(COUNT_STANDS_FOR) : false,
     retry: false,
   }).data;
   const spend = useMutation({
