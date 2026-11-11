@@ -67,6 +67,7 @@ import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { relayout } from "../testing/resize-observer.js";
 import { ToastHost } from "../toast.js";
 import "../file-tree/index.js";
+import { useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import {
   handHostReads,
   handMembers,
@@ -251,38 +252,51 @@ function markupOf(element: ReactElement): string {
   return markup;
 }
 
-test("a listed task draws its name, its status, and the column's tab from its row while its description is still read, which alone waits, and stands nowhere with Descriptions off", () => {
+test("a listed task draws its name, its status, and the column's tab from its row while its description is still read, which alone waits, renames from it, and stands nowhere with Descriptions off", () => {
   const listed = { ...TASK, status: TASK_STATUS.IN_PROGRESS, priority: TASK_PRIORITY.HIGH };
-  const drawn = (experiments: ExperimentChoices) => {
-    const page = document.createElement("div");
-    page.innerHTML = markupOf(
-      windowRouter().provide(
-        withExperiments(
-          experiments,
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
-              tasks: [listed],
-              activeTaskId: TASK.id,
-              region: { kind: DOCUMENT_REGION.READING },
-              workspaces: [
-                {
-                  id: TASK.workspaceId,
-                  name: "Personal",
-                  role: WORKSPACE_ROLE.OWNER,
-                  github: null,
-                },
-              ],
-            }),
-          }),
+  /** The rename door the page offers ⌘K, as it stood at the last draw. */
+  let renameOffer: ReturnType<typeof useTaskRenameOffer>;
+  function RenameOfferProbe(): null {
+    renameOffer = useTaskRenameOffer();
+    return null;
+  }
+  const page = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(page);
+  const draw = (experiments: ExperimentChoices) => {
+    act(() =>
+      root.render(
+        windowRouter().provide(
+          withExperiments(
+            experiments,
+            createElement(
+              Fragment,
+              null,
+              createElement(RenameOfferProbe),
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                tasks: tasksControl({
+                  page: TASKS_PAGE.DOCUMENT,
+                  tasks: [listed],
+                  activeTaskId: TASK.id,
+                  region: { kind: DOCUMENT_REGION.READING },
+                  workspaces: [
+                    {
+                      id: TASK.workspaceId,
+                      name: "Personal",
+                      role: WORKSPACE_ROLE.OWNER,
+                      github: null,
+                    },
+                  ],
+                }),
+              }),
+            ),
+          ),
         ),
       ),
     );
-    const reading = [...page.querySelectorAll('[role="status"]')].map((each) => each.textContent);
-    return { page, reading };
+    return [...page.querySelectorAll('[role="status"]')].map((each) => each.textContent);
   };
-  const { page, reading } = drawn(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+  const reading = draw(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   assert.ok(
     [...page.querySelectorAll("h1, h2")].some((each) => each.textContent === TASK.name),
     "the task's title is drawn from its row",
@@ -298,11 +312,20 @@ test("a listed task draws its name, its status, and the column's tab from its ro
     reading.some((words) => words?.includes("description")),
     "the description alone says it is read",
   );
+  assert.ok(renameOffer, "the page offers its rename");
+  act(() => renameOffer?.begin());
+  assert.equal(
+    page.querySelector<HTMLInputElement>('input[aria-label="Task name"]')?.value,
+    TASK.name,
+    "the rename opens over the listed name",
+  );
   assert.deepEqual(
-    drawn({}).reading.filter((words) => words?.includes("description")),
+    draw({}).filter((words) => words?.includes("description")),
     [],
     "with Descriptions off no description is said to be read",
   );
+  act(() => root.unmount());
+  page.remove();
 });
 
 test("a task with no agent tab draws a new agent's draft", () => {

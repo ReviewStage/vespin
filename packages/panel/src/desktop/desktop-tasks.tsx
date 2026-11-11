@@ -515,12 +515,6 @@ function DescriptionDocument({
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
   );
-  const taskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
-  // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
-  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
   // The description is shown while the column is on Overview, with no panel filling the window over it.
   const descriptionShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
   const { onChoose: chooseColumnTab } = tasks.mainTabs;
@@ -529,12 +523,6 @@ function DescriptionDocument({
     if (tasks.sidePanel.fullScreen) tasks.sidePanel.onToggleFullScreen();
     chooseColumnTab(MAIN_TAB.OVERVIEW);
   });
-  // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
-  const beginRename = useSteadyDoor(() => {
-    if (room === SHELL_ROOM.NARROW) rename.begin();
-    else barRename.begin();
-  });
-  useOfferTaskRename(taskId, beginRename);
   // A terminal shown hands the keys to the side panel, where it stands; an
   // agent's tab's Show terminal always opens that agent's own.
   const showSide = () => setFocus(COLUMN.SIDE);
@@ -558,6 +546,19 @@ function DescriptionDocument({
     (region.kind === DOCUMENT_REGION.READING
       ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
       : undefined);
+  // The task renamed is the one the page stands on, so its rename opens while its description is still read.
+  const taskId = opened?.id;
+  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
+  // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
+  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
+  // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
+  const beginRename = useSteadyDoor(() => {
+    if (room === SHELL_ROOM.NARROW) rename.begin();
+    else barRename.begin();
+  });
+  useOfferTaskRename(taskId, beginRename);
   const listedOpen =
     opened === undefined
       ? undefined
