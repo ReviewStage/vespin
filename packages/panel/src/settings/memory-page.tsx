@@ -193,7 +193,7 @@ const ADD_MEMORY = "Add memory";
 const EDITOR_WORDS = {
   EDIT: "Edit memory",
   ADD: "New memory",
-  PLACEHOLDER: "A fact your agents should carry into later tasks",
+  PLACEHOLDER: "A fact your agents should remember",
   CANCEL: "Cancel",
   SAVE: "Save",
 } as const;
