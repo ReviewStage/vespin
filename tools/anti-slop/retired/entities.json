@@ -12,8 +12,7 @@
       "baseline": {
         "packages/panel/src/settings/mcp-clients-section.tsx": 1,
         "packages/panel/src/settings/pages.tsx": 1,
-        "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1,
-        "packages/ui/src/components/landing/landing-scenes.tsx": 1
+        "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1
       }
     },
     {

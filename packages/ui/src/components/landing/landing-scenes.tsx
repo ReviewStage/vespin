@@ -7,6 +7,7 @@ import {
   CheckCheckIcon,
   CheckIcon,
   GLYPH,
+  HistoryIcon,
   ICON_SIZE,
   InboxIcon,
   ListTodoIcon,
@@ -52,12 +53,11 @@ import { Disclosure, DisclosureBody, DisclosureSummary } from "../disclosure/dis
 import { EmptyState } from "../empty-state/empty-state.js";
 import { FoldingButton } from "../folding-button/folding-button.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
-import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
+import { GROUP_HEADING, GROUP_LOOK, GroupHeader } from "../group-header/group-header.js";
 import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { INLINE_REF_FIT, type InlineRefFit } from "../inline-ref/inline-ref-fit.js";
 import { LineRow } from "../line-button/line-button.js";
 import {
-  LIST_DENSITY,
   LIST_ROW_CURRENT,
   LIST_ROW_CURRENT_LOOK,
   LIST_ROW_INK,
@@ -134,11 +134,12 @@ const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
- * rest), and the step a narrow page's crop opens on.
+ * rest), and the steps a narrow page's crop opens and closes on.
  */
 const STORY = {
-  INBOX: { STEPS: 7, LAST: 5, NARROW_FROM: 2 },
-  AGENTS: { STEPS: 7, LAST: 5, NARROW_FROM: 3 },
+  INBOX: { STEPS: 7, LAST: 5, NARROW_FROM: 2, NARROW_LAST: 5 },
+  // Note that a narrow page's crop stops before the Overview, because its crop is the log's.
+  AGENTS: { STEPS: 9, LAST: 7, NARROW_FROM: 3, NARROW_LAST: 5 },
 } as const;
 
 /** The step a window's `story` draws: all of it on a wide page, from its telling moment on a narrow one. */
@@ -147,8 +148,12 @@ function useWindowStory(
   story: (typeof STORY)[keyof typeof STORY],
   beat: number,
 ): number {
-  const from = useNarrowPage(ref) ? story.NARROW_FROM : 0;
-  return Math.min(useStory(ref, story.STEPS - from, beat) + from, story.LAST);
+  const narrow = useNarrowPage(ref);
+  const from = narrow ? story.NARROW_FROM : 0;
+  return Math.min(
+    useStory(ref, story.STEPS - from, beat) + from,
+    narrow ? story.NARROW_LAST : story.LAST,
+  );
 }
 
 /** The scenes the landing plays, by the feature each shows. */
@@ -617,13 +622,16 @@ function ReceivedMessage({ sender, words }: { sender: string; words: string }): 
 
 const ACCEPT_PAGE = "Accept page";
 const INVITE_EMAILS = "Invite emails";
+const TASK_NAME = "Teammate invitations";
 
-/** A sub-task of the plan beside the log. */
+/** The step the task's name is pressed on, its Overview taking the page from the log. */
+const OVERVIEW_FROM = 6;
+
+/** A sub-task in the task's Overview. */
 type SubTask = {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus;
-  readonly key: string;
 };
 
 /** The sub-tasks at `step`, each stepping toward done as the story goes. */
@@ -631,15 +639,10 @@ function subTasks(step: number): readonly SubTask[] {
   const at = (from: number, to: number): TaskStatus =>
     step >= to ? TASK_STATUS.DONE : step >= from ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.TODO;
   return [
-    { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE, key: "ACME-54" },
-    {
-      id: "endpoints",
-      name: "Invite and accept endpoints",
-      status: TASK_STATUS.DONE,
-      key: "ACME-55",
-    },
-    { id: "accept", name: ACCEPT_PAGE, status: at(1, 4), key: "ACME-56" },
-    { id: "emails", name: "Invite emails through Postmark", status: at(0, 9), key: "ACME-57" },
+    { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE },
+    { id: "endpoints", name: "Invite and accept endpoints", status: TASK_STATUS.DONE },
+    { id: "accept", name: ACCEPT_PAGE, status: at(1, 4) },
+    { id: "emails", name: "Invite emails through Postmark", status: at(0, 9) },
   ];
 }
 
@@ -658,7 +661,7 @@ function TaskTabs({ step }: { step: number }): React.JSX.Element {
           />
         ) : null}
       </Tabs>
-      <IconButton icon={<PlusIcon />} label="Open a tab" onClick={still} />
+      <IconButton icon={<PlusIcon />} label="New agent" onClick={still} />
     </span>
   );
 }
@@ -778,98 +781,108 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
   );
 }
 
-/** The side panel at `step`: the plan's tab, with its sub-tasks and agents. */
-function PlanPanel({ step }: { step: number }): React.JSX.Element {
+/** The task's Overview at `step`: its name and description over its sub-tasks and its agents. */
+function TaskOverview({ step }: { step: number }): React.JSX.Element {
   const tasks = subTasks(step);
   const done = tasks.filter((task) => task.status === TASK_STATUS.DONE).length;
   return (
-    <aside className="ui-landing-side">
-      <div className="ui-landing-side-bar">
-        <Tabs label="Panel" ground={TABS_GROUND.FRAME}>
-          <Tab
-            icon={<TaskStatusMark status={TASK_STATUS.IN_PROGRESS} />}
-            label="Teammate invitations"
-            selected
-            onSelect={still}
-          />
-          <Tab icon={<InboxIcon />} label="Inbox" selected={false} onSelect={still} />
-        </Tabs>
-      </div>
-      <div className="ui-landing-side-sheet">
+    <section className="ui-landing-overview" aria-label="Overview">
+      <div className="ui-landing-overview-page">
+        <Text as={TEXT_ELEMENT.H2} variant={TEXT_VARIANT.TITLE}>
+          {TASK_NAME}
+        </Text>
+        <Text tone={TEXT_TONE.MUTED}>
+          Let an admin invite a teammate by email, and let them accept from a link that signs them
+          into the workspace.
+        </Text>
         <GroupHeader
           heading={GROUP_HEADING.NONE}
-          glyph={<GLYPH.SUB_TASK />}
+          look={GROUP_LOOK.SECTION}
           label="Sub-tasks"
           mark={
             <ProgressCount
               done={done}
               total={tasks.length}
-              label="sub-tasks done"
+              label={`${done} of ${tasks.length} sub-tasks finished`}
               look={PROGRESS_COUNT_LOOK.BADGE}
             />
           }
-        />
-        <List label="Sub-tasks" density={LIST_DENSITY.DENSE}>
-          {tasks.map((task) => (
-            <ListRow
-              key={task.id}
-              motionKey={task.id}
-              density={LIST_DENSITY.DENSE}
-              leading={<TaskStatusMark status={task.status} />}
-              title={task.name}
-              meta={task.key}
-              onPress={still}
-            />
-          ))}
-        </List>
+          actions={<IconButton icon={<PlusIcon />} label="New sub-task" onClick={still} />}
+        >
+          <List label="Sub-tasks">
+            {tasks.map((task) => (
+              <ListRow
+                key={task.id}
+                motionKey={task.id}
+                leading={<TaskStatusMark status={task.status} />}
+                title={task.name}
+                onPress={still}
+              />
+            ))}
+          </List>
+        </GroupHeader>
         <GroupHeader
           heading={GROUP_HEADING.NONE}
-          glyph={<GLYPH.AGENT />}
+          look={GROUP_LOOK.SECTION}
           label="Agents"
-          count={{ value: step >= 1 ? 2 : 1, noun: "agents" }}
-        />
-        <List label="Agents" density={LIST_DENSITY.DENSE}>
-          <ListRow
-            density={LIST_DENSITY.DENSE}
-            leading={<WorkingMark />}
-            title={INVITE_EMAILS}
-            meta="Opus 5.5"
-            onPress={still}
-          />
-          {step >= 1 ? (
+          actions={<IconButton icon={<PlusIcon />} label="New agent" onClick={still} />}
+        >
+          <List label="Agents">
             <ListRow
-              density={LIST_DENSITY.DENSE}
-              leading={step >= 4 ? agentFace(ACCEPT_PAGE, AVATAR_SIZE.ROW) : <WorkingMark />}
+              leading={<WorkingMark />}
+              title={INVITE_EMAILS}
+              meta="Opus 5.5"
+              onPress={still}
+            />
+            <ListRow
+              leading={agentFace(ACCEPT_PAGE, AVATAR_SIZE.ROW)}
               title={ACCEPT_PAGE}
               meta="Sonnet 5.5"
               onPress={still}
             />
-          ) : null}
-        </List>
+          </List>
+        </GroupHeader>
       </div>
-    </aside>
+    </section>
   );
 }
 
-/** The task's page at `step`: its tabs, the agent's log over its foot, and the plan beside it. */
+/** The task's own bar across its page: its status and name, which open its Overview in place of its agents. */
+function TaskTopbar({ overview }: { overview: boolean }): React.JSX.Element {
+  const mark = <TaskStatusMark status={TASK_STATUS.IN_PROGRESS} />;
+  return (
+    <Toolbar
+      start={TOOLBAR_INSET.COLUMN}
+      title={TASK_NAME}
+      titlePress={{ open: overview, label: "Overview", icon: mark, onPress: still }}
+    />
+  );
+}
+
+/** The task's page at `step`: its bar over the agents' tabs and the log, then, pressed, its Overview. */
 function TaskPage({ step }: { step: number }): React.JSX.Element {
+  const overview = step >= OVERVIEW_FROM;
   return (
     <div className="ui-landing-app">
       <DesktopSidebar place={DESKTOP_PLACE.TASK} openTask="invites" />
       <div className="ui-landing-main ui-landing-task">
-        <section className="ui-landing-agent-log">
-          <Toolbar
-            start={TOOLBAR_INSET.COLUMN}
-            look={TOOLBAR_LOOK.TABS}
-            title={<TaskTabs step={step} />}
-            actions={<MoreButton thing="agent" onClick={still} />}
-          />
-          <div className="ui-landing-sheet-start ui-landing-log-sheet">
-            <AgentLog step={step} />
-            <AgentFoot step={step} />
-          </div>
-        </section>
-        <PlanPanel step={step} />
+        <TaskTopbar overview={overview} />
+        {overview ? (
+          <TaskOverview step={step} />
+        ) : (
+          <section className="ui-landing-agent-log">
+            <Toolbar
+              start={TOOLBAR_INSET.COLUMN}
+              look={TOOLBAR_LOOK.TABS}
+              title={<TaskTabs step={step} />}
+              actions={<IconButton icon={<HistoryIcon />} label="History" onClick={still} />}
+            />
+            <div className="ui-landing-sheet-start ui-landing-log-sheet">
+              <AgentLog step={step} />
+              <AgentFoot step={step} />
+            </div>
+          </section>
+        )}
       </div>
       <SidePanelToggle />
     </div>

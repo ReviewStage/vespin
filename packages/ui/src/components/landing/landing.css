@@ -773,8 +773,7 @@
   .ui-landing-inbox-list,
   .ui-landing-inbox-thread,
   .ui-landing-agent-log,
-  .ui-landing-automation,
-  .ui-landing-side {
+  .ui-landing-automation {
     position: relative;
     display: grid;
     grid-template-rows: 50px minmax(0, 1fr);
@@ -787,17 +786,18 @@
     grid-template-columns: 320px minmax(0, 1fr);
   }
 
+  /* A task's page: its own bar across it, over the agents' column or, its
+     name pressed, its Overview. */
   .ui-landing-task {
-    grid-template-columns: minmax(0, 1fr) 400px;
-    gap: 8px;
+    grid-template-rows: 50px minmax(0, 1fr);
   }
 
-  /* The sheet the columns' content stands on, under their bars; the side
-     panel's is the well. */
+  /* The sheet the columns' content stands on, under their bars; the
+     Overview's, under the task's bar, is the whole of its row. */
   .ui-landing-inbox::before,
   .ui-landing-agent-log::before,
   .ui-landing-automation::before,
-  .ui-landing-side::before {
+  .ui-landing-overview::before {
     content: "";
     position: absolute;
     inset: 50px 0 0;
@@ -808,8 +808,26 @@
       0 1px 2px var(--ui-color-shadow-soft);
   }
 
-  .ui-landing-side::before {
-    background: var(--ui-color-well);
+  .ui-landing-overview {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .ui-landing-overview::before {
+    inset: 0;
+  }
+
+  /* The Overview's page: the task's name and description over its
+     sub-tasks and its agents, at a reading width. */
+  .ui-landing-overview-page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-section-gap);
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 40px var(--ui-space-24);
   }
 
   .ui-landing-sheet-start,
@@ -942,8 +960,8 @@
     color: var(--ui-color-text-muted);
   }
 
-  /* A task's page: its tabs on the frame, the agent's log over its foot,
-     and the side panel's plan on the well beside it. */
+  /* A task's agents: their tabs on the frame, the agent's log over its
+     foot. */
   .ui-landing-tabs {
     display: flex;
     align-items: center;
@@ -1027,22 +1045,6 @@
 
   .ui-landing-effort {
     color: var(--ui-color-text-muted);
-  }
-
-  .ui-landing-side-bar {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .ui-landing-side-sheet {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: var(--ui-control-gap);
-    min-height: 0;
-    overflow: hidden;
-    padding: var(--ui-section-gap) var(--ui-space-12);
   }
 
   /* An automation's page, its sidebar folded: its toolbar on the frame
@@ -1324,7 +1326,7 @@
        and its answer, the next one rising from the foot. */
     .ui-landing-stage[data-scene="agents"] {
       --ui-landing-crop-x: 268;
-      --ui-landing-crop-y: 0;
+      --ui-landing-crop-y: 50;
       --ui-landing-crop-w: 420;
       --ui-landing-crop-h: 345;
     }
