@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
-import { rememberMemory } from "@repo/database/models/memory-store";
+import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
+import { type MemoryOutcome, rememberMemory } from "@repo/database/models/memory-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
@@ -108,6 +109,12 @@ const ranTurn = (admitted: AdmittedConversation, turnId: string, at: number) =>
       at,
     });
   });
+
+/** The id of the memory a keep wrote. */
+function keptId(outcome: MemoryOutcome): string {
+  assert.ok("memory" in outcome, `nothing was written: ${outcome.kind}`);
+  return outcome.memory.id;
+}
 
 it.layer(getTestDB())("a coding agent's turn message", (it) => {
   it.effect(
@@ -230,10 +237,20 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         const { userId, agent, admitted } = yield* openAgent;
         const elsewhere = yield* openWorkspace(userId);
         const kept = (workspaceId: string, text: string) =>
-          rememberMemory(workspaceId, userId, text, undefined);
-        yield* kept(agent.organizationId, "Invitation emails go out through the mail queue.");
-        yield* kept(agent.organizationId, "Release notes are dated in Eastern time.");
+          Effect.map(rememberMemory(workspaceId, userId, text, undefined), keptId);
+        const invitations = yield* kept(
+          agent.organizationId,
+          "Invitation emails go out through the mail queue.",
+        );
+        const releases = yield* kept(
+          agent.organizationId,
+          "Release notes are dated in Eastern time.",
+        );
         yield* kept(elsewhere, "Invitations in the other workspace expire after a day.");
+        const recalls = Effect.map(
+          tallyMemoryRecalls(agent.organizationId, [invitations, releases]),
+          (tallies) => [invitations, releases].map((id) => tallies.get(id)?.recalls30d),
+        );
         const firstTurn = randomUUID();
         const typedAt = (turnId: string) =>
           Effect.map(
@@ -249,12 +266,15 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
 
         const off = yield* typedAt(firstTurn);
         assert.ok(!off.includes("What the workspace remembers"), off);
+        assert.deepEqual(yield* recalls, [0, 0]);
 
         yield* experimentInTestWorkspace(userId, EXPERIMENT.MEMORY);
         const first = yield* typedAt(firstTurn);
         assert.ok(first.includes("Invitation emails go out through the mail queue."), first);
         assert.ok(!first.includes("Eastern time"), first);
         assert.ok(!first.includes("other workspace"), first);
+        // The memory the turn was handed is logged as recalled, and only it.
+        assert.deepEqual(yield* recalls, [1, 0]);
 
         yield* ranTurn(admitted, firstTurn, TURN_STARTS_AT);
         const later = yield* typedAt(randomUUID());

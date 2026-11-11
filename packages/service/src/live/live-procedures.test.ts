@@ -33,7 +33,9 @@ import { createTask, createTaskCommitted, deleteTask } from "@repo/database/mode
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
+import { memoryRecall } from "@repo/database/schemas/memory";
 import { messages, turns } from "@repo/database/schemas/storage";
+import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   fakeWorkspaceSeams,
@@ -60,6 +62,7 @@ import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { HOSTS_READ, hostsOfLiveRows } from "@repo/features/host-live";
 import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import { INBOX_ASK } from "@repo/features/inbox-wire";
@@ -1640,6 +1643,73 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
           }),
           { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
         );
+      }),
+  );
+
+  it.effect(
+    "a memory names the agent, line, and task its words came from only to a member who may open that task, and counts its recalls over the last thirty days",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const [keeper, teammate] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+        for (const id of [keeper, teammate]) {
+          yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+        }
+        const workspaceId = yield* openWorkspace(keeper);
+        yield* joinWorkspace(workspaceId, teammate);
+        const { id: taskId } = yield* createTask(keeper, {
+          organizationId: workspaceId,
+          name: "Flaky tests",
+        });
+        const agentId = yield* openTaskAgent(keeper, workspaceId, taskId);
+        const line = randomUUID();
+        const kept = yield* rememberMemory(
+          workspaceId,
+          keeper,
+          "Deployments go out from main.",
+          undefined,
+          { agentId, messageId: line },
+        );
+        assert.ok("memory" in kept);
+        // Two recalls, one now and one past the window, on the clock the read serves its window from, moved on so neither falls before the epoch.
+        yield* TestClock.adjust(Duration.days(60));
+        const now = yield* Clock.currentTimeMillis;
+        yield* db.insert(memoryRecall).values(
+          [now, now - Duration.toMillis(Duration.days(31))].map((at) => ({
+            organizationId: workspaceId,
+            memoryId: kept.memory.id,
+            recalledAt: new Date(at),
+          })),
+        );
+        const read = (bearer: string) =>
+          Effect.gen(function* () {
+            const polled = yield* ask({
+              bearer,
+              path: `/api/live/workspace-memories?workspaceId=${workspaceId}`,
+            });
+            assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
+            const answer = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.answer)(polled.body);
+            const { memories } = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.rows)({
+              memories: answer.queries.memories.rows,
+            });
+            return memoriesOfLiveRows(memories).map((memory) => [
+              memory.source,
+              memory.recalls30d,
+              memory.lastRecalledAt,
+            ]);
+          });
+
+        const shared = yield* read(teammate);
+        // The task moves onto its starter's own GitHub token, which the teammate has none of.
+        yield* db
+          .update(task)
+          .set({ githubAccess: GITHUB_ACCESS.TOKEN })
+          .where(eq(task.id, taskId));
+
+        const source = { agentId, messageId: line, taskId, taskName: "Flaky tests" };
+        assert.deepEqual(shared, [[source, 1, now]]);
+        assert.deepEqual(yield* read(keeper), [[source, 1, now]]);
+        assert.deepEqual(yield* read(teammate), [[null, 1, now]]);
       }),
   );
 });
