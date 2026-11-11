@@ -37,6 +37,8 @@ export const CALL_KIND = {
   WEB_PAGE: "web-page",
   LOAD_SKILL: "load-skill",
   LOOK_AT_PICTURE: "look-at-picture",
+  /** A look at a picture a thread's message carries (`look_at_picture` on a thread's address). */
+  LOOK_AT_THREAD_PICTURE: "look-at-thread-picture",
   EDIT_DESCRIPTION: "edit-description",
   TODOS: "todos",
   INBOX_POST: "inbox-post",
@@ -153,6 +155,7 @@ export const CALL_WORDS = {
   [CALL_KIND.WEB_PAGE]: { verb: "Fetched", code: true },
   [CALL_KIND.LOAD_SKILL]: { verb: "Loaded skill", code: true },
   [CALL_KIND.LOOK_AT_PICTURE]: { verb: "Looked at a picture in the description", code: false },
+  [CALL_KIND.LOOK_AT_THREAD_PICTURE]: { verb: "Looked at a picture in a thread", code: false },
   [CALL_KIND.EDIT_DESCRIPTION]: { verb: "Updated the description:", code: false },
   [CALL_KIND.TODOS]: { verb: "Updated the to-dos:", code: false },
   [CALL_KIND.INBOX_POST]: { verb: "Posted a thread:", code: false },

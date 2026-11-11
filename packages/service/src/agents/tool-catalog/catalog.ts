@@ -76,6 +76,7 @@ import {
 import { CODER_SHOW_PAGE_TOOL } from "../../tasks/page-tool.js";
 import {
   LOOK_AT_PICTURE_TOOL,
+  lookAtPictureToolOf,
   lookNamedOnly,
   PICTURE_LOOK_STATUS,
   pictureNotLooked,
@@ -525,13 +526,19 @@ const CATALOG = [
     (admitted, input, { sandbox }) => runTurnCappedEditDescription(admitted, input, sandbox),
     { gate: TOOL_GATE.DESCRIPTIONS, alwaysLoad: true },
   ),
-  served(LOOK_AT_PICTURE_TOOL, (admitted, input) => runAgentLookAtPicture(admitted, input), {
-    gate: TOOL_GATE.DESCRIPTIONS,
-    reads: true,
-    content: lookedPictureContent,
-    // Note that a look answers in its own shape, with the gate's words.
-    refused: pictureNotLooked,
-  }),
+  // Note that a look stands on no gate, because it shows a thread's pictures as much as a description's, and every workspace has threads.
+  served(
+    LOOK_AT_PICTURE_TOOL,
+    (admitted, input, { standing }) =>
+      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS)),
+    {
+      reads: true,
+      variant: lookAtPictureToolOf,
+      content: lookedPictureContent,
+      // Note that a look answers in its own shape, with the gate's words.
+      refused: pictureNotLooked,
+    },
+  ),
   served(
     SHOW_IMAGE_TOOL,
     (admitted, input, { sandbox }) => runAgentShowImage(admitted, input, sandbox),

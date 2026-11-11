@@ -465,7 +465,7 @@ const DOOR_OF: Readonly<
   withdraw_ask: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
   open_pull_request: (admitted, input) => runAgentOpenPullRequest(admitted, input),
   edit_description: (admitted, input) => runAgentEditDescription(admitted, input, 0, NO_SANDBOX),
-  look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input),
+  look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input, true),
   show_image: (admitted, input) => runAgentShowImage(admitted, input, NO_SANDBOX),
   show_page: (admitted, input) => runAgentShowPage(admitted, input, NO_SANDBOX),
   read_comments: commentTool("read_comments"),
@@ -733,7 +733,6 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "list_memories",
           "forget_memory",
           "edit_description",
-          "look_at_picture",
           "end_turn",
         ];
         assert.deepEqual(

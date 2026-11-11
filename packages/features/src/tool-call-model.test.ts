@@ -580,7 +580,7 @@ test("a description edit or a comment call opens the task it named, and one made
   });
 });
 
-test("a look at a description's picture says it looked and opens the task its address names, and one refused shows why and opens nothing", () => {
+test("a look at a description's picture says it looked and opens the task its address names, one refused shows why and opens nothing, and one at a thread's picture says so and opens the Inbox", () => {
   const input = {
     address:
       "https://vespin.dev/acme/plan/3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b/files/9d2e4c61-7a3b-4f0e-8b1a-2c6d4e8f0a13",
@@ -600,6 +600,16 @@ test("a look at a description's picture says it looked and opens the task its ad
   assert.equal(shown?.kind, TOOL_BLOCK.JSON);
   assert.ok(shown?.text.includes(refused.output.reason));
   assert.equal(toolTarget(refused), undefined);
+
+  const inThread = {
+    ...looked,
+    input: {
+      address:
+        "https://vespin.dev/acme/task/3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b/inbox/7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e/files/9d2e4c61-7a3b-4f0e-8b1a-2c6d4e8f0a13",
+    },
+  };
+  assert.equal(toolCallView(inThread).kind, CALL_KIND.LOOK_AT_THREAD_PICTURE);
+  assert.deepEqual(toolTarget(inThread), { kind: TOOL_TARGET.INBOX });
 });
 
 test("an agent a call starts, reads, or messages opens its tab while it is on the call's own task, and nothing once its answer says it is on another, which this task's column has no tab for", () => {
