@@ -64,7 +64,7 @@ import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
 import { launchPayerOf, roomAfterLimit } from "./agent-runtime-choice.js";
 import { claudeCodeCommandRoute } from "./harness-commands.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
-import { launchPermissionMode } from "./permission-mode.js";
+import { launchAllowedCommands, launchPermissionMode } from "./permission-mode.js";
 import {
   type HarnessLaunch,
   type RunnerHarness,
@@ -287,8 +287,9 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         ...(layout.installedSkills === undefined
           ? undefined
           : { installedSkills: layout.installedSkills }),
-        // Note that the agent's mode is read at each launch, so a change reaches it from its next turn.
+        // Note that the agent's mode and its starter's always-allowed commands are read at each launch, so a change reaches it from its next turn.
         ...mode,
+        ...(yield* launchAllowedCommands(agent, mode)),
       };
       return written;
     });

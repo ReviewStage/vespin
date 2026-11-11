@@ -94,6 +94,7 @@
     "./agent-boot-words": "./src/agent-boot-words.js",
     "./agent-transcript-live": "./src/agent-transcript-live.js",
     "./agent-wire": "./src/agent-wire.js",
+    "./allowed-command-wire": "./src/allowed-command-wire.js",
     "./agent-approval-model": "./src/agent-approval-model.js",
     "./agent-approval-wire": "./src/agent-approval-wire.js",
     "./conversation-picture-wire": "./src/conversation-picture-wire.js",

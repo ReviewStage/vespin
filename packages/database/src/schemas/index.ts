@@ -1,5 +1,6 @@
 // Better Auth owns its generated schema; our own tables can join this
 // aggregate from their own schema modules without being overwritten by it.
+export * from "./account-allowed-command.js";
 export * from "./account-provider-key.js";
 export * from "./account-sound.js";
 export * from "./agent.js";

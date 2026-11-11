@@ -10,7 +10,15 @@ import {
   type RunnerEvent,
 } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
-import { listPendingApprovals, readApproval } from "@repo/database/models/agent-approvals";
+import {
+  listAllowedCommands,
+  removeAllowedCommand,
+} from "@repo/database/models/account-allowed-commands";
+import {
+  answerApproval,
+  listPendingApprovals,
+  readApproval,
+} from "@repo/database/models/agent-approvals";
 import {
   createAgent,
   latestTurnsOfReached,
@@ -1099,6 +1107,76 @@ it.layer(SUITE)("the runner events route", (it) => {
         assert.ok(b !== undefined);
         assert.equal(yield* standingOf(b.id), APPROVAL_STATUS.EXPIRED);
         assert.deepEqual(yield* listPendingApprovals(agent.userId, agent.agentId), []);
+      }),
+  );
+
+  it.effect(
+    "a member's Always allow keeps the prefix its harness proposed on their list once, and a prefix no command is lands on no ask",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const ask = (requestId: string, commandPrefix: readonly string[]) => ({
+          type: RUNNER_EVENT.APPROVAL_REQUESTED,
+          requestId,
+          toolUseId: `toolu_${requestId}`,
+          toolName: "Bash",
+          title: "Run pnpm test?",
+          input: { command: "pnpm test --filter web" },
+          commandPrefix,
+        });
+        const allowed = (requestId: string) => ({
+          type: RUNNER_EVENT.APPROVAL_RESOLVED,
+          requestId,
+          decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+          by: APPROVAL_BY.MEMBER,
+        });
+        // SAFETY: each message is one the pinned SDK or the runner emits, written in its JSON shape.
+        const numbered = (messages: readonly unknown[], from: number) =>
+          messages.map((message, at) => ({ sequence: from + at, message }) as RunnerEvent);
+        const asking = numbered(
+          [
+            { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+            { type: "system", subtype: "init", ...top },
+            ask("a", ["pnpm", "test"]),
+            ask("b", ["pnpm", "test && rm"]),
+          ],
+          0,
+        );
+        yield* post(agent.bearer, asking);
+        const waiting = yield* listPendingApprovals(agent.userId, agent.agentId);
+        assert.deepEqual(
+          waiting
+            .map((each) => [each.requestId, each.ask.commandPrefix])
+            .sort(([left], [right]) => String(left).localeCompare(String(right))),
+          [
+            ["a", ["pnpm", "test"]],
+            ["b", undefined],
+          ],
+        );
+        const at = new Date(yield* Clock.currentTimeMillis);
+        for (const each of waiting) {
+          yield* answerApproval({
+            userId: agent.userId,
+            agentId: agent.agentId,
+            approvalId: each.id,
+            status: APPROVAL_STATUS.ALLOWED_FOR_AGENT,
+            at,
+          });
+        }
+        const settling = numbered([allowed("a"), allowed("b")], asking.length);
+        yield* post(agent.bearer, settling);
+        const kept = yield* listAllowedCommands(agent.userId);
+        assert.deepEqual(
+          kept.map((each) => [each.prefix, each.agentId]),
+          [[["pnpm", "test"], agent.agentId]],
+        );
+
+        // The runner's batch posted again is no new answer, so a command the member removed meanwhile stays removed.
+        yield* removeAllowedCommand(agent.userId, kept[0]?.id ?? "");
+        yield* post(agent.bearer, settling);
+        assert.deepEqual(yield* listAllowedCommands(agent.userId), []);
       }),
   );
 
