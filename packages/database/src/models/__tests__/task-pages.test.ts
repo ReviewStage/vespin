@@ -108,13 +108,13 @@ it.layer(getTestDB())("a page read by its id", (it) => {
 
         assert.deepEqual(
           [
-            newest.owner,
+            newest.taskId,
             newest.page.version,
             newest.page.title,
             newest.page.html,
             newest.newestVersion,
           ],
-          [onTask(task.id), 2, "Invites by week", "<h1>Two</h1>", 2],
+          [task.id, 2, "Invites by week", "<h1>Two</h1>", 2],
         );
         assert.deepEqual(
           [earlier.page.version, earlier.page.html, earlier.newestVersion],
