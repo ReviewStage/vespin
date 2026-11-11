@@ -118,4 +118,4 @@ if (reported.length > 0) {
   process.exit(1);
 }
 
-process.stdout.write(`No discarded Effect, Stream, or Layer in ${sourceCount} files.\nMEASURE discarded-effect peak RSS ${(process.resourceUsage().maxRSS / 1024).toFixed(0)} MB\n`);
+process.stdout.write(`No discarded Effect, Stream, or Layer in ${sourceCount} files.\n`);

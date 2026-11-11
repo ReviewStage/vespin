@@ -1,10 +1,4 @@
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-
-// TEMPORARY: the runner's memory in use (MemTotal - MemAvailable), sampled.
-const meminfo = () => Object.fromEntries(readFileSync("/proc/meminfo", "utf8").split("\n").filter(Boolean).map((l) => [l.split(":")[0], Number.parseInt(l.split(":")[1], 10)]));
-let peakInUse = 0;
-const sampler = setInterval(() => { const m = meminfo(); peakInUse = Math.max(peakInUse, m.MemTotal - m.MemAvailable); }, 250);
 
 import { ROOT_TASKS, TEST_TASK, turboInvocation, WORKSPACE_TASKS } from "./lib/turbo.mjs";
 
@@ -134,8 +128,6 @@ if (anyWorkspace && !parsed.without.includes("test")) {
 // piped stdout is asynchronous and an exit drops whatever a failing check's
 // output has not yet flushed, which is the part that names the failure.
 const results = await Promise.all(runs.map((run) => runTurbo(run.label, run.args, { held: true })));
-clearInterval(sampler);
-process.stdout.write(`\nMEASURE peak memory in use ${(peakInUse / 1024).toFixed(0)} MB of ${(meminfo().MemTotal / 1024).toFixed(0)} MB\n`);
 const failed = runs.filter((_, index) => !results[index]);
 if (failed.length > 0) {
   process.stderr.write(`\nerror: ${failed.map((run) => run.label).join("; ")} failed\n`);
