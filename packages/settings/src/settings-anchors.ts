@@ -50,6 +50,10 @@ export const SETTINGS_SEARCH_ROW = {
   CLI_SIGN_IN: "cli-sign-in",
   /** Hosts' Add hosts button, under its list. */
   ADD_HOSTS: "add-hosts",
+  /** Machines' list of the account's machines. */
+  HOSTS: "hosts-list",
+  /** Skills' group of the reader's own, under the workspace's in a workspace of several members. */
+  SKILLS_PERSONAL: "skills-personal",
   /** The Workspace page's identity row, where an owner or an admin renames the workspace. */
   WORKSPACE_RENAME: "workspace-rename",
   /** The Workspace page's identity row, whose ⋯ holds the owner's Change URL. */

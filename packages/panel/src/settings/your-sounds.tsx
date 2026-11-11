@@ -61,6 +61,7 @@ import { showToast } from "../toast.js";
 import { MenuRow } from "./menu-row.js";
 import { useSettingRowWrite } from "./row-write.js";
 import type { ChoiceMenu } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * your-sounds.tsx -- the sounds the account keeps of its own, in Settings' Notifications: listed first in each sound's pop-up, added from it or from the + beside Play under a name the member gives, and listed apart to play, rename, or remove.
@@ -376,7 +377,7 @@ function SoundList({
   onRemove: (sound: Sound) => void;
 }): React.JSX.Element {
   return (
-    <SettingsSection title={SOUND_WORDS.LIST}>
+    <SettingsSection {...settingsSectionHead(SECTION.YOUR_SOUNDS)}>
       {sounds.map((sound) => (
         <MenuRow
           key={sound.id}

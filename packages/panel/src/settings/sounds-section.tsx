@@ -16,6 +16,7 @@ import { PlayIcon } from "@repo/ui/icons";
 import { appPlatform } from "../app-platform.js";
 import { NotificationsOff } from "./notifications-off.js";
 import { SchemaSettingRows } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SlackNotificationsRow } from "./slack-notifications-row.js";
 import { useYourSounds } from "./your-sounds.js";
 
@@ -100,7 +101,7 @@ export function SoundsSection({
 
   return (
     <>
-      <SettingsSection title="Notifications">
+      <SettingsSection {...settingsSectionHead(SECTION.NOTIFICATIONS)}>
         <SchemaSettingRows
           page={SCHEMA_SETTINGS_PAGE.PREFERENCES}
           section={SETTING_SECTION.NOTIFICATIONS}
