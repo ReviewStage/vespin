@@ -32,14 +32,19 @@ import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
  * of the workspace while the reader is a member of it, each with its
  * keeper's id and name, each null once that account is gone, the agent,
  * line, and task its words came from, each null where the reader may not
- * open that task or none stands, and its recalls, most recently kept or
- * corrected first, then the newest kept, then by id. The service answers
- * `not-found` for a workspace the account is no member of.
+ * open that task or none stands, and its recalls since `recalledSince`,
+ * which the service serves from its clock, most recently kept or corrected
+ * first, then the newest kept, then by id. The service answers `not-found`
+ * for a workspace the account is no member of.
  */
 export const WORKSPACE_MEMORIES_READ = liveRead({
   name: LIVE_READ.MEMORIES,
   path: HOSTED_SERVICE_PATH.LIVE_WORKSPACE_MEMORIES,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, workspaceId: LIVE_PARAM.TEXT },
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    workspaceId: LIVE_PARAM.TEXT,
+    recalledSince: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     memories: liveRows({

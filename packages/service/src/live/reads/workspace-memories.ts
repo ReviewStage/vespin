@@ -19,9 +19,10 @@
  * forget, or by their own GitHub token moving, which decides which agents'
  * tasks they may open. Note that a teammate's rename wakes neither, since a
  * member's row names only their own topic and their workspaces': a keeper's
- * new name shows at the hold's end, as a task's new name does; and that the
- * window's edge passing wakes nothing, so a recall that falls out of it is
- * still counted until the next wake.
+ * new name shows at the hold's end, as a task's new name does. The window's
+ * start is served from the clock (`recalledSince`), since a live statement
+ * reads none, so a recall that falls out of the window with no write is
+ * still counted until the read is looked at again.
  */
 
 import { queryBuilder } from "@repo/database/core/query";
@@ -49,19 +50,21 @@ import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { MEMORY_RECALL_WINDOW_DAYS } from "@repo/features/memory-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { and, eq, exists, gte, or, sql } from "drizzle-orm";
+import { Clock, Duration, Effect } from "effect";
+import { instantParam } from "../../sync/live-param.js";
 import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
 import { admitWorkspaceMember } from "./workspace-member.js";
 
-/** The start of the window a memory's recalls are counted over. */
-const RECALL_WINDOW_OPENS = sql`now() - ${sql.raw(`interval '${MEMORY_RECALL_WINDOW_DAYS} days'`)}`;
+/** How far back a memory's recalls are counted. */
+const RECALL_WINDOW = Duration.days(MEMORY_RECALL_WINDOW_DAYS);
 
-/** How often the memory was recalled in the window. */
-const RECALLS_IN_WINDOW = sql<number>`(${queryBuilder
-  .select({ recalls: sql`count(*)::int` })
-  .from(memoryRecall)
-  .where(
-    and(eq(memoryRecall.memoryId, memory.id), gte(memoryRecall.recalledAt, RECALL_WINDOW_OPENS)),
-  )})`;
+/** How often the memory was recalled since the window opened. */
+function recallsSince(opens: Date) {
+  return sql<number>`(${queryBuilder
+    .select({ recalls: sql`count(*)::int` })
+    .from(memoryRecall)
+    .where(and(eq(memoryRecall.memoryId, memory.id), gte(memoryRecall.recalledAt, opens)))})`;
+}
 
 /** When the memory was last recalled, as epoch milliseconds; null where it never was. */
 const LAST_RECALLED_AT = sql<number | null>`floor(extract(epoch from ((${queryBuilder
@@ -102,7 +105,7 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
     [TOPIC.MEMORY, workspaceId],
     [TOPIC.ACCOUNT, userId],
   ],
-  statements: ({ userId, workspaceId }) => ({
+  statements: ({ userId, workspaceId, recalledSince }) => ({
     memories: liveRowsStatement(
       WORKSPACE_MEMORIES_READ.parts.memories,
       {
@@ -121,7 +124,7 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
           >`case when ${agentTable.id} is not null then ${memory.messageId} end`,
           sourceTaskId: outerJoined(task.id),
           sourceTaskName: outerJoined(task.name),
-          recalls30d: RECALLS_IN_WINDOW,
+          recalls30d: recallsSince(instantParam(recalledSince)),
           lastRecalledAt: LAST_RECALLED_AT,
         },
         instants: { createdAt: memory.createdAt, updatedAt: memory.updatedAt },
@@ -138,5 +141,9 @@ export const workspaceMemoriesRead = bindLiveRead(WORKSPACE_MEMORIES_READ, {
           ),
     ),
   }),
+  serve: () =>
+    Effect.map(Clock.currentTimeMillis, (now) => ({
+      recalledSince: String(now - Duration.toMillis(RECALL_WINDOW)),
+    })),
   admit: admitWorkspaceMember,
 });

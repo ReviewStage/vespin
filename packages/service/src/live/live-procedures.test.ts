@@ -1671,19 +1671,16 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
           { agentId, messageId: line },
         );
         assert.ok("memory" in kept);
-        // Two recalls stamped on the database's own clock, which the read's window is measured on: one now, one past the window.
-        const recalls = yield* db
-          .insert(memoryRecall)
-          .values([
-            { organizationId: workspaceId, memoryId: kept.memory.id, recalledAt: sql`now()` },
-            {
-              organizationId: workspaceId,
-              memoryId: kept.memory.id,
-              recalledAt: sql`now() - interval '31 days'`,
-            },
-          ])
-          .returning({ recalledAt: memoryRecall.recalledAt });
-        const latest = Math.max(...recalls.map((recall) => recall.recalledAt.getTime()));
+        // Two recalls, one now and one past the window, on the clock the read serves its window from, moved on so neither falls before the epoch.
+        yield* TestClock.adjust(Duration.days(60));
+        const now = yield* Clock.currentTimeMillis;
+        yield* db.insert(memoryRecall).values(
+          [now, now - Duration.toMillis(Duration.days(31))].map((at) => ({
+            organizationId: workspaceId,
+            memoryId: kept.memory.id,
+            recalledAt: new Date(at),
+          })),
+        );
         const read = (bearer: string) =>
           Effect.gen(function* () {
             const polled = yield* ask({
@@ -1710,9 +1707,9 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
           .where(eq(task.id, taskId));
 
         const source = { agentId, messageId: line, taskId, taskName: "Flaky tests" };
-        assert.deepEqual(shared, [[source, 1, latest]]);
-        assert.deepEqual(yield* read(keeper), [[source, 1, latest]]);
-        assert.deepEqual(yield* read(teammate), [[null, 1, latest]]);
+        assert.deepEqual(shared, [[source, 1, now]]);
+        assert.deepEqual(yield* read(keeper), [[source, 1, now]]);
+        assert.deepEqual(yield* read(teammate), [[null, 1, now]]);
       }),
   );
 });
