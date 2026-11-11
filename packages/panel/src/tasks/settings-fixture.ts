@@ -1059,8 +1059,8 @@ const UNLISTED_AGENT = "7f1c5d9e-4a6b-4b8d-0e2f-5a7c9b1d3e4f";
 
 /**
  * The commands the account always allows, earliest first, as the service
- * answers them: one Claude's agent kept, one Codex's, one added by hand,
- * and one whose agent no list names. A staged write lays its answer here.
+ * answers them: two a Claude Code agent kept, one added by hand, and one
+ * whose agent no list names, since Codex agents keep none. A staged write lays its answer here.
  */
 let stagedCommands: readonly AllowedCommand[] = [
   {
@@ -1072,7 +1072,7 @@ let stagedCommands: readonly AllowedCommand[] = [
   {
     id: "9b3e7f1a-6c8d-4dae-9a4b-7c9e1d3f5a6b",
     prefix: ["cargo", "check"],
-    agentId: MEMORY_AGENT.CODEX,
+    agentId: MEMORY_AGENT.CLAUDE,
     addedAt: NOW - 9 * DAY,
   },
   {

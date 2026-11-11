@@ -48,7 +48,7 @@ import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 
 /**
- * always-allowed-section.tsx -- Settings › Agents' Always allowed: the shell commands the account's coding agents run without asking, one added in place, each removed from its ⋯.
+ * always-allowed-section.tsx -- Settings › Agents' Always allowed: the shell commands the account's Claude Code agents run without asking, one added in place, each removed from its ⋯.
  *
  * The list is the one the host holds for the account signed in
  * (`LIVE_READ.ALLOWED_COMMANDS`), where each write's own answer is laid. It
@@ -65,13 +65,15 @@ import { MenuRow } from "./menu-row.js";
  * reaches only the reader and can be undone: the row leaves at once and a
  * toast offers Undo, which adds the command again (`undo-stack.ts`), as ⌘Z
  * does; it stands as added by you, since the list keeps no agent for an add
- * by hand. A removal stops applying at an agent's next launch.
+ * by hand. A removal stops applying at an agent's next launch. Codex
+ * agents neither read the list nor add to it, so the caption names Claude
+ * Code alone.
  */
 
 /** What the section says. */
 const SECTION = {
   TITLE: "Always allowed",
-  CAPTION: "Commands your agents run without asking.",
+  CAPTION: "Commands your Claude Code agents run without asking.",
   FIELD: "Add a command",
   PLACEHOLDER: "pnpm test",
   READ_FAILED: "Couldn't read your always-allowed commands.",
