@@ -162,7 +162,7 @@ import {
   refreshAgentCheckout,
   writeAgentCredential,
 } from "../coder-host/checkout.js";
-import { restoreCheckout } from "../coder-host/checkout-restore.js";
+import { diffCheckout, restoreCheckout } from "../coder-host/checkout-restore.js";
 import { NATIVE_SKILLS_PATH } from "../coder-host/native-skills.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
@@ -803,6 +803,8 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
       ),
 
     restoreCheckout: (session, snapshot) => restoreCheckout(api, { sessionId: session, snapshot }),
+
+    diffCheckout: (session, range) => diffCheckout(api, { sessionId: session, range }),
 
     phoneVideo: (session, path) =>
       Effect.flatMap(runningSession(session), (running) =>

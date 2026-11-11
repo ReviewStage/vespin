@@ -42,6 +42,7 @@ import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
+import type { CheckoutDiffRange } from "@repo/features/checkout-diff";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
   type Brand,
@@ -245,6 +246,24 @@ export const RESTORE_OUTCOME = {
 } as const;
 
 export type RestoreOutcome = (typeof RESTORE_OUTCOME)[keyof typeof RESTORE_OUTCOME];
+
+/** What a diff of a session's checkout came to: diffed, a commit it was handed missing from the checkout, the diff failed, or a machine that diffs none. */
+export const CHECKOUT_DIFF_OUTCOME = {
+  DIFFED: "diffed",
+  MISSING: "missing",
+  FAILED: "failed",
+  UNSUPPORTED: "unsupported",
+} as const;
+
+/** The outcome of a diff: the diff git printed where it diffed, and why not otherwise. */
+export type CheckoutDiffOutcome =
+  | { readonly outcome: typeof CHECKOUT_DIFF_OUTCOME.DIFFED; readonly diff: string }
+  | {
+      readonly outcome: Exclude<
+        (typeof CHECKOUT_DIFF_OUTCOME)[keyof typeof CHECKOUT_DIFF_OUTCOME],
+        typeof CHECKOUT_DIFF_OUTCOME.DIFFED
+      >;
+    };
 
 /** A runner launched in a place: the place, and the machine's own id for the runner's process. */
 export interface RunnerHandle extends MachinePlace {
@@ -482,6 +501,18 @@ export interface AgentMachineService {
     session: string,
     snapshot: TurnCheckoutSnapshot,
   ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices>;
+  /**
+   * The diff of the session's checkout between two snapshots its runner
+   * recorded, or one and the working tree, by the one diff script both
+   * machines run (`@repo/features/checkout-diff`): in a sandbox, woken where
+   * it stopped; on a Mac, asked of its host. Refused (`LaunchRefused`) where
+   * the Mac is away or removed, as a line to it is. A sandbox's diff is a
+   * use of it, recorded in the store (`../sandbox-use.ts`).
+   */
+  readonly diffCheckout: (
+    session: string,
+    range: CheckoutDiffRange,
+  ) => Effect.Effect<CheckoutDiffOutcome, SandboxError | LaunchRefused, DatabaseServices>;
   /** The runner's exit code, null while it runs, or gone where the machine no longer knows it; waiting at most `within` for the exit. */
   readonly runnerExit: (
     handle: RunnerHandle,

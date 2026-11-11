@@ -127,6 +127,7 @@ import {
 import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-host/stop.js";
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
+import { turnChangesOf } from "./coder-host/turn-changes.js";
 import { runActionOf } from "./run-actions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
@@ -571,6 +572,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           input.body.restoreFiles === true,
         ),
       };
+    }),
+    /** The files one of the agent's turns changed, as git tells them apart on its machine (`coder-host/turn-changes.ts`). */
+    turnChanges: signedIn.turnChanges.effect(function* ({ input, context }) {
+      const { agent } = yield* reachedAgentById(context.userId, input.id);
+      return yield* turnChangesOf(agent, input.messageId);
     }),
     /**
      * The agent's changes: the files of the pull request its kept published

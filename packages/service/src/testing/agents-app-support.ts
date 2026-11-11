@@ -412,6 +412,7 @@ const ORPC_PUBLIC_PATH: ReadonlyMap<string, (id: string) => string> = new Map([
   ["/api/agents/agents", (id: string) => `/api/agents/${id}/agents`],
   ["/api/agents/messages-newest", (id: string) => `/api/agents/${id}/messages/newest`],
   ["/api/agents/changes", (id: string) => `/api/agents/${id}/changes`],
+  ["/api/agents/turn-changes", (id: string) => `/api/agents/${id}/turn-changes`],
   ["/api/agents/review-options", (id: string) => `/api/agents/${id}/review-options`],
   ["/api/agents/workspace-tools", (id: string) => `/api/agents/${id}/workspace-tools`],
   ["/api/agents/pull-request", (id: string) => `/api/agents/${id}/pull-request`],
@@ -608,6 +609,7 @@ export function request(
     picture?: string;
     src?: string;
     number?: string;
+    messageId?: string;
     /** A browser's session cookie, sent beside the bearer or, with no account named, in its place. */
     cookie?: string;
     /** The media types the caller takes, as the iOS app names the video it plays. */
@@ -631,6 +633,7 @@ export function request(
   if (init.picture !== undefined) url.searchParams.set("picture", init.picture);
   if (init.src !== undefined) url.searchParams.set("src", init.src);
   if (init.number !== undefined) url.searchParams.set("number", init.number);
+  if (init.messageId !== undefined) url.searchParams.set("messageId", init.messageId);
   const headers = new Headers();
   if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
   if (init.accept !== undefined) headers.set("accept", init.accept);

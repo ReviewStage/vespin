@@ -857,6 +857,11 @@ export const agentChangesAnswerViewSchema = answerView(agentsContract.changes, {
 
 export type AgentChangesAnswerView = typeof agentChangesAnswerViewSchema.Type;
 
+/** The files one of an agent's turns changed, as the window hears them: the files, or why there are none to draw, a snapshot gone and a Mac away among the whys. */
+export const agentTurnChangesAnswerViewSchema = answerView(agentsContract.turnChanges);
+
+export type AgentTurnChangesAnswerView = typeof agentTurnChangesAnswerViewSchema.Type;
+
 /** One agent's pull request itself as its overview draws it, as the window hears it: the pull request, why there is none yet, or why there is no answer. */
 const agentOverviewPullRequestAnswerViewSchema = answerView(
   agentPullRequestsContract.overviewPullRequest,
