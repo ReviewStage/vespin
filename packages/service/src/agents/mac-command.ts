@@ -59,7 +59,7 @@ import { COMMAND_DESCRIPTION } from "./command-description.js";
  * answers as not run.
  *
  * An agent's call runs on the Mac of the member its task is assigned to,
- * or its starter's where it works on no task or one assigned to no one
+ * or its starter's where that task is assigned to no one
  * (`macOwnerOf`), so a task handed to another member hands its agents'
  * commands to their Mac. Note that who has written to the agent decides
  * nothing: the Mac's own setting (Ask every time by default) is the one

@@ -2,7 +2,7 @@
  * run-archive.ts -- "Archive finished runs": an automation run's agents put away once each finished well, as soon as what held the run back lets go.
  *
  * An automation that archives its successful runs has the agents of each
- * run, the run's own agent and the helpers it started with no task alike,
+ * run, the run's own agent and the helpers it started alike,
  * archived once each finished well, read as its tab reads it, holds nothing
  * open in the inbox, and has no pull request open or in draft, since an
  * archived agent hears nothing of a review on it. A run is archived as one,

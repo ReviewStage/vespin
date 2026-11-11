@@ -805,7 +805,7 @@ function composed(
     change: () => () => ({}),
     send: ({ taskId, ...request }) =>
       Effect.map(
-        // A Start from another agent that names no task goes where that agent is, its task or its workspace.
+        // A Start from another agent that names no task goes on that agent's task.
         asked(taskId === undefined ? client.startFrom(request) : client.start(taskId, request)),
         (answered) => {
           if ("agent" in answered) return { answer: answered, txid: answered.txid };

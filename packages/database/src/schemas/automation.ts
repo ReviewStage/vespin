@@ -150,8 +150,7 @@ export const automationRun = pgTable(
     /**
      * The task the run's agent works on: the one the run made for itself, or,
      * where every run goes to the same agent, that agent's task; null before
-     * the run is acted on, for a run whose agent works on no task, and once
-     * the task is deleted.
+     * the run is acted on, and once the task is deleted.
      */
     taskId: uuid("task_id").references(() => task.id, { onDelete: "set null" }),
     /**

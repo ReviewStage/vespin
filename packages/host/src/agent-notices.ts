@@ -670,7 +670,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       publishUnseen();
     }
 
-    /** The agent as the ledger holds it, on a plan or with none. */
+    /** The agent as the ledger holds it. */
     function heldOf(
       agent: Pick<AgentSummary, "planId" | "status" | "turn" | "turnId" | "startedBy" | "title">,
     ): HeldAgent {
@@ -685,9 +685,8 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       };
     }
 
-    // Note that the ledger holds every agent a read names, any member's, on a
-    // plan or with none, because a teammate's turn ending is news to whoever
-    // reads its page, whether or not it has a plan.
+    // Note that the ledger holds every agent a read names, any member's,
+    // because a teammate's turn ending is news to whoever reads its page.
     const notices: AgentNotices = {
       observeAgents: (agents) => {
         for (const agent of agents) observe(agent.id, heldOf(agent));

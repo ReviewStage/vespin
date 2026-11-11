@@ -24,8 +24,7 @@ import { createTask, deleteTask, updateTask } from "../task-store.js";
  * in them, through the store's public reads and writes, over a real
  * dialect. A task stands in one section at a time, deleting a section
  * deletes none of its tasks, and nobody puts a task in a section that is
- * not theirs or a task of another workspace in one. An agent with no task
- * is kept on the same terms beside the tasks.
+ * not theirs or a task of another workspace in one.
  *
  * Synthetic accounts, workspaces, sections, and tasks throughout.
  */

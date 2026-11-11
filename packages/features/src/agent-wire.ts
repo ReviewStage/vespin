@@ -1482,13 +1482,12 @@ const agentOriginSchema = EffectSchema.Struct({
 export type AgentOrigin = typeof agentOriginSchema.Type;
 
 /**
- * One agent as its own page reads it, which is how an agent an automation
- * started with no task is read, having no task's tab to stand in: the
- * summary the tabs draw, the automation whose run started it or none, the
+ * One agent as a read of it by its id answers it, as a link to it or a row
+ * naming it alone reads it: the summary the tabs draw, the automation whose run started it or none, the
  * run that did where one did, the workspace it belongs to, and the
  * repository it works in, null for one with none, and the branch its
  * checkout stood on as its last turn ended, as the member MCP server's
- * `read_agent` answers it. An agent on a plan reads so too, by the same id.
+ * `read_agent` answers it.
  */
 const agentPageSchema = EffectSchema.Struct({
   ...agentSummarySchema.fields,
@@ -1503,7 +1502,7 @@ const agentPageSchema = EffectSchema.Struct({
 
 export type AgentPage = typeof agentPageSchema.Type;
 
-/** One agent read by its id (GET), on a task or with none. */
+/** One agent read by its id (GET). */
 export const agentPageAnswerSchema = EffectSchema.Struct({ agent: agentPageSchema });
 
 /** The task's agents (GET), in the order they were started. */
@@ -1590,7 +1589,7 @@ export const agentPullRequestAnswerSchema = EffectSchema.Struct({
 export type AgentPullRequestAnswer = typeof agentPullRequestAnswerSchema.Type;
 
 /**
- * One agent as the task list carries it, on a plan or with none: the agent
+ * One agent as the task list carries it: the agent
  * as the tabs draw it, with the workspace it belongs to and the repository
  * it works in, its own, which its plan's no longer names once the plan's
  * repository moved, so its page reads its files and skills where it works.

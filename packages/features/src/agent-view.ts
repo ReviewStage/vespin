@@ -559,8 +559,7 @@ export type AgentListAnswer = typeof agentListAnswerViewSchema.Type;
 /**
  * Starting an agent, as the window asks it: the task, and the Start request
  * the service takes; or, for a Start from another agent, no task, the new
- * agent going where that agent is, its task or its workspace where it has
- * none. A Start naming neither a task nor an agent to start from starts
+ * agent going on that agent's task. A Start naming neither a task nor an agent to start from starts
  * nowhere, and is refused.
  */
 export const agentStartParamsSchema = EffectSchema.Struct({
@@ -781,7 +780,7 @@ export const agentRewindParamsSchema = EffectSchema.Struct({
   restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
-/** One agent, as the window asks to read it whole as its own page, on a task or with none. */
+/** One agent, as the window asks to read it whole by its id. */
 export const agentPageParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });

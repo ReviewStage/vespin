@@ -32,8 +32,8 @@ import { parsedUrl } from "./parsed-url.js";
  *   under it what is its own: a worker, `/worker/<callId>`, its Changes,
  *   `/changes`, one review thread of its pull request in one of that tab's
  *   views, `/changes/<conversation|files>/thread/<threadId>`, a message,
- *   `/message/<messageId>`, and, on no task, a page it showed,
- *   `/page/<pageId>`; which task's panel it opens in is the reader's to
+ *   `/message/<messageId>`, and a page an agent once showed on no task,
+ *   `/page/<pageId>`, which an older link names and no new one writes; which task's panel it opens in is the reader's to
  *   find, by the agent;
  * - the Inbox, `/inbox`, the Inbox narrowed to one task's items,
  *   `/inbox/task/<taskId>`, and an item in it under the agent that posted it,
@@ -589,7 +589,7 @@ function taskFields(taskId: string, rest: readonly string[]) {
   }
 }
 
-/** The steps after an agent's id, under the task an older link names it under or none: the agent itself, a worker, its Changes, a message, or, on no task, a page or an Inbox item of its own. */
+/** The steps after an agent's id, under the task an older link names it under or none: the agent itself, a worker, its Changes, a message, an Inbox item of its own, or a page an older link names under it. */
 function agentFields(taskId: string | undefined, agentId: string, rest: readonly string[]) {
   const [step, id, ...more] = rest;
   const task = taskId === undefined ? {} : { planId: taskId };

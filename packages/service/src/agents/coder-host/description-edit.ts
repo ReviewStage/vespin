@@ -55,7 +55,7 @@ import { type InboxSandboxDoor, readSandboxMedia } from "./inbox-image.js";
  * description's one write (`description-notes.ts`), which journals the save under the
  * agent's id, so the developer and the other agents read them and see which
  * agent wrote what. Every call names the task whose description it edits, its own
- * or any other of its workspace, so an agent on no task edits one too; the store writes only a task the
+ * or any other of its workspace; the store writes only a task the
  * member whose turn it is reaches (`agent-doors.ts`). A call's notes
  * may land anywhere in the description, its headings among it, and land together or
  * not at all: one naming what the description does not hold exactly once answers the
