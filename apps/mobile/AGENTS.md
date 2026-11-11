@@ -227,7 +227,11 @@ token, which the app keeps in one Keychain item it and the extension alone
 share (`modules/share-token/`, written through `@repo/host`'s `issued-token-account-source.ts`
 on every sign-in and renewal and deleted on sign-out; the Keychain group is
 each target's `VespinShareKeychainGroup`). The refresh token never leaves the
-app, since it rotates on every use. With no token, a stale one, or no answer,
+app, since it rotates on every use. Once the task is made, the sheet names
+it and posts a local notification (`share-extension/ShareNotice.swift`) whose
+tap the app routes as a push of `PUSH_KIND.SHARE_STARTED`
+(`@repo/features/inbox-push-wire`), to the agent's page or the task, since
+no public API lets an extension open its app. With no token, a stale one, or no answer,
 Start keeps the words and picks as a draft in the group instead, and the app
 opens New task on it, prefilled, the next time it comes forward, since no
 public API lets an extension bring its app forward. Every file the app
