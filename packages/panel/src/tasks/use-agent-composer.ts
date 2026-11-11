@@ -146,8 +146,10 @@ interface Held {
   cut: ReadonlySet<string> | undefined;
   /** The newest line not delivered whose refusal is mended elsewhere (`remedyLabel`), which the note under the box offers that remedy for and its Retry sends again; none while none waits. */
   remedied: { readonly lineId: string; readonly note: ComposerNote } | undefined;
-  /** The Revert that did not go, which the note under the box is of and its Retry asks again. */
-  revertFailed: { readonly messageId: string; readonly note: ComposerNote } | undefined;
+  /** The Revert that did not go, which the note under the box is of and its Retry asks again, the files back too where it asked them. */
+  revertFailed:
+    | { readonly messageId: string; readonly restoreFiles: boolean; readonly note: ComposerNote }
+    | undefined;
   closed: string | undefined;
   /** What the box held as it closed, newer than every line sent, which Continue carries after them. */
   behind: Draft;
@@ -564,7 +566,7 @@ export function useAgentComposer(input: {
         ...was,
         cut: undefined,
         reverting: undefined,
-        revertFailed: { messageId, note },
+        revertFailed: { messageId, restoreFiles, note },
       }));
     });
   };
@@ -630,7 +632,9 @@ export function useAgentComposer(input: {
     send: () => sendDraft(),
     retry: () => {
       const { revertFailed, remedied } = held;
-      if (revertFailed !== undefined) return revert(revertFailed.messageId);
+      if (revertFailed !== undefined) {
+        return revert(revertFailed.messageId, revertFailed.restoreFiles);
+      }
       if (remedied !== undefined) resend(remedied.lineId);
     },
     retryLine: resend,

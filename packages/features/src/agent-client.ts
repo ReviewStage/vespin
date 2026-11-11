@@ -1124,7 +1124,11 @@ export class HostedAgentClient {
         params: { id: agentId },
         body: { messageId, ...(restoreFiles ? { restoreFiles: true } : undefined) },
       },
-      { as: AGENT_NOT_FOUND_RENAMES, deadline: HOSTED_DEADLINE.STEER },
+      {
+        as: AGENT_NOT_FOUND_RENAMES,
+        // A rewind that puts the files back waits on the restore, two minutes on a Mac, past the steer's bound.
+        deadline: restoreFiles ? HOSTED_DEADLINE.REWIND_FILES : HOSTED_DEADLINE.STEER,
+      },
     );
   }
 

@@ -121,7 +121,7 @@ interface RewindDoors {
   readonly revertTakes: ReadonlyMap<string, string>;
   /** What the send of a line written again drops of other members' messages, by the line's id, said as `revertTakes` does; none where it drops none of theirs. */
   readonly editTakes: ReadonlyMap<string, string>;
-  /** The lines a rewind to just before can put the agent's files back at, by their ids: those whose turn the runner recorded the checkout before, on a machine the service restores. */
+  /** The lines a rewind to just before can put the agent's files back at, by their ids: those whose turn the runner recorded the checkout before, while the workspace's experiment is on. */
   readonly restorable: ReadonlySet<string>;
 }
 
@@ -185,8 +185,7 @@ function takesWords(takes: Takes): string | undefined {
  * (`readerId`) wrote, the points say whose and how many, for the confirm to
  * name. A line that opened a turn whose checkout its runner recorded
  * (`filesRestorable`) is one the files can go back at, where the files go
- * back at all (`restores`): the agent's workspace has the experiment on,
- * and the agent runs where the service restores them, a cloud sandbox.
+ * back at all (`restores`): the agent's workspace has the experiment on.
  */
 export function rewindPoints(
   messages: readonly AgentTranscriptMessage[],

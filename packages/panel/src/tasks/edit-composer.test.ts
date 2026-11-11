@@ -350,6 +350,15 @@ test("it offers the files back beside Cancel where the line's turn recorded them
   assert.equal(tick.getAttribute("aria-checked"), "true");
   pressInComposer(ticked.container, "Enter");
   await settle();
+  assert.deepEqual(ticked.ended, [], "putting the files back is asked about first");
+  const question = document.querySelector('[role="alertdialog"]')?.textContent;
+  assert.ok(question?.includes("files also go back"), String(question));
+  const send =
+    [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find(
+      (each) => each.textContent === "Send message",
+    ) ?? assert.fail("the question offers Send message");
+  await act(async () => send.click());
+  await settle();
   assert.deepEqual(
     ticked.ended.map(({ words, restoreFiles }) => ({ words, restoreFiles })),
     [{ words: "Also email the inviter.", restoreFiles: true }],

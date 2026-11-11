@@ -20,7 +20,6 @@ import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
-  AGENT_MACHINE,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
@@ -2947,16 +2946,13 @@ function AgentTabView({
   // reads them, and a page that moved no rewind point must draw no message again.
   const pending = composer.sent.length > 0;
   const going = useKept(composer.going, sameSet);
-  // The files go back only while the agent's workspace has the experiment on, and where the service
-  // restores them: in a cloud sandbox, not yet on a Mac.
+  // The files go back only while the agent's workspace has the experiment on.
   const selectWorkspace = useCallback(
     (state: AppStateSnapshot) => workspaceOfAgent(selectListedTasks(state), agent.id, agent.planId),
     [agent.id, agent.planId],
   );
   const workspaceId = useQuery({ ...appStateQuery, select: selectWorkspace }).data;
-  const restores =
-    useWorkspaceExperiment(workspaceId, EXPERIMENT.REWIND_FILES) &&
-    agent.machine !== AGENT_MACHINE.DEVICE;
+  const restores = useWorkspaceExperiment(workspaceId, EXPERIMENT.REWIND_FILES);
   const points = useKept(
     useMemo(
       () => rewindPoints(kept, pending, readerId, going, restores),

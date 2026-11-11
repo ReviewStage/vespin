@@ -375,17 +375,31 @@ async function revertOffered(shared: readonly AgentTranscriptMessage[], restores
 }
 
 test("Rewind conversation to here offers the files back only where the next line's turn recorded them, off until ticked, and hands the choice to the revert", async () => {
-  const recorded = [
+  const unrecorded = [
     lineFrom("a", "Dean", "user-1"),
     message("reply-1", MESSAGE_ROLE.ASSISTANT),
-    { ...lineFrom("b", "Dean", "user-1"), filesRestorable: true as const },
+    lineFrom("b", "Dean", "user-1"),
     message("reply-2", MESSAGE_ROLE.ASSISTANT),
   ];
+  const recorded = unrecorded.map((each) =>
+    each.id === "b" ? { ...each, filesRestorable: true as const } : each,
+  );
 
-  const plain = await revertOffered(recorded, false);
-  assert.equal(plain.checkbox(), undefined, "a Mac's agent is offered no files back");
+  const plain = await revertOffered(unrecorded, true);
+  assert.equal(
+    plain.checkbox(),
+    undefined,
+    "a point whose turn recorded nothing offers no files back",
+  );
   await plain.confirm();
   assert.deepEqual(plain.reverted, [["b", false]]);
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  document.body.innerHTML = "";
+
+  const off = await revertOffered(recorded, false);
+  assert.equal(off.checkbox(), undefined, "with the experiment off, a recorded point offers none");
+  await off.confirm();
+  assert.deepEqual(off.reverted, [["b", false]]);
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
