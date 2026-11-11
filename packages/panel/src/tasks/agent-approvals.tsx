@@ -19,6 +19,7 @@ import {
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
 import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { allowedCommandWords } from "@repo/features/allowed-command-model";
 import { providerOf } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
@@ -98,7 +99,9 @@ import type { HeldCall } from "./transcript-blocks.js";
  * line reads "Waiting for approval" in the working mark's place, its body
  * says who asks where a subagent does and the CLI's own words for why, and
  * `@repo/ui`'s `ApprovalActions` stand under it, Allow, Always allow, and
- * Deny, as a row's own presses do (`heldCallOf`). One whose row is not
+ * Deny, as a row's own presses do (`heldCallOf`), Always allow naming the
+ * command's first words where the harness proposed them
+ * (`commandPrefix`), since then it lasts for every agent of the member's. One whose row is not
  * drawn, a subagent's, whose calls the transcript does not keep among them,
  * is drawn as a row of its own at the transcript's foot over the working
  * line, from what the ask says of the call (`heldCallPart`). An answer goes
@@ -485,6 +488,11 @@ export function heldCallOf(ask: ApprovalView): HeldCall {
           error={ask.error}
           noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
           note={(doors) => <DenyNoteBox {...doors} />}
+          command={
+            ask.approval.commandPrefix === undefined
+              ? undefined
+              : allowedCommandWords(ask.approval.commandPrefix)
+          }
           onAnswer={ask.onAnswer}
         />
       ) : undefined,

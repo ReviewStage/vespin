@@ -24,6 +24,7 @@ import type {
   AgentOrigin,
   AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import type { AllowedCommand } from "@repo/features/allowed-command-wire";
 import type {
   AutomationRunSummary,
   AutomationSummary,
@@ -98,6 +99,8 @@ export const RUN_PROFILE = {
   PERSON: "person",
   /** The same task on its coding agent, its Pull request tab beside it: checks, reviews, and a merge queued. */
   AGENT_PULL_REQUEST: "agent-pull-request",
+  /** The same agent and Pull request tab, the agent in an asking mode holding a call on the member's answer, whose command's first words Always allow names. */
+  AGENT_APPROVAL: "agent-approval",
   /** The same agent and Pull request tab, the agent's turn long enough that its transcript scrolls. */
   AGENT_TRANSCRIPT: "agent-transcript",
   /** The same agent as an orchestrator days into its run, its transcript thousands of entries long and written to while it is open. */
@@ -602,6 +605,14 @@ export interface AppGitHubToken {
 /** The account's GitHub token the windows hold, by the account, as the host's read of it stands. */
 export type AppGitHubTokens = Readonly<Record<string, AppHostRead<AppGitHubToken>>>;
 
+/** The commands the account always allows its coding agents to run, as the service last answered them, a read's or a write's: the list, the earliest added first. */
+export interface AppAllowedCommandList {
+  commands: readonly AllowedCommand[];
+}
+
+/** The account's always-allowed commands the windows hold, by the account, as the host's read of them stands. */
+export type AppAllowedCommands = Readonly<Record<string, AppHostRead<AppAllowedCommandList>>>;
+
 /** Each workspace's token repositories the windows hold, by the workspace, as the host's read of them stands. */
 export type AppTokenRepositories = Readonly<
   Record<string, AppHostRead<readonly WorkspaceTokenRepository[]>>
@@ -692,6 +703,7 @@ export interface AppHostReads {
   [LIVE_READ.PULL_REQUEST]: AgentOverviewPullRequestAnswerView;
   [LIVE_READ.REPOSITORY_LISTS]: GitHubRepositoriesAnswer;
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubToken;
+  [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommandList;
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: PullRequestChaptersAnswer;
   [LIVE_READ.BROWSER_TABS]: readonly AgentBrowserTab[];
   [LIVE_READ.PULL_REQUEST_CHECKS]: AgentOverviewChecksAnswerView;
@@ -849,6 +861,8 @@ export interface AppState {
   [LIVE_READ.REPOSITORY_LISTS]: AppRepositoryLists;
   /** The account's own GitHub token, held while a window draws it and a while after: what Settings › Account, a workspace's Add repository, and onboarding's GitHub step read. Never written to disk. */
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubTokens;
+  /** The account's always-allowed commands, held while a window draws them and a while after: what Settings › Agents' Always allowed reads. */
+  [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommands;
   /** Each agent's pull request's chapters the windows chose, held while a Pull request tab holds them and a while after: what its Chapters tab draws. */
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: AppChapters;
   /** Each task's or agent's cloud Browser tabs the windows' side panels list, held while one lists them and a while after: what the side panel's Browser tabs draw. Never written to disk. */
@@ -1043,6 +1057,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.LINK_STANDINGS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.REPOSITORY_LISTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.GITHUB_TOKEN]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.ALLOWED_COMMANDS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST_CHECKS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },

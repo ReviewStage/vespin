@@ -48,6 +48,8 @@ export const FAILURE_SURFACE = {
   ACCOUNT_TOKEN_READ: "account_token.read",
   /** An act a person pressed for, whose answer nothing else read (`pressAct`). */
   ACT: "act",
+  ALLOWED_COMMANDS_READ: "allowed_commands.read",
+  ALLOWED_COMMANDS_WRITE: "allowed_commands.write",
   ADMIN_GATE: "admin.gate",
   ADMIN_READ: "admin.read",
   ADMIN_REFRESH: "admin.refresh",

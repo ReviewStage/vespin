@@ -71,6 +71,18 @@ export const ACCOUNT_ASK_ACT_KIND = {
   GITHUB_TOKEN_SAVE: "githubToken.save",
   GITHUB_TOKEN_REMOVE: "githubToken.remove",
   /**
+   * Settings › Agents › Always allowed: the shell commands the account
+   * always allows its coding agents to run unasked, by their first words,
+   * held for the window while it holds the stream open, asked again at
+   * once, and one added by hand or removed. The hold's stream carries
+   * nothing: the list reaches the panel on app state
+   * (`LIVE_READ.ALLOWED_COMMANDS`), where each write's own answer is laid
+   * too.
+   */
+  ALLOWED_COMMANDS_FOLLOW: "allowedCommands.follow",
+  ALLOWED_COMMANDS_RETRY: "allowedCommands.retry",
+  ALLOWED_COMMANDS_WRITE: "allowedCommands.write",
+  /**
    * Settings › Memory: the facts and conventions the coding agents kept in
    * the workspace Settings shows, shared by its members, held for the
    * window while it holds the stream open, and one forgotten for good. The
@@ -935,6 +947,9 @@ export const PORT_ACT_USE = {
   GITHUB_TOKEN_RETRY: ACT_USE.READ,
   GITHUB_TOKEN_SAVE: ACT_USE.WRITE,
   GITHUB_TOKEN_REMOVE: ACT_USE.WRITE,
+  ALLOWED_COMMANDS_FOLLOW: ACT_USE.READ,
+  ALLOWED_COMMANDS_RETRY: ACT_USE.READ,
+  ALLOWED_COMMANDS_WRITE: ACT_USE.WRITE,
   MEMORIES_FOLLOW: ACT_USE.READ,
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,

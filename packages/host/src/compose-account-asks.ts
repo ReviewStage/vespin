@@ -1,9 +1,9 @@
 /**
- * compose-account-asks.ts -- the account's own asks of the service on the window's behalf: its provider keys, a ChatGPT login by device code, its GitHub token, a workspace's memories, its hosts and a host's pairing, when its devices last beat, its own sounds, and a clip dictated into a box heard as words.
+ * compose-account-asks.ts -- the account's own asks of the service on the window's behalf: its provider keys, a ChatGPT login by device code, its GitHub token, the commands it always allows its agents to run, a workspace's memories, its hosts and a host's pairing, when its devices last beat, its own sounds, and a clip dictated into a box heard as words.
  *
  * Nothing is held here but the reads the host fetches for the windows that
  * hold them (`held-fetch.ts`): the account's provider keys, its GitHub
- * token, and when its devices last beat, asked every `MAC_PRESENCE.POLL_MS`
+ * token, its always-allowed commands, and when its devices last beat, asked every `MAC_PRESENCE.POLL_MS`
  * while held, the keys and the token told on their slices (`liveTold`) and
  * the beats as their own event, to the app state every window draws; and the
  * live follows of each workspace's memories Settings › Memory
@@ -20,22 +20,27 @@
  */
 
 import type { HostedAgentClient } from "@repo/features";
-import type {
-  ChatGptDevicePollAnswerView,
-  GitHubTokenAnswerView,
-  ProviderKeysAnswerView,
+import {
+  ALLOWED_COMMANDS_WRITE_FAILURE,
+  type AllowedCommandsWriteAnswerView,
+  type AllowedCommandWriteParams,
+  type ChatGptDevicePollAnswerView,
+  type GitHubTokenAnswerView,
+  type ProviderKeysAnswerView,
 } from "@repo/features/agent-view";
 import { MAC_PRESENCE } from "@repo/features/agent-wire";
+import { samePrefix } from "@repo/features/allowed-command-model";
 import { HOSTS_READ } from "@repo/features/host-live";
 import type { DevicePresenceAnswer } from "@repo/features/host-wire";
 import type { LIVE_READ } from "@repo/features/live-wire";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { CHATGPT_DEVICE_LOGIN, type ProviderKeysAnswer } from "@repo/features/provider-key-wire";
 import { declaredWrite, type EntityPool } from "@repo/sync";
-import { Clock, Duration, Effect, Option, Schedule, type Scope } from "effect";
+import { Clock, Duration, Effect, Option, Schedule, type Scope, Semaphore } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { type AccountGateDependencies, type Asked, askedOf, gateOf } from "./account-gate.js";
 import {
+  type AppAllowedCommandList,
   type AppDevicePresence,
   type AppGitHubToken,
   type AppProviderKeyList,
@@ -75,6 +80,9 @@ export type AccountAsksClient = Pick<
   | "pollChatGptDeviceLogin"
   | "cancelChatGptDeviceLogin"
   | "readGitHubToken"
+  | "readAllowedCommands"
+  | "addAllowedCommand"
+  | "removeAllowedCommand"
   | "saveGitHubToken"
   | "removeGitHubToken"
   | "forgetMemory"
@@ -159,6 +167,10 @@ interface FetchedReads {
   readonly token: HeldFetch<string, AppGitHubToken>;
   /** The windows' hold on the token, under the account signed in. */
   readonly tokenHold: AccountHeld;
+  /** The account's always-allowed commands, by the account. */
+  readonly commands: HeldFetch<string, AppAllowedCommandList>;
+  /** The windows' hold on the commands, under the account signed in. */
+  readonly commandsHold: AccountHeld;
 }
 
 /** Whether a device-code login's poll ends its wait: settled one way or another, or unanswered, which the window offers to start over from. */
@@ -294,9 +306,24 @@ function fetchedReads(
           : Effect.succeed(Option.none()),
       tell: liveTold(kernel.emit, ACCOUNT_ASK_FOLLOWS.GITHUB_TOKEN_FOLLOW),
     });
+    const commands = yield* heldFetch<typeof LIVE_READ.ALLOWED_COMMANDS, string>({
+      empty: NO_KEYS_HELD,
+      path: (userId) => [userId],
+      gate,
+      focus,
+      fetch: (userId) =>
+        userId === accountId()
+          ? Effect.map(asked(client.readAllowedCommands()), (answer) =>
+              "failure" in answer ? Option.none() : Option.some({ commands: answer.commands }),
+            )
+          : Effect.succeed(Option.none()),
+      tell: liveTold(kernel.emit, ACCOUNT_ASK_FOLLOWS.ALLOWED_COMMANDS_FOLLOW),
+    });
     return {
       presence,
       presenceHold: yield* accountHeld(presence, accountId),
+      commands,
+      commandsHold: yield* accountHeld(commands, accountId),
       keys,
       keysHold: yield* accountHeld(keys, accountId),
       token,
@@ -308,7 +335,7 @@ function fetchedReads(
 /** What a write of the keys, a device-code login, or the token answers, each laid where its read is held before it answers the window that asked. */
 function writesAnswered(
   dependencies: AccountAsksDependencies,
-  { keys, token }: Pick<FetchedReads, "keys" | "token">,
+  { keys, token, commands }: Pick<FetchedReads, "keys" | "token" | "commands">,
 ) {
   /** The keys as an answer of the service's leaves them, laid for the account signed in where it carries them, and the models asked again, whose marks they move. */
   const keysAnswered = (answer: ProviderKeysAnswerView) =>
@@ -319,6 +346,17 @@ function writesAnswered(
         : Effect.andThen(keys.answered(userId, keyListOf(answer)), dependencies.modelsMoved);
     });
   return {
+    /** A write's answer of the account's always-allowed commands, laid as the list stands for the account signed in where it carries it, and answered whole to the window that asked. */
+    commandsWritten: (answer: AllowedCommandsWriteAnswerView) =>
+      Effect.as(
+        Effect.suspend(() => {
+          const userId = dependencies.accountId();
+          return userId === undefined || "failure" in answer
+            ? Effect.void
+            : commands.answered(userId, { commands: answer.commands });
+        }),
+        answer,
+      ),
     /** A write's answer of the account's keys, laid as the keys stand where it carries them, and answered whole to the window that asked. */
     keysWritten: (answer: ProviderKeysAnswerView) => Effect.as(keysAnswered(answer), answer),
     /** A device-code login's wait or cancel answered whole to the window that asked; once it connected, the keys it carries laid as a write's are. */
@@ -348,6 +386,46 @@ function writesAnswered(
   };
 }
 
+/** A write the account that sent it can no longer make, answered as no answer at all. */
+const COMMANDS_UNANSWERED: AllowedCommandsWriteAnswerView = {
+  failure: ALLOWED_COMMANDS_WRITE_FAILURE.UNANSWERED,
+};
+
+/**
+ * One write of the always-allowed commands sent to the service for the
+ * account that asked it (`sentFor`): an add as it stands, and a removal by
+ * its first words, read off the list as the service answers it now, since
+ * an id the window saw may have been replaced by a take-back that added
+ * the command again. A removal of words the list no longer holds answers
+ * the list as it stands. Note that each call is sent only while that
+ * account is still the one signed in, because a write waits its turn
+ * behind others and must not land on whoever signed in meanwhile.
+ */
+function allowedCommandWrite(
+  { client, accountId }: Pick<AccountAsksDependencies, "client" | "accountId">,
+  asked: Asked,
+  write: AllowedCommandWriteParams,
+  sentFor: string | undefined,
+): Effect.Effect<AllowedCommandsWriteAnswerView> {
+  const forSender = (call: () => Effect.Effect<AllowedCommandsWriteAnswerView>) =>
+    Effect.suspend(() =>
+      sentFor !== undefined && accountId() === sentFor
+        ? call()
+        : Effect.succeed(COMMANDS_UNANSWERED),
+    );
+  if ("add" in write) return forSender(() => asked(client.addAllowedCommand(write.add)));
+  return Effect.flatMap(
+    forSender(() => asked(client.readAllowedCommands())),
+    (answer) => {
+      if ("failure" in answer) return Effect.succeed(answer);
+      const kept = answer.commands.find((each) => samePrefix(each.prefix, write.remove));
+      return kept === undefined
+        ? Effect.succeed(answer)
+        : forSender(() => asked(client.removeAllowedCommand(kept.id)));
+    },
+  );
+}
+
 /** `read` asked again for the account signed in now, as Try again asks; nothing while nobody is. */
 function retriedFor(
   accountId: () => string | undefined,
@@ -365,9 +443,13 @@ function actsOf(
   asked: Asked,
   { memories, hosts, hostsHold }: LiveFollows,
   fetched: FetchedReads,
+  commandsInTurn: <A>(write: Effect.Effect<A>) => Effect.Effect<A>,
 ): AccountAsksActs {
   const { client, pool } = dependencies;
-  const { keysWritten, deviceAnswered, tokenWritten } = writesAnswered(dependencies, fetched);
+  const { keysWritten, deviceAnswered, tokenWritten, commandsWritten } = writesAnswered(
+    dependencies,
+    fetched,
+  );
   return {
     PROVIDER_KEYS_SAVE: (save) => Effect.flatMap(asked(client.saveProviderKey(save)), keysWritten),
     PROVIDER_KEYS_REMOVE: (removal) =>
@@ -392,6 +474,14 @@ function actsOf(
       Effect.flatMap(asked(client.cancelChatGptDeviceLogin(login)), deviceAnswered),
     GITHUB_TOKEN_SAVE: (save) => Effect.flatMap(asked(client.saveGitHubToken(save)), tokenWritten),
     GITHUB_TOKEN_REMOVE: () => Effect.flatMap(asked(client.removeGitHubToken()), tokenWritten),
+    // Note that the commands' writes run one at a time, each laying its answer before the next is sent, because a write's answer is the whole list and one landing late would lay an older list over a newer.
+    ALLOWED_COMMANDS_WRITE: (write) =>
+      Effect.suspend(() => {
+        const sentFor = dependencies.accountId();
+        return commandsInTurn(
+          Effect.flatMap(allowedCommandWrite(dependencies, asked, write, sentFor), commandsWritten),
+        );
+      }),
     MEMORIES_FORGET: declaredWrite(
       pool,
       memoryForget((forget) => asked(client.forgetMemory(forget))),
@@ -448,6 +538,11 @@ function actsOf(
       hold: () => fetched.tokenHold.hold,
       retry: () => retriedFor(dependencies.accountId, fetched.token),
     },
+    // The always-allowed commands are held for the windows while Settings › Agents draws them, under the account signed in; each write's own answer is laid there too.
+    ALLOWED_COMMANDS_FOLLOW: {
+      hold: () => fetched.commandsHold.hold,
+      retry: () => retriedFor(dependencies.accountId, fetched.commands),
+    },
     // A workspace's memories are held for the windows while Settings › Memory shows them; a forget is drawn gone over them the moment it is asked.
     MEMORIES_FOLLOW: {
       hold: ({ workspaceId }) => memories.hold(workspaceId),
@@ -464,10 +559,17 @@ export function composeAccountAsks(
     const follows = yield* liveFollows(dependencies, asked);
     const fetched = yield* fetchedReads(dependencies, asked);
     const { memories, hosts, hostsHold } = follows;
-    const { presence, presenceHold, keys, keysHold, token, tokenHold } = fetched;
+    const { presence, presenceHold, keys, keysHold, token, tokenHold, commands, commandsHold } =
+      fetched;
     return {
       methods: {},
-      acts: actsOf(dependencies, asked, follows, fetched),
+      acts: actsOf(
+        dependencies,
+        asked,
+        follows,
+        fetched,
+        (yield* Semaphore.make(1)).withPermits(1),
+      ),
       lifetime: Effect.void,
       // Note that the beats, the hosts, the keys, and the token are held anew under whoever signed in, in place of the hold before, rather than followed again under the account they were held for.
       open: Effect.gen(function* () {
@@ -476,6 +578,7 @@ export function composeAccountAsks(
         yield* hostsHold.open;
         yield* keysHold.open;
         yield* tokenHold.open;
+        yield* commandsHold.open;
       }),
       // Note that the windows' holds stand through a sign-out, so a session signing in follows them anew (`open`).
       reset: Effect.gen(function* () {
@@ -484,6 +587,7 @@ export function composeAccountAsks(
         yield* presence.end;
         yield* keys.end;
         yield* token.end;
+        yield* commands.end;
       }),
     };
   });

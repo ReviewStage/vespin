@@ -732,6 +732,8 @@ const INVITES_HELD: AgentPendingApproval = {
   description: "Run the members tests",
   input: { command: "pnpm test src/members", description: "Run the members tests" },
   askedAt: INVITES_STARTED + 72 * MINUTE,
+  // Note that the harness proposed the command's first words, so Always allow names them and keeps them for every agent.
+  commandPrefix: ["pnpm", "test"],
 };
 
 const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([

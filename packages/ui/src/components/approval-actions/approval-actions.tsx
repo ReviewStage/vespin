@@ -4,6 +4,7 @@ import type { ShownError } from "../../reported-failure.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { GAP, Inline, Stack } from "../layout/layout.js";
+import { TEXT_FONT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { TextField } from "../text-field/text-field.js";
 
 /**
@@ -14,11 +15,15 @@ import { TextField } from "../text-field/text-field.js";
  * that answer it, the window's own buttons as an ask to run a command
  * draws them (`CommandAsk`), wrapping onto a second line where the column
  * is narrow. Allow, in the accent, lets this call through; Always allow,
- * outlined, lets every call like it through while the agent's runner runs;
- * Deny, quiet, opens one field in their place for the words that tell the
- * agent why, optional and held to the bound its owner names, with Deny to
- * send it and Cancel to close it again, Enter denying and Escape
- * canceling. An owner that writes to its agent in a box of its own draws
+ * outlined, lets every call like it through while the agent's runner runs,
+ * or, where the owner names the command it keeps (`command`), every command
+ * starting with those words for every agent of the member's, the command
+ * drawn monospace in the press or on a muted line under the presses as
+ * `commandPlace` chooses; Deny, outlined as Always allow is, so the presses
+ * read as one set however they wrap, opens one field in their place for the
+ * words that tell the agent why, optional and held to the bound its owner
+ * names, with Deny to send it and Cancel to close it again, Enter denying
+ * and Escape canceling. An owner that writes to its agent in a box of its own draws
  * that field itself (`note`), so the words to the agent are written as
  * every other message to it is; a plain text field stands where it does
  * not. They ask nothing of their place, so a dock over a composer can draw
@@ -48,6 +53,15 @@ export const DENY_NOTE_WORDS = {
   PLACEHOLDER: "Tell the agent why (optional)",
 } as const;
 
+/** Where Always allow names the command it keeps: in its press, or on a muted line under the presses. */
+export const APPROVAL_COMMAND_PLACE = {
+  IN_PRESS: "in-press",
+  UNDER: "under",
+} as const;
+
+export type ApprovalCommandPlace =
+  (typeof APPROVAL_COMMAND_PLACE)[keyof typeof APPROVAL_COMMAND_PLACE];
+
 /** The presses' words. */
 const WORDS = {
   ALLOW: APPROVAL_PRESS_WORDS.ALLOW,
@@ -66,6 +80,21 @@ export interface DenyNoteDoors {
   readonly onDeny: (message: string | undefined) => void;
   /** Closes the field, the answers offered again. */
   readonly onCancel: () => void;
+}
+
+/** A command's words in the monospace face, at the size of the words around it. */
+function CommandWords({
+  variant,
+  children,
+}: {
+  variant: typeof TEXT_VARIANT.LABEL | typeof TEXT_VARIANT.CAPTION;
+  children: string;
+}): React.JSX.Element {
+  return (
+    <Text as="span" variant={variant} font={TEXT_FONT.MONO}>
+      {children}
+    </Text>
+  );
 }
 
 /** The denial's field, with Deny and Cancel after it. */
@@ -113,6 +142,8 @@ export function ApprovalActions({
   error,
   noteMaxLength,
   note,
+  command,
+  commandPlace = APPROVAL_COMMAND_PLACE.IN_PRESS,
   onAnswer,
 }: {
   /** The answer that is out, whose press stands busy while the others take nothing; none while none is. */
@@ -123,6 +154,10 @@ export function ApprovalActions({
   noteMaxLength?: number | undefined;
   /** Draws the denial's field the owner writes to its agent in; a plain text field where none is given. */
   note?: ((doors: DenyNoteDoors) => ReactNode) | undefined;
+  /** The command Always allow keeps for every agent of the member's, as it reads (`pnpm test *`); none where it lasts for the agent's session alone. */
+  command?: string | undefined;
+  /** Where the command is named: in Always allow's press, or on a muted line under the presses. */
+  commandPlace?: ApprovalCommandPlace | undefined;
   /** Answers the call, a denial with its words where it has some. */
   onAnswer: (action: ApprovalAction, message?: string) => void;
 }): React.JSX.Element {
@@ -160,12 +195,26 @@ export function ApprovalActions({
             busyLabel={WORDS.ALLOWING}
             onClick={() => onAnswer(APPROVAL_ACTION.ALLOW_FOR_AGENT)}
           >
-            {WORDS.ALLOW_FOR_AGENT}
+            {command === undefined || commandPlace !== APPROVAL_COMMAND_PLACE.IN_PRESS ? (
+              WORDS.ALLOW_FOR_AGENT
+            ) : (
+              <>
+                {`${WORDS.ALLOW_FOR_AGENT} `}
+                <CommandWords variant={TEXT_VARIANT.LABEL}>{command}</CommandWords>
+              </>
+            )}
           </Button>
-          <Button variant={BUTTON_VARIANT.QUIET} disabled={out} onClick={() => setDenying(true)}>
+          <Button variant={BUTTON_VARIANT.OUTLINE} disabled={out} onClick={() => setDenying(true)}>
             {WORDS.DENY}
           </Button>
         </Inline>
+      )}
+      {command === undefined || commandPlace !== APPROVAL_COMMAND_PLACE.UNDER || denying ? null : (
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {`${WORDS.ALLOW_FOR_AGENT} won't ask again for `}
+          <CommandWords variant={TEXT_VARIANT.CAPTION}>{command}</CommandWords>
+          {" in any of your agents."}
+        </Text>
       )}
       <ErrorLine error={error} />
     </Stack>

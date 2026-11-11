@@ -191,6 +191,7 @@ const LIVE_FOLLOWS: { readonly [Read in LiveReadName]?: LiveFollow } = {
   [LIVE_READ.MODELS]: () => askAct(ACT_KIND.AGENTS_MODELS_FOLLOW),
   [LIVE_READ.PROVIDER_KEYS]: () => askAct(ACT_KIND.PROVIDER_KEYS_FOLLOW),
   [LIVE_READ.GITHUB_TOKEN]: () => askAct(ACT_KIND.GITHUB_TOKEN_FOLLOW),
+  [LIVE_READ.ALLOWED_COMMANDS]: () => askAct(ACT_KIND.ALLOWED_COMMANDS_FOLLOW),
   [LIVE_READ.DEVICE_PRESENCE]: () => askAct(ACT_KIND.HOSTS_PRESENCE_FOLLOW),
   [LIVE_READ.HOSTS]: () => askAct(ACT_KIND.HOSTS_FOLLOW),
   [LIVE_READ.AGENT_ORIGINS]: ([agentId = ""]) =>
@@ -290,6 +291,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.MODELS,
   LIVE_READ.PROVIDER_KEYS,
   LIVE_READ.GITHUB_TOKEN,
+  LIVE_READ.ALLOWED_COMMANDS,
   LIVE_READ.DEVICE_PRESENCE,
   LIVE_READ.HOSTS,
   LIVE_READ.THIS_MAC_HOST,
@@ -488,6 +490,10 @@ export const providerKeysQuery = (accountId: string | undefined) =>
 export const githubTokenQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.GITHUB_TOKEN, accountIds(accountId));
 
+/** The commands the account always allows its coding agents to run, by the account. */
+export const allowedCommandsQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.ALLOWED_COMMANDS, accountIds(accountId));
+
 /** The account's hosts, by the account. */
 export const hostsQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.HOSTS, accountIds(accountId));
@@ -679,6 +685,9 @@ export const providerKeysRetryMutation = () => actMutation(ACT_KIND.PROVIDER_KEY
 
 /** Try again on the GitHub token. */
 export const githubTokenRetryMutation = () => actMutation(ACT_KIND.GITHUB_TOKEN_RETRY);
+
+/** Try again on the always-allowed commands. */
+export const allowedCommandsRetryMutation = () => actMutation(ACT_KIND.ALLOWED_COMMANDS_RETRY);
 
 /** Try again on the hosts. */
 export const hostsRetryMutation = () => actMutation(ACT_KIND.HOSTS_RETRY);

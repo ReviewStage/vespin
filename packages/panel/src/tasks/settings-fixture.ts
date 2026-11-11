@@ -35,7 +35,13 @@ import {
   adminMetricsScope,
   adminMetricsWindow,
 } from "@repo/features/admin-wire";
+import type {
+  AllowedCommandsWriteAnswerView,
+  AllowedCommandWriteParams,
+} from "@repo/features/agent-view";
 import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
+import { samePrefix } from "@repo/features/allowed-command-model";
+import type { AllowedCommand } from "@repo/features/allowed-command-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
@@ -69,6 +75,7 @@ import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-w
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppAccountPreferences,
+  type AppAllowedCommands,
   type AppDevicePresences,
   type AppGitHubTokens,
   type AppHosts,
@@ -97,6 +104,8 @@ import {
 } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import { appStateQuery } from "../use-app-state.js";
+import { fixtureClient } from "./tasks-fixture-loader.js";
 
 /** When the fixture stands, from which every instant here is counted: a fixed one, never the clock. */
 const NOW = Date.parse("2026-10-24T09:00:00Z");
@@ -224,8 +233,8 @@ export function settingsTasksView(profile: string, list: TasksView): TasksView |
   if (!SETTINGS_LINKS.has(profile)) return undefined;
   return {
     ...list,
-    // Note that Memory's page names the agents that kept its memories, so the list carries them, as it carries every task's agents.
-    ...(profile === RUN_PROFILE.SETTINGS_MEMORY
+    // Note that Memory's page and Agents' Always allowed name the agents that kept their memories and commands, so the list carries them, as it carries every task's agents.
+    ...(profile === RUN_PROFILE.SETTINGS_MEMORY || profile === RUN_PROFILE.SETTINGS_AGENTS
       ? { taskAgents: [...(list.taskAgents ?? []), ...MEMORY_AGENTS] }
       : undefined),
     workspaces: list.workspaces.map((workspace) => ({
@@ -893,6 +902,7 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     acmeSlackBot = { ...acmeSlackBot, channels };
     return acmeSlackBot;
   },
+  [ACT_KIND.ALLOWED_COMMANDS_WRITE]: (write) => allowedCommandWritten(write),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: () => ({ variables: acmeVariables }),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name }) =>
     variablesAnswer([
@@ -1044,6 +1054,72 @@ const STAGED_HOSTS: AppHosts = {
   },
 };
 
+/** An agent no list the window holds names, as one archived on a task the window never read is, so its command's row draws a plain agent chip. */
+const UNLISTED_AGENT = "7f1c5d9e-4a6b-4b8d-0e2f-5a7c9b1d3e4f";
+
+/**
+ * The commands the account always allows, earliest first, as the service
+ * answers them: one Claude's agent kept, one Codex's, one added by hand,
+ * and one whose agent no list names. A staged write lays its answer here.
+ */
+let stagedCommands: readonly AllowedCommand[] = [
+  {
+    id: "8a2d6e0f-5b7c-4c9e-8f3a-6b8d0c2e4f5a",
+    prefix: ["gh", "pr", "view"],
+    agentId: UNLISTED_AGENT,
+    addedAt: NOW - 21 * DAY,
+  },
+  {
+    id: "9b3e7f1a-6c8d-4dae-9a4b-7c9e1d3f5a6b",
+    prefix: ["cargo", "check"],
+    agentId: MEMORY_AGENT.CODEX,
+    addedAt: NOW - 9 * DAY,
+  },
+  {
+    id: "ac4f8a2b-7d9e-4ebf-8b5c-8daf2e4a6b7c",
+    prefix: ["git", "status"],
+    agentId: null,
+    addedAt: NOW - 3 * DAY,
+  },
+  {
+    id: "bd5a9b3c-8eaf-4fc0-9c6d-9eb03f5b7c8d",
+    prefix: ["pnpm", "test"],
+    agentId: MEMORY_AGENT.CLAUDE,
+    addedAt: NOW - 2 * HOUR,
+  },
+];
+
+/** The commands as the host holds them for the account. */
+function heldCommands(commands: readonly AllowedCommand[]): AppAllowedCommands {
+  return { [ACCOUNT_ID]: { rows: { commands } } };
+}
+
+/** The staged commands as the host holds them, one object until a write moves them. */
+let stagedAllowedCommands = heldCommands(stagedCommands);
+
+/** The staged commands after one write, as the service keeps them: an add stands last, unless its words are kept already, and a removal goes. */
+function allowedCommandWritten(write: AllowedCommandWriteParams): AllowedCommandsWriteAnswerView {
+  if ("add" in write) {
+    if (!stagedCommands.some((each) => samePrefix(each.prefix, write.add))) {
+      const added = {
+        id: crypto.randomUUID(),
+        prefix: write.add,
+        agentId: null,
+        addedAt: Date.now(),
+      };
+      stagedCommands = [...stagedCommands, added];
+    }
+  } else {
+    stagedCommands = stagedCommands.filter((each) => !samePrefix(each.prefix, write.remove));
+  }
+  stagedAllowedCommands = heldCommands(stagedCommands);
+  // Note that the document is laid at once, as the host lays a write's answer, since nothing else delivers it under a fixture run.
+  fixtureClient()?.setQueryData(appStateQuery.queryKey, (doc) =>
+    doc === undefined ? doc : { ...doc, [LIVE_READ.ALLOWED_COMMANDS]: stagedAllowedCommands },
+  );
+  return { commands: stagedCommands };
+}
+
 /** The account's staged GitHub token, as the host holds it: a made-up hint, never a token. */
 const STAGED_GITHUB_TOKEN: AppGitHubTokens = {
   [ACCOUNT_ID]: {
@@ -1183,6 +1259,7 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.SLACK_CHANNELS]: STAGED_SLACK_CHANNELS,
     [LIVE_READ.PROVIDER_KEYS]: STAGED_KEYS,
     [LIVE_READ.GITHUB_TOKEN]: STAGED_GITHUB_TOKEN,
+    [LIVE_READ.ALLOWED_COMMANDS]: stagedAllowedCommands,
     [LIVE_READ.TOKEN_REPOSITORIES]: STAGED_TOKEN_REPOSITORIES,
     [LIVE_READ.MCP_CLIENTS]: STAGED_MCP_CLIENTS,
     [LIVE_READ.REPOSITORY_LISTS]: STAGED_REPOSITORIES,

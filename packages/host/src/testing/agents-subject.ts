@@ -339,6 +339,8 @@ function fakeService() {
   let removeAnswer: HostDoneAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
   /** What a host's removal waits on before the service answers it; nothing from the start. */
   let removeGate: Effect.Effect<void> = Effect.void;
+  /** What an always-allowed command's add waits on before the service answers it; nothing from the start. */
+  let commandAddGate: Effect.Effect<void> = Effect.void;
   /** How long ago the account's devices beat, as the service answers it; unanswered until a test says, and never where it hangs. */
   let presence: Effect.Effect<DevicePresenceAnswerView> = Effect.succeed({
     failure: AGENT_CALL_FAILURE.UNANSWERED,
@@ -734,6 +736,13 @@ function fakeService() {
         asked.push("remove-token");
         return { token: null };
       }),
+    readAllowedCommands: () => Effect.succeed({ commands: [] }),
+    addAllowedCommand: (prefix) =>
+      Effect.andThen(
+        Effect.sync(() => asked.push(`add-command:${prefix.join(" ")}`)),
+        Effect.as(commandAddGate, { commands: [] }),
+      ),
+    removeAllowedCommand: () => Effect.succeed({ commands: [] }),
 
     forgetMemory: (forget) =>
       Effect.andThen(
@@ -986,6 +995,10 @@ function fakeService() {
     answerSaves: (answer: MemorySaveAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       saveAnswer = answer;
       saveGate = gate;
+    },
+    /** What each always-allowed command's add waits on before the service answers it, from now on. */
+    holdCommandAdds: (gate: Effect.Effect<void>) => {
+      commandAddGate = gate;
     },
     /** How long ago the account's devices beat, as the service answers from now on. */
     answerPresence: (next: DevicePresenceAnswerView) => {
@@ -1273,6 +1286,7 @@ export function subject(
       answerForgets: service.answerForgets,
       answerSaves: service.answerSaves,
       answerPresence: service.answerPresence,
+      holdCommandAdds: service.holdCommandAdds,
       answerKeys: service.answerKeys,
       markKeys: service.markKeys,
       answerMarks: service.answerMarks,

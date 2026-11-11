@@ -34,6 +34,8 @@ export const SETTINGS_SEARCH_ROW = {
   AGENT_MODEL: "agent-model",
   AGENT_EFFORT: "agent-effort",
   AGENT_FAST: "agent-fast",
+  /** Agents' Always allowed, the commands the account's agents run without asking. */
+  ALWAYS_ALLOWED: "always-allowed",
   API_KEY_ANTHROPIC: "api-key-anthropic",
   API_KEY_OPENAI: "api-key-openai",
   /** Skills' first group, whose heading holds its Add skill. */

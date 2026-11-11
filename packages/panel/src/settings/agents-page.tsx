@@ -76,6 +76,7 @@ import {
 import { useRepositoryRemedy } from "../tasks/repository-remedy.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { AgentAuthSection } from "./agent-auth-section.js";
+import { AlwaysAllowedSection } from "./always-allowed-section.js";
 import { ReadFailed } from "./marks.js";
 import { PickerRow } from "./picker-row.js";
 import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
@@ -465,7 +466,8 @@ function AgentsSection({
 }
 
 /**
- * The harnesses and the New agents section, over the keys the harnesses'
+ * The harnesses, the New agents section, and, once an account is signed
+ * in, the commands its agents always run (`always-allowed-section.tsx`), over the keys the harnesses'
  * rows hold: Fast's link to ask Anthropic for fast mode stands on the account's
  * own key, so it reads them from the rows that change them rather than from
  * a read of its own that a save there would leave behind.
@@ -486,6 +488,7 @@ export function AgentsPage({
     <>
       <AgentAuthSection signedIn={signedIn} onKeys={onKeys} />
       <AgentsSection signedIn={signedIn} ownKeys={ownKeys} view={view} />
+      {signedIn ? <AlwaysAllowedSection /> : null}
     </>
   );
 }

@@ -242,6 +242,8 @@ export type TranscriptNowAnswer = typeof transcriptNowAnswerSchema.Type;
 export const LIVE_READ = {
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, by the account: the service's `accountPreferences` query, held for the signed-in session into the sync engine's pool, every write to one drawn over it the moment it is asked. */
   ACCOUNT_PREFERENCES: "accountPreferences",
+  /** The shell commands the account always allows its coding agents to run unasked, by the account: fetched by the host while a window holds it, and laid from each write's own answer. */
+  ALLOWED_COMMANDS: "allowedCommands",
   /** The run of an automation that started one agent, by the agent: the service's `agentOriginLive` query, held for the windows that show the agent's page and a few they showed lately. */
   AGENT_ORIGINS: "agentOrigins",
   /** Every inbox item the account reaches. */
