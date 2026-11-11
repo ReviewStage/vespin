@@ -173,7 +173,8 @@ const sameThisMac = (one: AppThisMacHost, other: AppThisMacHost) =>
   one.machineId === other.machineId &&
   one.enrolled === other.enrolled &&
   one.agentFolders === other.agentFolders &&
-  one.needsApproval === other.needsApproval;
+  one.needsApproval === other.needsApproval &&
+  one.setupFailed === other.setupFailed;
 
 /** What turning This Mac on or off answers: done, or that it could not be. */
 const DONE = { done: true } as const satisfies ThisMacHostSetAnswerView;
@@ -243,7 +244,10 @@ export function composeThisMacHost(
       Effect.map(host.machine, (machine) => machine.machineId),
     );
 
-    /** This Mac as the windows draw it: which machine it is, the device its record names, where it was enrolled with this app's service, whether it stands unrefused, how many agents' folders its host made, and whether its agent waits on the member's approval. */
+    /** Whether the last try at keeping the host running failed, until one lands. */
+    const keepFailed = MutableRef.make(false);
+
+    /** This Mac as the windows draw it: which machine it is, the device its record names, where it was enrolled with this app's service, whether it stands unrefused, how many agents' folders its host made, whether its agent waits on the member's approval, and whether the app could not start its host. */
     const read = Effect.map(
       Effect.all([ownServiceRecord, machineId, ownedAgents(host.stateRoot), host.status]),
       ([record, id, folders, status]): AppThisMacHost => ({
@@ -252,6 +256,7 @@ export function composeThisMacHost(
         enrolled: Option.isSome(record) && record.value.refused !== true,
         agentFolders: folders.length,
         needsApproval: status === THIS_MAC_AGENT_STATUS.REQUIRES_APPROVAL,
+        setupFailed: MutableRef.get(keepFailed),
       }),
     );
 
@@ -556,9 +561,17 @@ export function composeThisMacHost(
               : keepStopped
           ).pipe(
             Effect.tapError((step) =>
-              Effect.sync(() => report(`this Mac's host: could not ${step}, so it is tried again`)),
+              Effect.andThen(
+                Effect.sync(() => {
+                  report(`this Mac's host: could not ${step}, so it is tried again`);
+                  MutableRef.set(keepFailed, kept.running);
+                }),
+                tellThisMac,
+              ),
             ),
             Effect.retry(RETRY),
+            Effect.andThen(Effect.sync(() => MutableRef.set(keepFailed, false))),
+            Effect.andThen(tellThisMac),
             Effect.catchDefect(() =>
               Effect.sync(() => report("this Mac's host could not be kept as asked")),
             ),

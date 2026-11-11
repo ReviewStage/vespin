@@ -37,6 +37,9 @@ import { bindLiveRead, liveRowsStatement } from "../live-read-binding.js";
 /** When the pairing that names the host lapses; null where none does, as once its box collected its secret. */
 const pairingLapsesAt: SQL<Date | null> = sql`(select ${hostPairing.expiresAt} from ${hostPairing} where ${eq(hostPairing.deviceId, device.id)} limit 1)`;
 
+/** Whether the host's program has registered since it joined. */
+const calledIn: SQL<boolean> = sql<boolean>`${device.home} is not null`;
+
 export const hostsRead = bindLiveRead(HOSTS_READ, {
   reads: [deviceSync, hostPairingSync],
   topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
@@ -51,8 +54,11 @@ export const hostsRead = bindLiveRead(HOSTS_READ, {
           machineId: device.machineId,
           model: device.model,
           update: device.updatePhase,
+          setup: device.setup,
+          // Note that a register always writes the home folder and nothing else does, so a host with none has not called in since it joined.
+          calledIn: calledIn,
         },
-        instants: { pairingLapsesAt },
+        instants: { pairingLapsesAt, joinedAt: device.createdAt },
       },
       (selection) =>
         queryBuilder

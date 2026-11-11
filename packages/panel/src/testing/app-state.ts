@@ -20,6 +20,7 @@ import {
 } from "@repo/features/agent-view";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
+import type { HostLine } from "@repo/features/host-live";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import type { IntegrationToolsView } from "@repo/features/integration-view";
 import type { IntegrationToolsAnswer } from "@repo/features/integration-wire";
@@ -1020,7 +1021,16 @@ const BEATING_ACCOUNT_ID = "user-beating";
  */
 export function handBeats(
   ages: Readonly<Record<string, number>> | undefined,
-  { askedAgoMs = 0, ...options }: { readonly stale?: true; readonly askedAgoMs?: number } = {},
+  {
+    askedAgoMs = 0,
+    hosts,
+    ...options
+  }: {
+    readonly stale?: true;
+    readonly askedAgoMs?: number;
+    /** The account's hosts the hosts read answers beside the beats, where given. */
+    readonly hosts?: readonly HostLine[];
+  } = {},
 ): void {
   const handed = fakeAppBridgeCalls().requestAppState;
   const now = Date.now();
@@ -1049,6 +1059,9 @@ export function handBeats(
         ...snapshot,
         account: { ...account, id },
         [LIVE_READ.DEVICE_PRESENCE]: { [id]: read },
+        ...(hosts === undefined
+          ? undefined
+          : { [LIVE_READ.HOSTS]: { [id]: { rows: { hosts, installScriptUrl: "" } } } }),
       };
     },
   });

@@ -311,6 +311,7 @@ const UNENROLLED = {
   enrolled: false,
   agentFolders: 0,
   needsApproval: false,
+  setupFailed: false,
 } as const;
 
 it.effect.each([

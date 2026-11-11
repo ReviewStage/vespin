@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
+import { DEVICE_SETUP } from "@repo/features/device-agent-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
@@ -11,7 +12,7 @@ import { handBeats } from "./testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "./testing/copy-feedback.js";
 
 /**
- * device-presence.test.ts -- the shared presence judges each device by how long ago its beat was on this machine's clock, and says it cannot check, not offline, where its read failed.
+ * device-presence.test.ts -- the shared presence judges each device by how long ago its beat was on this machine's clock, says it cannot check, not offline, where its read failed, and says a host setting up or failed whatever its beat.
  * Synthetic ids.
  */
 
@@ -88,4 +89,25 @@ test("a read that failed says unknown, never offline, whether or not one answere
 
   handBeats({ [deviceOf(1)]: 61_000 }, { stale: true });
   assert.equal((await draw([deviceOf(1)])).textContent, DEVICE_STANDING.UNKNOWN);
+});
+
+test("a host still fetching its tools, one whose setup failed, and one that never called in ten minutes after joining read setting up, failed, and failed, though each beat just now", async () => {
+  fakeActPort({});
+  const host = (n: number) => ({ id: deviceOf(n), name: `host-${n}` });
+  handBeats(
+    { [deviceOf(1)]: 1_000, [deviceOf(2)]: 1_000, [deviceOf(3)]: 1_000 },
+    {
+      hosts: [
+        { ...host(1), setup: DEVICE_SETUP.PREPARING, calledIn: true },
+        { ...host(2), setup: DEVICE_SETUP.FAILED, calledIn: true },
+        { ...host(3), calledIn: false, joinedAt: Date.now() - 11 * 60 * 1_000 },
+      ],
+    },
+  );
+  const container = await draw([deviceOf(1), deviceOf(2), deviceOf(3)]);
+
+  assert.equal(
+    container.textContent,
+    `${DEVICE_STANDING.SETTING_UP},${DEVICE_STANDING.FAILED},${DEVICE_STANDING.FAILED}`,
+  );
 });

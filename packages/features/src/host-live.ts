@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { DEVICE_PLATFORM, HOST_UPDATE } from "./device-agent-wire.js";
+import { DEVICE_PLATFORM, DEVICE_SETUP, HOST_UPDATE } from "./device-agent-wire.js";
 import type { Host } from "./host-wire.js";
 import {
   LIVE_MODE,
@@ -49,6 +49,12 @@ export const HOSTS_READ = liveRead({
         update: Schema.NullOr(Schema.String),
         /** When the pairing that made the host lapses, in epoch milliseconds, while its box has yet to collect its secret; null once it has, or for a host no pairing made. Absent from a service that answers none. */
         pairingLapsesAt: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+        /** Where its setup stands (`DEVICE_SETUP`), null once it is ready. Absent from a service that answers none. */
+        setup: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        /** Whether its host program has registered since it joined. Absent from a service that answers none. */
+        calledIn: Schema.optionalKey(Schema.Boolean),
+        /** When it joined, in epoch milliseconds. Absent from a service that answers none. */
+        joinedAt: Schema.optionalKey(Schema.Number),
       }),
       key: "id",
       order: [
@@ -65,11 +71,15 @@ export type HostsLiveAnswer = LiveReadAnswer<typeof HOSTS_READ>;
 /** One host as the statement delivers it. */
 export type HostLiveRow = LiveRowOf<typeof HOSTS_READ.parts.hosts>;
 
-/** One host as Settings › Hosts draws it: what the section reads of a listed host, and nothing else. */
-export type HostLine = Pick<Host, "id" | "name" | "platform" | "machineId" | "model" | "update">;
+/** One host as Settings › Hosts draws it: what the section reads of a listed host, where its setup stands, whether its program has called in, and when it joined. */
+export type HostLine = Pick<
+  Host,
+  "id" | "name" | "platform" | "machineId" | "model" | "update" | "setup" | "calledIn"
+> & { readonly joinedAt?: number };
 
 const readPlatform = Schema.decodeUnknownOption(Schema.Literals(Object.values(DEVICE_PLATFORM)));
 const readUpdate = Schema.decodeUnknownOption(Schema.Literals(Object.values(HOST_UPDATE)));
+const readSetup = Schema.decodeUnknownOption(Schema.Literals(Object.values(DEVICE_SETUP)));
 
 /** When the pairing that made a host lapses while its box has yet to collect its secret; none for any other host. */
 function lapseOf(row: HostLiveRow): number | undefined {
@@ -83,6 +93,7 @@ export function hostsOfLiveRows(rows: readonly HostLiveRow[], now: number): read
     if (lapse !== undefined && lapse <= now) return [];
     const platform = readPlatform(row.platform);
     const update = readUpdate(row.update);
+    const setup = readSetup(row.setup);
     return [
       {
         id: row.id,
@@ -91,6 +102,9 @@ export function hostsOfLiveRows(rows: readonly HostLiveRow[], now: number): read
         ...(row.machineId === null ? undefined : { machineId: row.machineId }),
         ...(row.model === null ? undefined : { model: row.model }),
         ...(update._tag === "Some" ? { update: update.value } : undefined),
+        ...(setup._tag === "Some" ? { setup: setup.value } : undefined),
+        ...(row.calledIn === undefined ? undefined : { calledIn: row.calledIn }),
+        ...(row.joinedAt === undefined ? undefined : { joinedAt: row.joinedAt }),
       },
     ];
   });
