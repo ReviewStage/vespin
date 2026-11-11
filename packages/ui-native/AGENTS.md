@@ -146,9 +146,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Group headers** (`ListSection`) are small and muted with a count; a
   `foldable` one folds in place on a press, its chevron on the left.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
-  you: the unread dot, an ask's glyph and words, the selected tab and the
-  Inbox count, a picked option, and a primary `Button`. Status tones stand
-  on the status marks alone: a task's ring, and a pull request's state.
+  you and what you chose, as the panel draws it: the unread dot, an ask's
+  glyph, a count of what needs you, a reminder's time, the selected tab and
+  the Inbox count, a picked option or a switch that is on, and a filled
+  `Button`. Everything else stands in the ink: an ask's words on a row,
+  links, bar buttons, swipe actions, a bordered or plain button, and a
+  row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
+  asks for copper by name. Status tones stand on the status marks alone: a
+  task's ring, and a pull request's state.
 - **Capsules.** `ScopePills` are a list's scopes in a row under its title,
   the chosen one filled with the ink, and `Chip` one of them; `FieldChip`
   and `StatusChip` read a task's status, priority and assignee. Each stands

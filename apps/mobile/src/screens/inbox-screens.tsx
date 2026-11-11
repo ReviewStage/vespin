@@ -233,7 +233,7 @@ export function InboxRow({
           {
             label: RESOLVE,
             symbol: "checkmark.circle",
-            tone: ROW_ACTION_TONE.ACCENT,
+            tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => onResolve(item),
           } as const,
         ]
@@ -265,7 +265,7 @@ export function InboxRow({
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
           symbol: unread ? "envelope.open" : "envelope.badge",
-          tone: ROW_ACTION_TONE.ACCENT,
+          tone: ROW_ACTION_TONE.NEUTRAL,
           onPress: () => onMark(item.id, !unread),
         },
       ]}

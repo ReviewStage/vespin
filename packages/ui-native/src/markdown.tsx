@@ -277,7 +277,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         <Text
           onPress={onPress}
           accessibilityRole={onPress === undefined ? "text" : "link"}
-          style={{ color: colors.ACCENT_TEXT, textDecorationLine: "underline" }}
+          style={{ color: colors.TEXT_BODY, textDecorationLine: "underline" }}
         >
           <Runs runs={run.runs} drawing={drawing} />
         </Text>

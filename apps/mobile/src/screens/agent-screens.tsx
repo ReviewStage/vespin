@@ -590,7 +590,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
         options={{
           headerShown: true,
           title: OPTIONS_WORDS.TITLE,
-          headerTintColor: colors.ACCENT,
+          headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },

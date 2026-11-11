@@ -144,7 +144,7 @@ function SheetBar({
         options={{
           headerShown: true,
           title,
-          headerTintColor: colors.ACCENT,
+          headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },

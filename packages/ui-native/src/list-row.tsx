@@ -102,9 +102,8 @@ const PULL_REQUEST_HEARD = "Pull request";
 const SUB_TASKS_SHOWN = "Sub-tasks shown";
 const SUB_TASKS_HIDDEN = "Sub-tasks hidden";
 
-/** How a row's action reads: the accent, a plain gray, or a destructive red. */
+/** How a row's action reads: a plain gray, or a destructive red. Copper is kept for what wants the reader, so no act is drawn in it. */
 export const ROW_ACTION_TONE = {
-  ACCENT: "accent",
   NEUTRAL: "neutral",
   DESTRUCTIVE: "destructive",
 } as const;
@@ -203,7 +202,6 @@ type TaskRowProps = RowActs & {
 
 function actionButton(action: RowAction, colors: BrandColors) {
   const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
-  const ink = action.tone === ROW_ACTION_TONE.ACCENT ? colors.ACCENT : colors.TEXT_MUTED;
   return (
     <Button
       key={action.label}
@@ -211,7 +209,7 @@ function actionButton(action: RowAction, colors: BrandColors) {
       systemImage={action.symbol}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
-      modifiers={destructive ? [] : [tint(ink)]}
+      modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
     />
   );
 }
@@ -468,16 +466,14 @@ function LineGlyph({ line }: { readonly line: InboxLineKind | undefined }) {
 
 /**
  * An Inbox row's second line, under the title: an ask's glyph, where the
- * row's lead is the task's ring rather than it, the thread's last words, in
- * the accent where they are an ask waiting on you, and the task's name after
- * them, all 13 pt in the muted ink.
+ * row's lead is the task's ring rather than it, the thread's last words, and
+ * the task's name after them, all 13 pt in the muted ink, as the panel's row
+ * reads: only the ask's glyph stands in the attention ink.
  */
 function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
   const { line, summary, task, glyph } = props;
   const colors = useColors();
   const lines = useRowLines();
-  const look = line === undefined ? undefined : INBOX_LINE_LOOK[line];
-  const asks = look?.tone === STATUS_TONE.ATTENTION;
   const words = summary?.trim() === "" ? undefined : summary;
   if (words === undefined && task === undefined) return null;
   return (
@@ -494,11 +490,7 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
           lineLimit(lines.line),
         ]}
       >
-        {words === undefined ? null : (
-          <Text modifiers={[foregroundStyle(asks ? colors.ACCENT_TEXT : colors.TEXT_MUTED)]}>
-            {words}
-          </Text>
-        )}
+        {words === undefined ? null : <Text>{words}</Text>}
         {task === undefined ? null : (
           <Text>{words === undefined ? task.name : `${LINE_PART}${task.name}`}</Text>
         )}
