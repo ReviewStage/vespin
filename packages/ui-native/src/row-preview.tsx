@@ -13,6 +13,7 @@ import {
 import type { AgentStatus, PullRequestState } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
@@ -141,7 +142,7 @@ function PreviewMessageRow({
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       <HStack spacing={SPACE.TIGHT + 2} alignment="center">
         {message.agent ? (
-          <AgentTile name={message.writer} size={MARK_SIZE.WRITER} />
+          <AgentTile name={message.writer} harness={message.harness} size={MARK_SIZE.WRITER} />
         ) : (
           <Avatar name={message.writer} picture={message.picture} size={MARK_SIZE.WRITER} />
         )}
@@ -207,6 +208,8 @@ export function ThreadPreview({
 export type PreviewAgent = {
   readonly id: string;
   readonly name: string;
+  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus;
 };
 
@@ -224,7 +227,7 @@ function PreviewAgentRow({ agent }: { readonly agent: PreviewAgent }) {
   const words = agentStateWords(agent.status);
   return (
     <HStack spacing={SPACE.TIGHT + 2} alignment="center">
-      <AgentTile name={agent.name} size={MARK_SIZE.WRITER} />
+      <AgentTile name={agent.name} harness={agent.harness} size={MARK_SIZE.WRITER} />
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
@@ -305,6 +308,7 @@ export function TaskPreview({
  */
 export function AgentPreview({
   name,
+  harness,
   status,
   task,
   model,
@@ -314,6 +318,8 @@ export function AgentPreview({
   pullRequest,
 }: {
   readonly name: string;
+  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus;
   readonly task?: { readonly name: string; readonly status?: TaskStatus | undefined } | undefined;
   /** The model it runs on, as the panel's chip names it. */
@@ -336,7 +342,7 @@ export function AgentPreview({
         />
       )}
       <HStack spacing={SPACE.ROW} alignment="center">
-        <AgentTile name={name} size={MARK_SIZE.AVATAR} />
+        <AgentTile name={name} harness={harness} size={MARK_SIZE.AVATAR} />
         <PreviewHeading words={name} />
       </HStack>
       <HStack spacing={SPACE.TIGHT + 2} alignment="center">

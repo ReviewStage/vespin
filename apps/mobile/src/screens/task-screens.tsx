@@ -11,7 +11,7 @@ import {
   linkOf,
   readLink,
 } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
 import { subTasksOf, taskFinished } from "@repo/features/task-list-model";
 import {
@@ -293,6 +293,7 @@ function taskPreview(task: TaskSummary, listing: TasksListing) {
       agents={glance.agents.map((agent) => ({
         id: agent.id,
         name: agentName(agent),
+        harness: providerOf(agent.model),
         status: agent.status,
       }))}
     />
@@ -781,11 +782,13 @@ export function TaskAgentRow({
   const { agent, waiting, pullRequest } = line;
   const step = useHeldAgentStep(agent.id, agent.status);
   const name = agentName(agent);
+  const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
   return (
     <AgentRow
       id={agent.id}
       name={name}
+      harness={harness}
       state={agentState(agent.status)}
       runsOn={runsOn}
       waiting={waiting}
@@ -802,6 +805,7 @@ export function TaskAgentRow({
       preview={
         <AgentPreview
           name={name}
+          harness={harness}
           status={agent.status}
           task={task === undefined ? undefined : { name: task.name, status: task.status }}
           model={modelLabel(agent.model)}

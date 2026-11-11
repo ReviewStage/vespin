@@ -27,6 +27,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -164,6 +165,8 @@ type AgentRowProps = {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
   readonly name: string;
+  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
   readonly runsOn: string;
@@ -242,7 +245,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
  * want you.
  */
 export function AgentRow(props: AgentRowProps) {
-  const { id, name, state, runsOn, waiting, pullRequest } = props;
+  const { id, name, harness, state, runsOn, waiting, pullRequest } = props;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
@@ -251,7 +254,7 @@ export function AgentRow(props: AgentRowProps) {
       <RowHead
         unread={false}
         faded={false}
-        lead={<AgentTile name={name} size={MARK_SIZE.LEAD} />}
+        lead={<AgentTile name={name} harness={harness} size={MARK_SIZE.LEAD} />}
         title={name}
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}

@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
-import { GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
+import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
 
@@ -38,7 +38,9 @@ const PNG_COLOR_TYPE_RGB = 2;
 // the brand's own copper SVG in each appearance, and the marks its
 // `ProviderButton` reads (`PROVIDER_MARK_ASSET`), the web's sign-in buttons'
 // marks from the brand's paths: GitHub's a template SwiftUI draws in the ink
-// of the words beside it, Google's in its own four colors.
+// of the words beside it, Google's in its own four colors; and the harness
+// marks `AgentTile` draws (`HARNESS_MARK_ASSET`), Claude Code's Clawd in its
+// own clay, centered on a square canvas so it never stretches.
 const IMAGE_SETS = [
   {
     NAME: "BrandMark",
@@ -61,6 +63,27 @@ const IMAGE_SETS = [
       ).join("")}</svg>`,
     },
     TEMPLATE: false,
+  },
+  {
+    NAME: "ClawdMark",
+    LIGHT: {
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -4.5 47 47"><path fill="#D97757" d="${CLAWD_PATH}"/></svg>`,
+    },
+    TEMPLATE: false,
+  },
+] as const;
+
+// The pictures `AgentTile` draws that have no vector: Codex's, OpenAI's own
+// picture in its own colors, from the files the panel serves, at one, two,
+// and three device pixels to the point, so it is drawn at 16 points.
+const PICTURE_SETS = [
+  {
+    NAME: "CodexMark",
+    SCALES: [
+      { FILE: "../../packages/panel/marks/codex-16.png", SCALE: "1x" },
+      { FILE: "../../packages/panel/marks/codex-32.png", SCALE: "2x" },
+      { FILE: "../../packages/panel/marks/codex-48.png", SCALE: "3x" },
+    ],
   },
 ] as const;
 
@@ -398,7 +421,8 @@ const withStopAgentIntent = (config: ExpoConfig): ExpoConfig => {
 type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
-// appearance beside its light one where it has one, and each of Lucide's
+// appearance beside its light one where it has one, each of `PICTURE_SETS`
+// as an image set of its files at their scales, and each of Lucide's
 // glyphs `@repo/ui-native` draws (`LUCIDE_SYMBOL`) as a symbol set, a custom
 // SF Symbol from the brand's outlined template, so it sizes with Dynamic
 // Type, weighs with its text, and sits on its baseline as SF Symbols do.
@@ -432,6 +456,22 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
             "preserves-vector-representation": true,
             "template-rendering-intent": set.TEMPLATE ? "template" : "original",
           },
+        };
+        writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      }
+      for (const set of PICTURE_SETS) {
+        const imageSet = join(catalog, `${set.NAME}.imageset`);
+        mkdirSync(imageSet, { recursive: true });
+        for (const { FILE } of set.SCALES)
+          copyFileSync(join(projectRoot, FILE), join(imageSet, basename(FILE)));
+        const contents = {
+          images: set.SCALES.map(({ FILE, SCALE }) => ({
+            filename: basename(FILE),
+            idiom: "universal",
+            scale: SCALE,
+          })),
+          info: { author: "xcode", version: 1 },
+          properties: { "template-rendering-intent": "original" },
         };
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }

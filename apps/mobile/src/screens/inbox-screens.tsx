@@ -36,11 +36,13 @@ import {
 } from "@repo/features/inbox-wire";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
   INBOX_FEED,
   type InboxFeed,
+  selectAgentHarnesses,
   selectAgentTitles,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
@@ -207,6 +209,7 @@ export function InboxRow({
   const waitsOn = inboxWaitsOn(item);
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
@@ -220,8 +223,9 @@ export function InboxRow({
           readerId,
         ),
         pictureOf,
+        harness,
       ),
-    [item, agentName, readerId, pictureOf],
+    [item, agentName, readerId, pictureOf, harness],
   );
   const resolve =
     item.status === INBOX_STATUS.OPEN
@@ -353,6 +357,12 @@ function useAgentTitles(): ReadonlyMap<string, string> {
   return data;
 }
 
+/** The harness an agent runs in, as the document holds its model, whose mark its tile wears; none before the agent is listed. */
+function useAgentHarness(agentId: string): ModelProvider | undefined {
+  const { data } = useQuery({ ...appStateQuery, select: selectAgentHarnesses });
+  return data?.get(agentId);
+}
+
 /**
  * Where a thread stands: a compact window's pushed screen, whose stack's bar
  * names the path and which draws its own Remind me sheet, or a split view's
@@ -389,6 +399,7 @@ function ThreadDetail({
   const openLink = useOpenLink();
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const harness = useAgentHarness(item.agentId);
   const pictureOf = useMemberPictures();
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
@@ -453,6 +464,7 @@ function ThreadDetail({
     writer: {
       ...message.writer,
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+      harness: message.writer.agent ? harness : undefined,
     },
     stamp:
       message.stamp === undefined
