@@ -109,6 +109,14 @@ export interface MadeRow<Row> {
  */
 export type FieldChange<Row> = ((row: Row) => Partial<Row> | typeof ROW_GONE) | MadeRow<Row>;
 
+/** Whether `fields` sets any of `row`'s own fields to a value it does not already carry. */
+function movesRow<Row extends object>(row: Row, fields: Partial<Row>): boolean {
+  for (const name in fields) {
+    if (Object.hasOwn(fields, name) && !Equal.equals(row[name], fields[name])) return true;
+  }
+  return false;
+}
+
 /** A kind of plain rows, keyed by `key`, whose every change is a `FieldChange`. */
 export function fieldKind<Row extends object>(
   key: (row: Row) => string,
@@ -121,10 +129,7 @@ export function fieldKind<Row extends object>(
       const fields = change(row);
       if (fields === ROW_GONE) return ROW_GONE;
       // Note that a change the row already carries leaves it alone, so a reader holds the very row.
-      const moved = Object.entries(fields).some(
-        ([name, value]) => !Equal.equals(Reflect.get(row, name), value),
-      );
-      return moved ? { ...row, ...fields } : undefined;
+      return movesRow(row, fields) ? { ...row, ...fields } : undefined;
     },
   };
 }

@@ -104,6 +104,7 @@ describe("the bundled host's uninstall", () => {
             path === folders.owned
               ? Effect.fail(
                   systemError({
+                    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
                     _tag: "PermissionDenied",
                     module: "FileSystem",
                     method: "remove",

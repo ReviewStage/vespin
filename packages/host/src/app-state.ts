@@ -1160,6 +1160,11 @@ export interface AppStateDelivery {
 /** One level of a slice's keys: each id's or part's value, or, above the last level, each kind's record of ids. */
 type Keyed = Readonly<Record<string, unknown>>;
 
+/** Whether `value` is a level of keys or a record of fields that can be read by name, rather than a primitive or nothing. */
+function isKeyed(value: unknown): value is Keyed {
+  return typeof value === "object" && value !== null;
+}
+
 /** The value `keyed` holds under `id` itself, never one it inherits. */
 function ownValue(keyed: Keyed, id: string): unknown {
   return Object.hasOwn(keyed, id) ? keyed[id] : undefined;
@@ -1189,10 +1194,8 @@ function rowsAreValue(entry: HostReadSliceEntry): boolean {
 
 /** The record a key's read's rows are, where its slice names the field its list stands under (`rowsAt`); none otherwise. */
 function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
-  if (entry.rowsAt === undefined || typeof value !== "object" || value === null) return undefined;
-  const rows: unknown = Reflect.get(value, "rows");
-  // SAFETY: a read whose slice names `rowsAt` holds its rows as a record of fields.
-  return typeof rows === "object" && rows !== null ? (rows as Keyed) : undefined;
+  if (entry.rowsAt === undefined || !isKeyed(value)) return undefined;
+  return isKeyed(value.rows) ? value.rows : undefined;
 }
 
 /**
@@ -1202,12 +1205,12 @@ function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined 
  * (`AppHostRead`), so its rows are all of it that can move.
  */
 function rowsOf(entry: HostReadSliceEntry, value: unknown): readonly object[] | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
+  if (!isKeyed(value)) return undefined;
   const rows: unknown =
     entry.rowsAt === undefined
       ? rowsAreValue(entry)
         ? value
-        : Reflect.get(value, "rows")
+        : value.rows
       : recordOf(entry, value)?.[entry.rowsAt];
   return Array.isArray(rows) ? rows : undefined;
 }
@@ -1222,7 +1225,7 @@ function besideOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined 
 /** A row's id, under the field its slice names. */
 function idOf(rowId: string, row: object): string {
   // SAFETY: a row-keyed slice's rows each carry their id as a string under `rowId` (`HOST_READ_SLICE`).
-  return Reflect.get(row, rowId) as string;
+  return (isKeyed(row) ? row[rowId] : undefined) as string;
 }
 
 /**

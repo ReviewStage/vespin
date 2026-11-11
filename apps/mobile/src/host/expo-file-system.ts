@@ -42,6 +42,7 @@ function fileUri(path: string): string {
  */
 function missing(method: string, path: string) {
   return systemError({
+    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
     _tag: "NotFound",
     module: "FileSystem",
     method,
@@ -54,6 +55,7 @@ function missing(method: string, path: string) {
 /** A call the device's file system refused. */
 function refused(method: string, path: string, cause: unknown) {
   return systemError({
+    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
     _tag: "Unknown",
     module: "FileSystem",
     method,

@@ -17,6 +17,7 @@ import {
   type Updater,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Match } from "effect";
 import {
   type MouseEvent,
   type ReactNode,
@@ -227,12 +228,11 @@ function DataTableHeading<Row extends RowData>({
     );
   }
   const sorted = header.column.getIsSorted();
-  const direction =
-    sorted === false
-      ? undefined
-      : sorted === "asc"
-        ? SORT_DIRECTION.ASCENDING
-        : SORT_DIRECTION.DESCENDING;
+  const direction = Match.value(sorted).pipe(
+    Match.when(false, () => undefined),
+    Match.when("asc", () => SORT_DIRECTION.ASCENDING),
+    Match.orElse(() => SORT_DIRECTION.DESCENDING),
+  );
   if (!header.column.getCanSort()) {
     return (
       <TableHead className={CELL_KIND} data-kind={kind} aria-sort={direction}>

@@ -5,13 +5,14 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import type { PostHog } from "posthog-js/dist/module.no-external";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, test, vi } from "vitest";
 import { sessionReplay } from "./session-replay.js";
 
 /** The client as the controller drives it, every call heard in one order. */
-const client = vi.hoisted(() => {
+const client = (() => {
   const calls: unknown[][] = [];
   const heard =
     (name: string) =>
@@ -35,9 +36,7 @@ const client = vi.hoisted(() => {
       ].map((name) => [name, heard(name)]),
     ),
   };
-});
-
-vi.mock("posthog-js/dist/module.no-external", () => ({ default: client.posthog }));
+})();
 
 afterEach(() => {
   client.calls.length = 0;
@@ -83,6 +82,7 @@ function testShell(): Parameters<typeof sessionReplay>[0] {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
+    importClient: () => Promise.resolve(client.posthog as unknown as PostHog),
   };
 }
 

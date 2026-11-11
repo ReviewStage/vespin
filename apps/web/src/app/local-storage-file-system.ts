@@ -75,6 +75,7 @@ function readFiles(storage: Storage): Files {
  */
 function missing(method: string, path: string) {
   return systemError({
+    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
     _tag: "NotFound",
     module: "FileSystem",
     method,
@@ -87,6 +88,7 @@ function missing(method: string, path: string) {
 /** A write the browser refused, such as a full storage quota. */
 function refused(method: string, path: string, cause: unknown) {
   return systemError({
+    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
     _tag: "Unknown",
     module: "FileSystem",
     method,

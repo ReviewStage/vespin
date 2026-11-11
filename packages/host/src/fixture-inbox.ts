@@ -1622,11 +1622,21 @@ function changedAgent<A extends AgentSummary>(agent: A, change: AgentChange): A 
   return { ...agent, ...fields };
 }
 
+/** The fields of an agent a fixture run's change may set: each of `AgentChange`'s but the reader's pin. */
+const CHANGED_FIELDS = [
+  "model",
+  "effort",
+  "permissionMode",
+  "disabledServers",
+  "title",
+] as const satisfies readonly Exclude<keyof AgentChange, "pinned">[];
+
 /** Whether every field of the change already stands on the agent. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
-  const { pinned: _pinned, ...fields } = change;
-  return Object.entries(fields).every(([key, value]) => {
-    const held: unknown = Reflect.get(agent, key);
+  return CHANGED_FIELDS.every((key) => {
+    const value = change[key];
+    const held = agent[key];
+    if (value === undefined) return true;
     return Array.isArray(value) && Array.isArray(held)
       ? value.length === held.length && value.every((each, at) => each === held[at])
       : held === value;

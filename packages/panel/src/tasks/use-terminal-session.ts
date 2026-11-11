@@ -98,12 +98,12 @@ export interface Terminals {
 }
 
 /** A window's terminals, its lists read from what it kept before a reload. */
-export function makeTerminals(): Terminals {
+export function createTerminals(): Terminals {
   return { held: new TerminalsHeld(), sessions: new TerminalSessions() };
 }
 
 /** The terminals the doors under it read: the window's own unless a provider hands others. */
-export const TerminalsContext = createContext<Terminals>(makeTerminals());
+export const TerminalsContext = createContext<Terminals>(createTerminals());
 
 /**
  * Detaches every session of an account but the one signed in, its shell

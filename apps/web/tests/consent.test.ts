@@ -24,25 +24,6 @@ declare global {
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
-/** Every root the pages mount themselves on, to unmount once each test ends. */
-const mounted = vi.hoisted(() => ({ roots: [] as Array<{ unmount(): void }> }));
-
-// Note that a page mounts its own root as its module loads, so React's
-// `createRoot` is wrapped to keep each one, and nothing else about it
-// changes: a pressed button stays busy after the test ends, and its settle
-// would otherwise draw a moment later, after jsdom has gone.
-vi.mock("react-dom/client", async (importOriginal) => {
-  const client = await importOriginal<typeof import("react-dom/client")>();
-  return {
-    ...client,
-    createRoot: (...args: Parameters<typeof client.createRoot>) => {
-      const root = client.createRoot(...args);
-      mounted.roots.push(root);
-      return root;
-    },
-  };
-});
-
 const PATH = {
   SESSION: "/api/auth/get-session",
   PUBLIC_CLIENT: "/api/auth/oauth2/public-client",
@@ -112,6 +93,9 @@ async function openPage(page: "consent" | "sign-in", address: string): Promise<H
   const root = document.createElement("div");
   root.id = "root";
   document.body.replaceChildren(root);
+  // A busy ring shows at once, as a capture run has it, so a press's settle
+  // never arms a timer that would draw after jsdom has gone.
+  document.body.style.setProperty("--ui-settle-delay", "0ms");
   vi.resetModules();
   await act(async () => {
     await import(page === "consent" ? "../src/consent" : "../src/sign-in");
@@ -144,10 +128,11 @@ beforeAll(() => {
   });
 });
 
-afterEach(() => {
-  act(() => {
-    for (const root of mounted.roots.splice(0)) root.unmount();
-  });
+afterEach(async () => {
+  // Note that a page mounts its own root as its module loads and is never
+  // unmounted, so the answer to a press still on its way is let land here,
+  // inside act, rather than drawing once jsdom has gone.
+  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
   vi.restoreAllMocks();
   document.body.replaceChildren();
   sent = [];

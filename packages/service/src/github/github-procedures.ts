@@ -130,26 +130,28 @@ export interface GitHubProcedureSeams {
  */
 function unlinkOrRefusal(unlink: ReturnType<GitHubUnlink>): Effect.Effect<void, HostedRefusal> {
   return unlink.pipe(
-    Effect.catch((failure): Effect.Effect<never, HostedRefusal> => {
+    Effect.catchTag(
+      "UnknownError",
       // A failure that is not a refusal is logged by its kind alone, since what it threw may quote a request.
-      if (failure._tag === "UnknownError") {
-        return Effect.andThen(
+      () =>
+        Effect.andThen(
           Effect.logWarning("GitHub unlink failed: UnknownError"),
           Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
+        ),
+      (refused): Effect.Effect<never, HostedRefusal> => {
+        if (
+          refused.status === HOSTED_HTTP_STATUS.UNAUTHORIZED ||
+          refused.code === UNLINK_REFUSAL.SESSION_NOT_FRESH
+        ) {
+          return Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+        }
+        return Effect.fail(
+          refused.code === UNLINK_REFUSAL.LAST_ACCOUNT
+            ? HOSTED_REFUSAL.NOT_PERMITTED
+            : HOSTED_REFUSAL.UNAVAILABLE,
         );
-      }
-      if (
-        failure.status === HOSTED_HTTP_STATUS.UNAUTHORIZED ||
-        failure.code === UNLINK_REFUSAL.SESSION_NOT_FRESH
-      ) {
-        return Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-      }
-      return Effect.fail(
-        failure.code === UNLINK_REFUSAL.LAST_ACCOUNT
-          ? HOSTED_REFUSAL.NOT_PERMITTED
-          : HOSTED_REFUSAL.UNAVAILABLE,
-      );
-    }),
+      },
+    ),
   );
 }
 

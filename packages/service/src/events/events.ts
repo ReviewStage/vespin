@@ -15,7 +15,7 @@ import {
   type UnparsedWireValue,
 } from "../core.js";
 import { HOSTED_REFUSAL, type HostedRefusal, upstreamRefused } from "../http/http-effect.js";
-import { makeRateBrake } from "../http/rate-brake.js";
+import { createRateBrake } from "../http/rate-brake.js";
 import {
   type PosthogBatch,
   type PosthogBatchItem,
@@ -77,7 +77,7 @@ const RATE_LIMIT = {
   MAX_TRACKED_USERS: 10_000,
 } as const;
 
-const eventsBrake = makeRateBrake({
+const eventsBrake = createRateBrake({
   windowMs: RATE_LIMIT.WINDOW_MS,
   maxRequestsPerWindow: RATE_LIMIT.MAX_EVENTS_PER_WINDOW,
   maxTrackedUsers: RATE_LIMIT.MAX_TRACKED_USERS,

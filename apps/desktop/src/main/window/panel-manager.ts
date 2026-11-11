@@ -7,13 +7,14 @@ import {
   BrowserWindow,
   type BrowserWindowConstructorOptions,
   type Display,
+  dialog,
   type Rectangle,
   screen,
   type WebContents,
 } from "electron";
 import { layLiquidGlass } from "../native/liquid-glass";
 import { hardenedWebPreferences, refuseForeignNavigation } from "./hardened-window";
-import { askReloadPanel } from "./reload-dialog";
+import { askReloadPanel, type ReloadQuestionDoors } from "./reload-dialog";
 import { onRendererDeath, RendererRevival } from "./renderer-revival";
 import { followSwipes } from "./swipe-navigation";
 import {
@@ -25,8 +26,17 @@ import {
 import { windowPushes } from "./window-pushes";
 import { trafficLightsAt } from "./zoom";
 
+/** Electron's doors the panel's window stands on: its windows, its displays, the app, and its sheets. */
+export interface PanelSystem extends ReloadQuestionDoors {
+  readonly BrowserWindow: new (options: BrowserWindowConstructorOptions) => BrowserWindow;
+  readonly app: Pick<Electron.App, "focus" | "quit">;
+  readonly screen: Pick<Electron.Screen, "getPrimaryDisplay" | "getAllDisplays">;
+}
+
 interface PanelManagerOptions {
   runMode: RunMode;
+  /** Electron's doors, unless a test stands its own in. */
+  system?: PanelSystem;
   /** The native material its windows are drawn on (`@repo/host/appearance`); the sidebar's where unset. */
   material?: WindowMaterial | undefined;
   /** The named development instance this run is, which every window's title then carries; none for the plain one. */
@@ -155,6 +165,7 @@ export class PanelManager {
   readonly #onRendererGone: ((reason: string) => void) | undefined;
   readonly #placementPath: string | undefined;
   readonly #closing: () => boolean;
+  readonly #system: PanelSystem;
   /** The window, keyed by the display it was opened against. */
   readonly #windows = new Map<number, BrowserWindow>();
   /** The windows hidden, minimized, or wholly covered since they last showed, the ones whose document is held. */
@@ -176,6 +187,7 @@ export class PanelManager {
     this.#onRendererGone = options.onRendererGone;
     this.#placementPath = options.placementPath;
     this.#closing = options.closing;
+    this.#system = options.system ?? { BrowserWindow, app, screen, dialog };
   }
 
   /**
@@ -185,7 +197,7 @@ export class PanelManager {
    * macOS itself moves the frame onto a display that is still there.
    */
   reconcile(): void {
-    const wanted = screen.getPrimaryDisplay().id;
+    const wanted = this.#system.screen.getPrimaryDisplay().id;
     const [held] = [...this.#windows.keys()];
     if (held === undefined) this.#create(wanted);
     else if (held !== wanted) this.#rebind(held, wanted);
@@ -277,7 +289,7 @@ export class PanelManager {
   }
 
   display(displayId: number): Display | undefined {
-    return screen.getAllDisplays().find((candidate) => candidate.id === displayId);
+    return this.#system.screen.getAllDisplays().find((candidate) => candidate.id === displayId);
   }
 
   /** Brings the window forward, shown again if it was closed. */
@@ -334,7 +346,7 @@ export class PanelManager {
    */
   #focusWindow(window: BrowserWindow | undefined): void {
     if (!window || window.isDestroyed() || !this.#runMode.takesFocus) return;
-    if (process.platform === "darwin") app.focus({ steal: true });
+    if (process.platform === "darwin") this.#system.app.focus({ steal: true });
     window.show();
     window.focus();
   }
@@ -359,7 +371,7 @@ export class PanelManager {
     const placement = placeWindow({
       saved:
         this.#placementPath === undefined ? undefined : readWindowPlacement(this.#placementPath),
-      workAreas: screen.getAllDisplays().map((each) => each.workArea),
+      workAreas: this.#system.screen.getAllDisplays().map((each) => each.workArea),
       first: desktopBounds(display),
     });
     // Created at the stored zoom, so the first frame is drawn at the size it
@@ -395,7 +407,7 @@ export class PanelManager {
         zoomFactor,
       },
     };
-    const window = new BrowserWindow(windowOptions);
+    const window = new this.#system.BrowserWindow(windowOptions);
     this.#windows.set(displayId, window);
     const page = window.webContents;
     if (material === WINDOW_MATERIAL.LIQUID_GLASS) layGlassOnceLoaded(window);
@@ -477,9 +489,9 @@ export class PanelManager {
       onGone: (reason) => this.#onRendererGone?.(`${reason} It is being reloaded.`),
       onGaveUp: (reason) => {
         this.#onRendererGone?.(`${reason} It stopped reloading, so the developer was asked.`);
-        void askReloadPanel(window).then((reload) => {
+        void askReloadPanel(window, this.#system).then((reload) => {
           if (window.isDestroyed() || this.#closing()) return;
-          if (!reload) app.quit();
+          if (!reload) this.#system.app.quit();
           // Note that a quit held for its question leaves the launch
           // standing, and declining it keeps it so, so the page is loaded
           // once more rather than left blank with no question on it.

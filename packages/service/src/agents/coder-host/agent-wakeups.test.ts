@@ -18,6 +18,7 @@ import { TestClock } from "effect/testing";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import { githubReaching } from "../../testing/github-app-fake.js";
 import { bootedAtOnce } from "../../testing/native-harness-fake.js";
+import { refusedSession } from "../../testing/recording-sessions.js";
 import { AGENT_CALLER, type AgentCall } from "../agent-tools.js";
 import {
   type AgentSessions,
@@ -25,7 +26,6 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
   type SessionMessage,
-  SessionUnreachable,
 } from "../sessions/agent-sessions.js";
 import {
   AgentWakeupNotPublished,
@@ -65,16 +65,7 @@ function fakeAgentSessions(refusing = false) {
       }),
     send: (sessionId, message) =>
       refusing
-        ? Effect.fail(
-            new SessionUnreachable({
-              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
-              cause: {
-                _tag: "RequestError",
-                reason: { _tag: "TransportError" },
-                message: "refused",
-              } as never,
-            }),
-          )
+        ? Effect.fail(refusedSession())
         : Effect.sync(() => {
             sent.push({ sessionId, message });
             return {

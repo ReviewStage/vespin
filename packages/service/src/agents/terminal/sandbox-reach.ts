@@ -61,14 +61,14 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
 export function sandboxOrUpstream<A, R>(
   effect: Effect.Effect<A, SandboxError, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
-  return Effect.catch(effect, (failure) =>
-    Effect.andThen(
+  return effect.pipe(
+    Effect.tapError((failure) =>
       Effect.logWarning(`an agent's sandbox call failed: ${failure.message}`),
-      Effect.fail(
-        failure._tag === "SnapshotGone"
-          ? HOSTED_REFUSAL.SANDBOX_SNAPSHOT_GONE
-          : HOSTED_REFUSAL.UPSTREAM_ERROR,
-      ),
+    ),
+    Effect.catchTag(
+      "SnapshotGone",
+      () => Effect.fail(HOSTED_REFUSAL.SANDBOX_SNAPSHOT_GONE),
+      () => Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR),
     ),
   );
 }

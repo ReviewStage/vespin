@@ -46,7 +46,7 @@ import { DateTime, Duration, Effect, Option, Redacted, Result, Schema } from "ef
 import { HttpClient } from "effect/http";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { hostedStoreOrUnavailable, type UserIdResolver } from "../http/http-effect.js";
-import { makeRateBrake } from "../http/rate-brake.js";
+import { createRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted, keyRingMiddleware } from "../orpc/base.js";
 import { githubRead } from "./github-app.js";
 
@@ -195,7 +195,7 @@ const tokenAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /** The token's three procedures, braked per instance, each to a signed-in member, on a deployment that holds a ring. */
 export function githubTokenProcedures(seams: GitHubTokenProcedureSeams) {
-  const brake = makeRateBrake(SAVE_BRAKE);
+  const brake = createRateBrake(SAVE_BRAKE);
   const held = hosted.githubToken
     .use(accountMiddleware(seams.resolveUserId))
     .use(keyRingMiddleware);

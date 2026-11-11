@@ -76,13 +76,13 @@ import {
   canUseToolOf,
   denyForMessage,
   denyWaiting,
-  makeApprovals,
+  openApprovals,
   settleAsk,
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { ClaudeCode, type ClaudeCodeSession, type ClaudeCodeShape } from "./claude-code.js";
 import { runCodex } from "./codex.js";
-import { type EventSink, makeEventSink } from "./events.js";
+import { type EventSink, openEventSink } from "./events.js";
 import {
   harnessEnvOf,
   installedSkillsPath,
@@ -893,7 +893,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     return { end: RUNNER_END.FAILED, failure: resumed.failure } satisfies LaunchOutcome;
   }
   const from = resumed.success;
-  const approvals = yield* makeApprovals(sink);
+  const approvals = yield* openApprovals(sink);
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
   const memoryWatch = claudeCodeMemoryWatch();
@@ -1074,7 +1074,7 @@ interface ReadLaunch {
  */
 const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunch) {
   const { config, lines, bearer, secrets, trace, input } = read;
-  const posted = yield* makeEventSink({
+  const posted = yield* openEventSink({
     url: config.eventsUrl,
     bearer,
     firstSequence: config.firstSequence,

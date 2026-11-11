@@ -484,21 +484,26 @@ function withKeyLaid(keyed: object, path: readonly string[], read: object | unde
   if (id === undefined) return keyed;
   const next: Record<string, unknown> = { ...keyed };
   if (below.length > 0) {
-    const level: unknown = Object.hasOwn(keyed, id) ? Reflect.get(keyed, id) : undefined;
+    const level = Object.hasOwn(next, id) ? next[id] : undefined;
     next[id] = withKeyLaid(typeof level === "object" && level !== null ? level : {}, below, read);
   } else if (read === undefined) Reflect.deleteProperty(next, id);
   else next[id] = read;
   return next;
 }
 
+/** A level of a held slice: its keys by id, each holding a level below or a key's read. */
+type SliceLevel = Readonly<Record<string, unknown>>;
+
+/** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
+function isSliceLevel(value: unknown): value is SliceLevel {
+  return typeof value === "object" && value !== null;
+}
+
 /** The read `keyed` holds at `path`; none where it holds none. */
 function readAt(keyed: object, path: readonly string[]): AppHostRead<unknown> | undefined {
   let level: unknown = keyed;
   for (const id of path) {
-    level =
-      typeof level === "object" && level !== null && Object.hasOwn(level, id)
-        ? Reflect.get(level, id)
-        : undefined;
+    level = isSliceLevel(level) && Object.hasOwn(level, id) ? level[id] : undefined;
   }
   // SAFETY: what a held slice holds at a key's whole path is that key's read (`HostReadKeyPath`).
   return level as AppHostRead<unknown> | undefined;

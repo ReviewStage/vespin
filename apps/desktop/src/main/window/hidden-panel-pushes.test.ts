@@ -1,13 +1,14 @@
 /** hidden-panel-pushes.test.ts -- what a panel no one can see is pushed, as its window hides and shows. */
 
+import { EventEmitter } from "node:events";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { RunMode } from "@repo/host";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { initialAppState } from "@repo/host/client";
 import { PUSH, type PushEvent } from "@repo/host/contract";
 import type { WebContents } from "electron";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { PanelManager } from "./panel-manager";
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { PanelManager, type PanelSystem } from "./panel-manager";
 import { windowPushes } from "./window-pushes";
 
 /** An app link to a task, as the system hands one to the app. */
@@ -19,33 +20,37 @@ const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, p
  * in view.
  */
 
-const { windows, FakeBrowserWindow } = await vi.hoisted(async () => {
-  const { EventEmitter } = await import("node:events");
-  const windows: InstanceType<typeof FakeBrowserWindow>[] = [];
-  class FakeWebContents extends EventEmitter {
-    setBackgroundThrottling(): void {}
-    setWindowOpenHandler(): void {}
-    send(): void {}
+const windows: FakeBrowserWindow[] = [];
+
+class FakeWebContents extends EventEmitter {
+  setBackgroundThrottling(): void {}
+  setWindowOpenHandler(): void {}
+  send(): void {}
+}
+
+class FakeBrowserWindow extends EventEmitter {
+  readonly webContents = new FakeWebContents();
+  constructor() {
+    super();
+    windows.push(this);
   }
-  class FakeBrowserWindow extends EventEmitter {
-    readonly webContents = new FakeWebContents();
-    constructor() {
-      super();
-      windows.push(this);
-    }
-    isDestroyed = () => false;
-    loadFile = () => Promise.resolve();
-  }
-  return { windows, FakeBrowserWindow };
-});
+  isDestroyed = () => false;
+  loadFile = () => Promise.resolve();
+}
 
 const DISPLAY = { id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } };
 
-vi.mock("electron", () => ({
+/**
+ * Electron as the panel meets it, these windows on one display. Note that it
+ * is stood in for, because it is the operating system's door and answers
+ * nothing outside an Electron process.
+ */
+const SYSTEM = {
   BrowserWindow: FakeBrowserWindow,
   app: {},
+  dialog: {},
   screen: { getPrimaryDisplay: () => DISPLAY, getAllDisplays: () => [DISPLAY] },
-}));
+} as unknown as PanelSystem;
 
 const RUN_MODE: RunMode = {
   requiresAccount: false,
@@ -78,6 +83,7 @@ function documentAt(version: number): AppStateSnapshot {
 /** The panel's one window, shown, with its page's push stream open. */
 function shownPanel() {
   const panels = new PanelManager({
+    system: SYSTEM,
     runMode: RUN_MODE,
     preloadPath: "preload.js",
     rendererHtmlPath: "index.html",

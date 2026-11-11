@@ -4,7 +4,6 @@ import type { AppStateStore } from "@repo/host/client";
 import type { UpdaterEngine, UpdaterEngineEvents } from "@repo/host/update-service";
 import { UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
 import { Effect } from "effect";
-import { vi } from "vitest";
 import type { DesktopConfig } from "./desktop-config";
 import { createUpdateServiceHost } from "./update-service-host";
 
@@ -15,9 +14,6 @@ import { createUpdateServiceHost } from "./update-service-host";
  * Squirrel's own quit and install, which nothing holds. Synthetic versions
  * throughout.
  */
-
-// Note that Electron is never reached: the menu bar is drawn through `showMenuBar`, and no window opens.
-vi.mock("electron", () => ({}));
 
 /** What the updater reads of the launch: a packaged build that sends nothing on its own. */
 const CONFIG = {
