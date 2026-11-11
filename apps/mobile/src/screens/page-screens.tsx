@@ -85,23 +85,25 @@ export function PageScreen({
   );
 }
 
-/** A page a task's Overview lists, opened by its task, its id, and the version the list holds, in the workspace the Tasks tab stands in. */
+/** A page a task's Overview lists, opened by its task, its id, and the version the list holds, in the task's own workspace, which a later workspace switch leaves as it is. */
 export function TaskPageScreen() {
   const {
     id = "",
     task = "",
+    workspace = "",
     version = "",
     title = "",
   } = useLocalSearchParams<{
     id: string;
     task: string;
+    workspace: string;
     version: string;
     title: string;
   }>();
-  const workspace = useTasksWorkspace();
+  const chosen = useTasksWorkspace();
   return (
     <PageScreen
-      workspaceId={workspace?.id}
+      workspaceId={workspace === "" ? chosen?.id : workspace}
       taskId={task}
       pageId={id}
       version={Number(version)}

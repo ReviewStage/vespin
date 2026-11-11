@@ -613,6 +613,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
               params: {
                 id: page.id,
                 task: task.id,
+                workspace: task.workspaceId,
                 version: String(page.version),
                 title: page.title,
               },
